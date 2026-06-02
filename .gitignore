@@ -1,0 +1,16 @@
+# Planning lives in its own independent shadow repo, never in the code repo.
+/.planning/
+
+# Build output
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+
+# Editor / OS
+.cache/
+.idea/
+.vscode/
+compile_commands.json
+*.user
+.DS_Store
