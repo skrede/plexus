@@ -18,3 +18,17 @@ target_link_libraries(test_message_forwarder PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_message_forwarder TEST_PREFIX "forwarder.")
+
+# The frame_router demux oracle: each msg_type routes to its registered consumer
+# with the correct inner (header-off) span; short / bad-magic / unregistered
+# frames are warn-and-dropped through an injected counting logger. The router is
+# backend-agnostic (spans + move_only_function), so this needs only the core +
+# wire layers. Selected by the same `forwarder.` ctest prefix.
+add_executable(test_frame_router test_frame_router.cpp)
+
+target_link_libraries(test_frame_router PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_frame_router TEST_PREFIX "forwarder.")

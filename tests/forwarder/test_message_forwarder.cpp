@@ -1,5 +1,6 @@
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/wire_forwarder.h"
+#include "plexus/io/frame_router.h"
 
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_channel.h"
@@ -13,6 +14,7 @@
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/frame_codec.h"
+#include "plexus/wire/topic_hash.h"
 
 #include "support/alloc_counter.h"
 
@@ -71,13 +73,22 @@ forwarder::peer make_peer(inproc_channel<> &fwd_channel, capture &cap, std::stri
     return forwarder::peer{fwd_channel, std::move(node_name)};
 }
 
-// Counts decoded subscribe_request frames in a capture's recorded traffic.
+// Counts frame_header-wrapped subscribe_request frames in a capture's recorded
+// traffic. Control frames are now framed (Seed 3), so the helper FIRST strips and
+// asserts the frame_header.type, THEN decodes the inner payload — a frame whose
+// header type is not `subscribe` is not counted.
 std::size_t count_subscribes(const capture &cap)
 {
     std::size_t n = 0;
     for(const auto &f : cap.frames)
-        if(plexus::wire::decode_subscribe_request(f))
+    {
+        auto hdr = plexus::wire::decode_header(f);
+        if(!hdr || hdr->type != plexus::wire::msg_type::subscribe)
+            continue;
+        auto inner = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
+        if(plexus::wire::decode_subscribe_request(inner))
             ++n;
+    }
     return n;
 }
 
@@ -85,8 +96,14 @@ std::size_t count_unsubscribes(const capture &cap)
 {
     std::size_t n = 0;
     for(const auto &f : cap.frames)
-        if(plexus::wire::decode_unsubscribe_request(f))
+    {
+        auto hdr = plexus::wire::decode_header(f);
+        if(!hdr || hdr->type != plexus::wire::msg_type::unsubscribe)
+            continue;
+        auto inner = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
+        if(plexus::wire::decode_unsubscribe_request(inner))
             ++n;
+    }
     return n;
 }
 
@@ -150,7 +167,7 @@ std::vector<std::byte> make_data_frame(std::string_view fqn, const std::string &
     plexus::wire::unidirectional_header uhdr{
             .source     = plexus::wire::endpoint_source_type::publisher,
             .sequence   = 0,
-            .topic_hash = plexus::io::fqn_topic_hash(fqn),
+            .topic_hash = plexus::wire::fqn_topic_hash(fqn),
             .type_hash  = 0
     };
     auto inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
@@ -288,12 +305,18 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
     const std::string body = "the-opaque-payload";
     auto frame = make_data_frame("alpha", body);
 
+    // The frame_router owns the header strip + type switch; its unidirectional
+    // consumer hands the inner payload (header-off) to the realigned deliver().
     std::string got_fqn;
     std::string got_body;
-    fwd.deliver(frame, [&](std::string_view fqn, std::span<const std::byte> data) {
-        got_fqn.assign(fqn);
-        got_body.assign(reinterpret_cast<const char *>(data.data()), data.size());
+    plexus::io::frame_router router;
+    router.on_unidirectional([&](std::span<const std::byte> inner) {
+        fwd.deliver(inner, [&](std::string_view fqn, std::span<const std::byte> data) {
+            got_fqn.assign(fqn);
+            got_body.assign(reinterpret_cast<const char *>(data.data()), data.size());
+        });
     });
+    router.route(frame);
 
     REQUIRE(got_fqn == "alpha");
     REQUIRE(got_body == body);
@@ -315,8 +338,10 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
     counting_logger log;
     forwarder fwd(log);
 
-    // Garbage that fails the frame-header magic check.
-    std::vector<std::byte> garbage(40, std::byte{0xAB});
+    // An inner payload too short to be a unidirectional header (< 25 bytes), so
+    // the realigned deliver() — which now receives the header-off inner payload
+    // (the router owns the header strip) — fails decode_unidirectional and drops.
+    std::vector<std::byte> garbage(8, std::byte{0xAB});
 
     bool fired = false;
     fwd.deliver(garbage, [&](std::string_view, std::span<const std::byte>) { fired = true; });
@@ -328,7 +353,7 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
 TEST_CASE("default forwarder drops a malformed frame silently via null_logger", "[forwarder]")
 {
     forwarder fwd;                  // no logger argument: shared null_logger
-    std::vector<std::byte> garbage(40, std::byte{0xAB});
+    std::vector<std::byte> garbage(8, std::byte{0xAB});
 
     bool fired = false;
     REQUIRE_NOTHROW(fwd.deliver(garbage, [&](std::string_view, std::span<const std::byte>) {
