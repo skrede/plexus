@@ -15,6 +15,8 @@
 
 #include <span>
 #include <string>
+#include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <string_view>
@@ -122,19 +124,22 @@ public:
                 .topic_hash = hash,
                 .type_hash  = 0
         };
-        auto inner = wire::encode_unidirectional(uhdr, payload);
+        // Frame ONCE into the reused scratch buffers: after the first publish
+        // grows them, resize() reuses capacity so steady-state publishes do not
+        // allocate (the SLICE-3 no-hot-path-allocation property, designed in here).
+        wire::encode_unidirectional_into(m_inner_scratch, uhdr, payload);
 
         wire::frame_header fhdr{
                 .type         = wire::msg_type::unidirectional,
                 .flags        = 0,
                 .session_id   = 0,
                 .timestamp_ns = wire::now_timestamp_ns(),
-                .payload_len  = inner.size()
+                .payload_len  = m_inner_scratch.size()
         };
-        auto frame = wire::encode_frame(fhdr, inner);
+        wire::encode_frame_into(m_frame_scratch, fhdr, m_inner_scratch);
 
         for(const auto &sub : *subs)
-            sub.channel->send(frame);
+            sub.channel->send(m_frame_scratch);
     }
 
     // detach: per-(peer, fqn) refcount gate. On the 1->0 transition it removes
@@ -222,6 +227,8 @@ private:
     log::logger &m_logger;
     subscriber_registry<channel_type> m_registry;
     std::unordered_map<std::string, std::vector<std::string>> m_remote_topics;
+    std::vector<std::byte> m_inner_scratch;
+    std::vector<std::byte> m_frame_scratch;
     std::uint64_t m_next_sequence{0};
 };
 

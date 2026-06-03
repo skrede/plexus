@@ -63,6 +63,24 @@ inline std::vector<std::byte> encode_frame(const frame_header &hdr, std::span<co
     return frame;
 }
 
+// Encode a framed message into a caller-owned buffer reused across calls. Like
+// encode_unidirectional_into, resize() reuses capacity so a steady-state loop
+// framing into the same out vector allocates nothing after warm-up. The header
+// is written in place ahead of the payload copy.
+inline void encode_frame_into(std::vector<std::byte> &out, const frame_header &hdr,
+                              std::span<const std::byte> payload)
+{
+    auto adjusted = hdr;
+    adjusted.payload_len = payload.size();
+
+    auto header_bytes = encode_header(adjusted);
+
+    out.resize(header_size + payload.size());
+    std::memcpy(out.data(), header_bytes.data(), header_size);
+    if(!payload.empty())
+        std::memcpy(out.data() + header_size, payload.data(), payload.size());
+}
+
 inline uint64_t now_timestamp_ns()
 {
     auto now = std::chrono::system_clock::now();

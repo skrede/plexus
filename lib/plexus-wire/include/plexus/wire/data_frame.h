@@ -62,6 +62,27 @@ inline std::vector<std::byte> encode_unidirectional(const unidirectional_header 
     return buf;
 }
 
+// Encode a unidirectional frame into a caller-owned buffer reused across calls.
+// resize() reuses the buffer's capacity, so a steady-state loop that frames into
+// the same out vector allocates nothing after the warm-up grow — the building
+// block of the forwarder's no-hot-path-allocation fan-out (the allocating return
+// overload above stays for one-shot callers).
+inline void encode_unidirectional_into(std::vector<std::byte> &out,
+                                       const unidirectional_header &hdr,
+                                       std::span<const std::byte> data)
+{
+    out.resize(unidirectional_header_size + data.size());
+    auto *p = out.data();
+
+    detail::write_u8(p, static_cast<uint8_t>(hdr.source));
+    detail::write_u64(p + 1, hdr.sequence);
+    detail::write_u64(p + 9, hdr.topic_hash);
+    detail::write_u64(p + 17, hdr.type_hash);
+
+    if(!data.empty())
+        std::memcpy(p + unidirectional_header_size, data.data(), data.size());
+}
+
 inline std::optional<unidirectional_decode_result> decode_unidirectional(std::span<const std::byte> payload)
 {
     if(payload.size() < unidirectional_header_size)
