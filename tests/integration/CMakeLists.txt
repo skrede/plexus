@@ -51,6 +51,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         Catch2::Catch2WithMain)
     catch_discover_tests(test_asio_frame_contract TEST_PREFIX "integration.")
+
+    # The live TCP loopback req/res roundtrip: a server-side provider and a
+    # client-side caller over a real bidirectional asio connection, each on_data
+    # wired straight to a frame_router (the settled header-on receive contract).
+    # Loops the FULL roundtrip N>=100 in-body; the ctest invocation is re-run
+    # >=3 process runs for cross-process reproducibility. Includes the
+    # concurrent-outstanding stress (distinct correlation_ids in flight at once).
+    add_executable(test_reqres_roundtrip_asio test_reqres_roundtrip_asio.cpp)
+    target_link_libraries(test_reqres_roundtrip_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_reqres_roundtrip_asio TEST_PREFIX "integration.")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
