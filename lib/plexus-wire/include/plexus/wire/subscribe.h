@@ -1,0 +1,213 @@
+#ifndef HPP_GUARD_PLEXUS_WIRE_SUBSCRIBE_H
+#define HPP_GUARD_PLEXUS_WIRE_SUBSCRIBE_H
+
+#include "plexus/wire/byte_order.h"
+#include "plexus/wire/frame.h"
+#include "plexus/wire/length_prefixed.h"
+
+#include <span>
+#include <string>
+#include <vector>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <optional>
+
+namespace plexus::wire {
+
+enum class subscribe_status : uint8_t
+{
+    subscribed         = 0x01,
+    created            = 0x02,
+    type_mismatch      = 0x03,
+    already_subscribed = 0x04
+};
+
+enum class unsubscribe_status : uint8_t
+{
+    unsubscribed   = 0x01,
+    destroyed      = 0x02,
+    not_subscribed = 0x03
+};
+
+enum class subscribe_notification : uint8_t
+{
+    producer_available = 0x01,
+    producer_gone      = 0x02
+};
+
+struct subscribe_request
+{
+    std::string fqn;
+    std::string type_name;
+    uint64_t topic_hash;
+    uint64_t type_hash;
+    endpoint_source_type source;
+};
+
+struct subscribe_response
+{
+    uint64_t topic_hash;
+    subscribe_status status;
+};
+
+// Public wire size of an encoded subscribe_response payload. Used by the
+// receiver-side handler to early-validate the frame before decoding, and by
+// the encoder/decoder symmetrically. 8 bytes for the topic_hash + 1 byte for
+// the status enum.
+constexpr std::size_t subscribe_response_size = 9;
+
+struct unsubscribe_request
+{
+    uint64_t topic_hash;
+};
+
+struct unsubscribe_response
+{
+    uint64_t topic_hash;
+    unsubscribe_status status;
+};
+
+namespace detail {
+
+// Subscribe request wire layout (the slice carries no service-policy fields):
+//   topic_hash(8) + type_hash(8) + endpoint_source_type(1)
+//   + fqn_len(2) + fqn_bytes + type_name_len(2) + type_name_bytes
+// Minimum = 8 + 8 + 1 + 2 + 2 = 21 bytes
+
+constexpr std::size_t subscribe_request_fixed_prefix = 17; // 8 + 8 + 1
+constexpr std::size_t subscribe_request_min_size = 21;     // + 2 + 2
+constexpr std::size_t unsubscribe_request_size = 8;
+constexpr std::size_t unsubscribe_response_size = 9; // 8 + 1
+
+// Per-decoder policy bounds on the two uint16_t-prefixed string fields of
+// subscribe_request. Both are attacker-controlled across an unauthenticated
+// transport, so without an inline cap the 16-bit length prefix would let a
+// peer force a 65 KB std::string allocation per subscribe frame. The bound
+// here is structurally weaker than the upstream frame_reassembler cap and
+// the wire::read_length_prefixed buffer-bounds check; it is the per-callsite
+// policy lid.
+constexpr std::size_t k_max_fqn       = 1024;
+constexpr std::size_t k_max_type_name = 512;
+
+}
+
+inline std::vector<std::byte> encode_subscribe_request(const subscribe_request &req)
+{
+    auto total = detail::subscribe_request_fixed_prefix + 2 + req.fqn.size() + 2 + req.type_name.size();
+    std::vector<std::byte> buf(total);
+    auto *p = buf.data();
+
+    wire::detail::write_u64(p, req.topic_hash);
+    p += 8;
+    wire::detail::write_u64(p, req.type_hash);
+    p += 8;
+    wire::detail::write_u8(p, static_cast<uint8_t>(req.source));
+    p += 1;
+
+    wire::detail::write_u16(p, static_cast<uint16_t>(req.fqn.size()));
+    p += 2;
+    if(!req.fqn.empty())
+    {
+        std::memcpy(p, req.fqn.data(), req.fqn.size());
+        p += req.fqn.size();
+    }
+
+    wire::detail::write_u16(p, static_cast<uint16_t>(req.type_name.size()));
+    p += 2;
+    if(!req.type_name.empty())
+        std::memcpy(p, req.type_name.data(), req.type_name.size());
+
+    return buf;
+}
+
+inline std::optional<subscribe_request> decode_subscribe_request(std::span<const std::byte> payload)
+{
+    if(payload.size() < detail::subscribe_request_min_size)
+        return std::nullopt;
+
+    subscribe_request req{};
+    auto *p = payload.data();
+
+    req.topic_hash = wire::detail::read_u64(p);
+    p += 8;
+    req.type_hash = wire::detail::read_u64(p);
+    p += 8;
+    req.source = static_cast<endpoint_source_type>(wire::detail::read_u8(p));
+    p += 1;
+
+    std::size_t consumed = detail::subscribe_request_fixed_prefix;
+
+    // fqn_len(2) + fqn + type_name_len(2) + type_name
+    auto fqn_span = read_length_prefixed<uint16_t>(payload, consumed);
+    if(!fqn_span)
+        return std::nullopt;
+    if(fqn_span->size() > detail::k_max_fqn)
+        return std::nullopt;
+    req.fqn.assign(reinterpret_cast<const char*>(fqn_span->data()), fqn_span->size());
+
+    auto type_name_span = read_length_prefixed<uint16_t>(payload, consumed);
+    if(!type_name_span)
+        return std::nullopt;
+    if(type_name_span->size() > detail::k_max_type_name)
+        return std::nullopt;
+    req.type_name.assign(reinterpret_cast<const char*>(type_name_span->data()), type_name_span->size());
+    return req;
+}
+
+inline std::vector<std::byte> encode_subscribe_response(const subscribe_response &resp)
+{
+    std::vector<std::byte> buf(subscribe_response_size);
+    wire::detail::write_u64(buf.data(), resp.topic_hash);
+    wire::detail::write_u8(buf.data() + 8, static_cast<uint8_t>(resp.status));
+    return buf;
+}
+
+inline std::optional<subscribe_response> decode_subscribe_response(std::span<const std::byte> payload)
+{
+    if(payload.size() < subscribe_response_size)
+        return std::nullopt;
+
+    return subscribe_response{
+            .topic_hash = wire::detail::read_u64(payload.data()),
+            .status     = static_cast<subscribe_status>(wire::detail::read_u8(payload.data() + 8))
+    };
+}
+
+inline std::vector<std::byte> encode_unsubscribe_request(const unsubscribe_request &req)
+{
+    std::vector<std::byte> buf(detail::unsubscribe_request_size);
+    wire::detail::write_u64(buf.data(), req.topic_hash);
+    return buf;
+}
+
+inline std::optional<unsubscribe_request> decode_unsubscribe_request(std::span<const std::byte> payload)
+{
+    if(payload.size() < detail::unsubscribe_request_size)
+        return std::nullopt;
+
+    return unsubscribe_request{.topic_hash = wire::detail::read_u64(payload.data())};
+}
+
+inline std::vector<std::byte> encode_unsubscribe_response(const unsubscribe_response &resp)
+{
+    std::vector<std::byte> buf(detail::unsubscribe_response_size);
+    wire::detail::write_u64(buf.data(), resp.topic_hash);
+    wire::detail::write_u8(buf.data() + 8, static_cast<uint8_t>(resp.status));
+    return buf;
+}
+
+inline std::optional<unsubscribe_response> decode_unsubscribe_response(std::span<const std::byte> payload)
+{
+    if(payload.size() < detail::unsubscribe_response_size)
+        return std::nullopt;
+
+    return unsubscribe_response{
+            .topic_hash = wire::detail::read_u64(payload.data()),
+            .status     = static_cast<unsubscribe_status>(wire::detail::read_u8(payload.data() + 8))
+    };
+}
+
+}
+
+#endif

@@ -1,0 +1,180 @@
+#ifndef HPP_GUARD_PLEXUS_WIRE_FRAME_REASSEMBLER_H
+#define HPP_GUARD_PLEXUS_WIRE_FRAME_REASSEMBLER_H
+
+#include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
+
+#include <span>
+#include <memory>
+#include <vector>
+#include <cstddef>
+#include <cstdint>
+#include <algorithm>
+
+namespace plexus::wire {
+
+// Owning, shareable wire-payload buffer. A complete_frame's bytes are held
+// behind a shared_ptr so the receive seam can hand a zero-copy owning handle to
+// the consumer: this is the Policy-selected byte-owner seam in concrete form,
+// the handle whose lifetime bounds the non-owning view that wire_bytes exposes.
+// Implicitly converts to std::span so the wire::decode_* call sites consume it
+// unchanged.
+class shared_bytes
+{
+public:
+    shared_bytes() = default;
+
+    // Implicit by design: a complete_frame's payload is naturally assigned/
+    // constructed from an owning byte vector (the reassembler and consumers
+    // both do `frame.payload = <vector>`), and the conversion is an
+    // unambiguous ownership transfer into the shared buffer.
+    shared_bytes(std::vector<std::byte> bytes)
+        : m_owner(std::make_shared<const std::vector<std::byte>>(std::move(bytes)))
+    {
+    }
+
+    const std::byte *data() const noexcept { return m_owner ? m_owner->data() : nullptr; }
+    std::size_t size() const noexcept { return m_owner ? m_owner->size() : 0u; }
+    bool empty() const noexcept { return size() == 0u; }
+
+    const std::byte *begin() const noexcept { return data(); }
+    const std::byte *end() const noexcept { return data() + size(); }
+
+    operator std::span<const std::byte>() const noexcept { return {data(), size()}; }
+
+    // Type-erased owner handle the receive seam binds a wire_bytes view to.
+    std::shared_ptr<const void> owner() const noexcept { return m_owner; }
+
+    friend bool operator==(const shared_bytes &a, std::span<const std::byte> b) noexcept
+    {
+        return std::ranges::equal(std::span<const std::byte>(a), b);
+    }
+
+private:
+    std::shared_ptr<const std::vector<std::byte>> m_owner;
+};
+
+struct complete_frame
+{
+    frame_header header;
+    shared_bytes payload;
+};
+
+enum class feed_error : uint8_t
+{
+    none,
+    invalid_magic,
+    payload_too_large,
+    buffer_overflow,
+    no_progress
+};
+
+struct feed_result
+{
+    std::vector<complete_frame> frames;
+    feed_error error{feed_error::none};
+};
+
+class frame_reassembler
+{
+    enum class state : uint8_t
+    {
+        reading_header,
+        reading_payload
+    };
+
+public:
+    explicit frame_reassembler(std::size_t max_payload_size = k_max_reassembler_payload_bytes,
+                               std::size_t buffered_bytes_cap = k_max_reassembler_payload_bytes + header_size)
+        : m_max_payload_size{max_payload_size}
+        , m_buffered_bytes_cap{buffered_bytes_cap}
+    {
+    }
+
+    feed_result feed(std::span<const std::byte> data)
+    {
+        m_buffer.insert(m_buffer.end(), data.begin(), data.end());
+
+        feed_result result;
+
+        if(m_buffer.size() > m_buffered_bytes_cap)
+        {
+            result.error = feed_error::buffer_overflow;
+            reset();
+            return result;
+        }
+
+        std::size_t consumed = 0;
+
+        for(;;)
+        {
+            auto remaining = std::span<const std::byte>{m_buffer}.subspan(consumed);
+
+            if(m_state == state::reading_header)
+            {
+                if(remaining.size() < header_size)
+                    break;
+
+                auto hdr = decode_header(remaining);
+                if(!hdr)
+                {
+                    result.error = feed_error::invalid_magic;
+                    reset();
+                    return result;
+                }
+
+                m_pending_header = *hdr;
+                consumed += header_size;
+                m_state = state::reading_payload;
+            }
+
+            if(m_state == state::reading_payload)
+            {
+                if(m_pending_header.payload_len > m_max_payload_size)
+                {
+                    result.error = feed_error::payload_too_large;
+                    reset();
+                    return result;
+                }
+
+                remaining = std::span<const std::byte>{m_buffer}.subspan(consumed);
+
+                if(remaining.size() < m_pending_header.payload_len)
+                    break;
+
+                auto payload_span = remaining.subspan(0, m_pending_header.payload_len);
+                result.frames.push_back(complete_frame{
+                            .header  = m_pending_header,
+                            .payload = shared_bytes{std::vector<std::byte>(payload_span.begin(), payload_span.end())}
+                    }
+                );
+
+                consumed += m_pending_header.payload_len;
+                m_state = state::reading_header;
+            }
+        }
+
+        m_buffer.erase(m_buffer.begin(), m_buffer.begin() + static_cast<std::ptrdiff_t>(consumed));
+        return result;
+    }
+
+    void reset()
+    {
+        m_buffer.clear();
+        m_state = state::reading_header;
+        m_pending_header = {};
+    }
+
+    [[nodiscard]] std::size_t buffered_bytes() const { return m_buffer.size(); }
+
+private:
+    state m_state{state::reading_header};
+    std::size_t m_max_payload_size;
+    std::size_t m_buffered_bytes_cap;
+    frame_header m_pending_header{};
+    std::vector<std::byte> m_buffer;
+};
+
+}
+
+#endif
