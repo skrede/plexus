@@ -17,6 +17,18 @@ target_include_directories(test_hot_path_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_hot_path_alloc TEST_PREFIX "integration.")
 
+# The deterministic inproc req/res roundtrip + concurrent-outstanding + zero-alloc
+# rpc-dispatch gate — always built (inproc Policy, no backend needed).
+add_executable(test_reqres_roundtrip_inproc test_reqres_roundtrip_inproc.cpp)
+target_link_libraries(test_reqres_roundtrip_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_reqres_roundtrip_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_reqres_roundtrip_inproc TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
