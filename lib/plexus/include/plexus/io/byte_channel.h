@@ -25,6 +25,16 @@ namespace plexus::io {
 //     synchronously from inside send()/feed(). Consumers may therefore call back
 //     into the channel from a handler without reentrancy hazards.
 //
+// on_data delivery contract (pinned, honored identically by every backend): the
+// delivered span is a COMPLETE frame — header-ON (a frame_header followed by its
+// inner payload), NOT the stripped inner payload. The inproc channel delivers
+// send() bytes verbatim (already header-on); the asio channel re-frames each
+// reassembled frame (header + payload) back into header-on bytes before posting.
+// A consumer therefore demuxes uniformly — typically by handing the span to a
+// frame_router, which owns the frame_header strip and the type switch. This is a
+// span-SEMANTICS contract, not a signature constraint: on_data stays
+// void(span<const std::byte>).
+//
 // Handlers are plexus::detail::move_only_function so move-only callables are
 // admissible (no copyable-callable constraint).
 template <typename C>

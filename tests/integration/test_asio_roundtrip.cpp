@@ -3,6 +3,7 @@
 #include "plexus/asio/asio_listener.h"
 
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/frame_router.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/data_frame.h"
@@ -56,17 +57,22 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
     listener.start({"tcp", "127.0.0.1:0"});
     auto port = listener.port();
 
-    // Client side: dial the listener and read the framed message. The
-    // reassembler in asio_channel strips the frame_header and posts the inner
-    // unidirectional payload to on_data.
+    // Client side: dial the listener and read the framed message. The asio
+    // channel now delivers a COMPLETE header-on frame to on_data (it re-frames
+    // each reassembled frame), so the client routes it through a frame_router —
+    // the router owns the frame_header strip + type switch and hands the inner
+    // unidirectional payload to its consumer. This exercises the unified receive
+    // contract honestly rather than hand-stripping the header in the test.
     pasio::asio_channel client(io);
     std::optional<std::vector<std::byte>> received;
-    client.on_data([&](std::span<const std::byte> inner)
+    pio::frame_router router;
+    router.on_unidirectional([&](std::span<const std::byte> inner)
     {
         auto decoded = wire::decode_unidirectional(inner);
         if(decoded)
             received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
     });
+    client.on_data([&](std::span<const std::byte> frame) { router.route(frame); });
 
     ::asio::ip::tcp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), port);
     client.socket().connect(server_ep);
@@ -77,17 +83,15 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
         io.poll_one();
 
     // The publisher-side forwarder fans toward the accepted server channel.
-    // attach emits an (unframed) subscribe control frame; the reassembler on the
-    // client correctly rejects it as non-data and clears, so we flush it across
-    // its own read cycle BEFORE publishing the data frame — the SLICE-2 round-trip
-    // proves the publish->frame-once->fan-out->reassemble->receive DATA path, not
-    // the control-frame wire discipline (a separate hardening concern). Flushing
-    // in a bounded poll keeps the subscribe and the data frame in distinct reads.
+    // attach emits a frame_header-wrapped subscribe control frame: control frames
+    // are now framed identically to data, so the reassembler frames the subscribe
+    // cleanly (it no longer rejects-and-clears on it) and it reassembles alongside
+    // the data frame. The client's frame_router demuxes by frame_header.type — the
+    // subscribe has no registered consumer and is warn-and-dropped, the
+    // unidirectional data routes to its consumer — so no flush loop is needed.
     pio::message_forwarder<pasio::asio_policy> fwd;
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "client-node"};
     fwd.attach(sub, fqn);
-    for(int i = 0; i < 256; ++i)
-        io.poll();
 
     fwd.publish(fqn, payload);
 

@@ -5,6 +5,7 @@
 #include "plexus/asio/asio_listener.h"
 
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/frame_router.h"
 
 #include "plexus/wire/data_frame.h"
 
@@ -86,12 +87,16 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
 
     pasio::asio_channel client(io);
     std::optional<std::vector<std::byte>> received;
-    client.on_data([&](std::span<const std::byte> inner)
+    pio::frame_router router;
+    router.on_unidirectional([&](std::span<const std::byte> inner)
     {
         auto decoded = wire::decode_unidirectional(inner);
         if(decoded)
             received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
     });
+    // on_data now delivers a COMPLETE header-on frame; the frame_router owns the
+    // header strip + type switch and hands the inner payload to its consumer.
+    client.on_data([&](std::span<const std::byte> frame) { router.route(frame); });
 
     ::asio::ip::tcp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), port);
     client.socket().connect(server_ep);
@@ -106,12 +111,10 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     pio::message_forwarder<pasio::asio_policy> fwd;
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "peer-node"};
     fwd.attach(sub, fqn);
-    // Flush the (unframed) subscribe control frame across its own read cycle so
-    // the data frame reassembles cleanly — same DATA-path discipline as the
-    // round-trip test; the shared-executor proof is that this all rides one ctx.
-    for(int i = 0; i < 256; ++i)
-        io.poll();
-
+    // The subscribe is now frame_header-wrapped (control frames are framed like
+    // data), so it reassembles cleanly and the client's frame_router warn-and-
+    // drops it (no subscribe consumer) while routing the data frame — no flush
+    // loop is needed. The shared-executor proof is that this all rides one ctx.
     fwd.publish(fqn, payload);
 
     // Drive the ONE context: the SAME poll loop runs the TCP accept/read/write

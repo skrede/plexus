@@ -3,6 +3,7 @@
 
 #include "plexus/asio/detail/asio_error_map.h"
 
+#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame_reassembler.h"
 
 #include "plexus/io/endpoint.h"
@@ -130,16 +131,26 @@ private:
     {
         auto result = m_reassembler.feed(bytes);
         for(auto &frame : result.frames)
+            post_frame(frame);
+    }
+
+    // Re-frame the reassembled frame back into a COMPLETE header-on frame and post
+    // THAT, so on_data delivers a full frame (header + payload) — identical in
+    // shape to what the inproc channel delivers (send() bytes verbatim) — and the
+    // downstream frame_router sees the frame_header.type byte. The reassembler
+    // split the header off; this stitches it back on. The re-frame runs into a
+    // reused member scratch (encode_frame_into reuses capacity, no per-frame
+    // alloc on the steady path); the owning vector keeps the bytes alive across
+    // the post, the same lifetime discipline as before.
+    void post_frame(const wire::complete_frame &frame)
+    {
+        wire::encode_frame_into(m_frame_scratch, frame.header, frame.payload);
+        auto owned = std::make_shared<std::vector<std::byte>>(m_frame_scratch);
+        ::asio::post(m_io, [this, owned]
         {
-            // Post the owning payload, never deliver inline: the owner keeps the
-            // bytes alive across the post into the read-handler-free on_data call.
-            auto payload = std::make_shared<wire::shared_bytes>(std::move(frame.payload));
-            ::asio::post(m_io, [this, payload]
-            {
-                if(m_on_data)
-                    m_on_data(std::span<const std::byte>{*payload});
-            });
-        }
+            if(m_on_data)
+                m_on_data(std::span<const std::byte>{*owned});
+        });
     }
 
     void do_write()
@@ -176,6 +187,7 @@ private:
     ::asio::io_context &m_io;
     ::asio::ip::tcp::socket m_socket;
     wire::frame_reassembler m_reassembler;
+    std::vector<std::byte> m_frame_scratch;
     std::array<std::byte, 4096> m_read_buf{};
     std::deque<std::vector<std::byte>> m_write_queue;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;

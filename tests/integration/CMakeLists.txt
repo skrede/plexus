@@ -26,6 +26,19 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         Catch2::Catch2WithMain)
     catch_discover_tests(test_asio_roundtrip TEST_PREFIX "integration.")
+
+    # The asio control-frame demux smoke test: a frame_header-wrapped subscribe
+    # pushed through the real asio reassembler + frame_router over TCP loopback
+    # demuxes to the subscribe consumer — proving the frame_header.type byte
+    # survives the asio receive path (the receive-contract proof, at the point of
+    # change). Same asio gate + `integration.` ctest prefix.
+    add_executable(test_asio_frame_contract test_asio_frame_contract.cpp)
+    target_link_libraries(test_asio_frame_contract PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_asio_frame_contract TEST_PREFIX "integration.")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
