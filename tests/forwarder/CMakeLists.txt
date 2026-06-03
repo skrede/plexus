@@ -32,3 +32,24 @@ target_link_libraries(test_frame_router PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_frame_router TEST_PREFIX "forwarder.")
+
+# The procedure (req/res) forwarder behavioral oracle: the refcount-gated procedure
+# subscribe handshake, drain_for resurrection, the call/serve roundtrip recovering
+# exact opaque param/return bytes matched by correlation_id, the no_handler and
+# orphan-drop failure legs, detach_all failing every outstanding call with
+# peer_disconnected, concurrent corr_ids resolving without cross-talk, and a
+# steady-state provider-dispatch alloc-delta gate over a non-allocating sink Policy.
+# Parity-strict: no timeout test (there is no per-call timer to exercise). Links the
+# core, wire, and inproc layers; selected by the same `forwarder.` ctest prefix.
+add_executable(test_procedure_forwarder test_procedure_forwarder.cpp)
+
+target_include_directories(test_procedure_forwarder PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+target_link_libraries(test_procedure_forwarder PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_procedure_forwarder TEST_PREFIX "forwarder.")

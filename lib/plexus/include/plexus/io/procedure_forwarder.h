@@ -62,12 +62,14 @@ public:
         std::string node_name;
     };
 
-    // The provider's async reply: invoke reply_fn(status, return_bytes) to frame an
-    // rpc_response carrying the request's correlation_id.
+    // The provider's async reply: invoke reply(status, return_bytes) to frame an
+    // rpc_response carrying the request's correlation_id. Passed to a handler by
+    // reference to a forwarder-owned, reused callable — so a steady-state dispatch
+    // constructs no new type-erased object (the no-hot-path-allocation invariant).
     using reply_fn = detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
 
-    // A provider handler over opaque param bytes; it replies via the reply_fn.
-    using handler_fn = detail::move_only_function<void(std::span<const std::byte> param, reply_fn)>;
+    // A provider handler over opaque param bytes; it replies via the reply&.
+    using handler_fn = detail::move_only_function<void(std::span<const std::byte> param, reply_fn &)>;
 
     // The caller's response callback: fired once with the matched response's status
     // and opaque return bytes (or peer_disconnected/no_handler on a failure leg).
@@ -187,11 +189,13 @@ public:
     }
 
     // deliver_request (provider receive tail): decode the inbound (header-off)
-    // rpc_request, resolve its fqn by topic_hash, and dispatch to the registered
-    // handler over the opaque param bytes. An unknown topic replies topic_not_found;
-    // a known fqn with no provider replies no_handler — neither leaves the caller
-    // hanging. The handler replies via a reply_fn that frames a same-corr_id
-    // rpc_response (source = procedure, swapped type hashes).
+    // rpc_request, resolve a local provider by topic_hash, and dispatch to it over
+    // the opaque param bytes. A request whose topic_hash has no served provider
+    // resolves the caller's pending entry with no_handler (never silent, never
+    // left hanging) UNLESS the subscriber registry knows the fqn for this hash from
+    // a prior attach but no provider is served — that "topic known, provider gone"
+    // state replies topic_not_found. The handler replies via a reply_fn that frames
+    // a same-corr_id rpc_response (source = procedure, swapped type hashes).
     void deliver_request(const peer &p, std::span<const std::byte> inner)
     {
         auto decoded = wire::decode_rpc_request(inner);
@@ -201,16 +205,20 @@ public:
         const auto req_hdr = decoded->header;
         auto hash_it = m_hash_to_fqn.find(req_hdr.topic_hash);
         if(hash_it == m_hash_to_fqn.end())
-            return reply_status(p, req_hdr, wire::rpc_status::topic_not_found, {});
+        {
+            auto status = m_registry.fqn_for(req_hdr.topic_hash).empty()
+                              ? wire::rpc_status::no_handler
+                              : wire::rpc_status::topic_not_found;
+            return reply_status(p.channel, req_hdr, status, {});
+        }
 
-        auto provider_it = m_providers.find(hash_it->second);
-        if(provider_it == m_providers.end())
-            return reply_status(p, req_hdr, wire::rpc_status::no_handler, {});
-
-        auto reply = [this, &p, req_hdr](wire::rpc_status status, std::span<const std::byte> return_data) {
-            reply_status(p, req_hdr, status, return_data);
-        };
-        provider_it->second(decoded->param_data, std::move(reply));
+        // Stage the active request context, then hand the handler the forwarder's
+        // reused reply (constructed once, on first dispatch) by reference — no
+        // per-dispatch type-erased object is built.
+        m_active_channel = &p.channel;
+        m_active_req_hdr = req_hdr;
+        ensure_reply_ready();
+        m_providers.find(hash_it->second)->second(decoded->param_data, m_reply);
     }
 
     // deliver_response (caller receive tail): decode the inbound (header-off)
@@ -245,10 +253,22 @@ private:
         on_response_fn on_response;
     };
 
+    // ensure_reply_ready: construct the forwarder's reused reply once (lazily). It
+    // closes over `this` and reads the staged m_active_* request context, so a
+    // steady-state dispatch reuses it with no per-dispatch type-erased allocation.
+    void ensure_reply_ready()
+    {
+        if(m_reply)
+            return;
+        m_reply = [this](wire::rpc_status status, std::span<const std::byte> return_data) {
+            reply_status(*m_active_channel, m_active_req_hdr, status, return_data);
+        };
+    }
+
     // reply_status: frame an rpc_response carrying the request's correlation_id back
     // to the peer (source = procedure, type hashes swapped relative to the request)
     // and send it through reused scratch.
-    void reply_status(const peer &p, const wire::bidirectional_header &req_hdr,
+    void reply_status(channel_type &channel, const wire::bidirectional_header &req_hdr,
                       wire::rpc_status status, std::span<const std::byte> return_data)
     {
         wire::bidirectional_header resp_hdr{
@@ -260,7 +280,7 @@ private:
                 .correlation_id = req_hdr.correlation_id
         };
         wire::encode_rpc_response_into(m_resp_scratch, resp_hdr, status, return_data);
-        send_control(p.channel, wire::msg_type::rpc_response, m_resp_scratch);
+        send_control(channel, wire::msg_type::rpc_response, m_resp_scratch);
     }
 
     // send_control: wrap an inner payload in a frame_header (session_id = 0, every
@@ -312,6 +332,9 @@ private:
     std::vector<std::byte> m_req_scratch;
     std::vector<std::byte> m_resp_scratch;
     std::vector<std::byte> m_frame_scratch;
+    reply_fn m_reply;
+    channel_type *m_active_channel{nullptr};
+    wire::bidirectional_header m_active_req_hdr{};
     std::uint64_t m_next_correlation_id{1};
     std::uint64_t m_next_sequence{0};
     std::size_t m_max_outstanding;
