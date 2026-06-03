@@ -9,5 +9,7 @@ set(PLEXUS_WIRE_TESTS
 foreach(test ${PLEXUS_WIRE_TESTS})
     add_executable(${test} ${test}.cpp)
     target_link_libraries(${test} PRIVATE plexus::wire Catch2::Catch2WithMain)
-    catch_discover_tests(${test})
+    # Prefix the ctest registration so `ctest -R wire` selects the whole wire
+    # suite by name (the [wire] Catch2 tag is not a ctest-visible selector).
+    catch_discover_tests(${test} TEST_PREFIX "wire.")
 endforeach()
