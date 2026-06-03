@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_MESSAGE_FORWARDER_H
 
 #include "plexus/io/subscriber_registry.h"
+#include "plexus/io/null_logger.h"
 #include "plexus/wire_bytes.h"
 #include "plexus/policy.h"
 #include "plexus/log/logger.h"
@@ -24,15 +25,6 @@
 #include <unordered_map>
 
 namespace plexus::io {
-
-// The shared null sink the forwarder is injected with when the caller supplies
-// no logger: the warn-and-drop seam exists, but is silent. A function-local
-// static (no static singleton object at namespace scope) bound by reference.
-inline log::logger &shared_null_logger()
-{
-    static log::null_logger sink;
-    return sink;
-}
 
 // The slice's payload-opaque pub/sub engine: a header-only forwarder templated
 // on the Policy seam that fans opaque wire_bytes over byte_channels. A "peer" is
