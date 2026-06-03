@@ -48,7 +48,12 @@ public:
 
     void enqueue(const io::endpoint &to, std::span<const std::byte> data)
     {
-        m_queue.push_back(queued_packet{to, std::vector<std::byte>(data.begin(), data.end())});
+        m_queue.push_back(queued_packet{to, packet_kind::data, std::vector<std::byte>(data.begin(), data.end())});
+    }
+
+    void enqueue_close(const io::endpoint &to)
+    {
+        m_queue.push_back(queued_packet{to, packet_kind::close, {}});
     }
 
     bool deliver_one()
@@ -62,7 +67,10 @@ public:
         for(auto &entry : m_channels)
             if(pkt.to == entry.assigned_ep)
             {
-                entry.chan->deliver(std::span<const std::byte>(pkt.data));
+                if(pkt.kind == packet_kind::close)
+                    entry.chan->deliver_close();
+                else
+                    entry.chan->deliver(std::span<const std::byte>(pkt.data));
                 break;
             }
 
@@ -72,9 +80,12 @@ public:
     [[nodiscard]] bool has_pending_packets() const noexcept { return !m_queue.empty(); }
 
 private:
+    enum class packet_kind : uint8_t { data, close };
+
     struct queued_packet
     {
         io::endpoint to;
+        packet_kind kind;
         std::vector<std::byte> data;
     };
 
