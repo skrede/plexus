@@ -10,6 +10,7 @@
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/frame_codec.h"
+#include "plexus/wire/topic_hash.h"
 
 #include "plexus/detail/compat.h"
 
@@ -31,23 +32,6 @@ inline log::logger &shared_null_logger()
 {
     static log::null_logger sink;
     return sink;
-}
-
-// Stable fqn -> topic_hash for the slice. plexus carries no hashing dependency,
-// so the wire identity is computed here with 64-bit FNV-1a: deterministic for
-// identical bytes on every platform (unlike std::hash, which is toolchain-
-// defined), which is the only correct property for an identifier two peers must
-// agree on. attach and publish both route through this one function, so the
-// receive tail's resolve-by-hash is self-consistent.
-inline std::uint64_t fqn_topic_hash(std::string_view fqn) noexcept
-{
-    std::uint64_t h = 1469598103934665603ull;
-    for(char c : fqn)
-    {
-        h ^= static_cast<std::uint64_t>(static_cast<unsigned char>(c));
-        h *= 1099511628211ull;
-    }
-    return h;
 }
 
 // The slice's payload-opaque pub/sub engine: a header-only forwarder templated
@@ -86,7 +70,7 @@ public:
     {
         if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
             return false;
-        auto hash = fqn_topic_hash(fqn);
+        auto hash = wire::fqn_topic_hash(fqn);
         m_registry.add_subscriber(hash, fqn, p.channel, p.node_name);
         record_remote_topic(p.node_name, fqn);
         send_subscribe(p.channel, fqn, hash);
@@ -99,11 +83,11 @@ public:
     {
         if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
             return false;
-        auto hash = fqn_topic_hash(fqn);
+        auto hash = wire::fqn_topic_hash(fqn);
         m_registry.add_subscriber(hash, fqn, p.channel, p.node_name);
         auto resp = wire::encode_subscribe_response(
             {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
-        p.channel.send(resp);
+        send_control(p.channel, wire::msg_type::subscribe_response, resp);
         return true;
     }
 
@@ -113,7 +97,7 @@ public:
     // or allocation in the loop.
     void publish(std::string_view fqn, std::span<const std::byte> payload)
     {
-        auto hash = fqn_topic_hash(fqn);
+        auto hash = wire::fqn_topic_hash(fqn);
         const auto *subs = m_registry.subscribers_for(hash);
         if(subs == nullptr)
             return;
@@ -148,10 +132,10 @@ public:
     {
         if(m_registry.drop_refcount(p.node_name, fqn) != 0u)
             return false;
-        auto hash = fqn_topic_hash(fqn);
+        auto hash = wire::fqn_topic_hash(fqn);
         m_registry.remove_subscriber(hash, p.channel);
         auto req = wire::encode_unsubscribe_request({.topic_hash = hash});
-        p.channel.send(req);
+        send_control(p.channel, wire::msg_type::unsubscribe, req);
         return true;
     }
 
@@ -171,23 +155,19 @@ public:
         if(it == m_remote_topics.end())
             return;
         for(const auto &fqn : it->second)
-            send_subscribe(p.channel, fqn, fqn_topic_hash(fqn));
+            send_subscribe(p.channel, fqn, wire::fqn_topic_hash(fqn));
     }
 
-    // The receive tail: given a reassembled frame, strip the frame_header,
-    // decode the unidirectional payload, resolve the fqn by topic_hash, and hand
+    // The receive tail: given the INNER unidirectional payload (header-OFF — the
+    // frame_router owns the frame_header strip and the type switch, per the
+    // router-owns-demux split), decode it, resolve the fqn by topic_hash, and hand
     // the opaque wire_bytes up to on_message (plexus never parses them). A
-    // decode/verify failure — a bad header, a non-unidirectional type, a
-    // malformed inner payload, or an unresolved topic_hash — is warn-and-DROPPED
-    // through the injected logger&: never thrown, never propagated, never crashed.
+    // decode/verify failure — a malformed inner payload or an unresolved
+    // topic_hash — is warn-and-DROPPED through the injected logger&: never thrown,
+    // never propagated, never crashed.
     template <typename OnMessage>
-    void deliver(std::span<const std::byte> frame, OnMessage &&on_message)
+    void deliver(std::span<const std::byte> inner, OnMessage &&on_message)
     {
-        auto fhdr = wire::decode_header(frame);
-        if(!fhdr || fhdr->type != wire::msg_type::unidirectional)
-            return drop("plexus: forwarder frame_decode_failed");
-
-        auto inner = frame.subspan(wire::header_size);
         auto decoded = wire::decode_unidirectional(inner);
         if(!decoded)
             return drop("plexus: forwarder unidirectional_decode_failed");
@@ -200,6 +180,24 @@ public:
     }
 
 private:
+    // Wrap an inner control payload in a frame_header (Seed 3 — every control
+    // frame carries the same framing as data so it survives a real reassembler-
+    // framed stream) and send it. session_id = 0 on every control frame (Seed 1
+    // stays deferred — no per-peer stamp). Reuses a member scratch so the control
+    // emits stay allocation-light, consistent with the publish data path.
+    void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
+    {
+        wire::frame_header fhdr{
+                .type         = type,
+                .flags        = 0,
+                .session_id   = 0,
+                .timestamp_ns = wire::now_timestamp_ns(),
+                .payload_len  = inner.size()
+        };
+        wire::encode_frame_into(m_control_scratch, fhdr, inner);
+        channel.send(m_control_scratch);
+    }
+
     void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash)
     {
         wire::subscribe_request req{
@@ -210,7 +208,7 @@ private:
                 .source     = wire::endpoint_source_type::publisher
         };
         auto bytes = wire::encode_subscribe_request(req);
-        channel.send(bytes);
+        send_control(channel, wire::msg_type::subscribe, bytes);
     }
 
     void record_remote_topic(const std::string &node_name, std::string_view fqn)
@@ -229,6 +227,7 @@ private:
     std::unordered_map<std::string, std::vector<std::string>> m_remote_topics;
     std::vector<std::byte> m_inner_scratch;
     std::vector<std::byte> m_frame_scratch;
+    std::vector<std::byte> m_control_scratch;
     std::uint64_t m_next_sequence{0};
 };
 
