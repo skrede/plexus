@@ -37,9 +37,10 @@ namespace plexus::io {
 // with the SAME correlation_id. The caller matches a response back to its
 // pending entry by correlation_id; a miss is warn-and-dropped as an orphan.
 //
-// Parity-strict (mirrors the source): there is NO per-call timeout (no Policy::timer
-// armed, no deadline field) and NO caller cancel. An outstanding request resolves
-// ONLY on a matching response or on peer-death (detach_all -> peer_disconnected).
+// Parity-strict (mirrors the source): there is NO per-call timeout (no Policy
+// timer armed, no per-call expiry) and NO caller cancel. An outstanding request
+// resolves ONLY on a matching response or on peer-death
+// (detach_all -> peer_disconnected).
 //
 // The router-owns-demux split: this forwarder exposes
 // deliver_request/deliver_response and owns NO frame_header.type switch — the
@@ -121,7 +122,7 @@ public:
     void deliver_response(const peer &p, std::span<const std::byte> inner);
 
 private:
-    // A registered outstanding request. NO deadline/timer field: an
+    // A registered outstanding request. NO per-call expiry field: an
     // entry resolves only on a matching response or peer-death.
     struct pending_rpc
     {
@@ -150,6 +151,99 @@ private:
     std::uint64_t m_next_sequence{0};
     std::size_t m_max_outstanding;
 };
+
+// --- Caller half: correlation, response-match, peer-death resolution ---
+
+// call: fail fast if the peer's outstanding map is full (no insertion), else
+// allocate a corr_id, frame a frame_header-wrapped rpc_request into reused
+// scratch, send it, and ONLY THEN register the pending entry (the source
+// registers post-admission so a rejected send leaves no dangling entry). Type
+// hashes are opaque correlation hints plexus never interprets — written 0.
+template <typename Policy>
+    requires plexus::Policy<Policy>
+void procedure_forwarder<Policy>::call(const peer &p, std::string_view fqn,
+                                       std::span<const std::byte> param, on_response_fn on_response)
+{
+    auto &per_peer = m_outstanding[p.node_name];
+    if(per_peer.size() >= m_max_outstanding)
+        return on_response(wire::rpc_status::error, {});
+
+    std::uint64_t corr_id = m_next_correlation_id++;
+    wire::bidirectional_header hdr{
+            .source         = wire::endpoint_source_type::caller,
+            .sequence       = m_next_sequence++,
+            .topic_hash     = wire::fqn_topic_hash(fqn),
+            .type_hash_1    = 0,
+            .type_hash_2    = 0,
+            .correlation_id = corr_id
+    };
+    wire::encode_rpc_request_into(m_req_scratch, hdr, param);
+    send_control(p.channel, wire::msg_type::rpc_request, m_req_scratch);
+
+    per_peer.emplace(corr_id, pending_rpc{std::string{fqn}, std::move(on_response)});
+}
+
+// deliver_response: decode the inbound (header-off) rpc_response, find the
+// pending entry for this peer by correlation_id, move it out + erase it, and fire
+// its callback. A non-matching corr_id is warn-and-dropped as an orphan — never
+// fires a callback (corr_id uniqueness guarantees <= 1 match).
+template <typename Policy>
+    requires plexus::Policy<Policy>
+void procedure_forwarder<Policy>::deliver_response(const peer &p, std::span<const std::byte> inner)
+{
+    auto decoded = wire::decode_rpc_response(inner);
+    if(!decoded)
+        return drop("plexus: forwarder rpc_response decode_failed");
+
+    auto peer_it = m_outstanding.find(p.node_name);
+    if(peer_it == m_outstanding.end())
+        return drop("plexus: forwarder rpc_response_orphan");
+
+    auto entry_it = peer_it->second.find(decoded->header.correlation_id);
+    if(entry_it == peer_it->second.end())
+        return drop("plexus: forwarder rpc_response_orphan");
+
+    pending_rpc pending = std::move(entry_it->second);
+    peer_it->second.erase(entry_it);
+    pending.on_response(decoded->status, decoded->return_data);
+}
+
+// detach_all: drop the peer's subscriber entries/refcounts, then fire EVERY
+// pending callback for the peer with peer_disconnected (empty return bytes) and
+// erase the peer's outstanding map. The ONLY non-response resolution path.
+template <typename Policy>
+    requires plexus::Policy<Policy>
+void procedure_forwarder<Policy>::detach_all(const peer &p)
+{
+    m_registry.remove_peer(p.node_name, p.channel);
+    m_remote_topics.erase(p.node_name);
+
+    auto peer_it = m_outstanding.find(p.node_name);
+    if(peer_it == m_outstanding.end())
+        return;
+    for(auto &[corr_id, pending] : peer_it->second)
+        pending.on_response(wire::rpc_status::peer_disconnected, {});
+    m_outstanding.erase(peer_it);
+}
+
+// send_control: wrap an inner payload in a frame_header (session_id = 0, every
+// frame uniformly framed) into reused scratch and send it. Shared by the caller
+// request emit, the provider response emit, and the control emits.
+template <typename Policy>
+    requires plexus::Policy<Policy>
+void procedure_forwarder<Policy>::send_control(channel_type &channel, wire::msg_type type,
+                                               std::span<const std::byte> inner)
+{
+    wire::frame_header fhdr{
+            .type         = type,
+            .flags        = 0,
+            .session_id   = 0,
+            .timestamp_ns = wire::now_timestamp_ns(),
+            .payload_len  = inner.size()
+    };
+    wire::encode_frame_into(m_frame_scratch, fhdr, inner);
+    channel.send(m_frame_scratch);
+}
 
 }
 
