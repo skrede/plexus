@@ -7,11 +7,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Backends and extras are opt-in, gated targets — never required by the core.
 option(PLEXUS_ENABLE_ASIO_BACKEND "Build the asio executor/socket/timer backend" OFF)
 option(PLEXUS_BUILD_TESTS "Build the test suite" OFF)
+option(PLEXUS_BUILD_FUZZ_TESTS "Build the libFuzzer harnesses" OFF)
 option(PLEXUS_BUILD_EXAMPLES "Build the examples" OFF)
 
-add_subdirectory(lib/plexus)
+# Project-wide library registration contract: every lib/<target>/ owns a
+# CMakeLists.txt fragment and is auto-discovered here. The glob is
+# target-kind-agnostic — INTERFACE cores (plexus, plexus-wire, plexus-inproc)
+# and gated compiled backends (plexus-asio, plexus-mdnspp) are discovered the
+# same way; each fragment self-gates (an INTERFACE target is unconditional, a
+# compiled backend defines its target only when its option is ON). New targets
+# register by adding their fragment, never by editing this file.
+file(GLOB PLEXUS_LIB_FRAGMENTS CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/*/CMakeLists.txt)
+foreach(fragment ${PLEXUS_LIB_FRAGMENTS})
+    get_filename_component(fragment_dir ${fragment} DIRECTORY)
+    add_subdirectory(${fragment_dir})
+endforeach()
 
-if(PLEXUS_BUILD_TESTS)
+if(PLEXUS_BUILD_TESTS OR PLEXUS_BUILD_FUZZ_TESTS)
     enable_testing()
-    # add_subdirectory(tests)  # enabled with the first slice
+    add_subdirectory(tests)
 endif()
