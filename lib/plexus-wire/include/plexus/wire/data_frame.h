@@ -120,6 +120,29 @@ inline std::vector<std::byte> encode_bidirectional(const bidirectional_header &h
     return buf;
 }
 
+// Encode a bidirectional frame into a caller-owned buffer reused across calls.
+// resize() reuses the buffer's capacity, so a steady-state dispatch loop that
+// frames into the same out vector allocates nothing after the warm-up grow —
+// the rpc encoders' zero-alloc path builds on this (the allocating return
+// overload above stays for one-shot callers).
+inline void encode_bidirectional_into(std::vector<std::byte> &out,
+                                      const bidirectional_header &hdr,
+                                      std::span<const std::byte> data)
+{
+    out.resize(bidirectional_header_size + data.size());
+    auto *p = out.data();
+
+    detail::write_u8(p, static_cast<uint8_t>(hdr.source));
+    detail::write_u64(p + 1, hdr.sequence);
+    detail::write_u64(p + 9, hdr.topic_hash);
+    detail::write_u64(p + 17, hdr.type_hash_1);
+    detail::write_u64(p + 25, hdr.type_hash_2);
+    detail::write_u64(p + 33, hdr.correlation_id);
+
+    if(!data.empty())
+        std::memcpy(p + bidirectional_header_size, data.data(), data.size());
+}
+
 inline std::optional<bidirectional_decode_result> decode_bidirectional(std::span<const std::byte> payload)
 {
     if(payload.size() < bidirectional_header_size)
