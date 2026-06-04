@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SUBSCRIBER_REGISTRY_H
 #define HPP_GUARD_PLEXUS_IO_SUBSCRIBER_REGISTRY_H
 
+#include "plexus/topic_qos.h"
+
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -36,6 +38,7 @@ public:
     {
         std::string fqn;
         std::vector<subscriber> subscribers;
+        topic_qos qos{};
     };
 
     // Bump the (peer, fqn) refcount; returns the post-increment count. The 0->1
@@ -82,6 +85,25 @@ public:
             if(sub.channel == &channel)
                 return;
         entry.subscribers.push_back(subscriber{&channel, std::string{node_name}});
+    }
+
+    // Record a publisher-declared per-topic qos (and the topic_hash -> fqn
+    // resolution) BEFORE any subscriber attaches. A later add_subscriber for the
+    // same hash leaves this qos intact (it only fills an empty fqn).
+    void declare(std::uint64_t topic_hash, std::string_view fqn, topic_qos qos)
+    {
+        m_hash_to_fqn[topic_hash] = std::string{fqn};
+        auto &entry = m_topics[topic_hash];
+        if(entry.fqn.empty())
+            entry.fqn = std::string{fqn};
+        entry.qos = qos;
+    }
+
+    // The per-topic qos, or a default topic_qos{} when the hash is unknown.
+    topic_qos qos_for(std::uint64_t topic_hash) const
+    {
+        auto it = m_topics.find(topic_hash);
+        return it == m_topics.end() ? topic_qos{} : it->second.qos;
     }
 
     // Drop one peer's fan-out entry for an fqn.
