@@ -53,3 +53,23 @@ target_link_libraries(test_procedure_forwarder PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_procedure_forwarder TEST_PREFIX "forwarder.")
+
+# The latch behavioral oracle: the registry-seam qos assertion, replay of a value
+# published with ZERO subscribers, the non-latched no-replay negative, empty
+# retention, depth=1 last-value-only, replay-targets-only-the-new-peer, retention
+# across subscriber churn, multi-publisher last-writer-wins, and a delta-zero
+# LATCH-NOALLOC retention gate over a non-allocating sink Policy. Links the core,
+# wire, and inproc layers; selected by the `forwarder.` ctest prefix and by `latch`
+# Catch2 tags so `ctest -R latch` and `ctest -R forwarder` both pick it up.
+add_executable(test_latch_forwarder test_latch_forwarder.cpp)
+
+target_include_directories(test_latch_forwarder PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+target_link_libraries(test_latch_forwarder PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_latch_forwarder TEST_PREFIX "forwarder.")
