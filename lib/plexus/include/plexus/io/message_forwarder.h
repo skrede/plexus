@@ -170,16 +170,19 @@ public:
             send_subscribe(p.channel, fqn, wire::fqn_topic_hash(fqn));
     }
 
-    // The receive tail: given the INNER unidirectional payload (header-OFF — the
-    // frame_router owns the frame_header strip and the type switch, per the
-    // router-owns-demux split), decode it, resolve the fqn by topic_hash, and hand
-    // the opaque wire_bytes up to on_message (plexus never parses them). A
+    // The receive tail: given the source peer and the INNER unidirectional payload
+    // (header-OFF — the frame_router owns the frame_header strip and the type switch,
+    // per the router-owns-demux split), decode it, resolve the fqn by topic_hash, and
+    // hand the opaque wire_bytes up to on_message (plexus never parses them). The peer
+    // leads for receive-path identity symmetry with the procedure side (delivery still
+    // resolves by topic_hash, not by peer). A
     // decode/verify failure — a malformed inner payload or an unresolved
     // topic_hash — is warn-and-DROPPED through the injected logger&: never thrown,
     // never propagated, never crashed.
     template <typename OnMessage>
-    void deliver(std::span<const std::byte> inner, OnMessage &&on_message)
+    void deliver(const peer &p, std::span<const std::byte> inner, OnMessage &&on_message)
     {
+        (void)p;   // identity symmetry with the procedure receive tail; resolution is by topic_hash
         auto decoded = wire::decode_unidirectional(inner);
         if(!decoded)
             return drop("plexus: forwarder unidirectional_decode_failed");

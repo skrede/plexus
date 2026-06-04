@@ -311,7 +311,7 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
     std::string got_body;
     plexus::io::frame_router router;
     router.on_unidirectional([&](std::span<const std::byte> inner) {
-        fwd.deliver(inner, [&](std::string_view fqn, std::span<const std::byte> data) {
+        fwd.deliver(peer, inner, [&](std::string_view fqn, std::span<const std::byte> data) {
             got_fqn.assign(fqn);
             got_body.assign(reinterpret_cast<const char *>(data.data()), data.size());
         });
@@ -338,13 +338,19 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
     counting_logger log;
     forwarder fwd(log);
 
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
+
     // An inner payload too short to be a unidirectional header (< 25 bytes), so
     // the realigned deliver() — which now receives the header-off inner payload
     // (the router owns the header strip) — fails decode_unidirectional and drops.
     std::vector<std::byte> garbage(8, std::byte{0xAB});
 
     bool fired = false;
-    fwd.deliver(garbage, [&](std::string_view, std::span<const std::byte>) { fired = true; });
+    fwd.deliver(peer, garbage, [&](std::string_view, std::span<const std::byte>) { fired = true; });
 
     REQUIRE_FALSE(fired);           // dropped: no subscriber callback
     REQUIRE(log.count == 1);        // the warn seam fired exactly once
@@ -353,10 +359,17 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
 TEST_CASE("default forwarder drops a malformed frame silently via null_logger", "[forwarder]")
 {
     forwarder fwd;                  // no logger argument: shared null_logger
+
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
+
     std::vector<std::byte> garbage(8, std::byte{0xAB});
 
     bool fired = false;
-    REQUIRE_NOTHROW(fwd.deliver(garbage, [&](std::string_view, std::span<const std::byte>) {
+    REQUIRE_NOTHROW(fwd.deliver(peer, garbage, [&](std::string_view, std::span<const std::byte>) {
         fired = true;
     }));
     REQUIRE_FALSE(fired);           // dropped silently, no crash
