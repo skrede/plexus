@@ -17,12 +17,16 @@
 #include "plexus/detail/compat.h"
 
 #include <span>
+#include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <optional>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 
 namespace plexus::io {
@@ -37,10 +41,14 @@ namespace plexus::io {
 // SAME correlation_id. The caller matches a response back to its pending entry by
 // correlation_id; a miss is warn-and-dropped as an orphan.
 //
-// Parity-strict (mirrors the source): there is NO per-call timeout (no Policy
-// timer armed, no per-call expiry) and NO caller cancel. An outstanding request
-// resolves ONLY on a matching response or on peer-death
-// (detach_all -> peer_disconnected).
+// Parity-strict elsewhere, with ONE additive guarantee the source lacks: a
+// per-call timeout. The source resolves an outstanding request only on a matching
+// response or on peer-death (detach_all -> peer_disconnected); a provider that
+// silently never replies hangs forever. plexus arms a Policy timer per call (a
+// forwarder-level default deadline set at construction, optionally overridden
+// per call): on expiry the entry fires rpc_status::timeout and is erased; a
+// matched response or detach_all cancels the timer first. There is still NO
+// caller cancel — an in-flight call resolves on response, timeout, or peer-death.
 //
 // The router-owns-demux split: this forwarder exposes
 // deliver_request/deliver_response and owns NO frame_header.type switch — the
@@ -53,6 +61,8 @@ class procedure_forwarder
 {
 public:
     using channel_type = typename Policy::byte_channel_type;
+    using executor_type = typename Policy::executor_type;
+    using timer_type = typename Policy::timer_type;
 
     // A peer the forwarder talks to: the channel a frame rides plus the node-name
     // key its outstanding table is rooted at (mirror message_forwarder).
@@ -79,9 +89,16 @@ public:
     // (no hot-path growth), not a wire change — an over-capacity call fails fast.
     static constexpr std::size_t k_default_max_outstanding = 1024;
 
-    explicit procedure_forwarder(log::logger &logger = shared_null_logger(),
-                                 std::size_t max_outstanding = k_default_max_outstanding) noexcept
+    // The executor (to construct a per-call Policy timer) and the default call
+    // deadline are REQUIRED — a forwarder cannot arm a timeout it was not told to.
+    // The deadline is passed in, not defaulted to a magic constant, per plexus's
+    // required-over-default posture: the right value depends on the deployment.
+    procedure_forwarder(executor_type executor, std::chrono::nanoseconds default_deadline,
+                        log::logger &logger = shared_null_logger(),
+                        std::size_t max_outstanding = k_default_max_outstanding)
         : m_logger(logger)
+        , m_executor(executor)
+        , m_default_deadline(default_deadline)
         , m_max_outstanding(max_outstanding)
     {
     }
@@ -99,7 +116,9 @@ public:
     // scratch, send it, and ONLY THEN register the pending entry (the source
     // registers post-admission so a rejected send leaves no dangling entry). Type
     // hashes are opaque correlation hints plexus never interprets — written 0.
-    void call(const peer &p, std::string_view fqn, std::span<const std::byte> param, on_response_fn on_response)
+    void call(const peer &p, std::string_view fqn, std::span<const std::byte> param,
+              on_response_fn on_response,
+              std::optional<std::chrono::nanoseconds> deadline = std::nullopt)
     {
         auto &per_peer = m_outstanding[p.node_name];
         if(per_peer.size() >= m_max_outstanding)
@@ -117,7 +136,10 @@ public:
         wire::encode_rpc_request_into(m_req_scratch, hdr, param);
         send_control(p.channel, wire::msg_type::rpc_request, m_req_scratch);
 
-        per_peer.emplace(corr_id, pending_rpc{std::string{fqn}, std::move(on_response)});
+        auto [it, _] = per_peer.emplace(corr_id, pending_rpc{
+                std::string{fqn}, std::move(on_response),
+                std::make_unique<timer_type>(m_executor)});
+        arm_deadline(p.node_name, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
     }
 
     // attach: per-(peer, fqn) refcount gate. On 0->1 it emits a procedure subscribe
@@ -163,7 +185,8 @@ public:
 
     // detach_all: drop the peer's subscriber entries/refcounts, then fire EVERY
     // pending callback for the peer with peer_disconnected and erase the peer's
-    // outstanding map. The ONLY non-response resolution path (no timer).
+    // outstanding map. Cancels each entry's deadline timer first so a torn-down
+    // entry never fires a late timeout. The peer-death resolution path.
     void detach_all(const peer &p)
     {
         m_registry.remove_peer(p.node_name, p.channel);
@@ -173,7 +196,10 @@ public:
         if(peer_it == m_outstanding.end())
             return;
         for(auto &[corr_id, pending] : peer_it->second)
+        {
+            pending.timer->cancel();
             pending.on_response(wire::rpc_status::peer_disconnected, {});
+        }
         m_outstanding.erase(peer_it);
     }
 
@@ -241,17 +267,51 @@ public:
 
         pending_rpc pending = std::move(entry_it->second);
         peer_it->second.erase(entry_it);
+        pending.timer->cancel();   // cancel-on-match: no late timeout for a resolved call
         pending.on_response(decoded->status, decoded->return_data);
     }
 
 private:
-    // A registered outstanding request. NO per-call expiry field: an entry resolves
-    // only on a matching response or peer-death.
+    // A registered outstanding request. Owns its deadline timer (one heap node per
+    // outstanding call, consistent with the bounded per-call map cost — NOT a
+    // dispatch-path allocation) so the entry stays movable on a matched response.
     struct pending_rpc
     {
         std::string fqn;
         on_response_fn on_response;
+        std::unique_ptr<timer_type> timer;
     };
+
+    // arm_deadline: start the per-call timer. On a clean expiry (the response never
+    // arrived) fire rpc_status::timeout and erase the entry; a cancellation (match
+    // or detach_all) lands as operation_canceled and is a no-op. The handler looks
+    // the entry up by (node_name, corr_id) — never captures the entry, which moves.
+    void arm_deadline(const std::string &node_name, std::uint64_t corr_id,
+                      timer_type &timer, std::chrono::nanoseconds deadline)
+    {
+        timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(deadline));
+        timer.async_wait([this, node_name, corr_id](std::error_code ec) {
+            if(ec)
+                return;   // cancelled by a matched response or detach_all
+            fire_timeout(node_name, corr_id);
+        });
+    }
+
+    // fire_timeout: resolve a still-outstanding entry with rpc_status::timeout and
+    // erase it. A no-op if the entry already resolved (a race the cancel forecloses,
+    // but the lookup makes the expiry idempotent regardless).
+    void fire_timeout(const std::string &node_name, std::uint64_t corr_id)
+    {
+        auto peer_it = m_outstanding.find(node_name);
+        if(peer_it == m_outstanding.end())
+            return;
+        auto entry_it = peer_it->second.find(corr_id);
+        if(entry_it == peer_it->second.end())
+            return;
+        pending_rpc pending = std::move(entry_it->second);
+        peer_it->second.erase(entry_it);
+        pending.on_response(wire::rpc_status::timeout, {});
+    }
 
     // ensure_reply_ready: construct the forwarder's reused reply once (lazily). It
     // closes over `this` and reads the staged m_active_* request context, so a
@@ -324,6 +384,8 @@ private:
     void drop(std::string_view message) { m_logger.warn(message); }
 
     log::logger &m_logger;
+    executor_type m_executor;
+    std::chrono::nanoseconds m_default_deadline;
     subscriber_registry<channel_type> m_registry;
     std::unordered_map<std::string, handler_fn> m_providers;
     std::unordered_map<std::uint64_t, std::string> m_hash_to_fqn;

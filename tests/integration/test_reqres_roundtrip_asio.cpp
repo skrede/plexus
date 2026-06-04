@@ -59,7 +59,7 @@ struct live_rpc
     pio::frame_router client_router;   // client: demux inbound rpc_response
 
     std::optional<forwarder> provider;     // server side (constructed once accepted)
-    forwarder caller;                      // client side
+    forwarder caller{io, std::chrono::seconds(30)};   // client side; generous so the roundtrip never trips
 
     std::optional<forwarder::peer> caller_peer;
     std::optional<forwarder::peer> provider_peer;
@@ -86,7 +86,7 @@ struct live_rpc
             io.poll_one();
 
         caller_peer.emplace(forwarder::peer{client, "server-node"});
-        provider.emplace();
+        provider.emplace(io, std::chrono::seconds(30));
         provider_peer.emplace(forwarder::peer{*server_channel, "client-node"});
 
         // Server receive: header-on frame -> router -> rpc_request -> provider.

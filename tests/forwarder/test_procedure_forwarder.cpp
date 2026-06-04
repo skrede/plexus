@@ -47,6 +47,11 @@ static_assert(plexus::io::wire_forwarder<procedure_forwarder, procedure_forwarde
 
 namespace {
 
+// A deadline far past any clock advance the non-timeout cases perform — the inproc
+// clock only moves when a test explicitly advances it, so a roundtrip/orphan case
+// never trips this. The dedicated timeout cases pass their own short deadline.
+constexpr auto k_long_deadline = std::chrono::hours(1);
+
 std::span<const std::byte> as_bytes(const std::string &s)
 {
     return {reinterpret_cast<const std::byte *>(s.data()), s.size()};
@@ -82,8 +87,8 @@ struct rpc_link
     inproc_channel<> provider_tx{ex};
     inproc_channel<> provider_rx{ex};
 
-    procedure_forwarder caller;
-    procedure_forwarder provider;
+    procedure_forwarder caller{ex, k_long_deadline};
+    procedure_forwarder provider{ex, k_long_deadline};
 
     plexus::io::frame_router caller_router;
     plexus::io::frame_router provider_router;
@@ -92,7 +97,7 @@ struct rpc_link
     procedure_forwarder::peer provider_peer{provider_tx, "caller-node"};
 
     explicit rpc_link(plexus::log::logger &caller_log)
-        : caller(caller_log)
+        : caller(ex, k_long_deadline, caller_log)
     {
         wire();
     }
@@ -189,7 +194,7 @@ TEST_CASE("attach refcount gate emits exactly one procedure subscribe on 0->1", 
         capture cap(ex);
         auto peer = make_peer(ch, cap, "provider-node");
 
-        procedure_forwarder fwd;
+        procedure_forwarder fwd{ex, k_long_deadline};
         REQUIRE(fwd.attach(peer, "svc"));          // 0->1
         REQUIRE_FALSE(fwd.attach(peer, "svc"));    // 1->2, no emit
         ex.drain();
@@ -211,7 +216,7 @@ TEST_CASE("attach succeeds on 0->1 for an arbitrary fqn (no remote registry)", "
         capture cap(ex);
         auto peer = make_peer(ch, cap, "provider-node");
 
-        procedure_forwarder fwd;
+        procedure_forwarder fwd{ex, k_long_deadline};
         REQUIRE(fwd.attach(peer, "never.advertised.anywhere"));
         ex.drain();
         REQUIRE(count_subscribes(cap) == 1);
@@ -228,7 +233,7 @@ TEST_CASE("drain_for re-emits one subscribe per peer-rooted procedure", "[proced
         capture cap(ex);
         auto peer = make_peer(ch, cap, "provider-node");
 
-        procedure_forwarder fwd;
+        procedure_forwarder fwd{ex, k_long_deadline};
         fwd.attach(peer, "svc.a");
         fwd.attach(peer, "svc.b");
         ex.drain();
@@ -429,7 +434,7 @@ TEST_CASE("steady-state provider dispatch + reply framing allocates nothing", "[
 
     sink_executor ex;
     sink_channel provider_ch(ex);
-    sink_forwarder provider;
+    sink_forwarder provider{ex, k_long_deadline};
     sink_forwarder::peer provider_peer{provider_ch, "caller-node"};
 
     // A handler that replies with a fixed return span captured by reference: the

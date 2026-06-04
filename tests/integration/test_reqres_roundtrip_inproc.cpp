@@ -14,6 +14,7 @@
 
 #include <span>
 #include <array>
+#include <chrono>
 #include <string>
 #include <vector>
 #include <cstddef>
@@ -28,6 +29,10 @@ using procedure_forwarder = plexus::io::procedure_forwarder<inproc_policy>;
 using plexus::wire::rpc_status;
 
 namespace {
+
+// Far past any clock advance these roundtrip/alloc cases perform — they drain
+// deterministically and never move the clock, so the per-call deadline never trips.
+constexpr auto k_long_deadline = std::chrono::hours(1);
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -55,8 +60,8 @@ struct rpc_link
     inproc_channel<> provider_tx{ex};
     inproc_channel<> provider_rx{ex};
 
-    procedure_forwarder caller;
-    procedure_forwarder provider;
+    procedure_forwarder caller{ex, k_long_deadline};
+    procedure_forwarder provider{ex, k_long_deadline};
 
     plexus::io::frame_router caller_router;
     plexus::io::frame_router provider_router;
@@ -231,21 +236,23 @@ TEST_CASE("inproc rpc dispatch path is allocation-free; the correlation table ch
     //       warm-up it is allocation-FREE. This is the steady-state reply hot path.
     //
     //   (B) the caller correlate/match round — call() inserts a per-corr_id node
-    //       into the bounded outstanding table; deliver_response erases it. A
-    //       node-based unordered_map does NOT pool, so each in-flight call churns a
-    //       small CONSTANT number of heap blocks (the entry node, plus a bucket
-    //       rehash when the inner map empties and refills). This is inherent
-    //       correlation BOOKKEEPING, not the dispatch path — measured here HONESTLY
-    //       (a bounded, K-proportional constant, NOT unbounded growth) rather than
-    //       masked, and recorded as the v0.2.x pooled-outstanding seed.
+    //       into the bounded outstanding table AND arms a per-call deadline timer;
+    //       deliver_response cancels the timer and erases the node. A node-based
+    //       unordered_map does NOT pool, so each in-flight call churns a small
+    //       CONSTANT number of heap blocks: the entry node, a bucket rehash on the
+    //       empty/refill cycle, the timer object, and its type-erased async_wait
+    //       handler. This is inherent correlation + timeout BOOKKEEPING, not the
+    //       dispatch path — measured here HONESTLY (a bounded, K-proportional
+    //       constant, NOT unbounded growth) rather than masked, and recorded as the
+    //       v0.2.x pooled-outstanding seed.
     using sink_forwarder = plexus::io::procedure_forwarder<sink_policy>;
 
     sink_executor ex;
     sink_channel caller_ch(ex);
     sink_channel provider_ch(ex);
 
-    sink_forwarder caller;
-    sink_forwarder provider;
+    sink_forwarder caller{ex, k_long_deadline};
+    sink_forwarder provider{ex, k_long_deadline};
 
     plexus::io::frame_router caller_router;
     plexus::io::frame_router provider_router;
@@ -328,6 +335,6 @@ TEST_CASE("inproc rpc dispatch path is allocation-free; the correlation table ch
     REQUIRE(allocs_2k == 2 * allocs_k);
     REQUIRE(allocs_k % static_cast<std::size_t>(K) == 0);
     const std::size_t per_call = allocs_k / static_cast<std::size_t>(K);
-    REQUIRE(per_call >= 1);   // correlation tracking is not free (one node per in-flight call)
-    REQUIRE(per_call <= 2);   // but it is a small bounded constant, not the dispatch path
+    REQUIRE(per_call >= 1);   // correlation + timeout tracking is not free (a node + a timer per in-flight call)
+    REQUIRE(per_call <= 4);   // but it is a small bounded constant, not the dispatch path
 }
