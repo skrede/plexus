@@ -16,6 +16,7 @@
 #include "plexus/io/reconnect_config.h"
 
 #include "plexus/io/peer_session.h"
+#include "plexus/io/peer_context.h"
 #include "plexus/io/epoch_source.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/message_forwarder.h"
@@ -191,38 +192,41 @@ struct harness
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
-    std::unique_ptr<inproc_channel<manual_clock>> dialer_ch;
-    std::unique_ptr<inproc_channel<manual_clock>> accepted_ch;
+    // The per-peer records own the channel + the epoch well and OUTLIVE every
+    // incarnation, so each rebuilt session draws a strictly-later epoch with no
+    // hand-off of the dead one. The redial driver is a harness-owned SIBLING of the
+    // requester's record (NOT a record member); both are declared BEFORE the
+    // std::optional sessions so destruction unwinds the session first.
+    plexus::io::peer_context<manual_policy> req_ctx;
+    plexus::io::peer_context<manual_policy> resp_ctx;
+    driver_t driver;
     std::optional<session> requester;
     std::optional<session> responder;
 
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;
 
-    driver_t driver;
     bool listening{false};
     int dead{0};
-    // The per-peer epoch wells outlive every incarnation, so each rebuilt session
-    // draws a strictly-later epoch with no hand-off of the dead one.
-    plexus::io::epoch_source req_epochs;
-    plexus::io::epoch_source resp_epochs;
 
     explicit harness(const reconnect_config &cfg)
         : driver(transport, ex, cfg, k_svc, k_seed)
     {
         transport.on_accepted([this](std::unique_ptr<inproc_channel<manual_clock>> ch) {
-            accepted_ch = std::move(ch);
-            responder.emplace(*accepted_ch, ex, resp_epochs, make_cfg(0x01), k_long_timeout,
-                              resp_messages, resp_procedures, "requester-node", true);
+            resp_ctx.channel = std::move(ch);
+            resp_ctx.node_name = "requester-node";
+            responder.emplace(resp_ctx, ex, make_cfg(0x01), k_long_timeout,
+                              resp_messages, resp_procedures, true);
             responder->on_message([this](std::string_view, std::span<const std::byte> d) {
                 resp_received.emplace_back(to_string(d));
             });
             responder->start();
         });
         transport.on_dialed([this](std::unique_ptr<inproc_channel<manual_clock>> ch) {
-            dialer_ch = std::move(ch);
-            requester.emplace(*dialer_ch, ex, req_epochs, make_cfg(0x02), k_long_timeout,
-                              req_messages, req_procedures, "responder-node", false);
+            req_ctx.channel = std::move(ch);
+            req_ctx.node_name = "responder-node";
+            requester.emplace(req_ctx, ex, make_cfg(0x02), k_long_timeout,
+                              req_messages, req_procedures, false);
             requester->on_message([this](std::string_view, std::span<const std::byte> d) {
                 req_received.emplace_back(to_string(d));
             });

@@ -2,9 +2,9 @@
 #define HPP_GUARD_PLEXUS_IO_PEER_SESSION_H
 
 #include "plexus/io/null_logger.h"
-#include "plexus/io/epoch_source.h"
 #include "plexus/io/frame_router.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/peer_context.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 
@@ -20,7 +20,6 @@
 
 #include <span>
 #include <chrono>
-#include <string>
 #include <vector>
 #include <cstdint>
 #include <utility>
@@ -34,9 +33,9 @@ namespace plexus::io {
 // listen so a future transport backend slots in unchanged), owns a per-peer
 // frame_router whose consumers decode handshake frames into the FSM and hand data
 // frames to the node-shared forwarders carrying THIS peer's identity, mints a
-// per-connection session_id epoch on completion by drawing the next value from a
-// caller-owned epoch_source that OUTLIVES the incarnation (so a reconnect's fresh
-// session is automatically a strictly-later epoch), and runs the receive-path
+// per-connection session_id epoch on completion by drawing the next value from the
+// per-peer record's epoch_source — the record OUTLIVES the incarnation (so a
+// reconnect's fresh session is automatically a strictly-later epoch), and runs the receive-path
 // staleness gate that latches the peer's first non-zero session_id and drops
 // mismatches. Re-entrancy safety is structural: on_data is always posted and the
 // lifetime is single-owner, so the bridge needs no synchronization wrapper and no
@@ -50,20 +49,22 @@ public:
     using executor_type = typename Policy::executor_type;
     using timer_type = typename Policy::timer_type;
 
-    // handshake_timeout is required with NO default — a session cannot arm a bound
-    // it was not told, and the right value depends on the deployment. epochs is the
-    // caller-owned epoch well: it outlives this incarnation, so each successive
-    // session built against the same source mints a strictly-later epoch.
-    peer_session(channel_type &channel, executor_type executor, epoch_source &epochs,
+    // The per-peer record bundles the per-incarnation DATA the session draws from:
+    // ctx OWNS the live channel (the session borrows it), the peer node_name the
+    // forwarder peers are keyed on, and the epoch well. The record OUTLIVES this
+    // incarnation, so each successive session built against the same record mints a
+    // strictly-later epoch. handshake_timeout stays required with NO default — a
+    // session cannot arm a bound it was not told, and the value depends on the
+    // deployment.
+    peer_session(peer_context<Policy> &ctx, executor_type executor,
                  const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout,
                  message_forwarder<Policy> &messages, procedure_forwarder<Policy> &procedures,
-                 std::string node_name, bool is_inbound_bootstrap,
-                 log::logger &logger = shared_null_logger())
-        : m_channel(channel), m_epochs(epochs), m_fsm_cfg(fsm_cfg), m_fsm(fsm_cfg)
+                 bool is_inbound_bootstrap, log::logger &logger = shared_null_logger())
+        : m_ctx(ctx), m_channel(*ctx.channel), m_fsm_cfg(fsm_cfg), m_fsm(fsm_cfg)
         , m_handshake_timer(executor), m_messages(messages), m_procedures(procedures)
-        , m_node_name(std::move(node_name)), m_handshake_timeout(handshake_timeout)
+        , m_handshake_timeout(handshake_timeout)
         , m_is_inbound_bootstrap(is_inbound_bootstrap), m_logger(logger)
-        , m_msg_peer{m_channel, m_node_name}, m_rpc_peer{m_channel, m_node_name}
+        , m_msg_peer{m_channel, ctx.node_name}, m_rpc_peer{m_channel, ctx.node_name}
     {
     }
 
@@ -240,7 +241,7 @@ private:
         m_forwarders_installed = true;
     }
 
-    void mint_session_id() noexcept { m_session_id = m_epochs.next(); }
+    void mint_session_id() noexcept { m_session_id = m_ctx.epochs.next(); }
 
     void arm_handshake_timer()
     {
@@ -253,15 +254,14 @@ private:
         });
     }
 
+    peer_context<Policy> &m_ctx;
     channel_type &m_channel;
-    epoch_source &m_epochs;
     handshake_fsm_config m_fsm_cfg;
     handshake_fsm m_fsm;
     frame_router m_router;
     timer_type m_handshake_timer;
     message_forwarder<Policy> &m_messages;
     procedure_forwarder<Policy> &m_procedures;
-    std::string m_node_name;
     std::chrono::nanoseconds m_handshake_timeout;
     bool m_is_inbound_bootstrap;
     std::uint8_t m_session_id{0}, m_peer_session_id{0};

@@ -1,4 +1,5 @@
 #include "plexus/io/peer_session.h"
+#include "plexus/io/peer_context.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
@@ -68,27 +69,27 @@ struct dial_link
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
-    std::unique_ptr<inproc_channel<>> dialer_ch;
-    std::unique_ptr<inproc_channel<>> accepted_ch;
+    plexus::io::peer_context<inproc_policy> req_ctx;   // the dialer slot's per-peer record
+    plexus::io::peer_context<inproc_policy> resp_ctx;  // the accepted slot's per-peer record
     std::optional<session> requester;   // the dialer end
     std::optional<session> responder;   // the accepted end
 
-    plexus::io::epoch_source req_epochs;
-    plexus::io::epoch_source resp_epochs;
     bool dial_refused{false};
 
     explicit dial_link(std::chrono::nanoseconds timeout = k_long_timeout)
     {
         transport.on_accepted([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
-            accepted_ch = std::move(ch);
-            responder.emplace(*accepted_ch, ex, resp_epochs, make_cfg(0x01), timeout,
-                              resp_messages, resp_procedures, "requester-node", true);
+            resp_ctx.channel = std::move(ch);
+            resp_ctx.node_name = "requester-node";
+            responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout,
+                              resp_messages, resp_procedures, true);
             responder->start();
         });
         transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
-            dialer_ch = std::move(ch);
-            requester.emplace(*dialer_ch, ex, req_epochs, make_cfg(0x02), timeout,
-                              req_messages, req_procedures, "responder-node", false);
+            req_ctx.channel = std::move(ch);
+            req_ctx.node_name = "responder-node";
+            requester.emplace(req_ctx, ex, make_cfg(0x02), timeout,
+                              req_messages, req_procedures, false);
             requester->start();
         });
         transport.on_dial_failed([this](plexus::io::io_error) { dial_refused = true; });

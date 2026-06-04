@@ -1,4 +1,5 @@
 #include "plexus/io/peer_session.h"
+#include "plexus/io/peer_context.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/handshake_fsm.h"
@@ -84,32 +85,31 @@ struct link
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
-    std::unique_ptr<inproc_channel<>> dialer_ch;
-    std::unique_ptr<inproc_channel<>> accepted_ch;
+    plexus::io::peer_context<inproc_policy> req_ctx;   // the dialer slot's per-peer record
+    plexus::io::peer_context<inproc_policy> resp_ctx;  // the accepted slot's per-peer record
     std::optional<session> requester;
     std::optional<session> responder;
 
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;
 
-    plexus::io::epoch_source req_epochs;
-    plexus::io::epoch_source resp_epochs;
-
     explicit link(std::chrono::nanoseconds timeout = k_long_timeout)
     {
         transport.on_accepted([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
-            accepted_ch = std::move(ch);
-            responder.emplace(*accepted_ch, ex, resp_epochs, make_cfg(0x01), timeout,
-                              resp_messages, resp_procedures, "requester-node", true);
+            resp_ctx.channel = std::move(ch);
+            resp_ctx.node_name = "requester-node";
+            responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout,
+                              resp_messages, resp_procedures, true);
             responder->on_message([this](std::string_view, std::span<const std::byte> d) {
                 resp_received.emplace_back(to_string(d));
             });
             responder->start();
         });
         transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
-            dialer_ch = std::move(ch);
-            requester.emplace(*dialer_ch, ex, req_epochs, make_cfg(0x02), timeout,
-                              req_messages, req_procedures, "responder-node", false);
+            req_ctx.channel = std::move(ch);
+            req_ctx.node_name = "responder-node";
+            requester.emplace(req_ctx, ex, make_cfg(0x02), timeout,
+                              req_messages, req_procedures, false);
             requester->on_message([this](std::string_view, std::span<const std::byte> d) {
                 req_received.emplace_back(to_string(d));
             });
@@ -356,19 +356,19 @@ struct timeout_harness
 {
     inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    inproc_channel<manual_clock> ch{ex};
     inproc_channel<manual_clock> peer_ch{ex};   // a silent peer that never responds
 
     manual_msg messages;
     manual_rpc procedures{ex, std::chrono::hours(1)};
 
-    plexus::io::epoch_source epochs;
+    plexus::io::peer_context<manual_policy> ctx;   // the record owns the dialer channel
     manual_session requester;
 
     explicit timeout_harness(std::chrono::nanoseconds timeout)
-        : requester(ch, ex, epochs, make_cfg(0x02), timeout, messages, procedures, "silent-node", false)
+        : ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}
+        , requester(ctx, ex, make_cfg(0x02), timeout, messages, procedures, false)
     {
-        ch.connect_to(peer_ch.local_endpoint());   // sends land on a peer that never replies
+        ctx.channel->connect_to(peer_ch.local_endpoint());   // sends land on a peer that never replies
         requester.start();
     }
 
@@ -414,26 +414,25 @@ struct manual_link
     manual_rpc req_procedures{ex, std::chrono::hours(1)};
     manual_rpc resp_procedures{ex, std::chrono::hours(1)};
 
-    std::unique_ptr<inproc_channel<manual_clock>> dialer_ch;
-    std::unique_ptr<inproc_channel<manual_clock>> accepted_ch;
+    plexus::io::peer_context<manual_policy> req_ctx;   // the dialer slot's per-peer record
+    plexus::io::peer_context<manual_policy> resp_ctx;  // the accepted slot's per-peer record
     std::optional<manual_session> requester;
     std::optional<manual_session> responder;
-
-    plexus::io::epoch_source req_epochs;
-    plexus::io::epoch_source resp_epochs;
 
     explicit manual_link(std::chrono::nanoseconds timeout)
     {
         transport.on_accepted([this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch) {
-            accepted_ch = std::move(ch);
-            responder.emplace(*accepted_ch, ex, resp_epochs, make_cfg(0x01), timeout,
-                              resp_messages, resp_procedures, "requester-node", true);
+            resp_ctx.channel = std::move(ch);
+            resp_ctx.node_name = "requester-node";
+            responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout,
+                              resp_messages, resp_procedures, true);
             responder->start();
         });
         transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch) {
-            dialer_ch = std::move(ch);
-            requester.emplace(*dialer_ch, ex, req_epochs, make_cfg(0x02), timeout,
-                              req_messages, req_procedures, "responder-node", false);
+            req_ctx.channel = std::move(ch);
+            req_ctx.node_name = "responder-node";
+            requester.emplace(req_ctx, ex, make_cfg(0x02), timeout,
+                              req_messages, req_procedures, false);
             requester->start();
         });
         transport.listen({"inproc", "svc"});

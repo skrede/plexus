@@ -18,6 +18,7 @@
 #include "plexus/io/reconnect_config.h"
 
 #include "plexus/io/peer_session.h"
+#include "plexus/io/peer_context.h"
 #include "plexus/io/epoch_source.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/message_forwarder.h"
@@ -83,17 +84,18 @@ struct tcp_reconnect
     rpc_forwarder req_procedures{io, k_long_timeout};
     rpc_forwarder resp_procedures{io, k_long_timeout};
 
-    std::unique_ptr<pasio::asio_channel> dialer_ch;
-    std::unique_ptr<pasio::asio_channel> accepted_ch;
+    // The per-peer records own the channel + the epoch well and OUTLIVE every
+    // incarnation, so each rebuilt session draws a strictly-later epoch with no
+    // hand-off of the dead one. The redial driver is a harness-owned SIBLING of the
+    // requester's record (NOT a record member); both are declared BEFORE the
+    // std::optional sessions so destruction unwinds the session first.
+    plexus::io::peer_context<pasio::asio_policy> req_ctx;
+    plexus::io::peer_context<pasio::asio_policy> resp_ctx;
+    std::optional<driver_t> driver;
     std::optional<session> requester;
     std::optional<session> responder;
 
     std::uint16_t port{0};
-    std::optional<driver_t> driver;
-    // The per-peer epoch wells outlive every incarnation, so each rebuilt session
-    // draws a strictly-later epoch with no hand-off of the dead one.
-    plexus::io::epoch_source req_epochs;
-    plexus::io::epoch_source resp_epochs;
     int drops_seen{0};
 
     // listen_first: bind the listener on an ephemeral port BEFORE the driver so the
@@ -102,18 +104,20 @@ struct tcp_reconnect
     tcp_reconnect(const reconnect_config &cfg, bool listen_first, std::uint16_t closed_port = 0)
     {
         transport.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) {
-            accepted_ch = std::move(ch);
-            responder.emplace(*accepted_ch, io, resp_epochs, make_cfg(0x01), k_long_timeout,
-                              resp_messages, resp_procedures, "requester-node", true);
+            resp_ctx.channel = std::move(ch);
+            resp_ctx.node_name = "requester-node";
+            responder.emplace(resp_ctx, io, make_cfg(0x01), k_long_timeout,
+                              resp_messages, resp_procedures, true);
             responder->start();
         });
         transport.on_dialed([this](std::unique_ptr<pasio::asio_channel> ch) {
-            dialer_ch = std::move(ch);
+            req_ctx.channel = std::move(ch);
+            req_ctx.node_name = "responder-node";
             // Route a transport DROP (broken_pipe/connection_reset) — not a clean
             // close — to the driver. on_data is owned by the session (set in start()).
-            dialer_ch->on_error([this](pio::io_error) { ++drops_seen; driver->on_channel_dropped(); });
-            requester.emplace(*dialer_ch, io, req_epochs, make_cfg(0x02), k_long_timeout,
-                              req_messages, req_procedures, "responder-node", false);
+            req_ctx.channel->on_error([this](pio::io_error) { ++drops_seen; driver->on_channel_dropped(); });
+            requester.emplace(req_ctx, io, make_cfg(0x02), k_long_timeout,
+                              req_messages, req_procedures, false);
             requester->start();
         });
 
@@ -177,7 +181,7 @@ TEST_CASE("asio reconnect: an established session whose channel drops re-dials a
         // Drop the established connection: close the accepted (server) socket. The
         // dialer's read loop surfaces connection_reset/broken_pipe → on_error → the
         // driver re-dials. (A clean tear_down is NOT used — this is a real transport drop.)
-        h.accepted_ch->socket().close();
+        h.resp_ctx.channel->socket().close();
         h.pump_until([&] { return h.drops_seen >= 1; });
         REQUIRE(h.drops_seen >= 1);
         REQUIRE(h.driver->attempt_count() >= 1);
