@@ -58,6 +58,33 @@ target_include_directories(test_peer_session_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_peer_session_inproc TEST_PREFIX "integration.")
 
+# The DIALED inproc transport oracle: two paired peer_sessions stood up entirely
+# through the bus-mediated listen/dial rendezvous (no hand-dial), handshake to
+# completion, mint non-zero epochs, and a dial to an unregistered endpoint surfaces
+# connection_refused — always built (inproc Policy, no backend needed).
+add_executable(test_transport_dial_inproc test_transport_dial_inproc.cpp)
+target_link_libraries(test_transport_dial_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_transport_dial_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_transport_dial_inproc TEST_PREFIX "integration.")
+
+# The deterministic single-connection reconnect oracle on the virtual clock:
+# refused-dial → backoff → re-dial, surrender bounds, fresh epoch per reconnect —
+# always built (inproc Policy, no backend needed).
+add_executable(test_reconnect_inproc test_reconnect_inproc.cpp)
+target_link_libraries(test_reconnect_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_reconnect_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_reconnect_inproc TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
@@ -141,6 +168,34 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::inproc
         Catch2::Catch2WithMain)
     catch_discover_tests(test_peer_session_asio TEST_PREFIX "integration.")
+
+    # The DIALED asio transport oracle over real TCP loopback: the transport's
+    # listen + async-connect dial stand up two peer_sessions (no hand-dial,
+    # no manual socket().connect / poll loop) that handshake to completion, mint
+    # non-zero epochs, and flow a real published message carrying the minted epoch.
+    # Loops the full scenario N>=100 in-body; the ctest invocation is re-run >=3
+    # process runs for cross-process reproducibility. Links plexus::inproc for the
+    # forwarder framing path the oracle reuses.
+    add_executable(test_transport_dial_asio test_transport_dial_asio.cpp)
+    target_link_libraries(test_transport_dial_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_transport_dial_asio TEST_PREFIX "integration.")
+
+    # The gated real-TCP reconnect oracle: an established session whose channel
+    # drops re-dials + re-handshakes over real loopback; the initial-refused path
+    # re-dials a closed port. Links plexus::inproc for the forwarder framing path.
+    add_executable(test_reconnect_asio test_reconnect_asio.cpp)
+    target_link_libraries(test_reconnect_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_reconnect_asio TEST_PREFIX "integration.")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
