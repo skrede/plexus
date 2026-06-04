@@ -85,6 +85,20 @@ target_include_directories(test_reconnect_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_reconnect_inproc TEST_PREFIX "integration.")
 
+# The deterministic two-node routing oracle on the virtual clock: two engines over
+# one inproc bus prove lazy-no-dial-until-demand, eager-dial-on-awareness, awareness-
+# without-connect, receive-path identity, single-slot reconnect isolation, and
+# publish-does-not-dial — always built (inproc Policy, no backend needed).
+add_executable(test_routing_engine_inproc test_routing_engine_inproc.cpp)
+target_link_libraries(test_routing_engine_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_routing_engine_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_routing_engine_inproc TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
