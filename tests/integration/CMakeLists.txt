@@ -92,6 +92,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         Catch2::Catch2WithMain)
     catch_discover_tests(test_reqres_timeout_asio TEST_PREFIX "integration.")
+
+    # The live TCP loopback latch-replay: a publisher latches + publishes, then a
+    # SECOND client connects and subscribes and receives the RETAINED value over the
+    # real reassembler-framed stream through frame_router::on_unidirectional (the
+    # replay is byte-identical to a normal data frame, so it must). Carries the
+    # non-latched negative over asio. Loops the full roundtrip N>=100 in-body; the
+    # ctest invocation is re-run >=3 process runs for cross-process reproducibility.
+    add_executable(test_latch_replay_asio test_latch_replay_asio.cpp)
+    target_link_libraries(test_latch_replay_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_latch_replay_asio TEST_PREFIX "integration.")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
