@@ -121,6 +121,26 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         Catch2::Catch2WithMain)
     catch_discover_tests(test_latch_replay_asio TEST_PREFIX "integration.")
+
+    # The live peer_session bridge oracle over real TCP loopback: a hand-dialed
+    # client and an accepted server end of ONE bidirectional connection stand up two
+    # peer_sessions that complete the handshake (the simultaneous-connect path), mint
+    # non-zero epochs, flow a real published message over the reassembler-framed TCP
+    # stream, and prove the data-path staleness gate fires over TCP (a mismatched
+    # non-zero session_id is dropped; the latched epoch is delivered). Loops the full
+    # scenario N>=100 in-body; the ctest invocation is re-run >=3 process runs for
+    # cross-process reproducibility (a live networking claim is never made from one
+    # run). Links plexus::inproc too: the synthetic stale gate-frame is produced by
+    # the production framing path over an inproc capture link, then fed verbatim to
+    # the asio receiver's on_receive.
+    add_executable(test_peer_session_asio test_peer_session_asio.cpp)
+    target_link_libraries(test_peer_session_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_peer_session_asio TEST_PREFIX "integration.")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
