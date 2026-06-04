@@ -2,12 +2,12 @@
 // with a fixed RNG seed, so backoff intervals fire deterministically and surrender
 // is provable without wall-clock flakiness. Covers the four reconnect decisions:
 // an initial refused dial backs off and re-dials, then completes once the listener
-// appears (D-06a); an established session whose channel drops tears down, backs
-// off, re-dials and re-handshakes — while a CLEAN close does NOT re-dial (D-06b);
-// the surrender bounds (max_attempts / max_elapsed) stop re-dialing and report the
-// session dead, and with neither bound set it retries forever at the ceiling
-// cadence (D-07); each reconnect mints a fresh session_id epoch and the staleness
-// gate drops a dead-incarnation straggler (D-08). It also gates the POST-RECONNECT
+// appears; an established session whose channel drops tears down, backs off,
+// re-dials and re-handshakes — while a CLEAN close does NOT re-dial; the surrender
+// bounds (max_attempts / max_elapsed) stop re-dialing and report the session dead,
+// and with neither bound set it retries forever at the ceiling cadence; each
+// reconnect mints a fresh session_id epoch and the staleness gate drops a
+// dead-incarnation straggler. It also gates the POST-RECONNECT
 // steady-state publish loop as zero-alloc (the reconnect cycle introduces no
 // steady-state hot-path allocation regression) and documents the empirically-tuned
 // recommended backoff config. This TU owns the TU-local alloc counter.
@@ -153,7 +153,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 
 // Synthesize a unidirectional "topic" data frame carrying a chosen session_id via
 // the production framing path, so feeding it to a receiver's on_receive exercises
-// the real staleness gate (used for the D-08 dead-incarnation straggler).
+// the real staleness gate.
 std::vector<std::byte> make_data_frame(const std::string &payload, std::uint8_t session_id)
 {
     msg_forwarder framer;
@@ -241,7 +241,7 @@ struct harness
 
 }
 
-TEST_CASE("inproc reconnect: an initial refused dial backs off and re-dials, completing once the listener appears (D-06a)",
+TEST_CASE("inproc reconnect: an initial refused dial backs off and re-dials, completing once the listener appears",
           "[integration][reconnect][inproc]")
 {
     constexpr int k_iterations = 100;
@@ -273,7 +273,7 @@ TEST_CASE("inproc reconnect: an initial refused dial backs off and re-dials, com
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("inproc reconnect: an established session whose channel drops re-dials and re-handshakes; a clean close does NOT re-dial (D-06b)",
+TEST_CASE("inproc reconnect: an established session whose channel drops re-dials and re-handshakes; a clean close does NOT re-dial",
           "[integration][reconnect][inproc]")
 {
     constexpr int k_iterations = 100;
@@ -313,7 +313,7 @@ TEST_CASE("inproc reconnect: an established session whose channel drops re-dials
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("inproc reconnect: surrender on max_attempts and on max_elapsed reports the session dead and stops re-dialing; neither set retries forever (D-07)",
+TEST_CASE("inproc reconnect: surrender on max_attempts and on max_elapsed reports the session dead and stops re-dialing; neither set retries forever",
           "[integration][reconnect][inproc]")
 {
     SECTION("max_attempts surrender")
@@ -364,7 +364,7 @@ TEST_CASE("inproc reconnect: surrender on max_attempts and on max_elapsed report
     }
 }
 
-TEST_CASE("inproc reconnect: backoff grows full-jitter to the ceiling then holds, reproducibly with a fixed seed (D-07)",
+TEST_CASE("inproc reconnect: backoff grows full-jitter to the ceiling then holds, reproducibly with a fixed seed",
           "[integration][reconnect][inproc]")
 {
     reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
@@ -390,7 +390,7 @@ TEST_CASE("inproc reconnect: backoff grows full-jitter to the ceiling then holds
         REQUIRE(plexus::io::compute_backoff(cfg, attempt, c) <= cfg.max_delay);
 }
 
-TEST_CASE("inproc reconnect: each reconnect mints a fresh epoch and the staleness gate drops a dead-incarnation straggler (D-08)",
+TEST_CASE("inproc reconnect: each reconnect mints a fresh epoch and the staleness gate drops a dead-incarnation straggler",
           "[integration][reconnect][inproc]")
 {
     constexpr int k_iterations = 100;

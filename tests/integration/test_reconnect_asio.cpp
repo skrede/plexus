@@ -2,8 +2,8 @@
 // the dial-retry cycle on a real steady_timer: an established session whose channel
 // drops (the socket is closed on the accepted end, surfacing broken_pipe /
 // connection_reset on the dialer) tears down, backs off, re-dials through
-// asio_transport::dial, and re-handshakes to a fresh epoch (D-06b); a dial to a
-// CLOSED port re-dials until a listener appears (D-06a). The deterministic
+// asio_transport::dial, and re-handshakes to a fresh epoch; a dial to a
+// CLOSED port re-dials until a listener appears. The deterministic
 // surrender / ceiling sweeps live on the inproc virtual clock (the sibling oracle);
 // this leg validates the chosen numbers behave on the steady timer. The full
 // scenario loops in-body and the ctest invocation is re-run >=3 process runs (a
@@ -158,7 +158,7 @@ reconnect_config fast_cfg()
 
 }
 
-TEST_CASE("asio reconnect: an established session whose channel drops re-dials and re-handshakes over real TCP (D-06b)",
+TEST_CASE("asio reconnect: an established session whose channel drops re-dials and re-handshakes over real TCP",
           "[integration][reconnect][asio]")
 {
     constexpr int k_iterations = 100;
@@ -189,7 +189,7 @@ TEST_CASE("asio reconnect: an established session whose channel drops re-dials a
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("asio reconnect: a dial to a closed port re-dials until a listener appears, then completes over real TCP (D-06a)",
+TEST_CASE("asio reconnect: a dial to a closed port re-dials until a listener appears, then completes over real TCP",
           "[integration][reconnect][asio]")
 {
     constexpr int k_iterations = 30;
