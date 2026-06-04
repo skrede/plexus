@@ -4,6 +4,7 @@
 #include "plexus/io/subscriber_registry.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/wire_bytes.h"
+#include "plexus/topic_qos.h"
 #include "plexus/policy.h"
 #include "plexus/log/logger.h"
 
@@ -80,7 +81,22 @@ public:
         auto resp = wire::encode_subscribe_response(
             {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
         send_control(p.channel, wire::msg_type::subscribe_response, resp);
+        replay_if_latched(p, hash);
         return true;
+    }
+
+    // declare: mark a topic with a publisher-declared qos once (Fork-A). A latched
+    // topic retains its last published frame and replays it to late subscribers.
+    // The hot publish(fqn, bytes) signature is unchanged.
+    void declare(std::string_view fqn, topic_qos qos)
+    {
+        m_registry.declare(wire::fqn_topic_hash(fqn), fqn, qos);
+    }
+
+    // latch: convenience for declare(fqn, {.latch = true, .depth = 1}).
+    void latch(std::string_view fqn)
+    {
+        declare(fqn, topic_qos{.latch = true, .depth = 1});
     }
 
     // publish: frame ONCE (unidirectional header + frame_header, session_id = 0,
@@ -91,8 +107,9 @@ public:
     {
         auto hash = wire::fqn_topic_hash(fqn);
         const auto *subs = m_registry.subscribers_for(hash);
-        if(subs == nullptr)
-            return;
+        const bool latched = m_registry.qos_for(hash).latch;
+        if(subs == nullptr && !latched)
+            return;   // neither a subscriber nor a latch reason to frame
 
         wire::unidirectional_header uhdr{
                 .source     = wire::endpoint_source_type::publisher,
@@ -114,8 +131,11 @@ public:
         };
         wire::encode_frame_into(m_frame_scratch, fhdr, m_inner_scratch);
 
-        for(const auto &sub : *subs)
-            sub.channel->send(m_frame_scratch);
+        if(subs != nullptr)
+            for(const auto &sub : *subs)
+                sub.channel->send(m_frame_scratch);
+
+        retain_if_latched(hash);
     }
 
     // detach: per-(peer, fqn) refcount gate. On the 1->0 transition it removes
@@ -190,6 +210,34 @@ private:
         channel.send(m_control_scratch);
     }
 
+    // retain_if_latched: on a latched publish, assign() the just-framed complete
+    // frame into the per-topic retained slot. assign() reuses a slot grown by a
+    // prior retain — alloc-free after warm-up (the scratch-buffer trick). depth=1:
+    // one slot, replaced each latched publish — multi-publisher to one latched
+    // topic is last-writer-wins per topic_hash. The slot OWNS its bytes; it never
+    // aliases m_frame_scratch (the next publish overwrites that).
+    void retain_if_latched(std::uint64_t hash)
+    {
+        if(!m_registry.qos_for(hash).latch)
+            return;
+        auto &slot = m_retained[hash];
+        slot.assign(m_frame_scratch.begin(), m_frame_scratch.end());
+    }
+
+    // replay_if_latched: when a new subscriber attaches to a latched topic that has
+    // a frame retained, PUSH that frame to ONLY the new peer (not the fan-out loop)
+    // as an ordinary data frame, after the subscribe_response. A latched-but-never-
+    // published topic retains nothing, so it replays nothing.
+    void replay_if_latched(const peer &p, std::uint64_t hash)
+    {
+        if(!m_registry.qos_for(hash).latch)
+            return;
+        auto it = m_retained.find(hash);
+        if(it == m_retained.end() || it->second.empty())
+            return;
+        p.channel.send(it->second);
+    }
+
     void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash)
     {
         wire::subscribe_request req{
@@ -220,6 +268,7 @@ private:
     std::vector<std::byte> m_inner_scratch;
     std::vector<std::byte> m_frame_scratch;
     std::vector<std::byte> m_control_scratch;
+    std::unordered_map<std::uint64_t, std::vector<std::byte>> m_retained;
     std::uint64_t m_next_sequence{0};
 };
 
