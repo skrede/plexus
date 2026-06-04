@@ -99,11 +99,15 @@ public:
         declare(fqn, topic_qos{.latch = true, .depth = 1});
     }
 
-    // publish: frame ONCE (unidirectional header + frame_header, session_id = 0,
-    // no metadata region) and fan the single owning buffer to each subscribed
-    // channel. No subscriber -> no send (demand-driven). No per-listener reframe
-    // or allocation in the loop.
-    void publish(std::string_view fqn, std::span<const std::byte> payload)
+    // publish: frame ONCE (unidirectional header + frame_header, no metadata region)
+    // and fan the single owning buffer to each subscribed channel. No subscriber ->
+    // no send (demand-driven). No per-listener reframe or allocation in the loop. The
+    // per-send session_id stamps the established epoch onto the data frame so the
+    // receive-side staleness gate can fire; absence keeps the unestablished sentinel
+    // 0 — passed per send (NOT a forwarder-wide member) because a node-shared
+    // forwarder fans to many peers, each with its own epoch.
+    void publish(std::string_view fqn, std::span<const std::byte> payload,
+                 std::uint8_t session_id = 0)
     {
         auto hash = wire::fqn_topic_hash(fqn);
         const auto *subs = m_registry.subscribers_for(hash);
@@ -125,7 +129,7 @@ public:
         wire::frame_header fhdr{
                 .type         = wire::msg_type::unidirectional,
                 .flags        = 0,
-                .session_id   = 0,
+                .session_id   = session_id,
                 .timestamp_ns = wire::now_timestamp_ns(),
                 .payload_len  = m_inner_scratch.size()
         };

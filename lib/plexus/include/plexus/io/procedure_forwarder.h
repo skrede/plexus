@@ -118,7 +118,8 @@ public:
     // hashes are opaque correlation hints plexus never interprets — written 0.
     void call(const peer &p, std::string_view fqn, std::span<const std::byte> param,
               on_response_fn on_response,
-              std::optional<std::chrono::nanoseconds> deadline = std::nullopt)
+              std::optional<std::chrono::nanoseconds> deadline = std::nullopt,
+              std::uint8_t session_id = 0)
     {
         auto &per_peer = m_outstanding[p.node_name];
         if(per_peer.size() >= m_max_outstanding)
@@ -134,7 +135,7 @@ public:
                 .correlation_id = corr_id
         };
         wire::encode_rpc_request_into(m_req_scratch, hdr, param);
-        send_control(p.channel, wire::msg_type::rpc_request, m_req_scratch);
+        send_data(p.channel, wire::msg_type::rpc_request, m_req_scratch, session_id);
 
         auto [it, _] = per_peer.emplace(corr_id, pending_rpc{
                 std::string{fqn}, std::move(on_response),
@@ -222,7 +223,8 @@ public:
     // a prior attach but no provider is served — that "topic known, provider gone"
     // state replies topic_not_found. The handler replies via a reply_fn that frames
     // a same-corr_id rpc_response (source = procedure, swapped type hashes).
-    void deliver_request(const peer &p, std::span<const std::byte> inner)
+    void deliver_request(const peer &p, std::span<const std::byte> inner,
+                         std::uint8_t session_id = 0)
     {
         auto decoded = wire::decode_rpc_request(inner);
         if(!decoded)
@@ -235,7 +237,7 @@ public:
             auto status = m_registry.fqn_for(req_hdr.topic_hash).empty()
                               ? wire::rpc_status::no_handler
                               : wire::rpc_status::topic_not_found;
-            return reply_status(p.channel, req_hdr, status, {});
+            return reply_status(p.channel, req_hdr, status, {}, session_id);
         }
 
         // Stage the active request context, then hand the handler the forwarder's
@@ -243,6 +245,7 @@ public:
         // per-dispatch type-erased object is built.
         m_active_channel = &p.channel;
         m_active_req_hdr = req_hdr;
+        m_active_session_id = session_id;
         ensure_reply_ready();
         m_providers.find(hash_it->second)->second(decoded->param_data, m_reply);
     }
@@ -321,7 +324,7 @@ private:
         if(m_reply)
             return;
         m_reply = [this](wire::rpc_status status, std::span<const std::byte> return_data) {
-            reply_status(*m_active_channel, m_active_req_hdr, status, return_data);
+            reply_status(*m_active_channel, m_active_req_hdr, status, return_data, m_active_session_id);
         };
     }
 
@@ -329,7 +332,8 @@ private:
     // to the peer (source = procedure, type hashes swapped relative to the request)
     // and send it through reused scratch.
     void reply_status(channel_type &channel, const wire::bidirectional_header &req_hdr,
-                      wire::rpc_status status, std::span<const std::byte> return_data)
+                      wire::rpc_status status, std::span<const std::byte> return_data,
+                      std::uint8_t session_id)
     {
         wire::bidirectional_header resp_hdr{
                 .source         = wire::endpoint_source_type::procedure,
@@ -340,23 +344,33 @@ private:
                 .correlation_id = req_hdr.correlation_id
         };
         wire::encode_rpc_response_into(m_resp_scratch, resp_hdr, status, return_data);
-        send_control(channel, wire::msg_type::rpc_response, m_resp_scratch);
+        send_data(channel, wire::msg_type::rpc_response, m_resp_scratch, session_id);
     }
 
-    // send_control: wrap an inner payload in a frame_header (session_id = 0, every
-    // frame uniformly framed) into reused scratch and send it. Shared by the request
-    // emit, the response emit, and the control emits.
-    void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
+    // send_data: emit a DATA frame (rpc_request / rpc_response) carrying the per-send
+    // session_id epoch so the receive-side staleness gate can fire. Absence keeps the
+    // unestablished sentinel 0 — the epoch is per-peer, passed per send (a node-shared
+    // forwarder fans to many peers), never a forwarder-wide member.
+    void send_data(channel_type &channel, wire::msg_type type,
+                   std::span<const std::byte> inner, std::uint8_t session_id)
     {
         wire::frame_header fhdr{
                 .type         = type,
                 .flags        = 0,
-                .session_id   = 0,
+                .session_id   = session_id,
                 .timestamp_ns = wire::now_timestamp_ns(),
                 .payload_len  = inner.size()
         };
         wire::encode_frame_into(m_frame_scratch, fhdr, inner);
         channel.send(m_frame_scratch);
+    }
+
+    // send_control: wrap an inner CONTROL payload (subscribe / unsubscribe /
+    // subscribe_response) in a frame_header with session_id = 0 (control is
+    // pre-session) into reused scratch and send it.
+    void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
+    {
+        send_data(channel, type, inner, 0);
     }
 
     void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash)
@@ -397,6 +411,7 @@ private:
     reply_fn m_reply;
     channel_type *m_active_channel{nullptr};
     wire::bidirectional_header m_active_req_hdr{};
+    std::uint8_t m_active_session_id{0};
     std::uint64_t m_next_correlation_id{1};
     std::uint64_t m_next_sequence{0};
     std::size_t m_max_outstanding;
