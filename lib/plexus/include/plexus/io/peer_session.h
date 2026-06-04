@@ -144,8 +144,9 @@ private:
         });
     }
 
-    // Map an FSM action to channel I/O. retry has no dialer this block — a
-    // no-op-with-log; the reconnect path is a later concern.
+    // Map an FSM action to channel I/O. retry stays the FSM's intent as a log line:
+    // the reconnect driver lives outside the session and observes the transport's
+    // dial-failure directly, so the session is not reshaped to own a dialer.
     void execute(const fsm_step_result &step)
     {
         switch(step.action)
