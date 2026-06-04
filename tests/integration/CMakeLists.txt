@@ -43,6 +43,21 @@ target_include_directories(test_latch_replay_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_latch_replay_inproc TEST_PREFIX "integration.")
 
+# The deterministic peer_session bridge oracle: two paired peer_sessions handshake
+# over the inproc backend, install the node-shared forwarders once, flow a real
+# published message AND a real RPC, prove the data-path staleness gate fires on a
+# mismatched epoch, and prove the handshake timeout (virtual clock) aborts while a
+# completed handshake cancels the timer — always built (inproc Policy, no backend).
+add_executable(test_peer_session_inproc test_peer_session_inproc.cpp)
+target_link_libraries(test_peer_session_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_peer_session_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_peer_session_inproc TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
