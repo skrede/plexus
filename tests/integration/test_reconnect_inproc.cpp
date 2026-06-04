@@ -16,6 +16,7 @@
 #include "plexus/io/reconnect_config.h"
 
 #include "plexus/io/peer_session.h"
+#include "plexus/io/epoch_source.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
@@ -201,14 +202,17 @@ struct harness
     driver_t driver;
     bool listening{false};
     int dead{0};
-    std::uint8_t last_req_epoch{0};   // carried across reconnects for a monotonic epoch
+    // The per-peer epoch wells outlive every incarnation, so each rebuilt session
+    // draws a strictly-later epoch with no hand-off of the dead one.
+    plexus::io::epoch_source req_epochs;
+    plexus::io::epoch_source resp_epochs;
 
     explicit harness(const reconnect_config &cfg)
         : driver(transport, ex, cfg, k_svc, k_seed)
     {
         transport.on_accepted([this](std::unique_ptr<inproc_channel<manual_clock>> ch) {
             accepted_ch = std::move(ch);
-            responder.emplace(*accepted_ch, ex, make_cfg(0x01), k_long_timeout,
+            responder.emplace(*accepted_ch, ex, resp_epochs, make_cfg(0x01), k_long_timeout,
                               resp_messages, resp_procedures, "requester-node", true);
             responder->on_message([this](std::string_view, std::span<const std::byte> d) {
                 resp_received.emplace_back(to_string(d));
@@ -217,18 +221,17 @@ struct harness
         });
         transport.on_dialed([this](std::unique_ptr<inproc_channel<manual_clock>> ch) {
             dialer_ch = std::move(ch);
-            requester.emplace(*dialer_ch, ex, make_cfg(0x02), k_long_timeout,
+            requester.emplace(*dialer_ch, ex, req_epochs, make_cfg(0x02), k_long_timeout,
                               req_messages, req_procedures, "responder-node", false);
-            requester->seed_epoch(last_req_epoch);   // mint a STRICTLY later epoch than the dead one
             requester->on_message([this](std::string_view, std::span<const std::byte> d) {
                 req_received.emplace_back(to_string(d));
             });
             requester->start();
         });
-        // Tear the dead requester down before the fresh channel arrives (carrying its
-        // last epoch forward), and count surrender as a reported death the oracle asserts.
+        // Tear the dead requester down before the fresh channel arrives, and count
+        // surrender as a reported death the oracle asserts.
         driver.on_redial([this] {
-            if(requester) { last_req_epoch = requester->session_id(); requester->tear_down(); }
+            if(requester) requester->tear_down();
         });
         driver.on_dead([this] { ++dead; });
     }

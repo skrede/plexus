@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_PEER_SESSION_H
 
 #include "plexus/io/null_logger.h"
+#include "plexus/io/epoch_source.h"
 #include "plexus/io/frame_router.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/message_forwarder.h"
@@ -33,7 +34,9 @@ namespace plexus::io {
 // listen so a future transport backend slots in unchanged), owns a per-peer
 // frame_router whose consumers decode handshake frames into the FSM and hand data
 // frames to the node-shared forwarders carrying THIS peer's identity, mints a
-// per-connection session_id epoch on completion, and runs the receive-path
+// per-connection session_id epoch on completion by drawing the next value from a
+// caller-owned epoch_source that OUTLIVES the incarnation (so a reconnect's fresh
+// session is automatically a strictly-later epoch), and runs the receive-path
 // staleness gate that latches the peer's first non-zero session_id and drops
 // mismatches. Re-entrancy safety is structural: on_data is always posted and the
 // lifetime is single-owner, so the bridge needs no synchronization wrapper and no
@@ -48,16 +51,19 @@ public:
     using timer_type = typename Policy::timer_type;
 
     // handshake_timeout is required with NO default — a session cannot arm a bound
-    // it was not told, and the right value depends on the deployment.
-    peer_session(channel_type &channel, executor_type executor,
+    // it was not told, and the right value depends on the deployment. epochs is the
+    // caller-owned epoch well: it outlives this incarnation, so each successive
+    // session built against the same source mints a strictly-later epoch.
+    peer_session(channel_type &channel, executor_type executor, epoch_source &epochs,
                  const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout,
                  message_forwarder<Policy> &messages, procedure_forwarder<Policy> &procedures,
                  std::string node_name, bool is_inbound_bootstrap,
                  log::logger &logger = shared_null_logger())
-        : m_channel(channel), m_fsm_cfg(fsm_cfg), m_fsm(fsm_cfg), m_handshake_timer(executor)
-        , m_messages(messages), m_procedures(procedures), m_node_name(std::move(node_name))
-        , m_handshake_timeout(handshake_timeout), m_is_inbound_bootstrap(is_inbound_bootstrap)
-        , m_logger(logger), m_msg_peer{m_channel, m_node_name}, m_rpc_peer{m_channel, m_node_name}
+        : m_channel(channel), m_epochs(epochs), m_fsm_cfg(fsm_cfg), m_fsm(fsm_cfg)
+        , m_handshake_timer(executor), m_messages(messages), m_procedures(procedures)
+        , m_node_name(std::move(node_name)), m_handshake_timeout(handshake_timeout)
+        , m_is_inbound_bootstrap(is_inbound_bootstrap), m_logger(logger)
+        , m_msg_peer{m_channel, m_node_name}, m_rpc_peer{m_channel, m_node_name}
     {
     }
 
@@ -111,15 +117,6 @@ public:
         m_fsm.on_torn_down();
         m_channel.close();
     }
-
-    // Carry the epoch forward across a reconnect: a fresh peer_session built for the
-    // next incarnation seeds its mint counter from the dead incarnation's last epoch
-    // so the next completion mints a STRICTLY later epoch. That keeps each reconnect's
-    // session_id distinct from its predecessor's, so the receive-path staleness gate
-    // drops a dead-incarnation straggler. The ctor is unchanged (a reconnect re-dials
-    // through the transport and rebuilds the session); this only initializes the
-    // existing counter before start(). No effect once a session has completed.
-    void seed_epoch(std::uint8_t last_epoch) noexcept { m_session_id_counter = last_epoch; }
 
     bool is_complete() const noexcept { return m_forwarders_installed; }
     std::uint8_t session_id() const noexcept { return m_session_id; }
@@ -243,13 +240,7 @@ private:
         m_forwarders_installed = true;
     }
 
-    void mint_session_id() noexcept
-    {
-        ++m_session_id_counter;
-        if(m_session_id_counter == 0)
-            m_session_id_counter = 1;
-        m_session_id = m_session_id_counter;
-    }
+    void mint_session_id() noexcept { m_session_id = m_epochs.next(); }
 
     void arm_handshake_timer()
     {
@@ -263,6 +254,7 @@ private:
     }
 
     channel_type &m_channel;
+    epoch_source &m_epochs;
     handshake_fsm_config m_fsm_cfg;
     handshake_fsm m_fsm;
     frame_router m_router;
@@ -272,7 +264,7 @@ private:
     std::string m_node_name;
     std::chrono::nanoseconds m_handshake_timeout;
     bool m_is_inbound_bootstrap;
-    std::uint8_t m_session_id{0}, m_peer_session_id{0}, m_session_id_counter{0};
+    std::uint8_t m_session_id{0}, m_peer_session_id{0};
     bool m_forwarders_installed{false}, m_torn_down{false};
     log::logger &m_logger;
     typename message_forwarder<Policy>::peer m_msg_peer;

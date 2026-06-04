@@ -18,6 +18,7 @@
 #include "plexus/io/reconnect_config.h"
 
 #include "plexus/io/peer_session.h"
+#include "plexus/io/epoch_source.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
@@ -89,7 +90,10 @@ struct tcp_reconnect
 
     std::uint16_t port{0};
     std::optional<driver_t> driver;
-    std::uint8_t last_req_epoch{0};
+    // The per-peer epoch wells outlive every incarnation, so each rebuilt session
+    // draws a strictly-later epoch with no hand-off of the dead one.
+    plexus::io::epoch_source req_epochs;
+    plexus::io::epoch_source resp_epochs;
     int drops_seen{0};
 
     // listen_first: bind the listener on an ephemeral port BEFORE the driver so the
@@ -99,7 +103,7 @@ struct tcp_reconnect
     {
         transport.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) {
             accepted_ch = std::move(ch);
-            responder.emplace(*accepted_ch, io, make_cfg(0x01), k_long_timeout,
+            responder.emplace(*accepted_ch, io, resp_epochs, make_cfg(0x01), k_long_timeout,
                               resp_messages, resp_procedures, "requester-node", true);
             responder->start();
         });
@@ -108,9 +112,8 @@ struct tcp_reconnect
             // Route a transport DROP (broken_pipe/connection_reset) — not a clean
             // close — to the driver. on_data is owned by the session (set in start()).
             dialer_ch->on_error([this](pio::io_error) { ++drops_seen; driver->on_channel_dropped(); });
-            requester.emplace(*dialer_ch, io, make_cfg(0x02), k_long_timeout,
+            requester.emplace(*dialer_ch, io, req_epochs, make_cfg(0x02), k_long_timeout,
                               req_messages, req_procedures, "responder-node", false);
-            requester->seed_epoch(last_req_epoch);
             requester->start();
         });
 
@@ -125,7 +128,7 @@ struct tcp_reconnect
         }
         driver.emplace(transport, io, cfg, pio::endpoint{"tcp", "127.0.0.1:" + std::to_string(port)}, k_seed);
         driver->on_redial([this] {
-            if(requester) { last_req_epoch = requester->session_id(); requester->tear_down(); }
+            if(requester) requester->tear_down();
         });
     }
 

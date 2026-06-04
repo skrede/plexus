@@ -118,11 +118,14 @@ struct tcp_link
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;
 
+    plexus::io::epoch_source req_epochs;
+    plexus::io::epoch_source resp_epochs;
+
     explicit tcp_link(std::chrono::nanoseconds timeout = k_long_timeout)
     {
         transport.on_accepted([this, timeout](std::unique_ptr<pasio::asio_channel> ch) {
             accepted_ch = std::move(ch);
-            responder.emplace(*accepted_ch, io, make_cfg(0x01), timeout,
+            responder.emplace(*accepted_ch, io, resp_epochs, make_cfg(0x01), timeout,
                               resp_messages, resp_procedures, "requester-node", true);
             responder->on_message([this](std::string_view, std::span<const std::byte> d) {
                 resp_received.emplace_back(to_string(d));
@@ -131,7 +134,7 @@ struct tcp_link
         });
         transport.on_dialed([this, timeout](std::unique_ptr<pasio::asio_channel> ch) {
             dialer_ch = std::move(ch);
-            requester.emplace(*dialer_ch, io, make_cfg(0x02), timeout,
+            requester.emplace(*dialer_ch, io, req_epochs, make_cfg(0x02), timeout,
                               req_messages, req_procedures, "responder-node", false);
             requester->on_message([this](std::string_view, std::span<const std::byte> d) {
                 req_received.emplace_back(to_string(d));
