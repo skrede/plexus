@@ -247,11 +247,12 @@ TEST_CASE("asio peer_session: the data-path staleness gate FIRES over TCP — a 
         REQUIRE(latched == l.requester->session_id());
 
         // A frame for the SAME topic carrying a DIFFERENT non-zero epoch is dropped:
-        // the sink does not grow. Fed through the production receive path.
+        // the sink does not grow. Fed through the production receive path. on_receive
+        // gates synchronously (no post), so the drop is observable immediately — a
+        // wall-clock wait would only risk a false green under load.
         const std::uint8_t stale_epoch = static_cast<std::uint8_t>(latched == 200 ? 199 : 200);
         auto stale_frame = make_data_frame(stale, stale_epoch);
         l.responder->on_receive(stale_frame);
-        l.settle();
         REQUIRE(l.resp_received.size() == 1);   // DROPPED, not delivered
 
         // A frame carrying the latched epoch IS delivered.

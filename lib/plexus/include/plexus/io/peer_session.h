@@ -33,11 +33,11 @@ namespace plexus::io {
 // listen so a future transport backend slots in unchanged), owns a per-peer
 // frame_router whose consumers decode handshake frames into the FSM and hand data
 // frames to the node-shared forwarders carrying THIS peer's identity, mints a
-// per-connection session_id epoch on handshake completion, and runs the
-// receive-path staleness gate that latches the peer's first non-zero session_id
-// and drops mismatches. Re-entrancy safety is structural: on_data is always posted
-// and the lifetime is single-owner, so the bridge needs no synchronization wrapper
-// and no inbound reassembler (the channel already delivers complete header-on frames).
+// per-connection session_id epoch on completion, and runs the receive-path
+// staleness gate that latches the peer's first non-zero session_id and drops
+// mismatches. Re-entrancy safety is structural: on_data is always posted and the
+// lifetime is single-owner, so the bridge needs no synchronization wrapper and no
+// inbound reassembler (the channel already delivers complete header-on frames).
 template <typename Policy>
     requires plexus::Policy<Policy>
 class peer_session
@@ -66,6 +66,7 @@ public:
     // both begin outbound: the simultaneous-connect path completes on both ends.
     void start()
     {
+        m_torn_down = false;
         m_channel.on_data([this](std::span<const std::byte> f) { on_receive(f); });
         register_consumers();
         arm_handshake_timer();
@@ -81,9 +82,12 @@ public:
 
     // The staleness gate runs BEFORE the router: a frame whose non-zero session_id
     // differs from the latched epoch is a previous-session straggler and is dropped;
-    // the first non-zero observation latches the peer's epoch.
+    // the first non-zero observation latches the peer's epoch. A frame already posted
+    // before tear_down is ignored (no phantom completion on a closed session).
     void on_receive(std::span<const std::byte> frame)
     {
+        if(m_torn_down)
+            return;
         if(auto hdr = wire::decode_header(frame))
         {
             if(hdr->session_id != 0 && m_peer_session_id != 0 && hdr->session_id != m_peer_session_id)
@@ -98,6 +102,7 @@ public:
     // and the FSM for a fresh cycle, and close the channel.
     void tear_down()
     {
+        m_torn_down = true;
         m_handshake_timer.cancel();
         m_messages.detach_all(m_msg_peer);
         m_procedures.detach_all(m_rpc_peer);
@@ -249,7 +254,7 @@ private:
     std::chrono::nanoseconds m_handshake_timeout;
     bool m_is_inbound_bootstrap;
     std::uint8_t m_session_id{0}, m_peer_session_id{0}, m_session_id_counter{0};
-    bool m_forwarders_installed{false};
+    bool m_forwarders_installed{false}, m_torn_down{false};
     log::logger &m_logger;
     typename message_forwarder<Policy>::peer m_msg_peer;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
