@@ -14,7 +14,6 @@
 
 #include "plexus/log/logger.h"
 
-#include <deque>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -64,10 +63,9 @@ public:
         , m_registry(transport, m_build)
         , m_dial_eagerly(dial_eagerly)
     {
-        m_transport.on_dialed([this](std::unique_ptr<channel_type> ch) { on_dialed(std::move(ch)); });
+        m_transport.on_dialed([this](std::unique_ptr<channel_type> ch, const endpoint &ep) { on_dialed(std::move(ch), ep); });
         m_transport.on_accepted([this](std::unique_ptr<channel_type> ch) { on_accepted(std::move(ch)); });
-        m_transport.on_dial_failed([this](io_error) { on_dial_failed(); });
-        m_registry.on_slot_redial([this](const node_id &id) { m_pending_dials.push_back(id); });
+        m_transport.on_dial_failed([this](const endpoint &ep, io_error) { m_registry.notify_dial_failed(ep); });
     }
 
     void listen(const endpoint &ep) { m_transport.listen(ep); }
@@ -134,27 +132,20 @@ public:
     registry_type &registry() noexcept { return m_registry; }
 
 private:
-    // The single dial-success tail: the channel belongs to the oldest pending dial
-    // target (FIFO over the in-flight dials). Hand it to the registry's shared
-    // build-from-record -> start() tail.
-    void on_dialed(std::unique_ptr<channel_type> channel)
+    // The single dial-success tail. CORRELATION by endpoint, NOT by arrival order:
+    // the transport hands back the endpoint THIS channel dialed, so it routes to the
+    // slot that dialed that endpoint. A real async transport completes concurrent
+    // dials OUT OF ORDER, so the arrival sequence is not the dial sequence — only the
+    // endpoint deterministically identifies the originating slot.
+    void on_dialed(std::unique_ptr<channel_type> channel, const endpoint &dialed)
     {
-        if(m_pending_dials.empty())
-            return;
-        auto id = m_pending_dials.front();
-        m_pending_dials.pop_front();
-        m_registry.build_session(id, std::move(channel));
+        m_registry.build_session_for_endpoint(dialed, std::move(channel));
     }
 
     void on_accepted(std::unique_ptr<channel_type> channel)
     {
         m_registry.accept_session(std::move(channel));
     }
-
-    // A refused dial drives the slot's own reconnect driver (the per-slot redial),
-    // which the registry already wired in ensure_slot. The driver consumed the
-    // failure through its own on_dial_failed wiring in start(); nothing set-wide.
-    void on_dial_failed() {}
 
     std::string node_name_for(const node_id &id) const
     {
@@ -170,7 +161,6 @@ private:
     session_build_context<Policy> m_build;
     registry_type m_registry;
     known_peers m_known;
-    std::deque<node_id> m_pending_dials;
     bool m_dial_eagerly;
 };
 

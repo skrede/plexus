@@ -68,15 +68,22 @@ public:
     // driver stops re-dialing.
     void on_dead(detail::move_only_function<void()> cb) { m_on_dead = std::move(cb); }
 
-    // Wire the dial-failure trigger and begin the first dial. The first-attempt
-    // timestamp is read from the same Clock the backoff timer uses so max_elapsed
-    // is provable on the virtual clock.
+    // Begin the first dial. The first-attempt timestamp is read from the same Clock
+    // the backoff timer uses so max_elapsed is provable on the virtual clock. The
+    // dial-failure trigger is NOT self-wired on the transport: many drivers share one
+    // transport (the multi-peer registry), so a single transport callback cannot
+    // belong to one driver. The OWNER routes the transport's per-endpoint failure to
+    // THIS driver's notify_dial_failed() — for a known endpoint, that is unambiguous.
     void start()
     {
-        m_transport.on_dial_failed([this](io::io_error) { schedule_redial(); });
         m_first_attempt = Clock::now();
         dial();
     }
+
+    // The owner observed a dial failure for THIS driver's endpoint: back off and
+    // re-dial. (The registry/engine correlates the transport's per-endpoint failure
+    // to the matching slot; a single-connection owner routes its sole failure here.)
+    void notify_dial_failed() { schedule_redial(); }
 
     // An established session's transport dropped (broken_pipe/connection_reset on an
     // already-complete session). Back off and re-dial a fresh incarnation. A clean

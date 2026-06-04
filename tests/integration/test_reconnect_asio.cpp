@@ -110,7 +110,7 @@ struct tcp_reconnect
                               resp_messages, resp_procedures, true);
             responder->start();
         });
-        transport.on_dialed([this](std::unique_ptr<pasio::asio_channel> ch) {
+        transport.on_dialed([this](std::unique_ptr<pasio::asio_channel> ch, const pio::endpoint &) {
             req_ctx.channel = std::move(ch);
             req_ctx.node_name = "responder-node";
             // Route a transport DROP (broken_pipe/connection_reset) — not a clean
@@ -131,6 +131,12 @@ struct tcp_reconnect
             port = closed_port;
         }
         driver.emplace(transport, io, cfg, pio::endpoint{"tcp", "127.0.0.1:" + std::to_string(port)}, k_seed);
+        // The driver no longer self-wires the transport's dial-failure callback (a
+        // shared transport's single callback cannot belong to one of many drivers);
+        // the owner routes a failure to its sole driver.
+        transport.on_dial_failed([this](const pio::endpoint &, pio::io_error) {
+            driver->notify_dial_failed();
+        });
         driver->on_redial([this] {
             if(requester) requester->tear_down();
         });

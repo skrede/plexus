@@ -75,19 +75,10 @@ public:
     {
     }
 
-    // The engine sets this so each slot's dial (the initial one and every re-dial)
-    // enqueues its own slot as the next dial target — the channel on_dialed delivers
-    // then routes back to THIS slot. The driver fires on_redial just before every
-    // transport.dial(), so the enqueue order matches the dial order.
-    void on_slot_redial(detail::move_only_function<void(const node_id &)> cb)
-    {
-        m_on_slot_redial = std::move(cb);
-    }
-
     // Create the slot (record + its driver sibling) if absent. The driver is
     // constructed against the engine's transport, the slot's endpoint and the
-    // node-wide redial_config; its on_redial routes back HERE to rebuild only this
-    // slot. Idempotent — a second ensure_slot for a known id is a no-op.
+    // node-wide redial_config; its on_redial tears down only this slot. Idempotent —
+    // a second ensure_slot for a known id is a no-op.
     void ensure_slot(const node_id &id, const endpoint &ep, const std::string &node_name)
     {
         if(m_slots.find(id) != m_slots.end())
@@ -97,21 +88,23 @@ public:
         m_slots.emplace(id, std::move(slot));
     }
 
-    // The shared dial-success tail (BOTH the lazy and eager knobs converge here):
-    // store the just-dialed channel into the slot's record and build the session
-    // from the record by one reference, then start() it.
-    void build_session(const node_id &id, std::unique_ptr<channel_type> channel)
+    // The shared dial-success tail (BOTH the lazy and eager knobs converge here): the
+    // just-dialed channel is correlated to its slot BY THE ENDPOINT it dialed (the
+    // transport hands that back) — NOT by arrival order, which a real async transport
+    // reorders. Store it into the slot's record and build the session from the record
+    // by one reference, then start() it. A completion for an endpoint with no live
+    // slot (a torn-down peer) is dropped.
+    void build_session_for_endpoint(const endpoint &ep, std::unique_ptr<channel_type> channel)
     {
-        auto it = m_slots.find(id);
-        if(it == m_slots.end())
-            return;
-        build_into(*it->second, std::move(channel), false);
+        for(auto &[id, slot] : m_slots)
+            if(slot->record.dial_endpoint == ep)
+                return build_into(*slot, std::move(channel), false);
     }
 
     // The inbound-bootstrap tail: a peer dialed US. We build an accepted session on
     // a slot keyed by a synthetic inbound identity (the peer's real node_id arrives
-    // in the handshake; inbound slots are keyed by arrival order this phase). No
-    // driver re-dials an accepted slot — the dialer owns the redial.
+    // in the handshake; inbound slots are keyed by arrival order for now). No driver
+    // re-dials an accepted slot — the dialer owns the redial.
     node_id accept_session(std::unique_ptr<channel_type> channel)
     {
         node_id inbound_id{};
@@ -147,6 +140,17 @@ public:
     driver_type &driver_for(const node_id &id) { return m_slots.at(id)->driver; }
     std::uint32_t attempt_count(const node_id &id) const { return m_slots.at(id)->driver.attempt_count(); }
 
+    // Route a per-endpoint dial failure to the slot that dialed it: many slots share
+    // one transport, so the failure is correlated by endpoint, NOT by a per-driver
+    // transport callback (which they would clobber). A failure for an unknown
+    // endpoint (no live slot) is a no-op.
+    void notify_dial_failed(const endpoint &ep)
+    {
+        for(auto &[id, slot] : m_slots)
+            if(slot->record.dial_endpoint == ep)
+                return slot->driver.notify_dial_failed();
+    }
+
 private:
     // The per-peer slot: the member order encodes the outlive discipline (record,
     // then driver sibling, then the session built from both).
@@ -176,24 +180,22 @@ private:
         slot.session->start();
     }
 
-    // Per-slot redial routing: the driver tears down THIS slot's dead session
-    // before the fresh channel lands (the next on_dialed rebuilds it). It rebuilds
-    // only this slot — the registry never loops the map to reconnect the set.
+    // Per-slot redial routing: the driver tears down THIS slot's dead session before
+    // the fresh channel lands (the next on_dialed, correlated by endpoint, rebuilds
+    // it). It tears down only this slot — the registry never loops the map to
+    // reconnect the set.
     void wire_redial(slot_block &slot, const node_id &id)
     {
         slot.driver.on_redial([this, id] {
             auto it = m_slots.find(id);
             if(it != m_slots.end() && it->second->session)
                 it->second->session->tear_down();
-            if(m_on_slot_redial)
-                m_on_slot_redial(id);
         });
     }
 
     Transport &m_transport;
     session_build_context<Policy> &m_build;
     std::map<node_id, std::unique_ptr<slot_block>> m_slots;
-    detail::move_only_function<void(const node_id &)> m_on_slot_redial;
     std::uint8_t m_next_inbound{1};
 };
 

@@ -105,7 +105,7 @@ struct link
             });
             responder->start();
         });
-        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
+        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &) {
             req_ctx.channel = std::move(ch);
             req_ctx.node_name = "responder-node";
             requester.emplace(req_ctx, ex, make_cfg(0x02), timeout,
@@ -428,7 +428,7 @@ struct manual_link
                               resp_messages, resp_procedures, true);
             responder->start();
         });
-        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch) {
+        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch, const plexus::io::endpoint &) {
             req_ctx.channel = std::move(ch);
             req_ctx.node_name = "responder-node";
             requester.emplace(req_ctx, ex, make_cfg(0x02), timeout,

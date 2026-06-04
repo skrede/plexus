@@ -85,14 +85,14 @@ struct dial_link
                               resp_messages, resp_procedures, true);
             responder->start();
         });
-        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
+        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &) {
             req_ctx.channel = std::move(ch);
             req_ctx.node_name = "responder-node";
             requester.emplace(req_ctx, ex, make_cfg(0x02), timeout,
                               req_messages, req_procedures, false);
             requester->start();
         });
-        transport.on_dial_failed([this](plexus::io::io_error) { dial_refused = true; });
+        transport.on_dial_failed([this](const plexus::io::endpoint &, plexus::io::io_error) { dial_refused = true; });
 
         transport.listen({"inproc", "svc"});
         transport.dial({"inproc", "svc"});
@@ -139,8 +139,8 @@ TEST_CASE("inproc transport: dialing an unregistered endpoint surfaces connectio
 
     std::optional<plexus::io::io_error> failed;
     bool dialed = false;
-    transport.on_dial_failed([&](plexus::io::io_error e) { failed = e; });
-    transport.on_dialed([&](std::unique_ptr<inproc_channel<>>) { dialed = true; });
+    transport.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e) { failed = e; });
+    transport.on_dialed([&](std::unique_ptr<inproc_channel<>>, const plexus::io::endpoint &) { dialed = true; });
 
     transport.dial({"inproc", "nope"});
     ex.drain();

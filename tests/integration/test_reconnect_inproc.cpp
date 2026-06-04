@@ -222,7 +222,7 @@ struct harness
             });
             responder->start();
         });
-        transport.on_dialed([this](std::unique_ptr<inproc_channel<manual_clock>> ch) {
+        transport.on_dialed([this](std::unique_ptr<inproc_channel<manual_clock>> ch, const plexus::io::endpoint &) {
             req_ctx.channel = std::move(ch);
             req_ctx.node_name = "responder-node";
             requester.emplace(req_ctx, ex, make_cfg(0x02), k_long_timeout,
@@ -231,6 +231,12 @@ struct harness
                 req_received.emplace_back(to_string(d));
             });
             requester->start();
+        });
+        // The driver no longer self-wires the transport's dial-failure callback (a
+        // shared transport's single callback cannot belong to one of many drivers);
+        // the owner routes a failure to its sole driver.
+        transport.on_dial_failed([this](const plexus::io::endpoint &, plexus::io::io_error) {
+            driver.notify_dial_failed();
         });
         // Tear the dead requester down before the fresh channel arrives, and count
         // surrender as a reported death the oracle asserts.

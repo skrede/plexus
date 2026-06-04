@@ -199,6 +199,24 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_transport_dial_asio TEST_PREFIX "integration.")
 
+    # The gated real-TCP routing oracle: the routing_engine over asio_transport (no
+    # hand-dial) proves BOTH dial knobs over loopback — lazy (no connection until a
+    # demand call, then dial+handshake) and eager (dial on awareness) — flows a real
+    # published message carrying the minted epoch, and proves the two-peer receive-
+    # path source identity leg over the wire (one node dialing two peers near-
+    # simultaneously resolves each frame to its own source, no cross-attribution; the
+    # overlapping in-flight dials also exercise the dial-completion correlation).
+    # Loops the behavioral paths N>=100 in-body; the ctest invocation is re-run >=3
+    # process runs. Links plexus::inproc for the forwarder framing path.
+    add_executable(test_routing_engine_asio test_routing_engine_asio.cpp)
+    target_link_libraries(test_routing_engine_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_routing_engine_asio TEST_PREFIX "integration.")
+
     # The gated real-TCP reconnect oracle: an established session whose channel
     # drops re-dials + re-handshakes over real loopback; the initial-refused path
     # re-dials a closed port. Links plexus::inproc for the forwarder framing path.

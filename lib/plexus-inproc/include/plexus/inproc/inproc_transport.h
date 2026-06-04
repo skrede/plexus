@@ -41,8 +41,8 @@ public:
     inproc_transport &operator=(const inproc_transport &) = delete;
 
     void on_accepted(detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> cb) { m_on_accepted = std::move(cb); }
-    void on_dialed(detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> cb) { m_on_dialed = std::move(cb); }
-    void on_dial_failed(detail::move_only_function<void(io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
+    void on_dialed(detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
+    void on_dial_failed(detail::move_only_function<void(const io::endpoint &, io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
     void on_error(detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
 
     void listen(const io::endpoint &ep)
@@ -58,7 +58,7 @@ public:
     {
         auto *acc = m_bus.find_listener(ep);
         if(!acc)
-            return report_dial_fail(io::io_error::connection_refused);
+            return report_dial_fail(ep, io::io_error::connection_refused);
         auto dialer = std::make_unique<inproc_channel<Clock>>(m_exec);
         auto accepted = std::make_unique<inproc_channel<Clock>>(m_exec);
         dialer->connect_to(accepted->local_endpoint());
@@ -66,24 +66,24 @@ public:
         if(acc->on_accepted)
             acc->on_accepted(std::move(accepted));
         if(m_on_dialed)
-            m_on_dialed(std::move(dialer));
+            m_on_dialed(std::move(dialer), ep);
     }
 
     void close() { m_bus.deregister_listener(m_listen_ep); }
 
 private:
-    void report_dial_fail(io::io_error e)
+    void report_dial_fail(const io::endpoint &ep, io::io_error e)
     {
         if(m_on_dial_failed)
-            m_on_dial_failed(e);
+            m_on_dial_failed(ep, e);
     }
 
     inproc_executor<Clock> &m_exec;
     inproc_bus<Clock> &m_bus;
     io::endpoint m_listen_ep;
     detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> m_on_accepted;
-    detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> m_on_dialed;
-    detail::move_only_function<void(io::io_error)> m_on_dial_failed;
+    detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>, const io::endpoint &)> m_on_dialed;
+    detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
     detail::move_only_function<void(io::io_error)> m_on_error;
 };
 

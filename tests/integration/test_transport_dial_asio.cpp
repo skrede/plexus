@@ -99,7 +99,7 @@ struct dial_tcp_link
             });
             responder->start();
         });
-        transport.on_dialed([this, timeout](std::unique_ptr<pasio::asio_channel> ch) {
+        transport.on_dialed([this, timeout](std::unique_ptr<pasio::asio_channel> ch, const pio::endpoint &) {
             req_ctx.channel = std::move(ch);
             req_ctx.node_name = "responder-node";
             requester.emplace(req_ctx, io, make_cfg(0x02), timeout,

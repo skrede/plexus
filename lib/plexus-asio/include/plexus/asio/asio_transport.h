@@ -51,27 +51,30 @@ public:
     asio_transport &operator=(const asio_transport &) = delete;
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> cb) { m_on_accepted = std::move(cb); }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> cb) { m_on_dialed = std::move(cb); }
-    void on_dial_failed(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
+    void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
 
     void listen(const io::endpoint &ep) { m_listener.start(ep); }
 
+    // The dialed endpoint rides the async closure so on_dialed / on_dial_failed
+    // CARRY it back: the engine correlates each completion to its slot by endpoint,
+    // not by arrival order (concurrent dials over one transport reorder).
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;
         auto target = detail::parse(ep.address, pec);
         if(pec)
-            return report_dial_fail(detail::map_error(pec));
+            return report_dial_fail(ep, detail::map_error(pec));
         auto ch = std::make_unique<asio_channel>(m_io);
         auto &raw = *ch;
         raw.socket().async_connect(target,
-            [this, ch = std::move(ch)](std::error_code ec) mutable {
+            [this, ep, ch = std::move(ch)](std::error_code ec) mutable {
                 if(ec)
-                    return report_dial_fail(detail::map_error(ec));
+                    return report_dial_fail(ep, detail::map_error(ec));
                 ch->start_read();
                 if(m_on_dialed)
-                    m_on_dialed(std::move(ch));
+                    m_on_dialed(std::move(ch), ep);
             });
     }
 
@@ -80,17 +83,17 @@ public:
     [[nodiscard]] uint16_t port() const { return m_listener.port(); }
 
 private:
-    void report_dial_fail(io::io_error e)
+    void report_dial_fail(const io::endpoint &ep, io::io_error e)
     {
         if(m_on_dial_failed)
-            m_on_dial_failed(e);
+            m_on_dial_failed(ep, e);
     }
 
     ::asio::io_context &m_io;
     asio_listener m_listener;
     plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_dialed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_dial_failed;
+    plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>, const io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
 };
 
