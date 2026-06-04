@@ -29,6 +29,20 @@ target_include_directories(test_reqres_roundtrip_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_reqres_roundtrip_inproc TEST_PREFIX "integration.")
 
+# The deterministic inproc latch-replay roundtrip: a late subscriber recovers the
+# retained value through a real frame_router::on_unidirectional, plus the
+# non-latched negative and the LATCH-NOALLOC retention gate — always built (inproc
+# Policy, no backend needed). tests/ is on the include path for support/alloc_counter.h.
+add_executable(test_latch_replay_inproc test_latch_replay_inproc.cpp)
+target_link_libraries(test_latch_replay_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_latch_replay_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_latch_replay_inproc TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
