@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_HANDSHAKE_FSM_H
 
 #include "plexus/wire/handshake.h"
+
 #include "plexus/node_id.h"
 
 #include <array>
@@ -90,17 +91,23 @@ public:
     {
     }
 
-    // An outbound dial has begun. Subsequent on_timeout returns retry.
+    // An outbound dial has begun. Subsequent on_timeout returns retry. Guarded to
+    // the pre-handshake states: a stray dial once handshaking or resolved must NOT
+    // regress an established or completed session back to dialing.
     fsm_step_result on_dial_started() noexcept
     {
-        m_state = peer_fsm_state::dialing;
+        if(m_state == peer_fsm_state::not_connected || m_state == peer_fsm_state::dialing)
+            m_state = peer_fsm_state::dialing;
         return {};
     }
 
     // The dial succeeded; we own an outbound connection. Emit send_request and
-    // wait for the response to close the loop.
+    // wait for the response to close the loop. Guarded so a stray connected event
+    // on an already-handshaking or resolved session does not re-emit send_request.
     fsm_step_result on_outbound_connected() noexcept
     {
+        if(m_state == peer_fsm_state::handshaking || m_state == peer_fsm_state::handshake_resolved)
+            return {};
         m_state = peer_fsm_state::handshaking;
         return {.action = fsm_action::send_request};
     }
@@ -125,6 +132,8 @@ public:
         m_last_seen_their_protocol_version = resp.protocol_version;
         if(auto gate = validate(resp.protocol_version, resp.id))
             return *gate;
+        if(resp.status == wire::handshake_status::identity_conflict)
+            return identity_conflict_result();
         if(resp.status != wire::handshake_status::accepted)
             return reject_version_result();
         if(!is_version_compatible(resp.version_major, resp.version_minor))
@@ -190,8 +199,12 @@ private:
 
     // The response that closes a single-direction dial, or the second arrival of a
     // simultaneous connect after on_request already completed (the latch no-ops it).
+    // A response arriving with no outbound request ever sent (state not_connected /
+    // dialing) is unsolicited: ignore it rather than fabricate a completion.
     fsm_step_result resolve_outbound() noexcept
     {
+        if(m_state != peer_fsm_state::handshaking && m_state != peer_fsm_state::handshake_resolved)
+            return {};
         if(m_complete_emitted)
             return {};
         auto dedup = m_inbound_pending ? arbitrate_dedup() : dedup_decision::none;

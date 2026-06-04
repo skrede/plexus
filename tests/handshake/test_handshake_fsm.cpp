@@ -3,9 +3,10 @@
 // and the oracle's job is exhaustive enumeration of the (state, event, version,
 // identity) grid plus the named convergence invariants, NOT looped timing
 // reproducibility (there is no executor to reorder). Each named group below mirrors
-// one canonical oracle label of the phase's validation contract.
+// one canonical convergence invariant of this FSM's behavioral contract.
 
 #include "plexus/io/handshake_fsm.h"
+
 #include "plexus/node_id.h"
 
 #include "plexus/wire/handshake.h"
@@ -18,7 +19,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <type_traits>
 
 using plexus::node_id;
 using plexus::io::dedup_decision;
@@ -97,10 +97,10 @@ constexpr node_id k_peer  = id_with_tail(0x20);
 
 }
 
-// Group A — full state x event matrix. Every reachable peer_fsm_state crossed with
-// every on_* event, asserting the resulting state and action INCLUDING the
-// "nonsensical" cells, so no cell is ever undefined. Each cell builds a fresh FSM
-// driven to the target state, then fires the event under test once.
+// Group A — full state x event matrix. Every reachable peer_fsm_state (4) crossed
+// with every on_* event (6) = 24 cells, ALL present and asserted, including the
+// "nonsensical" re-entry cells, so no cell is ever undefined. Each cell builds a
+// fresh FSM driven to the target state, then fires the event under test once.
 TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
 {
     SECTION("not_connected")
@@ -127,16 +127,15 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
             REQUIRE(r.action == fsm_action::send_response);
             REQUIRE(r.outcome == handshake_outcome::accept_inbound);
         }
-        SECTION("on_response -> handshake_resolved/complete (no state guard by design)")
+        SECTION("on_response -> none (unsolicited: no request was ever sent)")
         {
-            // The FSM has no state guard on resolve_outbound: a valid response with
-            // nothing latched completes accept_outbound. This is a DEFINED result,
-            // not undefined behavior — the latch, not the state, bounds completion.
+            // resolve_outbound is state-guarded: a response with no outbound dial in
+            // flight is unsolicited and ignored — the FSM does NOT fabricate an
+            // accept_outbound completion for a request it never sent.
             handshake_fsm fsm(config_for(k_self));
             auto r = fsm.on_response(good_response(k_peer));
-            REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
-            REQUIRE(r.action == fsm_action::complete);
-            REQUIRE(r.outcome == handshake_outcome::accept_outbound);
+            REQUIRE(fsm.state() == peer_fsm_state::not_connected);
+            REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_timeout -> none, state unchanged")
         {
@@ -161,6 +160,13 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
             fsm.on_dial_started();
             return fsm;
         };
+        SECTION("on_dial_started again -> stays dialing/none (idempotent re-dial)")
+        {
+            auto fsm = dialing();
+            auto r = fsm.on_dial_started();
+            REQUIRE(fsm.state() == peer_fsm_state::dialing);
+            REQUIRE(r.action == fsm_action::none);
+        }
         SECTION("on_outbound_connected -> handshaking/send_request")
         {
             auto fsm = dialing();
@@ -174,6 +180,16 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
             auto r = fsm.on_request(good_request(k_peer), false);
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::send_response);
+        }
+        SECTION("on_response -> none (unsolicited: connection not yet established)")
+        {
+            // The dial is in flight but no outbound connection exists yet, so no
+            // send_request was emitted. A response here is unsolicited and ignored
+            // (the corrected resolve_outbound state guard).
+            auto fsm = dialing();
+            auto r = fsm.on_response(good_response(k_peer));
+            REQUIRE(fsm.state() == peer_fsm_state::dialing);
+            REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_timeout -> retry, state stays dialing")
         {
@@ -199,6 +215,24 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
             fsm.on_outbound_connected();
             return fsm;
         };
+        SECTION("on_dial_started -> no-op, stays handshaking (no regression)")
+        {
+            // A stray dial once an outbound connection is established must NOT
+            // regress the session back to dialing and discard the connection.
+            auto fsm = handshaking();
+            auto r = fsm.on_dial_started();
+            REQUIRE(fsm.state() == peer_fsm_state::handshaking);
+            REQUIRE(r.action == fsm_action::none);
+        }
+        SECTION("on_outbound_connected again -> no-op, no second send_request")
+        {
+            // A duplicate connected event must NOT re-emit send_request on a
+            // connection that is already handshaking.
+            auto fsm = handshaking();
+            auto r = fsm.on_outbound_connected();
+            REQUIRE(fsm.state() == peer_fsm_state::handshaking);
+            REQUIRE(r.action == fsm_action::none);
+        }
         SECTION("on_response(accepted, compatible) -> handshake_resolved/complete")
         {
             auto fsm = handshaking();
@@ -240,6 +274,21 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
             fsm.on_response(good_response(k_peer));
             return fsm;
         };
+        SECTION("on_dial_started -> no-op, stays resolved (no regression)")
+        {
+            // A stray dial on a resolved session must NOT reset it back to dialing.
+            auto fsm = resolved();
+            auto r = fsm.on_dial_started();
+            REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
+            REQUIRE(r.action == fsm_action::none);
+        }
+        SECTION("on_outbound_connected -> no-op, no send_request on resolved session")
+        {
+            auto fsm = resolved();
+            auto r = fsm.on_outbound_connected();
+            REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
+            REQUIRE(r.action == fsm_action::none);
+        }
         SECTION("on_response again -> none (latch holds, no second complete)")
         {
             auto fsm = resolved();
@@ -465,6 +514,49 @@ TEST_CASE("F: identity collision aborts reject_identity", "[handshake]")
         auto r = fsm.on_response(good_response(k_self));
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_identity);
+        REQUIRE(fsm.state() == peer_fsm_state::not_connected);
+    }
+
+    // The peer-REPORTED rejection statuses: a response whose id and version pass the
+    // local gates but whose status byte is a rejection. identity_conflict maps to the
+    // exact reject_identity outcome (not the reject_version catch-all); the other
+    // rejection bytes have no dedicated outcome and fall to reject_version.
+    SECTION("on_response status == identity_conflict -> abort/reject_identity")
+    {
+        handshake_fsm fsm(config_for(k_self));
+        fsm.on_dial_started();
+        fsm.on_outbound_connected();
+        auto resp = good_response(k_peer);
+        resp.status = handshake_status::identity_conflict;
+        auto r = fsm.on_response(resp);
+        REQUIRE(r.action == fsm_action::abort);
+        REQUIRE(r.outcome == handshake_outcome::reject_identity);
+        REQUIRE(fsm.state() == peer_fsm_state::not_connected);
+    }
+
+    SECTION("on_response status == version_incompatible -> abort/reject_version")
+    {
+        handshake_fsm fsm(config_for(k_self));
+        fsm.on_dial_started();
+        fsm.on_outbound_connected();
+        auto resp = good_response(k_peer);
+        resp.status = handshake_status::version_incompatible;
+        auto r = fsm.on_response(resp);
+        REQUIRE(r.action == fsm_action::abort);
+        REQUIRE(r.outcome == handshake_outcome::reject_version);
+        REQUIRE(fsm.state() == peer_fsm_state::not_connected);
+    }
+
+    SECTION("on_response status == rejected_unknown -> abort/reject_version")
+    {
+        handshake_fsm fsm(config_for(k_self));
+        fsm.on_dial_started();
+        fsm.on_outbound_connected();
+        auto resp = good_response(k_peer);
+        resp.status = handshake_status::rejected_unknown;
+        auto r = fsm.on_response(resp);
+        REQUIRE(r.action == fsm_action::abort);
+        REQUIRE(r.outcome == handshake_outcome::reject_version);
         REQUIRE(fsm.state() == peer_fsm_state::not_connected);
     }
 }
