@@ -215,10 +215,19 @@ private:
     // Install-once: a second complete (the simultaneous-connect tail) no-ops. The
     // dedup verdict's keep_outbound/keep_inbound channel drop is a registry-block
     // concern — single-peer here, so it is read but not acted on.
+    //
+    // A bootstrap inbound completes with no counter-dial in flight (a peer dialed us
+    // before we had demand to dial back — the common path under demand-driven lazy
+    // dial), so it must still send the accept response: that is how the dialer learns
+    // it was accepted, completes, and mints its own epoch. The simultaneous-connect
+    // path (both ends dialed, is_inbound_bootstrap false) completes off the mutual
+    // requests and must send no redundant response — the same flag distinguishes them.
     void on_complete()
     {
         if(m_forwarders_installed)
             return;
+        if(m_is_inbound_bootstrap)
+            send_handshake_response(handshake_outcome::accept_inbound);
         m_handshake_timer.cancel();
         mint_session_id();
         m_forwarders_installed = true;

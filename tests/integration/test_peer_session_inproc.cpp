@@ -59,12 +59,14 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 }
 
 // A two-node inproc link: each node owns its own channel + forwarders + a
-// peer_session for the single peer it talks to. Both sides dial (the
-// simultaneous-connect path the shipped FSM completes on both ends): each sends a
-// request, receives the peer's request, and completes — distinct node_ids give the
-// dedup a defined ordering. on_data on each side feeds its peer_session's receive
-// path (the staleness gate + the per-peer router). A real published message and a
-// real RPC ride the SAME live channels the handshake established.
+// peer_session for the single peer it talks to. By default both sides dial (the
+// simultaneous-connect path): each sends a request, receives the peer's request, and
+// completes — distinct node_ids give the dedup a defined ordering. With
+// responder_bootstrap=true only the requester dials and the responder is a bootstrap
+// inbound (the common demand-driven path): the requester's request drives the
+// responder to complete + answer, and the requester completes off that response.
+// on_data on each side feeds its peer_session's receive path (the staleness gate +
+// the per-peer router). Real messages and RPC ride the SAME live channels.
 struct link
 {
     inproc_bus<> bus;
@@ -84,9 +86,9 @@ struct link
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;
 
-    explicit link(std::chrono::nanoseconds timeout = k_long_timeout)
+    explicit link(std::chrono::nanoseconds timeout = k_long_timeout, bool responder_bootstrap = false)
         : requester(req_ch, ex, make_cfg(0x02), timeout, req_messages, req_procedures, "responder-node", false)
-        , responder(resp_ch, ex, make_cfg(0x01), timeout, resp_messages, resp_procedures, "requester-node", false)
+        , responder(resp_ch, ex, make_cfg(0x01), timeout, resp_messages, resp_procedures, "requester-node", responder_bootstrap)
     {
         req_ch.connect_to(resp_ch.local_endpoint());
         resp_ch.connect_to(req_ch.local_endpoint());
@@ -129,6 +131,49 @@ TEST_CASE("inproc peer_session pair completes the handshake, mints epochs, insta
         ++completed;
     }
     REQUIRE(completed == k_iterations);
+}
+
+TEST_CASE("inproc peer_session: a one-directional dial completes BOTH sides — the bootstrap responder answers, the dialer mints off the response, and gated data flows both ways, looped",
+          "[integration][peer_session][inproc]")
+{
+    constexpr int k_iterations = 100;
+    const std::string downward = "dialer-to-responder";
+    const std::string upward = "responder-to-dialer";
+    int proven = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        link l{k_long_timeout, /*responder_bootstrap=*/true};   // only the requester dials
+        l.drive();
+
+        // Both complete WITHOUT a simultaneous connect: the bootstrap responder sent
+        // an accept response, so the dialer completed and minted its OWN epoch. (Before
+        // the response-on-bootstrap-complete fix the dialer stranded and neither flowed.)
+        REQUIRE(l.requester.is_complete());
+        REQUIRE(l.responder.is_complete());
+        REQUIRE(l.requester.session_id() != 0);
+        REQUIRE(l.responder.session_id() != 0);
+
+        // The established session is usable BOTH ways, each direction gated by the
+        // sender's epoch (the receiver latches it).
+        REQUIRE(l.resp_messages.attach(l.responder.msg_peer(), "down"));
+        REQUIRE(l.req_messages.attach_for_fanout(l.requester.msg_peer(), "down"));
+        REQUIRE(l.req_messages.attach(l.requester.msg_peer(), "up"));
+        REQUIRE(l.resp_messages.attach_for_fanout(l.responder.msg_peer(), "up"));
+        l.drive();
+
+        l.req_messages.publish("down", as_bytes(downward), l.requester.session_id());
+        l.resp_messages.publish("up", as_bytes(upward), l.responder.session_id());
+        l.drive();
+
+        REQUIRE(l.resp_received.size() == 1);
+        REQUIRE(l.resp_received[0] == downward);
+        REQUIRE(l.req_received.size() == 1);
+        REQUIRE(l.req_received[0] == upward);
+        REQUIRE(l.responder.peer_session_id() == l.requester.session_id());
+        REQUIRE(l.requester.peer_session_id() == l.responder.session_id());
+        ++proven;
+    }
+    REQUIRE(proven == k_iterations);
 }
 
 TEST_CASE("inproc peer_session: a real published message flows post-handshake and latches the epoch, looped",
