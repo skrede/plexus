@@ -4,6 +4,7 @@
 #include "plexus/io/handshake_fsm.h"
 
 #include "plexus/inproc/inproc_policy.h"
+#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
 #include "plexus/inproc/inproc_bus.h"
@@ -17,18 +18,21 @@
 
 #include <span>
 #include <array>
+#include <memory>
 #include <chrono>
 #include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <optional>
 #include <string_view>
 #include <system_error>
 
 using plexus::inproc::inproc_bus;
 using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_channel;
+using plexus::inproc::inproc_transport;
 using plexus::inproc::inproc_policy;
 using plexus::io::handshake_fsm_config;
 using plexus::wire::rpc_status;
@@ -58,50 +62,59 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
                                 .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
-// A two-node inproc link: each node owns its own channel + forwarders + a
-// peer_session for the single peer it talks to. By default both sides dial (the
-// simultaneous-connect path): each sends a request, receives the peer's request, and
-// completes — distinct node_ids give the dedup a defined ordering. With
-// responder_bootstrap=true only the requester dials and the responder is a bootstrap
-// inbound (the common demand-driven path): the requester's request drives the
-// responder to complete + answer, and the requester completes off that response.
-// on_data on each side feeds its peer_session's receive path (the staleness gate +
-// the per-peer router). Real messages and RPC ride the SAME live channels.
+// A two-node inproc link stood up through the transport's listen/dial rendezvous
+// (no hand-dial): the dialer end becomes the requester (is_inbound_bootstrap=false)
+// and the accepted end becomes the responder (is_inbound_bootstrap=true) — the
+// realistic asymmetric handshake the B1 bridge completes on both sides. Each node
+// owns its channel + forwarders + a peer_session for the single peer it talks to;
+// the requester's request drives the responder to complete + answer, and the
+// requester completes off that response. The channels are deferred in unique_ptr
+// and the sessions in std::optional, built only once dial/on_accepted deliver the
+// ends — and declared AFTER the bus/executor/transport so destruction unwinds the
+// channels before the bus they registered on. Real messages and RPC ride the SAME
+// live channels.
 struct link
 {
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
-
-    inproc_channel<> req_ch{ex};
-    inproc_channel<> resp_ch{ex};
+    inproc_transport<> transport{ex, bus};
 
     msg_forwarder req_messages;
     msg_forwarder resp_messages;
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
-    session requester;
-    session responder;
+    std::unique_ptr<inproc_channel<>> dialer_ch;
+    std::unique_ptr<inproc_channel<>> accepted_ch;
+    std::optional<session> requester;
+    std::optional<session> responder;
 
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;
 
-    explicit link(std::chrono::nanoseconds timeout = k_long_timeout, bool responder_bootstrap = false)
-        : requester(req_ch, ex, make_cfg(0x02), timeout, req_messages, req_procedures, "responder-node", false)
-        , responder(resp_ch, ex, make_cfg(0x01), timeout, resp_messages, resp_procedures, "requester-node", responder_bootstrap)
+    explicit link(std::chrono::nanoseconds timeout = k_long_timeout)
     {
-        req_ch.connect_to(resp_ch.local_endpoint());
-        resp_ch.connect_to(req_ch.local_endpoint());
-
-        requester.on_message([this](std::string_view, std::span<const std::byte> d) {
-            req_received.emplace_back(to_string(d));
+        transport.on_accepted([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
+            accepted_ch = std::move(ch);
+            responder.emplace(*accepted_ch, ex, make_cfg(0x01), timeout,
+                              resp_messages, resp_procedures, "requester-node", true);
+            responder->on_message([this](std::string_view, std::span<const std::byte> d) {
+                resp_received.emplace_back(to_string(d));
+            });
+            responder->start();
         });
-        responder.on_message([this](std::string_view, std::span<const std::byte> d) {
-            resp_received.emplace_back(to_string(d));
+        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
+            dialer_ch = std::move(ch);
+            requester.emplace(*dialer_ch, ex, make_cfg(0x02), timeout,
+                              req_messages, req_procedures, "responder-node", false);
+            requester->on_message([this](std::string_view, std::span<const std::byte> d) {
+                req_received.emplace_back(to_string(d));
+            });
+            requester->start();
         });
 
-        responder.start();
-        requester.start();
+        transport.listen({"inproc", "svc"});
+        transport.dial({"inproc", "svc"});
     }
 
     void drive() { ex.drain(); }
@@ -119,21 +132,21 @@ TEST_CASE("inproc peer_session pair completes the handshake, mints epochs, insta
         link l;
         l.drive();
 
-        REQUIRE(l.requester.is_complete());
-        REQUIRE(l.responder.is_complete());
-        REQUIRE(l.requester.session_id() != 0);
-        REQUIRE(l.responder.session_id() != 0);
+        REQUIRE(l.requester->is_complete());
+        REQUIRE(l.responder->is_complete());
+        REQUIRE(l.requester->session_id() != 0);
+        REQUIRE(l.responder->session_id() != 0);
 
         // A further drive does not re-mint or re-install (install-once latch).
-        const auto req_epoch = l.requester.session_id();
+        const auto req_epoch = l.requester->session_id();
         l.drive();
-        REQUIRE(l.requester.session_id() == req_epoch);
+        REQUIRE(l.requester->session_id() == req_epoch);
         ++completed;
     }
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("inproc peer_session: a one-directional dial completes BOTH sides — the bootstrap responder answers, the dialer mints off the response, and gated data flows both ways, looped",
+TEST_CASE("inproc peer_session: a dialed (one-directional) connection completes BOTH sides — the accepted bootstrap responder answers, the dialer mints off the response, and gated data flows both ways, looped",
           "[integration][peer_session][inproc]")
 {
     constexpr int k_iterations = 100;
@@ -142,35 +155,36 @@ TEST_CASE("inproc peer_session: a one-directional dial completes BOTH sides — 
     int proven = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l{k_long_timeout, /*responder_bootstrap=*/true};   // only the requester dials
+        link l;   // the dial rendezvous: only the dialer dials, the accepted end bootstraps
         l.drive();
 
-        // Both complete WITHOUT a simultaneous connect: the bootstrap responder sent
-        // an accept response, so the dialer completed and minted its OWN epoch. (Before
-        // the response-on-bootstrap-complete fix the dialer stranded and neither flowed.)
-        REQUIRE(l.requester.is_complete());
-        REQUIRE(l.responder.is_complete());
-        REQUIRE(l.requester.session_id() != 0);
-        REQUIRE(l.responder.session_id() != 0);
+        // Both complete WITHOUT a simultaneous connect: the accepted bootstrap responder
+        // sent an accept response, so the dialer completed and minted its OWN epoch.
+        // (Before the response-on-bootstrap-complete fix the dialer stranded and neither
+        // flowed.)
+        REQUIRE(l.requester->is_complete());
+        REQUIRE(l.responder->is_complete());
+        REQUIRE(l.requester->session_id() != 0);
+        REQUIRE(l.responder->session_id() != 0);
 
         // The established session is usable BOTH ways, each direction gated by the
         // sender's epoch (the receiver latches it).
-        REQUIRE(l.resp_messages.attach(l.responder.msg_peer(), "down"));
-        REQUIRE(l.req_messages.attach_for_fanout(l.requester.msg_peer(), "down"));
-        REQUIRE(l.req_messages.attach(l.requester.msg_peer(), "up"));
-        REQUIRE(l.resp_messages.attach_for_fanout(l.responder.msg_peer(), "up"));
+        REQUIRE(l.resp_messages.attach(l.responder->msg_peer(), "down"));
+        REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "down"));
+        REQUIRE(l.req_messages.attach(l.requester->msg_peer(), "up"));
+        REQUIRE(l.resp_messages.attach_for_fanout(l.responder->msg_peer(), "up"));
         l.drive();
 
-        l.req_messages.publish("down", as_bytes(downward), l.requester.session_id());
-        l.resp_messages.publish("up", as_bytes(upward), l.responder.session_id());
+        l.req_messages.publish("down", as_bytes(downward), l.requester->session_id());
+        l.resp_messages.publish("up", as_bytes(upward), l.responder->session_id());
         l.drive();
 
         REQUIRE(l.resp_received.size() == 1);
         REQUIRE(l.resp_received[0] == downward);
         REQUIRE(l.req_received.size() == 1);
         REQUIRE(l.req_received[0] == upward);
-        REQUIRE(l.responder.peer_session_id() == l.requester.session_id());
-        REQUIRE(l.requester.peer_session_id() == l.responder.session_id());
+        REQUIRE(l.responder->peer_session_id() == l.requester->session_id());
+        REQUIRE(l.requester->peer_session_id() == l.responder->session_id());
         ++proven;
     }
     REQUIRE(proven == k_iterations);
@@ -190,15 +204,15 @@ TEST_CASE("inproc peer_session: a real published message flows post-handshake an
         // The responder subscribes (so its forwarder resolves the topic_hash on the
         // receive tail); the requester fans the topic toward its peer, then publishes
         // carrying its minted epoch. The frame rides the live channel to the responder.
-        REQUIRE(l.resp_messages.attach(l.responder.msg_peer(), "topic"));
-        REQUIRE(l.req_messages.attach_for_fanout(l.requester.msg_peer(), "topic"));
+        REQUIRE(l.resp_messages.attach(l.responder->msg_peer(), "topic"));
+        REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "topic"));
         l.drive();
-        l.req_messages.publish("topic", as_bytes(payload), l.requester.session_id());
+        l.req_messages.publish("topic", as_bytes(payload), l.requester->session_id());
         l.drive();
 
         REQUIRE(l.resp_received.size() == 1);
         REQUIRE(l.resp_received[0] == payload);
-        REQUIRE(l.responder.peer_session_id() == l.requester.session_id());
+        REQUIRE(l.responder->peer_session_id() == l.requester->session_id());
         ++delivered;
     }
     REQUIRE(delivered == k_iterations);
@@ -222,9 +236,9 @@ TEST_CASE("inproc peer_session: a real RPC round-trips post-handshake matched by
         int fired = 0;
         rpc_status got = rpc_status::error;
         std::string ret;
-        l.req_procedures.call(l.requester.rpc_peer(), "svc", as_bytes(param),
+        l.req_procedures.call(l.requester->rpc_peer(), "svc", as_bytes(param),
             [&](rpc_status s, std::span<const std::byte> r) { ++fired; got = s; ret = to_string(r); },
-            std::nullopt, l.requester.session_id());
+            std::nullopt, l.requester->session_id());
         l.drive();
 
         REQUIRE(fired == 1);
@@ -271,28 +285,28 @@ TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatc
     {
         link l;
         l.drive();
-        REQUIRE(l.resp_messages.attach(l.responder.msg_peer(), "topic"));
-        REQUIRE(l.req_messages.attach_for_fanout(l.requester.msg_peer(), "topic"));
+        REQUIRE(l.resp_messages.attach(l.responder->msg_peer(), "topic"));
+        REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "topic"));
         l.drive();
 
         // A real publish latches the requester's epoch on the responder.
-        l.req_messages.publish("topic", as_bytes(good), l.requester.session_id());
+        l.req_messages.publish("topic", as_bytes(good), l.requester->session_id());
         l.drive();
         REQUIRE(l.resp_received.size() == 1);
-        const auto latched = l.responder.peer_session_id();
-        REQUIRE(latched == l.requester.session_id());
+        const auto latched = l.responder->peer_session_id();
+        REQUIRE(latched == l.requester->session_id());
 
         // A frame for the SAME topic carrying a DIFFERENT non-zero epoch is dropped:
         // the sink does not grow.
         const std::uint8_t stale_epoch = static_cast<std::uint8_t>(latched == 200 ? 199 : 200);
         auto stale_frame = make_data_frame(stale, stale_epoch);
-        l.responder.on_receive(stale_frame);
+        l.responder->on_receive(stale_frame);
         l.drive();
         REQUIRE(l.resp_received.size() == 1);   // DROPPED, not delivered
 
         // A frame carrying the latched epoch IS delivered.
         auto fresh_frame = make_data_frame(good, latched);
-        l.responder.on_receive(fresh_frame);
+        l.responder->on_receive(fresh_frame);
         l.drive();
         REQUIRE(l.resp_received.size() == 2);
         REQUIRE(l.resp_received[1] == good);
@@ -382,31 +396,41 @@ TEST_CASE("inproc peer_session: a handshake that never completes aborts once the
 
 namespace {
 
-// A manual-clock pair so the handshake CAN complete before the deadline; used to
-// prove the timer is cancelled on completion (no later abort fires).
+// A manual-clock pair stood up through the manual-clock transport rendezvous (no
+// hand-dial) so the handshake CAN complete before the deadline; used to prove the
+// timer is cancelled on completion (no later abort fires).
 struct manual_link
 {
     inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    inproc_channel<manual_clock> req_ch{ex};
-    inproc_channel<manual_clock> resp_ch{ex};
+    inproc_transport<manual_clock> transport{ex, bus};
 
     manual_msg req_messages;
     manual_msg resp_messages;
     manual_rpc req_procedures{ex, std::chrono::hours(1)};
     manual_rpc resp_procedures{ex, std::chrono::hours(1)};
 
-    manual_session requester;
-    manual_session responder;
+    std::unique_ptr<inproc_channel<manual_clock>> dialer_ch;
+    std::unique_ptr<inproc_channel<manual_clock>> accepted_ch;
+    std::optional<manual_session> requester;
+    std::optional<manual_session> responder;
 
     explicit manual_link(std::chrono::nanoseconds timeout)
-        : requester(req_ch, ex, make_cfg(0x02), timeout, req_messages, req_procedures, "responder-node", false)
-        , responder(resp_ch, ex, make_cfg(0x01), timeout, resp_messages, resp_procedures, "requester-node", false)
     {
-        req_ch.connect_to(resp_ch.local_endpoint());
-        resp_ch.connect_to(req_ch.local_endpoint());
-        responder.start();
-        requester.start();
+        transport.on_accepted([this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch) {
+            accepted_ch = std::move(ch);
+            responder.emplace(*accepted_ch, ex, make_cfg(0x01), timeout,
+                              resp_messages, resp_procedures, "requester-node", true);
+            responder->start();
+        });
+        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch) {
+            dialer_ch = std::move(ch);
+            requester.emplace(*dialer_ch, ex, make_cfg(0x02), timeout,
+                              req_messages, req_procedures, "responder-node", false);
+            requester->start();
+        });
+        transport.listen({"inproc", "svc"});
+        transport.dial({"inproc", "svc"});
     }
 
     void drive() { ex.drain(); }
@@ -424,16 +448,16 @@ TEST_CASE("inproc peer_session: completing before the deadline cancels the timer
         manual_link l(deadline);
 
         l.drive();
-        REQUIRE(l.requester.is_complete());
-        REQUIRE(l.responder.is_complete());
+        REQUIRE(l.requester->is_complete());
+        REQUIRE(l.responder->is_complete());
 
         // Advance well past the (now-cancelled) deadline: NO abort fires; the
         // session stays complete with its minted epoch intact.
-        const auto epoch = l.requester.session_id();
+        const auto epoch = l.requester->session_id();
         manual_clock::advance(deadline + std::chrono::seconds(10));
         l.drive();
-        REQUIRE(l.requester.is_complete());
-        REQUIRE(l.requester.session_id() == epoch);
+        REQUIRE(l.requester->is_complete());
+        REQUIRE(l.requester->session_id() == epoch);
     }
 }
 
@@ -442,23 +466,23 @@ TEST_CASE("inproc peer_session: teardown drains the forwarders and resets the ep
 {
     link l;
     l.drive();
-    REQUIRE(l.req_messages.attach_for_fanout(l.requester.msg_peer(), "topic"));
+    REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "topic"));
     l.drive();
 
     // Latch the responder's view of the requester's epoch with a real publish.
-    l.req_messages.publish("topic", as_bytes(std::string{"x"}), l.requester.session_id());
+    l.req_messages.publish("topic", as_bytes(std::string{"x"}), l.requester->session_id());
     l.drive();
-    REQUIRE(l.responder.peer_session_id() == l.requester.session_id());
+    REQUIRE(l.responder->peer_session_id() == l.requester->session_id());
 
-    l.responder.tear_down();
-    REQUIRE(!l.responder.is_complete());
-    REQUIRE(l.responder.peer_session_id() == 0);
+    l.responder->tear_down();
+    REQUIRE(!l.responder->is_complete());
+    REQUIRE(l.responder->peer_session_id() == 0);
 
     // After teardown the responder no longer fans toward its peer: a publish from
     // the responder reaches nobody (detach_all dropped the fan-out entry).
-    l.resp_messages.attach_for_fanout(l.responder.msg_peer(), "back");
-    l.resp_messages.detach_all(l.responder.msg_peer());
-    l.resp_messages.publish("back", as_bytes(std::string{"y"}), l.responder.session_id());
+    l.resp_messages.attach_for_fanout(l.responder->msg_peer(), "back");
+    l.resp_messages.detach_all(l.responder->msg_peer());
+    l.resp_messages.publish("back", as_bytes(std::string{"y"}), l.responder->session_id());
     l.drive();
     REQUIRE(l.req_received.empty());
 }

@@ -2,12 +2,15 @@
 #define HPP_GUARD_PLEXUS_INPROC_INPROC_BUS_H
 
 #include "plexus/io/endpoint.h"
+#include "plexus/detail/compat.h"
 
 #include <span>
 #include <deque>
+#include <memory>
 #include <chrono>
 #include <string>
 #include <vector>
+#include <utility>
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
@@ -27,6 +30,14 @@ template <typename Clock = std::chrono::steady_clock>
 class inproc_bus
 {
 public:
+    // A registered accepting endpoint and the callback a dial() to it fires with
+    // the accepted channel end. Public so inproc_transport can hold the lookup.
+    struct listener_entry
+    {
+        io::endpoint ep;
+        detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted;
+    };
+
     inproc_bus() = default;
 
     inproc_bus(const inproc_bus &) = delete;
@@ -44,6 +55,28 @@ public:
     void deregister_channel(inproc_channel<Clock> *chan) noexcept
     {
         std::erase_if(m_channels, [chan](const channel_entry &e) { return e.chan == chan; });
+    }
+
+    // The accepting-endpoint registry (distinct from the synthetic per-channel
+    // addresses above): a listen() names an endpoint and supplies the on_accepted
+    // callback a dial() to that endpoint fires with the accepted channel end.
+    void register_listener(const io::endpoint &ep,
+                           detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted)
+    {
+        m_listeners.push_back(listener_entry{ep, std::move(on_accepted)});
+    }
+
+    listener_entry *find_listener(const io::endpoint &ep) noexcept
+    {
+        for(auto &entry : m_listeners)
+            if(entry.ep == ep)
+                return &entry;
+        return nullptr;
+    }
+
+    void deregister_listener(const io::endpoint &ep) noexcept
+    {
+        std::erase_if(m_listeners, [&ep](const listener_entry &e) { return e.ep == ep; });
     }
 
     void enqueue(const io::endpoint &to, std::span<const std::byte> data)
@@ -96,6 +129,7 @@ private:
     };
 
     std::vector<channel_entry> m_channels;
+    std::vector<listener_entry> m_listeners;
     std::deque<queued_packet> m_queue;
     uint32_t m_next_addr{1};
 };
