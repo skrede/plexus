@@ -13,7 +13,7 @@
 //   - publish-does-not-dial: a publish to a known-but-unconnected peer opens no
 //     connection; only subscribe/call/reach dial.
 // Both knobs converge on the engine's single on_dialed -> build-from-record ->
-// start() tail. This is the wave-0 routing oracle the engine headers satisfy.
+// start() tail. This is the deterministic routing oracle the engine headers satisfy.
 
 #include "plexus/io/known_peers.h"
 #include "plexus/io/routing_engine.h"
