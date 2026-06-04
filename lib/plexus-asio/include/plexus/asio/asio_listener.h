@@ -3,6 +3,7 @@
 
 #include "plexus/asio/asio_channel.h"
 #include "plexus/asio/detail/asio_error_map.h"
+#include "plexus/asio/detail/asio_endpoint_parse.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -42,7 +43,7 @@ public:
     void start(const io::endpoint &bind_ep)
     {
         std::error_code ec;
-        auto ep = parse(bind_ep.address, ec);
+        auto ep = detail::parse(bind_ep.address, ec);
         if(ec)
             return report(ec);
         m_acceptor.open(ep.protocol(), ec);
@@ -98,19 +99,6 @@ private:
     {
         if(m_on_error)
             m_on_error(detail::map_error(ec));
-    }
-
-    static ::asio::ip::tcp::endpoint parse(const std::string &addr, std::error_code &ec)
-    {
-        auto colon = addr.rfind(':');
-        if(colon == std::string::npos)
-        {
-            ec = std::make_error_code(std::errc::invalid_argument);
-            return {};
-        }
-        auto host = addr.substr(0, colon);
-        auto port = static_cast<uint16_t>(std::stoul(addr.substr(colon + 1)));
-        return {::asio::ip::make_address(host, ec), port};
     }
 
     ::asio::io_context &m_io;

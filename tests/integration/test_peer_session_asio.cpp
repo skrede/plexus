@@ -1,6 +1,6 @@
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_channel.h"
-#include "plexus/asio/asio_listener.h"
+#include "plexus/asio/asio_transport.h"
 
 #include "plexus/io/peer_session.h"
 #include "plexus/io/message_forwarder.h"
@@ -91,62 +91,56 @@ std::vector<std::byte> make_data_frame(const std::string &payload, std::uint8_t 
     return captured;
 }
 
-// One bidirectional TCP loopback link turned into a peer_session pair. The
-// listener accepts ONE connection (the server end of the single socket) and a
-// hand-dialed client gives the other end. BOTH peer_sessions begin outbound (the
-// simultaneous-connect path the shipped FSM completes on both ends): each sends its
-// request, sees the peer's request while racing, and completes — distinct node_ids
-// give the dedup a defined ordering. A real published message rides the SAME live
-// TCP channels the handshake established. Each instance stands up a fresh
-// listener + client + io_context so the looped iterations are independent.
+// One bidirectional TCP loopback link turned into a peer_session pair, stood up
+// entirely through the transport's listen/dial rendezvous (no hand-dial, no manual
+// socket().connect / poll loop). The dialer end becomes the requester
+// (is_inbound_bootstrap=false) and the accepted end becomes the responder
+// (is_inbound_bootstrap=true) — the realistic asymmetric handshake the B1 bridge
+// completes on both sides. The sessions are deferred in std::optional, built only
+// once on_dialed/on_accepted deliver the channels. A real published message rides
+// the SAME live TCP channels the handshake established. Each instance stands up a
+// fresh transport + io_context so the looped iterations are independent.
 struct tcp_link
 {
     ::asio::io_context io;
-    pasio::asio_listener listener{io};
-    std::unique_ptr<pasio::asio_channel> server_channel;
-    pasio::asio_channel client{io};
+    pasio::asio_transport transport{io};
 
     msg_forwarder req_messages;
     msg_forwarder resp_messages;
     rpc_forwarder req_procedures{io, k_long_timeout};
     rpc_forwarder resp_procedures{io, k_long_timeout};
 
-    std::optional<session> requester;   // the hand-dialed client end
-    std::optional<session> responder;   // the accepted server end
+    std::unique_ptr<pasio::asio_channel> dialer_ch;
+    std::unique_ptr<pasio::asio_channel> accepted_ch;
+    std::optional<session> requester;   // the dialer (client) end
+    std::optional<session> responder;   // the accepted (server) end
 
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;
 
-    explicit tcp_link(std::chrono::nanoseconds timeout = k_long_timeout, bool responder_bootstrap = false)
+    explicit tcp_link(std::chrono::nanoseconds timeout = k_long_timeout)
     {
-        listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) {
-            server_channel = std::move(ch);
+        transport.on_accepted([this, timeout](std::unique_ptr<pasio::asio_channel> ch) {
+            accepted_ch = std::move(ch);
+            responder.emplace(*accepted_ch, io, make_cfg(0x01), timeout,
+                              resp_messages, resp_procedures, "requester-node", true);
+            responder->on_message([this](std::string_view, std::span<const std::byte> d) {
+                resp_received.emplace_back(to_string(d));
+            });
+            responder->start();
         });
-        listener.start({"tcp", "127.0.0.1:0"});
-
-        ::asio::ip::tcp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), listener.port());
-        client.socket().connect(server_ep);
-        client.start_read();
-
-        while(!server_channel)
-            io.poll_one();
-
-        // By default both ends dial (simultaneous-connect); with responder_bootstrap
-        // only the client dials and the accepted server end is a bootstrap inbound.
-        requester.emplace(client, io, make_cfg(0x02), timeout,
-                          req_messages, req_procedures, "responder-node", false);
-        responder.emplace(*server_channel, io, make_cfg(0x01), timeout,
-                          resp_messages, resp_procedures, "requester-node", responder_bootstrap);
-
-        requester->on_message([this](std::string_view, std::span<const std::byte> d) {
-            req_received.emplace_back(to_string(d));
-        });
-        responder->on_message([this](std::string_view, std::span<const std::byte> d) {
-            resp_received.emplace_back(to_string(d));
+        transport.on_dialed([this, timeout](std::unique_ptr<pasio::asio_channel> ch) {
+            dialer_ch = std::move(ch);
+            requester.emplace(*dialer_ch, io, make_cfg(0x02), timeout,
+                              req_messages, req_procedures, "responder-node", false);
+            requester->on_message([this](std::string_view, std::span<const std::byte> d) {
+                req_received.emplace_back(to_string(d));
+            });
+            requester->start();
         });
 
-        responder->start();
-        requester->start();
+        transport.listen({"tcp", "127.0.0.1:0"});
+        transport.dial({"tcp", "127.0.0.1:" + std::to_string(transport.port())});
     }
 
     // Pump until pred() or a generous bounded wall-clock deadline, so a regression
@@ -181,7 +175,8 @@ TEST_CASE("asio peer_session pair completes the handshake over real TCP and mint
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l;
-        l.pump_until([&] { return l.requester->is_complete() && l.responder->is_complete(); });
+        l.pump_until([&] { return l.requester && l.responder
+                                  && l.requester->is_complete() && l.responder->is_complete(); });
 
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
@@ -192,7 +187,7 @@ TEST_CASE("asio peer_session pair completes the handshake over real TCP and mint
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("asio peer_session: a one-directional dial completes BOTH sides over real TCP — the bootstrap responder answers, the dialer mints off the response, gated data flows both ways, looped",
+TEST_CASE("asio peer_session: a dialed (one-directional) connection completes BOTH sides over real TCP — the accepted bootstrap responder answers, the dialer mints off the response, gated data flows both ways, looped",
           "[integration][peer_session][asio]")
 {
     constexpr int k_iterations = 100;
@@ -201,12 +196,13 @@ TEST_CASE("asio peer_session: a one-directional dial completes BOTH sides over r
     int proven = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        tcp_link l{k_long_timeout, /*responder_bootstrap=*/true};   // only the client dials
-        l.pump_until([&] { return l.requester->is_complete() && l.responder->is_complete(); });
+        tcp_link l;   // the dial rendezvous: only the dialer dials, the accepted end bootstraps
+        l.pump_until([&] { return l.requester && l.responder
+                                  && l.requester->is_complete() && l.responder->is_complete(); });
 
-        // Both complete over real TCP without a simultaneous connect: the bootstrap
-        // responder sent its accept response over the socket, so the dialer completed
-        // and minted its own epoch.
+        // Both complete over real TCP without a simultaneous connect: the accepted
+        // bootstrap responder sent its accept response over the socket, so the dialer
+        // completed and minted its own epoch.
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
         REQUIRE(l.requester->session_id() != 0);
@@ -242,7 +238,8 @@ TEST_CASE("asio peer_session: a real published message flows post-handshake over
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l;
-        l.pump_until([&] { return l.requester->is_complete() && l.responder->is_complete(); });
+        l.pump_until([&] { return l.requester && l.responder
+                                  && l.requester->is_complete() && l.responder->is_complete(); });
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
 
@@ -273,7 +270,8 @@ TEST_CASE("asio peer_session: the data-path staleness gate FIRES over TCP — a 
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l;
-        l.pump_until([&] { return l.requester->is_complete() && l.responder->is_complete(); });
+        l.pump_until([&] { return l.requester && l.responder
+                                  && l.requester->is_complete() && l.responder->is_complete(); });
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
 
