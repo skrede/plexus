@@ -65,6 +65,19 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         Catch2::Catch2WithMain)
     catch_discover_tests(test_reqres_roundtrip_asio TEST_PREFIX "integration.")
+
+    # The live TCP loopback req/res TIMEOUT proof: a real provider that receives the
+    # request but never replies; the caller's asio steady_timer fires the per-call
+    # deadline as rpc_status::timeout over the production receive path. Loops the
+    # behavior in-body; the ctest invocation is re-run >=3 process runs for
+    # cross-process reproducibility (a live-timing claim is never made from one run).
+    add_executable(test_reqres_timeout_asio test_reqres_timeout_asio.cpp)
+    target_link_libraries(test_reqres_timeout_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_reqres_timeout_asio TEST_PREFIX "integration.")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
