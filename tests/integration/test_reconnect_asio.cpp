@@ -113,12 +113,14 @@ struct tcp_reconnect
         transport.on_dialed([this](std::unique_ptr<pasio::asio_channel> ch, const pio::endpoint &) {
             req_ctx.channel = std::move(ch);
             req_ctx.node_name = "responder-node";
-            // Route a transport DROP (broken_pipe/connection_reset) — not a clean
-            // close — to the driver. on_data is owned by the session (set in start()).
-            req_ctx.channel->on_error([this](pio::io_error) { ++drops_seen; driver->on_channel_dropped(); });
             requester.emplace(req_ctx, io, make_cfg(0x02), k_long_timeout,
                               req_messages, req_procedures, false);
             requester->start();
+            // Route a transport DROP (broken_pipe/connection_reset) — not a clean
+            // close — to the driver through the session's production drop seam. The
+            // seam is set AFTER start() (start() owns the channel's on_error); a clean
+            // tear_down sets m_torn_down first, so it does not fire here.
+            requester->on_transport_drop([this] { ++drops_seen; driver->on_channel_dropped(); });
         });
 
         if(listen_first)

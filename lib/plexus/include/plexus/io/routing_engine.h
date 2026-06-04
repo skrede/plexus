@@ -122,6 +122,7 @@ public:
     }
 
     bool is_connected(const node_id &id) const { return m_registry.is_connected(id); }
+    bool is_dead(const node_id &id) const { return m_registry.is_dead(id); }
     bool has_session(const node_id &id) const { return m_registry.has_session(id); }
     std::uint32_t attempt_count(const node_id &id) const { return m_registry.attempt_count(id); }
     session_type *session_for(const node_id &id) { return m_registry.session_for(id); }

@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_PEER_SESSION_H
 #define HPP_GUARD_PLEXUS_IO_PEER_SESSION_H
 
+#include "plexus/io/io_error.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/frame_router.h"
 #include "plexus/io/handshake_fsm.h"
@@ -75,6 +76,10 @@ public:
     {
         m_torn_down = false;
         m_channel.on_data([this](std::span<const std::byte> f) { on_receive(f); });
+        m_channel.on_error([this](io_error) {
+            if(m_on_drop && !m_torn_down)
+                m_on_drop();
+        });
         register_consumers();
         arm_handshake_timer();
         if(!m_is_inbound_bootstrap)
@@ -86,6 +91,12 @@ public:
 
     template <typename OnMessage>
     void on_message(OnMessage on_message) { m_on_message = std::move(on_message); }
+
+    // The transport-drop seam, mirroring on_message: a plain settable callback
+    // (absent = no routing) fired from start()'s on_error wiring when an
+    // already-live channel breaks. The registry routes a dialed slot's drop to its
+    // reconnect driver through this; a clean tear_down does not fire it.
+    void on_transport_drop(detail::move_only_function<void()> cb) { m_on_drop = std::move(cb); }
 
     // The staleness gate runs BEFORE the router: a frame whose non-zero session_id
     // differs from the latched epoch is a previous-session straggler and is dropped;
@@ -271,6 +282,7 @@ private:
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
     std::vector<std::byte> m_payload_scratch, m_frame_scratch;
     detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message;
+    detail::move_only_function<void()> m_on_drop;
 };
 
 }
