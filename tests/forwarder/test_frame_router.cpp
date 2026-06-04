@@ -91,6 +91,38 @@ TEST_CASE("frame_router dispatches each type to its registered consumer with the
     REQUIRE(log.count == 0);                // no drop on the happy path
 }
 
+TEST_CASE("frame_router delivers a handshake_req / handshake_resp to a registered consumer", "[forwarder][router]")
+{
+    counting_logger log;
+    frame_router router(log);
+
+    std::size_t hs_req = 0, hs_resp = 0;
+    std::string last_inner;
+    router.on_handshake_req([&](std::span<const std::byte> in) { ++hs_req; last_inner = to_string(in); });
+    router.on_handshake_resp([&](std::span<const std::byte> in) { ++hs_resp; last_inner = to_string(in); });
+
+    router.route(make_frame(wire::msg_type::handshake_req, "hs-req-inner"));
+    REQUIRE(hs_req == 1);
+    REQUIRE(last_inner == "hs-req-inner");
+
+    router.route(make_frame(wire::msg_type::handshake_resp, "hs-resp-inner"));
+    REQUIRE(hs_resp == 1);
+    REQUIRE(last_inner == "hs-resp-inner");
+
+    REQUIRE(log.count == 0);   // no drop on the happy path
+}
+
+TEST_CASE("frame_router warn-and-drops a handshake frame with no consumer", "[forwarder][router]")
+{
+    counting_logger log;
+    frame_router router(log);   // no handshake consumers registered
+
+    router.route(make_frame(wire::msg_type::handshake_req, "hs-req-inner"));
+    router.route(make_frame(wire::msg_type::handshake_resp, "hs-resp-inner"));
+
+    REQUIRE(log.count == 2);   // both warn-and-dropped: no consumer for the type
+}
+
 TEST_CASE("frame_router warn-and-drops a short frame", "[forwarder][router]")
 {
     counting_logger log;
