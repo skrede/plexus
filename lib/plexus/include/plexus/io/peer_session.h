@@ -112,6 +112,15 @@ public:
         m_channel.close();
     }
 
+    // Carry the epoch forward across a reconnect: a fresh peer_session built for the
+    // next incarnation seeds its mint counter from the dead incarnation's last epoch
+    // so the next completion mints a STRICTLY later epoch. That keeps each reconnect's
+    // session_id distinct from its predecessor's, so the receive-path staleness gate
+    // drops a dead-incarnation straggler. The ctor is unchanged (a reconnect re-dials
+    // through the transport and rebuilds the session); this only initializes the
+    // existing counter before start(). No effect once a session has completed.
+    void seed_epoch(std::uint8_t last_epoch) noexcept { m_session_id_counter = last_epoch; }
+
     bool is_complete() const noexcept { return m_forwarders_installed; }
     std::uint8_t session_id() const noexcept { return m_session_id; }
     std::uint8_t peer_session_id() const noexcept { return m_peer_session_id; }
