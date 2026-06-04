@@ -13,3 +13,12 @@ foreach(test ${PLEXUS_WIRE_TESTS})
     # suite by name (the [wire] Catch2 tag is not a ctest-visible selector).
     catch_discover_tests(${test} TEST_PREFIX "wire.")
 endforeach()
+
+# The handshake encode-into NOALLOC gate is isolated in its own executable:
+# support/alloc_counter.h overrides global operator new/delete once per program,
+# so it must not share a binary with the rest of the wire oracle. tests/ is on the
+# include path so it can pull in support/alloc_counter.h.
+add_executable(test_handshake_codec_noalloc test_handshake_codec_noalloc.cpp)
+target_link_libraries(test_handshake_codec_noalloc PRIVATE plexus::wire Catch2::Catch2WithMain)
+target_include_directories(test_handshake_codec_noalloc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_handshake_codec_noalloc TEST_PREFIX "wire.")
