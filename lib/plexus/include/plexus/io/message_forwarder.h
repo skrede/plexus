@@ -85,6 +85,16 @@ public:
         return true;
     }
 
+    // remember_demand: record a peer's durable subscribe demand WITHOUT a wire emit.
+    // The engine calls this the moment subscribe is requested — possibly before the
+    // session exists (an async dial has not completed) — so the demand is durable and
+    // the session resurrects it through the counted path when it completes. No wire,
+    // no fan-out registration here: attach (driven by the session) does both later.
+    void remember_demand(const std::string &node_name, std::string_view fqn)
+    {
+        record_remote_topic(node_name, fqn);
+    }
+
     // declare: mark a topic with a publisher-declared qos once (Fork-A). A latched
     // topic retains its last published frame and replays it to late subscribers.
     // The hot publish(fqn, bytes) signature is unchanged.

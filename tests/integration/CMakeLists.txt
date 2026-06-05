@@ -130,6 +130,24 @@ target_include_directories(test_multipeer_reconnect_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_multipeer_reconnect_inproc TEST_PREFIX "integration.")
 
+# The deterministic peer-observer behavior oracle: a recording observer registered on
+# a real routing_engine forces the full lifecycle + readiness matrix over the inproc
+# backend — connected/reconnected/disconnected/rejected/dead plus the readiness loop
+# (ready fires once per cycle, re-arms across a reconnect, the zero-subscribe immediate
+# fire, the premature-ready window, the forged-frame underflow guard). The shared
+# recording_observer.h resolves via the tests/integration include dir — always built
+# (inproc Policy, no backend needed).
+add_executable(test_peer_observer_inproc test_peer_observer_inproc.cpp)
+target_link_libraries(test_peer_observer_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_peer_observer_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_peer_observer_inproc TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
@@ -247,6 +265,26 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::inproc
         Catch2::Catch2WithMain)
     catch_discover_tests(test_routing_engine_asio TEST_PREFIX "integration.")
+
+    # The gated real-TCP peer-observer behavior oracle: a recording observer on a
+    # routing_engine over asio_transport proves the lifecycle + readiness matrix over a
+    # real socket — connected/reconnected/disconnected/rejected/dead plus the readiness
+    # loop (ready once per cycle over the real subscribe->ack loop, double-fire
+    # prevention across a real reconnect, the premature-ready window, the accepted-peer
+    # edge subset, posted re-entrant delivery). Reuses the shared recording_observer.h
+    # via the tests/integration include dir. Loops N>=100 in-body; re-run >=3 process
+    # runs. Links plexus::inproc for the forwarder framing path the peers reuse.
+    add_executable(test_peer_observer_asio test_peer_observer_asio.cpp)
+    target_link_libraries(test_peer_observer_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    target_include_directories(test_peer_observer_asio PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    catch_discover_tests(test_peer_observer_asio TEST_PREFIX "integration.")
 
     # The gated real-TCP reconnect oracle: an established session whose channel
     # drops re-dials + re-handshakes over real loopback; the initial-refused path

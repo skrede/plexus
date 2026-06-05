@@ -183,9 +183,11 @@ TEST_CASE("routing over asio: a demand subscribe carries a real published messag
         pump_until(io, [&] { return a.eng.is_connected(id_b); });
         REQUIRE(a.eng.is_connected(id_b));
 
-        // B (the inbound side) wires its sink and producer-side fanout; A's session
-        // attached on subscribe. B publishes; the frame resolves through A's own
-        // node-shared forwarder to A's per-session sink carrying B's minted epoch.
+        // A's demand subscribe closes the loop over the real path: the resurrected
+        // subscribe reaches B, whose on_subscribe attaches B's producer-side fanout to
+        // A (so the manual attach is no longer needed — the loop is genuinely closed).
+        // B publishes; the frame resolves through A's own node-shared forwarder to A's
+        // per-session sink carrying B's minted epoch.
         auto *a_to_b = a.eng.session_for(id_b);
         REQUIRE(a_to_b != nullptr);
         std::vector<std::string> a_received;
@@ -196,9 +198,7 @@ TEST_CASE("routing over asio: a demand subscribe carries a real published messag
         const auto inbound = [] { auto id = make_id(0x00); id[15] = std::byte{1}; return id; }();
         auto *b_inbound = b.eng.session_for(inbound);
         REQUIRE(b_inbound != nullptr);
-        REQUIRE(b.eng.messages().attach_for_fanout(b_inbound->msg_peer(), "topic"));
-        REQUIRE(a.eng.messages().attach_for_fanout(a_to_b->msg_peer(), "topic"));
-        settle(io);   // drain the subscribe handshake
+        settle(io);   // drain the subscribe round-trip so B's fanout to A is wired
 
         b.eng.messages().publish("topic", as_bytes(payload), b_inbound->session_id());
         pump_until(io, [&] { return !a_received.empty(); });
@@ -288,10 +288,9 @@ TEST_CASE("routing over asio: one node dialing TWO peers near-simultaneously res
         REQUIRE(c_in != nullptr);
         (void)inbound2;
 
-        REQUIRE(b.eng.messages().attach_for_fanout(b_in->msg_peer(), "topic-b"));
-        REQUIRE(c.eng.messages().attach_for_fanout(c_in->msg_peer(), "topic-c"));
-        REQUIRE(a.eng.messages().attach_for_fanout(a_to_b->msg_peer(), "topic-b"));
-        REQUIRE(a.eng.messages().attach_for_fanout(a_to_c->msg_peer(), "topic-c"));
+        // A's two demand subscribes closed each loop over the real path: B's and C's
+        // on_subscribe attached their producer-side fanout to A, so the manual attaches
+        // are redundant — settle to let the subscribe round-trips wire the fanout.
         settle(io);
 
         b.eng.messages().publish("topic-b", as_bytes(from_b), b_in->session_id());
@@ -372,10 +371,9 @@ TEST_CASE("routing over asio: a dial that completes OUT OF ORDER is correlated t
         REQUIRE(b_in != nullptr);
         REQUIRE(c_in != nullptr);
 
-        REQUIRE(b.eng.messages().attach_for_fanout(b_in->msg_peer(), "topic-b"));
-        REQUIRE(c.eng.messages().attach_for_fanout(c_in->msg_peer(), "topic-c"));
-        REQUIRE(a.eng.messages().attach_for_fanout(a_to_b->msg_peer(), "topic-b"));
-        REQUIRE(a.eng.messages().attach_for_fanout(a_to_c->msg_peer(), "topic-c"));
+        // A's two demand subscribes closed each loop over the real path: B's and C's
+        // on_subscribe attached their producer-side fanout to A, so the manual attaches
+        // are redundant — settle to let the subscribe round-trips wire the fanout.
         settle(io);
 
         b.eng.messages().publish("topic-b", as_bytes(from_b), b_in->session_id());

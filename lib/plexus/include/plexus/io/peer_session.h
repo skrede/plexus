@@ -322,17 +322,26 @@ private:
         // ready cannot fire until they return. On a first connect there is nothing
         // remembered, so this is a no-op and the zero-subscribe path below fires ready
         // immediately.
-        if(reconnected)
-            resubscribe_all();
+        // Resurrect the durable subscribe demand on EVERY completion — both the first
+        // connect (the demand a lazy subscribe-that-triggered-the-dial recorded before
+        // the session existed) and a reconnect — through the counted path, so the
+        // demanded subscribes are outstanding when ready is evaluated. The forwarder is
+        // the durable demand ledger; (void)reconnected because the resurrection set is
+        // the same either way (empty for a true zero-subscribe peer, which fires ready
+        // immediately). This is the first-publish-loss guard: a subscribe issued before
+        // the connection completed is never lost.
+        (void)reconnected;
+        resubscribe_all();
         maybe_fire_ready();
     }
 
     // Re-emit every remembered subscribe for this peer through the counted subscribe(),
     // so each 0->1 wire-emit increments the outstanding count. The remembered topics
     // are read from the node-shared forwarder by a pure-read accessor (the forwarder
-    // stays readiness-agnostic). The demand survives the prior teardown — only a
-    // genuine unsubscribe forgets it — so the remembered set reflects the subscribes
-    // still demanded across the reconnect.
+    // stays readiness-agnostic). The demand survives a teardown — only a genuine
+    // unsubscribe forgets it — and the engine records it the moment subscribe is called
+    // (even before the session exists), so this resurrects both a lazy first-connect
+    // subscribe and a reconnect's still-demanded set.
     void resubscribe_all()
     {
         for(const auto &fqn : m_messages.remembered_topics(m_ctx.node_name))

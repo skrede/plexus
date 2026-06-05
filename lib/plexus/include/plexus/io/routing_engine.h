@@ -112,6 +112,12 @@ public:
     void subscribe(const node_id &id, std::string_view fqn)
     {
         reach(id);
+        // Record the durable demand FIRST — before any session may exist (an async
+        // dial completes later). The session resurrects the recorded demand through the
+        // counted path on completion, so a lazy subscribe that triggered the dial is
+        // never lost (the first-publish-loss guard). If the session is already complete,
+        // attach now so the demand takes effect immediately on the live connection.
+        m_messages.remember_demand(node_name_for(id), fqn);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
             session->subscribe(fqn);

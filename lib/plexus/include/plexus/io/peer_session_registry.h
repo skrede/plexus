@@ -168,7 +168,9 @@ private:
         slot.session.emplace(slot.record, m_build.executor, m_build.fsm_cfg,
                              m_build.handshake_timeout, m_build.messages,
                              m_build.procedures, inbound, m_build.logger);
-        if(!inbound)
+        if(inbound)
+            wire_inbound_drop(slot, slot.record.peer_id);
+        else
             wire_drop(slot, slot.record.peer_id);
         wire_lifecycle(slot);
         slot.session->start();
@@ -184,6 +186,19 @@ private:
             auto it = m_slots.find(id);
             if(it != m_slots.end())
                 it->second->driver.on_channel_dropped();
+        });
+    }
+
+    // Route an accepted slot's transport drop to a plain tear_down — NO redial (the
+    // dialer owns reconnection; an accepted peer that drops simply disconnects). The
+    // tear_down fires disconnected through the session's was-complete guard, so an
+    // accepted peer fires connected/disconnected/ready but never reconnect/dead.
+    void wire_inbound_drop(slot_block &slot, const node_id &id)
+    {
+        slot.session->on_transport_drop([this, id] {
+            auto it = m_slots.find(id);
+            if(it != m_slots.end() && it->second->session)
+                it->second->session->tear_down();
         });
     }
 
