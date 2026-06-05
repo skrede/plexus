@@ -1,0 +1,142 @@
+#include "plexus/asio/mux_policy.h"
+#include "plexus/asio/mux_channel.h"
+#include "plexus/asio/mux_selector.h"
+#include "plexus/asio/mux_transport.h"
+#include "plexus/asio/asio_transport.h"
+#include "plexus/asio/unix_transport.h"
+
+#include "plexus/io/endpoint.h"
+#include "plexus/io/transport_backend.h"
+
+#include "plexus/policy.h"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <asio/io_context.hpp>
+
+#include <unistd.h>
+
+#include <chrono>
+#include <memory>
+#include <string>
+#include <cstddef>
+#include <optional>
+
+namespace pasio = plexus::asio;
+namespace pio = plexus::io;
+
+static_assert(plexus::io::transport_backend<pasio::multiplexing_transport, pasio::mux_policy>);
+
+namespace {
+
+// A per-instance owner-only temp directory + a SHORT socket path within it (well under
+// the sun_path cap). The directory is removed on teardown after the socket file is
+// unlinked (the listener unlinks it on stop, but rmdir needs an empty dir).
+struct temp_sock
+{
+    std::string dir;
+    std::string path;
+
+    temp_sock()
+    {
+        char tmpl[] = "/tmp/pxm-XXXXXX";
+        const char *made = ::mkdtemp(tmpl);
+        dir = made ? made : "";
+        path = dir + "/s";
+    }
+
+    ~temp_sock()
+    {
+        if(!path.empty())
+            ::unlink(path.c_str());
+        if(!dir.empty())
+            ::rmdir(dir.c_str());
+    }
+};
+
+// Stands up a multiplexing transport over a real AF_UNIX (local) + TCP (remote) pair,
+// listening on the local family, dials a same-host (scheme "unix") endpoint, and
+// captures BOTH ends of the resulting connection: the dialed mux_channel (the client
+// end, via on_dialed) and the accepted mux_channel (the server end, via on_accepted).
+// Each instance owns a fresh io_context + transports + socket path so looped iterations
+// are independent.
+struct local_dial_link
+{
+    temp_sock sock;
+    ::asio::io_context io;
+    pasio::unix_transport local{io};
+    pasio::asio_transport remote{io};
+    pasio::multiplexing_transport mux{local, remote};
+
+    std::optional<pio::endpoint> dialed_ep;
+    std::unique_ptr<pasio::mux_channel> dialed;
+    std::unique_ptr<pasio::mux_channel> accepted;
+
+    local_dial_link()
+    {
+        mux.on_dialed([this](std::unique_ptr<pasio::mux_channel> ch, const pio::endpoint &ep) {
+            dialed = std::move(ch);
+            dialed_ep.emplace(ep);
+        });
+        mux.on_accepted([this](std::unique_ptr<pasio::mux_channel> ch) {
+            accepted = std::move(ch);
+        });
+
+        mux.listen({"unix", sock.path});
+        mux.dial({"unix", sock.path});
+    }
+
+    template <typename Pred>
+    void pump_until(Pred pred)
+    {
+        auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while(!pred() && std::chrono::steady_clock::now() < bound)
+            io.poll();
+    }
+};
+
+}
+
+TEST_CASE("mux select: a same-host endpoint dials over AF_UNIX through the erased channel, looped",
+          "[integration][mux][select][unix]")
+{
+    constexpr int k_iterations = 100;
+    int completed = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        local_dial_link l;
+        l.pump_until([&] { return l.dialed && l.accepted; });
+
+        REQUIRE(l.dialed != nullptr);
+        REQUIRE(l.accepted != nullptr);
+        // The selector picked the local (AF_UNIX) transport: the dialed channel reports
+        // the "unix" scheme through the erasure.
+        REQUIRE(l.dialed->remote_endpoint().scheme == "unix");
+        // The mux passed the dialed endpoint through unchanged (registry correlation key).
+        REQUIRE(l.dialed_ep.has_value());
+        REQUIRE(l.dialed_ep->scheme == "unix");
+        REQUIRE(l.dialed_ep->address == l.sock.path);
+        ++completed;
+    }
+    REQUIRE(completed == k_iterations);
+}
+
+TEST_CASE("mux select: an ACCEPTED AF_UNIX connection carries the unix scheme through the erasure, looped",
+          "[integration][mux][select][unix]")
+{
+    constexpr int k_iterations = 100;
+    int completed = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        local_dial_link l;
+        l.pump_until([&] { return l.dialed && l.accepted; });
+
+        REQUIRE(l.accepted != nullptr);
+        // The accepted (inbound, server-side) channel's scheme is inherited from the
+        // concrete backend that accepted it — load-bearing for attach-time tier
+        // classification of server-side subscribers; it must NOT be lost in the erasure.
+        REQUIRE(l.accepted->remote_endpoint().scheme == "unix");
+        ++completed;
+    }
+    REQUIRE(completed == k_iterations);
+}

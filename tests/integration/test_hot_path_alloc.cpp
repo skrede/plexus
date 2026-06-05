@@ -126,3 +126,57 @@ TEST_CASE("steady-state publish->frame-once->fan-out loop is zero-alloc", "[inte
     REQUIRE(sends_after - sends_before == static_cast<std::size_t>(K) * N); // every publish fanned to all N
     REQUIRE(after - before == 0); // zero allocation across the steady-state loop
 }
+
+#ifdef PLEXUS_HAVE_ASIO_MUX
+#include "plexus/asio/mux_channel.h"
+
+// The same steady-state no-alloc invariant must hold when the publish loop fans over a
+// type-erased mux_channel instead of a concrete channel: the erasure is ONE virtual hop
+// per send to the owned concrete channel, minted ONCE at wrap (here at setup), and the
+// adapter stores no per-verb callable — so the abstract base adds zero steady-state heap
+// blocks. Measured directly over a vector of mux_channels wrapping the inert sink_channel
+// (no forwarder Policy is needed: the gate is the channel layer's per-send behavior).
+TEST_CASE("steady-state fan-out over a type-erased mux_channel is zero-alloc", "[integration]")
+{
+    namespace pasio = plexus::asio;
+
+    constexpr int N = 8;
+    constexpr int K = 1024;
+    const std::string payload = "deterministic-steady-state-payload";
+
+    sink_executor ex;
+    std::vector<std::unique_ptr<pasio::mux_channel>> channels;
+    std::vector<sink_channel *> sinks;   // observers into the owned concrete channels
+    channels.reserve(N);
+    sinks.reserve(N);
+    for(int i = 0; i < N; ++i)
+    {
+        auto inner = std::make_unique<sink_channel>(ex);
+        sinks.push_back(inner.get());
+        channels.push_back(std::make_unique<pasio::mux_channel>(
+            std::make_unique<pasio::channel_adapter<sink_channel>>(std::move(inner))));
+    }
+
+    // Warm-up: one fan-out round before measuring (no scratch grows here, but mirror the gate).
+    for(auto &ch : channels)
+        ch->send(as_bytes(payload));
+
+    std::size_t sends_before = 0;
+    for(const auto *s : sinks)
+        sends_before += s->sends;
+
+    plexus::testing::reset_alloc_count();
+    const auto before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+        for(auto &ch : channels)
+            ch->send(as_bytes(payload));
+    const auto after = plexus::testing::alloc_count();
+
+    std::size_t sends_after = 0;
+    for(const auto *s : sinks)
+        sends_after += s->sends;
+
+    REQUIRE(sends_after - sends_before == static_cast<std::size_t>(K) * N);
+    REQUIRE(after - before == 0); // the abstract base adds zero steady-state allocation
+}
+#endif
