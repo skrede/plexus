@@ -150,17 +150,34 @@ public:
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
         m_registry.remove_subscriber(hash, p.channel);
+        forget_remote_topic(p.node_name, fqn);
         auto req = wire::encode_unsubscribe_request({.topic_hash = hash});
         send_control(p.channel, wire::msg_type::unsubscribe, req);
         return true;
     }
 
     // detach_all: drop all the peer's fan-out entries and refcounts; NO wire emit
-    // (the peer is gone, the wire has already torn down).
+    // (the peer is gone, the wire has already torn down). The remembered subscribe
+    // demand (m_remote_topics) is DELIBERATELY retained: a transport teardown is not
+    // an unsubscribe, so the demand survives to drive reconnect resurrection
+    // (drain_for / the session's resubscribe_all). A genuine unsubscribe forgets its
+    // topic on detach()'s 1->0 transition, so the record still prunes on real demand
+    // loss.
     void detach_all(const peer &p)
     {
         m_registry.remove_peer(p.node_name, p.channel);
-        m_remote_topics.erase(p.node_name);
+    }
+
+    // remembered_topics: the durable subscribe demand for a peer's node_name — the
+    // remote topics it has attached that have not been explicitly unsubscribed. A pure
+    // read (no wire emit, no mutation) so the forwarder stays readiness-agnostic: the
+    // session reads this to resurrect its counted subscribes on reconnect. Returns an
+    // empty vector for an unknown node_name.
+    const std::vector<std::string> &remembered_topics(const std::string &node_name) const
+    {
+        static const std::vector<std::string> empty;
+        auto it = m_remote_topics.find(node_name);
+        return it == m_remote_topics.end() ? empty : it->second;
     }
 
     // drain_for: re-emit a wire::subscribe for each remote topic rooted at the
@@ -265,6 +282,20 @@ private:
             if(existing == fqn)
                 return;
         topics.emplace_back(fqn);
+    }
+
+    // Forget a remembered topic on a genuine unsubscribe (detach's 1->0 transition) so
+    // the durable demand record reflects only live demand — a topic the user dropped
+    // must not be resurrected on reconnect. Erasing the last topic empties the node's
+    // entry; the next attach re-creates it.
+    void forget_remote_topic(const std::string &node_name, std::string_view fqn)
+    {
+        auto it = m_remote_topics.find(node_name);
+        if(it == m_remote_topics.end())
+            return;
+        std::erase(it->second, fqn);
+        if(it->second.empty())
+            m_remote_topics.erase(it);
     }
 
     void drop(std::string_view message) { m_logger.warn(message); }

@@ -17,6 +17,7 @@
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/handshake.h"
+#include "plexus/wire/subscribe.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/stream_inbound.h"
 
@@ -138,6 +139,8 @@ public:
         m_procedures.detach_all(m_rpc_peer);
         m_peer_session_id = 0;
         m_forwarders_installed = false;
+        m_outstanding_subscribes = 0;
+        m_ready_latched_this_cycle = false;
         m_fsm.on_torn_down();
         m_channel.close();
         // A teardown of a session that never completed is not a disconnect — the
@@ -163,6 +166,18 @@ public:
         tear_down();
     }
 
+    // The counted subscribe emit: the session routes its OWN demand-subscribe so it
+    // observes the wire emit and owns the readiness count. attach() returns true only
+    // on the 0->1 refcount transition — the single transition that puts a
+    // wire::subscribe on the channel — so the counter tracks exactly the outstanding
+    // acks. The forwarder stays readiness-agnostic: it is told to attach (a byte fact)
+    // and learns nothing of the count.
+    void subscribe(std::string_view fqn)
+    {
+        if(m_messages.attach(m_msg_peer, fqn))
+            ++m_outstanding_subscribes;
+    }
+
     bool is_complete() const noexcept { return m_forwarders_installed; }
     std::uint8_t session_id() const noexcept { return m_session_id; }
     std::uint8_t peer_session_id() const noexcept { return m_peer_session_id; }
@@ -179,6 +194,13 @@ private:
         m_router.on_handshake_resp([this](std::span<const std::byte> inner) {
             if(auto resp = wire::decode_handshake_response(inner))
                 execute(m_fsm.on_response(*resp));
+        });
+        m_router.on_subscribe([this](std::span<const std::byte> inner) {
+            if(auto req = wire::decode_subscribe_request(inner))
+                m_messages.attach_for_fanout(m_msg_peer, req->fqn);
+        });
+        m_router.on_subscribe_response([this](std::span<const std::byte> inner) {
+            on_subscribe_response_received(inner);
         });
         m_router.on_unidirectional([this](std::span<const std::byte> inner) {
             m_messages.deliver(m_msg_peer, inner,
@@ -293,7 +315,28 @@ private:
         m_handshake_timer.cancel();
         mint_session_id();
         m_forwarders_installed = true;
+        const bool reconnected = m_ctx.has_ever_connected;
         fire_connect_edge();
+        // Reconnect resurrection: re-emit the remembered subscribes through the counted
+        // path BEFORE the readiness check, so the resurrected acks are outstanding and
+        // ready cannot fire until they return. On a first connect there is nothing
+        // remembered, so this is a no-op and the zero-subscribe path below fires ready
+        // immediately.
+        if(reconnected)
+            resubscribe_all();
+        maybe_fire_ready();
+    }
+
+    // Re-emit every remembered subscribe for this peer through the counted subscribe(),
+    // so each 0->1 wire-emit increments the outstanding count. The remembered topics
+    // are read from the node-shared forwarder by a pure-read accessor (the forwarder
+    // stays readiness-agnostic). The demand survives the prior teardown — only a
+    // genuine unsubscribe forgets it — so the remembered set reflects the subscribes
+    // still demanded across the reconnect.
+    void resubscribe_all()
+    {
+        for(const auto &fqn : m_messages.remembered_topics(m_ctx.node_name))
+            subscribe(fqn);
     }
 
     void mint_session_id() noexcept { m_session_id = m_ctx.epochs.next(); }
@@ -327,6 +370,38 @@ private:
         m_on_lifecycle(lifecycle_event{edge, m_ctx.peer_id, m_ctx.node_name, kind(), reason});
     }
 
+    // The consumer half of the subscribe loop: an arriving subscribe_response drives
+    // the readiness decrement. A malformed frame is dropped without touching the
+    // counter. The underflow guard is input validation on an unauthenticated transport:
+    // a response with no outstanding match is warned-and-dropped BEFORE the decrement,
+    // so a stray or duplicate ack can never wrap the uint16_t (which would make ready
+    // unreachable for the cycle).
+    void on_subscribe_response_received(std::span<const std::byte> inner)
+    {
+        auto resp = wire::decode_subscribe_response(inner);
+        if(!resp)
+            return;
+        if(m_outstanding_subscribes == 0)
+            return m_logger.warn("plexus: subscribe_response with no outstanding match");
+        --m_outstanding_subscribes;
+        maybe_fire_ready();
+    }
+
+    // The readiness latch: once the outstanding count reaches 0 with the latch unset,
+    // fire ready exactly once for this connection cycle. The latch and the counter
+    // both clear in tear_down, so the next incarnation re-arms. A late subscribe issued
+    // after ready fires bumps the counter but does NOT re-arm the latch, so it cannot
+    // fire a second ready this cycle. Driven from on_complete's tail (the zero-subscribe
+    // case) and from the subscribe_response decrement.
+    void maybe_fire_ready()
+    {
+        if(m_outstanding_subscribes == 0 && !m_ready_latched_this_cycle)
+        {
+            m_ready_latched_this_cycle = true;
+            fire_lifecycle(lifecycle_edge::ready);
+        }
+    }
+
     void arm_handshake_timer()
     {
         m_handshake_timer.expires_after(
@@ -354,6 +429,13 @@ private:
     // the re-dial: a peer WE closed for misbehavior must not be re-dialed. A plain
     // bool, mirroring m_torn_down — its absence is not meaningful, only its value.
     bool m_closed_for_protocol_error{false};
+    // The readiness counter + fire-once latch, OWNED by the per-incarnation session
+    // (cleared in tear_down so reconnect re-arms — a fresh session is auto-rearmed at
+    // 0). The counter is the number of outstanding subscribe acks; the latch records
+    // whether ready already fired this cycle. Plain values, mirroring m_torn_down —
+    // their absence is not meaningful, only their value.
+    std::uint16_t m_outstanding_subscribes{0};
+    bool m_ready_latched_this_cycle{false};
     log::logger &m_logger;
     typename message_forwarder<Policy>::peer m_msg_peer;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;

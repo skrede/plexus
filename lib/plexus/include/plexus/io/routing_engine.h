@@ -105,14 +105,16 @@ public:
         m_registry.driver_for(id).start();
     }
 
-    // A demand verb: reach the named peer, then attach the topic through the owned
-    // message_forwarder once connected (the attach is what makes a publish flow).
+    // A demand verb: reach the named peer, then attach the topic through the COUNTED
+    // session path once connected (the attach is what makes a publish flow). Routing
+    // through session->subscribe lets the session observe its own wire emit and own
+    // the readiness count — the forwarder stays readiness-agnostic.
     void subscribe(const node_id &id, std::string_view fqn)
     {
         reach(id);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
-            m_messages.attach(session->msg_peer(), fqn);
+            session->subscribe(fqn);
     }
 
     // A demand verb: reach then call through the owned procedure_forwarder.
