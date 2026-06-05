@@ -4,11 +4,8 @@
 #include "plexus/io/reconnect.h"
 #include "plexus/io/peer_context.h"
 #include "plexus/io/peer_session.h"
-#include "plexus/io/handshake_fsm.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/transport_backend.h"
-#include "plexus/io/message_forwarder.h"
-#include "plexus/io/procedure_forwarder.h"
+#include "plexus/io/session_build_context.h"
 
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
@@ -24,25 +21,6 @@
 #include <optional>
 
 namespace plexus::io {
-
-// The node-shared inputs every per-slot session is built from: the engine owns one
-// of these and the registry borrows it by reference. A slot rebuild (a reconnect)
-// draws the same forwarders, self identity, handshake bound, executor and logger
-// from here, so the node-wide wiring is reused with no re-plumbing.
-template <typename Policy>
-struct session_build_context
-{
-    using executor_type = typename Policy::executor_type;
-
-    executor_type executor;
-    handshake_fsm_config fsm_cfg;
-    std::chrono::nanoseconds handshake_timeout;
-    message_forwarder<Policy> &messages;
-    procedure_forwarder<Policy> &procedures;
-    reconnect_config redial;
-    std::uint64_t redial_seed;
-    log::logger &logger;
-};
 
 // The multi-peer connection map: a node_id -> slot table where each slot bundles,
 // in a deliberate member ORDER, the per-peer state a session is built from. The

@@ -8,6 +8,7 @@
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/peer_session_registry.h"
+#include "plexus/io/session_build_context.h"
 
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
