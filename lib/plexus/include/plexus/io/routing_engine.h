@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_ROUTING_ENGINE_H
 #define HPP_GUARD_PLEXUS_IO_ROUTING_ENGINE_H
 
+#include "plexus/io/node_name.h"
 #include "plexus/io/known_peers.h"
 #include "plexus/io/peer_observer.h"
 #include "plexus/io/handshake_fsm.h"
@@ -19,7 +20,6 @@
 
 #include <chrono>
 #include <memory>
-#include <string>
 #include <vector>
 #include <cstdint>
 #include <algorithm>
@@ -43,6 +43,14 @@ namespace plexus::io {
 // creates a topic's connection demand, so publish only fans to who is already
 // connected. transport.on_dialed / on_accepted / on_dial_failed are wired ONCE in
 // the constructor.
+//
+// LIFETIME: every observer fan-out and transport callback is POSTED on the BORROWED
+// executor and captures `this`; the engine does not own the executor. The executor
+// MUST be drained (or quiesced) before the engine is destroyed — the same structural
+// single-owner discipline every posted callback in plexus relies on. There is no
+// per-post liveness guard (a guard reading a member would itself touch dead `this`,
+// and a shared alive-token contradicts the no-shared-ownership model); the owner
+// sequences teardown.
 template <typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
@@ -101,7 +109,7 @@ public:
         auto ep = m_known.lookup(id);
         if(!ep)
             return;
-        m_registry.ensure_slot(id, *ep, node_name_for(id));
+        m_registry.ensure_slot(id, *ep, node_name_of(id));
         m_registry.driver_for(id).start();
     }
 
@@ -117,13 +125,18 @@ public:
         // counted path on completion, so a lazy subscribe that triggered the dial is
         // never lost (the first-publish-loss guard). If the session is already complete,
         // attach now so the demand takes effect immediately on the live connection.
-        m_messages.remember_demand(node_name_for(id), fqn);
+        m_messages.remember_demand(node_name_of(id), fqn);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
             session->subscribe(fqn);
     }
 
     // A demand verb: reach then call through the owned procedure_forwarder.
+    // PRECONDITION: unlike subscribe (whose demand is remembered and resurrected on
+    // completion), a call has NO durable-demand mirror — a call issued before the
+    // session completes is dropped (no queue, no error callback). The caller must
+    // issue call on an already-connected peer; a deferred-call-demand queue is a
+    // tracked future concern, not silently free here.
     void call(const node_id &id, std::string_view fqn, std::span<const std::byte> param,
               typename procedure_forwarder<Policy>::on_response_fn on_response)
     {
@@ -168,18 +181,13 @@ private:
         m_registry.accept_session(std::move(channel));
     }
 
-    std::string node_name_for(const node_id &id) const
-    {
-        std::string name = "peer-";
-        name += std::to_string(static_cast<unsigned>(std::to_integer<std::uint8_t>(id[0])));
-        return name;
-    }
-
     // The session→observer fan-out. Every edge is delivered POSTED on the executor,
     // never synchronously from the fire-site: the posted lambda captures the event
-    // BY VALUE (its owned node_name string copies into the turn) and iterates
-    // m_observers ONLY inside that turn, so a callback's remove_observer takes effect
-    // on the NEXT posted edge — never mid-loop. rejected fans the FSM refusal reason;
+    // BY VALUE (its owned node_name string copies into the turn). The delivery fans
+    // out over a SNAPSHOT of m_observers, so a callback that (un)registers an observer
+    // mutates the live list without invalidating the in-flight iteration: a same-turn
+    // remove is honored (the unregistered observer is skipped), and a same-turn add
+    // takes effect only on the next posted edge. rejected fans the FSM refusal reason;
     // every other edge fans the peer_kind.
     void dispatch_lifecycle(const lifecycle_event &ev)
     {
@@ -194,20 +202,29 @@ private:
         }
     }
 
+    // Deliver to each observer over a snapshot, skipping any unregistered mid-turn, so
+    // a callback may safely (un)register observers without corrupting the fan-out.
+    template<class Deliver>
+    void fan_out(Deliver deliver)
+    {
+        const auto snapshot = m_observers;
+        for(auto *o : snapshot)
+            if(std::find(m_observers.begin(), m_observers.end(), o) != m_observers.end())
+                deliver(*o);
+    }
+
     void post_edge(const lifecycle_event &ev,
                    void (peer_observer::*edge)(const node_id &, std::string_view, peer_kind))
     {
         Policy::post(m_executor, [this, ev, edge] {
-            for(auto *o : m_observers)
-                (o->*edge)(ev.id, ev.node_name, ev.kind);
+            fan_out([&](peer_observer &o) { (o.*edge)(ev.id, ev.node_name, ev.kind); });
         });
     }
 
     void post_rejected(const lifecycle_event &ev)
     {
         Policy::post(m_executor, [this, ev] {
-            for(auto *o : m_observers)
-                o->on_peer_rejected(ev.id, ev.node_name, ev.reason);
+            fan_out([&](peer_observer &o) { o.on_peer_rejected(ev.id, ev.node_name, ev.reason); });
         });
     }
 

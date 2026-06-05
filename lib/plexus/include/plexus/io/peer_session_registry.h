@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_PEER_SESSION_REGISTRY_H
 #define HPP_GUARD_PLEXUS_IO_PEER_SESSION_REGISTRY_H
 
+#include "plexus/io/node_name.h"
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/reconnect.h"
 #include "plexus/io/peer_context.h"
@@ -21,6 +22,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <cstdint>
 #include <optional>
 
 namespace plexus::io {
@@ -64,6 +66,8 @@ public:
     {
         if(m_slots.find(id) != m_slots.end())
             return;
+        if(endpoint_claimed(id, ep))
+            return m_build.logger.warn("plexus: dial endpoint already claimed by another peer — slot not created");
         auto slot = std::make_unique<slot_block>(m_transport, m_build, id, ep, node_name);
         wire_redial(*slot, id);
         wire_dead(*slot, id);
@@ -85,16 +89,24 @@ public:
 
     // The inbound-bootstrap tail: a peer dialed US. We build an accepted session on
     // a slot keyed by a synthetic inbound identity (the peer's real node_id arrives
-    // in the handshake; inbound slots are keyed by arrival order for now). No driver
-    // re-dials an accepted slot — the dialer owns the redial.
+    // in the handshake; inbound slots are keyed by arrival order for now). Each
+    // accepted peer gets a DISTINCT node_name derived from its synthetic id, so two
+    // concurrently-accepted peers never share a forwarder refcount/demand key. The
+    // slot is inserted into the map BEFORE the session is built and started, so any
+    // wiring that looks the slot up by id finds it. No driver re-dials an accepted
+    // slot — the dialer owns the redial.
     node_id accept_session(std::unique_ptr<channel_type> channel)
     {
-        node_id inbound_id{};
-        inbound_id[15] = std::byte{m_next_inbound++};
+        const node_id inbound_id = next_inbound_id();
         auto slot = std::make_unique<slot_block>(m_transport, m_build, inbound_id,
-                                                 endpoint{}, "inbound-peer");
-        build_into(*slot, std::move(channel), true);
-        m_slots.emplace(inbound_id, std::move(slot));
+                                                 endpoint{}, node_name_of(inbound_id));
+        auto [it, inserted] = m_slots.emplace(inbound_id, std::move(slot));
+        if(!inserted)
+        {
+            m_build.logger.warn("plexus: inbound id collision — accept dropped");
+            return inbound_id;
+        }
+        build_into(*it->second, std::move(channel), true);
         return inbound_id;
     }
 
@@ -258,10 +270,35 @@ private:
                 slot.record.node_name, peer_kind::dialed, handshake_outcome::none});
     }
 
+    // Mint a fresh synthetic inbound identity. The counter is 64-bit and packed into
+    // the id's low bytes, so the synthetic-id space is 2^64 wide — it does not wrap
+    // after 256 accepts (a uint8 counter aliased a live slot's id, and the colliding
+    // map insert then dropped the freshly-started session and its live channel).
+    node_id next_inbound_id()
+    {
+        const std::uint64_t n = m_next_inbound++;
+        node_id id{};
+        for(int i = 0; i < 8; ++i)
+            id[15 - i] = std::byte{static_cast<std::uint8_t>(n >> (8 * i))};
+        return id;
+    }
+
+    // The dial→slot correlation key is the endpoint (the transport hands back the
+    // endpoint a channel dialed), which is unambiguous only if at most one live slot
+    // claims an endpoint: a second slot sharing it would steal the first's dial
+    // completion. Reject the duplicate rather than mis-route silently.
+    bool endpoint_claimed(const node_id &id, const endpoint &ep) const
+    {
+        for(const auto &[other, slot] : m_slots)
+            if(other != id && slot->record.dial_endpoint == ep)
+                return true;
+        return false;
+    }
+
     Transport &m_transport;
     session_build_context<Policy> &m_build;
     std::map<node_id, std::unique_ptr<slot_block>> m_slots;
-    std::uint8_t m_next_inbound{1};
+    std::uint64_t m_next_inbound{1};
 };
 
 }

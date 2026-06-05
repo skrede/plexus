@@ -530,6 +530,50 @@ TEST_CASE("inproc observer: calling engine.subscribe from inside an observer cal
     REQUIRE(proven == k_iterations);
 }
 
+TEST_CASE("inproc observer: (un)registering an observer from inside a lifecycle callback does not corrupt the posted fan-out",
+          "[integration][observer][inproc]")
+{
+    // The fan-out iterates a snapshot, so an observer that removes itself from within
+    // its own callback cannot invalidate the in-flight iteration, and a co-registered
+    // observer in the same turn still receives its edge. The suite runs under
+    // asan/ubsan, which turns a mid-loop vector mutation into a hard failure — so this
+    // case is the structural proof that add_observer/remove_observer are callback-safe.
+    struct self_removing_observer final : public plexus::io::peer_observer
+    {
+        engine *eng{nullptr};
+        int connected{0};
+        void on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
+        {
+            ++connected;
+            if(eng)
+                eng->remove_observer(*this);   // mutate m_observers mid-turn
+        }
+    };
+
+    constexpr int k_iterations = 100;
+    int proven = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        manual_clock::reset();
+        two_node net;
+        self_removing_observer first;
+        recording_observer second;
+        first.eng = &net.a;
+        net.a.add_observer(first);    // unregisters itself on connected
+        net.a.add_observer(second);   // the co-observer must still receive its edge
+
+        net.a.note_peer(net.id_b, net.ep_b);
+        net.a.reach(net.id_b);
+        net.drive();
+
+        REQUIRE(first.connected == 1);                        // fired once, then unregistered
+        REQUIRE(net.a.is_connected(net.id_b));
+        REQUIRE(second.for_peer(net.id_b).connected == 1);    // the co-observer is untouched
+        ++proven;
+    }
+    REQUIRE(proven == k_iterations);
+}
+
 TEST_CASE("inproc observer: a forged subscribe_response with no outstanding match is warned-and-dropped; the counter is not corrupted and a later legit subscribe still reaches ready",
           "[integration][observer][inproc]")
 {
