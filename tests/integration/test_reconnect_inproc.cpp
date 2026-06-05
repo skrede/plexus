@@ -54,7 +54,7 @@ using plexus::io::reconnect_config;
 namespace {
 
 // The virtual clock the backoff + handshake timers fire from, and the matching
-// Policy. Identical in shape to the Phase-6 timeout oracle's manual_clock.
+// Policy. Identical in shape to the handshake-timeout oracle's manual_clock.
 struct manual_clock
 {
     using duration = std::chrono::nanoseconds;

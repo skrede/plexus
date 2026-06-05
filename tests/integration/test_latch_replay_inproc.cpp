@@ -140,7 +140,7 @@ TEST_CASE("inproc non-latched topic does not replay on a late subscribe, looped"
     REQUIRE(held == k_iterations);
 }
 
-// A non-allocating sink Policy for the LATCH-NOALLOC gate (mirrors the Wave 1
+// A non-allocating sink Policy for the LATCH-NOALLOC gate (mirrors the message
 // forwarder oracle's sink Policy): the byte_channel records send sizes without
 // copying, so a forwarder<sink_policy> latched publish exercises framing +
 // retention with no transport-side allocation — isolating the retention path so a
@@ -208,7 +208,7 @@ TEST_CASE("inproc LATCH-NOALLOC: steady-state latched publishing adds no retenti
     // Warm-up: one latched publish grows the reused scratch buffers AND the
     // per-topic retained slot. The replay path is NOT in the measured loop (it
     // fires only on subscribe), so this gate isolates the per-publish RETENTION
-    // cost — the same measurement posture as the Wave 1 forwarder alloc gate.
+    // cost — the same measurement posture as the message forwarder alloc gate.
     fwd.publish("topic", as_bytes(payload));
     const auto sends_before = ch.sends;
 
