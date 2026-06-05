@@ -131,6 +131,7 @@ public:
     // and the FSM for a fresh cycle, and close the channel.
     void tear_down()
     {
+        const bool was_complete = m_forwarders_installed;
         m_torn_down = true;
         m_handshake_timer.cancel();
         m_messages.detach_all(m_msg_peer);
@@ -139,6 +140,11 @@ public:
         m_forwarders_installed = false;
         m_fsm.on_torn_down();
         m_channel.close();
+        // A teardown of a session that never completed is not a disconnect — the
+        // prior-complete guard suppresses the spurious fire (an un-established abort
+        // fires rejected only).
+        if(was_complete)
+            fire_lifecycle(lifecycle_edge::disconnected);
     }
 
     // The uniform close funnel for a peer that misbehaved on the wire — BOTH the
@@ -200,9 +206,19 @@ private:
             case fsm_action::send_response: return send_handshake_response(step.outcome);
             case fsm_action::complete:      return on_complete();
             case fsm_action::retry:         return m_logger.warn("plexus: peer_session retry_no_dialer");
-            case fsm_action::abort:         return close_for_protocol_error(wire::close_cause::invalid_magic);
+            case fsm_action::abort:         return on_abort(step.outcome);
             case fsm_action::none:          return;
         }
+    }
+
+    // An FSM abort: fire rejected carrying the real refusal reason (reject_version /
+    // reject_identity) BEFORE the close. The abort path is an un-established session
+    // (m_forwarders_installed is false), so close_for_protocol_error's tear_down
+    // suppresses disconnected via its prior-complete guard — only rejected fires.
+    void on_abort(handshake_outcome reason)
+    {
+        fire_lifecycle(lifecycle_edge::rejected, reason);
+        close_for_protocol_error(wire::close_cause::invalid_magic);
     }
 
     // The response reuses every request field and adds a status, so this is the one
@@ -277,9 +293,22 @@ private:
         m_handshake_timer.cancel();
         mint_session_id();
         m_forwarders_installed = true;
+        fire_connect_edge();
     }
 
     void mint_session_id() noexcept { m_session_id = m_ctx.epochs.next(); }
+
+    // Fire connected on the first-ever complete, reconnected on every subsequent
+    // one. The discriminator is the long-lived has_ever_connected flag on the
+    // record (it survives teardown): read its PRIOR value, then latch it true so it
+    // never clears. The read MUST precede the set or every complete looks like a
+    // reconnect.
+    void fire_connect_edge()
+    {
+        const bool first = !m_ctx.has_ever_connected;
+        m_ctx.has_ever_connected = true;
+        fire_lifecycle(first ? lifecycle_edge::connected : lifecycle_edge::reconnected);
+    }
 
     // The peer_kind discriminator drawn from the one source of truth: an inbound
     // bootstrap is an accepted peer, an outbound dial a dialed peer.

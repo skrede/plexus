@@ -42,6 +42,11 @@ struct peer_context
     std::string node_name;                    // the forwarder-peer key, set once at construction
     endpoint dial_endpoint;                   // the endpoint the slot dials/redials
     epoch_source epochs;                      // the per-peer well each incarnation draws from
+    // Set once on the first complete, NEVER cleared — survives teardown so a redial
+    // fires reconnected, not connected. It lives HERE (the record outlives every
+    // incarnation) and NOT on peer_session: a session-local flag would reset every
+    // reconnect (build_into destroys+recreates the session) and mis-fire connected.
+    bool has_ever_connected{false};
 };
 
 }

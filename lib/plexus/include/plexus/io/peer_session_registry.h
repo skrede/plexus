@@ -1,9 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_PEER_SESSION_REGISTRY_H
 #define HPP_GUARD_PLEXUS_IO_PEER_SESSION_REGISTRY_H
 
+#include "plexus/io/peer_kind.h"
 #include "plexus/io/reconnect.h"
 #include "plexus/io/peer_context.h"
 #include "plexus/io/peer_session.h"
+#include "plexus/io/handshake_fsm.h"
+#include "plexus/io/lifecycle_event.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/session_build_context.h"
 
@@ -219,9 +222,25 @@ private:
     {
         slot.driver.on_dead([this, id] {
             auto it = m_slots.find(id);
-            if(it != m_slots.end())
-                it->second->dead = true;
+            if(it == m_slots.end())
+                return;
+            it->second->dead = true;
+            fire_dead(*it->second, id);
         });
+    }
+
+    // Fire the dead edge at the surrender latch (the session may already be torn
+    // down, so it cannot own this edge — the slot does). The kind is dialed: drivers
+    // are wired only on dialed slots (build_into gates wire_drop on !inbound and
+    // accept_session constructs no driver), so on_dead structurally never fires for
+    // an accepted slot — no inbound dead path exists. The slot is MARKED dead, never
+    // erased here (erasing would free the driver mid-callback — a use-after-free).
+    void fire_dead(slot_block &slot, const node_id &id)
+    {
+        if(!m_build.on_lifecycle)
+            return;
+        m_build.on_lifecycle(lifecycle_event{lifecycle_edge::dead, id,
+                slot.record.node_name, peer_kind::dialed, handshake_outcome::none});
     }
 
     Transport &m_transport;
