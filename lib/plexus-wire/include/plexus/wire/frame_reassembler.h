@@ -9,6 +9,7 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <algorithm>
 
 namespace plexus::wire {
@@ -166,6 +167,24 @@ public:
     }
 
     [[nodiscard]] std::size_t buffered_bytes() const { return m_buffer.size(); }
+
+    // A frame is mid-assembly when its header is decoded (reading_payload) or any
+    // bytes sit buffered (a partial header). False only when idle between frames.
+    [[nodiscard]] bool frame_in_progress() const
+    {
+        return m_state == state::reading_payload || !m_buffer.empty();
+    }
+
+    // The declared payload length of the in-progress frame once its header is
+    // decoded (reading_payload); nullopt while the size is still unknown (a
+    // partial header). Lets the no-progress timer key its deadline off declared
+    // size rather than buffered bytes.
+    [[nodiscard]] std::optional<std::size_t> pending_payload_len() const
+    {
+        if(m_state == state::reading_payload)
+            return m_pending_header.payload_len;
+        return std::nullopt;
+    }
 
 private:
     state m_state{state::reading_header};
