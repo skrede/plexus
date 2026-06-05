@@ -328,6 +328,48 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::inproc
         Catch2::Catch2WithMain)
     catch_discover_tests(test_stream_channel_asio TEST_PREFIX "integration.")
+
+    # The DIALED AF_UNIX transport oracle over a real local socket: the transport's
+    # listen + async-connect dial stand up two peer_sessions (no hand-dial) that
+    # handshake to completion, mint non-zero epochs, and flow a real published
+    # message carrying the minted epoch. Loops N>=100 in-body; re-run >=3 process
+    # runs. Links plexus::inproc for the forwarder framing path the oracle reuses.
+    add_executable(test_transport_dial_unix test_transport_dial_unix.cpp)
+    target_link_libraries(test_transport_dial_unix PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_transport_dial_unix TEST_PREFIX "integration.")
+
+    # The gated real-AF_UNIX reconnect oracle: an established session whose channel
+    # drops re-dials + re-handshakes over a real local socket; the cold-start
+    # missing-socket path re-dials until a listener appears (the same-host demand
+    # resurrection). Links plexus::inproc for the forwarder framing path.
+    add_executable(test_reconnect_unix test_reconnect_unix.cpp)
+    target_link_libraries(test_reconnect_unix PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_reconnect_unix TEST_PREFIX "integration.")
+
+    # The gated real-AF_UNIX stream-channel hardening leg: a raw client socket writes
+    # hostile bytes (a bad-magic run; a header with a withheld payload) into a live
+    # unix_channel stamped with a SHORT-floor wire::stream_inbound_config, and the
+    # channel's on_protocol_close fires with the matching close_cause (invalid_magic;
+    # no_progress_timeout) — the byte-stream slowloris/garbage defense proven over a
+    # real local socket. Loops each path in-body; re-run >=3 process runs.
+    add_executable(test_stream_channel_unix test_stream_channel_unix.cpp)
+    target_link_libraries(test_stream_channel_unix PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_stream_channel_unix TEST_PREFIX "integration.")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
