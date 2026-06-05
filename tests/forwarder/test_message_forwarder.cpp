@@ -168,8 +168,7 @@ std::vector<std::byte> make_data_frame(std::string_view fqn, const std::string &
     plexus::wire::unidirectional_header uhdr{
             .source     = plexus::wire::endpoint_source_type::publisher,
             .sequence   = 0,
-            .topic_hash = plexus::wire::fqn_topic_hash(fqn),
-            .type_hash  = 0
+            .topic_hash = plexus::wire::fqn_topic_hash(fqn)
     };
     auto inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
     plexus::wire::frame_header fhdr{

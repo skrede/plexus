@@ -128,8 +128,7 @@ public:
         wire::unidirectional_header uhdr{
                 .source     = wire::endpoint_source_type::publisher,
                 .sequence   = m_next_sequence++,
-                .topic_hash = hash,
-                .type_hash  = 0
+                .topic_hash = hash
         };
         // Frame ONCE into the reused scratch buffers: after the first publish
         // grows them, resize() reuses capacity so steady-state publishes do not

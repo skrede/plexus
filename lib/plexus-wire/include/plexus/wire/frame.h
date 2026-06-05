@@ -62,8 +62,6 @@ struct frame_header
     uint64_t payload_len;
 };
 
-constexpr uint8_t flag_relay = 0x01;
-
 }
 
 #endif

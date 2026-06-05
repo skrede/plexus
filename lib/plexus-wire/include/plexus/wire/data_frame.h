@@ -13,7 +13,7 @@
 
 namespace plexus::wire {
 
-constexpr std::size_t unidirectional_header_size = 25;
+constexpr std::size_t unidirectional_header_size = 17;
 constexpr std::size_t bidirectional_header_size = 41;
 
 struct unidirectional_header
@@ -21,7 +21,6 @@ struct unidirectional_header
     endpoint_source_type source;
     uint64_t sequence;
     uint64_t topic_hash;
-    uint64_t type_hash;
 };
 
 struct bidirectional_header
@@ -54,7 +53,6 @@ inline std::vector<std::byte> encode_unidirectional(const unidirectional_header 
     detail::write_u8(p, static_cast<uint8_t>(hdr.source));
     detail::write_u64(p + 1, hdr.sequence);
     detail::write_u64(p + 9, hdr.topic_hash);
-    detail::write_u64(p + 17, hdr.type_hash);
 
     if(!data.empty())
         std::memcpy(p + unidirectional_header_size, data.data(), data.size());
@@ -77,7 +75,6 @@ inline void encode_unidirectional_into(std::vector<std::byte> &out,
     detail::write_u8(p, static_cast<uint8_t>(hdr.source));
     detail::write_u64(p + 1, hdr.sequence);
     detail::write_u64(p + 9, hdr.topic_hash);
-    detail::write_u64(p + 17, hdr.type_hash);
 
     if(!data.empty())
         std::memcpy(p + unidirectional_header_size, data.data(), data.size());
@@ -92,8 +89,7 @@ inline std::optional<unidirectional_decode_result> decode_unidirectional(std::sp
     unidirectional_header hdr{
             .source     = static_cast<endpoint_source_type>(detail::read_u8(p)),
             .sequence   = detail::read_u64(p + 1),
-            .topic_hash = detail::read_u64(p + 9),
-            .type_hash  = detail::read_u64(p + 17)
+            .topic_hash = detail::read_u64(p + 9)
     };
 
     return unidirectional_decode_result{

@@ -136,18 +136,17 @@ TEST_CASE("endpoint_source_type enum values", "[wire][codec]")
 
 // --- Data payload codec tests ---
 
-TEST_CASE("unidirectional payload size is 25 + data", "[wire][data]")
+TEST_CASE("unidirectional payload size is 17 + data", "[wire][data]")
 {
     unidirectional_header hdr{
         .source     = endpoint_source_type::publisher,
         .sequence   = 1,
-        .topic_hash = 0xDEAD,
-        .type_hash  = 0xBEEF
+        .topic_hash = 0xDEAD
     };
     std::vector<std::byte> data{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}};
 
     auto encoded = encode_unidirectional(hdr, data);
-    CHECK(encoded.size() == 25 + 3);
+    CHECK(encoded.size() == 17 + 3);
 }
 
 TEST_CASE("unidirectional round-trip preserves fields and data", "[wire][data]")
@@ -155,8 +154,7 @@ TEST_CASE("unidirectional round-trip preserves fields and data", "[wire][data]")
     unidirectional_header hdr{
         .source     = endpoint_source_type::publisher,
         .sequence   = 42,
-        .topic_hash = 0xDEAD,
-        .type_hash  = 0xBEEF
+        .topic_hash = 0xDEAD
     };
     std::vector<std::byte> data{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}};
 
@@ -167,7 +165,6 @@ TEST_CASE("unidirectional round-trip preserves fields and data", "[wire][data]")
     CHECK(decoded->header.source == endpoint_source_type::publisher);
     CHECK(decoded->header.sequence == 42);
     CHECK(decoded->header.topic_hash == 0xDEAD);
-    CHECK(decoded->header.type_hash == 0xBEEF);
     REQUIRE(decoded->data.size() == 3);
     CHECK(decoded->data[0] == std::byte{0x01});
     CHECK(decoded->data[1] == std::byte{0x02});
@@ -204,7 +201,7 @@ TEST_CASE("bidirectional round-trip preserves all fields", "[wire][data]")
 
 TEST_CASE("unidirectional decode fails on short payload", "[wire][data]")
 {
-    std::array<std::byte, 24> short_buf{};
+    std::array<std::byte, 16> short_buf{};
     auto result = decode_unidirectional(short_buf);
     CHECK_FALSE(result.has_value());
 }
@@ -221,8 +218,7 @@ TEST_CASE("full frame round-trip with unidirectional payload", "[wire][data]")
     unidirectional_header uni_hdr{
         .source     = endpoint_source_type::signal,
         .sequence   = 7,
-        .topic_hash = 0xCAFE,
-        .type_hash  = 0xBABE
+        .topic_hash = 0xCAFE
     };
     std::vector<std::byte> data{std::byte{0xAA}, std::byte{0xBB}};
 
@@ -250,7 +246,6 @@ TEST_CASE("full frame round-trip with unidirectional payload", "[wire][data]")
     CHECK(decoded_uni->header.source == endpoint_source_type::signal);
     CHECK(decoded_uni->header.sequence == 7);
     CHECK(decoded_uni->header.topic_hash == 0xCAFE);
-    CHECK(decoded_uni->header.type_hash == 0xBABE);
     REQUIRE(decoded_uni->data.size() == 2);
     CHECK(decoded_uni->data[0] == std::byte{0xAA});
     CHECK(decoded_uni->data[1] == std::byte{0xBB});
