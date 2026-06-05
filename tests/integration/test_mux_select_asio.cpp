@@ -54,7 +54,7 @@ struct remote_dial_link
         });
 
         mux.listen({"tcp", "127.0.0.1:0"});
-        mux.dial({"tcp", "127.0.0.1:" + std::to_string(mux.remote_port())});
+        mux.dial({"tcp", "127.0.0.1:" + std::to_string(remote.port())});
     }
 
     template <typename Pred>

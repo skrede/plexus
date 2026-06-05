@@ -3,8 +3,8 @@
 
 #include "plexus/asio/mux_policy.h"
 #include "plexus/asio/mux_channel.h"
-#include "plexus/asio/mux_selector.h"
 #include "plexus/asio/asio_channel.h"
+#include "plexus/asio/mux_selector.h"
 #include "plexus/asio/unix_channel.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
@@ -15,7 +15,6 @@
 #include "plexus/detail/compat.h"
 
 #include <memory>
-#include <cstdint>
 #include <utility>
 
 namespace plexus::asio {
@@ -30,6 +29,12 @@ namespace plexus::asio {
 // a mux node accepts on both families by listening once per family. An accepted channel's
 // scheme survives the erasure (the wrap never touches remote_endpoint()): a unix-listener
 // accept still reports "unix", a tcp-listener accept still reports "tcp".
+//
+// LIFETIME: the ctor installs this-capturing completion callbacks into the borrowed local
+// and remote transports. The borrowed transports MUST outlive this object — the owner
+// sequences teardown so the mux is destroyed before either transport fires a late
+// completion (the same caller-owned discipline asio_transport documents; no shared
+// lifetime handle is taken).
 class multiplexing_transport
 {
 public:
@@ -97,8 +102,6 @@ public:
     }
 
     void close() { m_local.close(); m_remote.close(); }
-
-    [[nodiscard]] uint16_t remote_port() const { return m_remote.port(); }
 
 private:
     template <typename C>

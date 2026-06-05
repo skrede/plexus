@@ -126,7 +126,9 @@ public:
     // REFUSED outright — no demand remembered, no reach(id)/dial, no subscribe over that
     // out-of-scope transport. This needs NO transport_backend change; it reads the
     // endpoint scheme via known_peers. (The fan-out gate reads the PUBLISHED topic's
-    // mask; this reads the SUBSCRIPTION's own mask — two independent gates.)
+    // mask; this reads the SUBSCRIPTION's own mask — two independent gates.) A confined
+    // topic's hard delivery guarantee is enforced PRODUCER-side at the fan-out gate; this
+    // demand gate guards the subscriber's own scope, not the topic's confinement.
     void subscribe(const node_id &id, std::string_view fqn, locality reach_mask = locality::any)
     {
         if(!demand_in_scope(id, reach_mask))

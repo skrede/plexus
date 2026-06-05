@@ -31,6 +31,13 @@ enum class transport_kind : std::uint8_t
 // same-host (local); everything else, INCLUDING an unrecognized scheme, classifies
 // remote — the most-restrictive-to-leak default, so a same-host-confined peer is never
 // reached over an unknown transport.
+//
+// transport_kind::local names the same-host TIER, not a concrete transport. The current
+// multiplexing transport maps that tier to its only same-host member, AF_UNIX — so an
+// "inproc" endpoint (also same-host) classifies local but has no member to bind/dial it
+// through this mux. An "inproc" endpoint must therefore not be dialed through this mux
+// until it owns an in-process member; the classification is correct for the tier, the
+// routing is bounded by the member set the mux composes.
 class transport_selector
 {
 public:

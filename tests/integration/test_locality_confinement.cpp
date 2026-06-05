@@ -136,8 +136,8 @@ TEST_CASE("locality confinement: the fan-out gate delivers a topic only to its i
 
     // The realistic subscriber set: a node fans toward WIRE peers only — a same-host
     // AF_UNIX peer (local tier) and an off-host TCP peer (remote tier). No process-tier
-    // subscriber exists, because this phase ships the process tier as the BIT +
-    // CONFINEMENT only (no in-process positive-delivery sink) — so a process-confined
+    // subscriber exists, because the process tier currently ships as the BIT +
+    // CONFINEMENT only (no in-process positive-delivery sink yet) — so a process-confined
     // topic reaches NO channel here, the pure-isolation property.
     int proven = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
