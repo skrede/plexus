@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_MESSAGE_FORWARDER_H
 
 #include "plexus/io/subscriber_registry.h"
+#include "plexus/io/locality.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/wire_bytes.h"
 #include "plexus/topic_qos.h"
@@ -121,7 +122,9 @@ public:
     {
         auto hash = wire::fqn_topic_hash(fqn);
         const auto *subs = m_registry.subscribers_for(hash);
-        const bool latched = m_registry.qos_for(hash).latch;
+        const topic_qos qos = m_registry.qos_for(hash);
+        const bool latched = qos.latch;
+        const locality reach = qos.reach;
         if(subs == nullptr && !latched)
             return;   // neither a subscriber nor a latch reason to frame
 
@@ -144,9 +147,14 @@ public:
         };
         wire::encode_frame_into(m_frame_scratch, fhdr, m_inner_scratch);
 
+        // The SINGLE fan-out confinement choke point: send to a subscriber only when
+        // the topic's reach mask shares a bit with the subscriber's cached tier. Default
+        // reach=any sends to all (no behavior change); a confined mask drops an off-scope
+        // tier and never leaks (fail-closed access control).
         if(subs != nullptr)
             for(const auto &sub : *subs)
-                sub.channel->send(m_frame_scratch);
+                if(any_set(reach, sub.tier))
+                    sub.channel->send(m_frame_scratch);
 
         retain_if_latched(hash);
     }

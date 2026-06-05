@@ -148,6 +148,21 @@ target_include_directories(test_peer_observer_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_peer_observer_inproc TEST_PREFIX "integration.")
 
+# The locality confinement matrix: the deterministic fan-out gate (synthetic schemes)
+# + the engine demand-side gate (inproc bus) are always built (no backend); the live
+# AF_UNIX/TCP confinement legs compile in only when the asio backend is on (guarded by
+# PLEXUS_HAVE_ASIO_MUX, wired below inside the asio gate). tests/ is on the include path
+# for support headers and the shared make_cfg helpers.
+add_executable(test_locality_confinement test_locality_confinement.cpp)
+target_link_libraries(test_locality_confinement PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_locality_confinement PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_locality_confinement TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
@@ -403,6 +418,11 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # the variant is compiled in (guarded by PLEXUS_HAVE_ASIO_MUX) only here.
     target_link_libraries(test_hot_path_alloc PRIVATE plexus::asio)
     target_compile_definitions(test_hot_path_alloc PRIVATE PLEXUS_HAVE_ASIO_MUX)
+
+    # The locality confinement test gains its LIVE AF_UNIX/TCP legs when the asio backend
+    # is on: real local + remote channels prove the same fan-out confinement over the wire.
+    target_link_libraries(test_locality_confinement PRIVATE plexus::asio)
+    target_compile_definitions(test_locality_confinement PRIVATE PLEXUS_HAVE_ASIO_MUX)
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.

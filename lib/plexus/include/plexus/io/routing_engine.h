@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_ROUTING_ENGINE_H
 
 #include "plexus/io/node_name.h"
+#include "plexus/io/locality.h"
 #include "plexus/io/known_peers.h"
 #include "plexus/io/peer_observer.h"
 #include "plexus/io/handshake_fsm.h"
@@ -117,8 +118,19 @@ public:
     // session path once connected (the attach is what makes a publish flow). Routing
     // through session->subscribe lets the session observe its own wire emit and own
     // the readiness count — the forwarder stays readiness-agnostic.
-    void subscribe(const node_id &id, std::string_view fqn)
+    //
+    // reach_mask is the SUBSCRIPTION's own locality confinement (a category-2 required-
+    // with-default: any = no confinement, existing callers unchanged). It is the demand-
+    // side half of the airtight guarantee: if the mask excludes the target peer's tier
+    // (classified from the endpoint scheme the engine already holds), the demand is
+    // REFUSED outright — no demand remembered, no reach(id)/dial, no subscribe over that
+    // out-of-scope transport. This needs NO transport_backend change; it reads the
+    // endpoint scheme via known_peers. (The fan-out gate reads the PUBLISHED topic's
+    // mask; this reads the SUBSCRIPTION's own mask — two independent gates.)
+    void subscribe(const node_id &id, std::string_view fqn, locality reach_mask = locality::any)
     {
+        if(!demand_in_scope(id, reach_mask))
+            return;   // out-of-mask demand: establish NO path toward this peer
         reach(id);
         // Record the durable demand FIRST — before any session may exist (an async
         // dial completes later). The session resurrects the recorded demand through the
@@ -166,6 +178,22 @@ public:
     registry_type &registry() noexcept { return m_registry; }
 
 private:
+    // The demand-side confinement gate: does a subscription's reach mask admit the
+    // target peer's delivery tier? The default any admits every peer (existing callers
+    // are never refused). A confined mask classifies the tier from the endpoint scheme
+    // the engine already holds (known_peers) and refuses an out-of-scope peer; a confined
+    // demand toward an UNKNOWN peer is also refused (fail-closed — never establish a path
+    // we cannot prove is in scope).
+    bool demand_in_scope(const node_id &id, locality reach_mask) const
+    {
+        if(reach_mask == locality::any)
+            return true;
+        auto ep = m_known.lookup(id);
+        if(!ep)
+            return false;
+        return any_set(reach_mask, tier_of(ep->scheme));
+    }
+
     // The single dial-success tail. CORRELATION by endpoint, NOT by arrival order:
     // the transport hands back the endpoint THIS channel dialed, so it routes to the
     // slot that dialed that endpoint. A real async transport completes concurrent

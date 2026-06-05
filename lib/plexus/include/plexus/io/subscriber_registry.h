@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SUBSCRIBER_REGISTRY_H
 #define HPP_GUARD_PLEXUS_IO_SUBSCRIBER_REGISTRY_H
 
+#include "plexus/io/locality.h"
 #include "plexus/topic_qos.h"
 
 #include <string>
@@ -32,6 +33,7 @@ public:
     {
         Channel *channel;
         std::string node_name;
+        locality tier;   // the delivery tier, classified ONCE at attach (never per fan-out hop)
     };
 
     struct topic_entry
@@ -84,7 +86,12 @@ public:
         for(const auto &sub : entry.subscribers)
             if(sub.channel == &channel)
                 return;
-        entry.subscribers.push_back(subscriber{&channel, std::string{node_name}});
+        // Classify the delivery tier ONCE here from the channel's OWN endpoint scheme
+        // (the transport that minted it, never peer-supplied data). remote_endpoint() is
+        // a syscall on a real socket channel, so it is read at attach and cached — the
+        // fan-out loop only reads the stored tier.
+        const locality tier = tier_of(channel.remote_endpoint().scheme);
+        entry.subscribers.push_back(subscriber{&channel, std::string{node_name}, tier});
     }
 
     // Record a publisher-declared per-topic qos (and the topic_hash -> fqn

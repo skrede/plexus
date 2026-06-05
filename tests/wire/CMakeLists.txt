@@ -14,6 +14,17 @@ foreach(test ${PLEXUS_WIRE_TESTS})
     catch_discover_tests(${test} TEST_PREFIX "wire.")
 endforeach()
 
+# The locality QoS unit oracle proves the delivery-tier bitflag truth table and the
+# scheme->tier classifier. It includes the core io/locality.h + topic_qos.h headers,
+# so it additionally links plexus::plexus (the header-only core); the rest of the wire
+# oracle needs only plexus::wire.
+add_executable(test_locality_qos test_locality_qos.cpp)
+target_link_libraries(test_locality_qos PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_locality_qos TEST_PREFIX "wire.")
+
 # The stream_inbound detection oracle drives a virtual-clock inproc timer, so this
 # TU additionally links plexus::inproc (the other wire targets do not) — mirroring
 # how the integration inproc targets pull in the manual-clock executor/timer.
