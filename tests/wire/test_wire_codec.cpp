@@ -1,5 +1,4 @@
 #include "plexus/wire/frame.h"
-#include "plexus/wire/byte_order.h"
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/subscribe.h"
@@ -10,7 +9,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>

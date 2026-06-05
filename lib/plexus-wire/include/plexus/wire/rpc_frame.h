@@ -28,9 +28,10 @@ struct rpc_response_decode_result
 
 // Decode cutoff for the response status byte. The retained enumerators are
 // sparse (6, 7, 9-17, 19 are reserved gaps with no defined value), so a bare
-// "<= highest" range check could yield an undefined enumerator. Accept ONLY the
-// nine defined values; every other byte — out of range or an in-range gap —
-// rejects the frame. This never materializes an undefined rpc_status.
+// "<= highest" range check could yield an undefined enumerator. The switch
+// enumerates ONLY the nine defined values; an out-of-range byte or a reserved
+// in-range gap matches no case, returns false, and the frame is rejected — so no
+// undefined rpc_status enumerator is ever constructed.
 inline bool is_defined_rpc_status(std::uint8_t byte) noexcept
 {
     switch(static_cast<rpc_status>(byte))

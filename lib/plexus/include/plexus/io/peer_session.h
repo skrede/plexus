@@ -16,6 +16,7 @@
 #include "plexus/wire/frame.h"
 #include "plexus/wire/handshake.h"
 #include "plexus/wire/frame_codec.h"
+#include "plexus/wire/stream_inbound.h"
 
 #include "plexus/detail/compat.h"
 
@@ -75,11 +76,13 @@ public:
     void start()
     {
         m_torn_down = false;
+        m_closed_for_protocol_error = false;
         m_channel.on_data([this](std::span<const std::byte> f) { on_receive(f); });
         m_channel.on_error([this](io_error) {
-            if(m_on_drop && !m_torn_down)
+            if(m_on_drop && !m_torn_down && !m_closed_for_protocol_error)
                 m_on_drop();
         });
+        m_channel.on_protocol_close([this](wire::close_cause cause) { close_for_protocol_error(cause); });
         register_consumers();
         arm_handshake_timer();
         if(!m_is_inbound_bootstrap)
@@ -106,13 +109,13 @@ public:
     {
         if(m_torn_down)
             return;
-        if(auto hdr = wire::decode_header(frame))
-        {
-            if(hdr->session_id != 0 && m_peer_session_id != 0 && hdr->session_id != m_peer_session_id)
-                return;
-            if(hdr->session_id != 0 && m_peer_session_id == 0)
-                m_peer_session_id = hdr->session_id;
-        }
+        auto hdr = wire::decode_header(frame);
+        if(!hdr)
+            return close_for_protocol_error(wire::close_cause::invalid_magic);
+        if(hdr->session_id != 0 && m_peer_session_id != 0 && hdr->session_id != m_peer_session_id)
+            return;
+        if(hdr->session_id != 0 && m_peer_session_id == 0)
+            m_peer_session_id = hdr->session_id;
         m_router.route(frame);
     }
 
@@ -128,6 +131,22 @@ public:
         m_forwarders_installed = false;
         m_fsm.on_torn_down();
         m_channel.close();
+    }
+
+    // The uniform close funnel for a peer that misbehaved on the wire — BOTH the
+    // framing violation surfaced by the channel's on_protocol_close and the semantic
+    // violations the session detects on complete frames (a header that does not
+    // decode, an FSM abort). It latches the protocol-error disposition so the
+    // on_error wiring does NOT re-dial a peer we closed, emits exactly ONE warn
+    // (never per-byte), and tears down. Idempotent on m_torn_down, mirroring
+    // on_receive's guard.
+    void close_for_protocol_error(wire::close_cause)
+    {
+        if(m_torn_down)
+            return;
+        m_closed_for_protocol_error = true;
+        m_logger.warn("plexus: peer_session protocol_close");
+        tear_down();
     }
 
     bool is_complete() const noexcept { return m_forwarders_installed; }
@@ -173,7 +192,7 @@ private:
             case fsm_action::send_response: return send_handshake_response(step.outcome);
             case fsm_action::complete:      return on_complete();
             case fsm_action::retry:         return m_logger.warn("plexus: peer_session retry_no_dialer");
-            case fsm_action::abort:         return tear_down();
+            case fsm_action::abort:         return close_for_protocol_error(wire::close_cause::invalid_magic);
             case fsm_action::none:          return;
         }
     }
@@ -277,6 +296,10 @@ private:
     bool m_is_inbound_bootstrap;
     std::uint8_t m_session_id{0}, m_peer_session_id{0};
     bool m_forwarders_installed{false}, m_torn_down{false};
+    // Latched true by close_for_protocol_error so the on_error wiring short-circuits
+    // the re-dial: a peer WE closed for misbehavior must not be re-dialed. A plain
+    // bool, mirroring m_torn_down — its absence is not meaningful, only its value.
+    bool m_closed_for_protocol_error{false};
     log::logger &m_logger;
     typename message_forwarder<Policy>::peer m_msg_peer;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;

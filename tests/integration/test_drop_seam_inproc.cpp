@@ -32,12 +32,21 @@
 
 #include "plexus/policy.h"
 
+#include "plexus/log/logger.h"
+
+#include "plexus/wire/frame.h"
+#include "plexus/wire/handshake.h"
+#include "plexus/wire/frame_codec.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
 #include <chrono>
+#include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 
 using plexus::inproc::inproc_bus;
 using plexus::inproc::inproc_timer;
@@ -112,6 +121,54 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
                             max_attempts, std::nullopt};
 }
 
+// A tiny logger that counts warn() calls — the close funnel emits exactly ONE warn
+// per protocol-error close, so the semantic-close leg asserts count == 1 (never a
+// per-byte / per-frame amplification). A plain instance, no static singleton.
+struct counting_logger final : plexus::log::logger
+{
+    int warns{0};
+    void warn(std::string_view) override { ++warns; }
+};
+
+// Frame a handshake response with a chosen status exactly as the wire codec does,
+// so feeding it to a dialer session's on_receive drives the production decode +
+// FSM path (a version_incompatible response makes on_response return abort). The
+// control frame carries session_id 0, as every handshake frame does.
+std::vector<std::byte> make_handshake_response(plexus::wire::handshake_status status)
+{
+    plexus::wire::handshake_response resp{};
+    resp.id[0] = std::byte{0xB2};
+    resp.version_major = 1;
+    resp.version_minor = 0;
+    resp.compatible_version_major = 1;
+    resp.compatible_version_minor = 0;
+    resp.protocol_version = plexus::wire::k_protocol_version;
+    resp.status = status;
+    auto payload = plexus::wire::encode_handshake_response(resp);
+    plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::handshake_resp, .flags = 0,
+                                   .session_id = 0, .timestamp_ns = 0, .payload_len = payload.size()};
+    return plexus::wire::encode_frame(hdr, payload);
+}
+
+// A complete, header-undecodable frame: a header-size-plus run whose magic bytes
+// are wrong. on_receive's decode_header returns nullopt on it, which the close
+// funnel treats as a frame-level protocol violation (it does NOT route the frame).
+std::vector<std::byte> make_undecodable_frame()
+{
+    return std::vector<std::byte>(plexus::wire::header_size + 4, std::byte{0xFF});
+}
+
+// A unidirectional data frame for a topic NOBODY subscribed: it reaches the
+// forwarder's benign warn-and-drop receive tail (an unresolved topic), which is
+// NOT a protocol error and must NOT trip the close funnel.
+std::vector<std::byte> make_unknown_topic_frame(std::uint8_t session_id)
+{
+    std::array<std::byte, 4> body{};
+    plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::unidirectional, .flags = 0,
+                                   .session_id = session_id, .timestamp_ns = 0, .payload_len = body.size()};
+    return plexus::wire::encode_frame(hdr, body);
+}
+
 // The inbound slot B keys an accepted session on: inbound ids are minted in arrival
 // order from 1 (the registry's synthetic inbound identity). The n-th accept yields
 // id[15] = n; the dialer's real node_id never reaches B's slot map here.
@@ -142,6 +199,10 @@ struct two_node
     transport_t transport_a{ex, bus};
     transport_t transport_b{ex, bus};
 
+    // A owns a counting logger so the semantic-close leg can assert the single warn
+    // the protocol-error funnel emits; it is injected into A's engine by reference.
+    counting_logger a_logger;
+
     engine a;
     engine b;
 
@@ -152,7 +213,7 @@ struct two_node
     endpoint ep_b{"inproc", "node-b"};
 
     explicit two_node(const reconnect_config &a_redial = forever_cfg())
-        : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, false)
+        : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, false, a_logger)
         , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, false)
     {
         a.listen(ep_a);
@@ -294,6 +355,116 @@ TEST_CASE("inproc drop seam: crossing a surrender bound marks is_dead and re-dia
         // Surrender without collateral: C is still connected and not dead.
         REQUIRE(a.is_connected(id_c));
         REQUIRE(!a.is_dead(id_c));
+        ++proven;
+    }
+    REQUIRE(proven == k_iterations);
+}
+
+TEST_CASE("inproc drop seam: a SEMANTIC protocol-error close (an FSM abort from a rejecting response) warns once, tears down, and does NOT re-dial",
+          "[integration][drop_seam][inproc]")
+{
+    constexpr int k_iterations = 100;
+    int proven = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        manual_clock::reset();
+        two_node net;
+
+        net.discovery.announce(net.a, net.id_b, net.ep_b);
+        net.a.reach(net.id_b);
+        net.drive();
+        REQUIRE(net.a.is_connected(net.id_b));
+        const auto before = net.a.attempt_count(net.id_b);
+        const int warns_before = net.a_logger.warns;
+
+        // Feed A's dialer session a version_incompatible handshake response: the
+        // production decode + FSM path returns abort, which the close funnel routes
+        // through close_for_protocol_error — ONE warn + tear_down + the latched
+        // protocol-error disposition that short-circuits the transport-drop re-dial.
+        auto *a_session = net.a.session_for(net.id_b);
+        REQUIRE(a_session != nullptr);
+        auto reject = make_handshake_response(plexus::wire::handshake_status::version_incompatible);
+        a_session->on_receive(reject);
+        net.drive();
+
+        REQUIRE(net.a_logger.warns == warns_before + 1);   // exactly one warn, never per-byte
+        REQUIRE(!net.a.is_connected(net.id_b));             // the session was torn down
+
+        // The dial-rearm short-circuit: a protocol-error close does NOT advance the
+        // dialer's attempt_count (contrast the real-drop leg's +1). Driving the
+        // backoff window confirms no re-dial was armed.
+        REQUIRE(net.a.attempt_count(net.id_b) == before);
+        net.advance(k_ceiling);
+        REQUIRE(net.a.attempt_count(net.id_b) == before);
+        ++proven;
+    }
+    REQUIRE(proven == k_iterations);
+}
+
+TEST_CASE("inproc drop seam: a header-undecodable complete frame closes via the protocol-error funnel and does NOT re-dial",
+          "[integration][drop_seam][inproc]")
+{
+    constexpr int k_iterations = 100;
+    int proven = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        manual_clock::reset();
+        two_node net;
+
+        net.discovery.announce(net.a, net.id_b, net.ep_b);
+        net.a.reach(net.id_b);
+        net.drive();
+        REQUIRE(net.a.is_connected(net.id_b));
+        const auto before = net.a.attempt_count(net.id_b);
+        const int warns_before = net.a_logger.warns;
+
+        // A complete frame whose header does NOT decode is a frame-level protocol
+        // violation: on_receive funnels it into close_for_protocol_error (one warn +
+        // tear_down) and does NOT route it. No re-dial (the short-circuit).
+        auto *a_session = net.a.session_for(net.id_b);
+        REQUIRE(a_session != nullptr);
+        auto bad = make_undecodable_frame();
+        a_session->on_receive(bad);
+        net.drive();
+
+        REQUIRE(net.a_logger.warns == warns_before + 1);
+        REQUIRE(!net.a.is_connected(net.id_b));
+        REQUIRE(net.a.attempt_count(net.id_b) == before);
+        net.advance(k_ceiling);
+        REQUIRE(net.a.attempt_count(net.id_b) == before);
+        ++proven;
+    }
+    REQUIRE(proven == k_iterations);
+}
+
+TEST_CASE("inproc drop seam: a benign unknown-topic data frame reaches the forwarder warn-and-drop tail and does NOT close the session (the scope guard)",
+          "[integration][drop_seam][inproc]")
+{
+    constexpr int k_iterations = 100;
+    int proven = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        manual_clock::reset();
+        two_node net;
+
+        net.discovery.announce(net.a, net.id_b, net.ep_b);
+        net.a.reach(net.id_b);
+        net.drive();
+        REQUIRE(net.a.is_connected(net.id_b));
+        const auto before = net.a.attempt_count(net.id_b);
+
+        // A data frame for a topic nobody subscribed is the forwarder's benign
+        // warn-and-drop (an unresolved topic), NOT a protocol violation: the session
+        // STAYS up and no re-dial is armed. Carry the latched epoch so the staleness
+        // gate passes it through to the forwarder tail rather than dropping it.
+        auto *a_session = net.a.session_for(net.id_b);
+        REQUIRE(a_session != nullptr);
+        auto frame = make_unknown_topic_frame(a_session->peer_session_id());
+        a_session->on_receive(frame);
+        net.drive();
+
+        REQUIRE(net.a.is_connected(net.id_b));               // the session is NOT closed
+        REQUIRE(net.a.attempt_count(net.id_b) == before);    // no re-dial
         ++proven;
     }
     REQUIRE(proven == k_iterations);

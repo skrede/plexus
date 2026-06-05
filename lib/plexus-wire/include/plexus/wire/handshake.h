@@ -70,9 +70,10 @@ constexpr std::size_t handshake_response_size = 22;
 
 static_assert(handshake_response_size == handshake_request_size + 1);
 
-// Decode cutoff for the response status byte. Accept ONLY the four defined
-// values; every other byte — out of range or a future in-range gap — rejects the
-// frame. The switch form never materializes an undefined handshake_status.
+// Decode cutoff for the response status byte. The switch enumerates ONLY the
+// defined values; an out-of-range byte or a reserved in-range gap matches no case,
+// returns false, and the frame is rejected — so no undefined handshake_status
+// enumerator is ever constructed.
 inline bool is_defined_handshake_status(std::uint8_t byte) noexcept
 {
     switch(static_cast<handshake_status>(byte))
