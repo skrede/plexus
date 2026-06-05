@@ -114,6 +114,22 @@ target_include_directories(test_drop_seam_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_drop_seam_inproc TEST_PREFIX "integration.")
 
+# The deterministic N>=3-peer concurrent-drop oracle on the virtual clock: one
+# dialer engine holds N established peers, several drop AT ONCE (the remote accepted
+# ends close before the backoff fires), and each dropped slot re-dials independently
+# while every survivor is left bit-for-bit undisturbed; one peer crossing a surrender
+# bound is is_dead with the live peers untouched; a reconnected peer's previous-epoch
+# straggler is dropped by the staleness gate — always built (inproc Policy, no backend).
+add_executable(test_multipeer_reconnect_inproc test_multipeer_reconnect_inproc.cpp)
+target_link_libraries(test_multipeer_reconnect_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_multipeer_reconnect_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_multipeer_reconnect_inproc TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
@@ -243,6 +259,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::inproc
         Catch2::Catch2WithMain)
     catch_discover_tests(test_reconnect_asio TEST_PREFIX "integration.")
+
+    # The gated real-TCP N>=3-peer concurrent-drop oracle: one dialer engine over
+    # asio_transport holds N established peers; several drop AT ONCE by closing the
+    # accepted sockets, and the engine's OWN production drop route re-dials each slot
+    # independently while every survivor is undisturbed; one peer crossing a surrender
+    # bound is is_dead with the live peers connected. Every drop is a real socket().close
+    # on the accepted end (no injection). Loops in-body; re-run >=3 process runs. Links
+    # plexus::inproc for the forwarder framing path the peers reuse.
+    add_executable(test_multipeer_reconnect_asio test_multipeer_reconnect_asio.cpp)
+    target_link_libraries(test_multipeer_reconnect_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_multipeer_reconnect_asio TEST_PREFIX "integration.")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
