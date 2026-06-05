@@ -386,31 +386,42 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_stream_channel_unix TEST_PREFIX "integration.")
 
-    # The live per-peer mux-selection oracle over real AF_UNIX: a multiplexing_transport
-    # over a unix + tcp pair, dialing a same-host ("unix") endpoint, completes over the
-    # local stream — the dialed AND accepted mux_channels report the "unix" scheme through
-    # the erasure, and the dialed endpoint is passed back unchanged. Loops N>=100 in-body;
-    # the ctest invocation is re-run >=3 process runs for cross-process reproducibility.
-    add_executable(test_mux_select_unix test_mux_select_unix.cpp)
-    target_link_libraries(test_mux_select_unix PRIVATE
-        plexus::plexus
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_mux_select_unix TEST_PREFIX "integration.")
+    # The multiplexing transport now composes a secure (TLS) member alongside the local
+    # and remote ones, so its header pulls in plexus::tls and these mux oracles link it
+    # (and only build when the secure backend is ON). The secure member stays inert on
+    # these unix/tcp routes — its credential is a default (invalid) one, never touched
+    # because no "tls" channel is ever dialed/accepted here.
+    if(PLEXUS_ENABLE_TLS_BACKEND)
+        # The live per-peer mux-selection oracle over real AF_UNIX: a multiplexing_transport
+        # over a unix + tcp + tls triple, dialing a same-host ("unix") endpoint, completes
+        # over the local stream — the dialed AND accepted mux_channels report the "unix"
+        # scheme through the erasure, and the dialed endpoint is passed back unchanged. Loops
+        # N>=100 in-body; the ctest invocation is re-run >=3 process runs.
+        add_executable(test_mux_select_unix test_mux_select_unix.cpp
+            $<TARGET_OBJECTS:plexus-tls>)
+        target_link_libraries(test_mux_select_unix PRIVATE
+            plexus::plexus
+            plexus::wire
+            plexus::asio
+            plexus::tls
+            Catch2::Catch2WithMain)
+        catch_discover_tests(test_mux_select_unix TEST_PREFIX "integration.")
 
-    # The live per-peer mux-selection oracle over real TCP loopback: a multiplexing_transport
-    # over a unix + tcp pair, dialing a remote ("tcp") endpoint, completes over the network
-    # stream — the dialed AND accepted mux_channels report the "tcp" scheme through the
-    # erasure, and the dialed endpoint is passed back unchanged. Loops N>=100 in-body; the
-    # ctest invocation is re-run >=3 process runs for cross-process reproducibility.
-    add_executable(test_mux_select_asio test_mux_select_asio.cpp)
-    target_link_libraries(test_mux_select_asio PRIVATE
-        plexus::plexus
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_mux_select_asio TEST_PREFIX "integration.")
+        # The live per-peer mux-selection oracle over real TCP loopback: a
+        # multiplexing_transport over a unix + tcp + tls triple, dialing a remote ("tcp")
+        # endpoint, completes over the network stream — the dialed AND accepted mux_channels
+        # report the "tcp" scheme through the erasure, and the dialed endpoint is passed back
+        # unchanged. Loops N>=100 in-body; the ctest invocation is re-run >=3 process runs.
+        add_executable(test_mux_select_asio test_mux_select_asio.cpp
+            $<TARGET_OBJECTS:plexus-tls>)
+        target_link_libraries(test_mux_select_asio PRIVATE
+            plexus::plexus
+            plexus::wire
+            plexus::asio
+            plexus::tls
+            Catch2::Catch2WithMain)
+        catch_discover_tests(test_mux_select_asio TEST_PREFIX "integration.")
+    endif()
 
     # The hot-path allocation audit gains a type-erased mux_channel variant when the asio
     # backend is on: the same steady-state 0-alloc invariant must hold across the single

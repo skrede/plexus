@@ -96,11 +96,26 @@ private:
                         report(ec);
                     return;
                 }
-                auto channel = std::make_unique<tls_channel>(m_io, std::move(peer), m_cred, m_cfg);
-                if(m_on_accepted)
-                    m_on_accepted(std::move(channel));
+                run_server_handshake(
+                    std::make_unique<tls_channel>(m_io, std::move(peer), m_cred, m_cfg));
                 if(m_running)
                     do_accept();
+            });
+    }
+
+    // Run the server handshake before delivering the channel: a verify reject
+    // routes through the channel's own error/fail path and the unique_ptr is
+    // dropped here (the channel is never handed to on_accepted), so the consumer
+    // never receives a verify-rejected peer's channel (fail-closed, symmetric
+    // with the dial side's post-handshake delivery).
+    void run_server_handshake(std::unique_ptr<tls_channel> ch)
+    {
+        auto &raw = *ch;
+        raw.start_server_handshake(
+            [this, ch = std::move(ch)]() mutable
+            {
+                if(m_on_accepted)
+                    m_on_accepted(std::move(ch));
             });
     }
 

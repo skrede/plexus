@@ -63,8 +63,11 @@ public:
     }
 
     // Accept mode: adopt an already-connected tcp::socket into a server-side
-    // ssl::stream and run the server handshake — the read loop arms only on its
-    // success (DIVERGENCE from the plaintext accept ctor, which reads at once).
+    // ssl::stream. The server handshake is NOT started here — the listener wires
+    // its readiness hook first and then calls start_server_handshake(), so the
+    // accepted channel is delivered to the consumer ONLY post-handshake (a
+    // verify-rejected peer never yields a live accepted channel — fail-closed,
+    // symmetric with the dial side).
     tls_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected,
                 const tls_credential &cred, wire::stream_inbound_config cfg = {})
         : m_io(io)
@@ -73,8 +76,6 @@ public:
         , m_inbound(io, cfg)
     {
         wire_inbound();
-        m_open = true;
-        do_handshake(::asio::ssl::stream_base::server);
     }
 
     ~tls_channel() { m_inbound.shutdown(); shutdown_socket(); }
@@ -135,6 +136,17 @@ public:
         if(!host.empty())
             (void)::SSL_set_tlsext_host_name(m_stream.native_handle(), host.c_str());
         do_handshake(::asio::ssl::stream_base::client);
+    }
+
+    // Accept-side bootstrap: run the server handshake. The read loop + write drain
+    // arm only on its success; on_ready fires ONCE the secure channel is up, so the
+    // listener delivers the accepted channel POST-handshake — a verify-rejected
+    // peer never yields a live accepted channel (fail-closed, symmetric with dial).
+    void start_server_handshake(plexus::detail::move_only_function<void()> on_ready = {})
+    {
+        m_open = true;
+        m_on_ready = std::move(on_ready);
+        do_handshake(::asio::ssl::stream_base::server);
     }
 
 private:
@@ -230,6 +242,21 @@ private:
             m_on_error(mapped);
         if(m_on_closed)
             m_on_closed();
+        release_pending();
+    }
+
+    // A handshake that fails BEFORE delivery never fires m_on_ready, so the
+    // readiness closure (which, on the pre-delivery path, owns the sole
+    // unique_ptr to this channel) would otherwise keep the channel — and its
+    // socket — alive forever. Drop it OFF the current stack: the closure (hence
+    // possibly *this) is destroyed only after fail() unwinds, so the channel is
+    // never torn down from inside its own member call. After a successful
+    // handshake m_on_ready is already moved-from, so this is a harmless no-op.
+    void release_pending()
+    {
+        if(!m_on_ready)
+            return;
+        ::asio::post(m_io, [pending = std::move(m_on_ready)]() mutable { pending = {}; });
     }
 
     ::asio::io_context &m_io;

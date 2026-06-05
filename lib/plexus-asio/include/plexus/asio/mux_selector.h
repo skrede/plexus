@@ -18,7 +18,13 @@ enum class reliability_hint : std::uint8_t
 };
 
 // The tag the multiplexing transport maps to one of its member transports: a same-host
-// peer is reached over the local stream, an off-host peer over the network stream.
+// peer is reached over the local stream, an off-host peer over a network stream. The
+// remote tier holds BOTH the plaintext "tcp" member and the secure "tls" member — the
+// tier classifies locality, not the wire protocol, so "tls" stays remote (and the
+// same-host locality confinement still excludes it: a host-confined peer is never
+// reached over tls even though tls encrypts). The tcp-vs-tls discrimination is the
+// multiplexing transport's job (an exact "tls" scheme branch within the remote tier),
+// not the selector's — the tier enum stays local/remote.
 enum class transport_kind : std::uint8_t
 {
     local,
@@ -28,9 +34,10 @@ enum class transport_kind : std::uint8_t
 // A small value object owned by the multiplexing transport. It holds NO transport
 // handles and NO hint map — it is a pure function of the endpoint scheme (plus the
 // reserved reliability axis). Same-host detection reads ep.scheme: "unix"/"inproc" are
-// same-host (local); everything else, INCLUDING an unrecognized scheme, classifies
-// remote — the most-restrictive-to-leak default, so a same-host-confined peer is never
-// reached over an unknown transport.
+// same-host (local); everything else, INCLUDING "tcp", "tls", and an unrecognized
+// scheme, classifies remote — the most-restrictive-to-leak default, so a same-host-
+// confined peer is never reached over an unknown transport. "tls" is a remote member
+// alongside "tcp": it rides a network stream, so locality confinement still excludes it.
 //
 // transport_kind::local names the same-host TIER, not a concrete transport. The current
 // multiplexing transport maps that tier to its only same-host member, AF_UNIX — so an

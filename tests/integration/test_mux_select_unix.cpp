@@ -5,6 +5,9 @@
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
 
+#include "plexus/tls/tls_credential.h"
+#include "plexus/tls/tls_transport.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/transport_backend.h"
 
@@ -23,6 +26,7 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
+namespace ptls = plexus::tls;
 namespace pio = plexus::io;
 
 static_assert(plexus::io::transport_backend<pasio::multiplexing_transport, pasio::mux_policy>);
@@ -64,9 +68,14 @@ struct local_dial_link
 {
     temp_sock sock;
     ::asio::io_context io;
+    // The secure member is never exercised on this same-host route: its credential
+    // stays a default (invalid) one — the SSL_CTX is only ever touched when a "tls"
+    // channel is actually dialed/accepted, which this link never does.
+    ptls::tls_credential no_tls;
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
-    pasio::multiplexing_transport mux{local, remote};
+    ptls::tls_transport secure{io, no_tls};
+    pasio::multiplexing_transport mux{local, remote, secure};
 
     std::optional<pio::endpoint> dialed_ep;
     std::unique_ptr<pasio::mux_channel> dialed;
