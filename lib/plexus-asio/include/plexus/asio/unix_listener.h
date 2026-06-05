@@ -34,6 +34,12 @@ namespace plexus::asio {
 // to on_accepted as a unique_ptr owner. stop() removes the filesystem entry the
 // acceptor close leaves behind, but only a path THIS listener bound. There is NO
 // reuse_address (AF_UNIX has none) and NO port (the rendezvous is the path).
+//
+// SECURITY CONTRACT (caller-owned): the socket path MUST live in a directory the
+// owner controls (not a world-writable shared tmp), so the unlink-before-bind cannot
+// be raced and the 0700 mode is the effective access boundary. Tightening this
+// (atomic mode via an owner-only parent dir, and on-connect peer-credential checks)
+// is deferred hardening — see seeds/af-unix-permissions-model.md.
 class unix_listener
 {
 public:
@@ -52,6 +58,8 @@ public:
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<unix_channel>)> cb) { m_on_accepted = std::move(cb); }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
 
+    ~unix_listener() { stop(); }
+
     void start(const io::endpoint &bind_ep)
     {
         std::error_code ec;
@@ -65,13 +73,13 @@ public:
             return report(ec);
         m_acceptor.bind(ep, ec);                  // NO reuse_address for AF_UNIX
         if(ec)
-            return report(ec);
+            return abort_start(ec);               // close the opened acceptor
+        m_bound_path = path;                      // bind created the inode — own it so any later failure unlinks it
         if(::chmod(path.c_str(), S_IRWXU) != 0)   // owner-only 0700 access control
-            return report(std::error_code(errno, std::generic_category()));
+            return abort_start(std::error_code(errno, std::generic_category()));
         m_acceptor.listen(::asio::socket_base::max_listen_connections, ec);
         if(ec)
-            return report(ec);
-        m_bound_path = path;
+            return abort_start(ec);
         m_running = true;
         do_accept();
     }
@@ -90,11 +98,26 @@ public:
     }
 
 private:
-    // Remove a socket file, treating ENOENT (nothing there) as success.
+    // Unwind a partially-started listener: close the opened acceptor and unlink the
+    // socket file bind() already created, so a failed start leaks neither the open
+    // acceptor (a retry would wedge at already_open) nor the on-disk inode.
+    void abort_start(const std::error_code &ec)
+    {
+        std::error_code ignore;
+        (void)m_acceptor.close(ignore);
+        if(!m_bound_path.empty())
+        {
+            unlink_path(m_bound_path);
+            m_bound_path.clear();
+        }
+        report(ec);
+    }
+
+    // Best-effort remove of a socket file: ENOENT (nothing there) is success, and any
+    // real conflict surfaces at the subsequent bind rather than here.
     static void unlink_path(const std::string &path)
     {
-        if(::unlink(path.c_str()) != 0 && errno != ENOENT)
-            return;   // a non-ENOENT failure surfaces later via bind/listen
+        (void)::unlink(path.c_str());
     }
 
     void do_accept()
