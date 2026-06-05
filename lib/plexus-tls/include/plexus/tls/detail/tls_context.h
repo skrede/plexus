@@ -20,6 +20,8 @@ namespace plexus::tls::detail {
 // the credential releases the original ref.
 inline ::asio::ssl::context share_context(const tls_credential &cred)
 {
+    if(!cred.valid())
+        throw std::runtime_error("tls_channel: credential has no SSL_CTX (default-constructed?)");
     auto *raw = &cred.ssl_ctx();
     if(::SSL_CTX_up_ref(raw) != 1)
         throw std::runtime_error("tls_channel: SSL_CTX_up_ref failed");

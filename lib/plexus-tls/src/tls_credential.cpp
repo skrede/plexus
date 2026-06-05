@@ -93,8 +93,15 @@ int allocate_ex_data_index() noexcept
 // ex_data -> credential -> verify_policy and returns the policy's accept/reject.
 // Fail-closed at every missing link: no SSL / no credential / no policy / no
 // peer cert / DER-serialize failure all REJECT. Non-throwing; frees the DER.
-extern "C" int plexus_tls_verify_callback(int /*preverify_ok*/, X509_STORE_CTX *ctx)
+extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 {
+    // SPKI pinning anchors trust at the leaf (depth 0). At depth > 0 we are not
+    // the trust anchor, so preserve preverify_ok and let OpenSSL's own chain
+    // logic own the intermediates — otherwise a legitimately-pinned peer that
+    // presents a leaf+intermediate chain is rejected at depth 1.
+    if(X509_STORE_CTX_get_error_depth(ctx) != 0)
+        return preverify_ok;
+
     const int ssl_idx = SSL_get_ex_data_X509_STORE_CTX_idx();
     auto *ssl = static_cast<SSL *>(X509_STORE_CTX_get_ex_data(ctx, ssl_idx));
     auto reject = [ctx] {

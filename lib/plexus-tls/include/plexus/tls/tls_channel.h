@@ -233,7 +233,10 @@ private:
     void fail(const std::error_code &ec)
     {
         if(ec == ::asio::error::operation_aborted || !m_open)
+        {
+            release_pending();   // break the self-owning cycle even on abort/teardown
             return;
+        }
         m_open = false;
         m_writing = false;
         m_inbound.shutdown();
@@ -250,8 +253,11 @@ private:
     // unique_ptr to this channel) would otherwise keep the channel — and its
     // socket — alive forever. Drop it OFF the current stack: the closure (hence
     // possibly *this) is destroyed only after fail() unwinds, so the channel is
-    // never torn down from inside its own member call. After a successful
-    // handshake m_on_ready is already moved-from, so this is a harmless no-op.
+    // never torn down from inside its own member call. The load-bearing case is
+    // a pre-delivery failure (incl. an aborted in-flight handshake), where this
+    // drops the sole owner. On the success path m_on_ready was invoked but not
+    // reset (its captured channel was already moved to the consumer), so a later
+    // fail() re-posts an empty-effect continuation — harmless.
     void release_pending()
     {
         if(!m_on_ready)
