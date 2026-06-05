@@ -14,6 +14,16 @@ foreach(test ${PLEXUS_WIRE_TESTS})
     catch_discover_tests(${test} TEST_PREFIX "wire.")
 endforeach()
 
+# The stream_inbound detection oracle drives a virtual-clock inproc timer, so this
+# TU additionally links plexus::inproc (the other wire targets do not) — mirroring
+# how the integration inproc targets pull in the manual-clock executor/timer.
+add_executable(test_stream_inbound test_stream_inbound.cpp)
+target_link_libraries(test_stream_inbound PRIVATE
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_stream_inbound TEST_PREFIX "wire.")
+
 # The handshake encode-into NOALLOC gate is isolated in its own executable:
 # support/alloc_counter.h overrides global operator new/delete once per program,
 # so it must not share a binary with the rest of the wire oracle. tests/ is on the
