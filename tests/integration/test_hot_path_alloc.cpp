@@ -46,6 +46,7 @@ struct sink_channel
     void on_data(detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(detail::move_only_function<void()>) {}
     void on_error(detail::move_only_function<void(io::io_error)>) {}
+    void on_protocol_close(detail::move_only_function<void(wire::close_cause)>) {}
 
     std::size_t total_bytes{0};
     std::size_t sends{0};

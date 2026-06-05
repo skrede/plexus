@@ -36,6 +36,7 @@ struct fake_channel
     void on_data(move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(move_only_function<void()>) {}
     void on_error(move_only_function<void(plexus::io::io_error)>) {}
+    void on_protocol_close(move_only_function<void(plexus::wire::close_cause)>) {}
 };
 
 struct fake_timer
@@ -76,6 +77,7 @@ struct broken_channel
     void on_data(move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(move_only_function<void()>) {}
     void on_error(move_only_function<void(plexus::io::io_error)>) {}
+    void on_protocol_close(move_only_function<void(plexus::wire::close_cause)>) {}
 };
 static_assert(plexus::io::byte_channel<broken_channel>,
               "broken_channel intentionally fails: send() is missing");

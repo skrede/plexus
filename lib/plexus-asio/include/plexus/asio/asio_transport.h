@@ -7,6 +7,8 @@
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_endpoint_parse.h"
 
+#include "plexus/wire/stream_inbound.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_backend.h"
@@ -33,9 +35,14 @@ namespace plexus::asio {
 class asio_transport
 {
 public:
-    explicit asio_transport(::asio::io_context &io)
+    // cfg is the node-level byte-stream hardening config (required-WITH-default):
+    // the transport mints every stream channel — accepted via the listener and
+    // dialed — with it, so the no-progress/slowloris defense is armed structurally
+    // (no setter, no sentinel; the defaults live in stream_inbound_config itself).
+    explicit asio_transport(::asio::io_context &io, wire::stream_inbound_config cfg = {})
         : m_io(io)
-        , m_listener(io)
+        , m_listener(io, cfg)
+        , m_cfg(cfg)
     {
         m_listener.on_accepted([this](std::unique_ptr<asio_channel> ch) {
             if(m_on_accepted)
@@ -66,7 +73,7 @@ public:
         auto target = detail::parse(ep.address, pec);
         if(pec)
             return report_dial_fail(ep, detail::map_error(pec));
-        auto ch = std::make_unique<asio_channel>(m_io);
+        auto ch = std::make_unique<asio_channel>(m_io, m_cfg);
         auto &raw = *ch;
         raw.socket().async_connect(target,
             [this, ep, ch = std::move(ch)](std::error_code ec) mutable {
@@ -91,6 +98,7 @@ private:
 
     ::asio::io_context &m_io;
     asio_listener m_listener;
+    wire::stream_inbound_config m_cfg;
     plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>, const io::endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;

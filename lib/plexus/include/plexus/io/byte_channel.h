@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_BYTE_CHANNEL_H
 #define HPP_GUARD_PLEXUS_IO_BYTE_CHANNEL_H
 
+#include "plexus/wire/stream_inbound.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/detail/compat.h"
@@ -35,6 +37,14 @@ namespace plexus::io {
 // span-SEMANTICS contract, not a signature constraint: on_data stays
 // void(span<const std::byte>).
 //
+// on_error vs on_protocol_close are two DISTINCT close seams the session must
+// discriminate: on_error reports a network drop (the peer vanished / the link
+// failed), which re-dials; on_protocol_close reports a peer that misbehaved on
+// the wire (a framing violation or a no-progress/slowloris stall), which must
+// NOT re-dial. Every channel surfaces both — a byte-stream channel fires
+// on_protocol_close from its stream_inbound; a non-stream channel stores it and
+// never fires it (no partial frame is expressible without a byte stream).
+//
 // Handlers are plexus::detail::move_only_function so move-only callables are
 // admissible (no copyable-callable constraint).
 template <typename C>
@@ -43,7 +53,8 @@ concept byte_channel = requires(C &c,
                                 std::span<const std::byte> bytes,
                                 detail::move_only_function<void(std::span<const std::byte>)> on_data_cb,
                                 detail::move_only_function<void()> on_closed_cb,
-                                detail::move_only_function<void(io_error)> on_error_cb)
+                                detail::move_only_function<void(io_error)> on_error_cb,
+                                detail::move_only_function<void(wire::close_cause)> on_protocol_close_cb)
 {
     { c.send(bytes) }                          -> std::same_as<void>;
     { c.close() }                              -> std::same_as<void>;
@@ -51,6 +62,7 @@ concept byte_channel = requires(C &c,
     c.on_data(std::move(on_data_cb));
     c.on_closed(std::move(on_closed_cb));
     c.on_error(std::move(on_error_cb));
+    c.on_protocol_close(std::move(on_protocol_close_cb));
 };
 
 }

@@ -196,6 +196,7 @@ struct sink_channel
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(plexus::detail::move_only_function<void()>) {}
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
 
     std::vector<std::byte> last;
     int pending{0};

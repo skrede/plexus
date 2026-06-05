@@ -4,6 +4,8 @@
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_executor.h"
 
+#include "plexus/wire/stream_inbound.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/detail/compat.h"
@@ -81,6 +83,12 @@ public:
     void on_closed(detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
     void on_error(detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
 
+    // The non-stream opt-out: inproc moves whole pre-framed packets, so no partial
+    // frame — and thus no framing violation or slowloris stall — can ever exist on
+    // it. The callback is stored to satisfy the uniform channel seam and is NEVER
+    // fired (a protocol-close is meaningless without a byte stream to misbehave on).
+    void on_protocol_close(detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+
     // Bus callbacks: invoked only from inproc_bus::deliver_one(), i.e. from
     // inside the executor's step(). Never reached synchronously from a peer's
     // send()/close().
@@ -108,6 +116,7 @@ private:
     detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     detail::move_only_function<void()> m_on_closed;
     detail::move_only_function<void(io::io_error)> m_on_error;
+    detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
     bool m_closed{false};
 };
 

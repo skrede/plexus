@@ -25,9 +25,19 @@ concept timer = requires(T &t,
 
 // Policy<P>: the single compile-time seam the slice is written against. A Policy
 // bundles the hot-path substrate — an executor with a byte_channel and a timer
-// (both constructible from the executor, per backend convention) and the byte_owner the
-// receive seam binds wire_bytes views to — plus a static post() that schedules
-// work onto the executor.
+// (the timer is constructible from the executor, per backend convention) and the
+// byte_owner the receive seam binds wire_bytes views to — plus a static post()
+// that schedules work onto the executor.
+//
+// Channel construction is deliberately NOT a Policy constraint: it is irreducibly
+// transport-specific (a live socket / a bus handle / a TLS context / a hardening
+// config), and is owned by the transport_backend concept
+// (dial -> on_dialed(unique_ptr<channel>), listen -> on_accepted(...)). Requiring
+// executor-alone channel constructibility would force a sentinel/setter mutation
+// anti-pattern on any channel that needs more than the executor; construction
+// belongs to the transport, not the Policy. (asio_channel/inproc_channel still
+// OFFER executor-alone construction as a convenience — a removed requirement is
+// not a ban.)
 template <typename P>
 concept Policy = requires
     {
@@ -38,9 +48,7 @@ concept Policy = requires
     }
     && io::byte_channel<typename P::byte_channel_type>
     && timer<typename P::timer_type>
-    && std::constructible_from<typename P::byte_channel_type, typename P::executor_type>
     && std::constructible_from<typename P::timer_type, typename P::executor_type>
-    && std::constructible_from<typename P::byte_channel_type, typename P::executor_type, std::error_code &>
     && std::constructible_from<typename P::timer_type, typename P::executor_type, std::error_code &>
     && requires(typename P::executor_type ex, detail::move_only_function<void()> fn)
     {

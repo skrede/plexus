@@ -25,15 +25,17 @@ TEST_CASE("asio_policy constructs its timer and channel from the io_context", "[
     asio_timer timer(io);
     asio_channel channel(io);
 
-    // Both are constructible from the executor alone (the Policy constraint); a
+    // The timer is constructible from the executor alone (still a Policy constraint).
+    // The channel's executor-alone ctor is now a CONVENIENCE that mints a real
+    // default-config channel (the wire::stream_inbound_config defaulted to {}) — NOT
+    // a Policy constraint: channel construction is owned by transport_backend. A
     // fresh channel reports an empty remote_endpoint until connected/accepted.
     CHECK(channel.remote_endpoint().scheme == "tcp");
     CHECK(channel.remote_endpoint().address.empty());
 
-    // Exercise the error_code-overload ctors the Policy concept also requires.
+    // Exercise the timer's error_code-overload ctor the Policy concept still requires.
     std::error_code ec;
     asio_timer timer_ec(io, ec);
-    asio_channel channel_ec(io, ec);
     CHECK_FALSE(ec);
 }
 

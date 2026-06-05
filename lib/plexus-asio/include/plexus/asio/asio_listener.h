@@ -5,6 +5,8 @@
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_endpoint_parse.h"
 
+#include "plexus/wire/stream_inbound.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/detail/compat.h"
@@ -28,9 +30,12 @@ namespace plexus::asio {
 class asio_listener
 {
 public:
-    explicit asio_listener(::asio::io_context &io)
+    // cfg is the node-level hardening config (required-WITH-default), stamped onto
+    // every channel this listener accepts so each minted stream arms it structurally.
+    explicit asio_listener(::asio::io_context &io, wire::stream_inbound_config cfg = {})
         : m_io(io)
         , m_acceptor(io)
+        , m_cfg(cfg)
     {
     }
 
@@ -87,7 +92,7 @@ private:
                         report(ec);
                     return;
                 }
-                auto channel = std::make_unique<asio_channel>(m_io, std::move(peer));
+                auto channel = std::make_unique<asio_channel>(m_io, std::move(peer), m_cfg);
                 if(m_on_accepted)
                     m_on_accepted(std::move(channel));
                 if(m_running)
@@ -103,6 +108,7 @@ private:
 
     ::asio::io_context &m_io;
     ::asio::ip::tcp::acceptor m_acceptor;
+    wire::stream_inbound_config m_cfg;
     plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     bool m_running{false};

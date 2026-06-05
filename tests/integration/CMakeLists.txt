@@ -275,6 +275,21 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::inproc
         Catch2::Catch2WithMain)
     catch_discover_tests(test_multipeer_reconnect_asio TEST_PREFIX "integration.")
+
+    # The gated real-TCP stream-channel hardening leg: a raw client socket writes
+    # hostile bytes (a bad-magic run; a header with a withheld payload) into a live
+    # asio_channel stamped with a SHORT-floor wire::stream_inbound_config, and the
+    # channel's on_protocol_close fires with the matching close_cause (invalid_magic;
+    # no_progress_timeout) — the byte-stream slowloris/garbage defense proven over a
+    # real socket. Loops each path in-body; re-run >=3 process runs.
+    add_executable(test_stream_channel_asio test_stream_channel_asio.cpp)
+    target_link_libraries(test_stream_channel_asio PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_stream_channel_asio TEST_PREFIX "integration.")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
