@@ -167,6 +167,7 @@ private:
                              m_build.procedures, inbound, m_build.logger);
         if(!inbound)
             wire_drop(slot, slot.record.peer_id);
+        wire_lifecycle(slot);
         slot.session->start();
     }
 
@@ -180,6 +181,20 @@ private:
             auto it = m_slots.find(id);
             if(it != m_slots.end())
                 it->second->driver.on_channel_dropped();
+        });
+    }
+
+    // Route this slot's session lifecycle edges up to the engine's observer fan-out
+    // via the node-shared build-context sink. Unlike wire_drop (dialed-only — an
+    // accepted slot owns no redial), this is set for BOTH inbound and dialed slots:
+    // an accepted peer still fires connected/disconnected/ready. The forward goes
+    // straight to m_build.on_lifecycle (the engine sink) — no per-slot driver to
+    // route to — so it needs no id indirection, only a re-check that the sink is set.
+    void wire_lifecycle(slot_block &slot)
+    {
+        slot.session->on_lifecycle([this](const lifecycle_event &ev) {
+            if(m_build.on_lifecycle)
+                m_build.on_lifecycle(ev);
         });
     }
 

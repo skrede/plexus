@@ -2,10 +2,12 @@
 #define HPP_GUARD_PLEXUS_IO_PEER_SESSION_H
 
 #include "plexus/io/io_error.h"
+#include "plexus/io/peer_kind.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/frame_router.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/peer_context.h"
+#include "plexus/io/lifecycle_event.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 
@@ -100,6 +102,12 @@ public:
     // already-live channel breaks. The registry routes a dialed slot's drop to its
     // reconnect driver through this; a clean tear_down does not fire it.
     void on_transport_drop(detail::move_only_function<void()> cb) { m_on_drop = std::move(cb); }
+
+    // The lifecycle seam, mirroring on_transport_drop: a settable callback the
+    // registry wires to forward each edge up to the engine's posted fan-out. The
+    // session never includes routing_engine.h — it routes edges blindly through this
+    // seam (absent = no routing). Dormant until a fire-site calls fire_lifecycle.
+    void on_lifecycle(detail::move_only_function<void(const lifecycle_event &)> cb) { m_on_lifecycle = std::move(cb); }
 
     // The staleness gate runs BEFORE the router: a frame whose non-zero session_id
     // differs from the latched epoch is a previous-session straggler and is dropped;
@@ -273,6 +281,23 @@ private:
 
     void mint_session_id() noexcept { m_session_id = m_ctx.epochs.next(); }
 
+    // The peer_kind discriminator drawn from the one source of truth: an inbound
+    // bootstrap is an accepted peer, an outbound dial a dialed peer.
+    peer_kind kind() const noexcept
+    {
+        return m_is_inbound_bootstrap ? peer_kind::accepted : peer_kind::dialed;
+    }
+
+    // Route one lifecycle edge up the seam (if wired) as an owned-value carrier. No
+    // fire-site calls this yet — the seam is dormant in this increment; the edges
+    // land in a later increment.
+    void fire_lifecycle(lifecycle_edge edge, handshake_outcome reason = handshake_outcome::none)
+    {
+        if(!m_on_lifecycle)
+            return;
+        m_on_lifecycle(lifecycle_event{edge, m_ctx.peer_id, m_ctx.node_name, kind(), reason});
+    }
+
     void arm_handshake_timer()
     {
         m_handshake_timer.expires_after(
@@ -306,6 +331,7 @@ private:
     std::vector<std::byte> m_payload_scratch, m_frame_scratch;
     detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message;
     detail::move_only_function<void()> m_on_drop;
+    detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
 };
 
 }

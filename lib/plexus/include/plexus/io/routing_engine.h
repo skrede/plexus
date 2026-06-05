@@ -2,7 +2,9 @@
 #define HPP_GUARD_PLEXUS_IO_ROUTING_ENGINE_H
 
 #include "plexus/io/known_peers.h"
+#include "plexus/io/peer_observer.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/lifecycle_event.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/message_forwarder.h"
@@ -18,7 +20,9 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <vector>
 #include <cstdint>
+#include <algorithm>
 #include <string_view>
 
 namespace plexus::io {
@@ -67,7 +71,14 @@ public:
         m_transport.on_dialed([this](std::unique_ptr<channel_type> ch, const endpoint &ep) { on_dialed(std::move(ch), ep); });
         m_transport.on_accepted([this](std::unique_ptr<channel_type> ch) { on_accepted(std::move(ch)); });
         m_transport.on_dial_failed([this](const endpoint &ep, io_error) { m_registry.notify_dial_failed(ep); });
+        m_build.on_lifecycle = [this](const lifecycle_event &ev) { dispatch_lifecycle(ev); };
     }
+
+    // Register/unregister an observer of peer liveness. The list is the registry,
+    // not a wire-exposed param: the add/remove API takes a const& and stores the
+    // address. Operator-driven cold-path registration — no remote peer can grow it.
+    void add_observer(peer_observer &o) { m_observers.push_back(&o); }
+    void remove_observer(peer_observer &o) { std::erase(m_observers, &o); }
 
     void listen(const endpoint &ep) { m_transport.listen(ep); }
 
@@ -156,6 +167,42 @@ private:
         return name;
     }
 
+    // The session→observer fan-out. Every edge is delivered POSTED on the executor,
+    // never synchronously from the fire-site: the posted lambda captures the event
+    // BY VALUE (its owned node_name string copies into the turn) and iterates
+    // m_observers ONLY inside that turn, so a callback's remove_observer takes effect
+    // on the NEXT posted edge — never mid-loop. rejected fans the FSM refusal reason;
+    // every other edge fans the peer_kind.
+    void dispatch_lifecycle(const lifecycle_event &ev)
+    {
+        switch(ev.edge)
+        {
+            case lifecycle_edge::connected:    return post_edge(ev, &peer_observer::on_peer_connected);
+            case lifecycle_edge::disconnected: return post_edge(ev, &peer_observer::on_peer_disconnected);
+            case lifecycle_edge::reconnected:  return post_edge(ev, &peer_observer::on_peer_reconnected);
+            case lifecycle_edge::dead:         return post_edge(ev, &peer_observer::on_peer_dead);
+            case lifecycle_edge::ready:        return post_edge(ev, &peer_observer::on_peer_ready);
+            case lifecycle_edge::rejected:     return post_rejected(ev);
+        }
+    }
+
+    void post_edge(const lifecycle_event &ev,
+                   void (peer_observer::*edge)(const node_id &, std::string_view, peer_kind))
+    {
+        Policy::post(m_executor, [this, ev, edge] {
+            for(auto *o : m_observers)
+                (o->*edge)(ev.id, ev.node_name, ev.kind);
+        });
+    }
+
+    void post_rejected(const lifecycle_event &ev)
+    {
+        Policy::post(m_executor, [this, ev] {
+            for(auto *o : m_observers)
+                o->on_peer_rejected(ev.id, ev.node_name, ev.reason);
+        });
+    }
+
     Transport &m_transport;
     executor_type m_executor;
     message_forwarder<Policy> m_messages;
@@ -163,6 +210,7 @@ private:
     session_build_context<Policy> m_build;
     registry_type m_registry;
     known_peers m_known;
+    std::vector<peer_observer *> m_observers;
     bool m_dial_eagerly;
 };
 

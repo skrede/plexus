@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_SESSION_BUILD_CONTEXT_H
 
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/lifecycle_event.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
@@ -9,6 +10,8 @@
 #include "plexus/policy.h"
 
 #include "plexus/log/logger.h"
+
+#include "plexus/detail/compat.h"
 
 #include <chrono>
 #include <cstdint>
@@ -32,6 +35,11 @@ struct session_build_context
     reconnect_config redial;
     std::uint64_t redial_seed;
     log::logger &logger;
+    // The node-shared route from any slot's session up to the engine's observer
+    // fan-out: the engine sets this after construction, the registry forwards each
+    // session's lifecycle edge through it. Absent (unset) on a context built before
+    // the engine wires it — a slot's forward guards on it being set.
+    detail::move_only_function<void(const lifecycle_event &)> on_lifecycle;
 };
 
 }
