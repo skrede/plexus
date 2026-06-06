@@ -260,15 +260,17 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
 
 #include "plexus/tls/tls_credential.h"
 #include "plexus/tls/tls_transport.h"
+#include "plexus/tls/dtls_transport.h"
 
 namespace {
 
 namespace ptls = plexus::tls;
 
-// ONE mux face over a (unix, tcp, tls, udp) quad. Each face owns its members outright —
-// the concrete completion callbacks are single-slot, so the listen face and the dial
-// face cannot share a member; a loopback pair gives each side its own quad. The tls
-// member is inert (a default/invalid credential): no "tls" channel is ever dialed here.
+// ONE mux face over a (unix, tcp, tls, udp, dtls) quintet. Each face owns its members
+// outright — the concrete completion callbacks are single-slot, so the listen face and the
+// dial face cannot share a member; a loopback pair gives each side its own quintet. The tls
+// and dtls members are inert (a default/invalid credential): no "tls"/"dtls" channel is ever
+// dialed here.
 struct mux_face
 {
     ::asio::io_context &io;
@@ -277,7 +279,8 @@ struct mux_face
     pasio::asio_transport remote{io};
     ptls::tls_transport secure{io, no_tls};
     pasio::udp_transport datagram{io};
-    pasio::multiplexing_transport mux{local, remote, secure, datagram};
+    ptls::dtls_transport secure_datagram{io, no_tls};
+    pasio::multiplexing_transport mux{local, remote, secure, datagram, secure_datagram};
 
     explicit mux_face(::asio::io_context &ctx) : io(ctx) {}
 };

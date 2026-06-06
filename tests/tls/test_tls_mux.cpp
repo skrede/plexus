@@ -125,10 +125,10 @@ ptls::tls_credential pin_one(const identity_fixture &self, const ptls::spki_dige
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
-// A face of the mux: ONE multiplexing_transport over its OWN (unix, tcp, tls)
-// member triple. Each face owns its members outright — the completion callbacks
-// on a concrete member are single-slot, so the listen face and the dial face
-// cannot share a member; a real two-node loopback gives each node its own trio.
+// A face of the mux: ONE multiplexing_transport over its OWN (unix, tcp, tls, udp,
+// dtls) member quintet. Each face owns its members outright — the completion
+// callbacks on a concrete member are single-slot, so the listen face and the dial
+// face cannot share a member; a real two-node loopback gives each node its own set.
 struct mux_face
 {
     ::asio::io_context &io;
@@ -139,12 +139,16 @@ struct mux_face
     // The datagram member stays inert on these tls/tcp routes — its socket is only ever
     // bound when a "udp" channel is actually dialed/accepted, which these faces never do.
     pasio::udp_transport datagram{io};
-    pasio::multiplexing_transport mux{local, remote, secure, datagram};
+    // The secure-datagram (DTLS) member reuses this face's credential but stays inert on
+    // the tls/tcp routes these faces exercise — its socket binds only on a "dtls" dial.
+    ptls::dtls_transport secure_datagram;
+    pasio::multiplexing_transport mux{local, remote, secure, datagram, secure_datagram};
 
     mux_face(::asio::io_context &ctx, ptls::tls_credential c)
         : io(ctx)
         , cred(std::move(c))
         , secure(io, cred)
+        , secure_datagram(io, cred)
     {
     }
 };

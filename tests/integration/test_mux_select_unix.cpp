@@ -8,6 +8,7 @@
 
 #include "plexus/tls/tls_credential.h"
 #include "plexus/tls/tls_transport.h"
+#include "plexus/tls/dtls_transport.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/transport_backend.h"
@@ -79,7 +80,10 @@ struct local_dial_link
     // The datagram member stays inert on this same-host route — its socket is only ever
     // bound when a "udp" channel is actually dialed/accepted, which this link never does.
     pasio::udp_transport datagram{io};
-    pasio::multiplexing_transport mux{local, remote, secure, datagram};
+    // The secure-datagram (DTLS) member is likewise inert here: it reuses the same default
+    // (invalid) credential and binds no socket unless a "dtls" channel is dialed/accepted.
+    ptls::dtls_transport secure_datagram{io, no_tls};
+    pasio::multiplexing_transport mux{local, remote, secure, datagram, secure_datagram};
 
     std::optional<pio::endpoint> dialed_ep;
     std::unique_ptr<pasio::mux_channel> dialed;

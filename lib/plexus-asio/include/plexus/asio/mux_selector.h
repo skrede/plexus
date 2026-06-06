@@ -32,12 +32,12 @@ enum class reliability_hint : std::uint8_t
 
 // The tag the multiplexing transport maps to one of its member transports: a same-host
 // peer is reached over the local stream, an off-host peer over a network stream. The
-// remote tier holds BOTH the plaintext "tcp" member and the secure "tls" member — the
-// tier classifies locality, not the wire protocol, so "tls" stays remote (and the
-// same-host locality confinement still excludes it: a host-confined peer is never
-// reached over tls even though tls encrypts). The tcp-vs-tls discrimination is the
-// multiplexing transport's job (an exact "tls" scheme branch within the remote tier),
-// not the selector's — the tier enum stays local/remote.
+// remote tier holds the plaintext "tcp"/"udp" members AND the secure "tls"/"dtls" members
+// — the tier classifies locality, not the wire protocol, so "tls" and "dtls" stay remote
+// (and the same-host locality confinement still excludes them: a host-confined peer is
+// never reached over tls or dtls even though they encrypt). The tls-vs-tcp and dtls-vs-udp
+// discrimination is the multiplexing transport's job (exact "tls"/"dtls" scheme branches
+// within the remote tier), not the selector's — the tier enum stays local/remote.
 enum class transport_kind : std::uint8_t
 {
     local,
@@ -47,10 +47,10 @@ enum class transport_kind : std::uint8_t
 // A small value object owned by the multiplexing transport. It holds NO transport
 // handles and NO hint map — it is a pure function of the endpoint scheme (plus the
 // reserved reliability axis). Same-host detection reads ep.scheme: "unix"/"inproc" are
-// same-host (local); everything else, INCLUDING "tcp", "tls", and an unrecognized
-// scheme, classifies remote — the most-restrictive-to-leak default, so a same-host-
-// confined peer is never reached over an unknown transport. "tls" is a remote member
-// alongside "tcp": it rides a network stream, so locality confinement still excludes it.
+// same-host (local); everything else, INCLUDING "tcp", "tls", "udp", "dtls", and an
+// unrecognized scheme, classifies remote — the most-restrictive-to-leak default, so a
+// same-host-confined peer is never reached over an unknown transport. "tls" and "dtls"
+// are remote members: they ride a network path, so locality confinement still excludes them.
 //
 // transport_kind::local names the same-host TIER, not a concrete transport. The current
 // multiplexing transport maps that tier to its only same-host member, AF_UNIX — so an
@@ -78,13 +78,17 @@ public:
     // The two UDP spellings are distinct schemes: plain "udp" is best_effort (lossy);
     // "udpr" is the reliable-datagram opt-in ("udp, reliable" — the shortest plexus-
     // native spelling; "udp+arq" was considered and rejected as noisier on the wire-
-    // scheme). Same-host schemes classify unspecified: locality has already won, so
-    // the reliability axis is moot. An unrecognized scheme also classifies unspecified
-    // — it carries no reliability claim (the tier gate classifies it remote, fail-
-    // closed). This mapping is the contract the routing_engine reliability gate mirrors.
+    // scheme). "dtls" is secure-best_effort (encrypted unreliable datagrams, the secure
+    // parallel of "udp") — so it classifies best_effort here for documentation honesty,
+    // but the mux routes "dtls" by an EXPLICIT scheme branch (like "tls"), not by this
+    // reliability axis; this arm is documentation-only and never reached on the dtls path.
+    // Same-host schemes classify unspecified: locality has already won, so the reliability
+    // axis is moot. An unrecognized scheme also classifies unspecified — it carries no
+    // reliability claim (the tier gate classifies it remote, fail-closed). This mapping is
+    // the contract the routing_engine reliability gate mirrors.
     [[nodiscard]] reliability_hint reliability_of_scheme(std::string_view scheme) const noexcept
     {
-        if(scheme == "udp")
+        if(scheme == "udp" || scheme == "dtls")
             return reliability_hint::best_effort;
         if(scheme == "udpr")
             return reliability_hint::reliable_datagram;
