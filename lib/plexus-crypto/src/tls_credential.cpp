@@ -1,6 +1,7 @@
 #include "plexus/tls/tls_credential.h"
 #include "plexus/tls/verify_policy.h"
 #include "plexus/tls/spki_fingerprint.h"
+#include "plexus/tls/dtls_cookie.h"
 
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
@@ -203,6 +204,45 @@ ssl_ctx_ptr build_ctx(X509 *cert, EVP_PKEY *key, tls_version min_version)
     return ctx;
 }
 
+// The offered ALPN protocol_name_list: one length-prefixed name, "plexus/1" (the
+// in-handshake protocol-version token; a future bump appends "plexus/2"). The
+// client offers it; the server selects it via plexus_alpn_select (fail-closed on
+// no overlap).
+constexpr unsigned char k_alpn_protos[] = {8, 'p', 'l', 'e', 'x', 'u', 's', '/', '1'};
+
+// Build the mutual-auth DTLS SSL_CTX: the same cert/key install + verify policy as
+// the TLS path, but over DTLS_method() pinned to DTLS 1.2 (no 1.3 on this host),
+// with the stateless anti-DoS cookie callbacks + SSL_OP_COOKIE_EXCHANGE and the
+// in-handshake ALPN version gate. load_cert/load_key/check_key_perms and the
+// verify callback are reused verbatim — only the method + DTLS-specific options
+// differ.
+ssl_ctx_ptr build_dtls_ctx(X509 *cert, EVP_PKEY *key)
+{
+    ssl_ctx_ptr ctx(SSL_CTX_new(DTLS_method()), &free_ssl_ctx);
+    if(!ctx)
+        fail("dtls: SSL_CTX_new failed");
+    if(SSL_CTX_set_min_proto_version(ctx.get(), DTLS1_2_VERSION) != 1)
+        fail("dtls: SSL_CTX_set_min_proto_version failed");
+    if(SSL_CTX_set_max_proto_version(ctx.get(), DTLS1_2_VERSION) != 1)
+        fail("dtls: SSL_CTX_set_max_proto_version failed");
+    if(SSL_CTX_use_certificate(ctx.get(), cert) != 1)
+        fail("dtls cert: SSL_CTX_use_certificate failed");
+    if(SSL_CTX_use_PrivateKey(ctx.get(), key) != 1)
+        fail("dtls: cert/key mismatch (SSL_CTX_use_PrivateKey failed)");
+    if(SSL_CTX_check_private_key(ctx.get()) != 1)
+        fail("dtls: cert/key mismatch (SSL_CTX_check_private_key failed)");
+    SSL_CTX_set_verify(ctx.get(),
+                       SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+                       &plexus_tls_verify_callback);
+    SSL_CTX_set_cookie_generate_cb(ctx.get(), &dtls_cookie_generate_cb);
+    SSL_CTX_set_cookie_verify_cb(ctx.get(), &dtls_cookie_verify_cb);
+    SSL_CTX_set_options(ctx.get(), SSL_OP_COOKIE_EXCHANGE);
+    if(SSL_CTX_set_alpn_protos(ctx.get(), k_alpn_protos, sizeof(k_alpn_protos)) != 0)
+        fail("dtls: SSL_CTX_set_alpn_protos failed");
+    SSL_CTX_set_alpn_select_cb(ctx.get(), &plexus_alpn_select, nullptr);
+    return ctx;
+}
+
 }
 
 std::optional<spki_digest> spki_fingerprint(const x509_st &leaf) noexcept
@@ -273,6 +313,26 @@ tls_credential load_credential(const std::string &cert_path,
     x509_ptr cert = load_cert(cert_path);
     evp_key_ptr key = load_key(key_path);
     ssl_ctx_ptr ctx = build_ctx(cert.get(), key.get(), min_version);
+
+    std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> owned(ctx.release(), &free_ssl_ctx);
+    return tls_credential{std::move(owned), std::move(policy)};
+}
+
+tls_credential load_dtls_credential(const std::string &cert_path,
+                                    const std::string &key_path,
+                                    std::shared_ptr<const verify_policy> policy)
+{
+    if(!policy)
+        fail("dtls: a credential requires a verify policy (no fail-open default)");
+    if(!std::filesystem::exists(cert_path))
+        fail("dtls cert: file not found: " + cert_path);
+    if(!std::filesystem::exists(key_path))
+        fail("dtls key: file not found: " + key_path);
+    check_key_perms(key_path);
+
+    x509_ptr cert = load_cert(cert_path);
+    evp_key_ptr key = load_key(key_path);
+    ssl_ctx_ptr ctx = build_dtls_ctx(cert.get(), key.get());
 
     std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> owned(ctx.release(), &free_ssl_ctx);
     return tls_credential{std::move(owned), std::move(policy)};

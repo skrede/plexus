@@ -75,6 +75,18 @@ private:
                                              std::shared_ptr<const verify_policy> policy,
                                              tls_version min_version = tls_version::v1_3);
 
+// Mint a mutual-auth DTLS credential from the same PEM cert + key on disk and the
+// same SPKI-pin verify policy the TLS credential uses (the phase-shared crypto
+// seam). The SSL_CTX is built with DTLS_method() pinned to DTLS 1.2 (the installed
+// OpenSSL has no DTLS 1.3), with the stateless anti-DoS cookie callbacks +
+// SSL_OP_COOKIE_EXCHANGE and the in-handshake ALPN version gate ("plexus/1")
+// installed. A factory (not a method-enum parameter) keeps the two build paths
+// readable and the DTLS-specific options out of the TLS path. Same 0600 key guard,
+// same fail-closed-on-error contract.
+[[nodiscard]] tls_credential load_dtls_credential(const std::string &cert_path,
+                                                  const std::string &key_path,
+                                                  std::shared_ptr<const verify_policy> policy);
+
 }
 
 #endif

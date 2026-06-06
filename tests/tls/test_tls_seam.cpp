@@ -7,6 +7,7 @@
 
 #include "plexus/tls/dtls_policy.h"
 #include "plexus/tls/dtls_channel.h"
+#include "plexus/tls/dtls_cookie.h"
 #include "plexus/tls/detail/dtls_context.h"
 
 #include "plexus/wire/frame.h"
@@ -248,9 +249,54 @@ TEST_CASE("dtls seam: share_context up_refs the SSL_CTX once and returns an owni
     REQUIRE(cred.valid());
     REQUIRE_NOTHROW(ptls::detail::share_dtls_context(cred));
 
-    // A default-constructed credential has no SSL_CTX: share_context fails closed.
+    // A default-constructed credential has no SSL_CTX: share_dtls_context fails closed.
     plexus::tls::tls_credential empty;
-    REQUIRE_THROWS(ptls::detail::share_context(empty));
+    REQUIRE_THROWS(ptls::detail::share_dtls_context(empty));
+}
+
+TEST_CASE("dtls seam: load_dtls_credential builds a valid DTLS SSL_CTX",
+          "[tls][seam][dtls]")
+{
+    identity_fixture self_id("dtls_cred");
+    auto policy = std::make_shared<const ptls::spki_pin_policy>(
+        std::vector<ptls::spki_digest>{self_id.id.digest});
+
+    auto cred = ptls::load_dtls_credential(
+        self_id.id.cert_path.string(), self_id.id.key_path.string(), policy);
+    REQUIRE(cred.valid());
+
+    // The DTLS ctx shares like the TLS one (the up_ref/free accounting is the same).
+    REQUIRE_NOTHROW(ptls::detail::share_dtls_context(cred));
+
+    // A missing verify policy fails closed.
+    REQUIRE_THROWS(ptls::load_dtls_credential(
+        self_id.id.cert_path.string(), self_id.id.key_path.string(), nullptr));
+}
+
+TEST_CASE("dtls seam: the cookie MAC is deterministic per nonce and binds the peer addr",
+          "[tls][seam][dtls]")
+{
+    ptls::dtls_cookie_state state;
+    const unsigned char addr_a[] = {127, 0, 0, 1, 0x1f, 0x90};   // 127.0.0.1:8080
+    const unsigned char addr_b[] = {127, 0, 0, 1, 0x23, 0x28};   // 127.0.0.1:9000
+
+    unsigned char mac_a1[ptls::dtls_cookie_state::k_cookie_len];
+    unsigned char mac_a2[ptls::dtls_cookie_state::k_cookie_len];
+    unsigned char mac_b[ptls::dtls_cookie_state::k_cookie_len];
+
+    REQUIRE(state.compute(addr_a, sizeof(addr_a), true, mac_a1));
+    REQUIRE(state.compute(addr_a, sizeof(addr_a), true, mac_a2));
+    REQUIRE(state.compute(addr_b, sizeof(addr_b), true, mac_b));
+
+    // Same addr + same nonce => same MAC (deterministic); a different addr diverges.
+    REQUIRE(std::memcmp(mac_a1, mac_a2, sizeof(mac_a1)) == 0);
+    REQUIRE(std::memcmp(mac_a1, mac_b, sizeof(mac_a1)) != 0);
+
+    // The previous-nonce MAC differs from the current-nonce MAC (the rotation
+    // window is two distinct secrets).
+    unsigned char mac_a_prev[ptls::dtls_cookie_state::k_cookie_len];
+    REQUIRE(state.compute(addr_a, sizeof(addr_a), false, mac_a_prev));
+    REQUIRE(std::memcmp(mac_a1, mac_a_prev, sizeof(mac_a1)) != 0);
 }
 
 TEST_CASE("tls transport: a DIALED pair completes a real mutual-TLS handshake over loopback, looped",

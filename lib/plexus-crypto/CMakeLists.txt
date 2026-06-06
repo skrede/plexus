@@ -32,7 +32,8 @@ find_package(OpenSSL REQUIRED)
 # the kind is OBJECT, proven by a live link+run, not a green build alone.
 add_library(plexus-crypto OBJECT
     src/tls_credential.cpp
-    src/dtls_context.cpp)
+    src/dtls_context.cpp
+    src/dtls_cookie.cpp)
 add_library(plexus::crypto ALIAS plexus-crypto)
 
 # Headers are exposed as INTERFACE include dirs (PUBLIC so the OBJECT TU itself
