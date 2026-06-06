@@ -313,32 +313,47 @@ TEST_CASE("udp mux: a reliable 'tcp' dial routes to the TCP member, never touchi
     REQUIRE(n.listen_face.datagram.port() == 0);
 }
 
-TEST_CASE("udp mux GUARD: a reliable_datagram 'udpr' dial routes to the TCP stream, NEVER bare UDP",
-          "[udp][mux][route][guard]")
+TEST_CASE("udp mux: a reliable_datagram 'udpr' dial routes to the UDP+ARQ member, NEVER TCP",
+          "[udp][mux][route][flip]")
 {
-    // The load-bearing no-downgrade invariant for the SLICE pause: the datagram-with-
-    // retransmit ARQ does not exist yet, so a "udpr" demand MUST be served over the
-    // reliable STREAM (TCP) member — never over bare best_effort UDP. Pinned by test so
-    // the later retarget of "udpr" to the UDP member is a deliberate, visible change.
+    // THE FLIP (the other half of the no-downgrade fix): the datagram-with-retransmit ARQ
+    // now exists, so a "udpr" demand rides the UDP DATAGRAM member with the ARQ engaged —
+    // not the TCP stream fallback it took before the engine landed. The route and the
+    // channel's reliable mode engage together: the datagram member reads "udpr" and mints
+    // a reliable-datagram channel (its send() drives the selective-repeat engine). The
+    // standing invariant holds — reliable_datagram is NEVER served over bare best_effort
+    // UDP; it was TCP before the ARQ, it is UDP+ARQ now. This deliberately REPLACES the
+    // Slice-A guard assertion (udpr->TCP), making the flip explicit and test-pinned.
     mux_pair n;
-    // The listen face accepts on TCP — the family the guard routes "udpr" to. The UDP
-    // member is also listening to prove "udpr" still does NOT land there.
-    n.listen_face.mux.listen({"tcp", "127.0.0.1:0"});
+    // The listen face accepts on UDP (the family the flip now routes "udpr" to) AND TCP
+    // (to prove "udpr" does NOT land on the stream member any more).
     n.listen_face.mux.listen({"udp", "127.0.0.1:0"});
+    n.listen_face.mux.listen({"tcp", "127.0.0.1:0"});
     n.pump_until([&] { return n.listen_face.datagram.port() != 0; });
 
-    // Dial "udpr" at the TCP member's port: the guard routes a reliable_datagram demand
-    // to the reliable stream. The dialed channel reports "tcp" — proof it rode the
-    // stream member, not the datagram member.
-    n.dial_face.mux.dial({"udpr", "127.0.0.1:" + std::to_string(n.listen_face.remote.port())});
+    // Dial "udpr" at the UDP member's port: the flip routes a reliable_datagram demand to
+    // the datagram member with the ARQ. The dialed channel reports "udpr" — proof it rode
+    // the datagram member in reliable mode, NOT the TCP stream.
+    n.dial_face.mux.dial({"udpr", "127.0.0.1:" + std::to_string(n.listen_face.datagram.port())});
     n.pump_until([&] { return n.dialed && n.accepted; });
 
     REQUIRE(n.dialed != nullptr);
     REQUIRE(n.accepted != nullptr);
-    REQUIRE(n.dialed->remote_endpoint().scheme == "tcp");     // routed to the STREAM member
-    REQUIRE(n.accepted->remote_endpoint().scheme == "tcp");
-    // The dial face's UDP member was NEVER engaged for the "udpr" dial — no bare UDP path.
-    REQUIRE(n.dial_face.datagram.port() == 0);
+    REQUIRE(n.dialed->remote_endpoint().scheme == "udpr");     // routed to the UDP+ARQ member
+    REQUIRE(n.accepted->remote_endpoint().scheme == "udpr");
+    // The dial face's TCP (remote stream) member was NEVER engaged for the "udpr" dial.
+    REQUIRE(n.dial_face.remote.port() == 0);
+
+    // And it delivers in-order reliably: a frame flows through the erased channel's single
+    // send() verb (which now drives the ARQ) and the acceptor posts it identically.
+    std::optional<std::string> got;
+    n.accepted->on_data([&](std::span<const std::byte> b) { got = str_of(b); });
+    const std::string payload = "mux-udpr-reliable";
+    auto frame = bytes_of(payload);
+    n.dialed->send(frame);
+    n.pump_until([&] { return got.has_value(); });
+    REQUIRE(got.has_value());
+    REQUIRE(*got == payload);
 }
 
 #endif  // PLEXUS_HAVE_TLS_MUX

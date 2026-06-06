@@ -21,6 +21,13 @@ enum class io_error : uint8_t
     // node and the channel stays open — a datagram transport surfaces it so a
     // publisher learns the message will never send (rather than a silent drop).
     message_too_large,
+    // A reliable send was refused because the congestion=block backpressure queue is
+    // full: the send window AND the bounded publish-side queue draining it are both
+    // saturated. Distinct from message_too_large (a size cap) and a network drop (the
+    // bytes never left the node, the channel stays open) — the publisher learns the
+    // path is stalled rather than silently growing memory without bound. This is the
+    // future drop-observer's blocked/stalled edge, surfaced today as an error.
+    would_block,
     unknown
 };
 

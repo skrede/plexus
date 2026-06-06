@@ -4,6 +4,8 @@
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/asio_timer.h"
 #include "plexus/asio/detail/udp_reliable_arq.h"
+#include "plexus/asio/detail/udp_handshake_frame.h"
+#include "plexus/asio/detail/udp_backpressure_queue.h"
 
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
@@ -11,6 +13,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/detail/compat.h"
 
@@ -55,20 +58,35 @@ class udp_channel
 {
 public:
     static constexpr std::size_t default_max_payload = 1400;
+    // The bounded congestion=block backpressure queue depth (allocated at setup, never
+    // grown on the hot path): a full send window AND a full queue surface a stall signal
+    // rather than unbounded memory growth (T-15-13). A conservative multiple of the
+    // default window — deep enough to ride a transient window-full burst, bounded so a
+    // sustained overrun fails closed instead of OOMing.
+    static constexpr std::size_t default_backpressure_depth = 1024;
 
     using arq_type = detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
 
     // The reliable-ARQ config is a required-WITH-default ctor argument (the handshake-
     // ladder pattern): production binds the swept defaults; a deterministic test binds a
     // compressed config (a fast RTO / small cap) to exercise the SAME mechanics quickly.
+    // The congestion mode is the per-channel QoS choice (block = the safe reliable
+    // default; drop = the opt-out shed) threaded the same way; the backpressure depth
+    // bounds the block queue.
     udp_channel(::asio::io_context &io, udp_server &server, ::asio::ip::udp::endpoint dest,
                 std::size_t max_payload = default_max_payload,
-                detail::udp_arq_config arq_cfg = {})
+                detail::udp_arq_config arq_cfg = {},
+                io::congestion congestion = io::congestion::block,
+                std::size_t backpressure_depth = default_backpressure_depth,
+                detail::udp_channel_mode mode = detail::udp_channel_mode::best_effort)
         : m_io(io)
         , m_server(server)
         , m_dest(std::move(dest))
         , m_max_payload(max_payload)
         , m_arq_cfg(arq_cfg)
+        , m_congestion(congestion)
+        , m_backpressure(backpressure_depth)
+        , m_mode(mode)
     {
     }
 
@@ -88,8 +106,17 @@ public:
             m_arq->cancel();
     }
 
+    // The single byte_channel send verb. A reliable_datagram-mode channel (the "udpr"
+    // route) dispatches to the in-order ARQ; a best_effort-mode channel (the "udp" route)
+    // is fire-and-forget. This is how the erased mux_channel — which exposes only send() —
+    // engages the ARQ on the flipped "udpr" route without a separate reliable verb.
     void send(std::span<const std::byte> frame)
     {
+        if(m_mode == detail::udp_channel_mode::reliable_datagram)
+        {
+            send_reliable(frame);
+            return;
+        }
         if(!m_open)
             return;
         if(frame.size() + wire::udp_envelope_overhead > m_max_payload)
@@ -106,10 +133,17 @@ public:
         ::asio::post(m_io, [this] { if(m_on_closed) m_on_closed(); });   // posted, never synchronous
     }
 
+    // The scheme reflects the channel's mode so a route is provable end-to-end: a
+    // best_effort channel reports "udp", a reliable_datagram channel reports "udpr". This
+    // lets the mux's "udpr" -> UDP+ARQ flip be test-pinned (the erased channel reports
+    // "udpr", proving it rode the datagram member in reliable mode, NOT the TCP stream).
     [[nodiscard]] io::endpoint remote_endpoint() const
     {
-        return {"udp", m_dest.address().to_string() + ":" + std::to_string(m_dest.port())};
+        const char *scheme = m_mode == detail::udp_channel_mode::reliable_datagram ? "udpr" : "udp";
+        return {scheme, m_dest.address().to_string() + ":" + std::to_string(m_dest.port())};
     }
+
+    [[nodiscard]] detail::udp_channel_mode mode() const noexcept { return m_mode; }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
@@ -118,8 +152,13 @@ public:
 
     // Submit a payload on the RELIABLE in-order path: the selective-repeat ARQ stamps a
     // seq, sends a kind=1 data segment, and retransmits under an adaptive RTO until the
-    // peer acks. A full send window returns window_full (a non-blocking backpressure
-    // signal — the congestion path is a later block; this never stalls the io_context).
+    // peer acks. The congestion mode decides a FULL send window:
+    //   * block (the safe reliable default): enqueue into the BOUNDED publish-side queue
+    //     allocated at setup; the next ack (on_window_advance) drains it by re-submitting
+    //     admissible frames, posted on the executor. publish() stays non-blocking — the
+    //     reliable guarantee is preserved (no drop), the io_context is NEVER blocked. A
+    //     queue at its cap surfaces would_block (the stall signal; never grows unbounded).
+    //   * drop: shed the new frame at the publisher (the opt-out of the guarantee).
     // The ARQ is constructed lazily on first reliable use so a best_effort-only channel
     // pays nothing. Oversize is rejected at publish (the marker byte joins the overhead).
     using submit_result = arq_type::submit_result;
@@ -134,7 +173,10 @@ public:
             return submit_result::window_full;
         }
         ensure_arq();
-        return m_arq->submit(payload);
+        const auto r = m_arq->submit(payload);
+        if(r == submit_result::admitted)
+            return r;
+        return on_window_full(payload);          // block: enqueue/drain; drop: shed
     }
 
     // The reliable-ARQ recv hook (kind=1). The data ARQ is wired here: a kind=1 datagram
@@ -168,6 +210,11 @@ public:
 
     [[nodiscard]] const ::asio::ip::udp::endpoint &dest() const noexcept { return m_dest; }
     [[nodiscard]] bool is_open() const noexcept { return m_open; }
+    [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
+    // The count of frames shed under congestion=drop (the future drop-observer's edge).
+    [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
+    // The current backpressure-queue occupancy (congestion=block); 0 when the window drains.
+    [[nodiscard]] std::size_t backpressured() const noexcept { return m_backpressure.size(); }
 
 private:
     void reject_oversize()
@@ -196,6 +243,45 @@ private:
         });
         m_arq->on_deliver([this](std::span<const std::byte> payload) { post_on_data(payload); });
         m_arq->on_exhausted([this] { if(m_on_error) m_on_error(io::io_error::timed_out); });
+        // congestion=block: when an ack frees window slots, drain the backpressure queue
+        // by re-submitting the admissible queued frames (the window-drain re-arm idiom,
+        // mirroring unix_channel::do_write — never a blocking wait in the ack handler).
+        m_arq->on_window_advance([this] { drain_backpressure(); });
+    }
+
+    // congestion=block enqueues a window-full reliable frame into the bounded queue (the
+    // ack handler drains it); a queue at its cap surfaces would_block (the stall signal —
+    // bounded, never unbounded growth, T-15-13). congestion=drop sheds the frame at the
+    // publisher (the documented opt-out of the reliable guarantee). Either way publish()
+    // stays non-blocking and the io_context is never blocked (T-15-12).
+    submit_result on_window_full(std::span<const std::byte> payload)
+    {
+        if(m_congestion == io::congestion::drop)
+        {
+            ++m_dropped;                          // shed at the publisher (counted for the future observer)
+            return submit_result::window_full;
+        }
+        if(!m_backpressure.admit(payload))
+        {
+            if(m_on_error)
+                m_on_error(io::io_error::would_block);   // queue at cap: the stall edge
+            return submit_result::window_full;
+        }
+        return submit_result::admitted;           // accepted into the queue; will send on the next ack
+    }
+
+    // Re-submit queued frames while the send window has room: each admit pops one. A
+    // submit that returns window_full (a fresh fill between acks) stops the drain — the
+    // remainder waits for the next on_window_advance. Bounded by the queue size; no
+    // hot-path allocation beyond the at-setup queue storage.
+    void drain_backpressure()
+    {
+        while(!m_backpressure.empty() && m_arq && m_arq->window_has_room())
+        {
+            if(m_arq->submit(m_backpressure.front()) != submit_result::admitted)
+                break;
+            m_backpressure.pop_front();
+        }
     }
 
     // Fan a kind=1 inner frame to the ARQ on the ONE inbound demux path: a data segment
@@ -239,6 +325,10 @@ private:
     ::asio::ip::udp::endpoint m_dest;
     std::size_t m_max_payload;
     detail::udp_arq_config m_arq_cfg;
+    io::congestion m_congestion;
+    detail::udp_backpressure_queue m_backpressure;       // bounded congestion=block queue
+    std::size_t m_dropped{0};                            // congestion=drop shed count
+    detail::udp_channel_mode m_mode;                     // best_effort vs reliable_datagram
     std::uint16_t m_out_seq{0};
     wire::udp_dedup_window m_dedup;
     std::vector<std::byte> m_send_scratch;

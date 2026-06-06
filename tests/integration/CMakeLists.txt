@@ -344,6 +344,17 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_stream_channel_asio TEST_PREFIX "integration.")
 
+    # The phase-close cross-class UDP reproducibility gate: a best_effort clean-path flow
+    # AND a reliable-datagram-over-loss flow, each looped 100x in-body; the ctest
+    # invocation is re-run across >=3 process runs (a timing/transport claim is never made
+    # from a single run). Header-only inside plexus::asio; the `udp.` ctest prefix selects
+    # it alongside the asio-dir udp legs.
+    add_executable(test_udp_reproducibility test_udp_reproducibility.cpp)
+    target_link_libraries(test_udp_reproducibility PRIVATE
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_udp_reproducibility TEST_PREFIX "udp.")
+
     # The DIALED AF_UNIX transport oracle over a real local socket: the transport's
     # listen + async-connect dial stand up two peer_sessions (no hand-dial) that
     # handshake to completion, mint non-zero epochs, and flow a real published

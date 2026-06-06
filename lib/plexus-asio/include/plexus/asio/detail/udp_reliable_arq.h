@@ -99,6 +99,13 @@ public:
     void on_deliver(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_deliver = std::move(cb); }
     // the retransmit cap was hit -> the reliable guarantee cannot be met (fatal).
     void on_exhausted(plexus::detail::move_only_function<void()> cb) { m_on_exhausted = std::move(cb); }
+    // a cumulative ack slid the base, so the send window freed slots: the congestion=block
+    // path drains its bounded backpressure queue from here (the window-drain re-arm idiom).
+    void on_window_advance(plexus::detail::move_only_function<void()> cb) { m_on_window_advance = std::move(cb); }
+
+    // Has the send window room for at least one more segment? The congestion=block queue
+    // drainer consults this to re-submit admissible frames without overrunning the window.
+    [[nodiscard]] bool window_has_room() const noexcept { return in_flight() < m_window; }
 
     // Admit a payload into the bounded send window. A full window returns window_full
     // (the congestion path is a later block; this never blocks the io_context). On
@@ -207,14 +214,19 @@ private:
     }
 
     // Cumulative ack: free + cancel every outstanding segment in [m_base, new_base).
+    // A non-empty advance freed window slots -> notify the congestion=block drainer so a
+    // backpressured publisher re-submits the admissible queued frames (posted upstream).
     void slide_to(std::uint16_t new_base)
     {
+        const std::uint16_t before = m_base;
         while(static_cast<std::uint16_t>(new_base - m_base) != 0
               && static_cast<std::uint16_t>(new_base - m_base) < udp_reorder_buffer::half_space)
         {
             free_segment(m_base, /*sample_rtt=*/true);
             ++m_base;
         }
+        if(m_base != before && m_on_window_advance)
+            m_on_window_advance();
     }
 
     // A selectively-acked hole above the base: cancel its retransmit so it is not
@@ -275,6 +287,7 @@ private:
     plexus::detail::move_only_function<void(const wire::udp_ack &)> m_on_send_ack;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_deliver;
     plexus::detail::move_only_function<void()> m_on_exhausted;
+    plexus::detail::move_only_function<void()> m_on_window_advance;
 };
 
 }

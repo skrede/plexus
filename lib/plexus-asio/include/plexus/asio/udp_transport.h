@@ -12,6 +12,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/detail/compat.h"
 
@@ -20,6 +21,7 @@
 
 #include <span>
 #include <memory>
+#include <string>
 #include <vector>
 #include <utility>
 #include <cstddef>
@@ -59,12 +61,14 @@ public:
 
     explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload,
                            arq_type::schedule hs_ladder = arq_type::default_ladder,
-                           detail::udp_arq_config arq_cfg = {})
+                           detail::udp_arq_config arq_cfg = {},
+                           io::congestion congestion = io::congestion::block)
         : m_io(io)
         , m_server(io)
         , m_max_payload(max_payload)
         , m_hs_ladder(hs_ladder)
         , m_arq_cfg(arq_cfg)
+        , m_congestion(congestion)
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { on_datagram(from, bytes); });
         m_server.on_error([this](io::io_error e) { if(m_on_error) m_on_error(e); });
@@ -91,7 +95,9 @@ public:
 
     // dial parses, mints a channel + a handshake ARQ, and fires on_dialed on the ARQ
     // resolving (the paired hs_response arriving) — NOT immediately. ep rides through
-    // the ARQ closures so the engine correlates the completion by endpoint.
+    // the ARQ closures so the engine correlates the completion by endpoint. The scheme
+    // selects the channel mode: "udpr" -> the reliable-datagram ARQ class, anything else
+    // -> best_effort. The mode is declared in the handshake so the acceptor is symmetric.
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;
@@ -101,13 +107,15 @@ public:
 
         ensure_bound(dest.protocol());      // a dial-only transport still needs a bound socket to send/recv
 
-        auto ch = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg);
+        const auto mode = mode_of_scheme(ep.scheme);
+        auto ch = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg,
+                                                m_congestion, udp_channel::default_backpressure_depth, mode);
         auto *raw = ch.get();
         m_demux.insert(dest, raw);
 
         auto arq = std::make_unique<arq_type>(m_io, m_hs_ladder);
         auto *raw_arq = arq.get();
-        raw_arq->on_transmit([this, dest] { send_handshake(dest, hs_type::request); });
+        raw_arq->on_transmit([this, dest, mode] { send_handshake(dest, hs_type::request, mode); });
         raw_arq->on_established([this, ep, raw] { resolve_dial(ep, raw); });
         raw_arq->on_timeout([this, ep, raw] { fail_dial(ep, raw); });
 
@@ -156,10 +164,10 @@ private:
     {
         if(auto hs = detail::decode_handshake(bytes))
         {
-            if(*hs == hs_type::response)
+            if(hs->type == hs_type::response)
                 resolve_paired(ch);
             else
-                send_handshake(from, hs_type::response);   // re-ack a retransmitted request
+                send_handshake(from, hs_type::response, hs->mode);   // re-ack a retransmitted request, echo mode
             return;
         }
         ch->deliver_inbound(bytes);
@@ -167,18 +175,21 @@ private:
 
     // A never-seen source: ONLY a handshake request synthesizes an accept (the source
     // endpoint is not trusted as identity — bare data from an unknown source is
-    // dropped). The demux cap bounds the spoof-flood (T-15-03).
+    // dropped). The demux cap bounds the spoof-flood (T-15-03). The dialer-declared mode
+    // mints a symmetric channel (best_effort or the reliable-datagram ARQ class) and is
+    // echoed in the response so the route flip is symmetric end-to-end.
     void accept_new_peer(const endpoint_type &from, std::span<const std::byte> bytes)
     {
         auto hs = detail::decode_handshake(bytes);
-        if(!hs || *hs != hs_type::request)
+        if(!hs || hs->type != hs_type::request)
             return;
-        auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg);
+        auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg,
+                                                m_congestion, udp_channel::default_backpressure_depth, hs->mode);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
             return;                                        // peer cap reached: drop the flood
         m_accepted[raw] = std::move(ch);
-        send_handshake(from, hs_type::response);           // let the dialer's ARQ resolve
+        send_handshake(from, hs_type::response, hs->mode); // let the dialer's ARQ resolve, echo mode
         if(m_on_accepted)
             m_on_accepted(adopt_accepted(raw));
     }
@@ -229,10 +240,20 @@ private:
         return ch;
     }
 
-    void send_handshake(const endpoint_type &dest, hs_type type)
+    void send_handshake(const endpoint_type &dest, hs_type type,
+                        detail::udp_channel_mode mode = detail::udp_channel_mode::best_effort)
     {
-        detail::encode_handshake_into(m_hs_scratch, type);
+        detail::encode_handshake_into(m_hs_scratch, type, mode);
         m_server.send_to(m_hs_scratch, dest);
+    }
+
+    // The scheme -> channel-mode classifier: "udpr" requests the reliable-datagram ARQ
+    // class; every other scheme (including bare "udp") is best_effort. The mirror of the
+    // mux selector's reliability_of_scheme, applied at the datagram member's dial face.
+    [[nodiscard]] static detail::udp_channel_mode mode_of_scheme(const std::string &scheme) noexcept
+    {
+        return scheme == "udpr" ? detail::udp_channel_mode::reliable_datagram
+                                : detail::udp_channel_mode::best_effort;
     }
 
     void report_dial_fail(const io::endpoint &ep, io::io_error e) { if(m_on_dial_failed) m_on_dial_failed(ep, e); }
@@ -244,6 +265,7 @@ private:
     std::size_t m_max_payload;
     arq_type::schedule m_hs_ladder;
     detail::udp_arq_config m_arq_cfg;
+    io::congestion m_congestion;
     std::vector<std::byte> m_hs_scratch;
     std::unordered_map<udp_channel *, pending_dial> m_pending;
     std::unordered_map<udp_channel *, std::unique_ptr<udp_channel>> m_accepted;

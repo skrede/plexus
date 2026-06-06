@@ -41,13 +41,16 @@ namespace plexus::asio {
 // a unix-listener accept reports "unix", a tcp-listener "tcp", a tls-listener "tls", a
 // udp-listener "udp".
 //
-// RELIABLE-DATAGRAM GUARD (a TEMPORARY routing, not a permanent one): the "udpr" scheme
-// classifies reliable_datagram, but the datagram-with-retransmit ARQ does not exist yet.
-// Until it lands, a "udpr" dial routes to the reliable STREAM member (plain TCP) — NEVER to
-// the bare best_effort UDP member, which would silently serve a reliable request lossily (a
-// reliability downgrade). When the datagram ARQ engine exists, this guard is retargeted so
-// "udpr" rides the UDP member. The standing invariant: reliable_datagram is never served
-// over bare best_effort UDP.
+// RELIABLE-DATAGRAM ROUTE ("udpr" -> the UDP+ARQ member): the "udpr" scheme classifies
+// reliable_datagram and now rides the UDP datagram member with its in-order ARQ engaged
+// (the channel mints in reliable-datagram mode from the scheme, so its send() drives the
+// selective-repeat engine, NOT bare best_effort UDP). The standing invariant holds: a
+// reliable_datagram demand is NEVER served over bare best_effort UDP — it was the reliable
+// STREAM member before the ARQ existed and is the UDP+ARQ member now. Plain reliable "tcp"
+// still routes to the stream member; only the safe destination for "udpr" changed once the
+// ARQ engine landed. The route and the channel's reliable mode engage TOGETHER (the route
+// picks the datagram member; the member reads "udpr" and mints the ARQ channel) — never the
+// route alone (T-15-15).
 //
 // KNOWN TENSION (a deferred strategic fork): the UDP member is the 4th MANDATORY borrowed
 // member, extending the fixed-tuple coupling. Whether the mux composes a variable member
@@ -170,10 +173,11 @@ private:
 
     // The 4-way composition, derived from ep ALONE (the dial(ep) reality): locality wins
     // (same-host -> the local stream); otherwise the remote tier is split by the scheme's
-    // reliability class. best_effort "udp" -> the datagram member; "tls" -> the secure
-    // member; reliable "tcp" -> the plain-TCP stream member; reliable_datagram "udpr" -> the
-    // GUARD: route to the reliable STREAM member (TCP) — NEVER to bare best_effort UDP —
-    // until the datagram ARQ exists, so a reliable request is never silently served lossily.
+    // reliability class. best_effort "udp" -> the datagram member (fire-and-forget); "tls"
+    // -> the secure member; reliable "tcp" -> the plain-TCP stream member; reliable_datagram
+    // "udpr" -> the datagram member with the ARQ engaged (the member reads "udpr" and mints
+    // a reliable channel). Both "udp" and "udpr" land on the datagram member; the channel's
+    // mode (best_effort vs reliable ARQ) is what differs — never a downgrade to bare UDP.
     [[nodiscard]] route route_of(const io::endpoint &ep) const noexcept
     {
         if(m_selector.select(ep, reliability_hint::unspecified) == transport_kind::local)
@@ -183,8 +187,8 @@ private:
         switch(m_selector.reliability_of_scheme(ep.scheme))
         {
             case reliability_hint::best_effort:       return route::datagram;
-            case reliability_hint::reliable_datagram: return route::stream;   // guard: no downgrade to UDP
-            default:                                  return route::stream;   // reliable/unspecified remote
+            case reliability_hint::reliable_datagram: return route::datagram;  // UDP+ARQ (the channel mints reliable)
+            default:                                  return route::stream;    // reliable/unspecified remote
         }
     }
 

@@ -77,3 +77,23 @@ target_link_libraries(test_udp_selector PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_selector TEST_PREFIX "udp.")
+
+# The congestion knobs (D-05) over the reliable-datagram ARQ: congestion=block back-
+# pressures a full window through a bounded ack-drained queue WITHOUT stalling the
+# io_context (a concurrent flow keeps flowing); congestion=drop sheds at the publisher.
+# Header-only inside plexus::asio; the `udp.` ctest prefix selects it.
+add_executable(test_udp_congestion test_udp_congestion.cpp)
+target_link_libraries(test_udp_congestion PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_congestion TEST_PREFIX "udp.")
+
+# The reliable-datagram opt-in engaged through the "udpr" scheme: a "udpr" dial mints a
+# reliable-mode channel (symmetric on both ends) whose send() drives the ARQ in-order
+# over loss; a "udp" dial stays best_effort; oversize rejects at publish on the reliable
+# class too. Header-only inside plexus::asio; the `udp.` ctest prefix selects it.
+add_executable(test_udp_reliable_datagram test_udp_reliable_datagram.cpp)
+target_link_libraries(test_udp_reliable_datagram PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_reliable_datagram TEST_PREFIX "udp.")
