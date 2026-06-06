@@ -164,8 +164,14 @@ void dtls_channel::drain_inbound()
             if(err == SSL_ERROR_ZERO_RETURN)     // clean close_notify
             {
                 m_open = false;
-                if(m_on_closed)
-                    m_on_closed();
+                m_retransmit.cancel();
+                // Post off the current stack, mirroring close(): a consumer that
+                // destroys the channel in its on_closed handler (the natural reaction
+                // to a peer close) would otherwise free `this` mid-drain_inbound,
+                // then the loop / try_complete() touches freed members (a UAF). The
+                // synchronous m_on_error in fail() is only safe because the transport's
+                // error handlers defer destruction; the close path has no such deferral.
+                ::asio::post(m_io, [this] { if(m_on_closed) m_on_closed(); });
                 break;
             }
             drain_outbound();                    // flush any fatal alert to the peer first

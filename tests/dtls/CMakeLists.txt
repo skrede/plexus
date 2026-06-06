@@ -57,6 +57,18 @@ target_link_libraries(test_dtls_pending_abort PRIVATE
 
 catch_discover_tests(test_dtls_pending_abort TEST_PREFIX "dtls.")
 
+# The teardown-discipline proof: the close_notify branch posts on_closed off its
+# own drain_inbound stack (a consumer that destroys the channel in on_closed must
+# not free `this` mid-drain — a UAF under asan), and the inbound demux overwrites a
+# stale entry on a re-insert (a re-dial routes to the new channel, not the old).
+add_executable(test_dtls_teardown test_dtls_teardown.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_dtls_teardown PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_dtls_teardown TEST_PREFIX "dtls.")
+
 # The mux integration proof: the selector classifies "dtls" remote (so locality
 # confinement excludes it); a multiplexing transport over a (unix, tcp, tls, udp,
 # dtls) quintet routes a "dtls" dial to the secure-datagram member (completing a

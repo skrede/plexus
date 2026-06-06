@@ -53,12 +53,17 @@ public:
     }
 
     // Returns false when the peer cap is already reached (the flood guard) so the
-    // caller drops the new source rather than admitting it.
+    // caller drops the new source rather than admitting it. insert_or_assign (NOT
+    // emplace): a re-dial / re-accept to a sender that already has an entry OVERWRITES
+    // the stale pointer with the new channel — emplace was a no-op on an existing key,
+    // so a re-dial silently kept the OLD (possibly torn-down) pointer and the new
+    // channel's inbound never routed. An overwrite to an already-present key does not
+    // grow the map, so the cap guard need only gate genuinely new keys.
     bool insert(const endpoint_type &sender, Channel *channel)
     {
-        if(m_peers.size() >= m_max_peers)
+        if(m_peers.size() >= m_max_peers && m_peers.find(sender) == m_peers.end())
             return false;
-        m_peers.emplace(sender, channel);
+        m_peers.insert_or_assign(sender, channel);
         return true;
     }
 
