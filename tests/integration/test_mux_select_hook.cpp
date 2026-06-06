@@ -102,11 +102,11 @@ TEST_CASE("mux_select_hook: an INJECTED hook routes the dial to the SECOND candi
         dummy_member<1> second;
         // The substitutability proof: an injected hook that returns the LAST candidate
         // index overrides the default — the mux must honor the erased callable, not a
-        // hardcoded first-candidate choice. This is the behavioral substitutability D-02
-        // requires.
+        // hardcoded first-candidate choice. This is the behavioral substitutability the
+        // multi-candidate selection seam requires.
         pio::selection_hook pick_last =
-            [](const pio::endpoint &, std::span<const std::size_t> candidates) -> std::size_t {
-                return candidates.back();
+            [](const pio::endpoint &, std::span<const pio::mux_candidate> candidates) -> std::size_t {
+                return candidates.back().index;
             };
         mux_t mux{first, second, {}, std::move(pick_last)};
 
@@ -127,8 +127,8 @@ TEST_CASE("mux_select_hook: the injected hook also governs listen",
     dummy_member<0> first;
     dummy_member<1> second;
     pio::selection_hook pick_last =
-        [](const pio::endpoint &, std::span<const std::size_t> candidates) -> std::size_t {
-            return candidates.back();
+        [](const pio::endpoint &, std::span<const pio::mux_candidate> candidates) -> std::size_t {
+            return candidates.back().index;
         };
     mux_t mux{first, second, {}, std::move(pick_last)};
 

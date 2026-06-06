@@ -14,6 +14,7 @@
 #include <memory>
 #include <cstddef>
 #include <utility>
+#include <type_traits>
 #include <string_view>
 
 namespace plexus::io {
@@ -42,25 +43,51 @@ concept mux_member = requires(M &m, const endpoint &ep,
     { M::mux_tier } -> std::convertible_to<transport_kind>;
 };
 
+// A per-candidate eligibility descriptor: the value the selection hook reads to pick
+// one member when a tier resolves to N candidates. It carries the candidate's member
+// index plus a small static eligibility flag — whether this candidate is a same-host
+// fast-path (shared-memory) member. The flag is a COMPILE-TIME property of the member
+// type (mux_prefers_shm below), NOT a runtime acquire result: a preference hook reads
+// it to know WHICH candidate is the fast path, then decides at acquire time whether to
+// take it. The descriptor is a small VALUE — the hook receives a span of these, never
+// the members tuple, so the erased signature stays decoupled from the concrete member
+// types (the seed constraint).
+struct mux_candidate
+{
+    std::size_t index        = 0;
+    bool        shm_eligible = false;
+};
+
+// Whether a member is the same-host shared-memory fast-path candidate. Defaults false;
+// a member opts in with `static constexpr bool mux_prefers_shm = true`. A trait (not a
+// concept requirement) so every existing member stays a valid mux_member unchanged.
+template <typename M, typename = void>
+struct member_prefers_shm : std::false_type {};
+
+template <typename M>
+struct member_prefers_shm<M, std::void_t<decltype(M::mux_prefers_shm)>>
+    : std::bool_constant<M::mux_prefers_shm> {};
+
 // The selection hook's erased type: when a tier resolves to N candidate members, the
 // hook picks one by index. It is a cold-path call (dial/listen, never the steady-state
 // message loop), so the type erasure costs an indirection that never touches the hot
 // path; the default below is empty, so it stays in SBO with no allocation. The hook
-// receives the endpoint and the candidate indices — NOT the members tuple: a candidate-
-// metadata-carrying signature is deferred to the same-host shared-memory member, which
-// will finalize whether its same-host preference needs per-candidate metadata and, if
-// so, widen this erased signature (a localized cold-path change; all callers are in-repo).
+// receives the endpoint and a span of per-candidate eligibility descriptors (the index
+// plus the same-host fast-path flag) — NOT the members tuple, so it stays erasable and
+// decoupled from the concrete member types. A same-host-preference hook reads the
+// shm_eligible flag to find the fast-path candidate and decides at acquire time whether
+// to take it or fall back; the default below ignores the flag.
 using selection_hook = plexus::detail::move_only_function<
-    std::size_t(const endpoint &, std::span<const std::size_t>)>;
+    std::size_t(const endpoint &, std::span<const mux_candidate>)>;
 
 // The default hook: return the first candidate, so today's single-candidate tiers behave
 // identically. It is a small empty callable injected at construction (never a setter).
 struct first_candidate
 {
     [[nodiscard]] std::size_t operator()(const endpoint &,
-                                         std::span<const std::size_t> candidates) const noexcept
+                                         std::span<const mux_candidate> candidates) const noexcept
     {
-        return candidates.front();
+        return candidates.front().index;
     }
 };
 
@@ -134,7 +161,7 @@ private:
     [[nodiscard]] std::size_t route_of(const endpoint &ep) noexcept
     {
         const transport_kind tier = tier_of(ep);
-        std::array<std::size_t, sizeof...(Members)> candidates{};
+        std::array<mux_candidate, sizeof...(Members)> candidates{};
         std::size_t count = 0;
         collect_candidates(ep, tier, candidates, count, std::index_sequence_for<Members...>{});
         if(count == 0)
@@ -144,7 +171,7 @@ private:
 
     template <std::size_t... I>
     void collect_candidates(const endpoint &ep, transport_kind tier,
-                            std::array<std::size_t, sizeof...(Members)> &out, std::size_t &count,
+                            std::array<mux_candidate, sizeof...(Members)> &out, std::size_t &count,
                             std::index_sequence<I...>) const noexcept
     {
         (consider<I>(ep, tier, out, count), ...);
@@ -152,7 +179,7 @@ private:
 
     template <std::size_t I>
     void consider(const endpoint &ep, transport_kind tier,
-                  std::array<std::size_t, sizeof...(Members)> &out, std::size_t &count) const noexcept
+                  std::array<mux_candidate, sizeof...(Members)> &out, std::size_t &count) const noexcept
     {
         using M = std::remove_reference_t<std::tuple_element_t<I, std::tuple<Members...>>>;
         if(M::mux_tier != tier)
@@ -160,7 +187,7 @@ private:
         for(std::string_view scheme : M::mux_schemes)
             if(scheme == ep.scheme)
             {
-                out[count++] = I;
+                out[count++] = mux_candidate{I, member_prefers_shm<M>::value};
                 return;
             }
     }
