@@ -25,7 +25,8 @@ add_library(plexus-shm STATIC
     src/shm_backend_version.cpp
     src/region_handle.cpp
     src/posix_shm_region_broker.cpp
-    src/futex_notifier_primitive.cpp)
+    src/futex_notifier_primitive.cpp
+    src/machine_fingerprint.cpp)
 add_library(plexus::shm ALIAS plexus-shm)
 
 target_include_directories(plexus-shm PUBLIC

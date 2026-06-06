@@ -167,6 +167,24 @@ target_link_libraries(test_shm_notifier_lostwakeup PRIVATE
 
 catch_discover_tests(test_shm_notifier_lostwakeup TEST_PREFIX "shm.")
 
+# The first whole-stack cross-process proof: two processes converge on the same
+# deterministically-named regions with no exchange (the machine fingerprint + the
+# direction-discriminated region naming), one creates + publishes, the other
+# attaches + consumes, and a real value round-trips byte-equal over the MAP_SHARED
+# broadcast ring. Links plexus::shm (broker + fingerprint) + plexus::wire (the fqn
+# hash the region naming routes through).
+add_executable(test_shm_same_host_roundtrip test_shm_same_host_roundtrip.cpp)
+
+target_include_directories(test_shm_same_host_roundtrip PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_same_host_roundtrip PRIVATE
+    plexus::shm
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_same_host_roundtrip TEST_PREFIX "shm.")
+
 # The thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
