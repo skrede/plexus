@@ -8,6 +8,7 @@
 
 #include <mutex>
 #include <cstring>
+#include <stdexcept>
 
 namespace plexus::tls {
 
@@ -58,9 +59,13 @@ const unsigned char *addr_of(ssl_st *ssl, std::size_t &len_out)
 
 dtls_cookie_state::dtls_cookie_state()
 {
-    RAND_bytes(m_key.data(), static_cast<int>(m_key.size()));
-    RAND_bytes(m_nonce_cur.data(), static_cast<int>(m_nonce_cur.size()));
-    RAND_bytes(m_nonce_prev.data(), static_cast<int>(m_nonce_prev.size()));
+    // Fail-closed on a degraded RNG: RAND_bytes returns <=1 leaving the buffer
+    // value-initialized to zero, and an all-zero HMAC key silently weakens the
+    // source-spoof cookie to a forgeable constant. Refuse to construct.
+    if(RAND_bytes(m_key.data(), static_cast<int>(m_key.size())) != 1
+       || RAND_bytes(m_nonce_cur.data(), static_cast<int>(m_nonce_cur.size())) != 1
+       || RAND_bytes(m_nonce_prev.data(), static_cast<int>(m_nonce_prev.size())) != 1)
+        throw std::runtime_error("dtls_cookie_state: RAND_bytes failed (degraded RNG)");
     m_last_rotate = std::chrono::steady_clock::now();
 }
 
@@ -68,8 +73,14 @@ void dtls_cookie_state::maybe_rotate(std::chrono::steady_clock::time_point now)
 {
     if(now - m_last_rotate < k_default_rotation)
         return;
+    // Generate the fresh nonce into a temporary FIRST: on RAND_bytes failure retain
+    // the prior good (current+previous) nonces rather than installing a zero nonce.
+    // The validity window simply does not advance until the RNG recovers.
+    std::array<unsigned char, 16> next{};
+    if(RAND_bytes(next.data(), static_cast<int>(next.size())) != 1)
+        return;
     m_nonce_prev = m_nonce_cur;
-    RAND_bytes(m_nonce_cur.data(), static_cast<int>(m_nonce_cur.size()));
+    m_nonce_cur = next;
     m_last_rotate = now;
 }
 
