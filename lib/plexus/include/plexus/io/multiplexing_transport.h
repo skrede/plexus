@@ -42,16 +42,23 @@ concept mux_member = requires(M &m, const endpoint &ep,
     { M::mux_tier } -> std::convertible_to<transport_kind>;
 };
 
-// When a tier resolves to N candidate members, this hook picks one. The default
-// returns the first candidate, so today's single-candidate tiers behave identically.
-// It is construction-injected (never a setter) and receives the endpoint, the
-// candidate indices, and the members tuple, so a same-host preference can plug in
-// without reworking the signature.
+// The selection hook's erased type: when a tier resolves to N candidate members, the
+// hook picks one by index. It is a cold-path call (dial/listen, never the steady-state
+// message loop), so the type erasure costs an indirection that never touches the hot
+// path; the default below is empty, so it stays in SBO with no allocation. The hook
+// receives the endpoint and the candidate indices — NOT the members tuple: a candidate-
+// metadata-carrying signature is deferred to the shared-memory transport phase, which
+// will finalize whether its same-host preference needs per-candidate metadata and, if
+// so, widen this erased signature (a localized cold-path change; all callers are in-repo).
+using selection_hook = plexus::detail::move_only_function<
+    std::size_t(const endpoint &, std::span<const std::size_t>)>;
+
+// The default hook: return the first candidate, so today's single-candidate tiers behave
+// identically. It is a small empty callable injected at construction (never a setter).
 struct first_candidate
 {
-    template <typename Members>
-    [[nodiscard]] std::size_t choose(const endpoint &, std::span<const std::size_t> candidates,
-                                     const Members &) const noexcept
+    [[nodiscard]] std::size_t operator()(const endpoint &,
+                                         std::span<const std::size_t> candidates) const noexcept
     {
         return candidates.front();
     }
@@ -75,10 +82,10 @@ class multiplexing_transport
 {
 public:
     explicit multiplexing_transport(Members &...members, transport_selector selector = {},
-                                    first_candidate hook = {})
+                                    selection_hook hook = first_candidate{})
         : m_members(members...)
         , m_selector(selector)
-        , m_hook(hook)
+        , m_hook(std::move(hook))
     {
         std::apply([this](auto &...m) { (wire_member(m), ...); }, m_members);
     }
@@ -124,7 +131,7 @@ private:
     // selection hook pick one. A scheme no member advertises in its tier resolves to no
     // candidate; the dispatch is then a no-op (the caller cannot form that path for a
     // composition that omits the member).
-    [[nodiscard]] std::size_t route_of(const endpoint &ep) const noexcept
+    [[nodiscard]] std::size_t route_of(const endpoint &ep) noexcept
     {
         const transport_kind tier = tier_of(ep);
         std::array<std::size_t, sizeof...(Members)> candidates{};
@@ -132,7 +139,7 @@ private:
         collect_candidates(ep, tier, candidates, count, std::index_sequence_for<Members...>{});
         if(count == 0)
             return sizeof...(Members);
-        return m_hook.choose(ep, {candidates.data(), count}, m_members);
+        return m_hook(ep, {candidates.data(), count});
     }
 
     template <std::size_t... I>
@@ -172,7 +179,7 @@ private:
 
     std::tuple<Members &...> m_members;
     transport_selector m_selector;
-    first_candidate m_hook;
+    selection_hook m_hook;
     plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>, const endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const endpoint &, io_error)> m_on_dial_failed;
