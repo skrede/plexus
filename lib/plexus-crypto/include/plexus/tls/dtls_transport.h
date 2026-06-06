@@ -107,7 +107,7 @@ public:
             return report_dial_fail(ep, io::io_error::address_in_use);
 
         raw->on_external_complete([this, ep, raw] { resolve_dial(ep, raw); });
-        raw->on_error([this, ep, raw](io::io_error) { fail_dial(ep, raw); });
+        raw->on_error([this, ep, raw](io::io_error e) { fail_dial(ep, raw, e); });
 
         m_pending[raw] = pending_dial{std::move(ch)};
         raw->start_handshake();
@@ -175,7 +175,7 @@ private:
             m_on_dialed(std::move(ch), dialed);
     }
 
-    void fail_dial(const io::endpoint &ep, dtls_channel *raw)
+    void fail_dial(const io::endpoint &ep, dtls_channel *raw, io::io_error e)
     {
         auto it = m_pending.find(raw);
         if(it == m_pending.end())
@@ -188,7 +188,11 @@ private:
         m_demux.erase(it->second.channel->dest());
         defer_destroy(std::move(it->second.channel));
         m_pending.erase(it);
-        report_dial_fail(failed, io::io_error::timed_out);
+        // Thread the channel's actual error through (a verify/pin failure surfaces as
+        // connection_refused, a broken pipe as broken_pipe, a retransmit-exhaustion
+        // timeout as timed_out) so the consumer can distinguish "peer never answered"
+        // from "peer presented an unpinned cert" — diagnostics + retry-policy material.
+        report_dial_fail(failed, e);
     }
 
     // An accepted server channel completed its mutual handshake: hand it to
