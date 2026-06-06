@@ -17,6 +17,7 @@
 
 #include "plexus/detail/compat.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -78,8 +79,31 @@ class shm_topic_registry
 public:
     using deliver_fn = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
-    shm_topic_registry(Broker &broker, reliability rel, congestion cong) noexcept
-        : m_broker(broker), m_reliability(rel), m_congestion(cong)
+    // The notifier-binder: constructs each entry's notifier in place over the ring's
+    // in-region generation word once the ring is bound. A notifier that wakes on a
+    // cross-process futex (the asio reactor bridge) is NOT default-constructible — it
+    // binds to the word + the user's executor — so the registry cannot default-build it
+    // in the entry. The binder injects that construction without coupling the registry
+    // to a concrete notifier's ctor: the default emplaces a default-constructed notifier
+    // (the recording/stub seam), and the asio composition injects a binder that captures
+    // the io_context and emplaces the reactor bridge over (executor, word).
+    using notifier_binder =
+        plexus::detail::move_only_function<void(std::optional<Notifier> &,
+                                                std::atomic<std::uint32_t> &)>;
+
+    // The default binder: emplace a default-constructed notifier, ignoring the word.
+    // The stub/recording notifier the unit oracles use is default-constructible and
+    // wakes nothing, so it needs no word; a real reactor bridge injects a binder that
+    // captures the executor and emplaces over (executor, word).
+    [[nodiscard]] static notifier_binder default_notifier_binder() noexcept
+    {
+        return [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &) { slot.emplace(); };
+    }
+
+    shm_topic_registry(Broker &broker, reliability rel, congestion cong,
+                       notifier_binder bind_notifier = default_notifier_binder()) noexcept
+        : m_broker(broker), m_reliability(rel), m_congestion(cong),
+          m_bind_notifier(std::move(bind_notifier))
     {
     }
 
@@ -109,15 +133,18 @@ public:
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
 
-        // The ring is now bound: build the channel (its subscriber registers a cursor
-        // over the live ring) and arm the notifier with a drain-this-channel callback.
-        // On each cross-process wake the bridge posts this drain onto the user's
-        // executor; the callback borrows the pinned entry by pointer.
-        e->channel.emplace(e->ring, e->notify, m_reliability, m_congestion);
+        // The ring is now bound: construct the notifier over the ring's generation word
+        // (the binder injects an executor for a reactor bridge, or default-builds a stub),
+        // build the channel (its subscriber registers a cursor over the live ring), and arm
+        // the notifier with a drain-this-channel callback. On each cross-process wake the
+        // bridge posts this drain onto the user's executor; the callback borrows the pinned
+        // entry by pointer.
+        m_bind_notifier(e->notify, e->ring.notify_generation());
+        e->channel.emplace(e->ring, *e->notify, m_reliability, m_congestion);
         e->verdict  = verdict;
         e->refcount = 1;
         entry *raw  = e.get();
-        e->notify.arm([raw] {
+        e->notify->arm([raw] {
             deliver_fn discard = [](::plexus::wire_bytes<shm_slot_owner>) {};
             raw->channel->drain(discard);
         });
@@ -204,7 +231,7 @@ private:
         typename Broker::region_handle  control;
         typename Broker::region_handle  slab;
         broadcast_ring                  ring;
-        Notifier                        notify;
+        std::optional<Notifier>         notify;
         std::optional<shm_channel<Notifier>> channel;
         acquire_result                  verdict  = acquire_result::failed;
         int                             refcount = 0;
@@ -267,8 +294,9 @@ private:
     // teardown can never post a drain onto a destroyed subscriber.
     void teardown(entry &e) noexcept
     {
-        e.notify.disarm();   // stop the wake FIRST
-        e.channel.reset();   // THEN destroy the channel (its subscriber the drain touches)
+        if(e.notify)
+            e.notify->disarm(); // stop the wake FIRST
+        e.channel.reset();      // THEN destroy the channel (its subscriber the drain touches)
         // The ring + region handles destruct when the unique_ptr is erased; with the
         // notifier already disarmed and the subscriber already gone, no drain can fire
         // onto destroyed state.
@@ -281,9 +309,10 @@ private:
         m_entries.clear();
     }
 
-    Broker     &m_broker;
-    reliability m_reliability;
-    congestion  m_congestion;
+    Broker         &m_broker;
+    reliability     m_reliability;
+    congestion      m_congestion;
+    notifier_binder m_bind_notifier;
 
     std::unordered_map<key, std::unique_ptr<entry>, key_hash> m_entries;
 };

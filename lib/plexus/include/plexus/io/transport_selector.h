@@ -47,11 +47,13 @@ enum class transport_kind : std::uint8_t
 
 // A small value object owned by the multiplexing transport. It holds NO transport
 // handles and NO hint map — it is a pure function of the endpoint scheme (plus the
-// reserved reliability axis). Same-host detection reads ep.scheme: "unix"/"inproc" are
-// same-host (local); everything else, INCLUDING "tcp", "tls", "udp", "dtls", and an
+// reserved reliability axis). Same-host detection reads ep.scheme: "unix"/"inproc"/"shm"
+// are same-host (local); everything else, INCLUDING "tcp", "tls", "udp", "dtls", and an
 // unrecognized scheme, classifies remote — the most-restrictive-to-leak default, so a
 // same-host-confined peer is never reached over an unknown transport. "tls" and "dtls"
-// are remote members: they ride a network path, so locality confinement still excludes them.
+// are remote members: they ride a network path, so locality confinement still excludes
+// them. "shm" is the same-host shared-memory medium: it rides no wire at all, so it is
+// unconditionally local — the locality confinement it falls under is the tightest there is.
 //
 // transport_kind::local names the same-host TIER, not a concrete transport. The current
 // multiplexing transport maps that tier to its only same-host member, AF_UNIX — so an
@@ -65,7 +67,7 @@ public:
     [[nodiscard]] transport_kind select(const endpoint &ep,
                                         reliability_hint /*reserved for caller composition*/) const noexcept
     {
-        if(ep.scheme == "unix" || ep.scheme == "inproc")
+        if(ep.scheme == "unix" || ep.scheme == "inproc" || ep.scheme == "shm")
             return transport_kind::local;
         return transport_kind::remote;
     }

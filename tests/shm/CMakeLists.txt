@@ -310,7 +310,63 @@ if(LIBURING_FOUND)
 
     catch_discover_tests(test_shm_teardown_race TEST_PREFIX "shm.")
 
+    # The dual-delivery xproc proof: for ONE topic, a same-host SHM ring round-trips a
+    # value over the io_uring-futex reactor bridge AND a cross-host loopback wire path
+    # delivers the same bytes — the SHM upgrade ADDS the fast path, it does not suppress
+    # the wire attach. Same link set as the bridge proof (the bridge + the posix broker +
+    # the futex primitive + the fqn-hash region naming + the io_uring the bridge drives).
+    add_executable(test_shm_dual_delivery test_shm_dual_delivery.cpp)
+
+    target_include_directories(test_shm_dual_delivery PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_dual_delivery PRIVATE
+        plexus::asio
+        plexus::shm
+        plexus::wire
+        PkgConfig::LIBURING
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_dual_delivery TEST_PREFIX "shm.")
+
+    # The composition compile-gate: the shm-bearing all-backends multiplexer (shm as the
+    # second local member alongside AF_UNIX) satisfies transport_backend AND the existing
+    # no-shm composition stays intact. The full member set pulls in the secure (TLS/DTLS)
+    # members, so it links plexus::crypto via the COMDAT-fold object pattern and builds only
+    # when the secure backend is ON.
+    if(PLEXUS_ENABLE_CRYPTO_BACKEND)
+        add_executable(test_shm_mux_composition test_shm_mux_composition.cpp
+            $<TARGET_OBJECTS:plexus-crypto>)
+
+        target_link_libraries(test_shm_mux_composition PRIVATE
+            plexus::plexus
+            plexus::wire
+            plexus::asio
+            plexus::shm
+            plexus::crypto
+            PkgConfig::LIBURING
+            Catch2::Catch2WithMain)
+
+        catch_discover_tests(test_shm_mux_composition TEST_PREFIX "shm.")
+    endif()
+
     message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found — io_uring futex spike + reactor bridge enabled")
 else()
     message(STATUS "plexus shm tests: liburing absent — io_uring futex spike + reactor bridge skipped (non-gating)")
 endif()
+
+# The mux-join selection oracle (header-only, asio/POSIX-free): the shm member composed
+# over the core multiplexer alongside a stream member proves the member satisfies
+# mux_member + byte_channel, the preference hook routes a same-host dial to the shm member
+# when the ring acquires, and the SAME dial falls back to the stream member on a forced
+# broker failure. A heap-backed stub broker + a no-op notifier keep it single-process and
+# deterministic; the TU includes only core headers (the real cross-process data path is the
+# dual_delivery xproc proof).
+add_executable(test_shm_mux test_shm_mux.cpp)
+
+target_link_libraries(test_shm_mux PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_mux TEST_PREFIX "shm.")
