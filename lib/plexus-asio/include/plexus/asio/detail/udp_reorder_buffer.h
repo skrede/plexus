@@ -44,9 +44,15 @@ public:
         out_of_window    // fed seq was at/beyond expected+W -> dropped (bound enforced)
     };
 
-    explicit udp_reorder_buffer(std::size_t window = default_window)
+    // The initial expected seq is a STRUCTURAL ctor argument (defaulting to 0), NOT an
+    // after-the-fact setter: production binds 0 on both ends (the sender's m_next and
+    // this receiver's m_expected both start at 0 — the DOCUMENTED contract that makes the
+    // cumulative-ack edge meaningful from segment one, since the handshake negotiates no
+    // initial sequence). A test that exercises the uint16 wrap binds a non-zero start here.
+    explicit udp_reorder_buffer(std::size_t window = default_window, std::uint16_t initial_seq = 0)
         : m_window(window == 0 ? default_window : window)
         , m_slots(m_window)
+        , m_expected(initial_seq)
     {
     }
 
@@ -91,10 +97,6 @@ public:
     }
 
     [[nodiscard]] std::uint16_t expected() const noexcept { return m_expected; }
-
-    // The seq the receiver started from (its first expected). The cumulative-ack edge
-    // before any delivery is one below this; the ack codec keys hole offsets off it.
-    void set_initial(std::uint16_t initial) noexcept { m_expected = initial; }
 
     // Is the slot at offset `hole` (above the cumulative edge) buffered? Drives the
     // selective-ack bitmap the receiver returns. hole 0 == expected (the gap itself).

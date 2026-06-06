@@ -99,7 +99,11 @@ inline void wrap_udp_into(std::vector<std::byte> &out, udp_envelope_kind kind, s
 // Decode an untrusted datagram. A buffer shorter than the fixed overhead is
 // rejected fail-closed (never index past the span). The reserved FRAGMENTED bit
 // is decoded, not rejected, so a future fragmenting peer's flag is observable
-// without a wire change; this phase never sets it on encode.
+// without a wire change; this phase never sets it on encode. Reserved bits 5..1 are
+// likewise decoded-PERMISSIVE by design (an unknown future bit is silently ignored,
+// never fail-closed) — forward-compat for a later flag, deliberately the OPPOSITE of
+// the strict mode-byte check on the handshake frame (a wire KIND must be exact; a flag
+// bit must be forward-compatible).
 inline std::optional<udp_decode_result> unwrap_udp(std::span<const std::byte> datagram)
 {
     if(datagram.size() < udp_envelope_overhead)

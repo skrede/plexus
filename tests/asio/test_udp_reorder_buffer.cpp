@@ -44,7 +44,8 @@ struct recorder
     std::vector<std::uint16_t> released_seq;
     std::vector<std::string> released_payload;
 
-    explicit recorder(std::size_t window = reorder::default_window) : buf(window)
+    explicit recorder(std::size_t window = reorder::default_window, std::uint16_t initial_seq = 0)
+        : buf(window, initial_seq)
     {
         buf.on_deliver([this](std::uint16_t seq, std::span<const std::byte> b) {
             released_seq.push_back(seq);
@@ -124,8 +125,7 @@ TEST_CASE("udp reorder: a seq at or beyond expected+W is out of window and dropp
 
 TEST_CASE("udp reorder: in-order delivery survives the uint16 65535 -> 0 wrap", "[udp][reorder]")
 {
-    recorder r;
-    r.buf.set_initial(65534);
+    recorder r{reorder::default_window, /*initial_seq=*/65534};
 
     REQUIRE(r.buf.feed(65534, bytes_of("x")) == reorder::outcome::delivered);
     REQUIRE(r.buf.feed(65535, bytes_of("y")) == reorder::outcome::delivered);

@@ -42,8 +42,11 @@ namespace plexus::asio {
 //
 // DIVERGENCE from the stream channels: no stream_inbound / frame_reassembler /
 // slowloris timer (a datagram is a complete message — nothing to reassemble, no
-// partial-frame stall to detect) and no write-queue drain (a datagram send is
-// one-shot). on_protocol_close is STORED and NEVER fired: the byte_channel concept
+// partial-frame stall to detect). The channel owns NO write queue (a datagram send is
+// one-shot at the channel face); the shared udp_server owns the serial outbound queue
+// that keeps each in-flight datagram's bytes alive across its async_send_to, so the
+// channel hands send_to a scratch buffer it may reuse immediately on return.
+// on_protocol_close is STORED and NEVER fired: the byte_channel concept
 // licenses this for a non-stream channel ("no partial frame is expressible without a
 // byte stream", byte_channel.h:43-46) — a malformed datagram is simply dropped.
 //
@@ -99,6 +102,14 @@ public:
     // post could outlive the channel). close() posts on_closed. The ARQ's per-segment
     // retransmit timers are cancelled FIRST so a timer firing after the channel dies is
     // a cancelled no-op (the single-owner discipline — no shared_from_this).
+    //
+    // LIFETIME (the owner's teardown burden, heavier here than on a stream channel):
+    // every inbound datagram posts a this-capturing delivery through post_on_data, so the
+    // channel has MORE in-flight posted-`this` surface than a stream channel (which posts
+    // only reassembled frames). The owner MUST drain/quiesce the executor before destroying
+    // the channel — a posted inbound delivery still dereferences this->m_on_data when it
+    // runs, and the dtor cannot cancel an already-posted handler (only the timers). This
+    // matches the routing_engine LIFETIME note and the codebase-wide posted-`this` contract.
     ~udp_channel()
     {
         m_open = false;
@@ -202,10 +213,14 @@ public:
                 return;                              // duplicate / too_old: drop
             post_on_data(dec->frame);
         }
-        else
+        else if(m_mode == detail::udp_channel_mode::reliable_datagram)
         {
             deliver_reliable(dec->seq, dec->frame);
         }
+        // else: a kind=1 datagram on a best_effort channel is not expected — DROP it.
+        // The source endpoint is not trusted as identity, so routing it to the reliable
+        // path would let a spoofed datagram spin up an unsolicited ARQ engine on a
+        // fire-and-forget channel. Mode, not envelope kind alone, gates the engine.
     }
 
     [[nodiscard]] const ::asio::ip::udp::endpoint &dest() const noexcept { return m_dest; }

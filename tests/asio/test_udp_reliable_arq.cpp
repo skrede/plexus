@@ -250,7 +250,10 @@ struct fixture
             dialed = std::move(ch);
             dialed->on_error([this](plexus::io::io_error e) { dialed_error = e; });
         });
-        client.dial({"udp", "127.0.0.1:" + std::to_string(link->port())});
+        // Dial "udpr" so BOTH ends are reliable_datagram mode: the accepted channel must
+        // be reliable-mode to deliver the kind=1 ARQ segments (a best_effort channel drops
+        // them — the mode, not the envelope kind alone, gates the reliable path).
+        client.dial({"udpr", "127.0.0.1:" + std::to_string(link->port())});
         pump_until(io, [this] { return dialed && accepted; });
     }
 };

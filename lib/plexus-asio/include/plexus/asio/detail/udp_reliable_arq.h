@@ -54,12 +54,28 @@ namespace plexus::asio::detail {
 // NOT a mutable test-only setter.
 struct udp_arq_config
 {
+    // The in-flight segment bound (<= 2^15 for the wrap-safe window invariant). The
+    // selective-ack bitmap (wire::udp_ack::bitmap_bits) names only that many holes above
+    // the cumulative edge, so a window LARGER than bitmap_bits leaves the holes beyond
+    // that offset undescribable in a single ack — they fall back to per-segment RTO-driven
+    // retransmit BY DESIGN (idempotent at the receiver). The static_assert below binds the
+    // default to bitmap_bits so a future sweep that widens the window past the nameable-hole
+    // count is a deliberate, visible choice rather than a silent mismatch.
     std::size_t window{512};                                 // in-flight segment bound (<= 2^15)
     std::chrono::milliseconds initial_rto{200};              // before any RTT sample
     std::chrono::milliseconds min_rto{50};
     std::chrono::milliseconds max_rto{2000};
     std::uint8_t max_retransmit{6};                          // cap -> connection-fatal on exhaustion
 };
+
+// Bind the default window to the selective-ack bitmap width: the default window (512)
+// may exceed bitmap_bits (256) — the excess is RTO-driven retransmit by design, NOT a
+// fully selectively-ackable span. This assert pins the documented relationship (the
+// default is at most 2x the nameable-hole count) so a sweep cannot silently pick a window
+// whose ack-undescribable tail dwarfs the bitmap; widening it past this is a conscious edit.
+static_assert(udp_arq_config{}.window <= wire::udp_ack::bitmap_bits * 2,
+              "default ARQ window outruns the selective-ack bitmap by more than the "
+              "RTO-fallback design budget — widen wire::udp_ack::bitmap_bits with it");
 
 template <typename Executor, typename Timer>
     requires plexus::timer<Timer> && std::constructible_from<Timer, Executor>
@@ -72,12 +88,21 @@ public:
 
     enum class submit_result : std::uint8_t { admitted, window_full };
 
-    explicit udp_reliable_arq(Executor executor, udp_arq_config cfg = {})
+    // The initial sequence is a STRUCTURAL ctor argument (defaulting to 0), NOT an
+    // after-the-fact setter. CONTRACT: both ends start at 0 — the sender's first m_next
+    // and the peer receiver's first m_expected default-construct to 0, and the handshake
+    // negotiates no initial sequence, so the cumulative-ack edge is meaningful from the
+    // first segment. (A per-session random ISN would be negotiated in the handshake and
+    // threaded through this same ctor argument on both ends — it is not built here.) A
+    // deterministic test that exercises the uint16 wrap binds a non-zero start.
+    explicit udp_reliable_arq(Executor executor, udp_arq_config cfg = {}, std::uint16_t initial_seq = 0)
         : m_executor(executor)
         , m_cfg(cfg)
         , m_window(cfg.window == 0 ? std::size_t{512} : std::min(cfg.window, std::size_t{32768}))
         , m_slots(m_window)
-        , m_recv(m_window)
+        , m_recv(m_window, initial_seq)
+        , m_next(initial_seq)
+        , m_base(initial_seq)
         , m_rto(cfg.initial_rto, cfg.min_rto, cfg.max_rto)
     {
         for(auto &s : m_slots)
@@ -147,15 +172,6 @@ public:
             const auto seq = static_cast<std::uint16_t>(ack.cumulative + 2 + i);
             ack_hole(seq);
         }
-    }
-
-    // The receiver's initial expected seq must match the sender's first seq so the
-    // cumulative-ack edge is meaningful from the first segment.
-    void set_initial(std::uint16_t initial) noexcept
-    {
-        m_next = initial;
-        m_base = initial;
-        m_recv.set_initial(initial);
     }
 
     // Owner teardown: cancel every per-segment timer (single-owner discipline).

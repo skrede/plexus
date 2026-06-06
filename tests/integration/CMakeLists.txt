@@ -355,6 +355,18 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_udp_reproducibility TEST_PREFIX "udp.")
 
+    # The outbound-send-lifetime gate: a BURST of sends issued in one turn (no drain
+    # between them) each transmit their OWN bytes — the proof that the shared udp_server
+    # owns each in-flight datagram across its async_send_to (a serial owned queue), not a
+    # reused caller scratch. Covers a best_effort burst, a two-peer same-turn overlap, and
+    # a reliable retransmit interleaved with fresh sends. Looped 100x in-body; re-run >=3
+    # process runs. Header-only inside plexus::asio; the `udp.` ctest prefix selects it.
+    add_executable(test_udp_send_burst test_udp_send_burst.cpp)
+    target_link_libraries(test_udp_send_burst PRIVATE
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_udp_send_burst TEST_PREFIX "udp.")
+
     # The DIALED AF_UNIX transport oracle over a real local socket: the transport's
     # listen + async-connect dial stand up two peer_sessions (no hand-dial) that
     # handshake to completion, mint non-zero epochs, and flow a real published

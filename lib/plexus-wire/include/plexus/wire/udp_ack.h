@@ -35,6 +35,12 @@ enum class udp_arq_kind : std::uint8_t
 // alloc): a 256-bit (32-byte) window of holes, ample for the default send window.
 struct udp_ack
 {
+    // bitmap_bits names the holes ABOVE the cumulative edge a single ack can describe.
+    // The send window may legitimately EXCEED this count: holes beyond offset bitmap_bits
+    // are not nameable in the selective bitmap and fall back to per-segment RTO-driven
+    // retransmit (idempotent at the receiver). The reliable ARQ binds its window's upper
+    // sweep bound to this constant via a static_assert (see udp_reliable_arq.h) so a future
+    // window sweep cannot silently pick a width whose excess is undescribable by surprise.
     static constexpr std::size_t bitmap_bytes = 32;          // 256 holes named per ack
     static constexpr std::size_t bitmap_bits = bitmap_bytes * 8;
 

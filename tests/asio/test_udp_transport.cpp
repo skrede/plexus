@@ -20,6 +20,7 @@
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/udp_transport.h"
 
+#include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
 
 #include "plexus/io/byte_channel.h"
@@ -182,6 +183,65 @@ TEST_CASE("udp oversize: a frame past max_payload is rejected at publish with a 
     h.pump_until([&] { return !h.received.empty(); });
     REQUIRE_FALSE(h.client_error.has_value());
     REQUIRE(h.received.size() == 1);
+}
+
+TEST_CASE("udp dial: a malformed port fails closed via on_dial_failed, never throwing",
+          "[udp][transport][parse]")
+{
+    ::asio::io_context io;
+    pasio::udp_transport client{io};
+
+    std::optional<plexus::io::io_error> dial_error;
+    client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e) { dial_error = e; });
+
+    // A non-numeric / empty / overflowing port must NOT throw out of dial(): the parser
+    // is fail-closed (from_chars, not stoul), so each routes to on_dial_failed.
+    REQUIRE_NOTHROW(client.dial({"udp", "127.0.0.1:not-a-port"}));
+    REQUIRE(dial_error.has_value());
+
+    dial_error.reset();
+    REQUIRE_NOTHROW(client.dial({"udp", "127.0.0.1:"}));
+    REQUIRE(dial_error.has_value());
+
+    dial_error.reset();
+    REQUIRE_NOTHROW(client.dial({"udp", "127.0.0.1:70000"}));   // > 65535
+    REQUIRE(dial_error.has_value());
+
+    dial_error.reset();
+    REQUIRE_NOTHROW(client.dial({"udp", "127.0.0.1:80junk"}));  // trailing junk
+    REQUIRE(dial_error.has_value());
+}
+
+TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ engine",
+          "[udp][transport][mode]")
+{
+    loopback h;
+    REQUIRE(h.accepted != nullptr);
+    REQUIRE(h.accepted->mode() == pasio::detail::udp_channel_mode::best_effort);
+
+    // A spoofed reliable_arq (kind=1) data segment from the peer's source endpoint must be
+    // DROPPED on a best_effort channel — never routed to the reliable path that would
+    // construct an unsolicited ARQ engine and start acking. With seq=0 it would otherwise
+    // be a valid first segment.
+    auto payload = bytes_of("spoofed-reliable");
+    std::vector<std::byte> inner(1 + payload.size());
+    inner[0] = static_cast<std::byte>(wire::udp_arq_kind::segment);
+    for(std::size_t i = 0; i < payload.size(); ++i)
+        inner[i + 1] = payload[i];
+    auto datagram = wire::wrap_udp(wire::udp_envelope_kind::reliable_arq, 0,
+                                   std::span<const std::byte>{inner});
+
+    h.accepted->deliver_inbound(datagram);
+    for(int i = 0; i < 64; ++i)   // drain any (erroneous) posted delivery / ack without a long wait
+    {
+        h.io.poll();
+        if(h.io.stopped())
+            h.io.restart();
+    }
+
+    // The kind=1 datagram was dropped: no in-order payload was posted to on_data, and the
+    // channel never built the reliable engine (a best_effort channel stays fire-and-forget).
+    REQUIRE(h.received.empty());
 }
 
 #ifdef PLEXUS_HAVE_TLS_MUX

@@ -2,11 +2,12 @@
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_UDP_INBOUND_DEMUX_H
 
 #include <asio/ip/udp.hpp>
+#include <asio/ip/address.hpp>
 
-#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <functional>
 #include <unordered_map>
 
 namespace plexus::asio {
@@ -43,7 +44,7 @@ public:
 
     [[nodiscard]] udp_channel *lookup(const endpoint_type &sender) const
     {
-        auto it = m_peers.find(key_of(sender));
+        auto it = m_peers.find(sender);
         return it == m_peers.end() ? nullptr : it->second;
     }
 
@@ -53,25 +54,40 @@ public:
     {
         if(m_peers.size() >= m_max_peers)
             return false;
-        m_peers.emplace(key_of(sender), channel);
+        m_peers.emplace(sender, channel);
         return true;
     }
 
-    void erase(const endpoint_type &sender) { m_peers.erase(key_of(sender)); }
+    void erase(const endpoint_type &sender) { m_peers.erase(sender); }
 
     [[nodiscard]] std::size_t size() const noexcept { return m_peers.size(); }
 
 private:
-    // A printable (addr,port) key — stable across the address family and cheap to
-    // hash. The textual address is the same string the channel reports back as its
-    // remote_endpoint, so the key and the endpoint identity stay in lockstep.
-    static std::string key_of(const endpoint_type &ep)
+    // Hash the endpoint DIRECTLY off its packed (address-bytes, port) — NO per-datagram
+    // textual key is minted, so the hot inbound lookup (once per received datagram) is
+    // allocation-free, honoring the "no allocation on the steady-state hot path" invariant.
+    // v4 packs into the low 4 bytes; v6 mixes all 16. asio's endpoint operator== resolves
+    // collisions exactly (the map's key equality), so the hash need only spread well.
+    struct endpoint_hash
     {
-        return ep.address().to_string() + ":" + std::to_string(ep.port());
-    }
+        std::size_t operator()(const endpoint_type &ep) const noexcept
+        {
+            const auto addr = ep.address();
+            std::size_t h = std::hash<std::uint16_t>{}(ep.port());
+            if(addr.is_v4())
+            {
+                h ^= std::hash<std::uint32_t>{}(addr.to_v4().to_uint()) + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+                return h;
+            }
+            const auto bytes = addr.to_v6().to_bytes();
+            for(auto b : bytes)
+                h ^= std::hash<std::uint8_t>{}(b) + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
 
     std::size_t m_max_peers;
-    std::unordered_map<std::string, udp_channel *> m_peers;
+    std::unordered_map<endpoint_type, udp_channel *, endpoint_hash> m_peers;
 };
 
 }

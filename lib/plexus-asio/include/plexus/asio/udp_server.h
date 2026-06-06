@@ -11,7 +11,9 @@
 #include <asio/ip/udp.hpp>
 
 #include <span>
+#include <deque>
 #include <array>
+#include <vector>
 #include <cstddef>
 #include <utility>
 #include <system_error>
@@ -24,9 +26,20 @@ namespace plexus::asio {
 // facades are stateless views over it. The recv loop reads into a fixed setup-time
 // buffer (>= 65536, the UDP datagram max — reused, never per-datagram allocated)
 // and hands (sender_endpoint, bytes) to an owner-installed callback, which demuxes.
-// send_to(span, dest) wraps async_send_to. Single-owner, bare `this`, no
-// shared_from_this / strand; the owning udp_transport closes the socket before the
-// server dies, so a completion firing after teardown self-guards on operation_aborted.
+//
+// send_to(span, dest) does NOT reference the caller's bytes across the async op:
+// asio buffers are non-owning views and async_send_to does not copy, so a caller-
+// owned scratch buffer reused on the next send would transmit corrupted bytes on a
+// burst / retransmit-vs-send / multi-peer overlap. Instead the caller's bytes are
+// copied SYNCHRONOUSLY into an OWNED outbound-queue node (the same write-queue
+// discipline the stream channels use), and the queue drains SERIALLY with at most
+// one outstanding async_send_to: the completion pops the front and chains the next.
+// The owned node captures the FULLY-WRAPPED outer datagram, so every caller-side
+// scratch (outer and inner) is only ever read synchronously into the node.
+//
+// Single-owner, bare `this`, no shared_from_this / strand; the owning udp_transport
+// closes the socket before the server dies, so a completion firing after teardown
+// self-guards on operation_aborted.
 class udp_server
 {
 public:
@@ -57,12 +70,16 @@ public:
         do_receive();
     }
 
+    // Copy the caller's bytes into an owned queue node (synchronously, so the caller's
+    // scratch buffer is never referenced live across the async op) and drive the serial
+    // drain. The queue node owns the datagram until its completion pops it.
     void send_to(std::span<const std::byte> bytes, const endpoint_type &dest)
     {
         if(!m_open)
             return;
-        m_socket.async_send_to(::asio::buffer(bytes.data(), bytes.size()), dest,
-            [this](std::error_code ec, std::size_t) { if(ec) report(ec); });
+        m_send_queue.push_back(outbound{std::vector<std::byte>(bytes.begin(), bytes.end()), dest});
+        if(!m_sending)
+            do_send();
     }
 
     // Installed by the transport: (sender, datagram bytes) per inbound completion.
@@ -88,9 +105,42 @@ public:
         std::error_code ec;
         (void)m_socket.close(ec);
         m_open = false;
+        m_sending = false;
+        m_send_queue.clear();
     }
 
 private:
+    struct outbound
+    {
+        std::vector<std::byte> bytes;
+        endpoint_type dest;
+    };
+
+    // Drain the owned outbound queue serially: send the front node, and on completion
+    // pop it and chain the next. At most one async_send_to is outstanding, so a node's
+    // bytes stay valid until its own completion runs (the stream-channel write-queue
+    // discipline applied to the connectionless socket).
+    void do_send()
+    {
+        if(m_send_queue.empty())
+        {
+            m_sending = false;
+            return;
+        }
+        m_sending = true;
+        const auto &front = m_send_queue.front();
+        m_socket.async_send_to(::asio::buffer(front.bytes), front.dest,
+            [this](std::error_code ec, std::size_t)
+            {
+                if(ec)
+                    report(ec);
+                if(!m_open)
+                    return;
+                m_send_queue.pop_front();
+                do_send();
+            });
+    }
+
     void do_receive()
     {
         m_socket.async_receive_from(::asio::buffer(m_recv_buf), m_sender,
@@ -123,9 +173,11 @@ private:
     ::asio::ip::udp::socket m_socket;
     endpoint_type m_sender{};
     std::array<std::byte, 65536> m_recv_buf{};
+    std::deque<outbound> m_send_queue;          // owned outbound datagrams, drained serially
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     bool m_open{false};
+    bool m_sending{false};                      // one async_send_to outstanding at a time
 };
 
 }
