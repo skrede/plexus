@@ -126,7 +126,18 @@ target_link_libraries(test_shm_selection PRIVATE
 
 catch_discover_tests(test_shm_selection TEST_PREFIX "shm.")
 
-# The D-10 thread-free notifier spike (NON-GATING): probes whether an
+# The two core seams (region_broker + notifier): stub models prove the concepts are
+# satisfiable and the notifier's drain is a move-only callback, with no POSIX/asio in
+# the core translation unit.
+add_executable(test_shm_seams test_shm_seams.cpp)
+
+target_link_libraries(test_shm_seams PRIVATE
+    plexus::plexus
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_seams TEST_PREFIX "shm.")
+
+# The thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
 # liburing is found (the io_uring path's optional dependency, the OpenSSL trust
