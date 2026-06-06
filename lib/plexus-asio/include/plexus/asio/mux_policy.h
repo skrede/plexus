@@ -2,8 +2,8 @@
 #define HPP_GUARD_PLEXUS_ASIO_MUX_POLICY_H
 
 #include "plexus/asio/asio_timer.h"
-#include "plexus/asio/mux_channel.h"
 
+#include "plexus/io/polymorphic_byte_channel.h"
 #include "plexus/policy.h"
 #include "plexus/detail/compat.h"
 
@@ -16,7 +16,7 @@
 namespace plexus::asio {
 
 // The MULTI-transport asio Policy: a near-verbatim clone of asio_policy/unix_policy
-// swapping the byte_channel to the type-erased mux_channel — the io_context executor
+// swapping the byte_channel to the type-erased polymorphic_byte_channel — the io_context executor
 // (carried by reference, the hot-path substrate), the steady-timer, and the
 // shared_ptr<const void> byte_owner are reused unchanged. The static post() forwards
 // onto the io_context. A node binds this Policy only when it drives more than one wire
@@ -26,7 +26,7 @@ namespace plexus::asio {
 struct mux_policy
 {
     using executor_type = ::asio::io_context &;
-    using byte_channel_type = mux_channel;
+    using byte_channel_type = io::polymorphic_byte_channel;
     using timer_type = asio_timer;
     using byte_owner = std::shared_ptr<const void>;
 

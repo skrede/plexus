@@ -5,15 +5,15 @@
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_policy.h"
 #include "plexus/asio/detail/asio_error_map.h"
-#include "plexus/asio/detail/udp_inbound_demux.h"
-#include "plexus/asio/detail/udp_handshake_arq.h"
-#include "plexus/asio/detail/udp_handshake_frame.h"
+#include "plexus/asio/detail/asio_inbound_demux.h"
 #include "plexus/asio/detail/asio_udp_endpoint_parse.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/detail/udp_handshake_arq.h"
+#include "plexus/io/detail/udp_handshake_frame.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -56,12 +56,12 @@ class udp_transport
 {
 public:
     using endpoint_type = ::asio::ip::udp::endpoint;
-    using arq_type = detail::udp_handshake_arq<udp_policy>;
-    using hs_type = detail::udp_hs_type;
+    using arq_type = io::detail::udp_handshake_arq<udp_policy>;
+    using hs_type = io::detail::udp_hs_type;
 
     explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload,
                            arq_type::schedule hs_ladder = arq_type::default_ladder,
-                           detail::udp_arq_config arq_cfg = {},
+                           io::detail::udp_arq_config arq_cfg = {},
                            io::congestion congestion = io::congestion::block)
         : m_io(io)
         , m_server(io)
@@ -162,7 +162,7 @@ private:
     // is data the channel deduplicates and posts.
     void route_to_peer(const endpoint_type &from, udp_channel *ch, std::span<const std::byte> bytes)
     {
-        if(auto hs = detail::decode_handshake(bytes))
+        if(auto hs = io::detail::decode_handshake(bytes))
         {
             if(hs->type == hs_type::response)
                 resolve_paired(ch);
@@ -180,7 +180,7 @@ private:
     // echoed in the response so the route flip is symmetric end-to-end.
     void accept_new_peer(const endpoint_type &from, std::span<const std::byte> bytes)
     {
-        auto hs = detail::decode_handshake(bytes);
+        auto hs = io::detail::decode_handshake(bytes);
         if(!hs || hs->type != hs_type::request)
             return;
         auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg,
@@ -241,19 +241,19 @@ private:
     }
 
     void send_handshake(const endpoint_type &dest, hs_type type,
-                        detail::udp_channel_mode mode = detail::udp_channel_mode::best_effort)
+                        io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort)
     {
-        detail::encode_handshake_into(m_hs_scratch, type, mode);
+        io::detail::encode_handshake_into(m_hs_scratch, type, mode);
         m_server.send_to(m_hs_scratch, dest);
     }
 
     // The scheme -> channel-mode classifier: "udpr" requests the reliable-datagram ARQ
     // class; every other scheme (including bare "udp") is best_effort. The mirror of the
     // mux selector's reliability_of_scheme, applied at the datagram member's dial face.
-    [[nodiscard]] static detail::udp_channel_mode mode_of_scheme(const std::string &scheme) noexcept
+    [[nodiscard]] static io::detail::udp_channel_mode mode_of_scheme(const std::string &scheme) noexcept
     {
-        return scheme == "udpr" ? detail::udp_channel_mode::reliable_datagram
-                                : detail::udp_channel_mode::best_effort;
+        return scheme == "udpr" ? io::detail::udp_channel_mode::reliable_datagram
+                                : io::detail::udp_channel_mode::best_effort;
     }
 
     void report_dial_fail(const io::endpoint &ep, io::io_error e) { if(m_on_dial_failed) m_on_dial_failed(ep, e); }
@@ -264,7 +264,7 @@ private:
     detail::udp_inbound_demux m_demux;
     std::size_t m_max_payload;
     arq_type::schedule m_hs_ladder;
-    detail::udp_arq_config m_arq_cfg;
+    io::detail::udp_arq_config m_arq_cfg;
     io::congestion m_congestion;
     std::vector<std::byte> m_hs_scratch;
     std::unordered_map<udp_channel *, pending_dial> m_pending;

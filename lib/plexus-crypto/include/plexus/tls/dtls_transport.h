@@ -8,7 +8,7 @@
 
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/detail/asio_error_map.h"
-#include "plexus/asio/detail/udp_inbound_demux.h"
+#include "plexus/asio/detail/asio_inbound_demux.h"
 #include "plexus/asio/detail/asio_udp_endpoint_parse.h"
 
 #include "plexus/io/endpoint.h"

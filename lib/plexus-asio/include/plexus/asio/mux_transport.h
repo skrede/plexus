@@ -2,10 +2,8 @@
 #define HPP_GUARD_PLEXUS_ASIO_MUX_TRANSPORT_H
 
 #include "plexus/asio/mux_policy.h"
-#include "plexus/asio/mux_channel.h"
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/asio_channel.h"
-#include "plexus/asio/mux_selector.h"
 #include "plexus/asio/unix_channel.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
@@ -19,6 +17,8 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/transport_selector.h"
+#include "plexus/io/polymorphic_byte_channel.h"
 #include "plexus/detail/compat.h"
 
 #include <memory>
@@ -37,7 +37,7 @@ namespace plexus::asio {
 // "udp" -> the datagram member, reliable "tcp" -> the plain-TCP member; and the reliable-
 // datagram "udpr" -> the SLICE-state guard below. It delegates to ONE chosen concrete
 // transport; that transport's
-// completion (wired once in the ctor) wraps its concrete channel in a mux_channel and
+// completion (wired once in the ctor) wraps its concrete channel in a polymorphic_byte_channel and
 // re-emits it to the engine with the SAME ep — so the registry's existing endpoint-
 // correlation demuxes mux completions with zero engine/registry change. listen(ep) routes
 // the same way, so a mux node accepts on all families by listening once per family. An
@@ -76,7 +76,7 @@ class multiplexing_transport
 public:
     multiplexing_transport(unix_transport &local, asio_transport &remote, tls::tls_transport &secure,
                            udp_transport &datagram, tls::dtls_transport &secure_datagram,
-                           transport_selector selector = {})
+                           io::transport_selector selector = {})
         : m_local(local)
         , m_remote(remote)
         , m_secure(secure)
@@ -154,8 +154,8 @@ public:
     multiplexing_transport(const multiplexing_transport &) = delete;
     multiplexing_transport &operator=(const multiplexing_transport &) = delete;
 
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<mux_channel>)> cb) { m_on_accepted = std::move(cb); }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<mux_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<io::polymorphic_byte_channel>)> cb) { m_on_accepted = std::move(cb); }
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<io::polymorphic_byte_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
 
@@ -208,7 +208,7 @@ private:
     // classifies local and is never reached over tls or dtls even though they encrypt.
     [[nodiscard]] route route_of(const io::endpoint &ep) const noexcept
     {
-        if(m_selector.select(ep, reliability_hint::unspecified) == transport_kind::local)
+        if(m_selector.select(ep, io::reliability_hint::unspecified) == io::transport_kind::local)
             return route::local;
         if(ep.scheme == "tls")
             return route::secure;
@@ -216,16 +216,16 @@ private:
             return route::secure_datagram;
         switch(m_selector.reliability_of_scheme(ep.scheme))
         {
-            case reliability_hint::best_effort:       return route::datagram;
-            case reliability_hint::reliable_datagram: return route::datagram;  // UDP+ARQ (the channel mints reliable)
+            case io::reliability_hint::best_effort:       return route::datagram;
+            case io::reliability_hint::reliable_datagram: return route::datagram;  // UDP+ARQ (the channel mints reliable)
             default:                                  return route::stream;    // reliable/unspecified remote
         }
     }
 
     template <typename C>
-    static std::unique_ptr<mux_channel> wrap(std::unique_ptr<C> ch)
+    static std::unique_ptr<io::polymorphic_byte_channel> wrap(std::unique_ptr<C> ch)
     {
-        return std::make_unique<mux_channel>(std::make_unique<channel_adapter<C>>(std::move(ch)));
+        return std::make_unique<io::polymorphic_byte_channel>(std::make_unique<io::channel_adapter<C>>(std::move(ch)));
     }
 
     unix_transport &m_local;
@@ -233,9 +233,9 @@ private:
     tls::tls_transport &m_secure;
     udp_transport &m_datagram;
     tls::dtls_transport &m_secure_datagram;
-    transport_selector m_selector;
-    plexus::detail::move_only_function<void(std::unique_ptr<mux_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<mux_channel>, const io::endpoint &)> m_on_dialed;
+    io::transport_selector m_selector;
+    plexus::detail::move_only_function<void(std::unique_ptr<io::polymorphic_byte_channel>)> m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<io::polymorphic_byte_channel>, const io::endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
 };

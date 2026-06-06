@@ -3,9 +3,6 @@
 
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/asio_timer.h"
-#include "plexus/asio/detail/udp_reliable_arq.h"
-#include "plexus/asio/detail/udp_handshake_frame.h"
-#include "plexus/asio/detail/udp_backpressure_queue.h"
 
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
@@ -15,6 +12,9 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/detail/udp_reliable_arq.h"
+#include "plexus/io/detail/udp_handshake_frame.h"
+#include "plexus/io/detail/udp_backpressure_queue.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -68,7 +68,7 @@ public:
     // sustained overrun fails closed instead of OOMing.
     static constexpr std::size_t default_backpressure_depth = 1024;
 
-    using arq_type = detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
+    using arq_type = io::detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
 
     // The reliable-ARQ config is a required-WITH-default ctor argument (the handshake-
     // ladder pattern): production binds the swept defaults; a deterministic test binds a
@@ -78,10 +78,10 @@ public:
     // bounds the block queue.
     udp_channel(::asio::io_context &io, udp_server &server, ::asio::ip::udp::endpoint dest,
                 std::size_t max_payload = default_max_payload,
-                detail::udp_arq_config arq_cfg = {},
+                io::detail::udp_arq_config arq_cfg = {},
                 io::congestion congestion = io::congestion::block,
                 std::size_t backpressure_depth = default_backpressure_depth,
-                detail::udp_channel_mode mode = detail::udp_channel_mode::best_effort)
+                io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort)
         : m_io(io)
         , m_server(server)
         , m_dest(std::move(dest))
@@ -119,11 +119,11 @@ public:
 
     // The single byte_channel send verb. A reliable_datagram-mode channel (the "udpr"
     // route) dispatches to the in-order ARQ; a best_effort-mode channel (the "udp" route)
-    // is fire-and-forget. This is how the erased mux_channel — which exposes only send() —
+    // is fire-and-forget. This is how the erased polymorphic_byte_channel — which exposes only send() —
     // engages the ARQ on the flipped "udpr" route without a separate reliable verb.
     void send(std::span<const std::byte> frame)
     {
-        if(m_mode == detail::udp_channel_mode::reliable_datagram)
+        if(m_mode == io::detail::udp_channel_mode::reliable_datagram)
         {
             send_reliable(frame);
             return;
@@ -150,11 +150,11 @@ public:
     // "udpr", proving it rode the datagram member in reliable mode, NOT the TCP stream).
     [[nodiscard]] io::endpoint remote_endpoint() const
     {
-        const char *scheme = m_mode == detail::udp_channel_mode::reliable_datagram ? "udpr" : "udp";
+        const char *scheme = m_mode == io::detail::udp_channel_mode::reliable_datagram ? "udpr" : "udp";
         return {scheme, m_dest.address().to_string() + ":" + std::to_string(m_dest.port())};
     }
 
-    [[nodiscard]] detail::udp_channel_mode mode() const noexcept { return m_mode; }
+    [[nodiscard]] io::detail::udp_channel_mode mode() const noexcept { return m_mode; }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
@@ -213,7 +213,7 @@ public:
                 return;                              // duplicate / too_old: drop
             post_on_data(dec->frame);
         }
-        else if(m_mode == detail::udp_channel_mode::reliable_datagram)
+        else if(m_mode == io::detail::udp_channel_mode::reliable_datagram)
         {
             deliver_reliable(dec->seq, dec->frame);
         }
@@ -339,11 +339,11 @@ private:
     udp_server &m_server;
     ::asio::ip::udp::endpoint m_dest;
     std::size_t m_max_payload;
-    detail::udp_arq_config m_arq_cfg;
+    io::detail::udp_arq_config m_arq_cfg;
     io::congestion m_congestion;
-    detail::udp_backpressure_queue m_backpressure;       // bounded congestion=block queue
+    io::detail::udp_backpressure_queue m_backpressure;       // bounded congestion=block queue
     std::size_t m_dropped{0};                            // congestion=drop shed count
-    detail::udp_channel_mode m_mode;                     // best_effort vs reliable_datagram
+    io::detail::udp_channel_mode m_mode;                     // best_effort vs reliable_datagram
     std::uint16_t m_out_seq{0};
     wire::udp_dedup_window m_dedup;
     std::vector<std::byte> m_send_scratch;
