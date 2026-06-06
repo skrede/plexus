@@ -22,7 +22,9 @@ endif()
 # archive is the honest shape. Link deps are PUBLIC plexus::plexus + plexus::wire
 # — explicitly NOT asio.
 add_library(plexus-shm STATIC
-    src/shm_backend_version.cpp)
+    src/shm_backend_version.cpp
+    src/region_handle.cpp
+    src/posix_shm_region_broker.cpp)
 add_library(plexus::shm ALIAS plexus-shm)
 
 target_include_directories(plexus-shm PUBLIC

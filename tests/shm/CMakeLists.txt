@@ -137,6 +137,21 @@ target_link_libraries(test_shm_seams PRIVATE
 
 catch_discover_tests(test_shm_seams TEST_PREFIX "shm.")
 
+# The POSIX region broker: create mints a 0600 /dev/shm region (creator owns the
+# unlink), attach maps an existing one, unlink_stale_on_create reclaims an orphan,
+# and an oversize create fast-fails before any syscall. Links plexus::shm for the
+# compiled broker bodies (shm_open/mmap/ftruncate/shm_unlink).
+add_executable(test_shm_region_broker test_shm_region_broker.cpp)
+
+target_include_directories(test_shm_region_broker PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_region_broker PRIVATE
+    plexus::shm
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_region_broker TEST_PREFIX "shm.")
+
 # The thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
