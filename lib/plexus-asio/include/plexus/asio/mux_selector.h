@@ -4,17 +4,30 @@
 #include "plexus/io/endpoint.h"
 
 #include <cstdint>
+#include <string_view>
 
 namespace plexus::asio {
 
-// A reserved delivery-guarantee axis. Today the only value is `unspecified`: TCP and
-// AF_UNIX are both lossless ordered streams, so this axis does not distinguish a
-// transport until a lossy datagram backend exists. The selector signature TAKES this
-// parameter so the guarantee enumerators can land later WITHOUT reshaping select() or
-// its callers.
+// The delivery-guarantee axis the selector composes with the locality tier. The
+// enumerators are now live (a lossy datagram backend exists): a scheme classifies
+// into ONE of these classes.
+//   * unspecified  — the scheme makes no reliability claim of its own (same-host
+//     "unix"/"inproc", where locality wins and the axis is moot; or an unrecognized
+//     scheme that carries no claim).
+//   * best_effort  — lossy, fire-and-forget datagrams (the "udp" scheme).
+//   * reliable     — a lossless ordered stream (the "tcp"/"tls" schemes).
+//   * reliable_datagram — the datagram-with-retransmit opt-in (the "udpr" scheme):
+//     a reliable guarantee over a datagram substrate. Until its data ARQ engine
+//     exists, the multiplexing transport routes it to the reliable STREAM member
+//     (never to bare best_effort UDP — that would silently downgrade the guarantee).
+// select() still TAKES a hint param (unchanged signature); the mux derives the hint
+// from ep.scheme via reliability_of_scheme so the axis reaches dial(ep).
 enum class reliability_hint : std::uint8_t
 {
     unspecified = 0,
+    best_effort,
+    reliable,
+    reliable_datagram,
 };
 
 // The tag the multiplexing transport maps to one of its member transports: a same-host
@@ -49,11 +62,35 @@ class transport_selector
 {
 public:
     [[nodiscard]] transport_kind select(const io::endpoint &ep,
-                                        reliability_hint /*reserved, ignored today*/) const noexcept
+                                        reliability_hint /*reserved for caller composition*/) const noexcept
     {
         if(ep.scheme == "unix" || ep.scheme == "inproc")
             return transport_kind::local;
         return transport_kind::remote;
+    }
+
+    // Classify an endpoint scheme into its reliability class — the value-object
+    // expression of the (locality-tier, scheme->reliability) composition that is
+    // REACHABLE through dial(ep), where the scheme is the only routing discriminator
+    // the engine path carries. The mux feeds ep.scheme through here instead of
+    // hardcoding a reserved hint, so the reliable-datagram opt-in is engine-reachable.
+    //
+    // The two UDP spellings are distinct schemes: plain "udp" is best_effort (lossy);
+    // "udpr" is the reliable-datagram opt-in ("udp, reliable" — the shortest plexus-
+    // native spelling; "udp+arq" was considered and rejected as noisier on the wire-
+    // scheme). Same-host schemes classify unspecified: locality has already won, so
+    // the reliability axis is moot. An unrecognized scheme also classifies unspecified
+    // — it carries no reliability claim (the tier gate classifies it remote, fail-
+    // closed). This mapping is the contract the routing_engine reliability gate mirrors.
+    [[nodiscard]] reliability_hint reliability_of_scheme(std::string_view scheme) const noexcept
+    {
+        if(scheme == "udp")
+            return reliability_hint::best_effort;
+        if(scheme == "udpr")
+            return reliability_hint::reliable_datagram;
+        if(scheme == "tcp" || scheme == "tls")
+            return reliability_hint::reliable;
+        return reliability_hint::unspecified;   // unix/inproc (local) and unknown: no claim
     }
 };
 

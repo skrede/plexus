@@ -2,6 +2,7 @@
 #include "plexus/asio/mux_channel.h"
 #include "plexus/asio/mux_selector.h"
 #include "plexus/asio/mux_transport.h"
+#include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
 
@@ -135,7 +136,10 @@ struct mux_face
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
     ptls::tls_transport secure;
-    pasio::multiplexing_transport mux{local, remote, secure};
+    // The datagram member stays inert on these tls/tcp routes — its socket is only ever
+    // bound when a "udp" channel is actually dialed/accepted, which these faces never do.
+    pasio::udp_transport datagram{io};
+    pasio::multiplexing_transport mux{local, remote, secure, datagram};
 
     mux_face(::asio::io_context &ctx, ptls::tls_credential c)
         : io(ctx)

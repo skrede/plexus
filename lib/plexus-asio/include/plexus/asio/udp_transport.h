@@ -193,10 +193,14 @@ private:
         auto it = m_pending.find(raw);
         if(it == m_pending.end())
             return;
+        // COPY ep before the erase: ep is bound to the pending entry's ARQ-closure
+        // capture, which erase() destroys — re-emitting the freed reference is a
+        // use-after-free (an on_dialed consumer that copies the endpoint reads it).
+        const io::endpoint dialed = ep;
         auto ch = std::move(it->second.channel);
         m_pending.erase(it);
         if(m_on_dialed)
-            m_on_dialed(std::move(ch), ep);
+            m_on_dialed(std::move(ch), dialed);
     }
 
     void fail_dial(const io::endpoint &ep, udp_channel *raw)
@@ -204,9 +208,12 @@ private:
         auto it = m_pending.find(raw);
         if(it == m_pending.end())
             return;
+        // COPY ep before the erase, for the same reason as resolve_dial: the pending
+        // entry owns the ARQ closure that ep is bound to.
+        const io::endpoint failed = ep;
         m_demux.erase(it->second.channel->dest());
         m_pending.erase(it);
-        report_dial_fail(ep, io::io_error::timed_out);
+        report_dial_fail(failed, io::io_error::timed_out);
     }
 
     // Transfer ownership of an accepted channel out to the on_accepted callback while

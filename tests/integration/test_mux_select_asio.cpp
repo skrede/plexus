@@ -2,6 +2,7 @@
 #include "plexus/asio/mux_channel.h"
 #include "plexus/asio/mux_selector.h"
 #include "plexus/asio/mux_transport.h"
+#include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
 
@@ -46,7 +47,10 @@ struct remote_dial_link
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
     ptls::tls_transport secure{io, no_tls};
-    pasio::multiplexing_transport mux{local, remote, secure};
+    // The datagram member stays inert on this tcp-only route — its socket is only ever
+    // bound when a "udp" channel is actually dialed/accepted, which this link never does.
+    pasio::udp_transport datagram{io};
+    pasio::multiplexing_transport mux{local, remote, secure, datagram};
 
     std::optional<pio::endpoint> dialed_ep;
     std::unique_ptr<pasio::mux_channel> dialed;
