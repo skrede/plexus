@@ -269,7 +269,48 @@ if(LIBURING_FOUND)
 
     catch_discover_tests(spike_iouring_futex TEST_PREFIX "shm.")
 
-    message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found — io_uring futex spike enabled")
+    # The wakeup -> reactor bridge functional proof: a forked producer publishes +
+    # signals the in-region notify word; the parent's io_uring-futex bridge, armed on
+    # a user-owned io_context, reaps the CQE on a reactor turn and posts the drain.
+    # Links plexus::asio (the bridge + its asio include path), plexus::shm (the broker
+    # + the futex primitive the bridge's signal() delegates to), plexus::wire (the fqn
+    # hash the region naming routes through), and liburing (the io_uring the bridge
+    # drives). The bridge is the only asio-coupled shared-memory piece (the core +
+    # the compiled backend stay asio-free).
+    add_executable(test_shm_notifier_bridge test_shm_notifier_bridge.cpp)
+
+    target_include_directories(test_shm_notifier_bridge PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_notifier_bridge PRIVATE
+        plexus::asio
+        plexus::shm
+        plexus::wire
+        PkgConfig::LIBURING
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_notifier_bridge TEST_PREFIX "shm.")
+
+    # The teardown-race proof (asan-targeted): a producer process signals at the
+    # moment the consumer tears the channel + bridge down, repeatedly, to drive the
+    # wake-vs-teardown race. The PASS criterion is asan/ubsan-clean -- no
+    # heap-use-after-free on the posted-drain path during teardown (the
+    # stop -> wake -> close ordering). Same link set as the bridge proof.
+    add_executable(test_shm_teardown_race test_shm_teardown_race.cpp)
+
+    target_include_directories(test_shm_teardown_race PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_teardown_race PRIVATE
+        plexus::asio
+        plexus::shm
+        plexus::wire
+        PkgConfig::LIBURING
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_teardown_race TEST_PREFIX "shm.")
+
+    message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found — io_uring futex spike + reactor bridge enabled")
 else()
-    message(STATUS "plexus shm tests: liburing absent — io_uring futex spike skipped (non-gating)")
+    message(STATUS "plexus shm tests: liburing absent — io_uring futex spike + reactor bridge skipped (non-gating)")
 endif()
