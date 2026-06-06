@@ -2,7 +2,10 @@
 #define HPP_GUARD_PLEXUS_ASIO_UDP_CHANNEL_H
 
 #include "plexus/asio/udp_server.h"
+#include "plexus/asio/asio_timer.h"
+#include "plexus/asio/detail/udp_reliable_arq.h"
 
+#include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
 #include "plexus/wire/udp_dedup_window.h"
 
@@ -53,12 +56,19 @@ class udp_channel
 public:
     static constexpr std::size_t default_max_payload = 1400;
 
+    using arq_type = detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
+
+    // The reliable-ARQ config is a required-WITH-default ctor argument (the handshake-
+    // ladder pattern): production binds the swept defaults; a deterministic test binds a
+    // compressed config (a fast RTO / small cap) to exercise the SAME mechanics quickly.
     udp_channel(::asio::io_context &io, udp_server &server, ::asio::ip::udp::endpoint dest,
-                std::size_t max_payload = default_max_payload)
+                std::size_t max_payload = default_max_payload,
+                detail::udp_arq_config arq_cfg = {})
         : m_io(io)
         , m_server(server)
         , m_dest(std::move(dest))
         , m_max_payload(max_payload)
+        , m_arq_cfg(arq_cfg)
     {
     }
 
@@ -68,8 +78,15 @@ public:
     udp_channel &operator=(udp_channel &&) = delete;
 
     // The dtor tears the channel down but never posts on_closed (a this-capturing
-    // post could outlive the channel). close() posts on_closed.
-    ~udp_channel() { m_open = false; }
+    // post could outlive the channel). close() posts on_closed. The ARQ's per-segment
+    // retransmit timers are cancelled FIRST so a timer firing after the channel dies is
+    // a cancelled no-op (the single-owner discipline — no shared_from_this).
+    ~udp_channel()
+    {
+        m_open = false;
+        if(m_arq)
+            m_arq->cancel();
+    }
 
     void send(std::span<const std::byte> frame)
     {
@@ -99,9 +116,31 @@ public:
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
 
-    // The reliable-ARQ recv hook (kind=1). Unset this plan — the data ARQ is a later
-    // block; until then a reliable datagram is dropped. The seam keeps ONE inbound
-    // demux path for both kinds (the kind discriminator is also the DTLS-bypass seam).
+    // Submit a payload on the RELIABLE in-order path: the selective-repeat ARQ stamps a
+    // seq, sends a kind=1 data segment, and retransmits under an adaptive RTO until the
+    // peer acks. A full send window returns window_full (a non-blocking backpressure
+    // signal — the congestion path is a later block; this never stalls the io_context).
+    // The ARQ is constructed lazily on first reliable use so a best_effort-only channel
+    // pays nothing. Oversize is rejected at publish (the marker byte joins the overhead).
+    using submit_result = arq_type::submit_result;
+
+    submit_result send_reliable(std::span<const std::byte> payload)
+    {
+        if(!m_open)
+            return submit_result::window_full;
+        if(payload.size() + wire::udp_envelope_overhead + 1 > m_max_payload)
+        {
+            reject_oversize();
+            return submit_result::window_full;
+        }
+        ensure_arq();
+        return m_arq->submit(payload);
+    }
+
+    // The reliable-ARQ recv hook (kind=1). The data ARQ is wired here: a kind=1 datagram
+    // self-identifies (its inner control byte) as a data segment or an ack and is fanned
+    // to the ARQ on ONE inbound demux path (the kind discriminator is also the
+    // DTLS-bypass seam). An override may still observe raw reliable segments for tests.
     void on_reliable_segment(plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> cb)
     {
         m_on_reliable = std::move(cb);
@@ -121,9 +160,9 @@ public:
                 return;                              // duplicate / too_old: drop
             post_on_data(dec->frame);
         }
-        else if(m_on_reliable)
+        else
         {
-            m_on_reliable(dec->seq, dec->frame);     // reliable ARQ engine (later block)
+            deliver_reliable(dec->seq, dec->frame);
         }
     }
 
@@ -135,6 +174,52 @@ private:
     {
         if(m_on_error)
             m_on_error(io::io_error::message_too_large);
+    }
+
+    // Build the selective-repeat ARQ on first reliable use and wire its actions: a
+    // (re)transmit wraps a kind=1 data segment, an ack wraps a kind=1 ack frame, an
+    // in-order payload posts on_data, and exhaustion surfaces a connection-fatal error.
+    void ensure_arq()
+    {
+        if(m_arq)
+            return;
+        m_arq = std::make_unique<arq_type>(m_io, m_arq_cfg);
+        m_arq->on_transmit([this](std::uint16_t seq, std::span<const std::byte> payload) {
+            wire::encode_udp_segment_into(m_arq_inner, payload);
+            wire::wrap_udp_into(m_send_scratch, wire::udp_envelope_kind::reliable_arq, seq, m_arq_inner);
+            m_server.send_to(m_send_scratch, m_dest);
+        });
+        m_arq->on_send_ack([this](const wire::udp_ack &ack) {
+            wire::encode_udp_ack_into(m_arq_inner, ack);
+            wire::wrap_udp_into(m_ack_scratch, wire::udp_envelope_kind::reliable_arq, 0, m_arq_inner);
+            m_server.send_to(m_ack_scratch, m_dest);
+        });
+        m_arq->on_deliver([this](std::span<const std::byte> payload) { post_on_data(payload); });
+        m_arq->on_exhausted([this] { if(m_on_error) m_on_error(io::io_error::timed_out); });
+    }
+
+    // Fan a kind=1 inner frame to the ARQ on the ONE inbound demux path: a data segment
+    // drives on_segment (in-order delivery + ack), an ack drives on_ack (window slide).
+    // A test-installed raw observer (m_on_reliable) sees the segment too. A frame whose
+    // marker is neither (a handshake byte, already split off upstream) is dropped.
+    void deliver_reliable(std::uint16_t seq, std::span<const std::byte> inner)
+    {
+        auto kind = wire::peek_udp_arq_kind(inner);
+        if(!kind)
+            return;
+        if(*kind == wire::udp_arq_kind::ack)
+        {
+            if(auto ack = wire::decode_udp_ack(inner); ack && m_arq)
+                m_arq->on_ack(*ack);
+            return;
+        }
+        auto payload = wire::decode_udp_segment(inner);
+        if(!payload)
+            return;
+        if(m_on_reliable)
+            m_on_reliable(seq, *payload);
+        ensure_arq();
+        m_arq->on_segment(seq, *payload);
     }
 
     // on_data is ALWAYS posted (the byte_channel contract). The owning vector keeps
@@ -153,9 +238,13 @@ private:
     udp_server &m_server;
     ::asio::ip::udp::endpoint m_dest;
     std::size_t m_max_payload;
+    detail::udp_arq_config m_arq_cfg;
     std::uint16_t m_out_seq{0};
     wire::udp_dedup_window m_dedup;
     std::vector<std::byte> m_send_scratch;
+    std::vector<std::byte> m_ack_scratch;
+    std::vector<std::byte> m_arq_inner;
+    std::unique_ptr<arq_type> m_arq;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;

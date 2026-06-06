@@ -33,14 +33,20 @@ inline void encode_handshake_into(std::vector<std::byte> &out, udp_hs_type type)
 }
 
 // Recognize a handshake control frame: a reliable_arq datagram whose inner frame is
-// exactly the single hs_type byte. Anything else (real reliable data, a later block)
-// is not a handshake and returns nullopt.
+// exactly the single hs_type byte AND that byte is a VALID hs_type (request=0 or
+// response=1). The strict value check keeps the handshake control space disjoint from
+// the reliable-ARQ inner markers (segment=2, ack=3): a 1-byte ARQ data segment with an
+// empty payload is [2], which is NOT a handshake and falls through to the ARQ demux.
+// Anything else (real reliable data / an ack) returns nullopt.
 inline std::optional<udp_hs_type> decode_handshake(std::span<const std::byte> datagram)
 {
     auto dec = wire::unwrap_udp(datagram);
     if(!dec || dec->kind != wire::udp_envelope_kind::reliable_arq || dec->frame.size() != 1)
         return std::nullopt;
-    return static_cast<udp_hs_type>(std::to_integer<std::uint8_t>(dec->frame[0]));
+    const auto v = std::to_integer<std::uint8_t>(dec->frame[0]);
+    if(v != static_cast<std::uint8_t>(udp_hs_type::request) && v != static_cast<std::uint8_t>(udp_hs_type::response))
+        return std::nullopt;
+    return static_cast<udp_hs_type>(v);
 }
 
 }

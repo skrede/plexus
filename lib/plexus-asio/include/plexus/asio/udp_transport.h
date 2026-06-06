@@ -58,11 +58,13 @@ public:
     using hs_type = detail::udp_hs_type;
 
     explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload,
-                           arq_type::schedule hs_ladder = arq_type::default_ladder)
+                           arq_type::schedule hs_ladder = arq_type::default_ladder,
+                           detail::udp_arq_config arq_cfg = {})
         : m_io(io)
         , m_server(io)
         , m_max_payload(max_payload)
         , m_hs_ladder(hs_ladder)
+        , m_arq_cfg(arq_cfg)
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { on_datagram(from, bytes); });
         m_server.on_error([this](io::io_error e) { if(m_on_error) m_on_error(e); });
@@ -99,7 +101,7 @@ public:
 
         ensure_bound(dest.protocol());      // a dial-only transport still needs a bound socket to send/recv
 
-        auto ch = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload);
+        auto ch = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg);
         auto *raw = ch.get();
         m_demux.insert(dest, raw);
 
@@ -171,7 +173,7 @@ private:
         auto hs = detail::decode_handshake(bytes);
         if(!hs || *hs != hs_type::request)
             return;
-        auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload);
+        auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
             return;                                        // peer cap reached: drop the flood
@@ -241,6 +243,7 @@ private:
     detail::udp_inbound_demux m_demux;
     std::size_t m_max_payload;
     arq_type::schedule m_hs_ladder;
+    detail::udp_arq_config m_arq_cfg;
     std::vector<std::byte> m_hs_scratch;
     std::unordered_map<udp_channel *, pending_dial> m_pending;
     std::unordered_map<udp_channel *, std::unique_ptr<udp_channel>> m_accepted;

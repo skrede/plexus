@@ -38,6 +38,37 @@ target_link_libraries(test_udp_handshake_arq PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_handshake_arq TEST_PREFIX "udp.")
 
+# The reliable-data ARQ legs (header-only inside plexus::asio): the sans-IO reorder
+# buffer's head-of-line in-order release (D-04), and the selective-repeat engine proven
+# end-to-end over deterministic loss/reorder/duplication via the lossy_relay fixture.
+# The `udp.` ctest prefix selects them.
+add_executable(test_udp_reorder_buffer test_udp_reorder_buffer.cpp)
+target_link_libraries(test_udp_reorder_buffer PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_reorder_buffer TEST_PREFIX "udp.")
+
+add_executable(test_udp_rto_estimator test_udp_rto_estimator.cpp)
+target_link_libraries(test_udp_rto_estimator PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_rto_estimator TEST_PREFIX "udp.")
+
+add_executable(test_udp_reliable_arq test_udp_reliable_arq.cpp)
+target_link_libraries(test_udp_reliable_arq PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_reliable_arq TEST_PREFIX "udp.")
+
+# The numeric sweep: an empirical substantiation of the RTO/window defaults over a
+# loss x window x RTO grid. Hidden behind the [.sweep] Catch2 tag so the default ctest
+# run skips it; `ctest -R udp.sweep` selects it.
+add_executable(test_udp_arq_sweep test_udp_arq_sweep.cpp)
+target_link_libraries(test_udp_arq_sweep PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_arq_sweep TEST_PREFIX "udp.")
+
 # The two-axis selector unit test: a PURE value-object check of the tier x
 # scheme->reliability composition (no socket, no io_context). Header-only inside
 # plexus::asio; the `udp.` ctest prefix selects it.

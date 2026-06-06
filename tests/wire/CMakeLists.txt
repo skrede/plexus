@@ -19,7 +19,8 @@ endforeach()
 # links only plexus::wire + Catch2's main; the "udp." ctest prefix selects them.
 set(PLEXUS_UDP_WIRE_TESTS
     test_udp_envelope
-    test_udp_dedup_window)
+    test_udp_dedup_window
+    test_udp_ack)
 
 foreach(test ${PLEXUS_UDP_WIRE_TESTS})
     add_executable(${test} ${test}.cpp)
