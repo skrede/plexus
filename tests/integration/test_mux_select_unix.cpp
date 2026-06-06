@@ -1,5 +1,5 @@
 #include "plexus/asio/mux_policy.h"
-#include "plexus/asio/mux_transport.h"
+#include "plexus/asio/all_backends_mux.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
@@ -31,7 +31,7 @@ namespace pasio = plexus::asio;
 namespace ptls = plexus::tls;
 namespace pio = plexus::io;
 
-static_assert(plexus::io::transport_backend<pasio::multiplexing_transport, pasio::mux_policy>);
+static_assert(plexus::io::transport_backend<pasio::all_backends_mux, pasio::mux_policy>);
 
 namespace {
 
@@ -83,7 +83,7 @@ struct local_dial_link
     // The secure-datagram (DTLS) member is likewise inert here: it reuses the same default
     // (invalid) credential and binds no socket unless a "dtls" channel is dialed/accepted.
     ptls::dtls_transport secure_datagram{io, no_tls};
-    pasio::multiplexing_transport mux{local, remote, secure, datagram, secure_datagram};
+    pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
     std::optional<pio::endpoint> dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;

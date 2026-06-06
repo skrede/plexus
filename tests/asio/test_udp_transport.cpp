@@ -255,7 +255,7 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
 // its secure member (inert here — never dialed), hence the PLEXUS_HAVE_TLS_MUX gate.
 // These includes are at file scope (the anonymous namespace above is already closed).
 
-#include "plexus/asio/mux_transport.h"
+#include "plexus/asio/all_backends_mux.h"
 #include "plexus/asio/unix_transport.h"
 
 #include "plexus/io/polymorphic_byte_channel.h"
@@ -282,7 +282,7 @@ struct mux_face
     ptls::tls_transport secure{io, no_tls};
     pasio::udp_transport datagram{io};
     ptls::dtls_transport secure_datagram{io, no_tls};
-    pasio::multiplexing_transport mux{local, remote, secure, datagram, secure_datagram};
+    pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
     explicit mux_face(::asio::io_context &ctx) : io(ctx) {}
 };
