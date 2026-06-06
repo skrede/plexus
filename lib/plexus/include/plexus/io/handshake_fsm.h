@@ -81,7 +81,7 @@ struct handshake_fsm_config
 
 // Pure, sans-IO handshake state machine. Holds no asio / transport / logger types
 // and moves no bytes — fully testable in isolation. The bridge feeds it via the
-// six on_* events and reacts to the returned fsm_step_result. The FSM does NOT
+// seven on_* events and reacts to the returned fsm_step_result. The FSM does NOT
 // log: it returns abort/reject and the bridge logs at action-execution time.
 class handshake_fsm
 {
@@ -152,6 +152,20 @@ public:
         if(m_state == peer_fsm_state::dialing)
             return {.action = fsm_action::retry};
         return {};
+    }
+
+    // A crypto-handshake transport completed its own handshake (mutual cert verify
+    // already passed at the crypto layer), so the session resolves with no plexus
+    // version/identity wire round-trip. Skips all validation and dedup — the crypto
+    // handshake and its in-band negotiation already gated those. Latched once via
+    // the shared m_complete_emitted; on_torn_down resets it for a fresh cycle.
+    fsm_step_result on_external_complete() noexcept
+    {
+        if(m_complete_emitted)
+            return {};
+        m_state = peer_fsm_state::handshake_resolved;
+        m_complete_emitted = true;
+        return {.action = fsm_action::complete, .outcome = handshake_outcome::accept_outbound};
     }
 
     // The bridge tore the peer down. Reset to a clean cycle: clear the latch and
