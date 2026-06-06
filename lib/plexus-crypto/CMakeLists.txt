@@ -30,7 +30,9 @@ find_package(OpenSSL REQUIRED)
 # consumer's source list), so asio's symbols are defined in exactly one link
 # unit per consumer — never a second archive. This is the load-bearing reason
 # the kind is OBJECT, proven by a live link+run, not a green build alone.
-add_library(plexus-crypto OBJECT src/tls_credential.cpp)
+add_library(plexus-crypto OBJECT
+    src/tls_credential.cpp
+    src/dtls_context.cpp)
 add_library(plexus::crypto ALIAS plexus-crypto)
 
 # Headers are exposed as INTERFACE include dirs (PUBLIC so the OBJECT TU itself

@@ -5,6 +5,10 @@
 #include "plexus/tls/verify_policy.h"
 #include "plexus/tls/spki_fingerprint.h"
 
+#include "plexus/tls/dtls_policy.h"
+#include "plexus/tls/dtls_channel.h"
+#include "plexus/tls/detail/dtls_context.h"
+
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
 
@@ -39,6 +43,11 @@ namespace pio = plexus::io;
 static_assert(plexus::io::byte_channel<ptls::tls_channel>);
 static_assert(plexus::io::transport_backend<ptls::tls_transport, ptls::tls_policy>);
 static_assert(plexus::Policy<ptls::tls_policy>);
+
+// The DTLS seam pieces: the dtls_channel byte_channel surface and the dtls_policy
+// bundle satisfy the same compile-time seams as their TLS analogs.
+static_assert(plexus::io::byte_channel<ptls::dtls_channel>);
+static_assert(plexus::Policy<ptls::dtls_policy>);
 
 namespace {
 
@@ -218,6 +227,30 @@ TEST_CASE("tls seam: asio::ssl + OpenSSL TU links and runs without a COMDAT-fold
     comdat_probe();
     plexus::tls::tls_credential cred;
     REQUIRE_FALSE(cred.valid());
+}
+
+TEST_CASE("dtls seam: share_context up_refs the SSL_CTX once and returns an owning handle",
+          "[tls][seam][dtls]")
+{
+    identity_fixture self_id("dtls_share");
+    auto cred = make_cred(self_id.id, self_id.id.digest);
+    REQUIRE(cred.valid());
+
+    {
+        auto shared = ptls::detail::share_dtls_context(cred);
+        REQUIRE(shared != nullptr);          // a live, refcounted SSL_CTX*
+        REQUIRE(reinterpret_cast<void *>(&cred.ssl_ctx())
+                == reinterpret_cast<void *>(shared.get()));
+    }                                        // the shared handle's ref is released here
+
+    // The credential's own ref survives the shared handle's release — the up_ref/
+    // free accounting balanced (a double-free or under-ref would have crashed/freed).
+    REQUIRE(cred.valid());
+    REQUIRE_NOTHROW(ptls::detail::share_dtls_context(cred));
+
+    // A default-constructed credential has no SSL_CTX: share_context fails closed.
+    plexus::tls::tls_credential empty;
+    REQUIRE_THROWS(ptls::detail::share_context(empty));
 }
 
 TEST_CASE("tls transport: a DIALED pair completes a real mutual-TLS handshake over loopback, looped",
