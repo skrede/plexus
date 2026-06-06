@@ -163,6 +163,17 @@ target_include_directories(test_locality_confinement PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_locality_confinement TEST_PREFIX "integration.")
 
+# The selection-hook substitutability proof: dummy members composed over the header-only
+# core multiplexer (no backend) prove the DEFAULT hook routes to the first candidate and an
+# INJECTED hook overrides that to a different candidate — the behavioral substitutability of
+# the type-erased selection seam. Always built (pure core, no backend needed).
+add_executable(test_mux_select_hook test_mux_select_hook.cpp)
+target_link_libraries(test_mux_select_hook PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_mux_select_hook TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
