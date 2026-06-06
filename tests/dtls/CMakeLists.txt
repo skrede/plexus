@@ -29,3 +29,20 @@ target_link_libraries(test_dtls_cookie PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_dtls_cookie TEST_PREFIX "dtls.")
+
+# The mux integration proof: the selector classifies "dtls" remote (so locality
+# confinement excludes it); a multiplexing transport over a (unix, tcp, tls, udp,
+# dtls) quintet routes a "dtls" dial to the secure-datagram member (completing a
+# mutual handshake + flowing an app frame over the wrapped channel), while "tcp"/
+# "tls" dials still reach their own members and a same-host "unix" dial routes
+# local — never the dtls member. Links plexus::asio (the mux + unix/tcp/udp members)
+# alongside plexus::crypto (the secure/secure-datagram members). Live legs loop
+# N>=100; re-run >=3.
+add_executable(test_dtls_mux test_dtls_mux.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_dtls_mux PRIVATE
+    plexus::asio
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_dtls_mux TEST_PREFIX "dtls.")
