@@ -224,6 +224,25 @@ target_link_libraries(test_shm_congested PRIVATE
 
 catch_discover_tests(test_shm_congested TEST_PREFIX "shm.")
 
+# The demand-driven topic registry (header-only, asio/strand/std::function-free): a
+# stub broker over heap-backed regions + a recording stub notifier prove the
+# acquire/release refcount lifecycle (created -> attached -> teardown+unlink), the
+# max_payload ring sizing with a subscriber-only default fallback, and the teardown
+# ordering (disarm BEFORE the subscriber the drain touches is destroyed -- a
+# recording notifier brackets the order). The registry borrows the broker + notifier
+# seams by reference; the TU includes only core headers.
+add_executable(test_shm_registry test_shm_registry.cpp)
+
+target_include_directories(test_shm_registry PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_registry PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_registry TEST_PREFIX "shm.")
+
 # The thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
