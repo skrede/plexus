@@ -22,6 +22,22 @@ target_link_libraries(test_shm_scaffold PRIVATE
 
 catch_discover_tests(test_shm_scaffold TEST_PREFIX "shm.")
 
+# The header-only broadcast ring + loan/take core. These TUs include ONLY the
+# core headers under plexus/io/shm/ — they need no plexus::shm backend link
+# (the ring drives a caller-supplied anonymous mapped span), proving the core is
+# POSIX/asio-free. They link plexus::plexus for the core include path and the
+# xproc harness header path.
+add_executable(test_shm_ring_core test_shm_ring_core.cpp)
+
+target_include_directories(test_shm_ring_core PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_ring_core PRIVATE
+    plexus::plexus
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_ring_core TEST_PREFIX "shm.")
+
 # The D-10 thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
