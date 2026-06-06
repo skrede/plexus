@@ -64,6 +64,33 @@ target_link_libraries(test_shm_ring_dekker PRIVATE
 
 catch_discover_tests(test_shm_ring_dekker TEST_PREFIX "shm.")
 
+# The D-06 loan reshape: the move-only intrusive shm_slot_owner, the zero-copy
+# take() returning wire_bytes<shm_slot_owner> (no shared_ptr), and the move-only
+# loaned_buffer / taken_message lifetime (inert moved-from, unpin exactly once).
+add_executable(test_shm_zerocopy_take test_shm_zerocopy_take.cpp)
+
+target_include_directories(test_shm_zerocopy_take PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_zerocopy_take PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_zerocopy_take TEST_PREFIX "shm.")
+
+add_executable(test_shm_loan_lifetime test_shm_loan_lifetime.cpp)
+
+target_include_directories(test_shm_loan_lifetime PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_loan_lifetime PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_loan_lifetime TEST_PREFIX "shm.")
+
 # The D-10 thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
