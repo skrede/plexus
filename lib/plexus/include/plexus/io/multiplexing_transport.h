@@ -47,7 +47,7 @@ concept mux_member = requires(M &m, const endpoint &ep,
 // message loop), so the type erasure costs an indirection that never touches the hot
 // path; the default below is empty, so it stays in SBO with no allocation. The hook
 // receives the endpoint and the candidate indices — NOT the members tuple: a candidate-
-// metadata-carrying signature is deferred to the shared-memory transport phase, which
+// metadata-carrying signature is deferred to the same-host shared-memory member, which
 // will finalize whether its same-host preference needs per-candidate metadata and, if
 // so, widen this erased signature (a localized cold-path change; all callers are in-repo).
 using selection_hook = plexus::detail::move_only_function<
