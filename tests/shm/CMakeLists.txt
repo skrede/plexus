@@ -103,6 +103,29 @@ target_link_libraries(test_shm_dispatch_hint PRIVATE
 
 catch_discover_tests(test_shm_dispatch_hint TEST_PREFIX "shm.")
 
+# The same-host identity layer: the null-guarded fingerprint compare + the
+# deterministic, direction-discriminated region naming (the generic half; the
+# machine-id read is deferred to the backend).
+add_executable(test_shm_same_host test_shm_same_host.cpp)
+
+target_link_libraries(test_shm_same_host PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_same_host TEST_PREFIX "shm.")
+
+# The shared-memory selection decision (locality x hint, bilateral) + the
+# per-forwarder acquired-ring refcount set (no singleton).
+add_executable(test_shm_selection test_shm_selection.cpp)
+
+target_link_libraries(test_shm_selection PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_selection TEST_PREFIX "shm.")
+
 # The D-10 thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
