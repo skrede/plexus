@@ -16,6 +16,7 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/detail/compat.h"
 
+#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
 
@@ -179,8 +180,13 @@ private:
         auto it = m_pending.find(raw);
         if(it == m_pending.end())
             return;
-        const io::endpoint failed = ep;                    // COPY before erase (same reason)
+        // fail() fired this from INSIDE raw's own deliver_inbound/drain_inbound stack,
+        // so destroying raw now is a use-after-free when that stack unwinds. Detach the
+        // demux ref immediately (no more inbound routes here), but DEFER the channel
+        // destruction off the current stack via a posted continuation that owns it.
+        const io::endpoint failed = ep;
         m_demux.erase(it->second.channel->dest());
+        defer_destroy(std::move(it->second.channel));
         m_pending.erase(it);
         report_dial_fail(failed, io::io_error::timed_out);
     }
@@ -205,8 +211,19 @@ private:
         auto it = m_accepted.find(raw);
         if(it == m_accepted.end())
             return;
+        // Same self-destruction hazard as fail_dial: defer the channel destruction off
+        // the current (raw's own) stack; detach the demux ref now.
         m_demux.erase(it->second->dest());
+        defer_destroy(std::move(it->second));
         m_accepted.erase(it);
+    }
+
+    // Hand a channel to a posted continuation that owns it until it runs, so it is
+    // destroyed AFTER the current stack (its own deliver_inbound/fail call) unwinds —
+    // never from inside its own member call.
+    void defer_destroy(std::unique_ptr<dtls_channel> ch)
+    {
+        ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); });
     }
 
     void report_dial_fail(const io::endpoint &ep, io::io_error e) { if(m_on_dial_failed) m_on_dial_failed(ep, e); }

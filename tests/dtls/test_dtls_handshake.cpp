@@ -395,6 +395,44 @@ TEST_CASE("dtls.verify: a cross-pinned pair accepts; mis-pin / unpinned / empty 
     }
 }
 
+TEST_CASE("dtls.dial_abort: an io_context destroyed mid-handshake leaks nothing, looped",
+          "[dtls][dial_abort]")
+{
+    pdt::identity_fixture srv("ab_srv");
+    pdt::identity_fixture cli("ab_cli");
+
+    // Dial into a relay that DROPS every client datagram, so the handshake never
+    // completes — the dial stays pending. Destroying the io_context + transports
+    // mid-handshake must free the transport-owned pending channel cleanly (the leak
+    // the TLS self-owning-channel cycle had). Run under asan to catch a leak/UAF.
+    constexpr int k_iterations = 100;
+    int aborted = 0;
+    for(int i = 0; i < k_iterations; ++i)
+    {
+        ::asio::io_context io;
+        auto server_cred = pdt::pin_one(srv, cli.digest);
+        auto client_cred = pdt::pin_one(cli, srv.digest);
+        ptls::dtls_transport server(io, server_cred);
+        ptls::dtls_transport client(io, client_cred);
+
+        bool dialed = false;
+        client.on_dialed([&](std::unique_ptr<ptls::dtls_channel>, const pdt::pio::endpoint &) { dialed = true; });
+
+        server.listen({"dtls", "127.0.0.1:0"});
+        auto link = std::make_unique<pdt::relay>(io, server.port());
+        for(int k = 0; k < 8; ++k)
+            link->script.push_back(pdt::action::drop);   // black-hole the client flights
+        client.dial({"dtls", "127.0.0.1:" + std::to_string(link->port())});
+
+        // Pump a short window so the ClientHello is in flight, then tear everything
+        // down WITHOUT completing (io, transports, relay all go out of scope here).
+        pdt::settle(io, std::chrono::milliseconds{30});
+        REQUIRE_FALSE(dialed);
+        ++aborted;
+    }
+    REQUIRE(aborted == k_iterations);
+}
+
 TEST_CASE("dtls.handshake_loss: the handshake completes through a lossy relay, looped",
           "[dtls][handshake_loss]")
 {
