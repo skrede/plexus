@@ -138,6 +138,13 @@ extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
         X509_STORE_CTX_set_error(ctx, X509_V_ERR_CERT_REJECTED);
         return 0;
     }
+    // The SPKI pin IS the trust anchor: a pinned leaf is fully trusted, so clear
+    // any chain-building error OpenSSL set ahead of this callback (a self-signed
+    // pinned leaf otherwise leaves X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT on the
+    // store ctx, which SSL_get_verify_result would surface). Resetting to X509_V_OK
+    // makes SSL_get_verify_result reflect the pin decision — the DTLS completion
+    // edge gates on it as a belt-and-suspenders mutual-auth check.
+    X509_STORE_CTX_set_error(ctx, X509_V_OK);
     return 1;
 }
 

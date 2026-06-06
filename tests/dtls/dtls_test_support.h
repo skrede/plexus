@@ -1,7 +1,6 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_TEST_SUPPORT_H
 #define HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_TEST_SUPPORT_H
 
-#include "plexus/tls/dtls_transport.h"
 #include "plexus/tls/dtls_channel.h"
 #include "plexus/tls/tls_credential.h"
 #include "plexus/tls/verify_policy.h"
