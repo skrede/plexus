@@ -14,3 +14,18 @@ target_link_libraries(test_asio_policy PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_asio_policy TEST_PREFIX "asio.")
+
+# Live connectionless-UDP legs: the best_effort transport (end-to-end + dedup +
+# oversize) and the handshake ARQ over injected loss. Header-only inside plexus::asio
+# (no new compiled backend target); the `udp.` ctest prefix selects them.
+add_executable(test_udp_transport test_udp_transport.cpp)
+target_link_libraries(test_udp_transport PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_transport TEST_PREFIX "udp.")
+
+add_executable(test_udp_handshake_arq test_udp_handshake_arq.cpp)
+target_link_libraries(test_udp_handshake_arq PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_handshake_arq TEST_PREFIX "udp.")
