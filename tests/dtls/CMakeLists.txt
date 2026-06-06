@@ -43,6 +43,20 @@ target_link_libraries(test_dtls_mtu PRIVATE
 
 catch_discover_tests(test_dtls_mtu TEST_PREFIX "dtls.")
 
+# The asan dial-abort leak proof: a dtls dial whose handshake never completes (a
+# dead port; a black-holing relay) is torn down WITH THE HANDSHAKE PENDING by
+# destroying the io_context + the transports. The transport-owned m_pending frees
+# every in-flight channel (and its armed retransmit timer) cleanly — no leak, no
+# use-after-free (the structural fix vs the TLS self-owning-channel cycle). Run under
+# asan/ubsan (the build-asan tree) as the boundary proof. Live legs loop N>=100.
+add_executable(test_dtls_pending_abort test_dtls_pending_abort.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_dtls_pending_abort PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_dtls_pending_abort TEST_PREFIX "dtls.")
+
 # The mux integration proof: the selector classifies "dtls" remote (so locality
 # confinement excludes it); a multiplexing transport over a (unix, tcp, tls, udp,
 # dtls) quintet routes a "dtls" dial to the secure-datagram member (completing a
