@@ -4,6 +4,7 @@
 #include "plexus/io/locality.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/shm/dispatch_hint.h"
 
 #include <cstdint>
 
@@ -26,13 +27,22 @@ namespace plexus {
 // carried here — the struct is shaped so they append later as future fields
 // (default = "unset") WITHOUT reshaping the call sites. Plain fields with defaults:
 // plexus has no QoS negotiation, so there is no "unset" to distinguish.
+//
+// `dispatch` is the shared-memory eligibility hint (a FLAGS bitmask; none = 0 is
+// the absence): a same-host topic with any bit set prefers the shared-memory
+// medium, none keeps it on the local stream. `max_payload` (0 = unset) is the
+// publisher's ring-sizing authority for that medium: it sizes the broadcast ring's
+// slot width; 0 falls back to the default ring geometry (the case for a
+// subscriber-only upgrade, where no publisher declared a width).
 struct topic_qos
 {
-    bool             latch       = false;
-    std::uint32_t    depth       = 1;
-    io::locality     reach       = io::locality::any;
-    io::reliability  reliability = io::reliability::best_effort;
-    io::congestion   congestion  = io::congestion::block;
+    bool                  latch       = false;
+    std::uint32_t         depth       = 1;
+    io::locality          reach       = io::locality::any;
+    io::reliability       reliability = io::reliability::best_effort;
+    io::congestion        congestion  = io::congestion::block;
+    io::shm::dispatch_hint dispatch   = io::shm::dispatch_hint::none;
+    std::uint32_t         max_payload = 0;
 };
 
 }

@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_TRANSPORT_SELECTOR_H
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/shm/dispatch_hint.h"
 
 #include <cstdint>
 #include <string_view>
@@ -95,6 +96,21 @@ public:
         if(scheme == "tcp" || scheme == "tls")
             return reliability_hint::reliable;
         return reliability_hint::unspecified;   // unix/inproc (local) and unknown: no claim
+    }
+
+    // The shared-memory eligibility decision (D-02): a (peer, topic) pair prefers
+    // the shared-memory medium iff it is SAME-HOST (the local tier) AND the topic
+    // carries a qualifying dispatch hint (any bit set). The two factors are
+    // independent and both necessary — locality alone keeps a same-host topic on
+    // AF_UNIX (the default), and a hint alone never reaches a remote peer over
+    // shared memory. This is a pure value-object function of the endpoint scheme +
+    // the hint, mirroring reliability_of_scheme: it holds no ring, no broker, and
+    // no acquired-set; it only answers "should this side ATTEMPT the ring acquire?"
+    // The actual acquire (and the dual-delivery wire fallback) is the registry's job.
+    [[nodiscard]] bool shm_eligible_for(const endpoint &ep, shm::dispatch_hint h) const noexcept
+    {
+        return select(ep, reliability_hint::unspecified) == transport_kind::local
+            && shm::shm_eligible(h);
     }
 };
 

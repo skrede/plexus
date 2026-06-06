@@ -91,6 +91,18 @@ target_link_libraries(test_shm_loan_lifetime PRIVATE
 
 catch_discover_tests(test_shm_loan_lifetime TEST_PREFIX "shm.")
 
+# The generic selection + identity layer (header-only, POSIX/asio-free): the
+# dispatch_hint FLAGS type wired into topic_qos + the selector's locality x hint
+# SHM-eligibility decision. The TU includes only core headers, proving the
+# selection layer carries no backend dependency.
+add_executable(test_shm_dispatch_hint test_shm_dispatch_hint.cpp)
+
+target_link_libraries(test_shm_dispatch_hint PRIVATE
+    plexus::plexus
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_dispatch_hint TEST_PREFIX "shm.")
+
 # The D-10 thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
