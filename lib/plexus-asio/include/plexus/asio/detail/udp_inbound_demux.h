@@ -16,14 +16,17 @@ class udp_channel;
 
 namespace detail {
 
-// Sender (addr,port) -> udp_channel* map: the whole game of a connectionless
+// Sender (addr,port) -> Channel* map: the whole game of a connectionless
 // transport (no plexus analog — the stream transports own a per-connection socket
-// the kernel demuxes; UDP shares ONE bound socket and must demux completions in
-// userspace). lookup(sender) returns the channel for an already-seen peer, or
-// nullptr for a never-seen source — the MISS the transport turns into a synthesized
-// accept. The transport owns the channels (unique_ptr); the demux holds non-owning
-// raw refs keyed by endpoint and is the transport's PRIVATE state (the engine
-// registry stays transport-agnostic).
+// the kernel demuxes; a datagram transport shares ONE bound socket and must demux
+// completions in userspace). lookup(sender) returns the channel for an already-seen
+// peer, or nullptr for a never-seen source — the MISS the transport turns into a
+// synthesized accept. The transport owns the channels (unique_ptr); the demux holds
+// non-owning raw refs keyed by endpoint and is the transport's PRIVATE state (the
+// engine registry stays transport-agnostic). Templated on Channel so a non-udp
+// datagram transport (e.g. DTLS) reuses the SAME flood-bound endpoint hash + cap
+// without copying the security logic; udp_inbound_demux below binds it to
+// udp_channel for udp_transport's existing call sites.
 //
 // THREAT (T-15-03): a UDP source address is forgeable, so a spoofed-source flood
 // could mint unbounded "accept" channels. The transport synthesizes only a PENDING
@@ -31,18 +34,19 @@ namespace detail {
 // authenticates identity; the demux bounds the live peer count so the flood cannot
 // exhaust memory. insert() past the cap is refused (returns false) so the caller
 // drops the datagram rather than growing without bound.
-class udp_inbound_demux
+template<typename Channel>
+class basic_inbound_demux
 {
 public:
     using endpoint_type = ::asio::ip::udp::endpoint;
     static constexpr std::size_t default_max_peers = 4096;
 
-    explicit udp_inbound_demux(std::size_t max_peers = default_max_peers) noexcept
+    explicit basic_inbound_demux(std::size_t max_peers = default_max_peers) noexcept
         : m_max_peers(max_peers)
     {
     }
 
-    [[nodiscard]] udp_channel *lookup(const endpoint_type &sender) const
+    [[nodiscard]] Channel *lookup(const endpoint_type &sender) const
     {
         auto it = m_peers.find(sender);
         return it == m_peers.end() ? nullptr : it->second;
@@ -50,7 +54,7 @@ public:
 
     // Returns false when the peer cap is already reached (the flood guard) so the
     // caller drops the new source rather than admitting it.
-    bool insert(const endpoint_type &sender, udp_channel *channel)
+    bool insert(const endpoint_type &sender, Channel *channel)
     {
         if(m_peers.size() >= m_max_peers)
             return false;
@@ -87,8 +91,11 @@ private:
     };
 
     std::size_t m_max_peers;
-    std::unordered_map<endpoint_type, udp_channel *, endpoint_hash> m_peers;
+    std::unordered_map<endpoint_type, Channel *, endpoint_hash> m_peers;
 };
+
+// The plain-UDP binding: udp_transport's existing call sites stay untouched.
+using udp_inbound_demux = basic_inbound_demux<udp_channel>;
 
 }
 

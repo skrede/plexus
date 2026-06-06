@@ -17,17 +17,17 @@ catch_discover_tests(test_asio_policy TEST_PREFIX "asio.")
 
 # Live connectionless-UDP legs: the best_effort transport (end-to-end + dedup +
 # oversize) and the handshake ARQ over injected loss. Header-only inside plexus::asio
-# (no new compiled backend target); the `udp.` ctest prefix selects them. When the TLS
-# backend is on, the SAME TU also compiles the mux-route legs (the multiplexing
-# transport header pulls in plexus::tls for its secure member), gated by
-# PLEXUS_HAVE_TLS_MUX so the base UDP legs build with TLS off.
+# (no new compiled backend target); the `udp.` ctest prefix selects them. When the
+# crypto backend is on, the SAME TU also compiles the mux-route legs (the multiplexing
+# transport header pulls in plexus::crypto for its secure member), gated by
+# PLEXUS_HAVE_TLS_MUX so the base UDP legs build with crypto off.
 add_executable(test_udp_transport test_udp_transport.cpp)
 target_link_libraries(test_udp_transport PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
-if(PLEXUS_ENABLE_TLS_BACKEND)
-    target_sources(test_udp_transport PRIVATE $<TARGET_OBJECTS:plexus-tls>)
-    target_link_libraries(test_udp_transport PRIVATE plexus::tls)
+if(PLEXUS_ENABLE_CRYPTO_BACKEND)
+    target_sources(test_udp_transport PRIVATE $<TARGET_OBJECTS:plexus-crypto>)
+    target_link_libraries(test_udp_transport PRIVATE plexus::crypto)
     target_compile_definitions(test_udp_transport PRIVATE PLEXUS_HAVE_TLS_MUX)
 endif()
 catch_discover_tests(test_udp_transport TEST_PREFIX "udp.")
