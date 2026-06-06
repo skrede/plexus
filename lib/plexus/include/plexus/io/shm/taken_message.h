@@ -27,7 +27,7 @@ struct handle_test_access;
 // idempotent -- it decrements once then nulls the back-pointer so a moved-from
 // handle's destructor and a move-assign target both no-op.
 //
-// as_wire_bytes() is the zero-copy read seam (the D-06 reshape): it builds a
+// as_wire_bytes() is the zero-copy read seam (the move-only owner reshape): it builds a
 // plexus::wire_bytes<shm_slot_owner> whose move-only intrusive owner pins the SAME
 // take_refcount, so the slot stays pinned for the deserialized view's lifetime
 // independently of this handle. There is no reference-counted heap handle
@@ -94,6 +94,16 @@ public:
             std::span<const std::byte>(m_payload, m_length), shm_slot_owner(m_refcount));
     }
 
+    // The adopt tag: the slot_subscriber has ALREADY pinned the slot via the ring's
+    // Dekker-safe pin_if_current (the seq_cst announce + recheck the best_effort
+    // overwrite race needs). This ctor ADOPTS that existing pin rather than adding a
+    // second one (the carry-forward "must not double-pin" rule) -- the handle owns
+    // the one held pin and releases it exactly once on reclaim().
+    struct adopt_pin_t
+    {
+    };
+    static constexpr adopt_pin_t adopt_pin{};
+
 private:
     friend class slot_subscriber;
     friend struct ::plexus::io::shm::test::handle_test_access;
@@ -109,6 +119,20 @@ private:
     {
         if(m_refcount != nullptr)
             m_refcount->fetch_add(1, std::memory_order_acq_rel); // pin at take()
+    }
+
+    // Adopting ctor: takes ownership of a pin the caller already holds (no
+    // fetch_add). reclaim() still decrements once, so the held pin is released
+    // exactly once when the handle dies.
+    taken_message(adopt_pin_t, const std::byte *payload, std::size_t length,
+                  std::atomic<std::uint32_t> *refcount, std::uint64_t cell_index,
+                  std::uint64_t generation) noexcept
+        : m_payload(payload),
+          m_length(length),
+          m_refcount(refcount),
+          m_cell_index(cell_index),
+          m_generation(generation)
+    {
     }
 
     // Decrements take_refcount once then nulls the back-pointer. noexcept +

@@ -185,6 +185,24 @@ target_link_libraries(test_shm_same_host_roundtrip PRIVATE
 
 catch_discover_tests(test_shm_same_host_roundtrip TEST_PREFIX "shm.")
 
+# The core pub/sub endpoints (header-only, asio/POSIX-free): the shm_channel
+# send -> drain round-trip over an anonymous mapped span (loan -> one memcpy ->
+# publish -> signal), the notifier signaling exactly once per successful send via
+# a recording stub, and the D-04 oversize fallback (a payload over the slot
+# capacity returns rejected, no publish, no signal). The TU includes only core
+# headers, proving the endpoints carry no backend dependency.
+add_executable(test_shm_channel test_shm_channel.cpp)
+
+target_include_directories(test_shm_channel PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_channel PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_channel TEST_PREFIX "shm.")
+
 # The thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
