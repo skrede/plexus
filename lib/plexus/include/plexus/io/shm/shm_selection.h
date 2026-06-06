@@ -14,7 +14,7 @@ namespace plexus::io::shm {
 // The medium a same-host (peer, topic) pair resolves to. shm = the pair is
 // same-host AND carries a qualifying hint, so each side attempts the ring acquire.
 // stream = the pair stays on the local stream (AF_UNIX) — the fallback. The wire
-// attach is NEVER suppressed regardless of this verdict (D-04 dual-delivery): a
+// attach is NEVER suppressed regardless of this verdict (dual-delivery): a
 // shared-memory upgrade ADDS a same-host fast path, it does not REPLACE the wire
 // path, so a peer that cannot map the ring (or a third process that never upgrades)
 // still receives over the stream. This enum only records which fast path, if any,
@@ -25,7 +25,7 @@ enum class same_host_medium : std::uint8_t
     shm,
 };
 
-// The pure selection decision (D-01/D-02/D-03): a (peer, topic) pair is
+// The pure selection decision: a (peer, topic) pair is
 // shared-memory eligible iff the peer is same-host AND either side declared a
 // qualifying dispatch hint. The hint is consumer-sovereign and bilateral — it is
 // the OR of whatever this side declared with whatever the peer declared (passed in

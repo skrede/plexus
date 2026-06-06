@@ -98,7 +98,7 @@ public:
         return reliability_hint::unspecified;   // unix/inproc (local) and unknown: no claim
     }
 
-    // The shared-memory eligibility decision (D-02): a (peer, topic) pair prefers
+    // The shared-memory eligibility decision: a (peer, topic) pair prefers
     // the shared-memory medium iff it is SAME-HOST (the local tier) AND the topic
     // carries a qualifying dispatch hint (any bit set). The two factors are
     // independent and both necessary — locality alone keeps a same-host topic on

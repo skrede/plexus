@@ -15,13 +15,13 @@ namespace plexus::io::shm {
 // policy: a hint only gates whether a same-host side ATTEMPTS the ring acquire; it
 // grants no cross-host reach and overrides no locality confinement.
 //
-// `none = 0` is deliberately the absence (D-01) — NOT an std::optional. A field
+// `none = 0` is deliberately the absence — NOT an std::optional. A field
 // defaulting to none means "no hint declared"; there is nothing to distinguish a
 // declared-none from an undeclared one, so a plain enum with a 0 absence is the
 // correct shape (plexus has no QoS negotiation, so no "unset" sentinel is needed).
 //
-// priority -> SHM is the weakest of the three motivations (a latency win from
-// shared memory is real but small next to the frequent/large copy-and-syscall
+// priority -> shared memory is the weakest of the three motivations (a latency win
+// from shared memory is real but small next to the frequent/large copy-and-syscall
 // wins); it is flagged for empirical pruning at v0.1.5 (a sweep may show priority
 // alone does not justify a ring). This is a tuning note, not a deferred feature —
 // the bit ships and is honored today.
@@ -45,7 +45,7 @@ constexpr dispatch_hint operator&(dispatch_hint a, dispatch_hint b) noexcept
     return static_cast<dispatch_hint>(static_cast<std::uint8_t>(a) & static_cast<std::uint8_t>(b));
 }
 
-// The SHM-eligibility predicate (D-02): a topic prefers the shared-memory medium
+// The shared-memory eligibility predicate: a topic prefers the shared-memory medium
 // iff ANY hint bit is set. none -> false (the topic stays on the local stream).
 // This is the dispatch half of the selector decision; the locality (same-host)
 // half is the other factor the transport_selector composes with it.

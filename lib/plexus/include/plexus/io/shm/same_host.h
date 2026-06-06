@@ -21,8 +21,8 @@ namespace plexus::io::shm {
 // string (plexus carries no XXH3 dependency; the determinism + host-distinctness
 // the same-host test needs are exactly what the cross-process-stable fqn hash
 // already provides). A zero value is the NULL fingerprint — "no fingerprint
-// computed / advertised" — which is NEVER same-host (Pitfall 2, the fail-closed
-// guard below). The node computes its own fingerprint ONCE into owned state and
+// computed / advertised" — which is NEVER same-host (the fail-closed null-guard
+// below). The node computes its own fingerprint ONCE into owned state and
 // passes it in; this header holds no static memoization (the no-static-singleton
 // discipline).
 struct host_fingerprint
@@ -37,7 +37,7 @@ struct host_fingerprint
     }
 };
 
-// The load-bearing null-guard (Pitfall 2): two ends are same-host iff the peer's
+// The load-bearing null-guard: two ends are same-host iff the peer's
 // fingerprint is NON-null AND equals the local one. A null peer fingerprint is
 // NEVER same-host — a peer that advertises nothing (or a forged zero) cannot claim
 // co-location it has not proven, so the pair falls back to the wire. This fails
