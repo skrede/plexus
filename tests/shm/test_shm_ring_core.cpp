@@ -5,6 +5,9 @@
 #include "plexus/io/shm/ring_layout.h"
 #include "plexus/io/shm/loan_status.h"
 
+#include "plexus/io/congestion.h"
+#include "plexus/io/reliability.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -96,13 +99,19 @@ TEST_CASE("ring_core: claim/commit/consume round-trips a payload single-process"
     std::uint32_t cursor_index = 0;
     REQUIRE(ring.register_cursor(cursor_index) == loan_status::ok);
     std::uint64_t cursor = ring.tail_position();
+    ring.publish_cursor(cursor_index, cursor);
 
+    // Loop well past one lap (200 > 64 cells): the reliable claim gates on this
+    // single registered cursor, which advances each iteration, so reclamation
+    // keeps pace and the round-trip never congests. Each consumed value must read
+    // back exactly the bytes the producer wrote.
     for (int i = 0; i < k_iterations; ++i)
     {
         const std::uint32_t value = 0xC0DE0000u | static_cast<std::uint32_t>(i);
 
         broadcast_ring::claim_result claim;
-        REQUIRE(ring.claim(sizeof(value), claim) == loan_status::ok);
+        REQUIRE(ring.claim_with_policy(sizeof(value), plexus::io::reliability::reliable,
+                                       plexus::io::congestion::block, claim) == loan_status::ok);
         std::memcpy(claim.slab.data(), &value, sizeof(value));
         REQUIRE(ring.commit(claim.position, sizeof(value)) == loan_status::ok);
 

@@ -38,6 +38,32 @@ target_link_libraries(test_shm_ring_core PRIVATE
 
 catch_discover_tests(test_shm_ring_core TEST_PREFIX "shm.")
 
+# Ring backpressure: best_effort overwrite-skips a pinned slot, the full-lap
+# congested fallback, and the reliable cursor gate (lossless).
+add_executable(test_shm_ring_backpressure test_shm_ring_backpressure.cpp)
+
+target_link_libraries(test_shm_ring_backpressure PRIVATE
+    plexus::plexus
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_ring_backpressure TEST_PREFIX "shm.")
+
+# The overwrite-vs-pin Dekker race, driven across a producer + consumer thread
+# (the looped-logic proof; tsan is the phase-boundary gate). The two driver
+# threads are a test-local concern (the ring itself spawns none) -- the SHM test
+# tree is the sole consumer of pthreads, so the dependency is resolved here in the
+# fragment, never in the shared root.
+find_package(Threads REQUIRED)
+
+add_executable(test_shm_ring_dekker test_shm_ring_dekker.cpp)
+
+target_link_libraries(test_shm_ring_dekker PRIVATE
+    plexus::plexus
+    Threads::Threads
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_ring_dekker TEST_PREFIX "shm.")
+
 # The D-10 thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's

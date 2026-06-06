@@ -1,0 +1,490 @@
+#ifndef HPP_GUARD_PLEXUS_IO_SHM_BROADCAST_RING_H
+#define HPP_GUARD_PLEXUS_IO_SHM_BROADCAST_RING_H
+
+#include "plexus/io/shm/ring_layout.h"
+#include "plexus/io/shm/loan_status.h"
+
+#include "plexus/io/congestion.h"
+#include "plexus/io/reliability.h"
+
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <new>
+#include <span>
+#include <utility>
+
+namespace plexus::io::shm {
+
+// Lock-free, cross-process, offset-based MPMC broadcast ring. It is the Vyukov
+// bounded MPMC queue adapted to DESCRIPTOR cells: each fixed cache-line cell
+// carries a slot descriptor (a payload-slab byte offset + length + the per-cell
+// sequence/generation), and the variable-size payload bytes live in a separate
+// fixed-stride slab keyed 1:1 to the cells (owning cell pos&mask grants exclusive
+// use of slab slot pos&mask, so there is no second allocator). It exposes the
+// low-level claim/commit/consume mechanism that the loan/publish/take endpoints
+// wrap, plus the broadcast overlay (per-consumer in-region cursors) and the two
+// backpressure modes reliability/congestion select.
+//
+// Header-only by design (no .cpp): the atomics + offset math are all inlineable,
+// so the ring is pure generic core with zero asio/POSIX dependency. It drives a
+// caller-supplied pair of mapped spans (a control+cells region and a payload
+// slab region); a test maps two anonymous spans and drives it directly, and a
+// backend maps two /dev/shm regions over the same seam. The ring never includes
+// a region broker -- the caller owns the mapping lifetime.
+//
+// Two mapped spans back one ring: a control+cells region (the header and the cell
+// array) and a payload slab region. The creator create()s over freshly-zeroed
+// spans and stamps the header; an attacher attach()es and re-reads + bounds-checks
+// the config (cell_count/slot_capacity/mask) from the SHM header rather than
+// trusting any separately-supplied value (the V5 input-validation control + the
+// foreign-region magic reject).
+//
+// BROADCAST OVERLAY (the Disruptor gating idea over Vyukov). Stock Vyukov is a
+// consume-once queue; here every subscriber must observe every committed slot.
+// Each subscriber owns its own read cursor in the header's fixed-bound, in-region
+// cursor array (register_cursor/unregister_cursor). A consumer reads cell
+// cursor&mask, checks sequence==cursor+1, reads, then advances ITS OWN cursor.
+// The producer reclamation gate is "the slowest registered consumer has passed
+// this slot": a registered cursor whose position is the sentinel (k_cursor_idle)
+// does not gate, so an unused-but-registered slot never wedges reclamation.
+// Exceeding k_max_consumers returns rejected.
+//
+// BACKPRESSURE (plexus::io::reliability + plexus::io::congestion). claim_with_policy
+// threads the publisher's delivery class:
+//   reliable     -> a cell is reusable only when take_refcount==0 AND the slowest
+//                   registered (non-sentinel) cursor is strictly past it; if the
+//                   gate blocks, claim returns congested (the publisher does the
+//                   bounded spin+backoff -- there is no kernel object).
+//   best-effort  -> overwrite-latest: claim never blocks on a slow cursor, but it
+//                   SKIPS any cell whose take_refcount>0 (overwrite RESPECTS a
+//                   live take so a consumer's aliased read is never stomped). At
+//                   most k_max_consumers cells can be pinned; if a full lap is all
+//                   pinned, claim returns congested as a bounded fallback. A
+//                   lapped consumer detects dif>0 and skips forward.
+// Memory ordering: take_refcount is acq_rel; the cursor loads/stores that gate
+// reclamation are acquire/release.
+//
+// CRASH STANCE (honest -- crash-SAFE, NOT crash-LIVE). No cross-process lock is
+// held by any verb, so a process dying mid-operation never corrupts the ring and
+// never leaves a held lock: atomics are all-or-nothing and survivors read a
+// consistent layout. It is NOT crash-LIVE: a producer that dies after the enqueue
+// CAS but before the release store of `sequence` leaves one cell whose sequence
+// never advances; a consumer that dies holding a take() leaves take_refcount>0 so
+// that cell never reclaims under reliable mode. Detect-and-reclaim is a DEFERRED
+// hardening item -- not solved here and not to be assumed.
+//
+// Non-copy/non-move owning service.
+class broadcast_ring
+{
+public:
+    // Sentinel cursor position meaning "registered but not yet gating": a fresh
+    // cursor does not hold back reclamation until it reads its first slot.
+    static constexpr std::uint64_t k_cursor_idle = UINT64_MAX;
+
+    // Result of a successful claim: the cell position (carries the lap) and a
+    // writable, 8-aligned slab span the caller fills before committing.
+    struct claim_result
+    {
+        std::uint64_t position{0};
+        std::span<std::byte> slab;
+    };
+
+    // Result of a successful consume: the read-only slab span for the message
+    // and the cell position it was read from.
+    struct consume_result
+    {
+        std::uint64_t position{0};
+        std::span<const std::byte> slab;
+    };
+
+    broadcast_ring() = default;
+
+    broadcast_ring(const broadcast_ring &) = delete;
+    broadcast_ring &operator=(const broadcast_ring &) = delete;
+    broadcast_ring(broadcast_ring &&) = delete;
+    broadcast_ring &operator=(broadcast_ring &&) = delete;
+
+    // Places the control header + cells over `control` and initializes every
+    // cell's sequence to its index per the Vyukov init. cell_count must be a
+    // power of two; slot_capacity > 0. The spans must already be sized for the
+    // geometry (control_region_bytes / slab_region_bytes).
+    static loan_status create(std::span<std::byte> control, std::span<std::byte> slab,
+                              std::uint64_t cell_count, std::uint64_t slot_capacity,
+                              broadcast_ring &out) noexcept
+    {
+        if(!is_power_of_two(cell_count) || slot_capacity == 0)
+            return loan_status::rejected;
+        if(control.size() < control_region_bytes(cell_count) ||
+           slab.size() < slab_region_bytes(cell_count, slot_capacity))
+            return loan_status::rejected;
+
+        auto *header = ::new(control.data()) control_header_t{};
+        header->enqueue_pos.store(0, std::memory_order_relaxed);
+        header->magic         = k_ring_magic;
+        header->cell_count    = cell_count;
+        header->slot_capacity = slot_capacity;
+        header->mask          = cell_count - 1;
+        header->notify_generation.store(0, std::memory_order_relaxed);
+        for(std::size_t i = 0; i < k_max_consumers; ++i)
+        {
+            header->cursors[i].position.store(k_cursor_idle, std::memory_order_relaxed);
+            header->cursors[i].active.store(0, std::memory_order_relaxed);
+        }
+
+        auto *cells = ::new(control.data() + sizeof(control_header_t)) cell_t[cell_count];
+        for(std::uint64_t i = 0; i < cell_count; ++i)
+        {
+            cells[i].sequence.store(i, std::memory_order_relaxed);
+            cells[i].payload_offset.store(0, std::memory_order_relaxed);
+            cells[i].payload_len.store(0, std::memory_order_relaxed);
+            cells[i].take_refcount.store(0, std::memory_order_relaxed);
+        }
+
+        out.bind(control, slab, header, cells, cell_count, slot_capacity, cell_count - 1);
+        return loan_status::ok;
+    }
+
+    // Attaches over already-mapped spans and re-reads + bounds-checks the config
+    // from the control header (never trusts a peer's separate value): magic +
+    // version, power-of-two cell_count, mask == cell_count - 1, and both region
+    // sizes. A foreign or layout-incompatible region is rejected.
+    static loan_status attach(std::span<std::byte> control, std::span<std::byte> slab,
+                              broadcast_ring &out) noexcept
+    {
+        if(control.size() < sizeof(control_header_t))
+            return loan_status::rejected;
+
+        auto *header = std::launder(reinterpret_cast<control_header_t *>(control.data()));
+        if(header->magic != k_ring_magic || !is_power_of_two(header->cell_count) ||
+           header->slot_capacity == 0)
+            return loan_status::rejected;
+        if(header->mask != header->cell_count - 1)
+            return loan_status::rejected;
+
+        const std::uint64_t stride = round_up_8(header->slot_capacity);
+        if(control.size() < control_region_bytes(header->cell_count) ||
+           slab.size() < header->cell_count * stride)
+            return loan_status::rejected;
+
+        auto *cells = std::launder(reinterpret_cast<cell_t *>(control.data() + sizeof(control_header_t)));
+        out.bind(control, slab, header, cells, header->cell_count, header->slot_capacity, header->mask);
+        return loan_status::ok;
+    }
+
+    // Claims a free cell for a message of `size` bytes under the reliable policy
+    // with no consumer gating. size>slot_capacity -> rejected; a free cell won ->
+    // ok; ring full -> congested.
+    loan_status claim(std::size_t size, claim_result &out) noexcept
+    {
+        if(size > m_slot_capacity)
+            return loan_status::rejected;
+
+        std::uint64_t pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
+        for(;;)
+        {
+            cell_t &c               = cell_at(pos);
+            const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
+            const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(pos);
+            if(dif == 0)
+            {
+                if(m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+                    break;
+            }
+            else if(dif < 0)
+                return loan_status::congested;
+            else
+                pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
+        }
+
+        out.position = pos;
+        out.slab     = slot_span(pos);
+        return loan_status::ok;
+    }
+
+    // Claims a free cell honoring the backpressure policy and the consumer gate.
+    // reliable -> congested when the slowest registered cursor has not passed the
+    // cell (and spins out a transient pin); best-effort -> overwrite-latest,
+    // skipping pinned cells, congested only when a full lap is pinned.
+    loan_status claim_with_policy(std::size_t size, reliability rel, congestion, claim_result &out) noexcept
+    {
+        if(size > m_slot_capacity)
+            return loan_status::rejected;
+
+        std::uint64_t pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
+        if(rel == reliability::reliable)
+            return claim_reliable(pos, out);
+        return claim_best_effort(pos, out);
+    }
+
+    // Commits a claimed cell: writes the descriptor fields relaxed, then releases
+    // the sequence so an acquiring consumer observes the payload writes.
+    // filled_len > slot_capacity -> rejected.
+    loan_status commit(std::uint64_t position, std::size_t filled_len) noexcept
+    {
+        if(filled_len > m_slot_capacity)
+            return loan_status::rejected;
+
+        cell_t &c = cell_at(position);
+        c.payload_offset.store(static_cast<std::uint64_t>(position & m_mask) * m_stride,
+                               std::memory_order_relaxed);
+        c.payload_len.store(static_cast<std::uint32_t>(filled_len), std::memory_order_relaxed);
+        c.sequence.store(position + 1, std::memory_order_release);
+        return loan_status::ok;
+    }
+
+    // Reads the cell at `cursor` for this consumer: sequence==cursor+1 -> ok with
+    // a read-only slab span; nothing newer -> empty; the cursor fell a full lap
+    // behind OR the slot is a skip tombstone -> congested (the caller steps its
+    // cursor forward without delivering).
+    loan_status consume(std::uint64_t cursor, consume_result &out) noexcept
+    {
+        cell_t &c               = cell_at(cursor);
+        const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
+        const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(cursor + 1);
+        if(dif < 0)
+            return loan_status::empty;
+        if(dif > 0)
+            return loan_status::congested;
+
+        const std::uint32_t len = c.payload_len.load(std::memory_order_relaxed);
+        if(len == k_skip_len)
+            return loan_status::congested;
+
+        out.position = cursor;
+        out.slab     = const_slot_span(cursor).subspan(
+            0, static_cast<std::size_t>(len > m_slot_capacity ? m_slot_capacity : len));
+        return loan_status::ok;
+    }
+
+    // Registers a broadcast cursor in the header's fixed-bound array; out_index is
+    // initialized to k_cursor_idle (not gating). rejected when k_max_consumers are
+    // already registered.
+    loan_status register_cursor(std::uint32_t &out_index) noexcept
+    {
+        for(std::uint32_t i = 0; i < k_max_consumers; ++i)
+        {
+            std::uint32_t expected = 0;
+            if(m_header->cursors[i].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
+            {
+                m_header->cursors[i].position.store(k_cursor_idle, std::memory_order_release);
+                out_index = i;
+                return loan_status::ok;
+            }
+        }
+        return loan_status::rejected;
+    }
+
+    // Releases a previously-registered cursor so it stops gating reclamation.
+    void unregister_cursor(std::uint32_t index) noexcept
+    {
+        if(index >= k_max_consumers)
+            return;
+        m_header->cursors[index].position.store(k_cursor_idle, std::memory_order_release);
+        m_header->cursors[index].active.store(0, std::memory_order_release);
+    }
+
+    // Publishes this consumer's cursor position with release so the producer's
+    // reclamation gate observes it.
+    void publish_cursor(std::uint32_t index, std::uint64_t position) noexcept
+    {
+        if(index >= k_max_consumers)
+            return;
+        m_header->cursors[index].position.store(position, std::memory_order_release);
+    }
+
+    // The take_refcount atomic pinning the cell at `position`.
+    std::atomic<std::uint32_t> &refcount_at(std::uint64_t position) noexcept
+    {
+        return cell_at(position).take_refcount;
+    }
+
+    // READER side of the overwrite-vs-pin Dekker handshake. Pins the cell at
+    // `cursor` (seq_cst fetch_add on take_refcount) then RE-LOADS its sequence
+    // seq_cst: if it still reads cursor+1 the pin landed before any best-effort
+    // overwrite could win the slot (the matching seq_cst announce/recheck pair
+    // rules out store-buffering), so the pin holds -- returns true. Otherwise the
+    // pin is dropped and false returned so the caller skips a torn read.
+    bool pin_if_current(std::uint64_t cursor) noexcept
+    {
+        cell_t &c = cell_at(cursor);
+        c.take_refcount.fetch_add(1, std::memory_order_seq_cst); // announce the pin
+        if(c.sequence.load(std::memory_order_seq_cst) == cursor + 1)
+            return true; // the slot is still our committed message: the pin holds
+        c.take_refcount.fetch_sub(1, std::memory_order_seq_cst); // overwritten: unpin
+        return false;
+    }
+
+    // The producer's current enqueue position -- a late-joining subscriber starts
+    // its cursor here so it sees messages published after it registers.
+    std::uint64_t tail_position() const noexcept
+    {
+        return m_header->enqueue_pos.load(std::memory_order_acquire);
+    }
+
+    // The shared wakeup-generation word in this ring's control header (in mapped
+    // shared memory). A producer in ANY process attached to this ring bumps it and
+    // wakes a consumer blocked on it by address; the consumer's notifier
+    // FUTEX_WAITs on this same word.
+    std::atomic<std::uint32_t> &notify_generation() noexcept
+    {
+        return m_header->notify_generation;
+    }
+
+    std::uint64_t cell_count() const noexcept { return m_cell_count; }
+    std::uint64_t slot_capacity() const noexcept { return m_slot_capacity; }
+
+private:
+    static bool is_power_of_two(std::uint64_t v) noexcept
+    {
+        return v != 0 && (v & (v - 1)) == 0;
+    }
+
+    void bind(std::span<std::byte> control, std::span<std::byte> slab, control_header_t *header,
+              cell_t *cells, std::uint64_t cell_count, std::uint64_t slot_capacity,
+              std::uint64_t mask) noexcept
+    {
+        m_control       = control;
+        m_slab          = slab;
+        m_header        = header;
+        m_cells         = cells;
+        m_cell_count    = cell_count;
+        m_slot_capacity = slot_capacity;
+        m_mask          = mask;
+        m_stride        = round_up_8(slot_capacity);
+    }
+
+    cell_t &cell_at(std::uint64_t position) noexcept { return m_cells[position & m_mask]; }
+
+    std::span<std::byte> slot_span(std::uint64_t position) noexcept
+    {
+        const std::size_t offset = static_cast<std::size_t>(position & m_mask) * m_stride;
+        return m_slab.subspan(offset, m_stride);
+    }
+
+    std::span<const std::byte> const_slot_span(std::uint64_t position) const noexcept
+    {
+        const std::size_t offset = static_cast<std::size_t>(position & m_mask) * m_stride;
+        return std::span<const std::byte>(m_slab).subspan(offset, m_stride);
+    }
+
+    // True when every registered, non-idle cursor has consumed the occupant the
+    // claim at `position` would overwrite (the one at position - cell_count).
+    bool consumers_passed(std::uint64_t position) const noexcept
+    {
+        if(position < m_cell_count)
+            return true; // first lap: no prior occupant to free
+        const std::uint64_t occupant = position - m_cell_count;
+        for(std::size_t i = 0; i < k_max_consumers; ++i)
+        {
+            if(m_header->cursors[i].active.load(std::memory_order_acquire) == 0)
+                continue;
+            const std::uint64_t cur = m_header->cursors[i].position.load(std::memory_order_acquire);
+            if(cur != k_cursor_idle && cur <= occupant)
+                return false; // a registered consumer has not consumed the occupant yet
+        }
+        return true;
+    }
+
+    // True when the slot serving `position` holds a COMMITTED prior occupant (or
+    // is fresh), so a best-effort overwrite may recycle it without stealing an
+    // in-flight peer's claim. dif==0 is fresh first-lap; dif==1-cell_count is
+    // filled-and-lapped (stale bytes); dif==-cell_count is an in-flight peer.
+    bool occupant_committed(std::uint64_t position) const noexcept
+    {
+        const std::uint64_t seq = m_cells[position & m_mask].sequence.load(std::memory_order_acquire);
+        const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(position);
+        return dif == 0 || dif == 1 - static_cast<std::int64_t>(m_cell_count);
+    }
+
+    // PRODUCER half of the overwrite-vs-pin Dekker announce on a slot already won.
+    // Stores the claiming marker on `sequence` (seq_cst) then seq_cst-loads
+    // take_refcount; the consumer's seq_cst pin + seq_cst recheck pair rules out
+    // store-buffering. Returns true when no live take pins the slot.
+    bool announce_and_check_pin(std::uint64_t position) noexcept
+    {
+        cell_t &c = cell_at(position);
+        c.sequence.store(position, std::memory_order_seq_cst); // claiming marker
+        return c.take_refcount.load(std::memory_order_seq_cst) == 0;
+    }
+
+    // Stamp the SKIPPED tombstone on the cell a best-effort producer donates past:
+    // advance its sequence to (pos + 1) so a future claim recognizes it via the
+    // Vyukov dif, but mark payload_len so consume() treats it as non-deliverable.
+    void stamp_skip(std::uint64_t position) noexcept
+    {
+        cell_t &c = cell_at(position);
+        c.payload_len.store(k_skip_len, std::memory_order_relaxed);
+        c.sequence.store(position + 1, std::memory_order_release);
+    }
+
+    loan_status claim_reliable(std::uint64_t &pos, claim_result &out) noexcept
+    {
+        for(;;)
+        {
+            // Gate BEFORE winning the position so reliable never burns a slot it
+            // cannot fill: the slowest cursor must have drained the prior occupant.
+            if(!consumers_passed(pos))
+                return loan_status::congested;
+            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+                continue;
+
+            // The position is now ours and contiguous. A consumer may still hold a
+            // pin on the prior occupant's aliased read; announce the claim and spin
+            // until the pin clears (Disruptor gate -- reliable keeps FIFO contiguity,
+            // and the pin is transient).
+            while(!announce_and_check_pin(pos))
+                ; // wait out the aliased read before overwriting its bytes
+            out.position = pos;
+            out.slab     = slot_span(pos);
+            return loan_status::ok;
+        }
+    }
+
+    loan_status claim_best_effort(std::uint64_t &pos, claim_result &out) noexcept
+    {
+        for(std::uint64_t skipped = 0;;)
+        {
+            // Only recycle a slot whose prior occupant is committed; an in-flight
+            // peer owns it otherwise. A stale `pos` reloads on the next CAS failure.
+            if(!occupant_committed(pos))
+            {
+                pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
+                continue;
+            }
+            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+                continue;
+
+            // Won the head; announce the claim and check the pin. Unpinned -> write.
+            if(announce_and_check_pin(pos))
+            {
+                out.position = pos;
+                out.slab     = slot_span(pos);
+                return loan_status::ok;
+            }
+            // Pinned by a live take: best-effort donates this position (leaving a
+            // recognizable tombstone) and tries the next. A full lap of pinned cells
+            // is the bounded congested fallback (at most k_max_consumers live pins).
+            stamp_skip(pos);
+            if(++skipped >= m_cell_count)
+                return loan_status::congested;
+            pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
+        }
+    }
+
+    std::span<std::byte> m_control;
+    std::span<std::byte> m_slab;
+    control_header_t *m_header{nullptr};
+    cell_t *m_cells{nullptr};
+    std::uint64_t m_cell_count{0};
+    std::uint64_t m_slot_capacity{0};
+    std::uint64_t m_mask{0};
+    std::uint64_t m_stride{0};
+};
+
+static_assert(broadcast_ring::k_cursor_idle == UINT64_MAX,
+              "an idle (registered-but-not-gating) cursor must read as the max sentinel");
+
+}
+
+#endif
