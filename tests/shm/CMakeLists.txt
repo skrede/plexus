@@ -152,6 +152,21 @@ target_link_libraries(test_shm_region_broker PRIVATE
 
 catch_discover_tests(test_shm_region_broker TEST_PREFIX "shm.")
 
+# The cross-process futex notifier: the wake crosses address spaces (the
+# no-PRIVATE-flag proof, a forked producer waking a forked consumer on a shared
+# MAP_SHARED word) and the drain-before-wait protocol delivers an interleaved
+# publish (lost-wakeup-safe). Links plexus::shm for the raw SYS_futex bodies.
+add_executable(test_shm_notifier_lostwakeup test_shm_notifier_lostwakeup.cpp)
+
+target_include_directories(test_shm_notifier_lostwakeup PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_notifier_lostwakeup PRIVATE
+    plexus::shm
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_notifier_lostwakeup TEST_PREFIX "shm.")
+
 # The thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
