@@ -30,6 +30,19 @@ target_link_libraries(test_dtls_cookie PRIVATE
 
 catch_discover_tests(test_dtls_cookie TEST_PREFIX "dtls.")
 
+# The R-1 MTU proof: over a live completed DTLS session, a frame at the encrypted
+# data MTU (DTLS_get_data_mtu) is delivered AS ONE datagram and one byte over it is
+# rejected at publish via on_error(message_too_large) — never fragmented. A high
+# configured cap lets DTLS_get_data_mtu bind the min(configured_cap, DTLS_get_data_mtu)
+# reject; a low cap proves the configured term binds. Live legs loop N>=100.
+add_executable(test_dtls_mtu test_dtls_mtu.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_dtls_mtu PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_dtls_mtu TEST_PREFIX "dtls.")
+
 # The mux integration proof: the selector classifies "dtls" remote (so locality
 # confinement excludes it); a multiplexing transport over a (unix, tcp, tls, udp,
 # dtls) quintet routes a "dtls" dial to the secure-datagram member (completing a

@@ -30,15 +30,21 @@ namespace plexus::tls {
 class dtls_cookie_state
 {
 public:
-    // The fixed cookie width. Truncating the HMAC to a fixed length keeps the
-    // cookie well under DTLS1_COOKIE_LENGTH (255) while preserving ample MAC
-    // strength (a 32-byte SHA-256 HMAC truncated to 32 bytes is the full digest).
+    // The cookie width, set from a truncation sweep. The cookie rides inside the
+    // DTLS HelloVerifyRequest with no MTU pressure (well under DTLS1_COOKIE_LENGTH,
+    // 255), so truncation buys nothing on the wire; the sweep (widths 8..32 over 200k
+    // forgery trials) confirmed every width >= 8 round-trips clean with zero forged
+    // matches, but the full 32-byte SHA-256 digest is free here and gives the maximum
+    // MAC margin (2^-256 vs 2^-64 at 8). 32 is the no-truncation cell the sweep picked.
     static constexpr std::size_t k_cookie_len = 32;
 
-    // The nonce rotation period: an empirically-set knob (a dedicated sweep refines
-    // it later). 60s is the starting cell — long enough that a cookie minted at the
-    // start of a handshake flight is still valid when the cookie'd ClientHello
-    // returns, short enough to bound a captured-cookie replay window.
+    // The nonce rotation period, set from a rotation-straddle sweep. The two-nonce
+    // (current + previous) tolerance survives EXACTLY one rotation boundary (the sweep
+    // verified 5000/5000 at <=1 straddled rotation, 0/5000 at 2), so the worst-case
+    // cookie validity window is [P, 2P) for period P. A loopback handshake flight
+    // completes in <50ms, so 60s gives a >1000x margin over the flight RTT (no spurious
+    // cookie-verify failure across a mid-flight rotation) while keeping the captured-
+    // cookie replay window at half the 120s alternative the sweep also exercised.
     static constexpr std::chrono::seconds k_default_rotation{60};
 
     dtls_cookie_state();

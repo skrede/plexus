@@ -256,6 +256,12 @@ void dtls_channel::try_complete()
     if(ok)
     {
         capture_peer_identity(m_ssl);
+        // OpenSSL resets the SSL MTU to the conservative DTLS minimum during the
+        // handshake (a memory-BIO pair cannot do path-MTU discovery), so re-assert the
+        // configured record budget now that the cipher is negotiated — DTLS_get_data_mtu
+        // (the send() oversize-reject term) otherwise collapses to the ~219-byte floor
+        // instead of the intended ~1400 budget (R-1).
+        ::SSL_set_mtu(m_ssl, k_dtls_mtu);
         m_complete_fired = true;
         if(peer)
             ::X509_free(peer);
