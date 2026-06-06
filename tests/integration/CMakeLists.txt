@@ -457,6 +457,19 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         catch_discover_tests(test_mux_select_asio TEST_PREFIX "integration.")
     endif()
 
+    # The minimal-composition proof: the core multiplexer instantiated DIRECTLY over a
+    # unix + tcp member subset (NOT the all_backends_mux alias) compiles, constructs, and
+    # satisfies the erased transport_backend surface. It links plexus::asio but NEITHER
+    # plexus::crypto NOR OpenSSL — the composability payoff: a node that omits the secure
+    # member pulls in none of the crypto stack.
+    add_executable(test_mux_minimal_composition test_mux_minimal_composition.cpp)
+    target_link_libraries(test_mux_minimal_composition PRIVATE
+        plexus::plexus
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_mux_minimal_composition TEST_PREFIX "integration.")
+
     # The hot-path allocation audit gains a type-erased polymorphic_byte_channel variant when the asio
     # backend is on: the same steady-state 0-alloc invariant must hold across the single
     # virtual hop the erasure adds. The mux headers are header-only inside plexus::asio, so
