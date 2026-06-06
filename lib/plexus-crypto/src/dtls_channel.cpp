@@ -1,7 +1,9 @@
 #include "plexus/tls/dtls_channel.h"
 
-#include <openssl/ssl.h>
+#include "plexus/tls/detail/dtls_identity.h"
+
 #include <openssl/bio.h>
+#include <openssl/ssl.h>
 #include <openssl/x509.h>
 
 #include <chrono>
@@ -17,79 +19,6 @@ void free_bio(BIO *b) { if(b) BIO_free(b); }
 
 int to_int(std::size_t v) noexcept { return static_cast<int>(v); }
 
-// Pack a udp endpoint into the cookie-bound peer-addr block: a length-prefixed
-// [addr-bytes || 2-byte port] (RFC 6347 §4.2.1 binds the cookie HMAC to the source
-// address). v4 packs 4 bytes, v6 packs 16; the port disambiguates a NAT-shared
-// address. The first byte is the total payload length the cookie cb reads back.
-std::vector<unsigned char> pack_peer_addr(const ::asio::ip::udp::endpoint &ep)
-{
-    std::vector<unsigned char> block;
-    const auto addr = ep.address();
-    std::vector<unsigned char> raw;
-    if(addr.is_v4())
-    {
-        auto b = addr.to_v4().to_bytes();
-        raw.assign(b.begin(), b.end());
-    }
-    else
-    {
-        auto b = addr.to_v6().to_bytes();
-        raw.assign(b.begin(), b.end());
-    }
-    const std::uint16_t port = ep.port();
-    raw.push_back(static_cast<unsigned char>(port >> 8));
-    raw.push_back(static_cast<unsigned char>(port & 0xff));
-
-    block.reserve(raw.size() + 1);
-    block.push_back(static_cast<unsigned char>(raw.size()));
-    block.insert(block.end(), raw.begin(), raw.end());
-    return block;
-}
-
-// SHA-256 the DER-encoded SPKI of the peer leaf into a 16-byte node_id (the first
-// 16 bytes of the full 32-byte SPKI digest — node_id is a 128-bit value). The full
-// pin is still the trust anchor in the verify cb; this is only the registry key.
-void spki_to_node_id(X509 *leaf, node_id &out)
-{
-    EVP_PKEY *pub = X509_get_pubkey(leaf);
-    if(!pub)
-        return;
-    X509_PUBKEY *xpub = nullptr;
-    if(X509_PUBKEY_set(&xpub, pub) == 1 && xpub)
-    {
-        unsigned char *der = nullptr;
-        const int der_len = i2d_X509_PUBKEY(xpub, &der);
-        if(der_len > 0 && der)
-        {
-            unsigned char digest[EVP_MAX_MD_SIZE];
-            unsigned int dlen = 0;
-            if(EVP_Digest(der, static_cast<std::size_t>(der_len), digest, &dlen, EVP_sha256(), nullptr) == 1
-               && dlen >= out.size())
-                std::memcpy(out.data(), digest, out.size());
-            OPENSSL_free(der);
-        }
-        X509_PUBKEY_free(xpub);
-    }
-    EVP_PKEY_free(pub);
-}
-
-// The cert subject CN (R-OQ3: node_name == cert subject). Falls back to the full
-// one-line subject DN if there is no CN entry.
-std::string subject_name_of(X509 *leaf)
-{
-    X509_NAME *name = X509_get_subject_name(leaf);
-    if(!name)
-        return {};
-    char cn[256];
-    const int n = X509_NAME_get_text_by_NID(name, NID_commonName, cn, sizeof(cn));
-    if(n > 0)
-        return std::string(cn, static_cast<std::size_t>(n));
-    char *line = X509_NAME_oneline(name, nullptr, 0);
-    std::string out = line ? line : "";
-    OPENSSL_free(line);
-    return out;
-}
-
 }
 
 dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
@@ -103,7 +32,7 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
     , m_max_payload(max_payload)
     , m_ssl_ctx(detail::share_dtls_context(cred))
     , m_retransmit(io)
-    , m_peer_addr_block(pack_peer_addr(m_dest))
+    , m_peer_addr_block(detail::pack_peer_addr(m_dest))
 {
     BIO *internal = nullptr;
     BIO *external = nullptr;
@@ -207,9 +136,12 @@ void dtls_channel::drain_outbound()
         const int n = ::BIO_read(bio, m_drain_buf.data(), to_int(m_drain_buf.size()));
         if(n <= 0)
             break;
-        m_send_scratch.assign(reinterpret_cast<const std::byte *>(m_drain_buf.data()),
-                              reinterpret_cast<const std::byte *>(m_drain_buf.data()) + n);
-        m_server.send_to(m_send_scratch, m_dest);
+        // Send DIRECTLY from the owned 2048-byte drain buffer (no per-datagram scratch
+        // reallocation on the steady-state hot path): udp_server's outbound queue owns
+        // each in-flight datagram's bytes across its async_send_to, so the buffer is
+        // free to be overwritten by the next BIO_read on return.
+        m_server.send_to(std::span<const std::byte>{
+            reinterpret_cast<const std::byte *>(m_drain_buf.data()), static_cast<std::size_t>(n)}, m_dest);
     }
 }
 
@@ -255,7 +187,7 @@ void dtls_channel::try_complete()
     const bool ok = peer && ::SSL_get_verify_result(m_ssl) == X509_V_OK;
     if(ok)
     {
-        capture_peer_identity(m_ssl);
+        capture_peer_identity(peer);             // reuse the cert just validated (no second fetch)
         // OpenSSL resets the SSL MTU to the conservative DTLS minimum during the
         // handshake (a memory-BIO pair cannot do path-MTU discovery), so re-assert the
         // configured record budget now that the cipher is negotiated — DTLS_get_data_mtu
@@ -274,14 +206,12 @@ void dtls_channel::try_complete()
     fail(io::io_error::connection_refused);      // fail-closed: no completion
 }
 
-void dtls_channel::capture_peer_identity(ssl_st *ssl)
+void dtls_channel::capture_peer_identity(X509 *peer)
 {
-    X509 *peer = ::SSL_get1_peer_certificate(ssl);
     if(!peer)
         return;
-    spki_to_node_id(peer, m_node_id);
-    m_node_name = subject_name_of(peer);
-    ::X509_free(peer);
+    detail::spki_to_node_id(peer, m_node_id);
+    m_node_name = detail::subject_name_of(peer);
 }
 
 void dtls_channel::arm_retransmit()

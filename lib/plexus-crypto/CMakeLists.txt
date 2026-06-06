@@ -34,6 +34,7 @@ add_library(plexus-crypto OBJECT
     src/tls_credential.cpp
     src/dtls_context.cpp
     src/dtls_cookie.cpp
+    src/dtls_identity.cpp
     src/dtls_channel.cpp)
 add_library(plexus::crypto ALIAS plexus-crypto)
 

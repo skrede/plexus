@@ -126,7 +126,7 @@ private:
     void fail(io::io_error e);
     void post_on_data(std::span<const std::byte> frame);
     void publish_cookie_ex_data();
-    void capture_peer_identity(ssl_st *ssl);
+    void capture_peer_identity(x509_st *peer);
 
     ::asio::io_context &m_io;
     plexus::asio::udp_server &m_server;
@@ -142,7 +142,6 @@ private:
 
     std::vector<unsigned char> m_peer_addr_block; // [len][addr bytes] for the cookie cb
     std::array<unsigned char, 2048> m_drain_buf{};
-    std::vector<std::byte> m_send_scratch;
 
     node_id m_node_id{};
     std::string m_node_name;
