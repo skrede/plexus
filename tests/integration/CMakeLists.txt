@@ -446,7 +446,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         catch_discover_tests(test_mux_select_asio TEST_PREFIX "integration.")
     endif()
 
-    # The hot-path allocation audit gains a type-erased mux_channel variant when the asio
+    # The hot-path allocation audit gains a type-erased polymorphic_byte_channel variant when the asio
     # backend is on: the same steady-state 0-alloc invariant must hold across the single
     # virtual hop the erasure adds. The mux headers are header-only inside plexus::asio, so
     # the variant is compiled in (guarded by PLEXUS_HAVE_ASIO_MUX) only here.

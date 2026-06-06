@@ -12,10 +12,11 @@
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/udp_transport.h"
-#include "plexus/asio/detail/udp_handshake_frame.h"
 
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
+
+#include "plexus/io/detail/udp_handshake_frame.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -43,9 +44,9 @@ using ms = std::chrono::milliseconds;
 
 constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80}};
 
-inline pasio::detail::udp_arq_config fast_arq()
+inline pio::detail::udp_arq_config fast_arq()
 {
-    return pasio::detail::udp_arq_config{
+    return pio::detail::udp_arq_config{
         .window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{80}, .max_retransmit = 12};
 }
 
@@ -170,8 +171,8 @@ TEST_CASE("udp reliable_datagram: a 'udpr' dial mints reliable-mode channels on 
     REQUIRE(accepted != nullptr);
     // The dialer declared reliable_datagram in the handshake; the acceptor minted the
     // SAME mode — both report "udpr" (the mode is symmetric, not just dialer-side).
-    REQUIRE(dialed->mode() == pasio::detail::udp_channel_mode::reliable_datagram);
-    REQUIRE(accepted->mode() == pasio::detail::udp_channel_mode::reliable_datagram);
+    REQUIRE(dialed->mode() == pio::detail::udp_channel_mode::reliable_datagram);
+    REQUIRE(accepted->mode() == pio::detail::udp_channel_mode::reliable_datagram);
     REQUIRE(dialed->remote_endpoint().scheme == "udpr");
     REQUIRE(accepted->remote_endpoint().scheme == "udpr");
 }
@@ -194,8 +195,8 @@ TEST_CASE("udp reliable_datagram: a 'udp' dial stays best_effort (the opt-in is 
 
     REQUIRE(dialed != nullptr);
     REQUIRE(accepted != nullptr);
-    REQUIRE(dialed->mode() == pasio::detail::udp_channel_mode::best_effort);
-    REQUIRE(accepted->mode() == pasio::detail::udp_channel_mode::best_effort);
+    REQUIRE(dialed->mode() == pio::detail::udp_channel_mode::best_effort);
+    REQUIRE(accepted->mode() == pio::detail::udp_channel_mode::best_effort);
     REQUIRE(dialed->remote_endpoint().scheme == "udp");
     REQUIRE(accepted->remote_endpoint().scheme == "udp");
 }

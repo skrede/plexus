@@ -21,7 +21,7 @@
 
 #include "plexus/asio/udp_policy.h"
 #include "plexus/asio/udp_transport.h"
-#include "plexus/asio/detail/udp_handshake_arq.h"
+#include "plexus/io/detail/udp_handshake_arq.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -38,6 +38,7 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
+namespace pio = plexus::io;
 
 namespace {
 
@@ -193,7 +194,7 @@ TEST_CASE("udp handshake_arq: dropping every datagram surfaces a handshake-timeo
 
 TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired frame cancels it", "[udp][handshake]")
 {
-    using arq_t = pasio::detail::udp_handshake_arq<pasio::udp_policy>;
+    using arq_t = pio::detail::udp_handshake_arq<pasio::udp_policy>;
 
     SECTION("a paired frame mid-ladder establishes and stops further transmits")
     {

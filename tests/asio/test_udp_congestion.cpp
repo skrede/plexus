@@ -17,12 +17,12 @@
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/udp_transport.h"
-#include "plexus/asio/detail/udp_reliable_arq.h"
 
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
 
 #include "plexus/io/congestion.h"
+#include "plexus/io/detail/udp_reliable_arq.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -53,9 +53,9 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 // A compressed ARQ config with a SMALL window so a modest publish burst overruns it and
 // exercises the congestion path quickly. Bound at construction (the same structural seam
 // production uses) — not a mutable setter.
-inline pasio::detail::udp_arq_config small_window_arq(std::size_t window)
+inline pio::detail::udp_arq_config small_window_arq(std::size_t window)
 {
-    return pasio::detail::udp_arq_config{
+    return pio::detail::udp_arq_config{
         .window = window, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{120}, .max_retransmit = 12};
 }
 
@@ -331,7 +331,7 @@ TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_b
     constexpr std::size_t window = 2, cap = 3;
     pasio::udp_channel ch{io, server, ::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 9},
                           pasio::udp_channel::default_max_payload, small_window_arq(window),
-                          pio::congestion::block, cap, pasio::detail::udp_channel_mode::reliable_datagram};
+                          pio::congestion::block, cap, pio::detail::udp_channel_mode::reliable_datagram};
 
     std::optional<pio::io_error> err;
     ch.on_error([&](pio::io_error e) { err = e; });

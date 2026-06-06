@@ -5,7 +5,7 @@
 // release in order) is asserted directly. The buffer is sans-IO (no socket, no
 // io_context): a pure deterministic unit. Bounded + dup-drop + uint16 wrap are covered.
 
-#include "plexus/asio/detail/udp_reorder_buffer.h"
+#include "plexus/io/detail/udp_reorder_buffer.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -15,11 +15,11 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace pasio = plexus::asio;
+namespace pio = plexus::io;
 
 namespace {
 
-using reorder = pasio::detail::udp_reorder_buffer;
+using reorder = pio::detail::udp_reorder_buffer;
 
 std::vector<std::byte> bytes_of(const std::string &s)
 {

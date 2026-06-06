@@ -5,7 +5,7 @@
 #include "plexus/tls/dtls_cookie.h"
 
 #include "plexus/asio/udp_server.h"
-#include "plexus/asio/detail/udp_inbound_demux.h"
+#include "plexus/asio/detail/asio_inbound_demux.h"
 
 #include <catch2/catch_test_macros.hpp>
 

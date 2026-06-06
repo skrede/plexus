@@ -12,10 +12,11 @@
 
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_transport.h"
-#include "plexus/asio/detail/udp_reliable_arq.h"
 
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
+
+#include "plexus/io/detail/udp_reliable_arq.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -35,6 +36,7 @@
 #include <iomanip>
 
 namespace pasio = plexus::asio;
+namespace pio = plexus::io;
 namespace wire = plexus::wire;
 
 namespace {
@@ -125,7 +127,7 @@ struct cell_result
 
 cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs, std::uint32_t seed)
 {
-    pasio::detail::udp_arq_config cfg{
+    pio::detail::udp_arq_config cfg{
         .window = window, .initial_rto = initial_rto, .min_rto = ms{5},
         .max_rto = initial_rto * 8, .max_retransmit = 30};
 

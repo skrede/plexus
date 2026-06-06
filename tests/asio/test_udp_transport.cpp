@@ -41,6 +41,7 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
+namespace pio = plexus::io;
 namespace wire = plexus::wire;
 
 namespace {
@@ -217,7 +218,7 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
 {
     loopback h;
     REQUIRE(h.accepted != nullptr);
-    REQUIRE(h.accepted->mode() == pasio::detail::udp_channel_mode::best_effort);
+    REQUIRE(h.accepted->mode() == pio::detail::udp_channel_mode::best_effort);
 
     // A spoofed reliable_arq (kind=1) data segment from the peer's source endpoint must be
     // DROPPED on a best_effort channel — never routed to the reliable path that would
@@ -254,9 +255,10 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
 // its secure member (inert here — never dialed), hence the PLEXUS_HAVE_TLS_MUX gate.
 // These includes are at file scope (the anonymous namespace above is already closed).
 
-#include "plexus/asio/mux_channel.h"
 #include "plexus/asio/mux_transport.h"
 #include "plexus/asio/unix_transport.h"
+
+#include "plexus/io/polymorphic_byte_channel.h"
 
 #include "plexus/tls/tls_credential.h"
 #include "plexus/tls/tls_transport.h"
@@ -287,7 +289,7 @@ struct mux_face
 
 // A loopback pair of mux faces on one io_context. The listen face listens on the
 // families a test exercises; the dial face drives a dial of the chosen scheme. The
-// dialed (client-side) and accepted (server-side) mux_channels are captured so the
+// dialed (client-side) and accepted (server-side) polymorphic_byte_channels are captured so the
 // route + the scheme-survival can be asserted on both ends.
 struct mux_pair
 {
@@ -296,13 +298,13 @@ struct mux_pair
     mux_face dial_face{io};
 
     std::optional<plexus::io::endpoint> dialed_ep;
-    std::unique_ptr<pasio::mux_channel> dialed;
-    std::unique_ptr<pasio::mux_channel> accepted;
+    std::unique_ptr<pio::polymorphic_byte_channel> dialed;
+    std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     mux_pair()
     {
-        listen_face.mux.on_accepted([this](std::unique_ptr<pasio::mux_channel> ch) { accepted = std::move(ch); });
-        dial_face.mux.on_dialed([this](std::unique_ptr<pasio::mux_channel> ch, const plexus::io::endpoint &ep) {
+        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) { accepted = std::move(ch); });
+        dial_face.mux.on_dialed([this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const plexus::io::endpoint &ep) {
             dialed = std::move(ch);
             dialed_ep.emplace(ep);
         });

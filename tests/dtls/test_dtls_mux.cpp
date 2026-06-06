@@ -1,8 +1,6 @@
 #include "dtls_test_support.h"
 
 #include "plexus/asio/mux_policy.h"
-#include "plexus/asio/mux_channel.h"
-#include "plexus/asio/mux_selector.h"
 #include "plexus/asio/mux_transport.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
@@ -15,6 +13,8 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/transport_selector.h"
+#include "plexus/io/polymorphic_byte_channel.h"
 
 #include "plexus/policy.h"
 
@@ -87,17 +87,17 @@ struct mux_pair
     mux_face dial_face;
 
     std::optional<pio::endpoint> dialed_ep;
-    std::unique_ptr<pasio::mux_channel> dialed;
-    std::unique_ptr<pasio::mux_channel> accepted;
+    std::unique_ptr<pio::polymorphic_byte_channel> dialed;
+    std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     mux_pair(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
         : listen_face(io, pin_one_tls(server_id, client_id.digest), pdt::pin_one(server_id, client_id.digest))
         , dial_face(io, pin_one_tls(client_id, server_id.digest), pdt::pin_one(client_id, server_id.digest))
     {
-        listen_face.mux.on_accepted([this](std::unique_ptr<pasio::mux_channel> ch) {
+        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) {
             accepted = std::move(ch);
         });
-        dial_face.mux.on_dialed([this](std::unique_ptr<pasio::mux_channel> ch, const pio::endpoint &ep) {
+        dial_face.mux.on_dialed([this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep) {
             dialed = std::move(ch);
             dialed_ep.emplace(ep);
         });
@@ -119,17 +119,17 @@ constexpr int k_iterations = 100;
 TEST_CASE("dtls.mux_select: the selector classifies dtls as remote, never local (locality exclusion)",
           "[dtls][mux][select]")
 {
-    pasio::transport_selector sel;
-    const auto reserved = pasio::reliability_hint::unspecified;
+    pio::transport_selector sel;
+    const auto reserved = pio::reliability_hint::unspecified;
 
     // "dtls" is a REMOTE-tier scheme — so locality confinement EXCLUDES it (a
     // host-confined process|local topic never rides dtls even though dtls encrypts).
     // "unix"/"inproc" are the same-host local tier; "tls"/"tcp"/"udp" are remote too.
-    REQUIRE(sel.select({"dtls", "127.0.0.1:5000"}, reserved) == pasio::transport_kind::remote);
-    REQUIRE(sel.select({"unix", "/tmp/s"}, reserved) == pasio::transport_kind::local);
-    REQUIRE(sel.select({"inproc", "node-a"}, reserved) == pasio::transport_kind::local);
+    REQUIRE(sel.select({"dtls", "127.0.0.1:5000"}, reserved) == pio::transport_kind::remote);
+    REQUIRE(sel.select({"unix", "/tmp/s"}, reserved) == pio::transport_kind::local);
+    REQUIRE(sel.select({"inproc", "node-a"}, reserved) == pio::transport_kind::local);
     // dtls is secure-best_effort (the secure parallel of udp) on the reliability axis.
-    REQUIRE(sel.reliability_of_scheme("dtls") == pasio::reliability_hint::best_effort);
+    REQUIRE(sel.reliability_of_scheme("dtls") == pio::reliability_hint::best_effort);
 }
 
 TEST_CASE("dtls.mux: a dtls dial routes to the secure-datagram member, completes, and flows a frame, looped",
@@ -159,7 +159,7 @@ TEST_CASE("dtls.mux: a dtls dial routes to the secure-datagram member, completes
         REQUIRE(n.dialed_ep.has_value());
         REQUIRE(n.dialed_ep->scheme == "dtls");
 
-        // An app frame flows decrypted over the wrapped mux_channel — proves the route
+        // An app frame flows decrypted over the wrapped polymorphic_byte_channel — proves the route
         // landed a live secure-datagram channel, not merely a completed handshake.
         std::vector<std::byte> got;
         bool received = false;

@@ -1,6 +1,4 @@
 #include "plexus/asio/mux_policy.h"
-#include "plexus/asio/mux_channel.h"
-#include "plexus/asio/mux_selector.h"
 #include "plexus/asio/mux_transport.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
@@ -14,6 +12,8 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/transport_selector.h"
+#include "plexus/io/polymorphic_byte_channel.h"
 
 #include "plexus/policy.h"
 
@@ -165,17 +165,17 @@ struct mux_pair
     mux_face dial_face;
 
     std::optional<pio::endpoint> dialed_ep;
-    std::unique_ptr<pasio::mux_channel> dialed;
-    std::unique_ptr<pasio::mux_channel> accepted;
+    std::unique_ptr<pio::polymorphic_byte_channel> dialed;
+    std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     mux_pair(const identity_fixture &server_id, const identity_fixture &client_id)
         : listen_face(io, pin_one(server_id, client_id.digest))
         , dial_face(io, pin_one(client_id, server_id.digest))
     {
-        listen_face.mux.on_accepted([this](std::unique_ptr<pasio::mux_channel> ch) {
+        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) {
             accepted = std::move(ch);
         });
-        dial_face.mux.on_dialed([this](std::unique_ptr<pasio::mux_channel> ch, const pio::endpoint &ep) {
+        dial_face.mux.on_dialed([this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep) {
             dialed = std::move(ch);
             dialed_ep.emplace(ep);
         });
@@ -197,16 +197,16 @@ constexpr int k_iterations = 100;
 TEST_CASE("tls mux: the selector classifies tls and tcp as remote, unix and inproc as local",
           "[tls][mux][select]")
 {
-    pasio::transport_selector sel;
-    const auto reserved = pasio::reliability_hint::unspecified;
+    pio::transport_selector sel;
+    const auto reserved = pio::reliability_hint::unspecified;
 
     // "tls" is a REMOTE-tier scheme — so the locality confinement still EXCLUDES
     // it (a host-confined process|local topic never rides tls even though tls
     // encrypts). "tcp" is remote too; "unix"/"inproc" are the same-host local tier.
-    REQUIRE(sel.select({"tls", "127.0.0.1:5000"}, reserved) == pasio::transport_kind::remote);
-    REQUIRE(sel.select({"tcp", "127.0.0.1:5000"}, reserved) == pasio::transport_kind::remote);
-    REQUIRE(sel.select({"unix", "/tmp/s"}, reserved) == pasio::transport_kind::local);
-    REQUIRE(sel.select({"inproc", "node-a"}, reserved) == pasio::transport_kind::local);
+    REQUIRE(sel.select({"tls", "127.0.0.1:5000"}, reserved) == pio::transport_kind::remote);
+    REQUIRE(sel.select({"tcp", "127.0.0.1:5000"}, reserved) == pio::transport_kind::remote);
+    REQUIRE(sel.select({"unix", "/tmp/s"}, reserved) == pio::transport_kind::local);
+    REQUIRE(sel.select({"inproc", "node-a"}, reserved) == pio::transport_kind::local);
 }
 
 TEST_CASE("tls mux: a tls dial routes to the secure member and the scheme survives the erasure, looped",

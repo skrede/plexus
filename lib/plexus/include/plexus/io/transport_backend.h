@@ -36,10 +36,10 @@ namespace plexus::io {
 template <typename T, typename Policy>
 concept transport_backend = plexus::Policy<Policy> && requires(T &t,
                                 const io::endpoint &ep,
-                                detail::move_only_function<void(std::unique_ptr<typename Policy::byte_channel_type>)> on_acc,
-                                detail::move_only_function<void(std::unique_ptr<typename Policy::byte_channel_type>, const io::endpoint &)> on_ch,
-                                detail::move_only_function<void(const io::endpoint &, io_error)> on_dfail,
-                                detail::move_only_function<void(io_error)> on_err)
+                                plexus::detail::move_only_function<void(std::unique_ptr<typename Policy::byte_channel_type>)> on_acc,
+                                plexus::detail::move_only_function<void(std::unique_ptr<typename Policy::byte_channel_type>, const io::endpoint &)> on_ch,
+                                plexus::detail::move_only_function<void(const io::endpoint &, io_error)> on_dfail,
+                                plexus::detail::move_only_function<void(io_error)> on_err)
 {
     { t.listen(ep) }                    -> std::same_as<void>;
     t.on_accepted(std::move(on_acc));

@@ -1,6 +1,4 @@
 #include "plexus/asio/mux_policy.h"
-#include "plexus/asio/mux_channel.h"
-#include "plexus/asio/mux_selector.h"
 #include "plexus/asio/mux_transport.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
@@ -12,6 +10,8 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/transport_selector.h"
+#include "plexus/io/polymorphic_byte_channel.h"
 
 #include "plexus/policy.h"
 
@@ -62,8 +62,8 @@ struct temp_sock
 
 // Stands up a multiplexing transport over a real AF_UNIX (local) + TCP (remote) pair,
 // listening on the local family, dials a same-host (scheme "unix") endpoint, and
-// captures BOTH ends of the resulting connection: the dialed mux_channel (the client
-// end, via on_dialed) and the accepted mux_channel (the server end, via on_accepted).
+// captures BOTH ends of the resulting connection: the dialed polymorphic_byte_channel (the client
+// end, via on_dialed) and the accepted polymorphic_byte_channel (the server end, via on_accepted).
 // Each instance owns a fresh io_context + transports + socket path so looped iterations
 // are independent.
 struct local_dial_link
@@ -86,16 +86,16 @@ struct local_dial_link
     pasio::multiplexing_transport mux{local, remote, secure, datagram, secure_datagram};
 
     std::optional<pio::endpoint> dialed_ep;
-    std::unique_ptr<pasio::mux_channel> dialed;
-    std::unique_ptr<pasio::mux_channel> accepted;
+    std::unique_ptr<pio::polymorphic_byte_channel> dialed;
+    std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     local_dial_link()
     {
-        mux.on_dialed([this](std::unique_ptr<pasio::mux_channel> ch, const pio::endpoint &ep) {
+        mux.on_dialed([this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep) {
             dialed = std::move(ch);
             dialed_ep.emplace(ep);
         });
-        mux.on_accepted([this](std::unique_ptr<pasio::mux_channel> ch) {
+        mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) {
             accepted = std::move(ch);
         });
 

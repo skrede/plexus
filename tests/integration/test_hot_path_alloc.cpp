@@ -128,24 +128,24 @@ TEST_CASE("steady-state publish->frame-once->fan-out loop is zero-alloc", "[inte
 }
 
 #ifdef PLEXUS_HAVE_ASIO_MUX
-#include "plexus/asio/mux_channel.h"
+#include "plexus/io/polymorphic_byte_channel.h"
 
 // The same steady-state no-alloc invariant must hold when the publish loop fans over a
-// type-erased mux_channel instead of a concrete channel: the erasure is ONE virtual hop
+// type-erased polymorphic_byte_channel instead of a concrete channel: the erasure is ONE virtual hop
 // per send to the owned concrete channel, minted ONCE at wrap (here at setup), and the
 // adapter stores no per-verb callable — so the abstract base adds zero steady-state heap
-// blocks. Measured directly over a vector of mux_channels wrapping the inert sink_channel
+// blocks. Measured directly over a vector of polymorphic_byte_channels wrapping the inert sink_channel
 // (no forwarder Policy is needed: the gate is the channel layer's per-send behavior).
-TEST_CASE("steady-state fan-out over a type-erased mux_channel is zero-alloc", "[integration]")
+TEST_CASE("steady-state fan-out over a type-erased polymorphic_byte_channel is zero-alloc", "[integration]")
 {
-    namespace pasio = plexus::asio;
+    namespace pio = plexus::io;
 
     constexpr int N = 8;
     constexpr int K = 1024;
     const std::string payload = "deterministic-steady-state-payload";
 
     sink_executor ex;
-    std::vector<std::unique_ptr<pasio::mux_channel>> channels;
+    std::vector<std::unique_ptr<pio::polymorphic_byte_channel>> channels;
     std::vector<sink_channel *> sinks;   // observers into the owned concrete channels
     channels.reserve(N);
     sinks.reserve(N);
@@ -153,8 +153,8 @@ TEST_CASE("steady-state fan-out over a type-erased mux_channel is zero-alloc", "
     {
         auto inner = std::make_unique<sink_channel>(ex);
         sinks.push_back(inner.get());
-        channels.push_back(std::make_unique<pasio::mux_channel>(
-            std::make_unique<pasio::channel_adapter<sink_channel>>(std::move(inner))));
+        channels.push_back(std::make_unique<pio::polymorphic_byte_channel>(
+            std::make_unique<pio::channel_adapter<sink_channel>>(std::move(inner))));
     }
 
     // Warm-up: one fan-out round before measuring (no scratch grows here, but mirror the gate).
