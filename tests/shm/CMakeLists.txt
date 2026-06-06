@@ -203,6 +203,27 @@ target_link_libraries(test_shm_channel PRIVATE
 
 catch_discover_tests(test_shm_channel TEST_PREFIX "shm.")
 
+# Backpressure + observable congestion (header-only): a best_effort ring with every
+# slot pinned returns congested off send() (OBSERVABLE, never a silent drop); a
+# reliable producer blocks losslessly on a lagging consumer (every value arrives in
+# order, none skipped, across a reader + writer thread); and the reliable blocking
+# spin/yield path allocates nothing across N sends (the alloc-counter idiom from
+# tests/support). The two driver threads are a test-local concern (the channel
+# spawns none).
+add_executable(test_shm_congested test_shm_congested.cpp)
+
+target_include_directories(test_shm_congested PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/tests)
+
+target_link_libraries(test_shm_congested PRIVATE
+    plexus::plexus
+    plexus::wire
+    Threads::Threads
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_congested TEST_PREFIX "shm.")
+
 # The thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's

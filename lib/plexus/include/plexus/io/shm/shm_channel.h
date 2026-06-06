@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstring>
 #include <span>
+#include <thread>
 #include <utility>
 
 namespace plexus::io::shm {
@@ -44,7 +45,7 @@ namespace plexus::io::shm {
 //
 // The notifier is the seam reference (a type satisfying the core `notifier`
 // concept -- the compiled futex primitive or the asio reactor bridge), NOT an asio
-// type: the channel never pulls asio/POSIX into core. Borrows the ring + notifier
+// type: the channel never pulls an asio or POSIX header into core. Borrows the ring + notifier
 // BY REFERENCE; non-copy/non-move owning facade.
 template <typename Notifier>
     requires notifier<Notifier>
@@ -67,7 +68,7 @@ public:
     loan_status send(std::span<const std::byte> payload) noexcept
     {
         loaned_buffer slot;
-        const loan_status loaned = m_publisher.loan(payload.size(), slot);
+        const loan_status loaned = loan_blocking(payload.size(), slot);
         if(loaned != loan_status::ok)
             return loaned; // rejected (oversize) or congested: no signal either way
 
@@ -96,6 +97,33 @@ public:
     }
 
 private:
+    // Bounded blocking budget for a reliable+block producer: the cap on yield turns
+    // before a still-congested loan surfaces congested rather than spinning
+    // unboundedly. A reliable producer BLOCKS on the slowest registered cursor (it
+    // must not overwrite an unconsumed value) -- so it retries the gated claim,
+    // yielding the CPU between turns, until the consumer drains. The loop allocates
+    // NOTHING (no kernel object, no heap) -- the determinism the safety/drone use
+    // needs. The bound keeps a permanently-stalled consumer (a dead or wedged peer)
+    // from hanging the producer forever: past it the send surfaces congested
+    // OBSERVABLY, never a silent block. best_effort never blocks -- it overwrites
+    // the latest and its own gate returns congested only on a full-lap-pinned ring.
+    static constexpr int k_block_spin_budget = 1 << 16;
+
+    loan_status loan_blocking(std::size_t size, loaned_buffer &out) noexcept
+    {
+        loan_status st = m_publisher.loan(size, out);
+        if(m_publisher.delivery() != reliability::reliable ||
+           m_publisher.overflow() != congestion::block)
+            return st; // best_effort / drop: surface the status as-is (no blocking)
+
+        for(int turn = 0; st == loan_status::congested && turn < k_block_spin_budget; ++turn)
+        {
+            std::this_thread::yield(); // bounded, allocation-free back-pressure spin
+            st = m_publisher.loan(size, out);
+        }
+        return st;
+    }
+
     slot_publisher  m_publisher;
     slot_subscriber m_subscriber;
     Notifier       &m_notifier;
