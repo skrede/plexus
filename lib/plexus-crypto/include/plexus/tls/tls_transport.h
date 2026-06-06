@@ -15,13 +15,16 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/transport_selector.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
 
+#include <array>
 #include <memory>
 #include <cstdint>
 #include <utility>
+#include <string_view>
 #include <system_error>
 
 namespace plexus::tls {
@@ -60,6 +63,14 @@ public:
 
     tls_transport(const tls_transport &) = delete;
     tls_transport &operator=(const tls_transport &) = delete;
+
+    // The concrete channel this member's completions deliver + its routing identity: the
+    // schemes it serves and the locality tier. TLS-over-TCP is a remote (encrypted stream)
+    // member serving the "tls" scheme — it rides a network path, so locality confinement
+    // still excludes it. A generic multiplexer reads these at compile time to route over a pack.
+    using channel_type = tls_channel;
+    static constexpr std::array<std::string_view, 1> mux_schemes{"tls"};
+    static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> cb) { m_on_accepted = std::move(cb); }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }

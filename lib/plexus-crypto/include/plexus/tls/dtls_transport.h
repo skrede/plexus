@@ -14,6 +14,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/transport_selector.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -21,10 +22,12 @@
 #include <asio/ip/udp.hpp>
 
 #include <span>
+#include <array>
 #include <memory>
 #include <string>
 #include <utility>
 #include <cstddef>
+#include <string_view>
 #include <system_error>
 #include <unordered_map>
 
@@ -73,6 +76,15 @@ public:
     dtls_transport &operator=(const dtls_transport &) = delete;
 
     ~dtls_transport() { close(); }
+
+    // The concrete channel this member's completions deliver + its routing identity: the
+    // schemes it serves and the locality tier. DTLS-over-UDP is a remote (encrypted
+    // datagram) member serving the "dtls" scheme — it rides a network path, so locality
+    // confinement still excludes it. A generic multiplexer reads these at compile time to
+    // route over a pack.
+    using channel_type = dtls_channel;
+    static constexpr std::array<std::string_view, 1> mux_schemes{"dtls"};
+    static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> cb) { m_on_accepted = std::move(cb); }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }

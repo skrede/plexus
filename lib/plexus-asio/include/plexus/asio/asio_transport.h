@@ -12,13 +12,16 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/transport_selector.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
 
+#include <array>
 #include <memory>
 #include <cstdint>
 #include <utility>
+#include <string_view>
 #include <system_error>
 
 namespace plexus::asio {
@@ -56,6 +59,14 @@ public:
 
     asio_transport(const asio_transport &) = delete;
     asio_transport &operator=(const asio_transport &) = delete;
+
+    // The concrete channel this member's completions deliver + its routing identity:
+    // the schemes it serves and the locality tier it belongs to. A generic multiplexer
+    // reads these at compile time to route by scheme over a member pack — plain TCP is a
+    // remote stream member, serving the "tcp" scheme.
+    using channel_type = asio_channel;
+    static constexpr std::array<std::string_view, 1> mux_schemes{"tcp"};
+    static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> cb) { m_on_accepted = std::move(cb); }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }

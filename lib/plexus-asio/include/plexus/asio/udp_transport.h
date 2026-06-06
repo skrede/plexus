@@ -12,6 +12,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/transport_selector.h"
 #include "plexus/io/detail/udp_handshake_arq.h"
 #include "plexus/io/detail/udp_handshake_frame.h"
 #include "plexus/detail/compat.h"
@@ -20,12 +21,14 @@
 #include <asio/ip/udp.hpp>
 
 #include <span>
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
 #include <utility>
 #include <cstddef>
 #include <optional>
+#include <string_view>
 #include <system_error>
 #include <unordered_map>
 
@@ -78,6 +81,15 @@ public:
     udp_transport &operator=(const udp_transport &) = delete;
 
     ~udp_transport() { close(); }
+
+    // The concrete channel this member's completions deliver + its routing identity: the
+    // schemes it serves and the locality tier. The ONE datagram member serves BOTH "udp"
+    // (best_effort) and "udpr" (reliable-datagram, the ARQ engaged) — the channel's mode
+    // differs by scheme, the member is the same; a reliable_datagram demand is never served
+    // over bare UDP. A generic multiplexer reads these at compile time to route over a pack.
+    using channel_type = udp_channel;
+    static constexpr std::array<std::string_view, 2> mux_schemes{"udp", "udpr"};
+    static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> cb) { m_on_accepted = std::move(cb); }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
