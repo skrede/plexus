@@ -236,6 +236,7 @@ void dtls_channel::drain_inbound()
                     m_on_closed();
                 break;
             }
+            drain_outbound();                    // flush any fatal alert to the peer first
             fail(io::io_error::broken_pipe);
             break;
         }
