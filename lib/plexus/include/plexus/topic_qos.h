@@ -2,6 +2,8 @@
 #define HPP_GUARD_PLEXUS_TOPIC_QOS_H
 
 #include "plexus/io/locality.h"
+#include "plexus/io/congestion.h"
+#include "plexus/io/reliability.h"
 
 #include <cstdint>
 
@@ -15,15 +17,22 @@ namespace plexus {
 // retrieval later. `reach` is the delivery-tier confinement field: a mask of the
 // localities a topic's bytes may travel to (default = any, so an undeclared topic
 // reaches every tier — no confinement); a confined mask drops a send/subscribe to
-// any out-of-scope tier. Reliability / durability / deadline / overflow are upstream
-// concepts NOT carried here — the struct is shaped so they append later as future
-// fields (default = "unset") WITHOUT reshaping the call sites. Plain fields with
-// defaults: plexus has no QoS negotiation, so there is no "unset" to distinguish.
+// any out-of-scope tier. `reliability` selects the lossy best-effort class or the
+// in-order reliable class; `congestion` selects what a full send path does (shed
+// at the publisher, or back-pressure the publish). The defaults carry the safe
+// per-class intent: best_effort (the lossy class) with block (so a reliable topic
+// that overrides reliability inherits a guarantee-preserving back-pressure rather
+// than a silent drop). Durability / deadline / overflow are upstream concepts NOT
+// carried here — the struct is shaped so they append later as future fields
+// (default = "unset") WITHOUT reshaping the call sites. Plain fields with defaults:
+// plexus has no QoS negotiation, so there is no "unset" to distinguish.
 struct topic_qos
 {
-    bool          latch = false;
-    std::uint32_t depth = 1;
-    io::locality  reach = io::locality::any;
+    bool             latch       = false;
+    std::uint32_t    depth       = 1;
+    io::locality     reach       = io::locality::any;
+    io::reliability  reliability = io::reliability::best_effort;
+    io::congestion   congestion  = io::congestion::block;
 };
 
 }

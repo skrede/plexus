@@ -14,6 +14,19 @@ foreach(test ${PLEXUS_WIRE_TESTS})
     catch_discover_tests(${test} TEST_PREFIX "wire.")
 endforeach()
 
+# The UDP wire oracle: the envelope codec round-trip + the uint16 dedup window's
+# RFC-1982 wrap-safety. Both are pure header-only wire units (no backend), so each
+# links only plexus::wire + Catch2's main; the "udp." ctest prefix selects them.
+set(PLEXUS_UDP_WIRE_TESTS
+    test_udp_envelope
+    test_udp_dedup_window)
+
+foreach(test ${PLEXUS_UDP_WIRE_TESTS})
+    add_executable(${test} ${test}.cpp)
+    target_link_libraries(${test} PRIVATE plexus::wire Catch2::Catch2WithMain)
+    catch_discover_tests(${test} TEST_PREFIX "udp.")
+endforeach()
+
 # The locality QoS unit oracle proves the delivery-tier bitflag truth table and the
 # scheme->tier classifier. It includes the core io/locality.h + topic_qos.h headers,
 # so it additionally links plexus::plexus (the header-only core); the rest of the wire
