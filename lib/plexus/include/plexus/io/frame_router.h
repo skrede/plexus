@@ -31,7 +31,7 @@ namespace plexus::io {
 class frame_router
 {
 public:
-    using consumer = detail::move_only_function<void(std::span<const std::byte>)>;
+    using consumer = plexus::detail::move_only_function<void(std::span<const std::byte>)>;
 
     explicit frame_router(log::logger &logger = shared_null_logger()) noexcept
         : m_logger(logger)

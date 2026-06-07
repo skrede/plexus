@@ -76,14 +76,14 @@ public:
     // rpc_response carrying the request's correlation_id. Passed to a handler by
     // reference to a forwarder-owned, reused callable — so a steady-state dispatch
     // constructs no new type-erased object (the no-hot-path-allocation invariant).
-    using reply_fn = detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
+    using reply_fn = plexus::detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
 
     // A provider handler over opaque param bytes; it replies via the reply&.
-    using handler_fn = detail::move_only_function<void(std::span<const std::byte> param, reply_fn &)>;
+    using handler_fn = plexus::detail::move_only_function<void(std::span<const std::byte> param, reply_fn &)>;
 
     // The caller's response callback: fired once with the matched response's status
     // and opaque return bytes (or peer_disconnected/no_handler on a failure leg).
-    using on_response_fn = detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
+    using on_response_fn = plexus::detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
 
     // Default bounded outstanding capacity per peer. A plexus determinism posture
     // (no hot-path growth), not a wire change — an over-capacity call fails fast.

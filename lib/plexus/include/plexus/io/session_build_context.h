@@ -39,7 +39,7 @@ struct session_build_context
     // fan-out: the engine sets this after construction, the registry forwards each
     // session's lifecycle edge through it. Absent (unset) on a context built before
     // the engine wires it — a slot's forward guards on it being set.
-    detail::move_only_function<void(const lifecycle_event &)> on_lifecycle;
+    plexus::detail::move_only_function<void(const lifecycle_event &)> on_lifecycle;
 };
 
 }

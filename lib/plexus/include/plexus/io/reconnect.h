@@ -62,11 +62,11 @@ public:
 
     // Fired just before each dial so the harness can tear down a dead incarnation
     // (the established-drop path) before the fresh channel arrives via on_dialed.
-    void on_redial(detail::move_only_function<void()> cb) { m_on_redial = std::move(cb); }
+    void on_redial(plexus::detail::move_only_function<void()> cb) { m_on_redial = std::move(cb); }
 
     // Fired when a surrender bound is crossed: the session is reported dead and the
     // driver stops re-dialing.
-    void on_dead(detail::move_only_function<void()> cb) { m_on_dead = std::move(cb); }
+    void on_dead(plexus::detail::move_only_function<void()> cb) { m_on_dead = std::move(cb); }
 
     // Begin the first dial. The first-attempt timestamp is read from the same Clock
     // the backoff timer uses so max_elapsed is provable on the virtual clock. The
@@ -144,8 +144,8 @@ private:
     typename Clock::time_point m_first_attempt{};
     std::uint32_t m_attempt{0};
     bool m_surrendered{false};
-    detail::move_only_function<void()> m_on_redial;
-    detail::move_only_function<void()> m_on_dead;
+    plexus::detail::move_only_function<void()> m_on_redial;
+    plexus::detail::move_only_function<void()> m_on_dead;
 };
 
 }

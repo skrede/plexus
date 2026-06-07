@@ -102,13 +102,13 @@ public:
     // (absent = no routing) fired from start()'s on_error wiring when an
     // already-live channel breaks. The registry routes a dialed slot's drop to its
     // reconnect driver through this; a clean tear_down does not fire it.
-    void on_transport_drop(detail::move_only_function<void()> cb) { m_on_drop = std::move(cb); }
+    void on_transport_drop(plexus::detail::move_only_function<void()> cb) { m_on_drop = std::move(cb); }
 
     // The lifecycle seam, mirroring on_transport_drop: a settable callback the
     // registry wires to forward each edge up to the engine's posted fan-out. The
     // session never includes routing_engine.h — it routes edges blindly through this
     // seam (absent = no routing). Dormant until a fire-site calls fire_lifecycle.
-    void on_lifecycle(detail::move_only_function<void(const lifecycle_event &)> cb) { m_on_lifecycle = std::move(cb); }
+    void on_lifecycle(plexus::detail::move_only_function<void(const lifecycle_event &)> cb) { m_on_lifecycle = std::move(cb); }
 
     // The staleness gate runs BEFORE the router: a frame whose non-zero session_id
     // differs from the latched epoch is a previous-session straggler and is dropped;
@@ -464,9 +464,9 @@ private:
     typename message_forwarder<Policy>::peer m_msg_peer;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
     std::vector<std::byte> m_payload_scratch, m_frame_scratch;
-    detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message;
-    detail::move_only_function<void()> m_on_drop;
-    detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message;
+    plexus::detail::move_only_function<void()> m_on_drop;
+    plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
 };
 
 }
