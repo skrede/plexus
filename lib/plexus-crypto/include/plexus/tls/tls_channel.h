@@ -12,6 +12,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/detail/handshake_gate.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -44,9 +45,13 @@ namespace plexus::tls {
 // distinct on_protocol_close seam. The channel is caller-owned, single-owner,
 // runs its loops with bare `this` captured, and posts on_data — NO
 // shared_from_this, NO strand (the prior art's lifetime is deliberately not
-// ported). The read loop and the write-queue drain are gated on handshake
-// completion so ciphertext is never read as frames and plaintext is never
-// written before the secure channel is up.
+// ported). The read loop arms only on handshake completion so ciphertext is
+// never read as frames; the open-before-data outbound edge is an
+// io::detail::handshake_gate that buffers application sends until the secure
+// channel is up, then drains them through the serial async_write egress so
+// plaintext is never written before the channel is ready. The post-ready serial
+// discipline stays a single in-flight async_write (a stream already serializes —
+// no serial outbound-queue block is composed here).
 class tls_channel
 {
 public:
@@ -58,6 +63,7 @@ public:
         , m_ssl_ctx(detail::share_context(cred))
         , m_stream(io, m_ssl_ctx)
         , m_inbound(io, cfg)
+        , m_gate([this](std::span<const std::byte> bytes) { enqueue_egress(bytes); })
     {
         wire_inbound();
     }
@@ -74,26 +80,26 @@ public:
         , m_ssl_ctx(detail::share_context(cred))
         , m_stream(std::move(connected), m_ssl_ctx)
         , m_inbound(io, cfg)
+        , m_gate([this](std::span<const std::byte> bytes) { enqueue_egress(bytes); })
     {
         wire_inbound();
     }
 
-    ~tls_channel() { m_inbound.shutdown(); shutdown_socket(); }
+    ~tls_channel() { m_inbound.shutdown(); shutdown_socket(); m_gate.reset(); }
 
     tls_channel(const tls_channel &) = delete;
     tls_channel &operator=(const tls_channel &) = delete;
     tls_channel(tls_channel &&) = delete;
     tls_channel &operator=(tls_channel &&) = delete;
 
-    // Enqueue unconditionally; the drain is gated on handshake completion (the
-    // handshake-success callback kicks the first do_write()).
+    // Submit to the open-before-data gate: pre-handshake it buffers an owned copy;
+    // post-handshake (mark_ready already drained) it forwards straight to the serial
+    // async_write egress. The gate's ready edge is the handshake-success callback.
     void send(std::span<const std::byte> data)
     {
         if(!m_open)
             return;
-        m_write_queue.emplace_back(data.begin(), data.end());
-        if(m_handshake_done && !m_writing)
-            do_write();
+        m_gate.submit(data);
     }
 
     void close()
@@ -161,10 +167,8 @@ private:
         m_stream.async_handshake(mode, [this](std::error_code ec) {
             if(ec)
                 return fail(ec);
-            m_handshake_done = true;
             do_read();
-            if(!m_writing)
-                do_write();   // drain whatever queued while the handshake was in flight
+            m_gate.mark_ready();   // drain whatever buffered while the handshake was in flight
             if(m_on_ready)
                 m_on_ready();
         });
@@ -212,31 +216,46 @@ private:
         });
     }
 
+    // The gate's drain sink (post-ready). The gate hands a transient view (an owned
+    // node while draining its buffer, or the caller's scratch on the pass-through), so
+    // copy it into the owned egress FIFO that keeps the bytes alive across the
+    // async_write, then kick the serial drain. This bridge IS the post-ready one-in-
+    // flight discipline (a stream already serializes — no outbound-queue block here).
+    void enqueue_egress(std::span<const std::byte> bytes)
+    {
+        m_outbox.emplace_back(bytes.begin(), bytes.end());
+        if(!m_writing)
+            do_write();
+    }
+
     void do_write()
     {
-        if(m_write_queue.empty())
+        if(m_outbox.empty())
         {
             m_writing = false;
             return;
         }
         m_writing = true;
-        ::asio::async_write(m_stream, ::asio::buffer(m_write_queue.front()),
+        ::asio::async_write(m_stream, ::asio::buffer(m_outbox.front()),
             [this](std::error_code ec, std::size_t)
             {
-                m_write_queue.pop_front();
+                m_outbox.pop_front();
                 if(ec)
                     return fail(ec);
                 do_write();
             });
     }
 
+    // A fail edge may fire from inside the channel's own async-completion stack. The
+    // channel never destroys itself here: the transport owns the in-flight dial via its
+    // pending_dial_registry (copy-before-erase + deferred-destroy), so on_error routes to
+    // the transport's fail path, which posts the channel's destruction off this stack.
+    // The accept path is owned by the listener's readiness closure (delivered synchronously
+    // on the ready edge, no self-owning cycle). fail() only quiesces and reports.
     void fail(const std::error_code &ec)
     {
         if(ec == ::asio::error::operation_aborted || !m_open)
-        {
-            release_pending();   // break the self-owning cycle even on abort/teardown
             return;
-        }
         m_open = false;
         m_writing = false;
         m_inbound.shutdown();
@@ -245,33 +264,16 @@ private:
             m_on_error(mapped);
         if(m_on_closed)
             m_on_closed();
-        release_pending();
-    }
-
-    // A handshake that fails BEFORE delivery never fires m_on_ready, so the
-    // readiness closure (which, on the pre-delivery path, owns the sole
-    // unique_ptr to this channel) would otherwise keep the channel — and its
-    // socket — alive forever. Drop it OFF the current stack: the closure (hence
-    // possibly *this) is destroyed only after fail() unwinds, so the channel is
-    // never torn down from inside its own member call. The load-bearing case is
-    // a pre-delivery failure (incl. an aborted in-flight handshake), where this
-    // drops the sole owner. On the success path m_on_ready was invoked but not
-    // reset (its captured channel was already moved to the consumer), so a later
-    // fail() re-posts an empty-effect continuation — harmless.
-    void release_pending()
-    {
-        if(!m_on_ready)
-            return;
-        ::asio::post(m_io, [pending = std::move(m_on_ready)]() mutable { pending = {}; });
     }
 
     ::asio::io_context &m_io;
     ::asio::ssl::context m_ssl_ctx;
     ::asio::ssl::stream<::asio::ip::tcp::socket> m_stream;
     wire::stream_inbound<plexus::asio::asio_timer, ::asio::io_context &> m_inbound;
+    io::detail::handshake_gate m_gate;                 // open-before-data outbound buffer
     std::vector<std::byte> m_frame_scratch;
     std::array<std::byte, 4096> m_read_buf{};
-    std::deque<std::vector<std::byte>> m_write_queue;
+    std::deque<std::vector<std::byte>> m_outbox;       // post-ready serial async_write FIFO
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
@@ -279,7 +281,6 @@ private:
     plexus::detail::move_only_function<void()> m_on_ready;
     bool m_open{false};
     bool m_writing{false};
-    bool m_handshake_done{false};
 };
 
 }

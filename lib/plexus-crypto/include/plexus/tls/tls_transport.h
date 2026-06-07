@@ -16,12 +16,15 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
+#include "plexus/io/pending_dial_registry.h"
 #include "plexus/detail/compat.h"
 
+#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 
 #include <array>
 #include <memory>
+#include <variant>
 #include <cstdint>
 #include <utility>
 #include <string_view>
@@ -36,8 +39,11 @@ namespace plexus::tls {
 // through on_accepted; dial(ep) parses the host:port target, async-connects a
 // fresh client channel, then runs the client handshake and hands the live
 // channel to on_dialed ONLY POST-handshake — so a verify-rejected peer never
-// yields a live channel (fail-closed). A handshake/verify failure surfaces as
-// on_dial_failed via the channel's own error path. The credential is REQUIRED,
+// yields a live channel (fail-closed). Each half-open dial is owned by the
+// transport's pending_dial_registry (copy-before-erase resolve, deferred-destroy
+// fail) — never by the channel's own readiness closure — so a fail edge firing
+// from inside the channel's async stack frees it OFF that stack. A handshake/verify
+// failure surfaces as on_dial_failed via the channel's own error path. The credential is REQUIRED,
 // non-defaultable (first after io); cfg stays required-WITH-default. The dialed
 // endpoint rides the async closure so on_dialed / on_dial_failed CARRY it back
 // (the engine correlates each completion to its slot by endpoint).
@@ -50,6 +56,7 @@ public:
         , m_cred(cred)
         , m_listener(io, cred, cfg)
         , m_cfg(cfg)
+        , m_pending([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
     {
         m_listener.on_accepted([this](std::unique_ptr<tls_channel> ch) {
             if(m_on_accepted)
@@ -88,36 +95,61 @@ public:
         if(pec)
             return report_dial_fail(ep, plexus::asio::detail::map_error(pec));
         auto ch = std::make_unique<tls_channel>(m_io, m_cred, m_cfg);
-        auto &raw = *ch;
-        raw.socket().async_connect(target,
-            [this, ep, ch = std::move(ch)](std::error_code ec) mutable {
+        auto *raw = ch.get();
+        raw->socket().async_connect(target,
+            [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable {
                 if(ec)
                     return report_dial_fail(ep, plexus::asio::detail::map_error(ec));
-                run_handshake(std::move(ch), ep);
+                run_handshake(std::move(ch), raw, ep);
             });
     }
 
-    void close() { m_listener.stop(); }
+    void close()
+    {
+        m_pending.clear();
+        m_listener.stop();
+    }
 
 private:
-    // Run the client handshake; deliver to on_dialed only on success. The
-    // channel is kept alive across the handshake by the on_ready closure (which
-    // owns the unique_ptr); a handshake/verify failure routes through the
-    // channel's on_error to on_dial_failed (fail-closed).
-    void run_handshake(std::unique_ptr<tls_channel> ch, const io::endpoint &ep)
+    // Run the client handshake; deliver to on_dialed only on success. The minted
+    // channel is owned by the registry (transport-owned) across the handshake — no
+    // self-owning readiness closure. A handshake/verify failure routes through the
+    // channel's on_error to fail_dial (deferred-destroy + on_dial_failed, fail-closed).
+    void run_handshake(std::unique_ptr<tls_channel> ch, tls_channel *raw, const io::endpoint &ep)
     {
-        auto &raw = *ch;
-        raw.on_error([this, ep](io::io_error e) { report_dial_fail(ep, e); });
+        m_pending.insert(raw, std::move(ch));
+        raw->on_error([this, ep, raw](io::io_error e) { fail_dial(ep, raw, e); });
         auto host = detail::sni_host(ep.address);
-        raw.start_client_handshake(host,
-            [this, ep, ch = std::move(ch)]() mutable {
-                // The handshake succeeded — the dial-failure error hook is no
-                // longer the right target; the consumer re-wires on_error when
-                // it adopts the channel from on_dialed (the established
-                // adopt-then-wire contract).
-                if(m_on_dialed)
-                    m_on_dialed(std::move(ch), ep);
-            });
+        raw->start_client_handshake(host, [this, ep, raw]() mutable { resolve_dial(ep, raw); });
+    }
+
+    // The handshake succeeded: resolve the channel OUT of the registry and deliver it.
+    // Copy ep before resolve()/erase — ep is bound to the readiness closure capture the
+    // erase destroys (copy-before-erase). The consumer re-wires on_error when it adopts
+    // the channel from on_dialed (the established adopt-then-wire contract).
+    void resolve_dial(const io::endpoint &ep, tls_channel *raw)
+    {
+        const io::endpoint dialed = ep;
+        auto ch = m_pending.resolve(raw);
+        if(ch && m_on_dialed)
+            m_on_dialed(std::move(ch), dialed);
+    }
+
+    // A handshake/verify failure: drop the dial through the registry's deferred-destroy
+    // (the channel is freed OFF its own async stack, not synchronously mid-call), then
+    // report on_dial_failed. Copy ep before fail()/erase (copy-before-erase).
+    void fail_dial(const io::endpoint &ep, tls_channel *raw, io::io_error e)
+    {
+        const io::endpoint failed = ep;
+        m_pending.fail(raw);
+        report_dial_fail(failed, e);
+    }
+
+    // Destroy a freed channel OFF the current stack: a posted continuation owns it until
+    // it runs, so it is torn down after the channel's own async-completion call unwinds.
+    void defer_destroy(std::unique_ptr<tls_channel> ch)
+    {
+        ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); });
     }
 
     void report_dial_fail(const io::endpoint &ep, io::io_error e)
@@ -130,6 +162,7 @@ private:
     const tls_credential &m_cred;
     tls_listener m_listener;
     wire::stream_inbound_config m_cfg;
+    io::pending_dial_registry<tls_channel, std::monostate> m_pending;   // transport-owned half-open dials
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
