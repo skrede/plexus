@@ -109,6 +109,24 @@ public:
         return channel;
     }
 
+    // Drop an accepted entry, destroying its channel DEFERRED through the SAME injected
+    // sink fail() uses — the accept-side analog of fail(). An accept-side handshake fail
+    // may fire from INSIDE the channel's own deliver_inbound/drain stack (the triggering
+    // datagram is fed straight into the freshly-minted accept channel), so destroying it
+    // synchronously there frees it mid-stack — a use-after-free as that stack unwinds.
+    // Moves the channel out, erases the entry, then routes it through m_defer. A no-op on
+    // a miss. Copy-before-erase applies to the caller exactly as for resolve()/fail().
+    void fail_accepted(Channel *raw)
+    {
+        auto it = m_accepted.find(raw);
+        if(it == m_accepted.end())
+            return;
+        auto channel = std::move(it->second);
+        m_accepted.erase(it);
+        if(m_defer)
+            m_defer(std::move(channel));
+    }
+
     [[nodiscard]] std::size_t pending_size() const noexcept { return m_pending.size(); }
 
     [[nodiscard]] std::size_t accepted_size() const noexcept { return m_accepted.size(); }

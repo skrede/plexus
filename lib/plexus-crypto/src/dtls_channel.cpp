@@ -32,6 +32,7 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
     , m_max_payload(max_payload)
     , m_ssl_ctx(detail::share_dtls_context(cred))
     , m_retransmit(io)
+    , m_gate([this](std::span<const std::byte> bytes) { secure_send(bytes); })
     , m_peer_addr_block(detail::pack_peer_addr(m_dest))
 {
     BIO *internal = nullptr;
@@ -73,6 +74,7 @@ dtls_channel::~dtls_channel()
     }
     free_bio(static_cast<BIO *>(m_external_bio));
     m_external_bio = nullptr;
+    m_gate.reset();                              // owned block reverse-destroyed last
 }
 
 void dtls_channel::publish_cookie_ex_data()
@@ -96,7 +98,11 @@ void dtls_channel::start_handshake()
 
 void dtls_channel::send(std::span<const std::byte> bytes)
 {
-    if(!m_open || !m_ssl || !m_complete_fired)
+    // DROP-PRESERVING gate: a send before the ready edge is DROPPED, never buffered
+    // (the gate is composed in pass-through mode — m_gate.submit is never called before
+    // mark_ready, so the buffer always stays empty). After the ready edge the gate
+    // forwards straight through to secure_send (its installed drain).
+    if(!m_open || !m_ssl || !m_gate.is_ready())
         return;
     // R-1: reject any app frame larger than the encrypted per-record budget.
     const long data_mtu = static_cast<long>(::DTLS_get_data_mtu(m_ssl));
@@ -109,6 +115,13 @@ void dtls_channel::send(std::span<const std::byte> bytes)
             m_on_error(io::io_error::message_too_large);
         return;
     }
+    m_gate.submit(bytes);                         // ready -> pass straight to secure_send
+}
+
+void dtls_channel::secure_send(std::span<const std::byte> bytes)
+{
+    if(!m_open || !m_ssl)
+        return;
     const int n = ::SSL_write(m_ssl, bytes.data(), to_int(bytes.size()));
     if(n <= 0)
     {
@@ -206,6 +219,7 @@ void dtls_channel::try_complete()
         // instead of the intended ~1400 budget (R-1).
         ::SSL_set_mtu(m_ssl, k_dtls_mtu);
         m_complete_fired = true;
+        m_gate.mark_ready();                     // the ready edge: send() now passes through
         if(peer)
             ::X509_free(peer);
         if(m_on_external_complete)

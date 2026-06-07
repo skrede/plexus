@@ -12,7 +12,9 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/mtu_budget.h"
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/detail/handshake_gate.h"
 #include "plexus/detail/compat.h"
 
 #include "plexus/node_id.h"
@@ -59,12 +61,15 @@ class dtls_channel
 public:
     enum class role { client, server };
 
-    static constexpr std::size_t default_max_payload = 1400;
+    // The per-channel payload budget, aligned to the shared io::mtu_budget value-object
+    // so the datagram channels share ONE budget symbol (no second 1400 literal). A caller
+    // MAY override it; the default is the conservative single-Ethernet-datagram floor.
+    static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
 
-    // The per-channel max DTLS record budget handed to SSL_set_mtu (R-1). The
-    // oversize-reject cap is min(configured max_payload, DTLS_get_data_mtu) once
-    // the cipher is negotiated.
-    static constexpr long k_dtls_mtu = 1400;
+    // The per-channel max DTLS record budget handed to SSL_set_mtu (R-1), the same
+    // io::mtu_budget floor. The oversize-reject cap is min(configured max_payload,
+    // DTLS_get_data_mtu) once the cipher is negotiated.
+    static constexpr long k_dtls_mtu = static_cast<long>(io::mtu_budget{}.max_payload);
 
     // Build over the shared udp_server: own NO socket, share the credential's
     // SSL_CTX (up_ref'd), publish the per-instance peer-addr + the transport's
@@ -119,6 +124,7 @@ public:
     [[nodiscard]] const std::string &peer_node_name() const noexcept { return m_node_name; }
 
 private:
+    void secure_send(std::span<const std::byte> bytes);
     void drain_outbound();
     void drain_inbound();
     void try_complete();
@@ -140,6 +146,14 @@ private:
     ssl_st *m_ssl{nullptr};
     void *m_external_bio{nullptr};               // BIO* (opaque in the header)
     plexus::asio::asio_timer m_retransmit;
+
+    // The open-before-data gate, composed in DROP-PRESERVING / ready-edge mode: a
+    // pre-ready send is DROPPED (send() never submits before the ready edge), so the
+    // gate's buffer always stays empty here — it is NOT the enqueue-then-drain variant.
+    // try_complete() flips the ready edge via mark_ready; after that send() forwards
+    // straight through the gate to the post-ready SSL_write -> drain_outbound egress
+    // (the drain installed at construction).
+    io::detail::handshake_gate m_gate;
 
     std::vector<unsigned char> m_peer_addr_block; // [len][addr bytes] for the cookie cb
     std::array<unsigned char, 2048> m_drain_buf{};
