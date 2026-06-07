@@ -1,8 +1,10 @@
-# Core io building-block unit tests: the mtu_budget value-object and the generic
-# send_queue serial-drain block. Both are header-only sans-IO core units (no asio,
-# no socket), so each links plexus::plexus + Catch2's main — NOT a backend target.
-# The "io." ctest prefix lets `ctest -R io\.` select the area; each Catch2 TEST_CASE
-# name carries its block substring so `-R send_queue` / `-R mtu_budget` also resolve.
+# Core io building-block unit tests: the mtu_budget value-object, the generic
+# send_queue serial-drain block, the pending_dial_registry half-open dial table, and
+# the handshake_gate open-before-data buffer. All are header-only sans-IO core units
+# (no asio, no socket), so each links plexus::plexus + Catch2's main — NOT a backend
+# target. The "io." ctest prefix lets `ctest -R io\.` select the area; each Catch2
+# TEST_CASE name carries its block substring so `-R send_queue` / `-R mtu_budget` /
+# `-R pending_dial` / `-R handshake_gate` also resolve.
 # Auto-discovered by the tests glob (gated on PLEXUS_BUILD_TESTS by the parent).
 if(NOT PLEXUS_BUILD_TESTS)
     return()
@@ -10,7 +12,9 @@ endif()
 
 set(PLEXUS_IO_TESTS
     test_mtu_budget
-    test_send_queue)
+    test_send_queue
+    test_pending_dial_registry
+    test_handshake_gate)
 
 foreach(test ${PLEXUS_IO_TESTS})
     add_executable(${test} ${test}.cpp)
