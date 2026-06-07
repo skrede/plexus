@@ -252,7 +252,8 @@ private:
                 .version_minor            = m_fsm_cfg.version_minor,
                 .compatible_version_major = m_fsm_cfg.compatible_version_major,
                 .compatible_version_minor = m_fsm_cfg.compatible_version_minor,
-                .protocol_version         = wire::k_protocol_version};
+                .protocol_version         = wire::k_protocol_version,
+                .fingerprint              = m_fsm_cfg.local_fingerprint.value};
     }
 
     void send_handshake_request()
@@ -267,7 +268,8 @@ private:
         wire::handshake_response resp{.id = r.id, .version_major = r.version_major,
                 .version_minor = r.version_minor, .compatible_version_major = r.compatible_version_major,
                 .compatible_version_minor = r.compatible_version_minor,
-                .protocol_version = r.protocol_version, .status = status_for(outcome)};
+                .protocol_version = r.protocol_version, .fingerprint = r.fingerprint,
+                .status = status_for(outcome)};
         wire::encode_handshake_response_into(m_payload_scratch, resp);
         send_control(wire::msg_type::handshake_resp);
     }
@@ -314,6 +316,7 @@ private:
             send_handshake_response(handshake_outcome::accept_inbound);
         m_handshake_timer.cancel();
         mint_session_id();
+        record_same_host();
         m_forwarders_installed = true;
         const bool reconnected = m_ctx.has_ever_connected;
         fire_connect_edge();
@@ -349,6 +352,18 @@ private:
     }
 
     void mint_session_id() noexcept { m_session_id = m_ctx.epochs.next(); }
+
+    // The same-host eligibility verdict (D-08): compare the peer's advertised
+    // fingerprint (learned by the FSM at the validated request/response) to our own
+    // via is_same_host — a null/absent peer fingerprint is conservatively NOT
+    // same-host (the fail-closed null-guard) — and record it on the per-peer record.
+    // This is the ELIGIBILITY gate the shared-memory upgrade reads: a pair that is
+    // not same-host never attempts a ring acquire, regardless of any dispatch hint.
+    void record_same_host() noexcept
+    {
+        m_ctx.same_host =
+            shm::is_same_host(m_fsm.last_seen_peer_fingerprint(), m_fsm.local_fingerprint());
+    }
 
     // Fire connected on the first-ever complete, reconnected on every subsequent
     // one. The discriminator is the long-lived has_ever_connected flag on the

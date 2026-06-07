@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_HANDSHAKE_FSM_H
 #define HPP_GUARD_PLEXUS_IO_HANDSHAKE_FSM_H
 
+#include "plexus/io/shm/same_host.h"
+
 #include "plexus/wire/handshake.h"
 
 #include "plexus/node_id.h"
@@ -70,13 +72,22 @@ struct fsm_step_result
 // Static configuration for one handshake. node_id and the four self-version fields
 // are required with NO default — a zeroed default would silently ship a real,
 // comparable identity, so the categories stay distinct (required != default).
+//
+// local_fingerprint is the node's own same-host fingerprint, computed ONCE into the
+// node's owned state (machine_fingerprint, the compiled backend read) and carried
+// here so the FSM stamps it onto the outbound request/response. Unlike self_id it is
+// required-WITH-default: a null (zero) fingerprint is the meaningful "no co-location
+// signal advertised" value — a node with no shared-memory backend leaves it null and
+// is correctly never same-host, so the default IS a valid advertisement, not a
+// stand-in for absence.
 struct handshake_fsm_config
 {
-    node_id      self_id;
-    std::uint8_t version_major;
-    std::uint8_t version_minor;
-    std::uint8_t compatible_version_major;
-    std::uint8_t compatible_version_minor;
+    node_id              self_id;
+    std::uint8_t         version_major;
+    std::uint8_t         version_minor;
+    std::uint8_t         compatible_version_major;
+    std::uint8_t         compatible_version_minor;
+    shm::host_fingerprint local_fingerprint{};
 };
 
 // Pure, sans-IO handshake state machine. Holds no asio / transport / logger types
@@ -118,7 +129,7 @@ public:
     fsm_step_result on_request(const wire::handshake_request &req, bool inbound_is_bootstrap) noexcept
     {
         m_last_seen_their_protocol_version = req.protocol_version;
-        if(auto gate = validate(req.protocol_version, req.id))
+        if(auto gate = validate(req.protocol_version, req.id, req.fingerprint))
             return *gate;
         if(!is_version_compatible(req.version_major, req.version_minor))
             return reject_version_result();
@@ -130,7 +141,7 @@ public:
     fsm_step_result on_response(const wire::handshake_response &resp) noexcept
     {
         m_last_seen_their_protocol_version = resp.protocol_version;
-        if(auto gate = validate(resp.protocol_version, resp.id))
+        if(auto gate = validate(resp.protocol_version, resp.id, resp.fingerprint))
             return *gate;
         if(resp.status == wire::handshake_status::identity_conflict)
             return identity_conflict_result();
@@ -181,14 +192,23 @@ public:
     peer_fsm_state state() const noexcept { return m_state; }
     std::uint8_t last_seen_their_protocol_version() const noexcept { return m_last_seen_their_protocol_version; }
 
+    // The peer's advertised same-host fingerprint, learned at the last validated
+    // request/response. Null (zero) until a frame is validated, and null thereafter
+    // if the peer advertised nothing — exactly the conservative not-same-host value
+    // the session's is_same_host compare null-guards on.
+    shm::host_fingerprint last_seen_peer_fingerprint() const noexcept { return m_peer_fingerprint; }
+    shm::host_fingerprint local_fingerprint() const noexcept { return m_cfg.local_fingerprint; }
+
 private:
     // The exact-match protocol gate runs ahead of every compat / status check, and
     // the identity-collision gate catches an equal node_id at validation so dedup
     // never sees the equal case. Returns a populated abort result when a gate trips;
     // captures the learned peer id for the dedup arbitration on the accept path.
-    std::optional<fsm_step_result> validate(std::uint8_t peer_protocol_version, const node_id &peer_id) noexcept
+    std::optional<fsm_step_result> validate(std::uint8_t peer_protocol_version, const node_id &peer_id,
+                                            std::uint64_t peer_fingerprint) noexcept
     {
         m_peer_id = peer_id;
+        m_peer_fingerprint = shm::host_fingerprint{peer_fingerprint};
         if(peer_protocol_version != wire::k_protocol_version)
             return reject_version_result();
         if(peer_id == m_cfg.self_id)
@@ -270,8 +290,9 @@ private:
         return {.action = fsm_action::abort, .outcome = handshake_outcome::reject_identity};
     }
 
-    handshake_fsm_config m_cfg;
-    node_id              m_peer_id{};
+    handshake_fsm_config  m_cfg;
+    node_id               m_peer_id{};
+    shm::host_fingerprint m_peer_fingerprint{};
     peer_fsm_state       m_state{peer_fsm_state::not_connected};
     std::uint8_t         m_last_seen_their_protocol_version{0};
     bool                 m_inbound_pending{false};

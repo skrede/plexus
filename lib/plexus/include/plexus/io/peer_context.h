@@ -3,6 +3,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/epoch_source.h"
+#include "plexus/io/shm/same_host.h"
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
 
@@ -47,6 +48,13 @@ struct peer_context
     // incarnation) and NOT on peer_session: a session-local flag would reset every
     // reconnect (build_into destroys+recreates the session) and mis-fire connected.
     bool has_ever_connected{false};
+    // The same-host eligibility verdict for THIS peer, recorded by the session on
+    // each handshake completion from the advertised-vs-local fingerprint compare
+    // (D-08). It is the gate the shared-memory upgrade reads: only a same-host pair
+    // ever attempts a ring acquire. A plain value with a fail-closed default (false
+    // = not co-located until proven), re-evaluated every completion — its absence is
+    // not meaningful, only its value.
+    bool same_host{false};
 };
 
 }
