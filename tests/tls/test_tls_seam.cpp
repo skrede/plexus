@@ -2,13 +2,14 @@
 #include "plexus/tls/tls_channel.h"
 #include "plexus/tls/tls_transport.h"
 #include "plexus/tls/tls_credential.h"
-#include "plexus/tls/verify_policy.h"
 #include "plexus/tls/spki_fingerprint.h"
 
 #include "plexus/tls/dtls_policy.h"
 #include "plexus/tls/dtls_channel.h"
 #include "plexus/tls/dtls_cookie.h"
 #include "plexus/tls/detail/dtls_context.h"
+
+#include "plexus/io/security/verify_policy.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
@@ -40,6 +41,9 @@
 
 namespace ptls = plexus::tls;
 namespace pio = plexus::io;
+
+// The full 32-byte SHA-256 SPKI digest — the core cert_facts::spki_sha256 field type.
+using spki_digest = std::array<std::byte, 32>;
 
 static_assert(plexus::io::byte_channel<ptls::tls_channel>);
 static_assert(plexus::io::transport_backend<ptls::tls_transport, ptls::tls_policy>);
@@ -74,7 +78,7 @@ struct identity
 {
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    ptls::spki_digest digest{};
+    spki_digest digest{};
 };
 
 // Generate an EC P-256 self-signed cert+key, write them to a fresh temp dir
@@ -148,10 +152,10 @@ struct identity_fixture
     }
 };
 
-ptls::tls_credential make_cred(const identity &self, const ptls::spki_digest &peer_pin)
+ptls::tls_credential make_cred(const identity &self, const spki_digest &peer_pin)
 {
-    auto policy = std::make_shared<const ptls::spki_pin_policy>(
-        std::vector<ptls::spki_digest>{peer_pin});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
+        std::vector<spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -258,8 +262,8 @@ TEST_CASE("dtls seam: load_dtls_credential builds a valid DTLS SSL_CTX",
           "[tls][seam][dtls]")
 {
     identity_fixture self_id("dtls_cred");
-    auto policy = std::make_shared<const ptls::spki_pin_policy>(
-        std::vector<ptls::spki_digest>{self_id.id.digest});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
+        std::vector<spki_digest>{self_id.id.digest});
 
     auto cred = ptls::load_dtls_credential(
         self_id.id.cert_path.string(), self_id.id.key_path.string(), policy);
@@ -276,27 +280,35 @@ TEST_CASE("dtls seam: load_dtls_credential builds a valid DTLS SSL_CTX",
 TEST_CASE("dtls seam: the cookie MAC is deterministic per nonce and binds the peer addr",
           "[tls][seam][dtls]")
 {
-    ptls::dtls_cookie_state state;
-    const unsigned char addr_a[] = {127, 0, 0, 1, 0x1f, 0x90};   // 127.0.0.1:8080
-    const unsigned char addr_b[] = {127, 0, 0, 1, 0x23, 0x28};   // 127.0.0.1:9000
+    // The backend factory injects OpenSSL HMAC/RAND into the core cookie_secret; the
+    // mint MAC binds [peer_addr || nonce] under the process-random key. Same addr =>
+    // same minted MAC (deterministic, no rotation in this window); a cookie minted
+    // for addr_a validates for addr_a but NOT for addr_b (the addr binding).
+    auto secret = ptls::make_cookie_secret();
+    const std::byte addr_a[] = {std::byte{127}, std::byte{0}, std::byte{0}, std::byte{1},
+                                std::byte{0x1f}, std::byte{0x90}};   // 127.0.0.1:8080
+    const std::byte addr_b[] = {std::byte{127}, std::byte{0}, std::byte{0}, std::byte{1},
+                                std::byte{0x23}, std::byte{0x28}};   // 127.0.0.1:9000
+    std::span<const std::byte> span_a{addr_a, sizeof(addr_a)};
+    std::span<const std::byte> span_b{addr_b, sizeof(addr_b)};
 
-    unsigned char mac_a1[ptls::dtls_cookie_state::k_cookie_len];
-    unsigned char mac_a2[ptls::dtls_cookie_state::k_cookie_len];
-    unsigned char mac_b[ptls::dtls_cookie_state::k_cookie_len];
+    constexpr std::size_t klen = pio::security::cookie_secret::k_cookie_len;
+    std::array<std::byte, klen> mac_a1{};
+    std::array<std::byte, klen> mac_a2{};
+    std::array<std::byte, klen> mac_b{};
 
-    REQUIRE(state.compute(addr_a, sizeof(addr_a), true, mac_a1));
-    REQUIRE(state.compute(addr_a, sizeof(addr_a), true, mac_a2));
-    REQUIRE(state.compute(addr_b, sizeof(addr_b), true, mac_b));
+    REQUIRE(secret.mint(span_a, mac_a1));
+    REQUIRE(secret.mint(span_a, mac_a2));
+    REQUIRE(secret.mint(span_b, mac_b));
 
     // Same addr + same nonce => same MAC (deterministic); a different addr diverges.
-    REQUIRE(std::memcmp(mac_a1, mac_a2, sizeof(mac_a1)) == 0);
-    REQUIRE(std::memcmp(mac_a1, mac_b, sizeof(mac_a1)) != 0);
+    REQUIRE(mac_a1 == mac_a2);
+    REQUIRE(mac_a1 != mac_b);
 
-    // The previous-nonce MAC differs from the current-nonce MAC (the rotation
-    // window is two distinct secrets).
-    unsigned char mac_a_prev[ptls::dtls_cookie_state::k_cookie_len];
-    REQUIRE(state.compute(addr_a, sizeof(addr_a), false, mac_a_prev));
-    REQUIRE(std::memcmp(mac_a1, mac_a_prev, sizeof(mac_a1)) != 0);
+    // The minted cookie validates for its own addr but not for a different addr (the
+    // peer-addr binding: a cookie issued to one source cannot be replayed by another).
+    REQUIRE(secret.validate(span_a, mac_a1));
+    REQUIRE_FALSE(secret.validate(span_b, mac_a1));
 }
 
 TEST_CASE("tls transport: a DIALED pair completes a real mutual-TLS handshake over loopback, looped",

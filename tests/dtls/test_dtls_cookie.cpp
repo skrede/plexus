@@ -9,6 +9,7 @@
 #include <openssl/ssl.h>
 
 #include <span>
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -138,29 +139,31 @@ TEST_CASE("dtls.cookie: the cookie verify callback rejects a forged cookie, loop
           "[dtls][cookie]")
 {
     // The cookie HMAC binds [peer_addr || nonce] under a process-random key; a cookie
-    // the state did not mint must not verify. compute() with the real addr is the only
-    // path that produces a valid cookie; a flipped byte / a foreign cookie is rejected.
-    ptls::dtls_cookie_state state;
-    const unsigned char addr[] = {127, 0, 0, 1, 0x1f, 0x90};
+    // the secret did not mint must not validate. mint() with the real addr is the only
+    // path that produces a valid cookie; a flipped byte / a foreign cookie is rejected
+    // (validate() checks the current AND previous nonce, constant-time).
+    auto secret = ptls::make_cookie_secret();
+    const std::byte addr[] = {std::byte{127}, std::byte{0}, std::byte{0}, std::byte{1},
+                              std::byte{0x1f}, std::byte{0x90}};
+    std::span<const std::byte> addr_span{addr, sizeof(addr)};
 
     constexpr int k_iterations = 100;
     int rejected = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
-        unsigned char good[ptls::dtls_cookie_state::k_cookie_len];
-        REQUIRE(state.compute(addr, sizeof(addr), true, good));
+        std::array<std::byte, plexus::io::security::cookie_secret::k_cookie_len> good{};
+        REQUIRE(secret.mint(addr_span, good));
+        REQUIRE(secret.validate(addr_span, good));            // the minted cookie validates
 
-        // A forged cookie (the good one with a flipped byte) must not match either nonce.
-        unsigned char forged[ptls::dtls_cookie_state::k_cookie_len];
-        std::memcpy(forged, good, sizeof(good));
-        forged[0] ^= 0xff;
+        // A forged cookie (the good one with a flipped byte) must not validate.
+        auto forged = good;
+        forged[0] ^= std::byte{0xff};
+        REQUIRE_FALSE(secret.validate(addr_span, forged));
 
-        unsigned char cur[ptls::dtls_cookie_state::k_cookie_len];
-        unsigned char prev[ptls::dtls_cookie_state::k_cookie_len];
-        REQUIRE(state.compute(addr, sizeof(addr), true, cur));
-        REQUIRE(state.compute(addr, sizeof(addr), false, prev));
-        REQUIRE(std::memcmp(forged, cur, sizeof(forged)) != 0);
-        REQUIRE(std::memcmp(forged, prev, sizeof(forged)) != 0);
+        // A cookie bound to a DIFFERENT peer addr must not validate either.
+        const std::byte other_addr[] = {std::byte{127}, std::byte{0}, std::byte{0}, std::byte{1},
+                                        std::byte{0x23}, std::byte{0x28}};
+        REQUIRE_FALSE(secret.validate(std::span<const std::byte>{other_addr, sizeof(other_addr)}, good));
         ++rejected;
     }
     REQUIRE(rejected == k_iterations);

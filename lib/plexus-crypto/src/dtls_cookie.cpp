@@ -4,20 +4,16 @@
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
 #include <openssl/evp.h>
-#include <openssl/crypto.h>
 
+#include <span>
 #include <mutex>
+#include <chrono>
 #include <cstring>
-#include <stdexcept>
+#include <cstddef>
 
 namespace plexus::tls {
 
 namespace {
-
-// The peer-address block the channel publishes per-instance into SSL ex_data: the
-// raw sockaddr-equivalent bytes the cookie MAC binds to (RFC 6347 §4.2.1). Stored
-// by the single-owner channel; the cookie callbacks read it back NON-owningly.
-constexpr std::size_t k_max_addr = 64;
 
 int alloc_state_index() noexcept
 {
@@ -35,12 +31,20 @@ int alloc_addr_index() noexcept
     return index;
 }
 
-// Resolve the per-instance cookie-state + peer-addr from SSL ex_data. The peer-addr
+int alloc_facts_index() noexcept
+{
+    static std::once_flag once;
+    static int index = -1;
+    std::call_once(once, [] { index = SSL_get_ex_new_index(0, nullptr, nullptr, nullptr, nullptr); });
+    return index;
+}
+
+// Resolve the per-instance cookie secret + peer-addr from SSL ex_data. The peer-addr
 // slot holds a length-prefixed block: the first byte is the address length, the
 // rest the address bytes (published by the channel before the handshake).
-dtls_cookie_state *state_of(ssl_st *ssl)
+io::security::cookie_secret *secret_of(ssl_st *ssl)
 {
-    return static_cast<dtls_cookie_state *>(SSL_get_ex_data(ssl, dtls_cookie_state_ex_index()));
+    return static_cast<io::security::cookie_secret *>(SSL_get_ex_data(ssl, dtls_cookie_secret_ex_index()));
 }
 
 const unsigned char *addr_of(ssl_st *ssl, std::size_t &len_out)
@@ -57,98 +61,66 @@ const unsigned char *addr_of(ssl_st *ssl, std::size_t &len_out)
 
 }
 
-dtls_cookie_state::dtls_cookie_state()
+io::security::cookie_secret make_cookie_secret()
 {
-    // Fail-closed on a degraded RNG: RAND_bytes returns <=1 leaving the buffer
-    // value-initialized to zero, and an all-zero HMAC key silently weakens the
-    // source-spoof cookie to a forgeable constant. Refuse to construct.
-    if(RAND_bytes(m_key.data(), static_cast<int>(m_key.size())) != 1
-       || RAND_bytes(m_nonce_cur.data(), static_cast<int>(m_nonce_cur.size())) != 1
-       || RAND_bytes(m_nonce_prev.data(), static_cast<int>(m_nonce_prev.size())) != 1)
-        throw std::runtime_error("dtls_cookie_state: RAND_bytes failed (degraded RNG)");
-    m_last_rotate = std::chrono::steady_clock::now();
+    // The two irreducible OpenSSL primitives the core cookie_secret drives: HMAC-
+    // SHA256 over [key, msg] -> out (>= 32 bytes), and RAND_bytes for the key +
+    // nonces. Both return false on any failure so the core fails the cookie / the
+    // construction closed (a degraded RNG must never install a zero key).
+    io::security::hmac_fn hmac =
+        [](std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out) {
+            unsigned int n = 0;
+            const unsigned char *r = HMAC(EVP_sha256(),
+                                          key.data(), static_cast<int>(key.size()),
+                                          reinterpret_cast<const unsigned char *>(msg.data()), msg.size(),
+                                          reinterpret_cast<unsigned char *>(out.data()), &n);
+            return r != nullptr && n >= out.size();
+        };
+    io::security::rand_fn rand =
+        [](std::span<std::byte> out) {
+            return RAND_bytes(reinterpret_cast<unsigned char *>(out.data()),
+                              static_cast<int>(out.size())) == 1;
+        };
+    return io::security::cookie_secret(std::move(hmac), std::move(rand));
 }
 
-void dtls_cookie_state::maybe_rotate(std::chrono::steady_clock::time_point now)
-{
-    if(now - m_last_rotate < k_default_rotation)
-        return;
-    // Generate the fresh nonce into a temporary FIRST: on RAND_bytes failure retain
-    // the prior good (current+previous) nonces rather than installing a zero nonce.
-    // The validity window simply does not advance until the RNG recovers.
-    std::array<unsigned char, 16> next{};
-    if(RAND_bytes(next.data(), static_cast<int>(next.size())) != 1)
-        return;
-    m_nonce_prev = m_nonce_cur;
-    m_nonce_cur = next;
-    m_last_rotate = now;
-}
-
-bool dtls_cookie_state::compute(const unsigned char *peer_addr, std::size_t addr_len,
-                                bool current, unsigned char *out) const
-{
-    const auto &nonce = current ? m_nonce_cur : m_nonce_prev;
-
-    unsigned char msg[k_max_addr + 16];
-    if(addr_len > k_max_addr)
-        return false;
-    std::memcpy(msg, peer_addr, addr_len);
-    std::memcpy(msg + addr_len, nonce.data(), nonce.size());
-
-    unsigned char mac[EVP_MAX_MD_SIZE];
-    unsigned int mac_len = 0;
-    const unsigned char *r = HMAC(EVP_sha256(), m_key.data(), static_cast<int>(m_key.size()),
-                                  msg, addr_len + nonce.size(), mac, &mac_len);
-    if(!r || mac_len < k_cookie_len)
-        return false;
-    std::memcpy(out, mac, k_cookie_len);
-    return true;
-}
-
-int dtls_cookie_state_ex_index() noexcept { return alloc_state_index(); }
+int dtls_cookie_secret_ex_index() noexcept { return alloc_state_index(); }
 int dtls_peer_addr_ex_index() noexcept { return alloc_addr_index(); }
+int dtls_peer_facts_ex_index() noexcept { return alloc_facts_index(); }
 
 extern "C" int dtls_cookie_generate_cb(ssl_st *ssl, unsigned char *cookie, unsigned int *len)
 {
-    auto *state = state_of(ssl);
-    if(!state)
+    auto *secret = secret_of(ssl);
+    if(!secret)
         return 0;
     std::size_t addr_len = 0;
     const unsigned char *addr = addr_of(ssl, addr_len);
     if(!addr || addr_len == 0)
         return 0;
 
-    state->maybe_rotate(std::chrono::steady_clock::now());
-    if(!state->compute(addr, addr_len, /*current=*/true, cookie))
+    secret->maybe_rotate(std::chrono::steady_clock::now());
+    std::span<const std::byte> addr_bytes{reinterpret_cast<const std::byte *>(addr), addr_len};
+    std::span<std::byte> out{reinterpret_cast<std::byte *>(cookie), io::security::cookie_secret::k_cookie_len};
+    if(!secret->mint(addr_bytes, out))
         return 0;
-    *len = static_cast<unsigned int>(dtls_cookie_state::k_cookie_len);
+    *len = static_cast<unsigned int>(io::security::cookie_secret::k_cookie_len);
     return 1;
 }
 
 extern "C" int dtls_cookie_verify_cb(ssl_st *ssl, const unsigned char *cookie, unsigned int len)
 {
-    auto *state = state_of(ssl);
-    if(!state)
+    auto *secret = secret_of(ssl);
+    if(!secret)
         return 0;
     std::size_t addr_len = 0;
     const unsigned char *addr = addr_of(ssl, addr_len);
     if(!addr || addr_len == 0)
         return 0;
-    if(len != dtls_cookie_state::k_cookie_len)
-        return 0;
 
-    state->maybe_rotate(std::chrono::steady_clock::now());
-
-    // Recompute against the current then the previous nonce (rotation tolerance);
-    // constant-time compare so a near-miss leaks no timing about the MAC.
-    unsigned char expected[dtls_cookie_state::k_cookie_len];
-    if(state->compute(addr, addr_len, /*current=*/true, expected)
-       && CRYPTO_memcmp(expected, cookie, len) == 0)
-        return 1;
-    if(state->compute(addr, addr_len, /*current=*/false, expected)
-       && CRYPTO_memcmp(expected, cookie, len) == 0)
-        return 1;
-    return 0;
+    secret->maybe_rotate(std::chrono::steady_clock::now());
+    std::span<const std::byte> addr_bytes{reinterpret_cast<const std::byte *>(addr), addr_len};
+    std::span<const std::byte> cookie_bytes{reinterpret_cast<const std::byte *>(cookie), len};
+    return secret->validate(addr_bytes, cookie_bytes) ? 1 : 0;
 }
 
 extern "C" int plexus_alpn_select(ssl_st *, const unsigned char **out, unsigned char *outlen,

@@ -1,18 +1,25 @@
 #include "plexus/tls/tls_credential.h"
-#include "plexus/tls/verify_policy.h"
 #include "plexus/tls/spki_fingerprint.h"
 #include "plexus/tls/dtls_cookie.h"
+
+#include "plexus/io/security/cert_facts.h"
 
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 #include <openssl/evp.h>
 #include <openssl/crypto.h>
 
-#include <span>
+#include <array>
+#include <ctime>
 #include <mutex>
+#include <chrono>
+#include <string>
+#include <vector>
 #include <utility>
+#include <optional>
 #include <stdexcept>
 #include <filesystem>
 
@@ -35,9 +42,10 @@ void free_evp_pkey(EVP_PKEY *k)       { if(k) EVP_PKEY_free(k); }
 void free_x509_pubkey(X509_PUBKEY *p) { if(p) X509_PUBKEY_free(p); }
 void free_ssl_ctx(ssl_ctx_st *c)      { if(c) SSL_CTX_free(c); }
 
-// SHA-256 the DER-encoded SPKI of an X509 leaf into the full 32-byte digest.
-// Non-throwing; frees every handle on every path; cleanses + frees the DER.
-std::optional<spki_digest> digest_of(X509 *leaf) noexcept
+// SHA-256 the DER-encoded SPKI of an X509 leaf into the full 32-byte digest (the
+// core cert_facts::spki_sha256 field type). Non-throwing; frees every handle on
+// every path; cleanses + frees the DER.
+std::optional<std::array<std::byte, 32>> digest_of(X509 *leaf) noexcept
 {
     evp_key_ptr pubkey(X509_get_pubkey(leaf), &free_evp_pkey);
     if(!pubkey)
@@ -53,7 +61,7 @@ std::optional<spki_digest> digest_of(X509 *leaf) noexcept
     if(der_len <= 0 || !der)
         return std::nullopt;
 
-    spki_digest out{};
+    std::array<std::byte, 32> out{};
     unsigned int dlen = 0;
     const int ok = EVP_Digest(der, static_cast<std::size_t>(der_len),
                               reinterpret_cast<unsigned char *>(out.data()), &dlen,
@@ -65,15 +73,82 @@ std::optional<spki_digest> digest_of(X509 *leaf) noexcept
     return out;
 }
 
-// Parse a DER-encoded leaf back into an X509 (the verify contract is pure bytes),
-// SHA-256 its SPKI, and free the handle. Non-throwing.
-std::optional<spki_digest> digest_of_der(std::span<const std::byte> leaf_der) noexcept
+// The leaf subject: the CN, or the full one-line subject DN if there is no CN.
+std::string subject_of(X509 *leaf)
 {
-    const unsigned char *p = reinterpret_cast<const unsigned char *>(leaf_der.data());
-    x509_ptr leaf(d2i_X509(nullptr, &p, static_cast<long>(leaf_der.size())), &free_x509);
-    if(!leaf)
-        return std::nullopt;
-    return digest_of(leaf.get());
+    X509_NAME *name = X509_get_subject_name(leaf);
+    if(!name)
+        return {};
+    char cn[256];
+    const int n = X509_NAME_get_text_by_NID(name, NID_commonName, cn, sizeof(cn));
+    if(n > 0)
+        return std::string(cn, static_cast<std::size_t>(n));
+    char *line = X509_NAME_oneline(name, nullptr, 0);
+    std::string out = line ? line : "";
+    OPENSSL_free(line);
+    return out;
+}
+
+// The subjectAltName DNS / IP / URI entries, in cert order. Frees the GENERAL_NAMES
+// stack on every path. Absence yields an empty vector (no SAN extension).
+std::vector<std::string> san_of(X509 *leaf)
+{
+    std::vector<std::string> out;
+    auto *names = static_cast<GENERAL_NAMES *>(
+        X509_get_ext_d2i(leaf, NID_subject_alt_name, nullptr, nullptr));
+    if(!names)
+        return out;
+    const int count = sk_GENERAL_NAME_num(names);
+    for(int i = 0; i < count; ++i)
+    {
+        const GENERAL_NAME *gn = sk_GENERAL_NAME_value(names, i);
+        if(!gn)
+            continue;
+        if(gn->type == GEN_DNS || gn->type == GEN_URI)
+        {
+            const unsigned char *data = ASN1_STRING_get0_data(gn->d.ia5);
+            const int len = ASN1_STRING_length(gn->d.ia5);
+            if(data && len > 0)
+                out.emplace_back(reinterpret_cast<const char *>(data), static_cast<std::size_t>(len));
+        }
+    }
+    GENERAL_NAMES_free(names);
+    return out;
+}
+
+// Convert an ASN1_TIME to a system_clock time_point (epoch on any parse failure —
+// a policy that reasons about validity reads not_before/not_after, fail-closed).
+std::chrono::system_clock::time_point time_of(const ASN1_TIME *t)
+{
+    if(!t)
+        return {};
+    std::tm tm{};
+    if(ASN1_TIME_to_tm(t, &tm) != 1)
+        return {};
+    const std::time_t secs = timegm(&tm);
+    return std::chrono::system_clock::from_time_t(secs);
+}
+
+// Extract the full cert_facts field set from a peer leaf into the core VALUE struct
+// (never an X509* crosses the seam). Non-throwing; fail-closed: a missing SPKI
+// digest yields false (the caller rejects). The SPKI digest reuses digest_of (the
+// ONE SPKI extraction); subject / SAN / validity / depth / preverify_ok fill the
+// rest. The first 16 bytes of spki_sha256 also derive the peer node_id at the
+// completion edge (no second digest).
+bool extract_cert_facts(X509 *peer, int depth, bool preverify_ok,
+                        io::security::cert_facts &facts) noexcept
+{
+    const auto digest = digest_of(peer);
+    if(!digest)
+        return false;
+    facts.spki_sha256 = *digest;
+    facts.subject = subject_of(peer);
+    facts.san = san_of(peer);
+    facts.not_before = time_of(X509_get0_notBefore(peer));
+    facts.not_after = time_of(X509_get0_notAfter(peer));
+    facts.chain_depth = depth;
+    facts.preverify_ok = preverify_ok;
+    return true;
 }
 
 // The one-shot OpenSSL ex_data index. call_once (a function, never a singleton
@@ -91,9 +166,10 @@ int allocate_ex_data_index() noexcept
 }
 
 // The C-linkage verify callback. Walks X509_STORE_CTX -> SSL* -> SSL_CTX* ->
-// ex_data -> credential -> verify_policy and returns the policy's accept/reject.
-// Fail-closed at every missing link: no SSL / no credential / no policy / no
-// peer cert / DER-serialize failure all REJECT. Non-throwing; frees the DER.
+// ex_data -> credential -> verify_policy, extracts a cert_facts VALUE from the leaf
+// ONCE, and returns the core decision's accept/reject. Core never sees an X509* and
+// never parses DER. Fail-closed at every missing link: no SSL / no credential / no
+// policy / no peer cert / extraction failure all REJECT.
 extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 {
     // SPKI pinning anchors trust at the leaf (depth 0). At depth > 0 we are not
@@ -125,19 +201,23 @@ extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     if(!peer)
         return reject();
 
-    unsigned char *der = nullptr;
-    const int der_len = i2d_X509(peer, &der);
-    if(der_len <= 0 || !der)
+    io::security::cert_facts facts;
+    if(!extract_cert_facts(peer, 0, preverify_ok != 0, facts))
         return reject();
-    const bool ok = cred->policy()->verify(
-        std::span<const std::byte>(reinterpret_cast<const std::byte *>(der),
-                                   static_cast<std::size_t>(der_len)));
-    OPENSSL_free(der);
-    if(!ok)
+    if(!cred->policy()->decide(facts))
     {
         X509_STORE_CTX_set_error(ctx, X509_V_ERR_CERT_REJECTED);
         return 0;
     }
+    // Stash the verify-time depth-0 leaf facts onto the channel via the SAME
+    // per-instance SSL ex_data stitch the cookie callbacks use (never thread_local):
+    // the channel published its m_peer_facts address before driving the handshake,
+    // so the completion edge derives the peer identity from this ONE extraction
+    // with no second SPKI digest. A null slot (the TLS path, which does not stash)
+    // is simply skipped.
+    if(auto *slot = static_cast<io::security::cert_facts *>(
+           SSL_get_ex_data(ssl, dtls_peer_facts_ex_index())))
+        *slot = facts;
     // The SPKI pin IS the trust anchor: a pinned leaf is fully trusted, so clear
     // any chain-building error OpenSSL set ahead of this callback (a self-signed
     // pinned leaf otherwise leaves X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT on the
@@ -252,20 +332,9 @@ ssl_ctx_ptr build_dtls_ctx(X509 *cert, EVP_PKEY *key)
 
 }
 
-std::optional<spki_digest> spki_fingerprint(const x509_st &leaf) noexcept
+std::optional<std::array<std::byte, 32>> spki_fingerprint(const x509_st &leaf) noexcept
 {
     return digest_of(const_cast<X509 *>(&leaf));
-}
-
-bool spki_pin_policy::verify(std::span<const std::byte> leaf_der) const noexcept
-{
-    const auto peer = digest_of_der(leaf_der);
-    if(!peer)
-        return false;
-    for(const auto &pin : m_pinned)
-        if(pin == *peer)
-            return true;
-    return false;
 }
 
 int tls_credential::ex_data_index() noexcept { return allocate_ex_data_index(); }
@@ -277,7 +346,7 @@ void tls_credential::stitch() noexcept
 }
 
 tls_credential::tls_credential(std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> ctx,
-                               std::shared_ptr<const verify_policy> policy) noexcept
+                               std::shared_ptr<const io::security::verify_policy> policy) noexcept
     : m_ssl_ctx(std::move(ctx))
     , m_policy(std::move(policy))
 {
@@ -306,7 +375,7 @@ tls_credential::~tls_credential() = default;
 
 tls_credential load_credential(const std::string &cert_path,
                                const std::string &key_path,
-                               std::shared_ptr<const verify_policy> policy,
+                               std::shared_ptr<const io::security::verify_policy> policy,
                                tls_version min_version)
 {
     if(!policy)
@@ -327,7 +396,7 @@ tls_credential load_credential(const std::string &cert_path,
 
 tls_credential load_dtls_credential(const std::string &cert_path,
                                     const std::string &key_path,
-                                    std::shared_ptr<const verify_policy> policy)
+                                    std::shared_ptr<const io::security::verify_policy> policy)
 {
     if(!policy)
         fail("dtls: a credential requires a verify policy (no fail-open default)");

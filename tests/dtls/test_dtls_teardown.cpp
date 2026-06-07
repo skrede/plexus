@@ -43,7 +43,7 @@ struct close_notify_harness
     ::asio::io_context io;
     ptls::tls_credential server_cred;
     ptls::tls_credential client_cred;
-    ptls::dtls_cookie_state server_cookie;
+    plexus::io::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
     pasio::udp_server server_sock{io};
     pasio::udp_server client_sock{io};         // a REAL client socket: the server sends here
 

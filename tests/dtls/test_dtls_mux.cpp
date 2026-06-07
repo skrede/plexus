@@ -8,8 +8,9 @@
 
 #include "plexus/tls/tls_transport.h"
 #include "plexus/tls/tls_credential.h"
-#include "plexus/tls/verify_policy.h"
 #include "plexus/tls/dtls_transport.h"
+
+#include "plexus/io/security/verify_policy.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/transport_backend.h"
@@ -41,10 +42,10 @@ namespace {
 
 // Mint a TLS (TLS-over-TCP) credential for `self` pinning exactly `peer_pin` — the
 // secure stream member needs a TLS_method SSL_CTX (NOT the DTLS one pin_one mints).
-ptls::tls_credential pin_one_tls(const pdt::identity_fixture &self, const ptls::spki_digest &peer_pin)
+ptls::tls_credential pin_one_tls(const pdt::identity_fixture &self, const pdt::spki_digest &peer_pin)
 {
-    auto policy = std::make_shared<const ptls::spki_pin_policy>(
-        std::vector<ptls::spki_digest>{peer_pin});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
+        std::vector<pdt::spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 

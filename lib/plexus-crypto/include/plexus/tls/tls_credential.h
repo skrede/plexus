@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_TLS_TLS_CREDENTIAL_H
 #define HPP_GUARD_PLEXUS_TLS_TLS_CREDENTIAL_H
 
-#include "plexus/tls/verify_policy.h"
+#include "plexus/io/security/verify_policy.h"
 
 #include <memory>
 #include <string>
@@ -40,7 +40,7 @@ public:
     // policy is shared so every channel that shares this SSL_CTX sees the same
     // verify decision. Prefer load_credential() to mint one from disk paths.
     tls_credential(std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> ctx,
-                   std::shared_ptr<const verify_policy> policy) noexcept;
+                   std::shared_ptr<const io::security::verify_policy> policy) noexcept;
 
     tls_credential(const tls_credential &) = delete;
     tls_credential &operator=(const tls_credential &) = delete;
@@ -54,7 +54,7 @@ public:
     // its refcount (SSL_CTX_up_ref) to back its per-channel asio::ssl::context.
     [[nodiscard]] ssl_ctx_st &ssl_ctx() const noexcept { return *m_ssl_ctx; }
 
-    [[nodiscard]] const std::shared_ptr<const verify_policy> &policy() const noexcept { return m_policy; }
+    [[nodiscard]] const std::shared_ptr<const io::security::verify_policy> &policy() const noexcept { return m_policy; }
 
     // The OpenSSL ex_data index, allocated once (via call_once) at first use.
     [[nodiscard]] static int ex_data_index() noexcept;
@@ -63,7 +63,7 @@ private:
     void stitch() noexcept;
 
     std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> m_ssl_ctx{nullptr, nullptr};
-    std::shared_ptr<const verify_policy> m_policy;
+    std::shared_ptr<const io::security::verify_policy> m_policy;
 };
 
 // Mint a mutual-auth credential from a PEM cert + key on disk, pinning the given
@@ -72,7 +72,7 @@ private:
 // build failure (a misconfigured credential must never silently fall open).
 [[nodiscard]] tls_credential load_credential(const std::string &cert_path,
                                              const std::string &key_path,
-                                             std::shared_ptr<const verify_policy> policy,
+                                             std::shared_ptr<const io::security::verify_policy> policy,
                                              tls_version min_version = tls_version::v1_3);
 
 // Mint a mutual-auth DTLS credential from the same PEM cert + key on disk and the
@@ -85,7 +85,7 @@ private:
 // same fail-closed-on-error contract.
 [[nodiscard]] tls_credential load_dtls_credential(const std::string &cert_path,
                                                   const std::string &key_path,
-                                                  std::shared_ptr<const verify_policy> policy);
+                                                  std::shared_ptr<const io::security::verify_policy> policy);
 
 }
 

@@ -3,8 +3,9 @@
 
 #include "plexus/tls/tls_credential.h"
 #include "plexus/tls/dtls_cookie.h"
-#include "plexus/tls/spki_fingerprint.h"
 #include "plexus/tls/detail/dtls_context.h"
+
+#include "plexus/io/security/cert_facts.h"
 
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/asio_timer.h"
@@ -72,7 +73,7 @@ public:
     // peer-addr block is this channel's own member.
     dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
                  ::asio::ip::udp::endpoint dest, const tls_credential &cred,
-                 dtls_cookie_state &cookie_state, role r,
+                 io::security::cookie_secret &cookie_state, role r,
                  std::size_t max_payload = default_max_payload);
 
     dtls_channel(const dtls_channel &) = delete;
@@ -126,12 +127,12 @@ private:
     void fail(io::io_error e);
     void post_on_data(std::span<const std::byte> frame);
     void publish_cookie_ex_data();
-    void capture_peer_identity(x509_st *peer);
+    void capture_peer_identity();
 
     ::asio::io_context &m_io;
     plexus::asio::udp_server &m_server;
     ::asio::ip::udp::endpoint m_dest;
-    dtls_cookie_state &m_cookie_state;
+    io::security::cookie_secret &m_cookie_state;
     role m_role;
     std::size_t m_max_payload;
 
@@ -143,6 +144,11 @@ private:
     std::vector<unsigned char> m_peer_addr_block; // [len][addr bytes] for the cookie cb
     std::array<unsigned char, 2048> m_drain_buf{};
 
+    // The verify-time depth-0 leaf facts the verify callback stashes here through the
+    // per-instance SSL ex_data slot (the ONE cert extraction per handshake). The
+    // completion edge derives node_id (first 16 bytes of spki_sha256) + node_name
+    // (subject) from this value — no second SPKI digest at the capture site.
+    io::security::cert_facts m_peer_facts;
     node_id m_node_id{};
     std::string m_node_name;
 

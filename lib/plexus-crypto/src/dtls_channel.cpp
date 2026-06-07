@@ -23,7 +23,7 @@ int to_int(std::size_t v) noexcept { return static_cast<int>(v); }
 
 dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
                            ::asio::ip::udp::endpoint dest, const tls_credential &cred,
-                           dtls_cookie_state &cookie_state, role r, std::size_t max_payload)
+                           io::security::cookie_secret &cookie_state, role r, std::size_t max_payload)
     : m_io(io)
     , m_server(server)
     , m_dest(std::move(dest))
@@ -66,7 +66,8 @@ dtls_channel::~dtls_channel()
     if(m_ssl)
     {
         ::SSL_set_ex_data(m_ssl, dtls_peer_addr_ex_index(), nullptr);
-        ::SSL_set_ex_data(m_ssl, dtls_cookie_state_ex_index(), nullptr);
+        ::SSL_set_ex_data(m_ssl, dtls_cookie_secret_ex_index(), nullptr);
+        ::SSL_set_ex_data(m_ssl, dtls_peer_facts_ex_index(), nullptr);
         ::SSL_free(m_ssl);                       // frees the internal BIO too
         m_ssl = nullptr;
     }
@@ -76,8 +77,12 @@ dtls_channel::~dtls_channel()
 
 void dtls_channel::publish_cookie_ex_data()
 {
-    ::SSL_set_ex_data(m_ssl, dtls_cookie_state_ex_index(), &m_cookie_state);
+    ::SSL_set_ex_data(m_ssl, dtls_cookie_secret_ex_index(), &m_cookie_state);
     ::SSL_set_ex_data(m_ssl, dtls_peer_addr_ex_index(), m_peer_addr_block.data());
+    // Publish the facts-stash destination so the verify callback writes the ONE
+    // verify-time leaf extraction back into this channel's m_peer_facts (the same
+    // per-instance ex_data stitch, never thread_local).
+    ::SSL_set_ex_data(m_ssl, dtls_peer_facts_ex_index(), &m_peer_facts);
 }
 
 void dtls_channel::start_handshake()
@@ -193,7 +198,7 @@ void dtls_channel::try_complete()
     const bool ok = peer && ::SSL_get_verify_result(m_ssl) == X509_V_OK;
     if(ok)
     {
-        capture_peer_identity(peer);             // reuse the cert just validated (no second fetch)
+        capture_peer_identity();                 // identity from the stashed verify-time facts
         // OpenSSL resets the SSL MTU to the conservative DTLS minimum during the
         // handshake (a memory-BIO pair cannot do path-MTU discovery), so re-assert the
         // configured record budget now that the cipher is negotiated — DTLS_get_data_mtu
@@ -212,12 +217,14 @@ void dtls_channel::try_complete()
     fail(io::io_error::connection_refused);      // fail-closed: no completion
 }
 
-void dtls_channel::capture_peer_identity(X509 *peer)
+void dtls_channel::capture_peer_identity()
 {
-    if(!peer)
-        return;
-    detail::spki_to_node_id(peer, m_node_id);
-    m_node_name = detail::subject_name_of(peer);
+    // The peer identity comes from the ONE verify-time cert_facts extraction the
+    // verify callback stashed into m_peer_facts — no second SPKI digest, no X509
+    // re-parse at the completion edge. node_id is the first 16 bytes of the full
+    // SPKI digest; node_name is the cert subject.
+    m_node_id = io::security::to_node_id(m_peer_facts);
+    m_node_name = m_peer_facts.subject;
 }
 
 void dtls_channel::arm_retransmit()

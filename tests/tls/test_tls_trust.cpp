@@ -1,8 +1,9 @@
 #include "plexus/tls/tls_channel.h"
 #include "plexus/tls/tls_transport.h"
 #include "plexus/tls/tls_credential.h"
-#include "plexus/tls/verify_policy.h"
 #include "plexus/tls/spki_fingerprint.h"
+
+#include "plexus/io/security/verify_policy.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
@@ -32,6 +33,9 @@
 namespace ptls = plexus::tls;
 namespace pio = plexus::io;
 
+// The full 32-byte SHA-256 SPKI digest — the core cert_facts::spki_sha256 field type.
+using spki_digest = std::array<std::byte, 32>;
+
 namespace {
 
 // ---- Ephemeral self-signed identity fixture -------------------------------
@@ -45,7 +49,7 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    ptls::spki_digest digest{};
+    spki_digest digest{};
 
     explicit identity_fixture(const std::string &tag)
     {
@@ -111,10 +115,10 @@ struct identity_fixture
 };
 
 // Mint a credential for `self` whose verify policy pins exactly `peer_pin`.
-ptls::tls_credential pin_one(const identity_fixture &self, const ptls::spki_digest &peer_pin)
+ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &peer_pin)
 {
-    auto policy = std::make_shared<const ptls::spki_pin_policy>(
-        std::vector<ptls::spki_digest>{peer_pin});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
+        std::vector<spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -122,8 +126,8 @@ ptls::tls_credential pin_one(const identity_fixture &self, const ptls::spki_dige
 // allowlist) — fail-closed: it rejects every peer.
 ptls::tls_credential pin_none(const identity_fixture &self)
 {
-    auto policy = std::make_shared<const ptls::spki_pin_policy>(
-        std::vector<ptls::spki_digest>{});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
+        std::vector<spki_digest>{});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 

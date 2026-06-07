@@ -66,6 +66,7 @@ public:
         : m_io(io)
         , m_server(io)
         , m_cred(cred)
+        , m_cookie(make_cookie_secret())
         , m_max_payload(max_payload)
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { on_datagram(from, bytes); });
@@ -248,7 +249,7 @@ private:
     ::asio::io_context &m_io;
     plexus::asio::udp_server m_server;
     const tls_credential &m_cred;
-    dtls_cookie_state m_cookie;                            // the node's single cookie secret
+    io::security::cookie_secret m_cookie;                  // the node's single cookie secret
     std::size_t m_max_payload;
     plexus::asio::detail::basic_inbound_demux<dtls_channel> m_demux;
     std::unordered_map<dtls_channel *, pending_dial> m_pending;
