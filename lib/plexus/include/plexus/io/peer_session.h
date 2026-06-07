@@ -353,7 +353,7 @@ private:
 
     void mint_session_id() noexcept { m_session_id = m_ctx.epochs.next(); }
 
-    // The same-host eligibility verdict (D-08): compare the peer's advertised
+    // The same-host eligibility verdict: compare the peer's advertised
     // fingerprint (learned by the FSM at the validated request/response) to our own
     // via is_same_host — a null/absent peer fingerprint is conservatively NOT
     // same-host (the fail-closed null-guard) — and record it on the per-peer record.

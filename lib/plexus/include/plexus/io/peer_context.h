@@ -49,8 +49,8 @@ struct peer_context
     // reconnect (build_into destroys+recreates the session) and mis-fire connected.
     bool has_ever_connected{false};
     // The same-host eligibility verdict for THIS peer, recorded by the session on
-    // each handshake completion from the advertised-vs-local fingerprint compare
-    // (D-08). It is the gate the shared-memory upgrade reads: only a same-host pair
+    // each handshake completion from the advertised-vs-local fingerprint compare.
+    // It is the gate the shared-memory upgrade reads: only a same-host pair
     // ever attempts a ring acquire. A plain value with a fail-closed default (false
     // = not co-located until proven), re-evaluated every completion — its absence is
     // not meaningful, only its value.

@@ -42,6 +42,36 @@ enum class same_host_medium : std::uint8_t
     return same_host_medium::stream;
 }
 
+// The bilateral, consumer-sovereign upgrade decision: whether THIS end
+// attempts the same-host shared-memory acquire for a (peer, topic). It is purely
+// LOCAL — it reads only this end's same-host verdict (recorded from the handshake
+// fingerprint) and this end's own dispatch hint — and exchanges NOTHING on the wire.
+// Both ends run this independently and, when it returns true, each acquires the SAME
+// deterministically-named ring (region_name_for(fqn, direction)); they converge on
+// the one ring the same way they converge on the name (demand-driven convergence).
+// The hint ONLY gates whether each side ATTEMPTS the acquire:
+//   * a PUBLISHER with a qualifying hint creates + sizes the ring (max_payload);
+//   * a SUBSCRIBER with a qualifying hint attaches the same ring (creating the
+//     default-geometry ring itself if the publisher has not yet) -- the consumer
+//     rescues itself from a hint-less publisher (the beyond-vagus capability).
+// EITHER end's qualifying hint therefore upgrades the pair: the side with the hint
+// attempts the acquire, and the converged ring is shared. A non-same-host pair never
+// upgrades regardless of the hint (the eligibility gate).
+[[nodiscard]] inline bool attempt_shm_upgrade(bool same_host, dispatch_hint own_hint) noexcept
+{
+    return same_host && shm_eligible(own_hint);
+}
+
+// The ring-sizing authority for an upgrade THIS end drives: a publisher with
+// a declared max_payload sizes the ring to that width; a subscriber-only upgrade (no
+// max_payload, i.e. 0) falls back to the default ring geometry. Returns the value to
+// pass to shm_topic_registry::acquire, where 0 already means "default geometry".
+[[nodiscard]] inline std::uint32_t upgrade_ring_max_payload(ring_direction direction,
+                                                            std::uint32_t publisher_max_payload) noexcept
+{
+    return direction == ring_direction::request ? publisher_max_payload : 0u;
+}
+
 // The per-forwarder acquired-ring bookkeeping: the set of (node_name, fqn) pairs
 // this forwarder currently holds a same-host ring for, plus the per-pair refcount
 // that gates the 0->1 acquire and the 1->0 release. This is borrowed BY REFERENCE

@@ -370,3 +370,22 @@ target_link_libraries(test_shm_mux PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_mux TEST_PREFIX "shm.")
+
+# The bilateral, consumer-sovereign upgrade via demand-driven convergence (xproc):
+# two real processes each decide INDEPENDENTLY whether to attempt the shared-memory
+# acquire from their OWN dispatch hint (no hint on the wire), converge on the same
+# deterministically-named ring, and round-trip a value over it; the publisher sizes
+# the ring via max_payload, a no-max_payload upgrade falls back to the default
+# geometry. Links plexus::shm (the POSIX broker + the ring) + plexus::wire (the fqn
+# hash the region naming routes through).
+add_executable(test_shm_bilateral test_shm_bilateral.cpp)
+
+target_include_directories(test_shm_bilateral PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_bilateral PRIVATE
+    plexus::shm
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_bilateral TEST_PREFIX "shm.")

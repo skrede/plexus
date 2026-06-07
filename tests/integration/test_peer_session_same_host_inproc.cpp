@@ -1,10 +1,10 @@
-// The same-host eligibility verdict (D-08): after a handshake completes, each peer
+// The same-host eligibility verdict: after a handshake completes, each peer
 // has compared the OTHER end's advertised fingerprint to its own and recorded the
 // verdict on its peer_context. This oracle stands up a two-node inproc link with
 // controllable local fingerprints and proves the three cases:
 //   * equal non-null fingerprints  -> both record same_host = true
 //   * distinct fingerprints        -> both record same_host = false (cross-host)
-//   * one end advertises null (0)   -> the OTHER end records false (Pitfall 2)
+//   * one end advertises null (0)   -> the OTHER end records false (the null-guard)
 // and that a not-same-host pair never resolves to the shared-memory medium (the
 // eligibility gate), regardless of a qualifying dispatch hint. The fingerprint rides
 // the handshake frame as the appended field; no separate exchange. Looped for the
@@ -131,7 +131,7 @@ TEST_CASE("inproc peer_session: distinct fingerprints record NOT same-host (cros
     }
 }
 
-TEST_CASE("inproc peer_session: a peer advertising a null fingerprint is NOT same-host (Pitfall 2), looped",
+TEST_CASE("inproc peer_session: a peer advertising a null fingerprint is NOT same-host (fail closed), looped",
           "[integration][peer_session][same_host][inproc]")
 {
     for(int iter = 0; iter < 50; ++iter)

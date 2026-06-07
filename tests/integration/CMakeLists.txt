@@ -58,7 +58,7 @@ target_include_directories(test_peer_session_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_peer_session_inproc TEST_PREFIX "integration.")
 
-# The same-host eligibility verdict (D-08): after the handshake the session records
+# The same-host eligibility verdict: after the handshake the session records
 # whether the peer's advertised fingerprint equals its own (the fingerprint rides the
 # widened frame), and a non-same-host pair never reaches the shared-memory medium.
 add_executable(test_peer_session_same_host_inproc test_peer_session_same_host_inproc.cpp)
