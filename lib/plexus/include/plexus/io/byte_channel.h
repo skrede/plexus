@@ -51,10 +51,10 @@ template <typename C>
 concept byte_channel = requires(C &c,
                                 const C &cc,
                                 std::span<const std::byte> bytes,
-                                detail::move_only_function<void(std::span<const std::byte>)> on_data_cb,
-                                detail::move_only_function<void()> on_closed_cb,
-                                detail::move_only_function<void(io_error)> on_error_cb,
-                                detail::move_only_function<void(wire::close_cause)> on_protocol_close_cb)
+                                plexus::detail::move_only_function<void(std::span<const std::byte>)> on_data_cb,
+                                plexus::detail::move_only_function<void()> on_closed_cb,
+                                plexus::detail::move_only_function<void(io_error)> on_error_cb,
+                                plexus::detail::move_only_function<void(wire::close_cause)> on_protocol_close_cb)
 {
     { c.send(bytes) }                          -> std::same_as<void>;
     { c.close() }                              -> std::same_as<void>;

@@ -11,12 +11,15 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/mtu_budget.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
+#include "plexus/io/pending_dial_registry.h"
 #include "plexus/io/detail/udp_handshake_arq.h"
 #include "plexus/io/detail/udp_handshake_frame.h"
 #include "plexus/detail/compat.h"
 
+#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
 
@@ -30,7 +33,6 @@
 #include <optional>
 #include <string_view>
 #include <system_error>
-#include <unordered_map>
 
 namespace plexus::asio {
 
@@ -72,6 +74,7 @@ public:
         , m_hs_ladder(hs_ladder)
         , m_arq_cfg(arq_cfg)
         , m_congestion(congestion)
+        , m_dials(make_defer_destroy())
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { on_datagram(from, bytes); });
         m_server.on_error([this](io::io_error e) { if(m_on_error) m_on_error(e); });
@@ -131,16 +134,19 @@ public:
         raw_arq->on_established([this, ep, raw] { resolve_dial(ep, raw); });
         raw_arq->on_timeout([this, ep, raw] { fail_dial(ep, raw); });
 
-        m_pending[raw] = pending_dial{std::move(ch), std::move(arq)};
+        m_dials.insert(raw, std::move(ch), std::move(arq));
         raw_arq->start();
     }
 
     void close()
     {
-        for(auto &[raw, pend] : m_pending)
-            pend.arq->cancel();
-        m_pending.clear();
-        m_accepted.clear();
+        // Drop both registry tables, then the demux and the socket. clear() destroys each
+        // held channel AND its per-entry handshake ARQ synchronously from this own-close
+        // path (never from inside a channel's member call). Destroying an ARQ cancels its
+        // pending retransmit timer (the timer's queued completion guards on the aborted
+        // error before touching the freed ARQ), so the "cancel every pending ARQ timer
+        // then drop" teardown semantics hold.
+        m_dials.clear();
         m_demux = detail::udp_inbound_demux{};
         m_server.close();
     }
@@ -148,11 +154,20 @@ public:
     [[nodiscard]] std::uint16_t port() const { return m_server.port(); }
 
 private:
-    struct pending_dial
+    using dial_registry = io::pending_dial_registry<udp_channel, std::unique_ptr<arq_type>>;
+
+    // The deferred-destroy sink the registry routes a failed channel through: a fail
+    // edge may fire from inside the channel's own member stack, so destroying it there
+    // frees it mid-unwind. Posting it to a continuation that owns it until it runs defers
+    // the destruction off the current stack (the UDP fail is a clean timer callback, so
+    // this defer is harmless here and strictly safe).
+    dial_registry::defer_destroy make_defer_destroy()
     {
-        std::unique_ptr<udp_channel> channel;
-        std::unique_ptr<arq_type>    arq;
-    };
+        return [this](std::unique_ptr<udp_channel> ch)
+        {
+            ::asio::post(m_io, [ch = std::move(ch)]() mutable { ch.reset(); });
+        };
+    }
 
     // Bind the shared socket to an ephemeral local endpoint if listen() has not
     // already bound it: a transport that only dials (never listens) still needs a
@@ -200,7 +215,7 @@ private:
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
             return;                                        // peer cap reached: drop the flood
-        m_accepted[raw] = std::move(ch);
+        m_dials.insert_accepted(raw, std::move(ch));
         send_handshake(from, hs_type::response, hs->mode); // let the dialer's ARQ resolve, echo mode
         if(m_on_accepted)
             m_on_accepted(adopt_accepted(raw));
@@ -208,36 +223,31 @@ private:
 
     void resolve_paired(udp_channel *ch)
     {
-        auto it = m_pending.find(ch);
-        if(it != m_pending.end())
-            it->second.arq->on_paired_frame();
+        if(auto *arq = m_dials.payload_of(ch))
+            (*arq)->on_paired_frame();
     }
 
     void resolve_dial(const io::endpoint &ep, udp_channel *raw)
     {
-        auto it = m_pending.find(raw);
-        if(it == m_pending.end())
-            return;
-        // COPY ep before the erase: ep is bound to the pending entry's ARQ-closure
-        // capture, which erase() destroys — re-emitting the freed reference is a
-        // use-after-free (an on_dialed consumer that copies the endpoint reads it).
+        // COPY ep before resolve erases the entry: ep is bound to the pending entry's
+        // ARQ-closure capture, which the erase destroys — re-emitting the freed reference
+        // is a use-after-free (an on_dialed consumer that copies the endpoint reads it).
         const io::endpoint dialed = ep;
-        auto ch = std::move(it->second.channel);
-        m_pending.erase(it);
+        auto ch = m_dials.resolve(raw);
+        if(!ch)
+            return;
         if(m_on_dialed)
             m_on_dialed(std::move(ch), dialed);
     }
 
     void fail_dial(const io::endpoint &ep, udp_channel *raw)
     {
-        auto it = m_pending.find(raw);
-        if(it == m_pending.end())
-            return;
-        // COPY ep before the erase, for the same reason as resolve_dial: the pending
-        // entry owns the ARQ closure that ep is bound to.
+        // COPY ep AND the dest out before fail erases the entry, for the same reason as
+        // resolve_dial: the pending entry owns the ARQ closure that ep is bound to, and
+        // the channel (whose dest the demux is keyed on) is moved out by fail().
         const io::endpoint failed = ep;
-        m_demux.erase(it->second.channel->dest());
-        m_pending.erase(it);
+        m_demux.erase(raw->dest());
+        m_dials.fail(raw);                  // routes the freed channel through the deferred-destroy sink
         report_dial_fail(failed, io::io_error::timed_out);
     }
 
@@ -246,10 +256,7 @@ private:
     // routing inbound datagrams to it by endpoint).
     std::unique_ptr<udp_channel> adopt_accepted(udp_channel *raw)
     {
-        auto it = m_accepted.find(raw);
-        auto ch = std::move(it->second);
-        m_accepted.erase(it);
-        return ch;
+        return m_dials.adopt_accepted(raw);
     }
 
     void send_handshake(const endpoint_type &dest, hs_type type,
@@ -279,8 +286,7 @@ private:
     io::detail::udp_arq_config m_arq_cfg;
     io::congestion m_congestion;
     std::vector<std::byte> m_hs_scratch;
-    std::unordered_map<udp_channel *, pending_dial> m_pending;
-    std::unordered_map<udp_channel *, std::unique_ptr<udp_channel>> m_accepted;
+    dial_registry m_dials;                  // the half-open dial table + the accepted table
     plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;

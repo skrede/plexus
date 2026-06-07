@@ -14,7 +14,8 @@ set(PLEXUS_IO_TESTS
     test_mtu_budget
     test_send_queue
     test_pending_dial_registry
-    test_handshake_gate)
+    test_handshake_gate
+    test_assembly_pattern)
 
 foreach(test ${PLEXUS_IO_TESTS})
     add_executable(${test} ${test}.cpp)

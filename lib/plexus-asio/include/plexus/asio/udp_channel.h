@@ -11,6 +11,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/mtu_budget.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/detail/udp_reliable_arq.h"
 #include "plexus/io/detail/udp_handshake_frame.h"
@@ -60,7 +61,11 @@ namespace plexus::asio {
 class udp_channel
 {
 public:
-    static constexpr std::size_t default_max_payload = 1400;
+    // The per-channel payload budget the oversize-reject gates consult, relocated to the
+    // shared io::mtu_budget value-object so the channel and any future datagram backend
+    // read the SAME default (1400) instead of a scattered local literal. A caller MAY
+    // override it at construction (the required-with-default ctor arg below).
+    static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
     // The bounded congestion=block backpressure queue depth (allocated at setup, never
     // grown on the hot path): a full send window AND a full queue surface a stall signal
     // rather than unbounded memory growth (T-15-13). A conservative multiple of the
