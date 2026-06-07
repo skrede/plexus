@@ -21,3 +21,17 @@ target_link_libraries(test_handshake_fsm PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_handshake_fsm TEST_PREFIX "handshake.")
+
+# The widened-frame codec oracle: the same-host fingerprint rides the handshake as
+# an append-only fixed-width field. Re-pins the round-trip across the fingerprint
+# value space, the bounds-safety at the widened size, the status cutoff under the
+# wider frame, and the protocol-version bump that gates the layout change. Links the
+# header-only wire structs only. The `handshake.` ctest prefix groups it with the FSM
+# oracle. Auto-discovered by the tests glob.
+add_executable(test_handshake_codec test_handshake_codec.cpp)
+
+target_link_libraries(test_handshake_codec PRIVATE
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_handshake_codec TEST_PREFIX "handshake.")
