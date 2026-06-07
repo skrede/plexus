@@ -15,7 +15,10 @@ set(PLEXUS_IO_TESTS
     test_send_queue
     test_pending_dial_registry
     test_handshake_gate
-    test_assembly_pattern)
+    test_assembly_pattern
+    test_cert_facts
+    test_verify_policy
+    test_cookie_secret)
 
 foreach(test ${PLEXUS_IO_TESTS})
     add_executable(${test} ${test}.cpp)
