@@ -389,3 +389,21 @@ target_link_libraries(test_shm_bilateral PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_bilateral TEST_PREFIX "shm.")
+
+# The crashed-creator orphan-reclaim proof (xproc): a child creates a region,
+# stamps a sentinel, and _exits WITHOUT unlinking (the create-owns-unlink dtor
+# skipped), leaving an orphan in /dev/shm; the parent's create with
+# unlink_stale_on_create reclaims the orphan and mints a FRESH (zero-filled)
+# region, proving the orphan's stale bytes do not leak through. The bounded
+# crash-orphan mitigation; looped N>=100, the binary re-run >=3 times. Links
+# plexus::shm for the compiled broker (shm_open/ftruncate/shm_unlink).
+add_executable(test_shm_stale_reclaim test_shm_stale_reclaim.cpp)
+
+target_include_directories(test_shm_stale_reclaim PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_stale_reclaim PRIVATE
+    plexus::shm
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_stale_reclaim TEST_PREFIX "shm.")
