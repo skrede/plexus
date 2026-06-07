@@ -662,7 +662,8 @@ handshake_request make_request(const std::array<std::byte, 16> &id)
             .version_minor            = 0x22,
             .compatible_version_major = 0x33,
             .compatible_version_minor = 0x44,
-            .protocol_version         = 0x55};
+            .protocol_version         = 0x55,
+            .fingerprint              = 0x0123456789ABCDEFull};
 }
 
 handshake_response make_response(const std::array<std::byte, 16> &id, handshake_status status)
@@ -674,6 +675,7 @@ handshake_response make_response(const std::array<std::byte, 16> &id, handshake_
             .compatible_version_major = 0x33,
             .compatible_version_minor = 0x44,
             .protocol_version         = 0x55,
+            .fingerprint              = 0xFEDCBA9876543210ull,
             .status                   = status};
 }
 
@@ -685,6 +687,7 @@ void check_request_equal(const handshake_request &a, const handshake_request &b)
     CHECK(a.compatible_version_major == b.compatible_version_major);
     CHECK(a.compatible_version_minor == b.compatible_version_minor);
     CHECK(a.protocol_version == b.protocol_version);
+    CHECK(a.fingerprint == b.fingerprint);
 }
 
 }
@@ -719,14 +722,16 @@ TEST_CASE("Handshake response: round-trip across id field space and all four sta
             CHECK(decoded->compatible_version_major == resp.compatible_version_major);
             CHECK(decoded->compatible_version_minor == resp.compatible_version_minor);
             CHECK(decoded->protocol_version == resp.protocol_version);
+            CHECK(decoded->fingerprint == resp.fingerprint);
             CHECK(decoded->status == status);
         }
 }
 
 TEST_CASE("Handshake codec: encoded wire-size pins", "[wire][handshake]")
 {
-    CHECK(encode_handshake_request(make_request(id_distinct())).size() == 21);
-    CHECK(encode_handshake_response(make_response(id_distinct(), handshake_status::accepted)).size() == 22);
+    // id(16) + 5 single-byte fields + the appended fingerprint(8) = 29; +status(1) = 30.
+    CHECK(encode_handshake_request(make_request(id_distinct())).size() == 29);
+    CHECK(encode_handshake_response(make_response(id_distinct(), handshake_status::accepted)).size() == 30);
 }
 
 TEST_CASE("Handshake request: every length below the fixed size returns nullopt", "[wire][handshake]")
@@ -755,12 +760,14 @@ TEST_CASE("Handshake response: status cutoff rejects 0x00 and every byte 0x05..0
 {
     auto encoded = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
 
-    encoded[21] = std::byte{0x00};
+    // The status byte is the LAST byte, after the appended fingerprint, at offset
+    // handshake_request_size (the response is the request plus the trailing status).
+    encoded[handshake_request_size] = std::byte{0x00};
     CHECK_FALSE(decode_handshake_response(encoded).has_value());
 
     for(int b = 0x05; b <= 0xFF; ++b)
     {
-        encoded[21] = std::byte{static_cast<std::uint8_t>(b)};
+        encoded[handshake_request_size] = std::byte{static_cast<std::uint8_t>(b)};
         CHECK_FALSE(decode_handshake_response(encoded).has_value());
     }
 }
@@ -776,7 +783,7 @@ TEST_CASE("Handshake response: each defined status byte 0x01..0x04 decodes to it
 
     for(auto [byte, status] : defined)
     {
-        encoded[21] = std::byte{byte};
+        encoded[handshake_request_size] = std::byte{byte};
         auto decoded = decode_handshake_response(encoded);
         REQUIRE(decoded.has_value());
         CHECK(decoded->status == status);

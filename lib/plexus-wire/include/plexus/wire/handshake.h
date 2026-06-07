@@ -17,7 +17,7 @@ namespace plexus::wire {
 // protocol_version differs from this constant is rejected outright — there is no
 // negotiation, so a skewed peer is never silently downgraded. The two-tier
 // version model layers a compatibility window (major/minor) on top of this gate.
-constexpr std::uint8_t k_protocol_version = 1;
+constexpr std::uint8_t k_protocol_version = 2;
 
 // Wire-stable handshake status byte. Integers are append-only: a value is NEVER
 // reordered or reused; a new status takes the next free integer. rejected_unknown
@@ -42,6 +42,14 @@ static_assert(static_cast<std::uint8_t>(handshake_status::rejected_unknown) == 0
 // this header keeps plexus-wire's zero-upward-dependency (it must not depend on the
 // core). Alias transparency means the core-side FSM passes this array wherever a
 // plexus::node_id is expected with no conversion.
+// The same-host fingerprint is the RAW std::uint64_t value rather than the core
+// host_fingerprint type, for the same reason id carries the raw std::array: this
+// header keeps plexus-wire's zero-upward-dependency (it must not include the core
+// io/shm header). The core-side FSM/session sets it from host_fingerprint::value
+// and compares the decoded value against its own. Append-only: it sits at the next
+// free offset AFTER protocol_version, so a 0 (the null / not-same-host value)
+// decodes from a field-zeroed frame. The wire byte order is the codec's standard
+// big-endian (write_u64/read_u64), so the value crosses hosts identically.
 struct handshake_request
 {
     std::array<std::byte, 16> id;
@@ -50,6 +58,7 @@ struct handshake_request
     std::uint8_t              compatible_version_major;
     std::uint8_t              compatible_version_minor;
     std::uint8_t              protocol_version;
+    std::uint64_t             fingerprint;
 };
 
 struct handshake_response
@@ -60,13 +69,17 @@ struct handshake_response
     std::uint8_t              compatible_version_major;
     std::uint8_t              compatible_version_minor;
     std::uint8_t              protocol_version;
+    std::uint64_t             fingerprint;
     handshake_status          status;
 };
 
-// FIXED wire size of an encoded handshake_request: id(16) + 5 single-byte fields.
-constexpr std::size_t handshake_request_size = 21;
-// FIXED wire size of an encoded handshake_response: the request 21 + status(1).
-constexpr std::size_t handshake_response_size = 22;
+// FIXED wire size of an encoded handshake_request: id(16) + 5 single-byte fields +
+// the appended fingerprint(8).
+constexpr std::size_t handshake_request_size = 29;
+// FIXED wire size of an encoded handshake_response: the request 29 + status(1). The
+// status stays the LAST byte (after the appended fingerprint), so the request+1
+// relation is preserved.
+constexpr std::size_t handshake_response_size = 30;
 
 static_assert(handshake_response_size == handshake_request_size + 1);
 
@@ -97,6 +110,7 @@ inline void encode_handshake_request_into(std::vector<std::byte> &out, const han
     detail::write_u8(p + 18, req.compatible_version_major);
     detail::write_u8(p + 19, req.compatible_version_minor);
     detail::write_u8(p + 20, req.protocol_version);
+    detail::write_u64(p + 21, req.fingerprint);
 }
 
 inline void encode_handshake_response_into(std::vector<std::byte> &out, const handshake_response &resp)
@@ -109,7 +123,8 @@ inline void encode_handshake_response_into(std::vector<std::byte> &out, const ha
     detail::write_u8(p + 18, resp.compatible_version_major);
     detail::write_u8(p + 19, resp.compatible_version_minor);
     detail::write_u8(p + 20, resp.protocol_version);
-    detail::write_u8(p + 21, static_cast<std::uint8_t>(resp.status));
+    detail::write_u64(p + 21, resp.fingerprint);
+    detail::write_u8(p + 29, static_cast<std::uint8_t>(resp.status));
 }
 
 inline std::vector<std::byte> encode_handshake_request(const handshake_request &req)
@@ -139,6 +154,7 @@ inline std::optional<handshake_request> decode_handshake_request(std::span<const
     req.compatible_version_major = detail::read_u8(p + 18);
     req.compatible_version_minor = detail::read_u8(p + 19);
     req.protocol_version         = detail::read_u8(p + 20);
+    req.fingerprint              = detail::read_u64(p + 21);
     return req;
 }
 
@@ -148,7 +164,7 @@ inline std::optional<handshake_response> decode_handshake_response(std::span<con
         return std::nullopt;
 
     const auto *p = payload.data();
-    auto status_byte = detail::read_u8(p + 21);
+    auto status_byte = detail::read_u8(p + 29);
     if(!is_defined_handshake_status(status_byte))
         return std::nullopt;
 
@@ -159,6 +175,7 @@ inline std::optional<handshake_response> decode_handshake_response(std::span<con
     resp.compatible_version_major = detail::read_u8(p + 18);
     resp.compatible_version_minor = detail::read_u8(p + 19);
     resp.protocol_version         = detail::read_u8(p + 20);
+    resp.fingerprint              = detail::read_u64(p + 21);
     resp.status                   = static_cast<handshake_status>(status_byte);
     return resp;
 }
