@@ -243,6 +243,61 @@ struct session_under_peer
 
 }
 
+TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=drop and stalls under block",
+          "[integration][asio][hardening]")
+{
+    // The byte-bounded write-queue edge proven over a real (connected) TCP socket whose
+    // PEER NEVER READS, so the kernel send buffer fills and async_write stalls — the
+    // userspace write queue then accumulates and the byte cap engages deterministically.
+    // A small cap (4 KiB) bounds the queue; a stream of 1 KiB frames fills it, after which:
+    //   * congestion=drop sheds the overrun at the publisher (dropped_count advances), and
+    //   * congestion=block surfaces would_block (the stall edge) and sheds nothing.
+    // The queue NEVER grows past the cap (backpressured() stays <= cap).
+    auto run = [](pio::congestion mode) {
+        ::asio::io_context io;
+        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+        ::asio::ip::tcp::socket peer{io};
+        ::asio::ip::tcp::socket client{io};
+        client.connect(acc.local_endpoint());
+        acc.accept(peer);                               // peer adopts but NEVER reads
+
+        constexpr std::size_t cap = 4096;
+        // Adopt the connected client end into an accept-mode channel with the small cap.
+        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode, cap};
+
+        std::optional<pio::io_error> err;
+        ch.on_error([&](pio::io_error e) { err = e; });
+
+        // Send 1 KiB frames until the byte cap engages (peer not reading -> buffer fills).
+        std::vector<std::byte> kib(1024, std::byte{0x5A});
+        for(int i = 0; i < 4096; ++i)
+        {
+            ch.send(kib);
+            io.poll();                                  // let async_write make what progress it can
+            REQUIRE(ch.backpressured() <= cap);         // NEVER grows past the cap
+            if(mode == pio::congestion::drop && ch.dropped_count() > 0)
+                break;
+            if(mode == pio::congestion::block && err.has_value())
+                break;
+        }
+
+        if(mode == pio::congestion::drop)
+        {
+            REQUIRE(ch.dropped_count() > 0);            // the overrun was shed at the publisher
+        }
+        else
+        {
+            REQUIRE(err.has_value());
+            REQUIRE(*err == pio::io_error::would_block);   // block stalls, never grows
+            REQUIRE(ch.dropped_count() == 0);              // block sheds nothing
+        }
+        REQUIRE(ch.backpressured() <= cap);
+    };
+
+    run(pio::congestion::drop);
+    run(pio::congestion::block);
+}
+
 TEST_CASE("asio stream channel: a FRAMING protocol-close does NOT re-dial while a real socket drop does",
           "[integration][asio][hardening]")
 {

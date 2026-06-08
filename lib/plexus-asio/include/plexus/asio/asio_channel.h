@@ -9,6 +9,8 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -41,21 +43,42 @@ namespace plexus::asio {
 class asio_channel
 {
 public:
+    // The bounded congestion=block write-queue BYTE budget (allocated at setup, never
+    // grown on the hot path): a producer that outruns the socket drain back-pressures (or
+    // sheds, under drop) at a bounded 16 MiB instead of growing the userspace write deque
+    // to the 10+ GB OOM the unbounded queue left possible. Sized at 4x the 4 MiB
+    // max-message ceiling — the swept knee (TRANSPORT-POLICY-PROFILE.md §byte-cap sweep),
+    // matching the publisher in-flight gate that kept the re-baseline stream cells from
+    // OOMing, and not throttling the in-budget flat-latency regime.
+    static constexpr std::size_t default_write_queue_bytes =
+        4u * io::fragmentation_limits::max_message_size;
+
     // Dial/executor-alone: unconnected, not reading yet — dial() calls start_read().
-    explicit asio_channel(::asio::io_context &io, wire::stream_inbound_config cfg = {})
+    // The congestion mode + byte budget are the per-channel QoS choice (block = the safe
+    // reliable default that back-pressures; drop = the opt-out shed), threaded as
+    // required-WITH-default ctor args exactly as udp_channel threads io::congestion.
+    explicit asio_channel(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+                          io::congestion congestion = io::congestion::block,
+                          std::size_t write_queue_bytes = default_write_queue_bytes)
         : m_io(io)
         , m_socket(io)
         , m_inbound(io, cfg)
+        , m_congestion(congestion)
+        , m_write_queue_bytes(write_queue_bytes)
     {
         wire_inbound();
     }
 
     // Accept-mode: adopt an already-connected socket and start reading.
     asio_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected,
-                 wire::stream_inbound_config cfg = {})
+                 wire::stream_inbound_config cfg = {},
+                 io::congestion congestion = io::congestion::block,
+                 std::size_t write_queue_bytes = default_write_queue_bytes)
         : m_io(io)
         , m_socket(std::move(connected))
         , m_inbound(io, cfg)
+        , m_congestion(congestion)
+        , m_write_queue_bytes(write_queue_bytes)
     {
         wire_inbound();
         m_open = true;
@@ -71,10 +94,18 @@ public:
     asio_channel(asio_channel &&) = delete;
     asio_channel &operator=(asio_channel &&) = delete;
 
+    // Enqueue for the serial async_write egress, bounded by the byte budget. A frame that
+    // would carry the queued total past the cap is shed at the publisher under
+    // congestion=drop (counted for the observer), or refused under congestion=block with
+    // the would_block stall edge surfaced (never an unbounded deque) — the same QoS edge
+    // udp_channel threads. Compare-before-add so the running total never wraps.
     void send(std::span<const std::byte> data)
     {
         if(!m_open)
             return;
+        if(!admits(data.size()))
+            return on_write_queue_full();
+        m_write_bytes += data.size();
         m_write_queue.emplace_back(data.begin(), data.end());
         if(!m_writing)
             do_write();
@@ -106,7 +137,34 @@ public:
     [[nodiscard]] ::asio::ip::tcp::socket &socket() noexcept { return m_socket; }
     void start_read() { m_open = true; do_read(); }
 
+    [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
+    // The count of frames shed under congestion=drop (the drop-observer's edge).
+    [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
+    // The current queued (un-drained) write-queue byte occupancy; 0 when the socket drains.
+    [[nodiscard]] std::size_t backpressured() const noexcept { return m_write_bytes; }
+
 private:
+    // Compare-before-add: a frame fits only when the cap is not already met AND its size
+    // is within the remaining budget (cap - bytes, no wrap).
+    [[nodiscard]] bool admits(std::size_t size) const noexcept
+    {
+        return m_write_bytes < m_write_queue_bytes && size <= m_write_queue_bytes - m_write_bytes;
+    }
+
+    // congestion=drop sheds the frame at the publisher (the documented opt-out of the
+    // reliable guarantee); congestion=block surfaces would_block (the stall edge —
+    // bounded, never unbounded growth). Either way the call returns without blocking.
+    void on_write_queue_full()
+    {
+        if(m_congestion == io::congestion::drop)
+        {
+            ++m_dropped;
+            return;
+        }
+        if(m_on_error)
+            m_on_error(io::io_error::would_block);
+    }
+
     // Wire stream_inbound's two outputs to the channel's frame + close paths.
     void wire_inbound()
     {
@@ -175,6 +233,7 @@ private:
         ::asio::async_write(m_socket, ::asio::buffer(m_write_queue.front()),
             [this](std::error_code ec, std::size_t)
             {
+                m_write_bytes -= m_write_queue.front().size();
                 m_write_queue.pop_front();
                 if(ec)
                     return fail(ec);
@@ -201,7 +260,11 @@ private:
     wire::stream_inbound<asio_timer, ::asio::io_context &> m_inbound;
     std::vector<std::byte> m_frame_scratch;
     std::array<std::byte, 4096> m_read_buf{};
-    std::deque<std::vector<std::byte>> m_write_queue;
+    std::deque<std::vector<std::byte>> m_write_queue;     // bounded congestion=block egress
+    io::congestion m_congestion;
+    std::size_t m_write_queue_bytes;                      // the byte budget (cap)
+    std::size_t m_write_bytes{0};                         // summed queued (un-drained) bytes
+    std::size_t m_dropped{0};                             // congestion=drop shed count
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;

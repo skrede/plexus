@@ -70,12 +70,17 @@ public:
     // read the SAME default (1400) instead of a scattered local literal. A caller MAY
     // override it at construction (the required-with-default ctor arg below).
     static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
-    // The bounded congestion=block backpressure queue depth (allocated at setup, never
-    // grown on the hot path): a full send window AND a full queue surface a stall signal
-    // rather than unbounded memory growth. A conservative multiple of the
-    // default window — deep enough to ride a transient window-full burst, bounded so a
-    // sustained overrun fails closed instead of OOMing.
-    static constexpr std::size_t default_backpressure_depth = 1024;
+    // The bounded congestion=block backpressure BYTE budget (allocated at setup, never
+    // grown on the hot path): a full send window AND a full byte budget surface a stall
+    // signal rather than unbounded memory growth. Sized at 4x the 4 MiB max-message
+    // ceiling (= 16 MiB) so the queue can hold a whole one-shot large reliable message in
+    // flight plus headroom for the next, yet a sustained overrun fails closed at a bounded
+    // 16 MiB instead of the unbounded 10+ GB balloon the count cap left possible. The
+    // 16 MiB figure is the swept knee (TRANSPORT-POLICY-PROFILE.md §byte-cap sweep): it
+    // matches the publisher in-flight gate that kept the stream cells from OOMing in the
+    // re-baseline and does not throttle the in-budget flat-latency regime.
+    static constexpr std::size_t default_backpressure_bytes =
+        4u * io::fragmentation_limits::max_message_size;
 
     using arq_type = io::detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
     using reassembler_type = io::detail::reassembler<::asio::io_context &, asio_timer>;
@@ -84,13 +89,13 @@ public:
     // ladder pattern): production binds the swept defaults; a deterministic test binds a
     // compressed config (a fast RTO / small cap) to exercise the SAME mechanics quickly.
     // The congestion mode is the per-channel QoS choice (block = the safe reliable
-    // default; drop = the opt-out shed) threaded the same way; the backpressure depth
-    // bounds the block queue.
+    // default; drop = the opt-out shed) threaded the same way; the backpressure byte
+    // budget bounds the block queue.
     udp_channel(::asio::io_context &io, udp_server &server, ::asio::ip::udp::endpoint dest,
                 std::size_t max_payload = default_max_payload,
                 io::detail::udp_arq_config arq_cfg = {},
                 io::congestion congestion = io::congestion::block,
-                std::size_t backpressure_depth = default_backpressure_depth,
+                std::size_t backpressure_bytes = default_backpressure_bytes,
                 io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort)
         : m_io(io)
         , m_server(server)
@@ -98,7 +103,7 @@ public:
         , m_max_payload(max_payload)
         , m_arq_cfg(arq_cfg)
         , m_congestion(congestion)
-        , m_backpressure(backpressure_depth)
+        , m_backpressure(backpressure_bytes)
         , m_mode(mode)
     {
     }

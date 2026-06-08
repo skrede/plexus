@@ -124,7 +124,7 @@ public:
 
         const auto mode = mode_of_scheme(ep.scheme);
         auto ch = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg,
-                                                m_congestion, udp_channel::default_backpressure_depth, mode);
+                                                m_congestion, udp_channel::default_backpressure_bytes, mode);
         auto *raw = ch.get();
         m_demux.insert(dest, raw);
 
@@ -211,7 +211,7 @@ private:
         if(!hs || hs->type != hs_type::request)
             return;
         auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg,
-                                                m_congestion, udp_channel::default_backpressure_depth, hs->mode);
+                                                m_congestion, udp_channel::default_backpressure_bytes, hs->mode);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
             return;                                        // peer cap reached: drop the flood

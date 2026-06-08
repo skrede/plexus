@@ -12,6 +12,8 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/handshake_gate.h"
 #include "plexus/detail/compat.h"
 
@@ -55,15 +57,30 @@ namespace plexus::tls {
 class tls_channel
 {
 public:
+    // The bounded congestion=block outbox BYTE budget (allocated at setup, never grown on
+    // the hot path): a producer that outruns the encrypted-stream drain back-pressures (or
+    // sheds, under drop) at a bounded 16 MiB instead of growing the userspace outbox to the
+    // 10+ GB OOM the unbounded deque left possible. Sized at 4x the 4 MiB max-message
+    // ceiling — the swept knee (TRANSPORT-POLICY-PROFILE.md §byte-cap sweep), symmetric
+    // with asio_channel's plaintext write-queue budget.
+    static constexpr std::size_t default_outbox_bytes =
+        4u * io::fragmentation_limits::max_message_size;
+
     // Dial mode: unconnected ssl::stream. The transport async_connects the
-    // lowest layer, then calls start_client_handshake(host).
+    // lowest layer, then calls start_client_handshake(host). The congestion mode + byte
+    // budget are the per-channel QoS choice (block = the safe reliable default; drop = the
+    // opt-out shed), threaded as required-WITH-default ctor args as udp_channel does.
     tls_channel(::asio::io_context &io, const tls_credential &cred,
-                wire::stream_inbound_config cfg = {})
+                wire::stream_inbound_config cfg = {},
+                io::congestion congestion = io::congestion::block,
+                std::size_t outbox_bytes = default_outbox_bytes)
         : m_io(io)
         , m_ssl_ctx(detail::share_context(cred))
         , m_stream(io, m_ssl_ctx)
         , m_inbound(io, cfg)
         , m_gate([this](std::span<const std::byte> bytes) { enqueue_egress(bytes); })
+        , m_congestion(congestion)
+        , m_outbox_bytes(outbox_bytes)
     {
         wire_inbound();
     }
@@ -75,12 +92,16 @@ public:
     // verify-rejected peer never yields a live accepted channel — fail-closed,
     // symmetric with the dial side).
     tls_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected,
-                const tls_credential &cred, wire::stream_inbound_config cfg = {})
+                const tls_credential &cred, wire::stream_inbound_config cfg = {},
+                io::congestion congestion = io::congestion::block,
+                std::size_t outbox_bytes = default_outbox_bytes)
         : m_io(io)
         , m_ssl_ctx(detail::share_context(cred))
         , m_stream(std::move(connected), m_ssl_ctx)
         , m_inbound(io, cfg)
         , m_gate([this](std::span<const std::byte> bytes) { enqueue_egress(bytes); })
+        , m_congestion(congestion)
+        , m_outbox_bytes(outbox_bytes)
     {
         wire_inbound();
     }
@@ -128,6 +149,12 @@ public:
     using lowest_layer_type = ::asio::ssl::stream<::asio::ip::tcp::socket>::lowest_layer_type;
     [[nodiscard]] lowest_layer_type &socket() noexcept { return m_stream.lowest_layer(); }
     [[nodiscard]] const lowest_layer_type &socket() const noexcept { return m_stream.lowest_layer(); }
+
+    [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
+    // The count of frames shed under congestion=drop (the drop-observer's edge).
+    [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
+    // The current queued (un-drained) outbox byte occupancy; 0 when the stream drains.
+    [[nodiscard]] std::size_t backpressured() const noexcept { return m_outbox_used; }
 
     // Dial-side bootstrap: set SNI (best-effort) then run the client handshake.
     // The read loop + write drain arm only on handshake success (fail-closed: a
@@ -223,9 +250,32 @@ private:
     // flight discipline (a stream already serializes — no outbound-queue block here).
     void enqueue_egress(std::span<const std::byte> bytes)
     {
+        if(!admits(bytes.size()))
+            return on_outbox_full();
+        m_outbox_used += bytes.size();
         m_outbox.emplace_back(bytes.begin(), bytes.end());
         if(!m_writing)
             do_write();
+    }
+
+    // Compare-before-add: a frame fits only when the cap is not already met AND its size
+    // is within the remaining budget (cap - bytes, no wrap).
+    [[nodiscard]] bool admits(std::size_t size) const noexcept
+    {
+        return m_outbox_used < m_outbox_bytes && size <= m_outbox_bytes - m_outbox_used;
+    }
+
+    // congestion=drop sheds the frame at the publisher; congestion=block surfaces
+    // would_block (the stall edge — bounded, never unbounded growth).
+    void on_outbox_full()
+    {
+        if(m_congestion == io::congestion::drop)
+        {
+            ++m_dropped;
+            return;
+        }
+        if(m_on_error)
+            m_on_error(io::io_error::would_block);
     }
 
     void do_write()
@@ -239,6 +289,7 @@ private:
         ::asio::async_write(m_stream, ::asio::buffer(m_outbox.front()),
             [this](std::error_code ec, std::size_t)
             {
+                m_outbox_used -= m_outbox.front().size();
                 m_outbox.pop_front();
                 if(ec)
                     return fail(ec);
@@ -271,9 +322,13 @@ private:
     ::asio::ssl::stream<::asio::ip::tcp::socket> m_stream;
     wire::stream_inbound<plexus::asio::asio_timer, ::asio::io_context &> m_inbound;
     io::detail::handshake_gate m_gate;                 // open-before-data outbound buffer
+    io::congestion m_congestion;
+    std::size_t m_outbox_bytes;                        // the byte budget (cap)
+    std::size_t m_outbox_used{0};                      // summed queued (un-drained) bytes
+    std::size_t m_dropped{0};                          // congestion=drop shed count
     std::vector<std::byte> m_frame_scratch;
     std::array<std::byte, 4096> m_read_buf{};
-    std::deque<std::vector<std::byte>> m_outbox;       // post-ready serial async_write FIFO
+    std::deque<std::vector<std::byte>> m_outbox;       // bounded post-ready async_write FIFO
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;

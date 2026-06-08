@@ -30,6 +30,12 @@ namespace plexus::io::detail {
 // This bounded-send surface is the block's OWN capacity, not a window-coupled parking
 // queue — that distinct concern stays a separate, channel-side composed member.
 //
+// The cap accounts the SUMMED PAYLOAD BYTES of the queued nodes, not the entry count:
+// a single large frame must trip the budget even though it is one entry (a count cap
+// admits a 4 MB frame unboundedly while count stays 1). Admission is compare-BEFORE-add
+// against the running total so the sum never integer-overflows past the cap and
+// re-admits — a crafted sequence of large frames cannot wrap m_bytes below the cap.
+//
 // The send-sink reads the block-owned node and signals completion: it is the only
 // irreducible backend mechanism (the async write). Single-owner, bare `this`, no
 // shared lifetime — the owner closes the block before it dies.
@@ -44,30 +50,37 @@ public:
     using completion = plexus::detail::move_only_function<void(bool)>;
     using send_sink = plexus::detail::move_only_function<void(std::span<const std::byte>, const Endpoint &, completion)>;
 
-    explicit send_queue(send_sink sink, std::size_t capacity = unbounded)
+    explicit send_queue(send_sink sink, std::size_t byte_cap = unbounded)
         : m_sink(std::move(sink))
-        , m_capacity(capacity)
+        , m_byte_cap(byte_cap)
     {
     }
 
     // Copy the caller's bytes into an owned node and kick the serial drain if idle.
-    // Returns false (admitting nothing) when a finite capacity is already full — the
-    // at-capacity backpressure signal; inert under the unbounded default.
+    // Returns false (admitting nothing) when admitting this frame would carry the queued
+    // byte total past the cap — the at-capacity backpressure signal; inert under the
+    // unbounded default. The check is compare-before-add (no wrap): a frame is refused
+    // when m_bytes already meets the cap OR the frame's size would not fit in the
+    // remaining budget, so the running total can never overflow past the cap.
     bool enqueue(std::span<const std::byte> bytes, const Endpoint &dest)
     {
-        if(m_queue.size() >= m_capacity)
+        if(!admits(bytes.size()))
             return false;
+        m_bytes += bytes.size();
         m_queue.push_back(node{std::vector<std::byte>(bytes.begin(), bytes.end()), dest});
         if(!m_sending)
             drive();
         return true;
     }
 
-    // True when a finite capacity is reached and no further node is admitted until a
-    // drain frees room; always false under the unbounded default.
-    [[nodiscard]] bool full() const noexcept { return m_queue.size() >= m_capacity; }
+    // True when the queued byte total has reached the cap and no further frame is
+    // admitted until a drain frees room; always false under the unbounded default.
+    [[nodiscard]] bool full() const noexcept { return m_bytes >= m_byte_cap; }
 
     [[nodiscard]] std::size_t size() const noexcept { return m_queue.size(); }
+
+    // The summed payload bytes of the queued (not-yet-drained) nodes.
+    [[nodiscard]] std::size_t queued_bytes() const noexcept { return m_bytes; }
 
     [[nodiscard]] bool sending() const noexcept { return m_sending; }
 
@@ -77,6 +90,7 @@ public:
         m_open = false;
         m_sending = false;
         m_queue.clear();
+        m_bytes = 0;
     }
 
 private:
@@ -85,6 +99,15 @@ private:
         std::vector<std::byte> bytes;
         Endpoint dest;
     };
+
+    // Compare-before-add admission: a frame fits only when the cap is not already met AND
+    // its size is within the remaining budget. Phrasing the remaining-budget test as a
+    // subtraction (cap - bytes, both unsigned with bytes < cap guaranteed by the first
+    // clause) cannot overflow, so no crafted size can wrap the comparison.
+    [[nodiscard]] bool admits(std::size_t size) const noexcept
+    {
+        return m_bytes < m_byte_cap && size <= m_byte_cap - m_bytes;
+    }
 
     // Send the front node, and on completion pop it (freeing a slot under a finite cap)
     // and chain the next. At most one send-sink invocation is outstanding, so a node's
@@ -103,14 +126,16 @@ private:
             {
                 if(!m_open)
                     return;
+                m_bytes -= m_queue.front().bytes.size();
                 m_queue.pop_front();
                 drive();
             });
     }
 
     send_sink m_sink;
-    std::size_t m_capacity;
+    std::size_t m_byte_cap;
     std::deque<node> m_queue;
+    std::size_t m_bytes{0};
     bool m_open{true};
     bool m_sending{false};
 };

@@ -39,6 +39,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <algorithm>
 
 namespace pasio = plexus::asio;
 namespace wire = plexus::wire;
@@ -323,30 +324,34 @@ TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_b
           "[udp][congestion]")
 {
     // A standalone channel (no real peer, so NO acks slide the window) with a small window
-    // AND a small backpressure cap: the window fills, then the queue fills, then the next
-    // window-full publish has nowhere to go and surfaces would_block (the stall edge —
-    // bounded, never unbounded growth, T-15-13). publish() stays non-blocking throughout.
+    // AND a small backpressure BYTE budget: the window fills, then the queue fills to its
+    // byte cap, then the next window-full publish has nowhere to go and surfaces would_block
+    // (the stall edge — bounded by BYTES, never unbounded growth). publish() stays
+    // non-blocking throughout. Each "q-N" frame is 3 bytes, so a 9-byte cap holds exactly 3.
     ::asio::io_context io;
     pasio::udp_server server{io};                 // unbound: send_to is a no-op sink, the window never drains
-    constexpr std::size_t window = 2, cap = 3;
+    constexpr std::size_t window = 2;
+    constexpr std::size_t frame_bytes = 3;        // "q-N" is three bytes
+    constexpr std::size_t queued = 3;             // frames that fit in the byte cap
+    constexpr std::size_t byte_cap = queued * frame_bytes;
     pasio::udp_channel ch{io, server, ::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 9},
                           pasio::udp_channel::default_max_payload, small_window_arq(window),
-                          pio::congestion::block, cap, pio::detail::udp_channel_mode::reliable_datagram};
+                          pio::congestion::block, byte_cap, pio::detail::udp_channel_mode::reliable_datagram};
 
     std::optional<pio::io_error> err;
     ch.on_error([&](pio::io_error e) { err = e; });
 
-    // Fill the window (2) — admitted; fill the queue (3) — admitted into the queue; the
-    // 6th publish overflows the cap -> would_block.
-    for(std::size_t i = 0; i < window + cap; ++i)
+    // Fill the window (2) — admitted; fill the queue to its byte cap (3 frames) — admitted;
+    // the next window-full publish overflows the byte cap -> would_block.
+    for(std::size_t i = 0; i < window + queued; ++i)
         ch.send(bytes_of("q-" + std::to_string(i)));
-    REQUIRE(ch.backpressured() == cap);           // the queue is at its cap, not growing past it
-    REQUIRE_FALSE(err.has_value());               // no stall yet — the cap is not exceeded
+    REQUIRE(ch.backpressured() == queued);        // the queue holds 3 frames, at its byte cap
+    REQUIRE_FALSE(err.has_value());               // no stall yet — the byte cap is not exceeded
 
-    ch.send(bytes_of("overflow"));                // past window + cap -> the stall edge
+    ch.send(bytes_of("over"));                    // past window + byte cap -> the stall edge
     REQUIRE(err.has_value());
     REQUIRE(*err == pio::io_error::would_block);
-    REQUIRE(ch.backpressured() == cap);           // still bounded at the cap (never grew)
+    REQUIRE(ch.backpressured() == queued);        // still bounded at the byte cap (never grew)
     REQUIRE(ch.dropped_count() == 0);             // block does not shed — it stalls
 }
 
@@ -383,4 +388,46 @@ TEST_CASE("udp congestion block: a sustained reliable load completes within a bo
     REQUIRE(f.delivered == sent);                                 // in publish order
     REQUIRE(f.dialed->backpressured() == 0);                      // queue fully drained
     REQUIRE(elapsed < std::chrono::seconds(8));                   // within the bounded budget (no freeze)
+}
+
+TEST_CASE("udp congestion block: a windowed reliable burst stays byte-bounded and DRAINS on ack (E-001)",
+          "[udp][congestion]")
+{
+    // The E-001 drain-on-ack behavioral proof: a reliable burst far exceeding the ARQ
+    // window parks its overrun in the BYTE-bounded queue, the in-flight queue NEVER exceeds
+    // the byte cap, and as each ack advances the window the queue DRAINS (re-submission on
+    // window-advance), so the whole burst arrives in order — partial delivery never occurs
+    // and the path does not block-and-shed. This is the mechanic the byte-bound provides
+    // for the paced reliable splitter: in-flight bytes bounded, drained as budget frees.
+    fixture f{pio::congestion::block, /*window=*/4};
+    REQUIRE(f.dialed != nullptr);
+
+    // Observe the peak backpressure occupancy across the whole drain so we can assert it
+    // stayed bounded (never grew without limit) yet was genuinely engaged (peaked > 0).
+    std::size_t peak_queued = 0;
+    std::optional<pio::io_error> err;
+    f.dialed->on_error([&](pio::io_error e) { err = e; });
+
+    constexpr int n = 60;                          // 60 frames into a window of 4 -> ~56 parked
+    std::vector<std::string> sent;
+    for(int i = 0; i < n; ++i)
+    {
+        const std::string p = "drain-" + std::to_string(i);
+        sent.push_back(p);
+        f.dialed->send(bytes_of(p));               // non-blocking; overrun parks in the byte queue
+        peak_queued = std::max(peak_queued, f.dialed->backpressured());
+    }
+    REQUIRE(peak_queued > 0);                       // the queue genuinely absorbed the overrun
+
+    // Drive the io_context: each ack advances the window and drains the byte queue by
+    // re-submitting admissible parked frames, observing the occupancy stays bounded.
+    pump_until(f.io, [&] {
+        peak_queued = std::max(peak_queued, f.dialed->backpressured());
+        return f.delivered.size() == static_cast<std::size_t>(n);
+    });
+
+    REQUIRE_FALSE(err.has_value());                 // the 16 MiB byte budget never overflowed
+    REQUIRE(f.delivered.size() == static_cast<std::size_t>(n));   // FULL delivery, never partial
+    REQUIRE(f.delivered == sent);                   // in publish order
+    REQUIRE(f.dialed->backpressured() == 0);        // the queue fully DRAINED on ack
 }
