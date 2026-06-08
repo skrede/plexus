@@ -117,7 +117,7 @@ public:
 
             out = taken_message(taken_message::adopt_pin, consumed.slab.data(),
                                 consumed.slab.size(), &m_ring.refcount_at(m_cursor),
-                                m_cursor & m_ring.cell_count() - 1, m_cursor);
+                                m_cursor & (m_ring.cell_count() - 1), m_cursor);
             advance();
             return loan_status::ok;
         }

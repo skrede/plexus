@@ -76,7 +76,6 @@ bool subscribe_shm(const std::string &fqn, coord *c, std::uint32_t want_payload)
 {
     posix_shm_region_broker broker;
     region_handle ctrl, slab;
-    const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     // Wait for the publisher to mint the ring, then attach the SAME names.
     while(c->publisher_ready.load(std::memory_order_acquire) == 0)

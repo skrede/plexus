@@ -10,6 +10,13 @@ option(PLEXUS_BUILD_TESTS "Build the test suite" OFF)
 option(PLEXUS_BUILD_FUZZ_TESTS "Build the libFuzzer harnesses" OFF)
 option(PLEXUS_BUILD_EXAMPLES "Build the examples" OFF)
 
+# Treat warnings as errors across every compiled translation unit the build owns
+# (the gated backends and the test suite; the INTERFACE cores carry no TUs of
+# their own). Applied before the fragment glob so each discovered target inherits
+# it. The build is clean under this gate today, so any newly introduced warning
+# fails the build going forward.
+add_compile_options(-Wall -Wextra -Werror)
+
 # Project-wide library registration contract: every lib/<target>/ owns a
 # CMakeLists.txt fragment and is auto-discovered here. The glob is
 # target-kind-agnostic — INTERFACE cores (plexus, plexus-wire, plexus-inproc)

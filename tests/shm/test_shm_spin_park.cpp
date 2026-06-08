@@ -38,7 +38,7 @@ struct backing_region
         : m_storage(bytes + k_cache_line)
     {
         auto base    = reinterpret_cast<std::uintptr_t>(m_storage.data());
-        auto aligned = base + k_cache_line - 1 & ~static_cast<std::uintptr_t>(k_cache_line - 1);
+        auto aligned = (base + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
         m_data       = reinterpret_cast<std::byte *>(aligned);
         m_size       = bytes;
     }

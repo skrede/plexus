@@ -63,7 +63,7 @@ public:
             return st;
 
         out = loaned_buffer(claim.slab.data(), claim.slab.size(),
-                            claim.position & m_ring.cell_count() - 1, claim.position);
+                            claim.position & (m_ring.cell_count() - 1), claim.position);
         return st;
     }
 

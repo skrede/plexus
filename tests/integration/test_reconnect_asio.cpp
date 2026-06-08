@@ -30,7 +30,6 @@
 
 #include <asio/io_context.hpp>
 
-#include <span>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -53,11 +52,6 @@ namespace {
 
 constexpr auto k_long_timeout = std::chrono::hours(1);
 constexpr std::uint64_t k_seed = 0xC0FFEEu;
-
-std::span<const std::byte> as_bytes(const std::string &s)
-{
-    return {reinterpret_cast<const std::byte *>(s.data()), s.size()};
-}
 
 handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {

@@ -25,12 +25,12 @@ class peer_observer
 public:
     virtual ~peer_observer() = default;
 
-    virtual void on_peer_connected(const node_id &, std::string_view name, peer_kind) {}
-    virtual void on_peer_disconnected(const node_id &, std::string_view name, peer_kind) {}
-    virtual void on_peer_reconnected(const node_id &, std::string_view name, peer_kind) {}
-    virtual void on_peer_dead(const node_id &, std::string_view name, peer_kind) {}
-    virtual void on_peer_ready(const node_id &, std::string_view name, peer_kind) {}
-    virtual void on_peer_rejected(const node_id &, std::string_view name, handshake_outcome reason) {}
+    virtual void on_peer_connected(const node_id &, std::string_view, peer_kind) {}
+    virtual void on_peer_disconnected(const node_id &, std::string_view, peer_kind) {}
+    virtual void on_peer_reconnected(const node_id &, std::string_view, peer_kind) {}
+    virtual void on_peer_dead(const node_id &, std::string_view, peer_kind) {}
+    virtual void on_peer_ready(const node_id &, std::string_view, peer_kind) {}
+    virtual void on_peer_rejected(const node_id &, std::string_view, handshake_outcome) {}
 };
 
 }

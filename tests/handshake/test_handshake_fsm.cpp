@@ -75,7 +75,8 @@ handshake_request good_request(node_id peer) noexcept
         .version_minor            = 0,
         .compatible_version_major = 1,
         .compatible_version_minor = 0,
-        .protocol_version         = k_protocol_version};
+        .protocol_version         = k_protocol_version,
+        .fingerprint              = 0};
 }
 
 // A response that passes every gate by default: accepted status, matching protocol,
@@ -89,6 +90,7 @@ handshake_response good_response(node_id peer) noexcept
         .compatible_version_major = 1,
         .compatible_version_minor = 0,
         .protocol_version         = k_protocol_version,
+        .fingerprint              = 0,
         .status                   = handshake_status::accepted};
 }
 

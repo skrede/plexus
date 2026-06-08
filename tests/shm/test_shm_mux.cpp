@@ -62,7 +62,7 @@ struct region_store
         auto r        = std::make_shared<region>();
         r->storage.assign(bytes + k_cache_line, std::byte{});
         auto raw      = reinterpret_cast<std::uintptr_t>(r->storage.data());
-        auto algn     = raw + k_cache_line - 1 & ~static_cast<std::uintptr_t>(k_cache_line - 1);
+        auto algn     = (raw + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
         r->base       = reinterpret_cast<std::byte *>(algn);
         r->size       = bytes;
         r->live       = true;
