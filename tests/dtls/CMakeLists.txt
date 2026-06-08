@@ -69,6 +69,19 @@ target_link_libraries(test_dtls_teardown PRIVATE
 
 catch_discover_tests(test_dtls_teardown TEST_PREFIX "dtls.")
 
+# The large-payload fragmentation proof: over a live completed DTLS session a payload
+# larger than the encrypted record budget (DTLS_get_data_mtu) is SPLIT across numbered
+# records (each one DTLS record, never one oversize record) and reassembled into ONE
+# on_data byte-equal at the peer, while a frame at the record budget still rides exactly
+# one record (parity, no fragmentation). Live legs loop N>=50; re-run >=3.
+add_executable(test_dtls_fragmentation test_dtls_fragmentation.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_dtls_fragmentation PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_dtls_fragmentation TEST_PREFIX "dtls.")
+
 # The mux integration proof: the selector classifies "dtls" remote (so locality
 # confinement excludes it); a multiplexing transport over a (unix, tcp, tls, udp,
 # dtls) quintet routes a "dtls" dial to the secure-datagram member (completing a

@@ -6,6 +6,9 @@
 #include "plexus/asio/udp_server.h"
 
 #include "plexus/io/io_error.h"
+#include "plexus/io/fragmentation.h"
+
+#include "plexus/wire/udp_envelope.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -51,6 +54,7 @@ struct mtu_link
 
     std::vector<std::vector<std::byte>> client_to_server;
     std::vector<std::vector<std::byte>> server_to_client;
+    int client_records{0};                       // client->server DTLS records since the last send
 
     mtu_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id,
              std::size_t max_payload)
@@ -72,6 +76,7 @@ struct mtu_link
 
         server_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) {
             client_to_server.emplace_back(b.begin(), b.end());
+            ++client_records;
         });
         client_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) {
             server_to_client.emplace_back(b.begin(), b.end());
@@ -111,10 +116,11 @@ struct mtu_link
 
     // Send a frame of `size` bytes and pump until the server receives it OR an oversize
     // error fired. Returns true if the server received exactly one datagram of `size`.
-    bool send_and_deliver(std::size_t size, std::chrono::milliseconds timeout = std::chrono::milliseconds{1000})
+    bool send_and_deliver(std::size_t size, std::chrono::milliseconds timeout = std::chrono::milliseconds{2000})
     {
         server_received.clear();
         client_too_large = false;
+        client_records = 0;
         std::vector<std::byte> frame(size, std::byte{0xab});
         client_ch->send(std::span<const std::byte>{frame});
         auto bound = std::chrono::steady_clock::now() + timeout;
@@ -128,32 +134,41 @@ struct mtu_link
         return server_received.size() == 1 && server_received[0].size() == size;
     }
 
-    // Probe the largest accepted frame by binary search over [lo, hi]: accept is
-    // monotone in size (every size <= cap is delivered, every size > cap rejected), so
-    // the boundary is discovered behaviorally — the test never reaches into the
-    // channel's internals (no test-only DTLS_get_data_mtu accessor). `lo` must be
-    // accepted and `hi` rejected for the invariant to hold.
-    std::size_t probe_max_accepted(std::size_t lo, std::size_t hi)
+    // Send `size` and report whether it crossed as exactly ONE DTLS record (delivered
+    // byte-equal). Above the encrypted record budget a frame still delivers, but fragmented
+    // across MORE than one record — so one_record is the behavioral single-record boundary.
+    bool delivered_in_one_record(std::size_t size)
     {
-        if(!send_and_deliver(lo))
-            return 0;                                  // floor not accepted: window wrong
-        std::size_t accepted = lo;
-        std::size_t rejected = hi;
-        while(rejected - accepted > 1)
+        return send_and_deliver(size) && client_records == 1;
+    }
+
+    // Probe the largest frame delivered in a SINGLE record by binary search over [lo, hi]:
+    // single-record delivery is monotone in size (every size at or under the encrypted
+    // budget rides one record, every larger size fragments into more than one), so the
+    // boundary is discovered behaviorally — the test never reaches into the channel's
+    // internals (no test-only DTLS_get_data_mtu accessor). `lo` must ride one record and
+    // `hi` must fragment for the invariant to hold.
+    std::size_t probe_one_record_ceiling(std::size_t lo, std::size_t hi)
+    {
+        if(!delivered_in_one_record(lo))
+            return 0;                                  // floor not single-record: window wrong
+        std::size_t single = lo;
+        std::size_t multi = hi;
+        while(multi - single > 1)
         {
-            const std::size_t mid = accepted + (rejected - accepted) / 2;
-            if(send_and_deliver(mid))
-                accepted = mid;
+            const std::size_t mid = single + (multi - single) / 2;
+            if(delivered_in_one_record(mid))
+                single = mid;
             else
-                rejected = mid;
+                multi = mid;
         }
-        return accepted;
+        return single;
     }
 };
 
 }
 
-TEST_CASE("dtls.mtu: a frame at the data-MTU is delivered, one byte over is rejected via message_too_large, looped",
+TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fragments byte-equal, looped",
           "[dtls][mtu]")
 {
     pdt::identity_fixture srv("mtu_srv");
@@ -176,27 +191,28 @@ TEST_CASE("dtls.mtu: a frame at the data-MTU is delivered, one byte over is reje
         // record budget (1400) minus the DTLS 1.2 AEAD-GCM record overhead (13B header +
         // 8B explicit IV + 16B auth tag = 37B), so the accepted ceiling lands at ~1363
         // — proving the cap binds the encrypted record budget, not the plaintext size.
-        const std::size_t cap = l.probe_max_accepted(100, 1400);
-        REQUIRE(cap >= 1300);                          // the ~1363 encrypted data MTU (1400 - 37B overhead)
+        const std::size_t cap = l.probe_one_record_ceiling(100, 1400);
+        REQUIRE(cap >= 1300);                          // the ~1360 encrypted data MTU (1400 - 37B - 3B envelope)
         REQUIRE(cap < 1400);                           // strictly below the configured budget (overhead subtracted)
         observed_cap = cap;
 
-        // The boundary frame is delivered intact AS ONE datagram (no fragmentation):
-        // the server got exactly one on_data of exactly `cap` bytes.
-        REQUIRE(l.send_and_deliver(cap));
+        // The boundary frame is delivered intact AS ONE record (no fragmentation): the
+        // server got exactly one on_data of exactly `cap` bytes over exactly one record.
+        REQUIRE(l.delivered_in_one_record(cap));
 
-        // One byte over the cap is rejected at publish via on_error(message_too_large)
-        // and NOTHING crosses the wire (the server receives no datagram for it).
-        REQUIRE_FALSE(l.send_and_deliver(cap + 1));
-        REQUIRE(l.client_too_large);
-        REQUIRE(l.server_received.empty());
+        // One byte over the single-record ceiling no longer rejects — it FRAGMENTS across
+        // more than one record and reassembles byte-equal into ONE on_data (the new
+        // large-payload capability; the encrypted budget still governs each record).
+        REQUIRE(l.send_and_deliver(cap + 1));
+        REQUIRE(l.client_records > 1);
+        REQUIRE_FALSE(l.client_too_large);
         ++proven;
     }
     REQUIRE(proven == k_iterations);
     REQUIRE(observed_cap > 0);
 }
 
-TEST_CASE("dtls.mtu: a low configured cap binds the reject below the data-MTU, looped",
+TEST_CASE("dtls.mtu: a low configured cap binds the single-record ceiling below the data-MTU, looped",
           "[dtls][mtu]")
 {
     pdt::identity_fixture srv("cap_srv");
@@ -216,13 +232,42 @@ TEST_CASE("dtls.mtu: a low configured cap binds the reject below the data-MTU, l
         REQUIRE(l.client_complete);
         REQUIRE(l.server_complete);
 
-        // At the configured cap: delivered as one datagram.
-        REQUIRE(l.send_and_deliver(k_cap));
-        // One byte over the configured cap: rejected even though it is well under the
-        // encrypted data MTU — the configured cap is the binding term.
-        REQUIRE_FALSE(l.send_and_deliver(k_cap + 1));
+        // At the configured cap minus the envelope: delivered as one record (the configured
+        // cap is the binding term, well under the encrypted data MTU).
+        REQUIRE(l.delivered_in_one_record(k_cap - plexus::wire::udp_envelope_overhead));
+        // Over the configured single-record ceiling: fragments (not rejects) and reassembles
+        // byte-equal — the configured cap binds each fragment record, the message still flows.
+        REQUIRE(l.send_and_deliver(k_cap + 1));
+        REQUIRE(l.client_records > 1);
+        REQUIRE_FALSE(l.client_too_large);
+        ++proven;
+    }
+    REQUIRE(proven == k_iterations);
+}
+
+TEST_CASE("dtls.mtu: a frame beyond the bounded max-message size is rejected via message_too_large, looped",
+          "[dtls][mtu]")
+{
+    pdt::identity_fixture srv("big_srv");
+    pdt::identity_fixture cli("big_cli");
+
+    // The oversize reject is PRESERVED for a genuinely-too-big message: a frame beyond the
+    // reassembler's bounded max-message size cannot fragment (it would exceed the receiver's
+    // hard ceiling), so it is rejected at publish via on_error(message_too_large) and nothing
+    // crosses the wire (the fail-closed bound on the fragment path).
+    constexpr int k_iterations = 30;
+    int proven = 0;
+    for(int i = 0; i < k_iterations; ++i)
+    {
+        mtu_link l(srv, cli, /*max_payload=*/100000);
+        l.handshake();
+        REQUIRE(l.client_complete);
+        REQUIRE(l.server_complete);
+
+        REQUIRE_FALSE(l.send_and_deliver(pio::fragmentation_limits::max_message_size + 1));
         REQUIRE(l.client_too_large);
         REQUIRE(l.server_received.empty());
+        REQUIRE(l.client_records == 0);                // nothing crossed the wire
         ++proven;
     }
     REQUIRE(proven == k_iterations);

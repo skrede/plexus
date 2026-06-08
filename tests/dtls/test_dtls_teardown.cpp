@@ -93,7 +93,7 @@ struct close_notify_harness
         BIO *internal = nullptr;
         REQUIRE(BIO_new_bio_pair(&internal, 4096, &client_ext, 4096) == 1);
         SSL_set_bio(client_ssl, internal, internal);
-        SSL_set_mtu(client_ssl, ptls::dtls_channel::k_dtls_mtu);
+        SSL_set_mtu(client_ssl, static_cast<long>(ptls::dtls_channel::default_max_payload));
         SSL_set_options(client_ssl, SSL_OP_NO_QUERY_MTU);
         SSL_set_connect_state(client_ssl);
     }

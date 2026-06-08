@@ -14,11 +14,14 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/mtu_budget.h"
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/handshake_gate.h"
+#include "plexus/io/detail/reassembler.h"
 #include "plexus/detail/compat.h"
 
 #include "plexus/node_id.h"
 
+#include "plexus/wire/udp_envelope.h"
 #include "plexus/wire/stream_inbound.h"
 
 #include <asio/io_context.hpp>
@@ -31,6 +34,7 @@
 #include <vector>
 #include <utility>
 #include <cstddef>
+#include <cstdint>
 
 // Forward-declared OpenSSL handle: the header never sees a complete SSL — only
 // dtls_channel.cpp includes <openssl/ssl.h>, so OpenSSL stays out of every
@@ -61,15 +65,22 @@ class dtls_channel
 public:
     enum class role { client, server };
 
-    // The per-channel payload budget, aligned to the shared io::mtu_budget value-object
-    // so the datagram channels share ONE budget symbol (no second 1400 literal). A caller
-    // MAY override it; the default is the conservative single-Ethernet-datagram floor.
+    using reassembler_type = io::detail::reassembler<::asio::io_context &, plexus::asio::asio_timer>;
+
+    // The per-channel LOGICAL payload ceiling — the upper term of the
+    // min(max_payload, DTLS_get_data_mtu) oversize cap. A caller MAY raise it above the
+    // single-datagram budget so the fragment path carries large messages; the default is
+    // the conservative single-Ethernet-datagram floor (parity with the pre-fragment cap).
     static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
 
-    // The per-channel max DTLS record budget handed to SSL_set_mtu (R-1), the same
-    // io::mtu_budget floor. The oversize-reject cap is min(configured max_payload,
-    // DTLS_get_data_mtu) once the cipher is negotiated.
-    static constexpr long k_dtls_mtu = static_cast<long>(io::mtu_budget{}.max_payload);
+    // The per-channel DTLS RECORD MTU handed to SSL_set_mtu at BOTH set-points (the
+    // construction edge AND the post-handshake completion re-assert — R-1). Unpinned from
+    // the former fixed k_dtls_mtu to a configurable per-channel value; the default stays the
+    // single-Ethernet-datagram floor so DTLS_get_data_mtu reports the real per-record fit
+    // (the encrypted budget the fragmenter splits against). It is DECOUPLED from max_payload:
+    // raising the logical ceiling (max_payload) lets a large message fragment, while each
+    // fragment still rides one DTLS record bounded by this MTU.
+    static constexpr std::size_t default_record_mtu = io::mtu_budget{}.max_payload;
 
     // Build over the shared udp_server: own NO socket, share the credential's
     // SSL_CTX (up_ref'd), publish the per-instance peer-addr + the transport's
@@ -79,7 +90,8 @@ public:
     dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
                  ::asio::ip::udp::endpoint dest, const tls_credential &cred,
                  io::security::cookie_secret &cookie_state, role r,
-                 std::size_t max_payload = default_max_payload);
+                 std::size_t max_payload = default_max_payload,
+                 std::size_t record_mtu = default_record_mtu);
 
     dtls_channel(const dtls_channel &) = delete;
     dtls_channel &operator=(const dtls_channel &) = delete;
@@ -124,7 +136,23 @@ public:
     [[nodiscard]] const std::string &peer_node_name() const noexcept { return m_node_name; }
 
 private:
+    // The configurable SSL_set_mtu record budget (both set-points consult this so unpinning
+    // honors the ctor value at construction AND at the post-handshake completion re-assert).
+    [[nodiscard]] long dtls_mtu() const noexcept { return static_cast<long>(m_record_mtu); }
+
     void secure_send(std::span<const std::byte> bytes);
+    // The post-handshake encrypted per-record budget DTLS_get_data_mtu reports (the real
+    // per-record fit), capped by the configured logical ceiling. The fragmenter splits
+    // against THIS, not the configured ceiling (so each fragment rides one DTLS record).
+    [[nodiscard]] std::size_t record_budget() const noexcept;
+    // Split an oversize-but-fragmentable frame across numbered records: each fragment is one
+    // FRAGMENTED-bit envelope (the 9-byte sub-header + slice), submitted through the gate to
+    // secure_send. A frame beyond the bounded max-message size is rejected, not fragmented.
+    void send_large(std::span<const std::byte> bytes);
+    // A decrypted inbound record carrying the FRAGMENTED envelope: decode its sub-header
+    // (fail-closed) and feed the bounded reassembler; a completed message posts on_data.
+    void feed_fragment(std::span<const std::byte> frame);
+    void ensure_reassembler();
     void drain_outbound();
     void drain_inbound();
     void try_complete();
@@ -141,6 +169,7 @@ private:
     io::security::cookie_secret &m_cookie_state;
     role m_role;
     std::size_t m_max_payload;
+    std::size_t m_record_mtu;
 
     detail::shared_ssl_ctx m_ssl_ctx;            // up_ref'd shared SSL_CTX
     ssl_st *m_ssl{nullptr};
@@ -157,6 +186,16 @@ private:
 
     std::vector<unsigned char> m_peer_addr_block; // [len][addr bytes] for the cookie cb
     std::array<unsigned char, 2048> m_drain_buf{};
+
+    // The fragment/reassemble blocks, composed as owned members the channel drives directly
+    // (the assembly pattern): the splitter encodes each fragment into m_frag_scratch (reused,
+    // no per-send alloc); the bounded reassembler (built lazily on the first inbound fragment)
+    // sits on the decrypted drain_inbound path. Its per-message timeout timer is cancelled in
+    // the dtor FIRST (before m_gate.reset() / the OpenSSL teardown) so a timer firing after
+    // teardown is a guarded no-op (single-owner, no use-after-free, no shared_from_this).
+    std::vector<std::byte> m_frag_scratch;        // reused fragment-encode buffer
+    std::uint16_t m_out_msg_id{0};                // per-message fragment grouping id (sender)
+    std::unique_ptr<reassembler_type> m_reassembler;
 
     // The verify-time depth-0 leaf facts the verify callback stashes here through the
     // per-instance SSL ex_data slot (the ONE cert extraction per handshake). The
