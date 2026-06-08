@@ -16,6 +16,7 @@
 #include "plexus/detail/compat.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <span>
 #include <thread>
@@ -54,8 +55,12 @@ class shm_channel
 public:
     using deliver_fn = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
-    shm_channel(broadcast_ring &ring, Notifier &notify, reliability rel, congestion cong) noexcept
-        : m_publisher(ring, rel, cong), m_subscriber(ring), m_notifier(notify)
+    // spin_budget is the consumer-sovereign adaptive spin-then-park knob threaded to the
+    // slot_subscriber (required-WITH-default — the swept knee): the subscriber spins up to
+    // the budget on an empty take before this drain returns and the notifier parks.
+    shm_channel(broadcast_ring &ring, Notifier &notify, reliability rel, congestion cong,
+                std::uint32_t spin_budget = slot_subscriber::default_spin_budget) noexcept
+        : m_publisher(ring, rel, cong), m_subscriber(ring, spin_budget), m_notifier(notify)
     {
     }
 

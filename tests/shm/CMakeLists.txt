@@ -203,6 +203,17 @@ target_link_libraries(test_shm_channel PRIVATE
 
 catch_discover_tests(test_shm_channel TEST_PREFIX "shm.")
 
+# Adaptive spin-then-park consumer policy at the slot_subscriber take seam (header-only
+# core); drives a real publisher/subscriber over a heap-backed ring and a producer thread.
+add_executable(test_shm_spin_park test_shm_spin_park.cpp)
+target_include_directories(test_shm_spin_park PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_shm_spin_park PRIVATE
+    plexus::plexus
+    plexus::wire
+    Threads::Threads
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_shm_spin_park TEST_PREFIX "shm.")
+
 # Backpressure + observable congestion (header-only): a best_effort ring with every
 # slot pinned returns congested off send() (OBSERVABLE, never a silent drop); a
 # reliable producer blocks losslessly on a lagging consumer (every value arrives in

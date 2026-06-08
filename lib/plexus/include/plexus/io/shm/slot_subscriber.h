@@ -7,6 +7,10 @@
 
 #include <cstdint>
 
+#if defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#endif
+
 namespace plexus::io::shm {
 
 // The consumer endpoint over one broadcast ring. It owns its OWN in-region read
@@ -28,12 +32,30 @@ namespace plexus::io::shm {
 // and hands that ALREADY-HELD pin to the taken_message via its adopt_pin ctor --
 // it does NOT pin a second time (the carry-forward "must not double-pin" rule).
 //
+// Adaptive spin-then-park (consumer-sovereign): take() spins up to spin_budget empty
+// reads before reporting empty, so a back-to-back message landing within the budget is
+// caught at near-busy-poll latency without falling through to the notifier's futex park;
+// a genuinely-idle consumer exhausts the budget, returns empty, and the notifier parks at
+// ~0% CPU. The budget is a required-WITH-default consumer policy knob — 0 = always park
+// (the futex floor), large = effectively always spin (busy-poll). The park MECHANISM stays
+// the backend notifier's futex/io_uring wait; this is only the GENERIC consumer spin
+// policy, so it lives here in core. The default is the swept knee (see
+// TRANSPORT-POLICY-PROFILE.md §SHM spin-budget sweep): it catches the back-to-back arrival
+// at near-busy-poll latency while parking when idle.
+//
 // Borrows the ring BY REFERENCE; non-copy/non-move owning endpoint.
 class slot_subscriber
 {
 public:
-    explicit slot_subscriber(broadcast_ring &ring) noexcept
+    // The swept default spin budget (TRANSPORT-POLICY-PROFILE.md §SHM spin-budget sweep):
+    // the knee where back-to-back latency has collapsed toward busy-poll while idle CPU is
+    // still negligible (the spin exits on the first idle-with-traffic-absent window).
+    static constexpr std::uint32_t default_spin_budget = 256;
+
+    explicit slot_subscriber(broadcast_ring &ring,
+                             std::uint32_t spin_budget = default_spin_budget) noexcept
         : m_ring(ring)
+        , m_spin_budget(spin_budget)
     {
         if(m_ring.register_cursor(m_cursor_index) == loan_status::ok)
         {
@@ -61,12 +83,22 @@ public:
         if(!m_registered)
             return loan_status::empty;
 
+        std::uint32_t spun = 0;
         for(;;)
         {
             broadcast_ring::consume_result consumed;
             const loan_status st = m_ring.consume(m_cursor, consumed);
             if(st == loan_status::empty)
-                return loan_status::empty;
+            {
+                // Adaptive spin-then-park: a back-to-back message may land within the
+                // budget — spin (relaxing the core) and retry rather than reporting empty
+                // immediately and letting the notifier park. Past the budget report empty
+                // so the backend futex park takes over (idle -> ~0% CPU).
+                if(spun++ >= m_spin_budget)
+                    return loan_status::empty;
+                cpu_relax();
+                continue;
+            }
             if(st == loan_status::congested)
             {
                 advance(); // a lap-behind cursor or a skip tombstone: step forward
@@ -101,7 +133,20 @@ private:
         m_ring.publish_cursor(m_cursor_index, m_cursor);
     }
 
+    // A spin-loop pause hint: lowers the spin's contention + power cost on the empty
+    // retry (PAUSE on x86, YIELD on aarch64), a no-op fallback elsewhere. NOT a scheduler
+    // yield — the spin stays on-core to catch a back-to-back arrival at low latency.
+    static void cpu_relax() noexcept
+    {
+#if defined(__x86_64__) || defined(__i386__)
+        _mm_pause();
+#elif defined(__aarch64__)
+        __asm__ __volatile__("yield" ::: "memory");
+#endif
+    }
+
     broadcast_ring &m_ring;
+    std::uint32_t   m_spin_budget;
     std::uint32_t   m_cursor_index{0};
     std::uint64_t   m_cursor{0};
     bool            m_registered{false};
