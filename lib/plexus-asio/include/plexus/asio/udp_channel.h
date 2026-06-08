@@ -54,11 +54,12 @@ namespace plexus::asio {
 // licenses this for a non-stream channel ("no partial frame is expressible without a
 // byte stream", byte_channel.h:43-46) — a malformed datagram is simply dropped.
 //
-// Oversize (D-03): a frame whose enveloped size exceeds max_payload is REJECTED at
-// publish through on_error(message_too_large), never silently dropped — the channel
-// stays open and the publisher learns the message will not send.
+// Oversize: a frame whose enveloped size exceeds max_payload is FRAGMENTED across
+// numbered datagrams and reassembled by the peer; only a frame beyond the bounded
+// max-message size is REJECTED at publish through on_error(message_too_large), never
+// silently dropped — the channel stays open and the publisher learns it will not send.
 //
-// The reliable_arq kind is a recv-side hook only this plan (the data ARQ is a later
+// The reliable_arq kind is a recv-side hook only (the data ARQ is a later
 // block); a kind=1 datagram is handed to m_on_reliable, which the transport leaves
 // unset here so such datagrams are dropped until the ARQ engine is wired.
 class udp_channel
@@ -71,7 +72,7 @@ public:
     static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
     // The bounded congestion=block backpressure queue depth (allocated at setup, never
     // grown on the hot path): a full send window AND a full queue surface a stall signal
-    // rather than unbounded memory growth (T-15-13). A conservative multiple of the
+    // rather than unbounded memory growth. A conservative multiple of the
     // default window — deep enough to ride a transient window-full burst, bounded so a
     // sustained overrun fails closed instead of OOMing.
     static constexpr std::size_t default_backpressure_depth = 1024;
@@ -375,9 +376,9 @@ private:
 
     // congestion=block enqueues a window-full reliable frame into the bounded queue (the
     // ack handler drains it); a queue at its cap surfaces would_block (the stall signal —
-    // bounded, never unbounded growth, T-15-13). congestion=drop sheds the frame at the
+    // bounded, never unbounded growth). congestion=drop sheds the frame at the
     // publisher (the documented opt-out of the reliable guarantee). Either way publish()
-    // stays non-blocking and the io_context is never blocked (T-15-12).
+    // stays non-blocking and the io_context is never blocked.
     submit_result on_window_full(std::span<const std::byte> payload)
     {
         if(m_congestion == io::congestion::drop)

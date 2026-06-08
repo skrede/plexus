@@ -65,7 +65,7 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
 dtls_channel::~dtls_channel()
 {
     m_open = false;
-    m_retransmit.cancel();                       // cancel the timer FIRST (Pitfall 6)
+    m_retransmit.cancel();                       // cancel the timer FIRST (no use-after-free on teardown)
     if(m_reassembler)
         m_reassembler->cancel();                 // cancel the reassembly timeout(s) before teardown
     if(m_ssl)
@@ -122,7 +122,7 @@ void dtls_channel::send(std::span<const std::byte> bytes)
 
 std::size_t dtls_channel::record_budget() const noexcept
 {
-    // R-1: the encrypted per-record budget OpenSSL reports post-handshake (the real fit in
+    // the encrypted per-record budget OpenSSL reports post-handshake (the real fit in
     // one DTLS record), capped by the configured logical ceiling — min(max_payload,
     // DTLS_get_data_mtu). This is the oversize-reject term AND the fragmenter's split budget.
     const long data_mtu = static_cast<long>(::DTLS_get_data_mtu(m_ssl));
@@ -164,7 +164,7 @@ void dtls_channel::secure_send(std::span<const std::byte> bytes)
             return;
         }
     }
-    drain_outbound();                            // UNCONDITIONAL (Pitfall 2)
+    drain_outbound();                            // UNCONDITIONAL
 }
 
 void dtls_channel::deliver_inbound(std::span<const std::byte> datagram)
@@ -249,7 +249,7 @@ void dtls_channel::try_complete()
 {
     if(m_complete_fired || !m_ssl || !::SSL_is_init_finished(m_ssl))
         return;
-    // Fail-closed mutual-auth gate (Pitfall 4): a verified peer cert is mandatory.
+    // Fail-closed mutual-auth gate: a verified peer cert is mandatory.
     X509 *peer = ::SSL_get1_peer_certificate(m_ssl);
     const bool ok = peer && ::SSL_get_verify_result(m_ssl) == X509_V_OK;
     if(ok)
@@ -259,7 +259,7 @@ void dtls_channel::try_complete()
         // handshake (a memory-BIO pair cannot do path-MTU discovery), so re-assert the
         // configured record budget now that the cipher is negotiated — DTLS_get_data_mtu
         // (the send() oversize-reject term) otherwise collapses to the ~219-byte floor
-        // instead of the intended ~1400 budget (R-1).
+        // instead of the intended ~1400 budget.
         ::SSL_set_mtu(m_ssl, dtls_mtu());        // completion edge: re-assert the configured budget
         m_complete_fired = true;
         m_gate.mark_ready();                     // the ready edge: send() now passes through

@@ -58,8 +58,8 @@ namespace plexus::tls {
 //   Retransmit: DTLSv1_get_timeout arms one asio_timer; on fire
 //             DTLSv1_handle_timeout + drain + re-arm; the dtor cancels it FIRST.
 //
-// Identity (R-OQ3): after completion the peer SPKI digest is node_id and the cert
-// subject is node_name. NO plexus wire frame crosses the datagram channel (D-01).
+// Identity: after completion the peer SPKI digest is node_id and the cert
+// subject is node_name. NO plexus wire frame crosses the datagram channel.
 class dtls_channel
 {
 public:
@@ -74,7 +74,7 @@ public:
     static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
 
     // The per-channel DTLS RECORD MTU handed to SSL_set_mtu at BOTH set-points (the
-    // construction edge AND the post-handshake completion re-assert — R-1). Unpinned from
+    // construction edge AND the post-handshake completion re-assert). Unpinned from
     // the former fixed k_dtls_mtu to a configurable per-channel value; the default stays the
     // single-Ethernet-datagram floor so DTLS_get_data_mtu reports the real per-record fit
     // (the encrypted budget the fragmenter splits against). It is DECOUPLED from max_payload:
