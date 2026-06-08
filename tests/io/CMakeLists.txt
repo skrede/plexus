@@ -18,7 +18,8 @@ set(PLEXUS_IO_TESTS
     test_assembly_pattern
     test_cert_facts
     test_verify_policy
-    test_cookie_secret)
+    test_cookie_secret
+    test_fragmentation)
 
 foreach(test ${PLEXUS_IO_TESTS})
     add_executable(${test} ${test}.cpp)
@@ -30,3 +31,8 @@ endforeach()
 # wire::udp_envelope_overhead constant, so it additionally links the header-only
 # plexus::wire interface target (still sans-IO — no backend, no socket).
 target_link_libraries(test_mtu_budget PRIVATE plexus::wire)
+
+# The fragment/reassemble unit drives the wire fragment codec and proves the bounded
+# reassembler deterministically on the virtual-clock harness, so it additionally links
+# the wire codec and the plexus::testing substrate (still sans-IO — no backend, no socket).
+target_link_libraries(test_fragmentation PRIVATE plexus::wire plexus::testing)

@@ -38,6 +38,25 @@ namespace plexus::wire {
 // its own anti-replay and handshake retransmit). Reserved here; nothing is built.
 constexpr std::size_t udp_envelope_overhead = 3;
 
+// A fragmented datagram carries a 6-byte sub-header AFTER the 3-byte envelope:
+//
+//   offset  size  field
+//   ------  ----  ----------------------------------------------------------------
+//    3       2    msg_id     uint16, big-endian. Groups the fragments of one logical
+//                            message; the reassembler keys its partial-message table on it.
+//    5       2    frag_idx   uint16, big-endian. This fragment's 0-based position.
+//    7       2    frag_cnt   uint16, big-endian. The total fragment count for the message.
+//    9       ..   bytes      this fragment's slice of the payload, passed through verbatim.
+//
+// The widths follow from the largest message a single send may fragment. At a
+// conservative ~1400-byte fragment a ~4 MB message is roughly 3000 fragments — well
+// inside the uint16 frag_cnt/frag_idx range (65535), and the uint16 msg_id space far
+// exceeds the bounded reassembler's in-flight table so an id wrap cannot alias a live
+// entry. This sub-header is APPENDED only when the FRAGMENTED bit is set, so the common
+// single-datagram path keeps the 3-byte overhead with zero fragmentation cost.
+constexpr std::size_t udp_fragment_subheader = 6;
+constexpr std::size_t udp_fragment_header_overhead = udp_envelope_overhead + udp_fragment_subheader;
+
 enum class udp_envelope_kind : std::uint8_t
 {
     best_effort = 0,
@@ -50,10 +69,15 @@ constexpr std::uint8_t udp_kind_shift = 6u;
 constexpr std::uint8_t udp_kind_mask = 0b1100'0000u;
 constexpr std::uint8_t udp_fragmented_bit = 0b0000'0001u;
 
-inline std::uint8_t pack_ver_flags(udp_envelope_kind kind) noexcept
+// Pack the kind discriminator into bits 7..6 and the FRAGMENTED flag into bit0. The
+// flag defaults false, so the existing single-datagram wrap is byte-unchanged; bits 5..1
+// stay 0 (reserved). A fragmenting send passes fragmented=true to set bit0.
+inline std::uint8_t pack_ver_flags(udp_envelope_kind kind, bool fragmented = false) noexcept
 {
-    // FRAGMENTED (bit0) and bits 5..1 stay 0 this phase — reserved.
-    return static_cast<std::uint8_t>(static_cast<std::uint8_t>(kind) << udp_kind_shift);
+    auto bits = static_cast<std::uint8_t>(static_cast<std::uint8_t>(kind) << udp_kind_shift);
+    if(fragmented)
+        bits |= udp_fragmented_bit;
+    return bits;
 }
 
 }
@@ -117,6 +141,57 @@ inline std::optional<udp_decode_result> unwrap_udp(std::span<const std::byte> da
             .seq        = detail::read_u16(p + 1),
             .frame      = datagram.subspan(udp_envelope_overhead),
             .fragmented = (ver_flags & detail::udp_fragmented_bit) != 0u
+    };
+}
+
+// The decoded fragment sub-header: the message-grouping id, this fragment's index and
+// the total count, plus the fragment's own payload slice (a view into the caller's
+// frame). The reassembler keys its table on these fields.
+struct udp_fragment_header
+{
+    std::uint16_t msg_id;
+    std::uint16_t frag_idx;
+    std::uint16_t frag_cnt;
+    std::span<const std::byte> payload;
+};
+
+// Wrap one fragment into a caller-owned buffer reused across sends: the 3-byte envelope
+// with the FRAGMENTED bit set, the 6-byte fragment sub-header, then the fragment bytes.
+// resize() reuses the buffer's capacity so a fragmenting send loop allocates nothing
+// after the warm-up grow. The unfragmented wrap_udp_into above is untouched — this
+// overhead exists only on the fragmenting path.
+inline void wrap_udp_fragment_into(std::vector<std::byte> &out, udp_envelope_kind kind, std::uint16_t seq,
+                                   std::uint16_t msg_id, std::uint16_t frag_idx, std::uint16_t frag_cnt,
+                                   std::span<const std::byte> frag_bytes)
+{
+    out.resize(udp_fragment_header_overhead + frag_bytes.size());
+    auto *p = out.data();
+
+    detail::write_u8(p, detail::pack_ver_flags(kind, true));
+    detail::write_u16(p + 1, seq);
+    detail::write_u16(p + 3, msg_id);
+    detail::write_u16(p + 5, frag_idx);
+    detail::write_u16(p + 7, frag_cnt);
+
+    if(!frag_bytes.empty())
+        std::memcpy(p + udp_fragment_header_overhead, frag_bytes.data(), frag_bytes.size());
+}
+
+// Decode the fragment sub-header from an untrusted inner frame (the .frame an unwrap
+// of a fragmented datagram yields). Fail-closed: a frame shorter than the 6-byte
+// sub-header is rejected to nullopt before any read, never indexing past the span. The
+// returned payload is a view into the caller's frame (frame.subspan past the sub-header).
+inline std::optional<udp_fragment_header> decode_udp_fragment_header(std::span<const std::byte> frame)
+{
+    if(frame.size() < udp_fragment_subheader)
+        return std::nullopt;
+
+    auto *p = frame.data();
+    return udp_fragment_header{
+            .msg_id   = detail::read_u16(p),
+            .frag_idx = detail::read_u16(p + 2),
+            .frag_cnt = detail::read_u16(p + 4),
+            .payload  = frame.subspan(udp_fragment_subheader)
     };
 }
 
