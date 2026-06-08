@@ -32,10 +32,15 @@ class asio_listener
 public:
     // cfg is the node-level hardening config (required-WITH-default), stamped onto
     // every channel this listener accepts so each minted stream arms it structurally.
-    explicit asio_listener(::asio::io_context &io, wire::stream_inbound_config cfg = {})
+    // no_delay disables Nagle on every accepted peer (required-WITH-default true — the
+    // latency-MW default; a Nagle use-case overrides it): set BEFORE the channel adopts
+    // the socket, since the accept ctor starts reading immediately.
+    explicit asio_listener(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+                           bool no_delay = true)
         : m_io(io)
         , m_acceptor(io)
         , m_cfg(cfg)
+        , m_no_delay(no_delay)
     {
     }
 
@@ -92,6 +97,11 @@ private:
                         report(ec);
                     return;
                 }
+                if(m_no_delay)
+                {
+                    std::error_code nec;
+                    (void)peer.set_option(::asio::ip::tcp::no_delay(true), nec);   // disable Nagle pre-adopt
+                }
                 auto channel = std::make_unique<asio_channel>(m_io, std::move(peer), m_cfg);
                 if(m_on_accepted)
                     m_on_accepted(std::move(channel));
@@ -109,6 +119,7 @@ private:
     ::asio::io_context &m_io;
     ::asio::ip::tcp::acceptor m_acceptor;
     wire::stream_inbound_config m_cfg;
+    bool m_no_delay;
     plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     bool m_running{false};

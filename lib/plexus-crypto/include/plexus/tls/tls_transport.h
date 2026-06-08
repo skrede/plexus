@@ -50,12 +50,16 @@ namespace plexus::tls {
 class tls_transport
 {
 public:
+    // no_delay disables Nagle on every dialed + accepted TCP lowest layer (required-WITH-
+    // default true — the latency-MW default; overridable for a Nagle use-case). Threaded to
+    // the listener for the accept side and set on the dial socket post-connect below.
     tls_transport(::asio::io_context &io, const tls_credential &cred,
-                  wire::stream_inbound_config cfg = {})
+                  wire::stream_inbound_config cfg = {}, bool no_delay = true)
         : m_io(io)
         , m_cred(cred)
-        , m_listener(io, cred, cfg)
+        , m_listener(io, cred, cfg, no_delay)
         , m_cfg(cfg)
+        , m_no_delay(no_delay)
         , m_pending([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
     {
         m_listener.on_accepted([this](std::unique_ptr<tls_channel> ch) {
@@ -100,6 +104,11 @@ public:
             [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable {
                 if(ec)
                     return report_dial_fail(ep, plexus::asio::detail::map_error(ec));
+                if(m_no_delay)
+                {
+                    std::error_code nec;
+                    (void)raw->socket().set_option(::asio::ip::tcp::no_delay(true), nec);   // disable Nagle pre-handshake
+                }
                 run_handshake(std::move(ch), raw, ep);
             });
     }
@@ -162,6 +171,7 @@ private:
     const tls_credential &m_cred;
     tls_listener m_listener;
     wire::stream_inbound_config m_cfg;
+    bool m_no_delay;
     io::pending_dial_registry<tls_channel, std::monostate> m_pending;   // transport-owned half-open dials
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed;

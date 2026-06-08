@@ -37,12 +37,15 @@ namespace plexus::tls {
 class tls_listener
 {
 public:
+    // no_delay disables Nagle on every accepted peer's lowest (TCP) layer (required-WITH-
+    // default true — the latency-MW default), set BEFORE the channel adopts the socket.
     tls_listener(::asio::io_context &io, const tls_credential &cred,
-                 wire::stream_inbound_config cfg = {})
+                 wire::stream_inbound_config cfg = {}, bool no_delay = true)
         : m_io(io)
         , m_acceptor(io)
         , m_cred(cred)
         , m_cfg(cfg)
+        , m_no_delay(no_delay)
         , m_accepting([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
     {
     }
@@ -101,6 +104,11 @@ private:
                         report(ec);
                     return;
                 }
+                if(m_no_delay)
+                {
+                    std::error_code nec;
+                    (void)peer.set_option(::asio::ip::tcp::no_delay(true), nec);   // disable Nagle pre-adopt
+                }
                 run_server_handshake(
                     std::make_unique<tls_channel>(m_io, std::move(peer), m_cred, m_cfg));
                 if(m_running)
@@ -156,6 +164,7 @@ private:
     ::asio::ip::tcp::acceptor m_acceptor;
     const tls_credential &m_cred;
     wire::stream_inbound_config m_cfg;
+    bool m_no_delay;
     io::pending_dial_registry<tls_channel, std::monostate> m_accepting;   // accepted-table owner
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;

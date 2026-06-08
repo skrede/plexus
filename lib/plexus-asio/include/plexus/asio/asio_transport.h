@@ -42,10 +42,15 @@ public:
     // the transport mints every stream channel — accepted via the listener and
     // dialed — with it, so the no-progress/slowloris defense is armed structurally
     // (no setter, no sentinel; the defaults live in stream_inbound_config itself).
-    explicit asio_transport(::asio::io_context &io, wire::stream_inbound_config cfg = {})
+    // no_delay disables Nagle on every dialed + accepted TCP socket (required-WITH-default
+    // true — the latency-MW default; overridable for a Nagle use-case). Threaded to the
+    // listener for the accept side and set on the dial socket post-connect below.
+    explicit asio_transport(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+                            bool no_delay = true)
         : m_io(io)
-        , m_listener(io, cfg)
+        , m_listener(io, cfg, no_delay)
         , m_cfg(cfg)
+        , m_no_delay(no_delay)
     {
         m_listener.on_accepted([this](std::unique_ptr<asio_channel> ch) {
             if(m_on_accepted)
@@ -90,6 +95,11 @@ public:
             [this, ep, ch = std::move(ch)](std::error_code ec) mutable {
                 if(ec)
                     return report_dial_fail(ep, detail::map_error(ec));
+                if(m_no_delay)
+                {
+                    std::error_code nec;
+                    (void)ch->socket().set_option(::asio::ip::tcp::no_delay(true), nec);   // disable Nagle pre-read
+                }
                 ch->start_read();
                 if(m_on_dialed)
                     m_on_dialed(std::move(ch), ep);
@@ -110,6 +120,7 @@ private:
     ::asio::io_context &m_io;
     asio_listener m_listener;
     wire::stream_inbound_config m_cfg;
+    bool m_no_delay;
     plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>, const io::endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
