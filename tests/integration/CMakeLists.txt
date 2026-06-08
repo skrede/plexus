@@ -477,6 +477,24 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
             plexus::crypto
             Catch2::Catch2WithMain)
         catch_discover_tests(test_mux_select_asio TEST_PREFIX "integration.")
+
+        # The gated real-TLS bounded-outbox hardening leg: the SECOND composition of the
+        # shared io::detail::stream_send_queue block (the plaintext asio_channel pins the
+        # first). A real mutual-TLS pair handshakes over loopback; the server end never
+        # reads, the encrypted async_write stalls, and the dialed channel's outbox cap
+        # engages — congestion=drop sheds, congestion=block surfaces would_block, the
+        # outbox never grows past the cap. Serialized + RESOURCE_LOCK on the shared
+        # loopback resource alongside the other real-socket legs.
+        add_executable(test_tls_channel_backpressure_asio test_tls_channel_backpressure_asio.cpp
+            $<TARGET_OBJECTS:plexus-crypto>)
+        target_link_libraries(test_tls_channel_backpressure_asio PRIVATE
+            plexus::plexus
+            plexus::wire
+            plexus::asio
+            plexus::crypto
+            Catch2::Catch2WithMain)
+        catch_discover_tests(test_tls_channel_backpressure_asio TEST_PREFIX "integration."
+            PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
     endif()
 
     # The minimal-composition proof: the core multiplexer instantiated DIRECTLY over a

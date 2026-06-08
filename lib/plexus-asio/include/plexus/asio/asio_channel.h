@@ -11,6 +11,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
+#include "plexus/io/detail/stream_send_queue.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -18,7 +19,6 @@
 #include <asio/ip/tcp.hpp>
 #include <asio/io_context.hpp>
 
-#include <deque>
 #include <span>
 #include <array>
 #include <memory>
@@ -64,7 +64,7 @@ public:
         , m_socket(io)
         , m_inbound(io, cfg)
         , m_congestion(congestion)
-        , m_write_queue_bytes(write_queue_bytes)
+        , m_egress(make_send_sink(), write_queue_bytes)
     {
         wire_inbound();
     }
@@ -78,7 +78,7 @@ public:
         , m_socket(std::move(connected))
         , m_inbound(io, cfg)
         , m_congestion(congestion)
-        , m_write_queue_bytes(write_queue_bytes)
+        , m_egress(make_send_sink(), write_queue_bytes)
     {
         wire_inbound();
         m_open = true;
@@ -103,12 +103,8 @@ public:
     {
         if(!m_open)
             return;
-        if(!admits(data.size()))
-            return on_write_queue_full();
-        m_write_bytes += data.size();
-        m_write_queue.emplace_back(data.begin(), data.end());
-        if(!m_writing)
-            do_write();
+        if(!m_egress.enqueue(data))
+            on_write_queue_full();
     }
 
     void close()
@@ -117,6 +113,7 @@ public:
             return;
         m_inbound.shutdown();
         shutdown_socket();
+        m_egress.close();   // an aborted in-flight write must not chain onto the closed socket
         ::asio::post(m_io, [this] { if(m_on_closed) m_on_closed(); });   // posted, never synchronous
     }
 
@@ -141,16 +138,9 @@ public:
     // The count of frames shed under congestion=drop (the drop-observer's edge).
     [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
     // The current queued (un-drained) write-queue byte occupancy; 0 when the socket drains.
-    [[nodiscard]] std::size_t backpressured() const noexcept { return m_write_bytes; }
+    [[nodiscard]] std::size_t backpressured() const noexcept { return m_egress.queued_bytes(); }
 
 private:
-    // Compare-before-add: a frame fits only when the cap is not already met AND its size
-    // is within the remaining budget (cap - bytes, no wrap).
-    [[nodiscard]] bool admits(std::size_t size) const noexcept
-    {
-        return m_write_bytes < m_write_queue_bytes && size <= m_write_queue_bytes - m_write_bytes;
-    }
-
     // congestion=drop sheds the frame at the publisher (the documented opt-out of the
     // reliable guarantee); congestion=block surfaces would_block (the stall edge —
     // bounded, never unbounded growth). Either way the call returns without blocking.
@@ -222,23 +212,23 @@ private:
         });
     }
 
-    void do_write()
+    // The irreducible asio send-sink the stream_send_queue block drives: write the
+    // block-owned node's bytes and signal completion when the async op finishes. At most
+    // one is outstanding (the block's serial discipline). On a socket error the channel
+    // fails (which closes the block), so the completion's open-guard stops the chain — the
+    // exact fail-before-chain edge the hand-rolled do_write carried, never a swallow.
+    io::detail::stream_send_queue::send_sink make_send_sink()
     {
-        if(m_write_queue.empty())
+        return [this](std::span<const std::byte> bytes, io::detail::stream_send_queue::completion done)
         {
-            m_writing = false;
-            return;
-        }
-        m_writing = true;
-        ::asio::async_write(m_socket, ::asio::buffer(m_write_queue.front()),
-            [this](std::error_code ec, std::size_t)
-            {
-                m_write_bytes -= m_write_queue.front().size();
-                m_write_queue.pop_front();
-                if(ec)
-                    return fail(ec);
-                do_write();
-            });
+            ::asio::async_write(m_socket, ::asio::buffer(bytes.data(), bytes.size()),
+                [this, done = std::move(done)](std::error_code ec, std::size_t) mutable
+                {
+                    if(ec)
+                        fail(ec);
+                    done(!ec);
+                });
+        };
     }
 
     void fail(const std::error_code &ec)
@@ -246,7 +236,7 @@ private:
         if(ec == ::asio::error::operation_aborted || !m_open)
             return;
         m_open = false;
-        m_writing = false;
+        m_egress.close();   // stop the serial drain so the failed write does not chain
         m_inbound.shutdown();
         auto mapped = detail::map_error(ec);
         if(m_on_error)
@@ -260,17 +250,14 @@ private:
     wire::stream_inbound<asio_timer, ::asio::io_context &> m_inbound;
     std::vector<std::byte> m_frame_scratch;
     std::array<std::byte, 4096> m_read_buf{};
-    std::deque<std::vector<std::byte>> m_write_queue;     // bounded congestion=block egress
     io::congestion m_congestion;
-    std::size_t m_write_queue_bytes;                      // the byte budget (cap)
-    std::size_t m_write_bytes{0};                         // summed queued (un-drained) bytes
     std::size_t m_dropped{0};                             // congestion=drop shed count
+    io::detail::stream_send_queue m_egress;               // bounded byte-budgeted serial write block
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
     bool m_open{false};
-    bool m_writing{false};
 };
 
 }

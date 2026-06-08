@@ -13,6 +13,7 @@ endif()
 set(PLEXUS_IO_TESTS
     test_mtu_budget
     test_send_queue
+    test_stream_send_queue
     test_udp_backpressure_queue
     test_pending_dial_registry
     test_handshake_gate

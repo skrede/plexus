@@ -15,6 +15,7 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/handshake_gate.h"
+#include "plexus/io/detail/stream_send_queue.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -26,7 +27,6 @@
 
 #include <openssl/ssl.h>
 
-#include <deque>
 #include <span>
 #include <array>
 #include <memory>
@@ -78,9 +78,9 @@ public:
         , m_ssl_ctx(detail::share_context(cred))
         , m_stream(io, m_ssl_ctx)
         , m_inbound(io, cfg)
-        , m_gate([this](std::span<const std::byte> bytes) { enqueue_egress(bytes); })
         , m_congestion(congestion)
-        , m_outbox_bytes(outbox_bytes)
+        , m_egress(make_send_sink(), outbox_bytes)
+        , m_gate([this](std::span<const std::byte> bytes) { enqueue_egress(bytes); })
     {
         wire_inbound();
     }
@@ -99,9 +99,9 @@ public:
         , m_ssl_ctx(detail::share_context(cred))
         , m_stream(std::move(connected), m_ssl_ctx)
         , m_inbound(io, cfg)
-        , m_gate([this](std::span<const std::byte> bytes) { enqueue_egress(bytes); })
         , m_congestion(congestion)
-        , m_outbox_bytes(outbox_bytes)
+        , m_egress(make_send_sink(), outbox_bytes)
+        , m_gate([this](std::span<const std::byte> bytes) { enqueue_egress(bytes); })
     {
         wire_inbound();
     }
@@ -129,6 +129,7 @@ public:
             return;
         m_inbound.shutdown();
         shutdown_socket();
+        m_egress.close();   // an aborted in-flight write must not chain onto the closed stream
         ::asio::post(m_io, [this] { if(m_on_closed) m_on_closed(); });   // posted, never synchronous
     }
 
@@ -154,7 +155,7 @@ public:
     // The count of frames shed under congestion=drop (the drop-observer's edge).
     [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
     // The current queued (un-drained) outbox byte occupancy; 0 when the stream drains.
-    [[nodiscard]] std::size_t backpressured() const noexcept { return m_outbox_used; }
+    [[nodiscard]] std::size_t backpressured() const noexcept { return m_egress.queued_bytes(); }
 
     // Dial-side bootstrap: set SNI (best-effort) then run the client handshake.
     // The read loop + write drain arm only on handshake success (fail-closed: a
@@ -245,24 +246,14 @@ private:
 
     // The gate's drain sink (post-ready). The gate hands a transient view (an owned
     // node while draining its buffer, or the caller's scratch on the pass-through), so
-    // copy it into the owned egress FIFO that keeps the bytes alive across the
-    // async_write, then kick the serial drain. This bridge IS the post-ready one-in-
-    // flight discipline (a stream already serializes — no outbound-queue block here).
+    // hand it to the bounded byte-budgeted serial write block (which copies into an
+    // owned node and drives the one-in-flight async_write); under a full cap the
+    // congestion mode decides shed vs stall. This is the SAME core block the plaintext
+    // channel composes — the TLS channel adds only the irreducible async_write sink.
     void enqueue_egress(std::span<const std::byte> bytes)
     {
-        if(!admits(bytes.size()))
-            return on_outbox_full();
-        m_outbox_used += bytes.size();
-        m_outbox.emplace_back(bytes.begin(), bytes.end());
-        if(!m_writing)
-            do_write();
-    }
-
-    // Compare-before-add: a frame fits only when the cap is not already met AND its size
-    // is within the remaining budget (cap - bytes, no wrap).
-    [[nodiscard]] bool admits(std::size_t size) const noexcept
-    {
-        return m_outbox_used < m_outbox_bytes && size <= m_outbox_bytes - m_outbox_used;
+        if(!m_egress.enqueue(bytes))
+            on_outbox_full();
     }
 
     // congestion=drop sheds the frame at the publisher; congestion=block surfaces
@@ -278,23 +269,23 @@ private:
             m_on_error(io::io_error::would_block);
     }
 
-    void do_write()
+    // The irreducible asio send-sink the stream_send_queue block drives: write the
+    // block-owned node's bytes through the ssl::stream and signal completion. At most one
+    // is outstanding (the block's serial discipline). On a socket error the channel fails
+    // (which closes the block), so the completion's open-guard stops the chain — the exact
+    // fail-before-chain edge the hand-rolled do_write carried, never a swallow.
+    io::detail::stream_send_queue::send_sink make_send_sink()
     {
-        if(m_outbox.empty())
+        return [this](std::span<const std::byte> bytes, io::detail::stream_send_queue::completion done)
         {
-            m_writing = false;
-            return;
-        }
-        m_writing = true;
-        ::asio::async_write(m_stream, ::asio::buffer(m_outbox.front()),
-            [this](std::error_code ec, std::size_t)
-            {
-                m_outbox_used -= m_outbox.front().size();
-                m_outbox.pop_front();
-                if(ec)
-                    return fail(ec);
-                do_write();
-            });
+            ::asio::async_write(m_stream, ::asio::buffer(bytes.data(), bytes.size()),
+                [this, done = std::move(done)](std::error_code ec, std::size_t) mutable
+                {
+                    if(ec)
+                        fail(ec);
+                    done(!ec);
+                });
+        };
     }
 
     // A fail edge may fire from inside the channel's own async-completion stack. The
@@ -308,7 +299,7 @@ private:
         if(ec == ::asio::error::operation_aborted || !m_open)
             return;
         m_open = false;
-        m_writing = false;
+        m_egress.close();   // stop the serial drain so the failed write does not chain
         m_inbound.shutdown();
         auto mapped = plexus::asio::detail::map_error(ec);
         if(m_on_error)
@@ -321,21 +312,18 @@ private:
     ::asio::ssl::context m_ssl_ctx;
     ::asio::ssl::stream<::asio::ip::tcp::socket> m_stream;
     wire::stream_inbound<plexus::asio::asio_timer, ::asio::io_context &> m_inbound;
-    io::detail::handshake_gate m_gate;                 // open-before-data outbound buffer
     io::congestion m_congestion;
-    std::size_t m_outbox_bytes;                        // the byte budget (cap)
-    std::size_t m_outbox_used{0};                      // summed queued (un-drained) bytes
     std::size_t m_dropped{0};                          // congestion=drop shed count
+    io::detail::stream_send_queue m_egress;            // bounded byte-budgeted serial write block
+    io::detail::handshake_gate m_gate;                 // open-before-data outbound buffer
     std::vector<std::byte> m_frame_scratch;
     std::array<std::byte, 4096> m_read_buf{};
-    std::deque<std::vector<std::byte>> m_outbox;       // bounded post-ready async_write FIFO
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
     plexus::detail::move_only_function<void()> m_on_ready;
     bool m_open{false};
-    bool m_writing{false};
 };
 
 }
