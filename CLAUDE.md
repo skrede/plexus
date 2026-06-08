@@ -1,60 +1,62 @@
 Do not add Co-Authored-By lines to commit messages.
 
-Do not be sycophantic nor agreeable to be appealing. The user values rigor, honesty, and
-objectivity — not sycophancy.
+Do not be sycophantic nor agreeable to be appealing to the user.
+The user values rigor, honesty and objectivity -- not a sycophancy.
 
-Use American English: e.g., "stabilizing" not "stabilising", and "color" not "colour".
+Use american English: e.g., "stabilizing" not "stabilising", and "color" not "colour"
 
-Never refer to planning-tool artifacts (phase/milestone/plan/task numbers, GSD/.planning IDs
-or keys) anywhere in the codebase — including commit messages, code, comments, documentation,
-and examples.
+Never refer to issues, IDs and keys that are result of planning tools, project management tools, or issue trackers
+(including phase numbers, milestones, plans or task numbers or any other kind of planning artifact ID/key -- including from GSD and .planning artifacts)
+in any area of the code/bodebase, including but not limited to commit messages, code, code comments, documentation, and examples.
 
-Never do git tagging, never merge, never push, no force flags, and do not override .gitignore.
+Never do git tagging, never merge and no force flags to circumvent .gitignore.
 
 Commit message format:
 {Prefix}: {summary sentence}.
 
 - {what was done, one line per item}
+- {another item if applicable}
 
-Allowed prefixes: Feature, Fix, Refactor, Docs, Examples, Optimization, WIP. Use WIP if the
-code does not compile. Aim for one commit per GSD plan.
+Allowed prefixes: Feature, Fix, Refactor, Docs, Examples, Optimization, WIP
+The summary line should be brief and descriptive. The bullet list expands on what was done.
+Single-item commits may omit the bullet list.
 
-Branching model: master (releases) -> develop (integration) -> milestone/<version> (work).
-Commit to the milestone branch; never push. Merges are the user's.
+There should be one commit per GSD plan within each GSD phase (so a phase with 3 plans has at least 3 commits);
+you can make additional commits if you need them for safekeeping during development, but you should by default attempt
+to make one commit per plan (not GSD task or other things). Use the WIP prefix if the code in the commit does not
+compile.
 
-.planning/ is NOT committed to the code repository; it has a separate, independent shadow git
-repo (`git -C .planning ...`). Do not override .gitignore to add it.
+No issue tags, phase numbers, or planning tool references in commit messages, code, comments, docs, or examples.
 
-## What plexus is
+Branching model: master (releases) ? develop (integration) ? milestone/<version> (work).
+Create milestone branches from the current branch, named milestone/<version> (e.g., milestone/v0.2.0).
+If develop does not exist, create it from master.
+Merge path: milestone ? develop ? master. Never delete develop.
+You can make commits to the milestone branch but never push.
 
-plexus is a standalone, header-only-core, policy-based C++20 middleware (pub/sub + req/res),
-extracted from and porting the proven cores of vagus-plexus. It has **zero dependency on vagus
-or vagus-core**. `mdnspp` is a dependency (discovery). plexus is **serializer-agnostic**: it
-moves opaque bytes; no serializer ever lives in plexus.
+.planning/ files should not be committed to the code project repository.
+Do not override .gitignore to attempt to add files or folders, including .planning/.
+./planning should have a separate shadow repository initialized (without submodules and independent of the code project)
+where the state is kept.
+If there is no such repo, leave the files to be locally.
 
-Architecture invariants:
-- Header-only generic core; heavy/backend code (asio, OpenSSL/mbedTLS) lives in separate,
-  compiled, CMake-gated targets. Non-applicable features are disabled targets, not #ifdef soup.
-- One compile-time `Policy` bundles the hot-path substrate (executor + socket + timer +
-  memory traits + byte-owner). Cold-path services (discovery, logger) are runtime-injected
-  virtual interfaces in compiled adapters — not template policies.
-- No allocation on the steady-state hot path (allocate at setup; deterministic message loop).
-- `wire_bytes` = a non-owning view + a policy-selected owner handle whose lifetime bounds it.
-- Design so as not to preclude an MCU profile (RTOS / lwIP / serial; bounded, exception-aware
-  core). MCU is a later target, not a day-one deliverable — design-in the seams, defer the port.
+Generate idiomatic, cross-platform C++20 code -- the code must run on macOS, Linux and Windows. Leverage the language features as much as possible!
 
-## C++ conventions
+Adhere to typical conventions of popular and modern C++ libraries, e.g., asio, boost, and so on;
+existing conventions in the project take precedence, if you are unsure about conventions, or existing conventions
+contradict typical and popular conventions, ask the user what to do.
 
-Generate idiomatic, cross-platform C++20 (macOS, Linux, Windows). Follow asio/modern-C++
-library conventions; existing conventions in the project take precedence — ask if unsure. No Boost.
+Use header guards and not pragma once. Header guards are on the format HPP_GUARD_<NAMESPACE>_<FOLDER>_FILENAME_H.
+Do not add matching comment // namespace "the namespace" after closing namespace brackets, e.g., } //
+namespace {namespace name}
+Do not add matching comment // HPP_GUARD_... define macro after the include guard #endif
 
-Header guards (not pragma once): HPP_GUARD_<NAMESPACE>_<FOLDER>_FILENAME_H. Do not add a
-matching `// namespace X` after a closing namespace brace, nor a matching comment after the
-`#endif` of an include guard.
+The #include order for the project is as follows (unless order matter for other reasons like something must come before
+something else):
 
-Include order: internal project includes (`"..."`) first, third-party (`<...>`) second, standard
-library third. One blank line between these major sections. Within a section, group by folder
-(blank line between groups); within a group, sort by length, then alphabetically.
-
-Function/file size: aim for 5-15 LOC functions (25 max) and ~100 LOC files (200 max).
-Readability over dogmatic SOLID/DRY; never split a unified concept just to hit a number.
+- internal project includes (#include with ") come at the top, third-party libs come second, and standard library
+  headers come third.
+- these three major "sections" are divided by a new blank line. Within the major sections, includes are grouped by
+  folder location to form intermediate sections, which are separated by a blank line.
+- Only one blank line between sections, even if a new major starts
+- For each "section" of includes, all includes are sorted first by length, then with the same length alphabetically.
