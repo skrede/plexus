@@ -144,6 +144,25 @@ inline std::optional<udp_decode_result> unwrap_udp(std::span<const std::byte> da
     };
 }
 
+// Wrap an inner frame with the FRAGMENTED bit set but WITHOUT the 6-byte wire
+// sub-header: the reliable-ARQ fragment path carries its msg_id/index/count INSIDE the
+// ARQ segment payload (so each fragment is one independently-ARQ'd segment), and only
+// needs the envelope bit to flag the peer that the in-order-delivered payload is a
+// fragment to reassemble. The best_effort path uses wrap_udp_fragment_into (the bit AND
+// the sub-header) instead; the unfragmented wrap_udp_into above is untouched.
+inline void wrap_udp_into_fragmented(std::vector<std::byte> &out, udp_envelope_kind kind, std::uint16_t seq,
+                                     std::span<const std::byte> frame)
+{
+    out.resize(udp_envelope_overhead + frame.size());
+    auto *p = out.data();
+
+    detail::write_u8(p, detail::pack_ver_flags(kind, true));
+    detail::write_u16(p + 1, seq);
+
+    if(!frame.empty())
+        std::memcpy(p + udp_envelope_overhead, frame.data(), frame.size());
+}
+
 // The decoded fragment sub-header: the message-grouping id, this fragment's index and
 // the total count, plus the fragment's own payload slice (a view into the caller's
 // frame). The reassembler keys its table on these fields.
@@ -175,6 +194,25 @@ inline void wrap_udp_fragment_into(std::vector<std::byte> &out, udp_envelope_kin
 
     if(!frag_bytes.empty())
         std::memcpy(p + udp_fragment_header_overhead, frag_bytes.data(), frag_bytes.size());
+}
+
+// Encode the BARE fragment sub-header + slice — [msg_id:2][frag_idx:2][frag_cnt:2][slice]
+// — with no envelope. This is the reliable-ARQ fragment payload: the fragment rides as
+// one ARQ segment whose in-order delivery the peer decodes with decode_udp_fragment_header
+// (the layout is identical to the wire sub-header). Reused caller buffer, no per-send alloc.
+inline void encode_udp_fragment_payload_into(std::vector<std::byte> &out, std::uint16_t msg_id,
+                                             std::uint16_t frag_idx, std::uint16_t frag_cnt,
+                                             std::span<const std::byte> slice)
+{
+    out.resize(udp_fragment_subheader + slice.size());
+    auto *p = out.data();
+
+    detail::write_u16(p, msg_id);
+    detail::write_u16(p + 2, frag_idx);
+    detail::write_u16(p + 4, frag_cnt);
+
+    if(!slice.empty())
+        std::memcpy(p + udp_fragment_subheader, slice.data(), slice.size());
 }
 
 // Decode the fragment sub-header from an untrusted inner frame (the .frame an unwrap

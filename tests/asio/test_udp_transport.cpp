@@ -24,6 +24,7 @@
 #include "plexus/wire/udp_envelope.h"
 
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/transport_backend.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -161,15 +162,16 @@ TEST_CASE("udp dedup_live: a replayed datagram is dropped — on_data fires once
     REQUIRE(h.received.front() == "replay-me");
 }
 
-TEST_CASE("udp oversize: a frame past max_payload is rejected at publish with a surfaced error",
+TEST_CASE("udp oversize: a message beyond the max-message size is rejected at publish with a surfaced error",
           "[udp][transport]")
 {
     loopback h;
     REQUIRE(h.dialed != nullptr);
 
-    // max_payload default 1400; overhead 3 -> a 1398-byte frame fits, a 1398+ frame
-    // whose enveloped size exceeds 1400 is rejected.
-    std::vector<std::byte> too_big(pasio::udp_channel::default_max_payload, std::byte{0x5A});
+    // A payload merely past the per-datagram budget is now SPLIT across fragments (not
+    // rejected) — the oversize-reject path fires ONLY for a payload beyond the bounded
+    // max-MESSAGE size, the genuinely-too-big case the reassembler cannot hold.
+    std::vector<std::byte> too_big(plexus::io::fragmentation_limits::max_message_size + 1, std::byte{0x5A});
     h.dialed->send(too_big);
     h.pump_until([&] { return h.client_error.has_value(); });
 
@@ -177,7 +179,8 @@ TEST_CASE("udp oversize: a frame past max_payload is rejected at publish with a 
     REQUIRE(*h.client_error == plexus::io::io_error::message_too_large);
     REQUIRE(h.dialed->is_open());     // rejected at publish, channel stays open — not a drop/close
 
-    // A frame that just fits still sends (boundary: size + overhead == max_payload).
+    // A frame that just fits one datagram still sends unfragmented (boundary: size +
+    // overhead == max_payload) — the small path is byte-identical to before.
     h.client_error.reset();
     std::vector<std::byte> fits(pasio::udp_channel::default_max_payload - wire::udp_envelope_overhead, std::byte{0x01});
     h.dialed->send(fits);

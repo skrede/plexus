@@ -249,12 +249,13 @@ TEST_CASE("udp reliable_datagram: a 'udpr' channel delivers in-order over inject
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp reliable_datagram: oversize is rejected at publish on the reliable class too (cross-class)",
+TEST_CASE("udp reliable_datagram: a message beyond the max-message size is rejected at publish (cross-class)",
           "[udp][reliable_datagram][oversize]")
 {
-    // The oversize-reject-at-publish invariant holds on BOTH classes: a reliable send()
-    // past max_payload surfaces message_too_large at publish (the channel stays open),
-    // exactly like the best_effort path — never a silent drop.
+    // The oversize-reject-at-publish invariant holds on BOTH classes for the genuinely-
+    // too-big message: a reliable send() of a payload beyond the bounded max-MESSAGE size
+    // surfaces message_too_large at publish (the channel stays open), exactly like the
+    // best_effort path — never a silent drop. A merely-oversize payload is fragmented.
     ::asio::io_context io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs};
@@ -273,10 +274,10 @@ TEST_CASE("udp reliable_datagram: oversize is rejected at publish on the reliabl
     pump_until(io, [&] { return dialed && accepted; });
     REQUIRE(dialed != nullptr);
 
-    // A frame whose enveloped size (overhead + 1 marker byte) exceeds max_payload is
-    // rejected at publish via on_error(message_too_large) — the reliable class enforces
-    // the same cap as best_effort.
-    std::vector<std::byte> too_big(pasio::udp_channel::default_max_payload, std::byte{0x5A});
+    // A payload beyond the bounded max-MESSAGE size is rejected at publish via
+    // on_error(message_too_large) — the reliable class enforces the same hard ceiling as
+    // best_effort. A merely-oversize-but-fragmentable payload is split, not rejected.
+    std::vector<std::byte> too_big(pio::fragmentation_limits::max_message_size + 1, std::byte{0x5A});
     dialed->send(too_big);     // reliable-mode send dispatches to send_reliable -> oversize reject
     pump_until(io, [&] { return dialed_error.has_value(); });
 

@@ -97,3 +97,14 @@ target_link_libraries(test_udp_reliable_datagram PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_reliable_datagram TEST_PREFIX "udp.")
+
+# Live large-payload fragmentation legs: an oversize payload is split across numbered
+# datagrams and reassembled into ONE message at the peer — best_effort (drop-whole on a
+# lost fragment via the reassembly timeout) and reliable (each fragment ARQ'd above the
+# engine, a lost fragment retransmitted, the message completes byte-equal). Header-only
+# inside plexus::asio; the `udp.` ctest prefix selects it.
+add_executable(test_udp_fragmentation test_udp_fragmentation.cpp)
+target_link_libraries(test_udp_fragmentation PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_fragmentation TEST_PREFIX "udp.")

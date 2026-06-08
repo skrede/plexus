@@ -393,7 +393,7 @@ TEST_CASE("udp reliable_arq: the bounded send window admits up to W then reports
     using engine = pio::detail::udp_reliable_arq<::asio::io_context &, pasio::asio_timer>;
     engine arq{io, pio::detail::udp_arq_config{.window = 4}};
     int transmits = 0;
-    arq.on_transmit([&](std::uint16_t, std::span<const std::byte>) { ++transmits; });
+    arq.on_transmit([&](std::uint16_t, std::span<const std::byte>, bool) { ++transmits; });
 
     auto one = bytes_of("x");
     for(int i = 0; i < 4; ++i)

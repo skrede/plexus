@@ -107,7 +107,9 @@ public:
     {
         for(auto &s : m_slots)
             s.timer = std::make_unique<timer_type>(m_executor);
-        m_recv.on_deliver([this](std::uint16_t, std::span<const std::byte> bytes) {
+        m_recv.on_deliver([this](std::uint16_t seq, std::span<const std::byte> bytes) {
+            if(m_on_deliver_seq)
+                m_on_deliver_seq(seq, bytes);
             if(m_on_deliver)
                 m_on_deliver(bytes);
         });
@@ -116,12 +118,19 @@ public:
     udp_reliable_arq(const udp_reliable_arq &) = delete;
     udp_reliable_arq &operator=(const udp_reliable_arq &) = delete;
 
-    // (re)transmit segment `seq` carrying `payload` (the channel wraps the envelope).
-    void on_transmit(plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> cb) { m_on_transmit = std::move(cb); }
+    // (re)transmit segment `seq` carrying `payload` (the channel wraps the envelope). The
+    // bool tells the channel whether this segment is a fragment of a large message, so it
+    // sets the envelope FRAGMENTED bit on (re)transmit and the peer routes the in-order
+    // payload to the reassembler — the fragmenter sits ABOVE the per-segment ARQ.
+    void on_transmit(plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)> cb) { m_on_transmit = std::move(cb); }
     // send the receiver's cumulative+selective ack back to the sender.
     void on_send_ack(plexus::detail::move_only_function<void(const wire::udp_ack &)> cb) { m_on_send_ack = std::move(cb); }
     // an in-order reliable payload is ready for the application (the channel posts it).
     void on_deliver(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_deliver = std::move(cb); }
+    // the same in-order release, carrying the delivered seq: the channel correlates it
+    // against the per-seq fragmented mark (set when the inbound envelope's FRAGMENTED bit
+    // was seen) to route a reliable fragment to the reassembler instead of straight delivery.
+    void on_deliver_seq(plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> cb) { m_on_deliver_seq = std::move(cb); }
     // the retransmit cap was hit -> the reliable guarantee cannot be met (fatal).
     void on_exhausted(plexus::detail::move_only_function<void()> cb) { m_on_exhausted = std::move(cb); }
     // a cumulative ack slid the base, so the send window freed slots: the congestion=block
@@ -135,7 +144,7 @@ public:
     // Admit a payload into the bounded send window. A full window returns window_full
     // (the congestion path is a later block; this never blocks the io_context). On
     // admit: stamp the next seq, store for retransmit, send, arm the per-segment RTO.
-    submit_result submit(std::span<const std::byte> payload)
+    submit_result submit(std::span<const std::byte> payload, bool fragmented = false)
     {
         if(in_flight() >= m_window)
             return submit_result::window_full;
@@ -145,6 +154,7 @@ public:
         slot.outstanding = true;
         slot.retransmitted = false;
         slot.retransmits = 0;
+        slot.fragmented = fragmented;
         slot.sent_at = clock::now();
         transmit(seq, slot);
         arm(seq);
@@ -197,12 +207,13 @@ private:
         std::uint8_t retransmits{0};
         bool outstanding{false};
         bool retransmitted{false};
+        bool fragmented{false};
     };
 
     void transmit(std::uint16_t seq, slot &s)
     {
         if(m_on_transmit)
-            m_on_transmit(seq, std::span<const std::byte>{s.bytes});
+            m_on_transmit(seq, std::span<const std::byte>{s.bytes}, s.fragmented);
     }
 
     void arm(std::uint16_t seq)
@@ -299,9 +310,10 @@ private:
     std::uint16_t m_base{0};                      // oldest unacked seq (sender)
     udp_rto_estimator m_rto;                      // RFC-6298 SRTT/RTTVAR -> RTO (Karn at the caller)
     bool m_dead{false};
-    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> m_on_transmit;
+    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)> m_on_transmit;
     plexus::detail::move_only_function<void(const wire::udp_ack &)> m_on_send_ack;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_deliver;
+    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> m_on_deliver_seq;
     plexus::detail::move_only_function<void()> m_on_exhausted;
     plexus::detail::move_only_function<void()> m_on_window_advance;
 };
