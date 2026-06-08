@@ -123,8 +123,12 @@ std::uint16_t reserve_closed_port()
 
 template <typename Pred>
 void pump_until(::asio::io_context &io, Pred pred,
-                std::chrono::seconds bound_secs = std::chrono::seconds(5))
+                std::chrono::seconds bound_secs = std::chrono::seconds(30))
 {
+    // A GENEROUS wall-clock backstop, not a tight deadline: the happy path exits the
+    // moment the predicate holds, so widening the bound only keeps a heavily-contended
+    // host from slipping the clock before the (completed-anyway) work is observed. A
+    // genuine regression still fails fast on the predicate never coming true.
     auto bound = std::chrono::steady_clock::now() + bound_secs;
     while(!pred() && std::chrono::steady_clock::now() < bound)
         io.poll();

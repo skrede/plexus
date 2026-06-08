@@ -195,7 +195,13 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::wire
         plexus::asio
         Catch2::Catch2WithMain)
-    catch_discover_tests(test_asio_roundtrip TEST_PREFIX "integration.")
+    # Serialized + RESOURCE_LOCK on the shared loopback resource: this real-TCP leg
+    # (and the other *over asio* legs below) flaked only under contended parallel ctest
+    # -- many real-loopback handshake/reconnect tests piling onto the kernel TCP stack at
+    # once squeezed each test's fixed wall-clock pump deadline. RUN_SERIAL keeps them off
+    # each other; the shared loopback RESOURCE_LOCK keeps them off any other socket leg.
+    catch_discover_tests(test_asio_roundtrip TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
     # The asio control-frame demux smoke test: a frame_header-wrapped subscribe
     # pushed through the real asio reassembler + frame_router over TCP loopback
@@ -303,7 +309,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         plexus::inproc
         Catch2::Catch2WithMain)
-    catch_discover_tests(test_routing_engine_asio TEST_PREFIX "integration.")
+    catch_discover_tests(test_routing_engine_asio TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
     # The gated real-TCP peer-observer behavior oracle: a recording observer on a
     # routing_engine over asio_transport proves the lifecycle + readiness matrix over a
@@ -323,7 +330,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     target_include_directories(test_peer_observer_asio PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/..
         ${CMAKE_CURRENT_SOURCE_DIR})
-    catch_discover_tests(test_peer_observer_asio TEST_PREFIX "integration.")
+    catch_discover_tests(test_peer_observer_asio TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
     # The gated real-TCP reconnect oracle: an established session whose channel
     # drops re-dials + re-handshakes over real loopback; the initial-refused path
@@ -351,7 +359,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         plexus::inproc
         Catch2::Catch2WithMain)
-    catch_discover_tests(test_multipeer_reconnect_asio TEST_PREFIX "integration.")
+    catch_discover_tests(test_multipeer_reconnect_asio TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
     # The gated real-TCP stream-channel hardening leg: a raw client socket writes
     # hostile bytes (a bad-magic run; a header with a withheld payload) into a live

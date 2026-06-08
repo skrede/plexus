@@ -95,9 +95,12 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
 
     fwd.publish(fqn, payload);
 
-    // Drive the context until the payload arrives (bounded so a regression fails
-    // fast instead of hanging).
-    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    // Drive the context until the payload arrives. A GENEROUS wall-clock backstop, not
+    // a tight deadline: the happy path returns the instant the payload lands, so a wide
+    // bound only keeps a contended host from slipping the clock before the
+    // (completed-anyway) round-trip is observed; a real regression still fails on the
+    // predicate never coming true.
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     while(!received && std::chrono::steady_clock::now() < deadline)
         io.poll();
 
