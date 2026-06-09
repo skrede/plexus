@@ -73,3 +73,31 @@ target_link_libraries(test_latch_forwarder PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_latch_forwarder TEST_PREFIX "forwarder.")
+
+# The message_info delivery scaffold: exercises the existing 2-arg deliver and pins
+# the not-yet-built metadata-overload contract RED-now (flipped GREEN by the owning
+# plan). Links the core, wire, and inproc layers; selected by the `forwarder.` ctest
+# prefix and by `ctest -R message_info`.
+add_executable(test_message_info test_message_info.cpp)
+
+target_link_libraries(test_message_info PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_message_info TEST_PREFIX "forwarder.")
+
+# The subscribe-time type_id match scaffold: drives attach_for_fanout and decodes the
+# subscribe_response status. The matching case is GREEN; the mismatch case is RED-now
+# (the type_id compare is activated by the owning plan). Links the core, wire, and
+# inproc layers; selected by the `forwarder.` ctest prefix and by `ctest -R type_id_match`.
+add_executable(test_type_id_match test_type_id_match.cpp)
+
+target_link_libraries(test_type_id_match PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_type_id_match TEST_PREFIX "forwarder.")

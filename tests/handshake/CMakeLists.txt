@@ -35,3 +35,16 @@ target_link_libraries(test_handshake_codec PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_handshake_codec TEST_PREFIX "handshake.")
+
+# The mixed-version interop oracle: a peer whose protocol_version differs from this
+# build's is aborted at the exact-match version gate. Pure FSM logic over the wire
+# value structs, so it links only the header-only core and wire layers. The
+# `handshake.` ctest prefix groups it; `ctest -R interop` selects it by name.
+add_executable(test_version_interop test_version_interop.cpp)
+
+target_link_libraries(test_version_interop PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_version_interop TEST_PREFIX "handshake.")
