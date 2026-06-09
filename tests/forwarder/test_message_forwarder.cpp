@@ -311,7 +311,7 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
     std::string got_body;
     plexus::io::frame_router router;
     router.on_unidirectional([&](const plexus::wire::frame_header &, std::span<const std::byte> inner) {
-        fwd.deliver(peer, inner, [&](std::string_view fqn, std::span<const std::byte> data) {
+        fwd.deliver(peer, inner, /*has_source_identity=*/false, [&](std::string_view fqn, std::span<const std::byte> data) {
             got_fqn.assign(fqn);
             got_body.assign(reinterpret_cast<const char *>(data.data()), data.size());
         });
@@ -350,7 +350,7 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
     std::vector<std::byte> garbage(8, std::byte{0xAB});
 
     bool fired = false;
-    fwd.deliver(peer, garbage, [&](std::string_view, std::span<const std::byte>) { fired = true; });
+    fwd.deliver(peer, garbage, /*has_source_identity=*/false, [&](std::string_view, std::span<const std::byte>) { fired = true; });
 
     REQUIRE_FALSE(fired);           // dropped: no subscriber callback
     REQUIRE(log.count == 1);        // the warn seam fired exactly once
@@ -369,7 +369,7 @@ TEST_CASE("default forwarder drops a malformed frame silently via null_logger", 
     std::vector<std::byte> garbage(8, std::byte{0xAB});
 
     bool fired = false;
-    REQUIRE_NOTHROW(fwd.deliver(peer, garbage, [&](std::string_view, std::span<const std::byte>) {
+    REQUIRE_NOTHROW(fwd.deliver(peer, garbage, /*has_source_identity=*/false, [&](std::string_view, std::span<const std::byte>) {
         fired = true;
     }));
     REQUIRE_FALSE(fired);           // dropped silently, no crash

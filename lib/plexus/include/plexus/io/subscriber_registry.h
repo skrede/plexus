@@ -49,6 +49,15 @@ public:
         // concern) is intentionally not recorded here; matching authority is the
         // type_id alone.
         std::optional<std::uint64_t> producer_type_id;
+        // Producer-declared source-identity carriage (Option 2: producer-offered).
+        // When emit_source_identity is set, this topic's publishes carry the gid flag
+        // + a varint endpoint_counter; the receiver reconstructs publisher_gid as
+        // session.node_id ‖ endpoint_counter. The counter is minted ONCE at the first
+        // such declare (std::nullopt until then) and is STABLE thereafter — it does
+        // NOT change on re-declare or across reconnect (the registry record persists),
+        // so an endpoint's gid is stable per IDENT-02.
+        bool emit_source_identity{false};
+        std::optional<std::uint64_t> endpoint_counter;
     };
 
     // Bump the (peer, fqn) refcount; returns the post-increment count. The 0->1
@@ -108,7 +117,8 @@ public:
     // producer type_id (std::nullopt = undeclared) is recorded alongside the qos —
     // the subscribe-time match authority.
     void declare(std::uint64_t topic_hash, std::string_view fqn, topic_qos qos,
-                 std::optional<std::uint64_t> producer_type_id = std::nullopt)
+                 std::optional<std::uint64_t> producer_type_id = std::nullopt,
+                 bool emit_source_identity = false)
     {
         m_hash_to_fqn[topic_hash] = std::string{fqn};
         auto &entry = m_topics[topic_hash];
@@ -116,6 +126,13 @@ public:
             entry.fqn = std::string{fqn};
         entry.qos = qos;
         entry.producer_type_id = producer_type_id;
+        entry.emit_source_identity = emit_source_identity;
+        // Mint the endpoint counter ONCE, the first time this topic declares source
+        // identity. A re-declare keeps the existing counter so the endpoint's gid is
+        // stable (IDENT-02); the monotonic allocator lives here (a node-level member of
+        // the forwarder-owned registry — no static singleton, no hot-path RNG).
+        if(emit_source_identity && !entry.endpoint_counter)
+            entry.endpoint_counter = m_next_endpoint_counter++;
     }
 
     // The per-topic qos, or a default topic_qos{} when the hash is unknown.
@@ -133,6 +150,17 @@ public:
     {
         auto it = m_topics.find(topic_hash);
         return it == m_topics.end() ? std::nullopt : it->second.producer_type_id;
+    }
+
+    // The source-identity endpoint counter to emit for a topic, or std::nullopt when
+    // the topic did not declare source identity (so publish emits 0 B and a byte-
+    // identical v3-no-flag frame). Engaged iff the producer declared emit_source_identity.
+    std::optional<std::uint64_t> source_identity_counter(std::uint64_t topic_hash) const
+    {
+        auto it = m_topics.find(topic_hash);
+        if(it == m_topics.end() || !it->second.emit_source_identity)
+            return std::nullopt;
+        return it->second.endpoint_counter;
     }
 
     // Drop one peer's fan-out entry for an fqn.
@@ -177,6 +205,10 @@ private:
     std::unordered_map<std::uint64_t, topic_entry> m_topics;
     std::unordered_map<std::uint64_t, std::string> m_hash_to_fqn;
     std::unordered_map<std::string, std::unordered_map<std::string, std::uint32_t>> m_refcount;
+    // The per-node monotonic source-identity endpoint-counter allocator. Minted at
+    // declare (cold path), never on the hot path. Starts at 1 so 0 stays free as an
+    // "unminted" value if ever needed; gid uniqueness comes from node_id ‖ counter.
+    std::uint64_t m_next_endpoint_counter{1};
 };
 
 }

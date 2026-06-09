@@ -22,6 +22,7 @@ endfunction()
 
 plexus_add_fuzz_target(fuzz_frame_reassembler)
 plexus_add_fuzz_target(fuzz_data_frame)
+plexus_add_fuzz_target(fuzz_varint)
 plexus_add_fuzz_target(fuzz_rpc_frame)
 plexus_add_fuzz_target(fuzz_handshake_frame)
 

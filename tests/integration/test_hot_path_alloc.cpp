@@ -170,17 +170,46 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
     std::size_t seen = 0;
     auto on_message = [&](std::string_view, std::span<const std::byte>, const io::message_info &) { ++seen; };
 
+    // The session peer's node_id (the gid's node_id half on reconstruction).
+    node_id src{};
+    src[15] = std::byte{0x5A};
+
+    // --- bytes-only path (gid flag clear) ---
     // Warm-up: one deliver exercises any first-touch growth in the resolution path.
-    fwd.deliver(peer, inner, info, on_message);
+    fwd.deliver(peer, inner, info, src, /*has_source_identity=*/false, on_message);
 
     plexus::testing::reset_alloc_count();
-    const auto before = plexus::testing::alloc_count();
+    auto before = plexus::testing::alloc_count();
     for(int i = 0; i < K; ++i)
-        fwd.deliver(peer, inner, info, on_message);
-    const auto after = plexus::testing::alloc_count();
+        fwd.deliver(peer, inner, info, src, /*has_source_identity=*/false, on_message);
+    auto after = plexus::testing::alloc_count();
 
     REQUIRE(seen == static_cast<std::size_t>(K) + 1);   // every deliver reached the callback
     REQUIRE(after - before == 0);                       // zero allocation across the steady-state loop
+
+    // --- source-identity path (gid flag set) ---
+    // The inner now carries a varint endpoint counter; deliver decodes it and constructs
+    // the publisher_gid IN-PLACE into the stack message_info — the reconstruction must add
+    // zero steady-state heap, same as the bytes-only path.
+    auto inner_gid = wire::encode_unidirectional(uhdr, as_bytes(payload), std::uint64_t{0x1234});
+    std::size_t gid_seen = 0;
+    bool gid_ok = true;
+    auto on_gid = [&](std::string_view, std::span<const std::byte>, const io::message_info &mi) {
+        ++gid_seen;
+        if(!mi.source_identity || mi.source_identity->endpoint_counter() != 0x1234)
+            gid_ok = false;
+    };
+    fwd.deliver(peer, inner_gid, info, src, /*has_source_identity=*/true, on_gid);   // warm-up
+
+    plexus::testing::reset_alloc_count();
+    before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+        fwd.deliver(peer, inner_gid, info, src, /*has_source_identity=*/true, on_gid);
+    after = plexus::testing::alloc_count();
+
+    REQUIRE(gid_seen == static_cast<std::size_t>(K) + 1);
+    REQUIRE(gid_ok);                  // every delivery reconstructed the gid
+    REQUIRE(after - before == 0);     // gid reconstruction is zero steady-state heap
 }
 
 #ifdef PLEXUS_HAVE_ASIO_MUX

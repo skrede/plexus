@@ -99,6 +99,10 @@ struct link
         transport.on_accepted([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
             resp_ctx.channel = std::move(ch);
             resp_ctx.node_name = "requester-node";
+            // The reconciled peer identity (the registry sets this from the slot key; on a
+            // real accepter it is the post-inbound-reconciliation value). Pinned here so the
+            // source-identity gid reconstructs against the true peer node_id.
+            resp_ctx.peer_id = make_cfg(0x02).self_id;   // the requester's node_id
             responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout,
                               resp_messages, resp_procedures, true);
             responder->on_message([this](std::string_view, std::span<const std::byte> d) {
@@ -109,6 +113,7 @@ struct link
         transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &) {
             req_ctx.channel = std::move(ch);
             req_ctx.node_name = "responder-node";
+            req_ctx.peer_id = make_cfg(0x01).self_id;   // the responder's node_id (the dialed peer)
             requester.emplace(req_ctx, ex, make_cfg(0x02), timeout,
                               req_messages, req_procedures, false);
             requester->on_message([this](std::string_view, std::span<const std::byte> d) {
@@ -261,6 +266,53 @@ TEST_CASE("inproc peer_session: the opt-in 3-arg callback delivers a message_inf
         CHECK(got.source_timestamp != 0);
         CHECK(got.reception_timestamp >= got.source_timestamp);
         CHECK_FALSE(got.source_identity.has_value());
+        ++delivered;
+    }
+    REQUIRE(delivered == k_iterations);
+}
+
+TEST_CASE("inproc peer_session: a source-identity publish populates message_info.source_identity end-to-end, looped",
+          "[integration][peer_session][inproc][message_info][gid]")
+{
+    // End-to-end through the real session deliver path: deliver_data reads the gid flag
+    // from the live frame_header and reconstructs publisher_gid{ m_ctx.peer_id, counter }.
+    // The DIALER (requester) receives — the canonical demand flow (a subscriber dials the
+    // publisher), where peer_id is the true dialed peer id. The responder is the producer.
+    constexpr int k_iterations = 100;
+    const std::string payload = "attributed-bytes";
+    const auto producer_id = make_cfg(0x01).self_id;   // the responder's node_id
+    int delivered = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        link l;
+        l.drive();
+
+        plexus::io::message_info got{};
+        bool got_one = false;
+        l.requester->on_message_with_info(
+            [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi) {
+                got = mi;
+                got_one = true;
+                l.req_received.emplace_back(to_string(d));
+            });
+
+        // The responder is the producer: it declares source identity for the topic, fans
+        // it toward the requester, and the requester subscribes.
+        l.resp_messages.declare("topic", plexus::topic_qos{}, std::nullopt, /*emit_source_identity=*/true);
+        REQUIRE(l.req_messages.attach(l.requester->msg_peer(), "topic"));
+        REQUIRE(l.resp_messages.attach_for_fanout(l.responder->msg_peer(), "topic"));
+        l.drive();
+        l.resp_messages.publish("topic", as_bytes(payload), l.responder->session_id());
+        l.drive();
+
+        REQUIRE(got_one);
+        REQUIRE(l.req_received.size() == 1);
+        REQUIRE(l.req_received[0] == payload);
+        REQUIRE(got.source_identity.has_value());
+        // The node_id half is the PINNED session peer (the producer), NOT taken from the
+        // frame; the counter half is the producer's minted endpoint counter.
+        CHECK(got.source_identity->node_id() == producer_id);
+        CHECK(got.source_identity->endpoint_counter() != 0);
         ++delivered;
     }
     REQUIRE(delivered == k_iterations);

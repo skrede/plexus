@@ -6,7 +6,9 @@
 #include "plexus/io/null_logger.h"
 #include "plexus/io/locality.h"
 #include "plexus/wire_bytes.h"
+#include "plexus/publisher_gid.h"
 #include "plexus/topic_qos.h"
+#include "plexus/node_id.h"
 #include "plexus/policy.h"
 #include "plexus/log/logger.h"
 
@@ -121,11 +123,17 @@ public:
     // topic retains its last published frame and replays it to late subscribers.
     // An optional producer type_id (std::nullopt = undeclared) is the subscribe-time
     // match authority: a subscriber declaring a different type_id is refused with
-    // type_mismatch. The hot publish(fqn, bytes) signature is unchanged.
+    // type_mismatch. emit_source_identity (Option 2: producer-offered) opts this topic
+    // into per-frame source-identity carriage — its publishes set the gid flag and
+    // carry a varint endpoint counter the receiver pairs with the session peer's
+    // node_id; a subscriber-side "require source identity" RxO refusal is a Phase 26
+    // concern (see the multi-publisher-semantics seed). The hot publish(fqn, bytes)
+    // signature is unchanged.
     void declare(std::string_view fqn, topic_qos qos,
-                 std::optional<std::uint64_t> producer_type_id = std::nullopt)
+                 std::optional<std::uint64_t> producer_type_id = std::nullopt,
+                 bool emit_source_identity = false)
     {
-        m_registry.declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id);
+        m_registry.declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id, emit_source_identity);
     }
 
     // latch: convenience for declare(fqn, {.latch = true, .depth = 1}).
@@ -157,14 +165,20 @@ public:
                 .sequence   = m_next_sequence++,
                 .topic_hash = hash
         };
+        // Source identity (Option 2: producer-offered). When this topic declared
+        // emit_source_identity, frame the gid flag + a varint endpoint counter; the
+        // receiver reconstructs publisher_gid as session.node_id ‖ counter. Absent →
+        // 0 B and a byte-identical v3-no-flag frame. Per-topic, decided at framing
+        // time, so the frame-ONCE-fan-to-N invariant holds (one buffer for all subs).
+        const auto counter = m_registry.source_identity_counter(hash);
         // Frame ONCE into the reused scratch buffers: after the first publish
         // grows them, resize() reuses capacity so steady-state publishes do not
         // allocate (the SLICE-3 no-hot-path-allocation property, designed in here).
-        wire::encode_unidirectional_into(m_inner_scratch, uhdr, payload);
+        wire::encode_unidirectional_into(m_inner_scratch, uhdr, payload, counter);
 
         wire::frame_header fhdr{
                 .type         = wire::msg_type::unidirectional,
-                .flags        = 0,
+                .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
                 .session_id   = session_id,
                 .timestamp_ns = wire::now_timestamp_ns(),
                 .payload_len  = m_inner_scratch.size()
@@ -242,10 +256,15 @@ public:
     // topic_hash — is warn-and-DROPPED through the injected logger&: never thrown,
     // never propagated, never crashed.
     template <typename OnMessage>
-    void deliver(const peer &p, std::span<const std::byte> inner, OnMessage &&on_message)
+    void deliver(const peer &p, std::span<const std::byte> inner, bool has_source_identity,
+                 OnMessage &&on_message)
     {
         (void)p;   // identity symmetry with the procedure receive tail; resolution is by topic_hash
-        auto decoded = wire::decode_unidirectional(inner);
+        // has_source_identity mirrors the frame's gid flag. The bytes-only tail discards
+        // the counter, but it MUST still pass the flag: the producer emits the varint per
+        // ITS topic declaration, independent of which receive callback is set, so the data
+        // span is only correct when the flag is honored on decode.
+        auto decoded = wire::decode_unidirectional(inner, has_source_identity);
         if(!decoded)
             return drop("plexus: forwarder unidirectional_decode_failed");
 
@@ -258,24 +277,26 @@ public:
 
     // The metadata-bearing receive tail: identical resolution to the 2-arg deliver, but
     // it finishes the message_info the session began at on_receive (where the now-stripped
-    // frame_header was live) and hands it to a 3-arg callback. The forwarder fills only
-    // publication_sequence — the one metadata field carried INSIDE the inner payload it
-    // alone decodes; the header-derived fields (source_timestamp, reception_timestamp,
-    // from_intra_process) were already stamped by the session.
+    // frame_header was live) and hands it to a 3-arg callback. The forwarder fills
+    // publication_sequence (carried INSIDE the inner payload it alone decodes) and, when
+    // the gid flag rode the frame, source_identity; the header-derived fields
+    // (source_timestamp, reception_timestamp, from_intra_process) were already stamped by
+    // the session.
     //
-    // source_identity stays std::nullopt: the gid does not yet ride the wire. The
-    // direct-delivery invariant the gid will rest on (source == the session peer at the
-    // other end of THIS channel; the forwarder fans to subscribed channels and never
-    // relays across peer boundaries) is what will let the receiver reconstruct the gid
-    // from the session node_id without trusting a per-frame node_id. A future relay or
-    // store-and-forward topology would break that invariant and must carry full origin
-    // identity locally on those frames.
+    // DIRECT-DELIVERY INVARIANT (the gid rests on it): the gid's node_id half is the
+    // PINNED session peer's node_id (source_node_id) — the peer at the other end of THIS
+    // channel — NOT a node_id taken from the frame. The forwarder fans to subscribed
+    // channels and never relays across peer boundaries, so source == the session peer;
+    // the wire therefore carries only the endpoint counter, and a peer can claim counters
+    // ONLY within its own node_id namespace (structural anti-spoof — a forged counter
+    // cannot impersonate another node). A future relay/bridge/store-and-forward topology
+    // would break this invariant and MUST carry full origin identity locally on those frames.
     template <typename OnMessage>
     void deliver(const peer &p, std::span<const std::byte> inner, message_info info,
-                 OnMessage &&on_message)
+                 const node_id &source_node_id, bool has_source_identity, OnMessage &&on_message)
     {
         (void)p;   // identity symmetry with the procedure receive tail; resolution is by topic_hash
-        auto decoded = wire::decode_unidirectional(inner);
+        auto decoded = wire::decode_unidirectional(inner, has_source_identity);
         if(!decoded)
             return drop("plexus: forwarder unidirectional_decode_failed");
 
@@ -284,6 +305,8 @@ public:
             return drop("plexus: forwarder topic_unknown_for_data");
 
         info.publication_sequence = decoded->header.sequence;
+        if(decoded->endpoint_counter)
+            info.source_identity = publisher_gid{source_node_id, *decoded->endpoint_counter};
         on_message(fqn, decoded->data, info);
     }
 

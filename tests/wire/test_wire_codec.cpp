@@ -182,6 +182,65 @@ TEST_CASE("unidirectional round-trip preserves fields and data", "[wire][data]")
     CHECK(decoded->data[2] == std::byte{0x03});
 }
 
+TEST_CASE("unidirectional round-trips a flag-gated source-identity counter", "[wire][data][gid]")
+{
+    unidirectional_header hdr{
+        .source     = endpoint_source_type::publisher,
+        .sequence   = 7,
+        .topic_hash = 0xCAFE
+    };
+    std::vector<std::byte> data{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}};
+    constexpr std::uint64_t counter = 0x1234;   // a multi-byte varint
+
+    auto encoded = encode_unidirectional(hdr, data, counter);
+    auto decoded = decode_unidirectional(encoded, /*has_source_identity=*/true);
+
+    REQUIRE(decoded.has_value());
+    REQUIRE(decoded->endpoint_counter.has_value());
+    CHECK(*decoded->endpoint_counter == counter);
+    CHECK(decoded->header.topic_hash == 0xCAFE);
+    REQUIRE(decoded->data.size() == 3);
+    CHECK(decoded->data[0] == std::byte{0xAA});
+    CHECK(decoded->data[2] == std::byte{0xCC});
+}
+
+TEST_CASE("unidirectional flag-clear encode is byte-identical to a no-counter frame", "[wire][data][gid]")
+{
+    unidirectional_header hdr{
+        .source     = endpoint_source_type::publisher,
+        .sequence   = 42,
+        .topic_hash = 0xDEAD
+    };
+    std::vector<std::byte> data{std::byte{0x01}, std::byte{0x02}};
+
+    auto without = encode_unidirectional(hdr, data);                // no counter argument
+    auto clear   = encode_unidirectional(hdr, data, std::nullopt);  // explicitly absent
+    CHECK(without == clear);
+
+    // Flag-clear decode yields no counter and the data immediately after the 17B header.
+    auto decoded = decode_unidirectional(without);
+    REQUIRE(decoded.has_value());
+    CHECK_FALSE(decoded->endpoint_counter.has_value());
+    REQUIRE(decoded->data.size() == 2);
+}
+
+TEST_CASE("unidirectional decode rejects a truncated source-identity region", "[wire][data][gid]")
+{
+    unidirectional_header hdr{
+        .source     = endpoint_source_type::publisher,
+        .sequence   = 1,
+        .topic_hash = 0xBEEF
+    };
+    // A 17B header followed by a lone continuation byte (0x80) with no terminator:
+    // read_varint must return nullopt, so the whole decode fails (warn-and-drop) —
+    // never an over-read past the buffer.
+    std::vector<std::byte> truncated = encode_unidirectional(hdr, {});
+    truncated.push_back(std::byte{0x80});
+
+    auto decoded = decode_unidirectional(truncated, /*has_source_identity=*/true);
+    CHECK_FALSE(decoded.has_value());
+}
+
 TEST_CASE("bidirectional round-trip preserves all fields", "[wire][data]")
 {
     bidirectional_header hdr{

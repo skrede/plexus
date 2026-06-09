@@ -237,26 +237,32 @@ private:
     // timestamp; reception_timestamp is receiver-stamped from the same clock the codec
     // uses (so it is monotonic with respect to the publisher's stamp); from_intra_process
     // is derived honestly from THIS channel's own endpoint scheme (true only on a genuine
-    // same-process inproc delivery, never from peer-supplied data). source_identity stays
-    // absent until the gid rides the wire. publication_sequence is filled by the forwarder,
-    // which owns the inner-payload decode. When the opt-in 3-arg callback is set it takes
+    // same-process inproc delivery, never from peer-supplied data). publication_sequence
+    // and source_identity are filled by the forwarder, which owns the inner-payload decode.
+    //
+    // has_source_identity is read from the gid flag and passed to BOTH deliver paths: the
+    // producer emits the varint counter per ITS topic declaration, so even the bytes-only
+    // 2-arg path must honor the flag to land the data span correctly. The gid's node_id
+    // half is m_ctx.peer_id — the PINNED session peer (the direct-delivery invariant) —
+    // never a node_id taken from the frame. When the opt-in 3-arg callback is set it takes
     // precedence; otherwise the unchanged 2-arg path runs.
     void deliver_data(const wire::frame_header &hdr, std::span<const std::byte> inner)
     {
+        const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
         if(m_on_message_with_info)
         {
             message_info info{};
             info.source_timestamp    = hdr.timestamp_ns;
             info.reception_timestamp = wire::now_timestamp_ns();
             info.from_intra_process  = tier_of(m_channel.remote_endpoint().scheme) == locality::process;
-            m_messages.deliver(m_msg_peer, inner, info,
+            m_messages.deliver(m_msg_peer, inner, info, m_ctx.peer_id, has_source_identity,
                                [this](std::string_view fqn, std::span<const std::byte> data,
                                       const message_info &mi) {
                                    m_on_message_with_info(fqn, data, mi);
                                });
             return;
         }
-        m_messages.deliver(m_msg_peer, inner,
+        m_messages.deliver(m_msg_peer, inner, has_source_identity,
                            [this](std::string_view fqn, std::span<const std::byte> data) {
                                if(m_on_message)
                                    m_on_message(fqn, data);

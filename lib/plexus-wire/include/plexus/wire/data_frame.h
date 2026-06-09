@@ -3,6 +3,7 @@
 
 #include "plexus/wire/byte_order.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/varint.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -43,6 +44,11 @@ struct bidirectional_header
 struct unidirectional_decode_result
 {
     unidirectional_header header;
+    // The decoded source-identity endpoint counter, present iff the caller decoded
+    // with has_source_identity (the frame's gid flag was set). The receiver pairs it
+    // with the session peer's node_id to reconstruct the publisher_gid; absent leaves
+    // message_info.source_identity unset.
+    std::optional<std::uint64_t> endpoint_counter;
     std::span<const std::byte> data;
 };
 
@@ -52,42 +58,53 @@ struct bidirectional_decode_result
     std::span<const std::byte> data;
 };
 
-inline std::vector<std::byte> encode_unidirectional(const unidirectional_header &hdr, std::span<const std::byte> data)
-{
-    std::vector<std::byte> buf(unidirectional_header_size + data.size());
-    auto *p = buf.data();
-
-    detail::write_u8(p, static_cast<uint8_t>(hdr.source));
-    detail::write_u64(p + 1, hdr.sequence);
-    detail::write_u64(p + 9, hdr.topic_hash);
-
-    if(!data.empty())
-        std::memcpy(p + unidirectional_header_size, data.data(), data.size());
-
-    return buf;
-}
-
 // Encode a unidirectional frame into a caller-owned buffer reused across calls.
 // resize() reuses the buffer's capacity, so a steady-state loop that frames into
 // the same out vector allocates nothing after the warm-up grow — the building
-// block of the forwarder's no-hot-path-allocation fan-out (the allocating return
-// overload above stays for one-shot callers).
+// block of the forwarder's no-hot-path-allocation fan-out.
+//
+// endpoint_counter is the flag-gated source-identity region: when present, a varint
+// endpoint counter nests between the fixed 17B header and the data (inside
+// payload_len), and the caller sets frame_header.flags |= k_flag_source_identity.
+// Absent → byte-identical to a v3-no-flag frame. write_varint/insert reuse the
+// buffer's existing capacity, so the no-alloc property holds in both shapes.
 inline void encode_unidirectional_into(std::vector<std::byte> &out,
                                        const unidirectional_header &hdr,
-                                       std::span<const std::byte> data)
+                                       std::span<const std::byte> data,
+                                       std::optional<std::uint64_t> endpoint_counter = std::nullopt)
 {
-    out.resize(unidirectional_header_size + data.size());
+    out.resize(unidirectional_header_size);
     auto *p = out.data();
 
     detail::write_u8(p, static_cast<uint8_t>(hdr.source));
     detail::write_u64(p + 1, hdr.sequence);
     detail::write_u64(p + 9, hdr.topic_hash);
 
-    if(!data.empty())
-        std::memcpy(p + unidirectional_header_size, data.data(), data.size());
+    if(endpoint_counter)
+        write_varint(out, *endpoint_counter);
+    out.insert(out.end(), data.begin(), data.end());
 }
 
-inline std::optional<unidirectional_decode_result> decode_unidirectional(std::span<const std::byte> payload)
+// One-shot allocating overload for callers that do not reuse a buffer; delegates to
+// the reusing _into form so the layout (incl. the flag-gated counter) lives in ONE place.
+inline std::vector<std::byte> encode_unidirectional(const unidirectional_header &hdr,
+                                                    std::span<const std::byte> data,
+                                                    std::optional<std::uint64_t> endpoint_counter = std::nullopt)
+{
+    std::vector<std::byte> out;
+    encode_unidirectional_into(out, hdr, data, endpoint_counter);
+    return out;
+}
+
+// Decode a unidirectional payload. has_source_identity MUST mirror the frame's gid
+// flag (k_flag_source_identity in frame_header.flags): when set, a varint endpoint
+// counter follows the fixed header and is decoded through the bounds-safe read_varint
+// (a truncated or over-long region returns nullopt → the whole decode fails, the
+// warn-and-drop path). When clear, the data begins immediately after the 17B header
+// (the v3-no-flag layout). Both the gid-bearing and the bytes-only receive tails
+// pass the flag so the data span is correct regardless of which callback is set.
+inline std::optional<unidirectional_decode_result>
+decode_unidirectional(std::span<const std::byte> payload, bool has_source_identity = false)
 {
     if(payload.size() < unidirectional_header_size)
         return std::nullopt;
@@ -99,9 +116,21 @@ inline std::optional<unidirectional_decode_result> decode_unidirectional(std::sp
             .topic_hash = detail::read_u64(p + 9)
     };
 
+    if(!has_source_identity)
+        return unidirectional_decode_result{
+                .header           = hdr,
+                .endpoint_counter = std::nullopt,
+                .data             = payload.subspan(unidirectional_header_size)
+        };
+
+    std::size_t consumed = unidirectional_header_size;
+    auto counter = read_varint(payload, consumed);
+    if(!counter)
+        return std::nullopt;
     return unidirectional_decode_result{
-            .header = hdr,
-            .data   = payload.subspan(unidirectional_header_size)
+            .header           = hdr,
+            .endpoint_counter = counter,
+            .data             = payload.subspan(consumed)
     };
 }
 
