@@ -134,6 +134,43 @@ TEST_CASE("steady-state publish->frame-once->fan-out loop is zero-alloc", "[inte
     REQUIRE(after - before == 0); // zero allocation across the steady-state loop
 }
 
+// The KEEP_LAST-N history-ring retain path is ALSO zero-alloc after warm-up: a
+// latched topic of depth N pushes each framed buffer into a ring of N owned slots,
+// reusing each slot's grown capacity via assign(). Once every slot has been touched
+// once (the warm-up publishes at least N frames), the steady-state push allocates
+// zero — the same determinism invariant the depth-1 latch obeys, proven at N slots.
+TEST_CASE("steady-state depth-N history-ring retain is zero-alloc", "[integration]")
+{
+    using forwarder = io::message_forwarder<sink_policy>;
+
+    constexpr std::uint32_t N = 8;   // ring depth
+    constexpr int K = 1024;          // steady-state message count
+    const std::string fqn = "demo._plexus._tcp.local.";
+    const std::string payload = "deterministic-steady-state-payload";
+
+    sink_executor ex;
+    sink_channel ch(ex);
+    forwarder::peer peer{ch, "node-a"};
+
+    forwarder fwd;
+    fwd.declare(fqn, topic_qos{.latch = true, .depth = N});
+    fwd.attach(peer, fqn);
+
+    // Warm-up: publish N times so EVERY ring slot's vector grows once.
+    for(std::uint32_t i = 0; i < N; ++i)
+        fwd.publish(fqn, as_bytes(payload));
+    const auto sends_before = ch.sends;
+
+    plexus::testing::reset_alloc_count();
+    const auto before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+        fwd.publish(fqn, as_bytes(payload));
+    const auto after = plexus::testing::alloc_count();
+
+    REQUIRE(ch.sends - sends_before == static_cast<std::size_t>(K));   // every publish fanned out
+    REQUIRE(after - before == 0);   // framing + N-slot ring push: zero alloc after warm-up
+}
+
 // The message_info delivery path is ALSO zero-alloc after warm-up: the 3-arg deliver
 // resolves the fqn by topic_hash and hands a STACK message_info to the callback. The
 // info is a POD assembled on the stack (no heap), the callback is captured ONCE outside

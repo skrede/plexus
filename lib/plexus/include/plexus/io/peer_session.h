@@ -22,6 +22,7 @@
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/fetch_latched.h"
 
 #include "plexus/detail/compat.h"
 
@@ -220,6 +221,13 @@ private:
                                                             : subscriber_qos{};
                 m_messages.attach_for_fanout(m_msg_peer, req->fqn, subscriber_type_id, sub_qos);
             }
+        });
+        m_router.on_fetch_latched([this](std::span<const std::byte> inner) {
+            // The consumer-paced PULL: decode the request and replay the capped
+            // retained window to THIS requesting peer. The reply is the data frames
+            // themselves, so no reply control frame is sent.
+            if(auto req = wire::decode_fetch_latched_request(inner))
+                m_messages.fetch_latched(m_msg_peer, req->topic_hash, req->max_samples);
         });
         m_router.on_subscribe_response([this](std::span<const std::byte> inner) {
             on_subscribe_response_received(inner);

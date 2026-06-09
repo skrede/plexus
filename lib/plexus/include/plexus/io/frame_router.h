@@ -47,6 +47,7 @@ public:
 
     void on_unidirectional(data_consumer c) { m_unidirectional = std::move(c); }
     void on_subscribe(consumer c) { m_subscribe = std::move(c); }
+    void on_fetch_latched(consumer c) { m_fetch_latched = std::move(c); }
     void on_unsubscribe(consumer c) { m_unsubscribe = std::move(c); }
     void on_subscribe_response(consumer c) { m_subscribe_response = std::move(c); }
     void on_rpc_request(consumer c) { m_rpc_request = std::move(c); }
@@ -74,6 +75,7 @@ private:
         {
             case wire::msg_type::unidirectional:     return fire_data(hdr, inner);
             case wire::msg_type::subscribe:          return fire(m_subscribe, inner);
+            case wire::msg_type::fetch_latched:      return fire(m_fetch_latched, inner);
             case wire::msg_type::unsubscribe:        return fire(m_unsubscribe, inner);
             case wire::msg_type::subscribe_response: return fire(m_subscribe_response, inner);
             case wire::msg_type::rpc_request:        return fire(m_rpc_request, inner);
@@ -103,6 +105,7 @@ private:
     log::logger &m_logger;
     data_consumer m_unidirectional;
     consumer m_subscribe;
+    consumer m_fetch_latched;
     consumer m_unsubscribe;
     consumer m_subscribe_response;
     consumer m_rpc_request;

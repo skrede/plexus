@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_MESSAGE_FORWARDER_H
 
 #include "plexus/io/subscriber_registry.h"
+#include "plexus/io/detail/history_ring.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/null_logger.h"
@@ -18,6 +19,7 @@
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/fetch_latched.h"
 
 #include "plexus/detail/compat.h"
 
@@ -28,6 +30,7 @@
 #include <cstdint>
 #include <utility>
 #include <optional>
+#include <algorithm>
 #include <string_view>
 #include <unordered_map>
 
@@ -69,6 +72,19 @@ inline subscriber_qos from_wire_region(const wire::subscribe_qos_region &r)
             .requested_lease_ns    = r.requested_lease_ns,
             .requested_priority    = r.requested_priority};
 }
+
+// The hard cap on a latched topic's history depth (the KEEP_LAST-N ring capacity).
+// A publisher-declared depth is an attacker-controlled count and N x max_payload is
+// a resource-exhaustion vector, so the ring capacity is clamped to [1, this]; with
+// max_payload itself bounded by the reassembler ceiling, the retained memory is
+// bounded.
+constexpr std::size_t k_history_depth_cap = 1024;
+
+// The server-side hard cap on a fetch_latched (PULL) reply. max_samples arrives from
+// an unverified peer, so the reply is capped at min(max_samples, ring.count(), this)
+// — a huge or wrapping max_samples can never force more than count (<= N <= the
+// history cap) sends, each walking only an owned, already-allocated ring frame.
+constexpr std::size_t k_fetch_cap = 1024;
 
 // The slice's payload-opaque pub/sub engine: a header-only forwarder templated
 // on the Policy seam that fans opaque wire_bytes over byte_channels. A "peer" is
@@ -348,6 +364,22 @@ public:
         on_message(fqn, decoded->data, info);
     }
 
+    // fetch_latched: the consumer-paced PULL reply. Replay up to
+    // min(max_samples, ring.count(), k_fetch_cap) retained frames — the most-recent
+    // that many, oldest->newest — to the REQUESTING peer's channel ONLY (never the
+    // fan-out loop). max_samples is attacker-controlled, so the cap bounds the reply
+    // to owned, already-allocated ring frames; an unknown/unlatched/empty topic
+    // sends zero frames (no crash).
+    void fetch_latched(const peer &p, std::uint64_t topic_hash, std::uint32_t max_samples)
+    {
+        auto it = m_retained.find(topic_hash);
+        if(it == m_retained.end() || it->second.empty())
+            return;
+        const std::size_t limit =
+            std::min<std::size_t>({static_cast<std::size_t>(max_samples), it->second.count(), k_fetch_cap});
+        replay_window(p, it->second, limit);
+    }
+
 private:
     // Wrap an inner control payload in a frame_header (Seed 3 — every control
     // frame carries the same framing as data so it survives a real reassembler-
@@ -367,29 +399,31 @@ private:
         channel.send(m_control_scratch);
     }
 
-    // retain_if_latched: on a latched publish, assign() the just-framed complete
-    // frame into the per-topic retained slot. assign() reuses a slot grown by a
-    // prior retain — alloc-free after warm-up (the scratch-buffer trick). depth=1:
-    // one slot, replaced each latched publish — multi-publisher to one latched
-    // topic is last-writer-wins per topic_hash. The slot OWNS its bytes; it never
-    // aliases m_frame_scratch (the next publish overwrites that).
+    // retain_if_latched: on a latched publish, push the just-framed complete frame
+    // into the per-topic KEEP_LAST-N history ring. The ring is sized ONCE from the
+    // declared depth (clamped to [1, k_history_depth_cap] so N x max_payload cannot
+    // be driven to OOM by a careless/hostile declare), then push() reuses each slot's
+    // grown capacity — alloc-free after warm-up. A capacity-1 ring is byte-identical
+    // to the pre-ring single slot: last-writer-wins per topic_hash. The ring slots
+    // OWN their bytes; they never alias m_frame_scratch (the next publish overwrites).
     void retain_if_latched(std::uint64_t hash)
     {
         if(!m_registry.qos_for(hash).latch)
             return;
-        auto &slot = m_retained[hash];
-        slot.assign(m_frame_scratch.begin(), m_frame_scratch.end());
+        auto &ring = m_retained[hash];
+        ring.resize_to(std::clamp<std::size_t>(m_registry.qos_for(hash).depth, 1, k_history_depth_cap));
+        ring.push(m_frame_scratch);
     }
 
-    // replay_if_latched: when a new subscriber attaches to a latched topic that has
-    // a frame retained, PUSH that frame to ONLY the new peer (not the fan-out loop)
-    // as an ordinary data frame, after the subscribe_response. A latched-but-never-
+    // replay_if_latched: when a new subscriber attaches to a latched topic with a
+    // retained history, PUSH frames to ONLY the new peer (not the fan-out loop) as
+    // ordinary data frames, after the subscribe_response. A latched-but-never-
     // published topic retains nothing, so it replays nothing.
     //
     // The new subscriber's stored durability choice gates the replay: `none` declines
-    // every retained frame; `latest` takes the single retained slot; `all` takes the
-    // retained history (the multi-slot history replay is built on the retained ring —
-    // here it behaves as `latest` against the depth-1 slot until that ring lands).
+    // every retained frame; `latest` takes the single newest frame; `all` takes the
+    // retained history oldest->newest, capped to the most-recent replay_depth frames
+    // when that is non-zero (min(count, replay_depth)).
     void replay_if_latched(const peer &p, std::uint64_t hash)
     {
         if(!m_registry.qos_for(hash).latch)
@@ -397,15 +431,34 @@ private:
         auto it = m_retained.find(hash);
         if(it == m_retained.end() || it->second.empty())
             return;
-        switch(m_registry.qos_for_subscriber(hash, p.channel).durability_mode)
+        const subscriber_qos sub = m_registry.qos_for_subscriber(hash, p.channel);
+        switch(sub.durability_mode)
         {
         case durability::none:
             return;
         case durability::latest:
+            p.channel.send(it->second.newest());
+            return;
         case durability::all:
-            p.channel.send(it->second);
+        {
+            const std::size_t count = it->second.count();
+            const std::size_t limit = sub.replay_depth
+                                          ? std::min<std::size_t>(count, sub.replay_depth)
+                                          : count;
+            replay_window(p, it->second, limit);
             return;
         }
+        }
+    }
+
+    // Send the most-recent `limit` frames of a ring to one peer, oldest->newest. The
+    // shared replay window for durability=all and the fetch_latched PULL reply: both
+    // walk only owned, already-allocated ring frames to the requesting peer's channel.
+    void replay_window(const peer &p, const detail::history_ring &ring, std::size_t limit)
+    {
+        const std::size_t count = ring.count();
+        for(std::size_t i = count - limit; i < count; ++i)
+            p.channel.send(ring.oldest_to_newest(i));
     }
 
     // type_id_mismatch: a refusal is warranted only when BOTH the producer and the
@@ -476,7 +529,7 @@ private:
     std::vector<std::byte> m_inner_scratch;
     std::vector<std::byte> m_frame_scratch;
     std::vector<std::byte> m_control_scratch;
-    std::unordered_map<std::uint64_t, std::vector<std::byte>> m_retained;
+    std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     std::uint64_t m_next_sequence{0};
 };
 

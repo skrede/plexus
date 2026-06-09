@@ -117,3 +117,35 @@ target_link_libraries(test_durability_replay PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_durability_replay TEST_PREFIX "forwarder.")
+
+# The KEEP_LAST-N history-ring oracle: durability=all on a depth-N latched topic
+# published N+k times replays EXACTLY the last N oldest->newest; fewer than N
+# retained replays all of them; replay_depth caps to the most-recent frames; and a
+# depth-1 ring stays byte-identical to last-writer-wins (all/latest/none). The
+# delivery effects are looped for reproducibility. Links the core, wire, and inproc
+# layers; selected by the `forwarder.` ctest prefix and by `ctest -R history_ring`.
+add_executable(test_history_ring test_history_ring.cpp)
+
+target_link_libraries(test_history_ring PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_history_ring TEST_PREFIX "forwarder.")
+
+# The consumer-paced PULL (fetch_latched) oracle: a none+pull subscriber receives
+# ZERO retained frames on subscribe, then a direct fetch_latched(max) replays the
+# most-recent min(max, count) frames oldest->newest to the requesting peer only; a
+# fetch against a never-declared topic replays nothing. The delivery effects are
+# looped for reproducibility. Links the core, wire, and inproc layers; selected by
+# the `forwarder.` ctest prefix and by `ctest -R fetch_latched`.
+add_executable(test_fetch_latched test_fetch_latched.cpp)
+
+target_link_libraries(test_fetch_latched PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_fetch_latched TEST_PREFIX "forwarder.")
