@@ -3,6 +3,7 @@
 # wire selects them.
 set(PLEXUS_WIRE_TESTS
     test_wire_codec
+    test_varint
     test_frame_reassembler
     test_length_prefixed_helper)
 
