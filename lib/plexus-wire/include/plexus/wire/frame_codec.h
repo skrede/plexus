@@ -23,9 +23,9 @@ inline std::array<std::byte, header_size> encode_header(const frame_header &hdr)
     p[1] = magic_byte_1;
     detail::write_u8(p + 2, static_cast<uint8_t>(hdr.type));
     detail::write_u8(p + 3, hdr.flags);
-    detail::write_u8(p + 4, hdr.session_id);
-    detail::write_u64(p + 5, hdr.timestamp_ns);
-    detail::write_u64(p + 13, hdr.payload_len);
+    detail::write_u64(p + 4, hdr.session_id);
+    detail::write_u64(p + 12, hdr.timestamp_ns);
+    detail::write_u64(p + 20, hdr.payload_len);
 
     return buf;
 }
@@ -42,9 +42,9 @@ inline std::optional<frame_header> decode_header(std::span<const std::byte> data
     return frame_header{
             .type         = static_cast<msg_type>(detail::read_u8(p + 2)),
             .flags        = detail::read_u8(p + 3),
-            .session_id   = detail::read_u8(p + 4),
-            .timestamp_ns = detail::read_u64(p + 5),
-            .payload_len  = detail::read_u64(p + 13)
+            .session_id   = detail::read_u64(p + 4),
+            .timestamp_ns = detail::read_u64(p + 12),
+            .payload_len  = detail::read_u64(p + 20)
     };
 }
 

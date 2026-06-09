@@ -190,8 +190,8 @@ public:
     }
 
     bool is_complete() const noexcept { return m_forwarders_installed; }
-    std::uint8_t session_id() const noexcept { return m_session_id; }
-    std::uint8_t peer_session_id() const noexcept { return m_peer_session_id; }
+    std::uint64_t session_id() const noexcept { return m_session_id; }
+    std::uint64_t peer_session_id() const noexcept { return m_peer_session_id; }
     const typename message_forwarder<Policy>::peer &msg_peer() const noexcept { return m_msg_peer; }
     const typename procedure_forwarder<Policy>::peer &rpc_peer() const noexcept { return m_rpc_peer; }
 
@@ -493,7 +493,7 @@ private:
     procedure_forwarder<Policy> &m_procedures;
     std::chrono::nanoseconds m_handshake_timeout;
     bool m_is_inbound_bootstrap;
-    std::uint8_t m_session_id{0}, m_peer_session_id{0};
+    std::uint64_t m_session_id{0}, m_peer_session_id{0};
     bool m_forwarders_installed{false}, m_torn_down{false};
     // Latched true by close_for_protocol_error so the on_error wiring short-circuits
     // the re-dial: a peer WE closed for misbehavior must not be re-dialed. A plain

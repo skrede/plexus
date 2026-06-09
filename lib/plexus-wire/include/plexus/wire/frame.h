@@ -7,7 +7,7 @@
 
 namespace plexus::wire {
 
-constexpr std::size_t header_size = 21;
+constexpr std::size_t header_size = 28;
 
 // Maximum reassembled-frame payload size. The reassembler's ctor reads this
 // as the default upper bound on payload_len. plexus is serializer-agnostic and
@@ -48,6 +48,15 @@ enum class endpoint_source_type : uint8_t
     plexus         = 0x08
 };
 
+// frame_header.flags bit allocation. The flags byte was always written 0 in
+// v0.1.x; this is the FIRST allocated bit. k_flag_source_identity signals that a
+// flag-gated, varint-encoded endpoint counter is appended after the fixed header
+// (the receiver reconstructs the publisher_gid as session.node_id ‖ counter). The
+// bit is RESERVED here so the v3 layout is fully specified, but the varint region
+// is not yet encoded or decoded: a frame with the bit CLEAR is byte-identical to a
+// freshly-bumped v3 no-flag frame. Append-only: a new flag takes the next free bit.
+constexpr std::uint8_t k_flag_source_identity = 0x01;
+
 struct frame_header
 {
     msg_type type;
@@ -55,9 +64,13 @@ struct frame_header
     // Monotonic session-id minted on each successful handshake completion.
     // 0 == unestablished sentinel: handshake control frames carry 0; the
     // receiver-side staleness gate latches the first non-zero observation
-    // and drops subsequent frames whose session_id differs. Wraps from 255
-    // back to 1 (never 0) to preserve the sentinel semantics.
-    uint8_t  session_id;
+    // and drops subsequent frames whose session_id differs. Drawn from a u64
+    // epoch well that wraps back to 1 (never 0) to preserve the sentinel
+    // semantics; the u64 width retires the 255-reconnect wrap window a reused
+    // slot's u8 epoch cycled through. It does not by itself fix an accepted slot
+    // that restarts its epoch from 1 on re-accept — that is a separate slot-reuse
+    // concern, untouched here.
+    uint64_t session_id;
     uint64_t timestamp_ns;
     uint64_t payload_len;
 };

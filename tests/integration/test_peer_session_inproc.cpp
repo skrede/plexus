@@ -302,7 +302,7 @@ namespace {
 // Synthesize a unidirectional data frame for "topic" carrying a chosen session_id,
 // exactly as the forwarder frames one — so handing it to a receiver's on_receive
 // exercises the production staleness gate, not a hand-strip.
-std::vector<std::byte> make_data_frame(const std::string &payload, std::uint8_t session_id)
+std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
     msg_forwarder framer;
     inproc_bus<> bus;
@@ -358,6 +358,46 @@ TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatc
         l.drive();
         REQUIRE(l.resp_received.size() == 2);
         REQUIRE(l.resp_received[1] == good);
+        ++proven;
+    }
+    REQUIRE(proven == k_iterations);
+}
+
+TEST_CASE("inproc peer_session: the staleness gate distinguishes epochs beyond the u8 range — the 255-wrap collision is gone, looped",
+          "[integration][peer_session][inproc]")
+{
+    // Two epochs that ALIAS under a u8 epoch well — 257 ≡ 1 (mod 256) — are distinct
+    // u64 values. The gate must latch one and drop the other. Under the retired u8
+    // width these collided, so a dead incarnation's straggler (epoch 1) was wrongly
+    // accepted against a live epoch-257 session. The u64 width makes them distinct.
+    constexpr int k_iterations = 100;
+    constexpr std::uint64_t latched_epoch  = 257;   // the live session's epoch
+    constexpr std::uint64_t aliasing_epoch = 1;     // would alias 257 under u8
+    int proven = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        link l;
+        l.drive();
+        REQUIRE(l.resp_messages.attach(l.responder->msg_peer(), "topic"));
+        REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "topic"));
+        l.drive();
+
+        // A framed data frame carrying epoch 257 latches the FULL u64 epoch — not 1.
+        l.responder->on_receive(make_data_frame("first", latched_epoch));
+        l.drive();
+        REQUIRE(l.resp_received.size() == 1);
+        REQUIRE(l.responder->peer_session_id() == latched_epoch);
+
+        // A straggler carrying the aliasing epoch (1) is a DIFFERENT session: dropped.
+        l.responder->on_receive(make_data_frame("aliasing", aliasing_epoch));
+        l.drive();
+        REQUIRE(l.resp_received.size() == 1);   // DROPPED — no u8 collision
+
+        // The latched epoch still delivers.
+        l.responder->on_receive(make_data_frame("same", latched_epoch));
+        l.drive();
+        REQUIRE(l.resp_received.size() == 2);
+        REQUIRE(l.resp_received[1] == "same");
         ++proven;
     }
     REQUIRE(proven == k_iterations);

@@ -22,7 +22,8 @@ set(PLEXUS_IO_TESTS
     test_verify_policy
     test_cookie_secret
     test_fragmentation
-    test_identity_types)
+    test_identity_types
+    test_epoch_source)
 
 foreach(test ${PLEXUS_IO_TESTS})
     add_executable(${test} ${test}.cpp)

@@ -100,7 +100,7 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // Synthesize a unidirectional "topic" data frame carrying a chosen session_id via
 // the production framing path, so feeding it to a receiver's on_receive exercises
 // the REAL staleness gate (mirrors the single-connection reconnect oracle).
-std::vector<std::byte> make_data_frame(const std::string &payload, std::uint8_t session_id)
+std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
     plexus::io::message_forwarder<manual_policy> framer;
     inproc_bus<manual_clock> bus;
@@ -247,7 +247,7 @@ TEST_CASE("multipeer inproc: concurrent real drops re-dial each dropped slot ind
             REQUIRE(net.a.is_connected(net.peer(i).id));
 
         std::array<std::uint32_t, k_n> before{};
-        std::array<std::uint8_t, k_n> epoch{};
+        std::array<std::uint64_t, k_n> epoch{};
         for(std::size_t i = 0; i < k_n; ++i)
         {
             before[i] = net.a.attempt_count(net.peer(i).id);

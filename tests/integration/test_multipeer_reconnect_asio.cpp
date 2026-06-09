@@ -190,7 +190,7 @@ TEST_CASE("multipeer asio: concurrent real socket closes re-dial each dropped sl
         net.pump_until([&] { return net.all_connected(); });
         REQUIRE(net.all_connected());
 
-        std::array<std::uint8_t, k_n> epoch{};
+        std::array<std::uint64_t, k_n> epoch{};
         std::array<std::uint32_t, k_n> attempts{};
         for(std::size_t i = 0; i < k_n; ++i)
         {

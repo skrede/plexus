@@ -142,7 +142,7 @@ public:
     // 0 — passed per send (NOT a forwarder-wide member) because a node-shared
     // forwarder fans to many peers, each with its own epoch.
     void publish(std::string_view fqn, std::span<const std::byte> payload,
-                 std::uint8_t session_id = 0)
+                 std::uint64_t session_id = 0)
     {
         auto hash = wire::fqn_topic_hash(fqn);
         const auto *subs = m_registry.subscribers_for(hash);

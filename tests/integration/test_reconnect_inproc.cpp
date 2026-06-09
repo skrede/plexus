@@ -157,7 +157,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // Synthesize a unidirectional "topic" data frame carrying a chosen session_id via
 // the production framing path, so feeding it to a receiver's on_receive exercises
 // the real staleness gate.
-std::vector<std::byte> make_data_frame(const std::string &payload, std::uint8_t session_id)
+std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
     msg_forwarder framer;
     inproc_bus<manual_clock> bus;

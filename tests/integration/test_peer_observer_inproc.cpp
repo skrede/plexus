@@ -139,7 +139,7 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
 // Frame a subscribe_response exactly as the wire codec does, carrying the chosen
 // session_id, so feeding it to a dialer session's on_receive drives the production
 // decode + readiness-decrement path. Used to FORGE an unmatched ack.
-std::vector<std::byte> make_subscribe_response(std::uint8_t session_id)
+std::vector<std::byte> make_subscribe_response(std::uint64_t session_id)
 {
     plexus::wire::subscribe_response resp{.topic_hash = 0x1234, .status = plexus::wire::subscribe_status::subscribed};
     auto payload = plexus::wire::encode_subscribe_response(resp);

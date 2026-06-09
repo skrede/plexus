@@ -161,7 +161,7 @@ std::vector<std::byte> make_undecodable_frame()
 // A unidirectional data frame for a topic NOBODY subscribed: it reaches the
 // forwarder's benign warn-and-drop receive tail (an unresolved topic), which is
 // NOT a protocol error and must NOT trip the close funnel.
-std::vector<std::byte> make_unknown_topic_frame(std::uint8_t session_id)
+std::vector<std::byte> make_unknown_topic_frame(std::uint64_t session_id)
 {
     std::array<std::byte, 4> body{};
     plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::unidirectional, .flags = 0,

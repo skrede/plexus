@@ -70,7 +70,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // receiver's on_receive (the framing is backend-independent; on_receive consumes
 // raw frame bytes). Handing this to the asio receiver exercises the real staleness
 // gate, not a hand-strip.
-std::vector<std::byte> make_data_frame(const std::string &payload, std::uint8_t session_id)
+std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
     using plexus::inproc::inproc_bus;
     using plexus::inproc::inproc_executor;

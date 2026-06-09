@@ -17,7 +17,7 @@ namespace plexus::wire {
 // protocol_version differs from this constant is rejected outright — there is no
 // negotiation, so a skewed peer is never silently downgraded. The two-tier
 // version model layers a compatibility window (major/minor) on top of this gate.
-constexpr std::uint8_t k_protocol_version = 2;
+constexpr std::uint8_t k_protocol_version = 3;
 
 // Wire-stable handshake status byte. Integers are append-only: a value is NEVER
 // reordered or reused; a new status takes the next free integer. rejected_unknown

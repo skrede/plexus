@@ -120,7 +120,7 @@ public:
     void call(const peer &p, std::string_view fqn, std::span<const std::byte> param,
               on_response_fn on_response,
               std::optional<std::chrono::nanoseconds> deadline = std::nullopt,
-              std::uint8_t session_id = 0)
+              std::uint64_t session_id = 0)
     {
         auto &per_peer = m_outstanding[p.node_name];
         if(per_peer.size() >= m_max_outstanding)
@@ -225,7 +225,7 @@ public:
     // state replies topic_not_found. The handler replies via a reply_fn that frames
     // a same-corr_id rpc_response (source = procedure, swapped type hashes).
     void deliver_request(const peer &p, std::span<const std::byte> inner,
-                         std::uint8_t session_id = 0)
+                         std::uint64_t session_id = 0)
     {
         auto decoded = wire::decode_rpc_request(inner);
         if(!decoded)
@@ -336,7 +336,7 @@ private:
     // subscribe-time discovery), so the response writes them 0 rather than echoing.
     void reply_status(channel_type &channel, const wire::bidirectional_header &req_hdr,
                       wire::rpc_status status, std::span<const std::byte> return_data,
-                      std::uint8_t session_id)
+                      std::uint64_t session_id)
     {
         wire::bidirectional_header resp_hdr{
                 .source         = wire::endpoint_source_type::procedure,
@@ -355,7 +355,7 @@ private:
     // unestablished sentinel 0 — the epoch is per-peer, passed per send (a node-shared
     // forwarder fans to many peers), never a forwarder-wide member.
     void send_data(channel_type &channel, wire::msg_type type,
-                   std::span<const std::byte> inner, std::uint8_t session_id)
+                   std::span<const std::byte> inner, std::uint64_t session_id)
     {
         wire::frame_header fhdr{
                 .type         = type,
@@ -414,7 +414,7 @@ private:
     reply_fn m_reply;
     channel_type *m_active_channel{nullptr};
     wire::bidirectional_header m_active_req_hdr{};
-    std::uint8_t m_active_session_id{0};
+    std::uint64_t m_active_session_id{0};
     std::uint64_t m_next_correlation_id{1};
     std::uint64_t m_next_sequence{0};
     std::size_t m_max_outstanding;
