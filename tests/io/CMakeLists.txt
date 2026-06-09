@@ -21,7 +21,8 @@ set(PLEXUS_IO_TESTS
     test_cert_facts
     test_verify_policy
     test_cookie_secret
-    test_fragmentation)
+    test_fragmentation
+    test_identity_types)
 
 foreach(test ${PLEXUS_IO_TESTS})
     add_executable(${test} ${test}.cpp)
