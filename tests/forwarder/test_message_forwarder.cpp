@@ -193,7 +193,7 @@ TEST_CASE("attach refcount gate emits exactly one subscribe on 0->1", "[forwarde
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd;
+        forwarder fwd{ex};
         REQUIRE(fwd.attach(peer, "alpha"));    // 0->1
         REQUIRE_FALSE(fwd.attach(peer, "alpha")); // 1->2, no emit
         ex.drain();
@@ -212,7 +212,7 @@ TEST_CASE("drain_for re-emits one subscribe per peer-rooted remote topic", "[for
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd;
+        forwarder fwd{ex};
         fwd.attach(peer, "alpha");
         fwd.attach(peer, "beta");
         ex.drain();
@@ -235,7 +235,7 @@ TEST_CASE("frame-once fan-out delivers byte-identical frames to each subscriber"
         auto peer_a = make_peer(ch_a, cap_a, "node-a");
         auto peer_b = make_peer(ch_b, cap_b, "node-b");
 
-        forwarder fwd;
+        forwarder fwd{ex};
         fwd.attach(peer_a, "alpha");
         fwd.attach(peer_b, "alpha");
         ex.drain();
@@ -260,7 +260,7 @@ TEST_CASE("detach_all stops fan-out", "[forwarder]")
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.attach(peer, "alpha");
     ex.drain();
     cap.frames.clear();
@@ -279,7 +279,7 @@ TEST_CASE("detach on 1->0 emits exactly one unsubscribe_request", "[forwarder]")
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.attach(peer, "alpha");
     fwd.attach(peer, "alpha");      // refcount 2
     ex.drain();
@@ -299,7 +299,7 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.attach(peer, "alpha");     // registers the topic_hash -> fqn resolution
 
     const std::string body = "the-opaque-payload";
@@ -327,7 +327,7 @@ TEST_CASE("no-subscriber publish sends nothing (demand-driven)", "[forwarder]")
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.publish("alpha", as_bytes(std::string{"nobody-home"}));
     ex.drain();
     REQUIRE_FALSE(bus.has_pending_packets());   // nothing was ever enqueued
@@ -336,10 +336,9 @@ TEST_CASE("no-subscriber publish sends nothing (demand-driven)", "[forwarder]")
 TEST_CASE("receive tail warn-and-drops a malformed frame through the injected logger", "[forwarder]")
 {
     counting_logger log;
-    forwarder fwd(log);
-
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
+    forwarder fwd{ex, log};
     inproc_channel<> ch(ex);
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
@@ -358,10 +357,9 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
 
 TEST_CASE("default forwarder drops a malformed frame silently via null_logger", "[forwarder]")
 {
-    forwarder fwd;                  // no logger argument: shared null_logger
-
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
+    forwarder fwd{ex};                  // no logger argument: shared null_logger
     inproc_channel<> ch(ex);
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
@@ -385,7 +383,7 @@ TEST_CASE("frame-once fan-out allocates nothing after warm-up", "[forwarder]")
 
     sink_executor ex;
     sink_channel ch_a(ex), ch_b(ex);
-    sink_forwarder fwd;
+    sink_forwarder fwd{ex};
     sink_forwarder::peer peer_a{ch_a, "node-a"};
     sink_forwarder::peer peer_b{ch_b, "node-b"};
     fwd.attach(peer_a, "alpha");

@@ -72,6 +72,7 @@ public:
                    bool dial_eagerly = false, log::logger &logger = shared_null_logger())
         : m_transport(transport)
         , m_executor(executor)
+        , m_messages(m_executor)
         , m_procedures(executor, handshake_timeout, logger)
         , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures,
                   redial, redial_seed, logger, {}}

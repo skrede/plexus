@@ -68,7 +68,7 @@ struct link
     inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
-    msg_forwarder req_messages, resp_messages;
+    msg_forwarder req_messages{ex}, resp_messages{ex};
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 

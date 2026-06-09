@@ -45,13 +45,15 @@ class asio_channel
 public:
     // The bounded congestion=block write-queue BYTE budget (allocated at setup, never
     // grown on the hot path): a producer that outruns the socket drain back-pressures (or
-    // sheds, under drop) at a bounded 16 MiB instead of growing the userspace write deque
-    // to the 10+ GB OOM the unbounded queue left possible. Sized at 4x the 4 MiB
-    // max-message ceiling — the swept knee (TRANSPORT-POLICY-PROFILE.md §byte-cap sweep),
-    // matching the publisher in-flight gate that kept the re-baseline stream cells from
-    // OOMing, and not throttling the in-budget flat-latency regime.
+    // sheds, under drop) at a bounded cap instead of growing the userspace write deque to
+    // the 10+ GB OOM the unbounded queue left possible. Sized at 1x the 4 MiB max-message
+    // ceiling so this per-connection FIFO is the SHALLOW socket-facing buffer holding
+    // roughly one frame in flight: the deep, priority-ordered backlog now lives in the
+    // forwarder's egress bands ABOVE this queue, so a deep channel FIFO would silently
+    // defeat banding by re-accumulating an un-prioritized backlog. This shallow cap is a
+    // load-bearing knob — to be substantiated at the fan-out benchmark, not fixed by feel.
     static constexpr std::size_t default_write_queue_bytes =
-        4u * io::fragmentation_limits::max_message_size;
+        1u * io::fragmentation_limits::max_message_size;
 
     // Dial/executor-alone: unconnected, not reading yet — dial() calls start_read().
     // The congestion mode + byte budget are the per-channel QoS choice (block = the safe

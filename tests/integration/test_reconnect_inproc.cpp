@@ -159,9 +159,9 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // the real staleness gate.
 std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
-    msg_forwarder framer;
     inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex(bus);
+    msg_forwarder framer{ex};
     inproc_channel<manual_clock> capture(ex);
     inproc_channel<manual_clock> tx(ex);
     tx.connect_to(capture.local_endpoint());
@@ -188,8 +188,8 @@ struct harness
     inproc_executor<manual_clock> ex{bus};
     transport_t transport{ex, bus};
 
-    msg_forwarder req_messages;
-    msg_forwarder resp_messages;
+    msg_forwarder req_messages{ex};
+    msg_forwarder resp_messages{ex};
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
@@ -483,7 +483,7 @@ TEST_CASE("inproc reconnect: the POST-RECONNECT steady-state publish loop is zer
     sink_executor sx;
     std::vector<std::unique_ptr<sink_channel>> channels;
     std::vector<forwarder::peer> peers;
-    forwarder fwd;
+    forwarder fwd{sx};
     for(int i = 0; i < N; ++i)
     {
         channels.push_back(std::make_unique<sink_channel>(sx));

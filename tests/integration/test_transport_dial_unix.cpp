@@ -103,8 +103,8 @@ struct dial_unix_link
     ::asio::io_context io;
     pasio::unix_transport transport{io};
 
-    msg_forwarder req_messages;
-    msg_forwarder resp_messages;
+    msg_forwarder req_messages{io};
+    msg_forwarder resp_messages{io};
     rpc_forwarder req_procedures{io, k_long_timeout};
     rpc_forwarder resp_procedures{io, k_long_timeout};
 

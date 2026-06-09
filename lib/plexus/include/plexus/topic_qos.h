@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_TOPIC_QOS_H
 
 #include "plexus/io/locality.h"
+#include "plexus/io/priority.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/shm/dispatch_hint.h"
@@ -20,7 +21,10 @@ namespace plexus {
 // reaches every tier — no confinement); a confined mask drops a send/subscribe to
 // any out-of-scope tier. `reliability` selects the lossy best-effort class or the
 // in-order reliable class; `congestion` selects what a full send path does (shed
-// at the publisher, or back-pressure the publish). The defaults carry the safe
+// at the publisher, or back-pressure the publish); `priority` is the LOCAL,
+// off-wire egress-band selector — under a back-pressured destination a higher-
+// priority topic's frames drain ahead of a lower one's (default normal, a middle
+// band). The defaults carry the safe
 // per-class intent: best_effort (the lossy class) with block (so a reliable topic
 // that overrides reliability inherits a guarantee-preserving back-pressure rather
 // than a silent drop). Durability / deadline / overflow are upstream concepts NOT
@@ -41,6 +45,7 @@ struct topic_qos
     io::locality          reach       = io::locality::any;
     io::reliability       reliability = io::reliability::best_effort;
     io::congestion        congestion  = io::congestion::block;
+    io::priority          priority    = io::priority::normal;
     io::shm::dispatch_hint dispatch   = io::shm::dispatch_hint::none;
     std::uint32_t         max_payload = 0;
 };

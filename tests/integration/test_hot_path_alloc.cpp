@@ -80,6 +80,43 @@ struct sink_policy
 
 static_assert(plexus::Policy<sink_policy>);
 
+// A sink channel that DOES expose backpressured() so a forwarder<banding_sink_policy>
+// publish routes through the egress scheduler's band->drain path (not the no-backpressured
+// short-circuit). The test holds the reported occupancy at 0 so accepts() is always true
+// and the synchronous drain sends every banded frame immediately — letting the no-alloc
+// gate measure the scheduler enqueue->band->pop->send path. It also satisfies the erasure
+// (channel_adapter<C>::backpressured forwards to it), so it doubles as the erased-channel
+// member in the type-erasure no-alloc gate.
+struct banding_sink_channel
+{
+    explicit banding_sink_channel(sink_executor &) {}
+    banding_sink_channel(sink_executor &, std::error_code &) {}
+
+    void send(std::span<const std::byte> d) { total_bytes += d.size(); ++sends; }
+    void close() {}
+    [[nodiscard]] io::endpoint remote_endpoint() const { return {}; }
+    void on_data(detail::move_only_function<void(std::span<const std::byte>)>) {}
+    void on_closed(detail::move_only_function<void()>) {}
+    void on_error(detail::move_only_function<void(io::io_error)>) {}
+    void on_protocol_close(detail::move_only_function<void(wire::close_cause)>) {}
+    [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+
+    std::size_t total_bytes{0};
+    std::size_t sends{0};
+};
+
+struct banding_sink_policy
+{
+    using executor_type = sink_executor &;
+    using byte_channel_type = banding_sink_channel;
+    using timer_type = sink_timer;
+    using byte_owner = std::shared_ptr<const void>;
+
+    static void post(executor_type, detail::move_only_function<void()> fn) { fn(); }
+};
+
+static_assert(plexus::Policy<banding_sink_policy>);
+
 }
 
 // SLICE-3 determinism invariant: the steady-state publish -> frame-once -> fan-out
@@ -104,7 +141,7 @@ TEST_CASE("steady-state publish->frame-once->fan-out loop is zero-alloc", "[inte
     channels.reserve(N);
     peers.reserve(N);
 
-    forwarder fwd;
+    forwarder fwd{ex};
     for(int i = 0; i < N; ++i)
     {
         channels.push_back(std::make_unique<sink_channel>(ex));
@@ -152,7 +189,7 @@ TEST_CASE("steady-state depth-N history-ring retain is zero-alloc", "[integratio
     sink_channel ch(ex);
     forwarder::peer peer{ch, "node-a"};
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.declare(fqn, topic_qos{.latch = true, .depth = N});
     fwd.attach(peer, fqn);
 
@@ -189,7 +226,7 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
     sink_channel ch(ex);
     forwarder::peer peer{ch, "node-rx"};
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.attach(peer, fqn);   // resolves topic_hash -> fqn for the receive tail
 
     // Build the inner unidirectional payload ONCE (the borrowed receive buffer).
@@ -249,6 +286,61 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
     REQUIRE(after - before == 0);     // gid reconstruction is zero steady-state heap
 }
 
+// The egress-scheduler band->drain path is ALSO zero-alloc after warm-up. Over a channel
+// that exposes backpressured() (held at 0 so the destination always accepts), publish
+// routes through enqueue -> band copy -> pop_highest -> send rather than the
+// no-backpressured short-circuit. Each enqueue/immediate-drain advances the band's FIFO
+// ring by one slot, so the warm-up must cycle the in-use band's whole pooled ring once
+// (k_band_depth publishes) — mirroring the history_ring no-alloc warm-up — to grow every
+// slot's vector. Thereafter the steady-state publish reuses those grown slots via assign,
+// so the scheduler path adds zero heap.
+TEST_CASE("steady-state publish through the egress scheduler bands is zero-alloc", "[integration]")
+{
+    using forwarder = io::message_forwarder<banding_sink_policy>;
+
+    constexpr int N = 8;                                          // fan-out width
+    constexpr int K = 1024;                                       // steady-state message count
+    const std::size_t warm = io::detail::k_band_depth;            // cycle the in-use band ring once
+    const std::string fqn = "demo._plexus._tcp.local.";
+    const std::string payload = "deterministic-steady-state-payload";
+
+    sink_executor ex;
+    std::vector<std::unique_ptr<banding_sink_channel>> channels;
+    std::vector<forwarder::peer> peers;
+    channels.reserve(N);
+    peers.reserve(N);
+
+    forwarder fwd{ex};
+    for(int i = 0; i < N; ++i)
+    {
+        channels.push_back(std::make_unique<banding_sink_channel>(ex));
+        peers.push_back(forwarder::peer{*channels.back(), "node-" + std::to_string(i)});
+        fwd.attach(peers.back(), fqn);
+    }
+
+    // Warm-up: cycle the in-use band's full pooled ring (k_band_depth publishes) so every
+    // slot's vector grows once across all destinations, plus the scratch + band map nodes.
+    for(std::size_t i = 0; i < warm; ++i)
+        fwd.publish(fqn, as_bytes(payload));
+
+    std::size_t sends_before = 0;
+    for(const auto &ch : channels)
+        sends_before += ch->sends;
+
+    plexus::testing::reset_alloc_count();
+    const auto before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+        fwd.publish(fqn, as_bytes(payload));
+    const auto after = plexus::testing::alloc_count();
+
+    std::size_t sends_after = 0;
+    for(const auto &ch : channels)
+        sends_after += ch->sends;
+
+    REQUIRE(sends_after - sends_before == static_cast<std::size_t>(K) * N);   // every publish drained to all N
+    REQUIRE(after - before == 0);   // the scheduler enqueue->band->pop->send path is zero-alloc
+}
+
 #ifdef PLEXUS_HAVE_ASIO_MUX
 #include "plexus/io/polymorphic_byte_channel.h"
 
@@ -256,8 +348,9 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
 // type-erased polymorphic_byte_channel instead of a concrete channel: the erasure is ONE virtual hop
 // per send to the owned concrete channel, minted ONCE at wrap (here at setup), and the
 // adapter stores no per-verb callable — so the abstract base adds zero steady-state heap
-// blocks. Measured directly over a vector of polymorphic_byte_channels wrapping the inert sink_channel
-// (no forwarder Policy is needed: the gate is the channel layer's per-send behavior).
+// blocks. Measured directly over a vector of polymorphic_byte_channels wrapping the inert
+// banding_sink_channel (it exposes the backpressured() read the erasure now forwards; no
+// forwarder Policy is needed: the gate is the channel layer's per-send behavior).
 TEST_CASE("steady-state fan-out over a type-erased polymorphic_byte_channel is zero-alloc", "[integration]")
 {
     namespace pio = plexus::io;
@@ -268,15 +361,15 @@ TEST_CASE("steady-state fan-out over a type-erased polymorphic_byte_channel is z
 
     sink_executor ex;
     std::vector<std::unique_ptr<pio::polymorphic_byte_channel>> channels;
-    std::vector<sink_channel *> sinks;   // observers into the owned concrete channels
+    std::vector<banding_sink_channel *> sinks;   // observers into the owned concrete channels
     channels.reserve(N);
     sinks.reserve(N);
     for(int i = 0; i < N; ++i)
     {
-        auto inner = std::make_unique<sink_channel>(ex);
+        auto inner = std::make_unique<banding_sink_channel>(ex);
         sinks.push_back(inner.get());
         channels.push_back(std::make_unique<pio::polymorphic_byte_channel>(
-            std::make_unique<pio::channel_adapter<sink_channel>>(std::move(inner))));
+            std::make_unique<pio::channel_adapter<banding_sink_channel>>(std::move(inner))));
     }
 
     // Warm-up: one fan-out round before measuring (no scratch grows here, but mirror the gate).

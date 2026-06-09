@@ -23,14 +23,18 @@ namespace plexus::io {
 // the concrete types are assembled behind the base in a backend-visible header,
 // never enumerated.
 //
-// concrete_channel_base mirrors EXACTLY the seven byte_channel verbs (send, close,
+// concrete_channel_base mirrors the seven byte_channel verbs (send, close,
 // remote_endpoint [const], on_data, on_closed, on_error, on_protocol_close — on_closed
-// is DISTINCT from on_protocol_close). channel_adapter<C> owns the real concrete
+// is DISTINCT from on_protocol_close) PLUS one additive occupancy read, backpressured():
+// it is NOT a byte_channel concept verb and NOT a wire/send change — it exposes the
+// queued-byte occupancy the egress scheduler polls so the erased multi-transport path
+// bands instead of always-accepting. channel_adapter<C> owns the real concrete
 // channel and forwards each verb STRAIGHT THROUGH to it (the concrete channel keeps
 // its own stored callbacks; the adapter stores none — load-bearing for the steady-
 // state no-alloc gate). polymorphic_byte_channel holds one unique_ptr<concrete_channel_base>
 // and forwards each verb through ONE virtual hop; the unique_ptr is minted ONCE at dial,
-// so the steady-state publish loop allocates nothing.
+// so the steady-state publish loop allocates nothing. Making backpressured() PURE on the
+// base forces every wrapped channel to expose it at compile time — no silent gap.
 
 class concrete_channel_base
 {
@@ -44,6 +48,7 @@ public:
     virtual void on_closed(plexus::detail::move_only_function<void()> cb) = 0;
     virtual void on_error(plexus::detail::move_only_function<void(io_error)> cb) = 0;
     virtual void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) = 0;
+    [[nodiscard]] virtual std::size_t backpressured() const = 0;
 };
 
 template <typename C>
@@ -59,6 +64,7 @@ public:
     void on_closed(plexus::detail::move_only_function<void()> cb) override { m_c->on_closed(std::move(cb)); }
     void on_error(plexus::detail::move_only_function<void(io_error)> cb) override { m_c->on_error(std::move(cb)); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) override { m_c->on_protocol_close(std::move(cb)); }
+    [[nodiscard]] std::size_t backpressured() const override { return m_c->backpressured(); }
 
 private:
     std::unique_ptr<C> m_c;
@@ -81,6 +87,7 @@ public:
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_impl->on_closed(std::move(cb)); }
     void on_error(plexus::detail::move_only_function<void(io_error)> cb) { m_impl->on_error(std::move(cb)); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_impl->on_protocol_close(std::move(cb)); }
+    [[nodiscard]] std::size_t backpressured() const { return m_impl->backpressured(); }
 
 private:
     std::unique_ptr<concrete_channel_base> m_impl;

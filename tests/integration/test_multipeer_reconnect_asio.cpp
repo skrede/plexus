@@ -101,6 +101,7 @@ struct peer_node
 
     peer_node(::asio::io_context &io, std::uint8_t seed)
         : transport(io)
+        , messages(io)
         , procedures(io, k_long_timeout)
         , id(make_id(seed))
     {

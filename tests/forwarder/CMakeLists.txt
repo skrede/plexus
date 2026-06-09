@@ -134,6 +134,44 @@ target_link_libraries(test_history_ring PRIVATE
 
 catch_discover_tests(test_history_ring TEST_PREFIX "forwarder.")
 
+# The priority-band-queue unit oracle: band_of's realtime->0..background->3 map,
+# FIFO order within a band, strict cross-band drain order (a lower band index drains
+# fully first), drop-newest-at-capacity with an observable counter (no oldest
+# evicted), and a zero-alloc steady enqueue/pop loop proven through support/
+# alloc_counter.h. A pure detail-header unit, so it needs only the core; selected by
+# the `forwarder.` ctest prefix and by `ctest -R priority_band`.
+add_executable(test_priority_band_queue test_priority_band_queue.cpp)
+
+target_include_directories(test_priority_band_queue PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+target_link_libraries(test_priority_band_queue PRIVATE
+    plexus::plexus
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_priority_band_queue TEST_PREFIX "forwarder.")
+
+# The egress-priority behavioral oracle: under a stalled (backpressured) destination a
+# realtime frame enqueued AFTER a background flood leaves BEFORE the background backlog
+# (looped); a flooded background band never delays a high frame (no starvation of the
+# high band, looped); inproc is unaffected (the no-backpressured short-circuit keeps
+# publish order, no banding); and the type-erased mux path bands too (backpressured()
+# read through the erasure — the QOS-05 enforcement on the flagship multi-transport
+# path). Links the core, wire, and inproc layers; selected by the `forwarder.` ctest
+# prefix and by `ctest -R egress_priority`.
+add_executable(test_egress_priority test_egress_priority.cpp)
+
+target_include_directories(test_egress_priority PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+target_link_libraries(test_egress_priority PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_egress_priority TEST_PREFIX "forwarder.")
+
 # The consumer-paced PULL (fetch_latched) oracle: a none+pull subscriber receives
 # ZERO retained frames on subscribe, then a direct fetch_latched(max) replays the
 # most-recent min(max, count) frames oldest->newest to the requesting peer only; a

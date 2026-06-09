@@ -59,12 +59,16 @@ class tls_channel
 public:
     // The bounded congestion=block outbox BYTE budget (allocated at setup, never grown on
     // the hot path): a producer that outruns the encrypted-stream drain back-pressures (or
-    // sheds, under drop) at a bounded 16 MiB instead of growing the userspace outbox to the
-    // 10+ GB OOM the unbounded deque left possible. Sized at 4x the 4 MiB max-message
-    // ceiling — the swept knee (TRANSPORT-POLICY-PROFILE.md §byte-cap sweep), symmetric
-    // with asio_channel's plaintext write-queue budget.
+    // sheds, under drop) at a bounded cap instead of growing the userspace outbox to the
+    // 10+ GB OOM the unbounded deque left possible. Sized at 1x the 4 MiB max-message
+    // ceiling so this per-connection outbox is the SHALLOW stream-facing buffer holding
+    // roughly one frame in flight: the deep, priority-ordered backlog now lives in the
+    // forwarder's egress bands ABOVE this queue, so a deep outbox would silently defeat
+    // banding by re-accumulating an un-prioritized backlog. Symmetric with asio_channel's
+    // plaintext write-queue budget; this shallow cap is a load-bearing knob — to be
+    // substantiated at the fan-out benchmark, not fixed by feel.
     static constexpr std::size_t default_outbox_bytes =
-        4u * io::fragmentation_limits::max_message_size;
+        1u * io::fragmentation_limits::max_message_size;
 
     // Dial mode: unconnected ssl::stream. The transport async_connects the
     // lowest layer, then calls start_client_handshake(host). The congestion mode + byte

@@ -102,9 +102,9 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // the REAL staleness gate (mirrors the single-connection reconnect oracle).
 std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
-    plexus::io::message_forwarder<manual_policy> framer;
     inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex(bus);
+    plexus::io::message_forwarder<manual_policy> framer{ex};
     inproc_channel<manual_clock> capture(ex);
     inproc_channel<manual_clock> tx(ex);
     tx.connect_to(capture.local_endpoint());
