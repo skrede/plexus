@@ -158,16 +158,15 @@ public:
         record_remote_topic(node_name, fqn);
     }
 
-    // declare: mark a topic with a publisher-declared qos once (Fork-A). A latched
-    // topic retains its last published frame and replays it to late subscribers.
+    // declare: mark a topic with a publisher-declared qos once. A latched topic
+    // retains its last published frame and replays it to late subscribers.
     // An optional producer type_id (std::nullopt = undeclared) is the subscribe-time
     // match authority: a subscriber declaring a different type_id is refused with
-    // type_mismatch. emit_source_identity (Option 2: producer-offered) opts this topic
+    // type_mismatch. emit_source_identity (producer-offered) opts this topic
     // into per-frame source-identity carriage — its publishes set the gid flag and
     // carry a varint endpoint counter the receiver pairs with the session peer's
-    // node_id; a subscriber-side "require source identity" RxO refusal is a Phase 26
-    // concern (see the multi-publisher-semantics seed). The hot publish(fqn, bytes)
-    // signature is unchanged.
+    // node_id; a subscriber-side "require source identity" refusal is a separate,
+    // later compatibility concern. The hot publish(fqn, bytes) signature is unchanged.
     void declare(std::string_view fqn, topic_qos qos,
                  std::optional<std::uint64_t> producer_type_id = std::nullopt,
                  bool emit_source_identity = false)
