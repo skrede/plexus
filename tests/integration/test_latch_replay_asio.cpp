@@ -70,7 +70,7 @@ late_join one_late_join(std::span<const std::byte> payload, std::string_view fqn
     pasio::asio_channel client(io);
     std::optional<std::vector<std::byte>> received;
     pio::frame_router router;
-    router.on_unidirectional([&](std::span<const std::byte> inner)
+    router.on_unidirectional([&](const wire::frame_header &, std::span<const std::byte> inner)
     {
         auto decoded = wire::decode_unidirectional(inner);
         if(decoded)

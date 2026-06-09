@@ -60,7 +60,7 @@ TEST_CASE("frame_router dispatches each type to its registered consumer with the
     std::size_t uni = 0, sub = 0, unsub = 0, sub_resp = 0, rpc_req = 0, rpc_resp = 0;
     std::string last_inner;
 
-    router.on_unidirectional([&](std::span<const std::byte> in) { ++uni; last_inner = to_string(in); });
+    router.on_unidirectional([&](const wire::frame_header &, std::span<const std::byte> in) { ++uni; last_inner = to_string(in); });
     router.on_subscribe([&](std::span<const std::byte> in) { ++sub; last_inner = to_string(in); });
     router.on_unsubscribe([&](std::span<const std::byte> in) { ++unsub; last_inner = to_string(in); });
     router.on_subscribe_response([&](std::span<const std::byte> in) { ++sub_resp; last_inner = to_string(in); });

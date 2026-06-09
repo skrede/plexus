@@ -66,7 +66,7 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
     pasio::asio_channel client(io);
     std::optional<std::vector<std::byte>> received;
     pio::frame_router router;
-    router.on_unidirectional([&](std::span<const std::byte> inner)
+    router.on_unidirectional([&](const wire::frame_header &, std::span<const std::byte> inner)
     {
         auto decoded = wire::decode_unidirectional(inner);
         if(decoded)

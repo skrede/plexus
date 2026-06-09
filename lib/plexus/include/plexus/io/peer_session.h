@@ -2,11 +2,13 @@
 #define HPP_GUARD_PLEXUS_IO_PEER_SESSION_H
 
 #include "plexus/io/io_error.h"
+#include "plexus/io/locality.h"
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/frame_router.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/peer_context.h"
+#include "plexus/io/message_info.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
@@ -97,6 +99,14 @@ public:
 
     template <typename OnMessage>
     void on_message(OnMessage on_message) { m_on_message = std::move(on_message); }
+
+    // The opt-in metadata seam: a second callback that ALSO receives the per-message
+    // message_info. Set ONCE at subscribe (the cold path), so the hot receive path
+    // never allocates a callable. When present it takes precedence over the 2-arg
+    // callback for delivered data; the 2-arg path is left entirely unchanged for a
+    // subscriber that did not opt in.
+    template <typename OnMessageWithInfo>
+    void on_message_with_info(OnMessageWithInfo cb) { m_on_message_with_info = std::move(cb); }
 
     // The transport-drop seam, mirroring on_message: a plain settable callback
     // (absent = no routing) fired from start()'s on_error wiring when an
@@ -202,12 +212,8 @@ private:
         m_router.on_subscribe_response([this](std::span<const std::byte> inner) {
             on_subscribe_response_received(inner);
         });
-        m_router.on_unidirectional([this](std::span<const std::byte> inner) {
-            m_messages.deliver(m_msg_peer, inner,
-                               [this](std::string_view fqn, std::span<const std::byte> data) {
-                                   if(m_on_message)
-                                       m_on_message(fqn, data);
-                               });
+        m_router.on_unidirectional([this](const wire::frame_header &hdr, std::span<const std::byte> inner) {
+            deliver_data(hdr, inner);
         });
         m_router.on_rpc_request([this](std::span<const std::byte> inner) {
             m_procedures.deliver_request(m_rpc_peer, inner, m_session_id);
@@ -215,6 +221,38 @@ private:
         m_router.on_rpc_response([this](std::span<const std::byte> inner) {
             m_procedures.deliver_response(m_rpc_peer, inner);
         });
+    }
+
+    // The message_info assembly seam: this is the ONLY place the decoded frame_header is
+    // still live alongside the data, because the router strips it before deliver. Stamp
+    // the header-derived metadata HERE — source_timestamp is the publisher's wire
+    // timestamp; reception_timestamp is receiver-stamped from the same clock the codec
+    // uses (so it is monotonic with respect to the publisher's stamp); from_intra_process
+    // is derived honestly from THIS channel's own endpoint scheme (true only on a genuine
+    // same-process inproc delivery, never from peer-supplied data). source_identity stays
+    // absent until the gid rides the wire. publication_sequence is filled by the forwarder,
+    // which owns the inner-payload decode. When the opt-in 3-arg callback is set it takes
+    // precedence; otherwise the unchanged 2-arg path runs.
+    void deliver_data(const wire::frame_header &hdr, std::span<const std::byte> inner)
+    {
+        if(m_on_message_with_info)
+        {
+            message_info info{};
+            info.source_timestamp    = hdr.timestamp_ns;
+            info.reception_timestamp = wire::now_timestamp_ns();
+            info.from_intra_process  = tier_of(m_channel.remote_endpoint().scheme) == locality::process;
+            m_messages.deliver(m_msg_peer, inner, info,
+                               [this](std::string_view fqn, std::span<const std::byte> data,
+                                      const message_info &mi) {
+                                   m_on_message_with_info(fqn, data, mi);
+                               });
+            return;
+        }
+        m_messages.deliver(m_msg_peer, inner,
+                           [this](std::string_view fqn, std::span<const std::byte> data) {
+                               if(m_on_message)
+                                   m_on_message(fqn, data);
+                           });
     }
 
     // Map an FSM action to channel I/O. retry stays the FSM's intent as a log line:
@@ -465,6 +503,7 @@ private:
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
     std::vector<std::byte> m_payload_scratch, m_frame_scratch;
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_with_info;
     plexus::detail::move_only_function<void()> m_on_drop;
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
 };

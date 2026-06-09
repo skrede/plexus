@@ -32,13 +32,20 @@ class frame_router
 {
 public:
     using consumer = plexus::detail::move_only_function<void(std::span<const std::byte>)>;
+    // The data-path consumer also receives the decoded frame_header, because the
+    // per-message metadata the subscriber sees (source_timestamp, the session epoch)
+    // lives in the header that route() otherwise strips before deliver. Handing it
+    // alongside the inner payload is what keeps the forwarder header-aware ONLY on the
+    // one path that needs it, without re-decoding the header downstream.
+    using data_consumer =
+        plexus::detail::move_only_function<void(const wire::frame_header &, std::span<const std::byte>)>;
 
     explicit frame_router(log::logger &logger = shared_null_logger()) noexcept
         : m_logger(logger)
     {
     }
 
-    void on_unidirectional(consumer c) { m_unidirectional = std::move(c); }
+    void on_unidirectional(data_consumer c) { m_unidirectional = std::move(c); }
     void on_subscribe(consumer c) { m_subscribe = std::move(c); }
     void on_unsubscribe(consumer c) { m_unsubscribe = std::move(c); }
     void on_subscribe_response(consumer c) { m_subscribe_response = std::move(c); }
@@ -57,15 +64,15 @@ public:
             return drop("plexus: router frame_decode_failed");
 
         auto inner = frame.subspan(wire::header_size);
-        dispatch(hdr->type, inner);
+        dispatch(*hdr, inner);
     }
 
 private:
-    void dispatch(wire::msg_type type, std::span<const std::byte> inner)
+    void dispatch(const wire::frame_header &hdr, std::span<const std::byte> inner)
     {
-        switch(type)
+        switch(hdr.type)
         {
-            case wire::msg_type::unidirectional:     return fire(m_unidirectional, inner);
+            case wire::msg_type::unidirectional:     return fire_data(hdr, inner);
             case wire::msg_type::subscribe:          return fire(m_subscribe, inner);
             case wire::msg_type::unsubscribe:        return fire(m_unsubscribe, inner);
             case wire::msg_type::subscribe_response: return fire(m_subscribe_response, inner);
@@ -84,10 +91,17 @@ private:
         c(inner);
     }
 
+    void fire_data(const wire::frame_header &hdr, std::span<const std::byte> inner)
+    {
+        if(!m_unidirectional)
+            return drop("plexus: router no_consumer_for_type");
+        m_unidirectional(hdr, inner);
+    }
+
     void drop(std::string_view message) { m_logger.warn(message); }
 
     log::logger &m_logger;
-    consumer m_unidirectional;
+    data_consumer m_unidirectional;
     consumer m_subscribe;
     consumer m_unsubscribe;
     consumer m_subscribe_response;

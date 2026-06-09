@@ -1,9 +1,13 @@
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/message_info.h"
 
 #include "plexus/policy.h"
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/detail/compat.h"
+
+#include "plexus/wire/data_frame.h"
+#include "plexus/wire/topic_hash.h"
 
 #include "support/alloc_counter.h"
 
@@ -13,7 +17,10 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <vector>
 #include <cstddef>
+#include <cstdint>
+#include <string_view>
 #include <system_error>
 
 using namespace plexus;
@@ -125,6 +132,55 @@ TEST_CASE("steady-state publish->frame-once->fan-out loop is zero-alloc", "[inte
 
     REQUIRE(sends_after - sends_before == static_cast<std::size_t>(K) * N); // every publish fanned to all N
     REQUIRE(after - before == 0); // zero allocation across the steady-state loop
+}
+
+// The message_info delivery path is ALSO zero-alloc after warm-up: the 3-arg deliver
+// resolves the fqn by topic_hash and hands a STACK message_info to the callback. The
+// info is a POD assembled on the stack (no heap), the callback is captured ONCE outside
+// the loop (no per-frame callable allocation), and decode_unidirectional only
+// subspans the borrowed inner buffer. So the steady-state receive path must allocate
+// zero — the same determinism invariant the publish path obeys.
+TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]")
+{
+    using forwarder = io::message_forwarder<sink_policy>;
+
+    constexpr int K = 1024;
+    const std::string fqn = "demo._plexus._tcp.local.";
+    const std::string payload = "deterministic-steady-state-payload";
+
+    sink_executor ex;
+    sink_channel ch(ex);
+    forwarder::peer peer{ch, "node-rx"};
+
+    forwarder fwd;
+    fwd.attach(peer, fqn);   // resolves topic_hash -> fqn for the receive tail
+
+    // Build the inner unidirectional payload ONCE (the borrowed receive buffer).
+    wire::unidirectional_header uhdr{
+        .source     = wire::endpoint_source_type::publisher,
+        .sequence   = 1,
+        .topic_hash = wire::fqn_topic_hash(fqn)};
+    auto inner = wire::encode_unidirectional(uhdr, as_bytes(payload));
+
+    // The session-assembled metadata half: a stack POD reused every iteration.
+    io::message_info info{};
+    info.source_timestamp   = 1000;
+    info.from_intra_process = false;
+
+    std::size_t seen = 0;
+    auto on_message = [&](std::string_view, std::span<const std::byte>, const io::message_info &) { ++seen; };
+
+    // Warm-up: one deliver exercises any first-touch growth in the resolution path.
+    fwd.deliver(peer, inner, info, on_message);
+
+    plexus::testing::reset_alloc_count();
+    const auto before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+        fwd.deliver(peer, inner, info, on_message);
+    const auto after = plexus::testing::alloc_count();
+
+    REQUIRE(seen == static_cast<std::size_t>(K) + 1);   // every deliver reached the callback
+    REQUIRE(after - before == 0);                       // zero allocation across the steady-state loop
 }
 
 #ifdef PLEXUS_HAVE_ASIO_MUX

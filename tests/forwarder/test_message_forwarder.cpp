@@ -310,7 +310,7 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
     std::string got_fqn;
     std::string got_body;
     plexus::io::frame_router router;
-    router.on_unidirectional([&](std::span<const std::byte> inner) {
+    router.on_unidirectional([&](const plexus::wire::frame_header &, std::span<const std::byte> inner) {
         fwd.deliver(peer, inner, [&](std::string_view fqn, std::span<const std::byte> data) {
             got_fqn.assign(fqn);
             got_body.assign(reinterpret_cast<const char *>(data.data()), data.size());

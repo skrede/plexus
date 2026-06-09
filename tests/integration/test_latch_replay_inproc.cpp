@@ -51,7 +51,7 @@ struct receive_sink
     explicit receive_sink(inproc_executor<> &ex)
         : channel(ex)
     {
-        router.on_unidirectional([this](std::span<const std::byte> inner) {
+        router.on_unidirectional([this](const plexus::wire::frame_header &, std::span<const std::byte> inner) {
             if(auto decoded = plexus::wire::decode_unidirectional(inner))
                 bodies.emplace_back(to_string(decoded->data));
         });

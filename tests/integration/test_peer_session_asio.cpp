@@ -4,6 +4,7 @@
 
 #include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"
+#include "plexus/io/message_info.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 
@@ -258,6 +259,49 @@ TEST_CASE("asio peer_session: a real published message flows post-handshake over
         REQUIRE(l.resp_received.size() == 1);
         REQUIRE(l.resp_received[0] == payload);
         REQUIRE(l.responder->peer_session_id() == l.requester->session_id());
+        ++delivered;
+    }
+    REQUIRE(delivered == k_iterations);
+}
+
+TEST_CASE("asio peer_session: the 3-arg callback reports NON-intra-process locality over real TCP, looped",
+          "[integration][peer_session][asio][message_info]")
+{
+    constexpr int k_iterations = 100;
+    const std::string payload = "info-bearing-bytes-over-tcp";
+    int delivered = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        tcp_link l;
+        l.pump_until([&] { return l.requester && l.responder
+                                  && l.requester->is_complete() && l.responder->is_complete(); });
+        REQUIRE(l.requester->is_complete());
+        REQUIRE(l.responder->is_complete());
+
+        plexus::io::message_info got{};
+        bool got_one = false;
+        l.responder->on_message_with_info(
+            [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi) {
+                got = mi;
+                got_one = true;
+                l.resp_received.emplace_back(to_string(d));
+            });
+
+        REQUIRE(l.resp_messages.attach(l.responder->msg_peer(), "topic"));
+        REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "topic"));
+        l.settle();
+        l.req_messages.publish("topic", as_bytes(payload), l.requester->session_id());
+
+        l.pump_until([&] { return !l.resp_received.empty(); });
+        REQUIRE(got_one);
+        REQUIRE(l.resp_received.size() == 1);
+        REQUIRE(l.resp_received[0] == payload);
+        // The frame rode a real TCP channel: from_intra_process is false, derived from
+        // the channel's own "tcp" endpoint scheme.
+        CHECK(got.from_intra_process == false);
+        CHECK(got.source_timestamp != 0);
+        CHECK(got.reception_timestamp >= got.source_timestamp);
+        CHECK_FALSE(got.source_identity.has_value());
         ++delivered;
     }
     REQUIRE(delivered == k_iterations);

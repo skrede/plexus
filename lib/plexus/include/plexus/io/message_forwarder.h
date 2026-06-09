@@ -2,8 +2,9 @@
 #define HPP_GUARD_PLEXUS_IO_MESSAGE_FORWARDER_H
 
 #include "plexus/io/subscriber_registry.h"
-#include "plexus/io/locality.h"
+#include "plexus/io/message_info.h"
 #include "plexus/io/null_logger.h"
+#include "plexus/io/locality.h"
 #include "plexus/wire_bytes.h"
 #include "plexus/topic_qos.h"
 #include "plexus/policy.h"
@@ -230,6 +231,37 @@ public:
             return drop("plexus: forwarder topic_unknown_for_data");
 
         on_message(fqn, decoded->data);
+    }
+
+    // The metadata-bearing receive tail: identical resolution to the 2-arg deliver, but
+    // it finishes the message_info the session began at on_receive (where the now-stripped
+    // frame_header was live) and hands it to a 3-arg callback. The forwarder fills only
+    // publication_sequence — the one metadata field carried INSIDE the inner payload it
+    // alone decodes; the header-derived fields (source_timestamp, reception_timestamp,
+    // from_intra_process) were already stamped by the session.
+    //
+    // source_identity stays std::nullopt: the gid does not yet ride the wire. The
+    // direct-delivery invariant the gid will rest on (source == the session peer at the
+    // other end of THIS channel; the forwarder fans to subscribed channels and never
+    // relays across peer boundaries) is what will let the receiver reconstruct the gid
+    // from the session node_id without trusting a per-frame node_id. A future relay or
+    // store-and-forward topology would break that invariant and must carry full origin
+    // identity locally on those frames.
+    template <typename OnMessage>
+    void deliver(const peer &p, std::span<const std::byte> inner, message_info info,
+                 OnMessage &&on_message)
+    {
+        (void)p;   // identity symmetry with the procedure receive tail; resolution is by topic_hash
+        auto decoded = wire::decode_unidirectional(inner);
+        if(!decoded)
+            return drop("plexus: forwarder unidirectional_decode_failed");
+
+        auto fqn = m_registry.fqn_for(decoded->header.topic_hash);
+        if(fqn.empty())
+            return drop("plexus: forwarder topic_unknown_for_data");
+
+        info.publication_sequence = decoded->header.sequence;
+        on_message(fqn, decoded->data, info);
     }
 
 private:
