@@ -1,15 +1,9 @@
-// Wave-0 scaffold for the subscribe-time type_id match (activated by a later plan).
-//
-// The producer-side reaction to an arriving subscribe (attach_for_fanout) today
-// always replies subscribe_status::subscribed and ignores the subscribe_request's
-// type_hash. The owning plan activates the dead type_hash field: a subscriber whose
-// type_id matches the producer's stays subscribed; a mismatch is refused with
-// subscribe_status::type_mismatch.
-//
-// This file is RED-NOW: the type_mismatch case is tagged [!shouldfail] because the
-// compare does not exist yet (the producer replies `subscribed` regardless). When
-// the owning plan lands the type_id compare, drop the [!shouldfail] tag and the case
-// flips GREEN. The matching case is already correct and stays GREEN.
+// The subscribe-time type_id match: a producer reacting to an arriving subscribe
+// (attach_for_fanout) compares the subscriber's declared type_id against its own
+// declared producer type_id. A match (or either side undeclared) stays subscribed;
+// a real mismatch is refused with subscribe_status::type_mismatch and NO fan-out
+// entry is registered. The type_id rides the already-on-wire subscribe_request
+// type_hash field (0 = undeclared); matching authority is subscribe-time discovery.
 
 #include "plexus/io/message_forwarder.h"
 
@@ -29,6 +23,7 @@
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 
 using plexus::inproc::inproc_bus;
@@ -86,7 +81,8 @@ TEST_CASE("type_id_match: a matching type_id stays subscribed", "[forwarder][typ
     auto peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd;
-    REQUIRE(fwd.attach_for_fanout(peer, "alpha"));
+    fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
+    REQUIRE(fwd.attach_for_fanout(peer, "alpha", std::uint64_t{0xABCD}));
     ex.drain();
 
     const auto status = first_response_status(cap);
@@ -94,12 +90,8 @@ TEST_CASE("type_id_match: a matching type_id stays subscribed", "[forwarder][typ
     CHECK(*status == plexus::wire::subscribe_status::subscribed);
 }
 
-// RED-NOW until the owning plan activates the type_id compare: the producer today
-// replies `subscribed` and never inspects the subscriber's type_hash, so a mismatch
-// is NOT yet refused. The [!shouldfail] tag pins the expected failure; remove it
-// when the compare lands.
 TEST_CASE("type_id_match: a mismatched type_id is refused with type_mismatch",
-          "[forwarder][type_id][!shouldfail]")
+          "[forwarder][type_id]")
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
@@ -108,10 +100,52 @@ TEST_CASE("type_id_match: a mismatched type_id is refused with type_mismatch",
     auto peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd;
-    REQUIRE(fwd.attach_for_fanout(peer, "alpha"));
+    fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
+    // The subscriber declares a different type_id; the producer refuses it and does
+    // NOT register the fan-out entry (attach_for_fanout returns false).
+    REQUIRE_FALSE(fwd.attach_for_fanout(peer, "alpha", std::uint64_t{0x1234}));
     ex.drain();
 
     const auto status = first_response_status(cap);
     REQUIRE(status.has_value());
     CHECK(*status == plexus::wire::subscribe_status::type_mismatch);
+}
+
+TEST_CASE("type_id_match: an undeclared producer type accepts any subscriber type",
+          "[forwarder][type_id]")
+{
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
+
+    forwarder fwd;
+    // No declared producer type_id for "alpha": any subscriber type_id is accepted.
+    REQUIRE(fwd.attach_for_fanout(peer, "alpha", std::uint64_t{0x1234}));
+    ex.drain();
+
+    const auto status = first_response_status(cap);
+    REQUIRE(status.has_value());
+    CHECK(*status == plexus::wire::subscribe_status::subscribed);
+}
+
+TEST_CASE("type_id_match: an undeclared subscriber type is accepted against a typed producer",
+          "[forwarder][type_id]")
+{
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
+
+    forwarder fwd;
+    fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
+    // The subscriber declares no type_id (std::nullopt) — absence is not a mismatch.
+    REQUIRE(fwd.attach_for_fanout(peer, "alpha", std::nullopt));
+    ex.drain();
+
+    const auto status = first_response_status(cap);
+    REQUIRE(status.has_value());
+    CHECK(*status == plexus::wire::subscribe_status::subscribed);
 }

@@ -114,8 +114,9 @@ public:
     // call: fail fast if the peer's outstanding map is full (no insertion), else
     // allocate a corr_id, frame a frame_header-wrapped rpc_request into reused
     // scratch, send it, and ONLY THEN register the pending entry (the source
-    // registers post-admission so a rejected send leaves no dangling entry). Type
-    // hashes are opaque correlation hints plexus never interprets — written 0.
+    // registers post-admission so a rejected send leaves no dangling entry). The type
+    // tag words are reserved zeroes: correlation is carried by correlation_id, and type
+    // matching is settled at subscribe-time discovery, so they are written 0.
     void call(const peer &p, std::string_view fqn, std::span<const std::byte> param,
               on_response_fn on_response,
               std::optional<std::chrono::nanoseconds> deadline = std::nullopt,
@@ -329,8 +330,10 @@ private:
     }
 
     // reply_status: frame an rpc_response carrying the request's correlation_id back
-    // to the peer (source = procedure, type hashes swapped relative to the request)
-    // and send it through reused scratch.
+    // to the peer (source = procedure) and send it through reused scratch. The
+    // correlation_id alone matches the response to its pending request; the type tag
+    // words are reserved zeroes carrying no type-matching authority (matching is
+    // subscribe-time discovery), so the response writes them 0 rather than echoing.
     void reply_status(channel_type &channel, const wire::bidirectional_header &req_hdr,
                       wire::rpc_status status, std::span<const std::byte> return_data,
                       std::uint8_t session_id)
@@ -339,8 +342,8 @@ private:
                 .source         = wire::endpoint_source_type::procedure,
                 .sequence       = m_next_sequence++,
                 .topic_hash     = req_hdr.topic_hash,
-                .type_hash_1    = req_hdr.type_hash_2,
-                .type_hash_2    = req_hdr.type_hash_1,
+                .type_hash_1    = 0,
+                .type_hash_2    = 0,
                 .correlation_id = req_hdr.correlation_id
         };
         wire::encode_rpc_response_into(m_resp_scratch, resp_hdr, status, return_data);

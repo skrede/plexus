@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <optional>
 #include <string_view>
 #include <unordered_map>
 
@@ -60,25 +61,44 @@ public:
 
     // attach: per-(peer, fqn) refcount gate. On the 0->1 transition it registers
     // the fan-out entry AND emits a wire::subscribe_request to the peer; returns
-    // true. Subsequent attaches only bump the refcount and return false.
-    bool attach(const peer &p, std::string_view fqn)
+    // true. Subsequent attaches only bump the refcount and return false. The
+    // subscriber's declared type_id (std::nullopt = undeclared) rides the subscribe
+    // request so the producer can match it at subscribe time.
+    bool attach(const peer &p, std::string_view fqn,
+                std::optional<std::uint64_t> type_id = std::nullopt)
     {
         if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
         m_registry.add_subscriber(hash, fqn, p.channel, p.node_name);
         record_remote_topic(p.node_name, fqn);
-        send_subscribe(p.channel, fqn, hash);
+        send_subscribe(p.channel, fqn, hash, type_id);
         return true;
     }
 
-    // attach_for_fanout: same gate + entry, but emits a wire::subscribe_response
-    // (NOT a subscribe). The producer-side reaction to an arriving subscribe.
-    bool attach_for_fanout(const peer &p, std::string_view fqn)
+    // attach_for_fanout: the producer-side reaction to an arriving subscribe. It
+    // matches the subscriber's declared type_id (carried on the subscribe request)
+    // against this topic's declared producer type_id. On a real mismatch (both sides
+    // declared and unequal) it refuses: it replies subscribe_status::type_mismatch,
+    // registers NO fan-out entry, and returns false. A match — or either side
+    // undeclared (std::nullopt) — registers the fan-out entry and replies subscribed.
+    // The type_name is carried on the wire for a future graph layer but matching
+    // authority is the type_id alone; the type_hash/type_name string caps in
+    // subscribe.h already bound the attacker-controlled fields, and a forged type_id
+    // only yields a refusal (an equality compare, no parsing risk).
+    bool attach_for_fanout(const peer &p, std::string_view fqn,
+                           std::optional<std::uint64_t> subscriber_type_id = std::nullopt)
     {
+        auto hash = wire::fqn_topic_hash(fqn);
+        if(type_id_mismatch(hash, subscriber_type_id))
+        {
+            auto resp = wire::encode_subscribe_response(
+                {.topic_hash = hash, .status = wire::subscribe_status::type_mismatch});
+            send_control(p.channel, wire::msg_type::subscribe_response, resp);
+            return false;
+        }
         if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
             return false;
-        auto hash = wire::fqn_topic_hash(fqn);
         m_registry.add_subscriber(hash, fqn, p.channel, p.node_name);
         auto resp = wire::encode_subscribe_response(
             {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
@@ -99,10 +119,13 @@ public:
 
     // declare: mark a topic with a publisher-declared qos once (Fork-A). A latched
     // topic retains its last published frame and replays it to late subscribers.
-    // The hot publish(fqn, bytes) signature is unchanged.
-    void declare(std::string_view fqn, topic_qos qos)
+    // An optional producer type_id (std::nullopt = undeclared) is the subscribe-time
+    // match authority: a subscriber declaring a different type_id is refused with
+    // type_mismatch. The hot publish(fqn, bytes) signature is unchanged.
+    void declare(std::string_view fqn, topic_qos qos,
+                 std::optional<std::uint64_t> producer_type_id = std::nullopt)
     {
-        m_registry.declare(wire::fqn_topic_hash(fqn), fqn, qos);
+        m_registry.declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id);
     }
 
     // latch: convenience for declare(fqn, {.latch = true, .depth = 1}).
@@ -311,13 +334,29 @@ private:
         p.channel.send(it->second);
     }
 
-    void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash)
+    // type_id_mismatch: a refusal is warranted only when BOTH the producer and the
+    // subscriber declared a type_id and they differ. Either side undeclared
+    // (std::nullopt) is never a mismatch — absence is a distinct state, not a zero
+    // type_id that would false-refuse.
+    bool type_id_mismatch(std::uint64_t hash, std::optional<std::uint64_t> subscriber_type_id) const
     {
+        const auto producer_type_id = m_registry.producer_type_id(hash);
+        if(!producer_type_id || !subscriber_type_id)
+            return false;
+        return *producer_type_id != *subscriber_type_id;
+    }
+
+    void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash,
+                        std::optional<std::uint64_t> type_id = std::nullopt)
+    {
+        // The wire carries the type_id in the already-present type_hash field; 0 is
+        // the undeclared sentinel (an undeclared subscriber writes 0, which the
+        // producer reads back as "no type declared" — never a mismatch).
         wire::subscribe_request req{
                 .fqn        = std::string{fqn},
                 .type_name  = {},
                 .topic_hash = hash,
-                .type_hash  = 0,
+                .type_hash  = type_id.value_or(0),
                 .source     = wire::endpoint_source_type::publisher
         };
         auto bytes = wire::encode_subscribe_request(req);

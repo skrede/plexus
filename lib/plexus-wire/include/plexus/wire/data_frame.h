@@ -28,6 +28,13 @@ struct bidirectional_header
     endpoint_source_type source;
     uint64_t sequence;
     uint64_t topic_hash;
+    // A pair of structural reservation words, kept ZEROED on the data path. They
+    // carry NO type-matching authority: type matching is settled at subscribe-time
+    // discovery (subscribe_request.type_hash), not per data frame. They also carry
+    // NO correlation role — req/res is matched solely by correlation_id (the
+    // pending-table key). They remain in the header only to hold the byte layout
+    // (bidirectional_header_size stays 41) so activating them is an append-free,
+    // wire-size-stable change if a future feature ever needs them.
     uint64_t type_hash_1;
     uint64_t type_hash_2;
     uint64_t correlation_id;

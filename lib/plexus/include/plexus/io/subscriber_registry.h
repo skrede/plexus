@@ -8,6 +8,7 @@
 #include <vector>
 #include <cstdint>
 #include <utility>
+#include <optional>
 #include <algorithm>
 #include <string_view>
 #include <unordered_map>
@@ -41,6 +42,13 @@ public:
         std::string fqn;
         std::vector<subscriber> subscribers;
         topic_qos qos{};
+        // The producer-declared type identity for this topic. std::nullopt is a
+        // distinct "undeclared type" state (NOT a zero type_id) so an unknown
+        // producer type never false-refuses a subscriber — matching applies only
+        // when BOTH sides declare a type. The type_name (a future graph-layer
+        // concern) is intentionally not recorded here; matching authority is the
+        // type_id alone.
+        std::optional<std::uint64_t> producer_type_id;
     };
 
     // Bump the (peer, fqn) refcount; returns the post-increment count. The 0->1
@@ -96,14 +104,18 @@ public:
 
     // Record a publisher-declared per-topic qos (and the topic_hash -> fqn
     // resolution) BEFORE any subscriber attaches. A later add_subscriber for the
-    // same hash leaves this qos intact (it only fills an empty fqn).
-    void declare(std::uint64_t topic_hash, std::string_view fqn, topic_qos qos)
+    // same hash leaves this qos intact (it only fills an empty fqn). An optional
+    // producer type_id (std::nullopt = undeclared) is recorded alongside the qos —
+    // the subscribe-time match authority.
+    void declare(std::uint64_t topic_hash, std::string_view fqn, topic_qos qos,
+                 std::optional<std::uint64_t> producer_type_id = std::nullopt)
     {
         m_hash_to_fqn[topic_hash] = std::string{fqn};
         auto &entry = m_topics[topic_hash];
         if(entry.fqn.empty())
             entry.fqn = std::string{fqn};
         entry.qos = qos;
+        entry.producer_type_id = producer_type_id;
     }
 
     // The per-topic qos, or a default topic_qos{} when the hash is unknown.
@@ -111,6 +123,16 @@ public:
     {
         auto it = m_topics.find(topic_hash);
         return it == m_topics.end() ? topic_qos{} : it->second.qos;
+    }
+
+    // The producer-declared type_id for a topic, or std::nullopt when the topic
+    // declared no type (undeclared producer type). Absence is a distinct state from
+    // a zero type_id — a subscriber type_id is never refused against an undeclared
+    // producer type.
+    std::optional<std::uint64_t> producer_type_id(std::uint64_t topic_hash) const
+    {
+        auto it = m_topics.find(topic_hash);
+        return it == m_topics.end() ? std::nullopt : it->second.producer_type_id;
     }
 
     // Drop one peer's fan-out entry for an fqn.

@@ -30,6 +30,7 @@
 #include <vector>
 #include <cstdint>
 #include <utility>
+#include <optional>
 #include <string_view>
 #include <system_error>
 
@@ -207,7 +208,14 @@ private:
         });
         m_router.on_subscribe([this](std::span<const std::byte> inner) {
             if(auto req = wire::decode_subscribe_request(inner))
-                m_messages.attach_for_fanout(m_msg_peer, req->fqn);
+            {
+                // type_hash == 0 is the undeclared-type sentinel on the wire; lift it
+                // to std::nullopt so an undeclared subscriber is never refused.
+                std::optional<std::uint64_t> subscriber_type_id;
+                if(req->type_hash != 0)
+                    subscriber_type_id = req->type_hash;
+                m_messages.attach_for_fanout(m_msg_peer, req->fqn, subscriber_type_id);
+            }
         });
         m_router.on_subscribe_response([this](std::span<const std::byte> inner) {
             on_subscribe_response_received(inner);
