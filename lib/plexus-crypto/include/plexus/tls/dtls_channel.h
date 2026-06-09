@@ -114,6 +114,13 @@ public:
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
 
+    // DTLS owns no socket and keeps no bounded userspace egress queue: the post-ready
+    // path fires application bytes straight through SSL_write -> drain_outbound to the
+    // shared UDP server (the handshake_gate buffers only DURING the handshake and stays
+    // empty after ready). It therefore reports 0 — "always accepts" — the accurate
+    // saturation signal for a fire-through datagram channel, NOT a short-circuit dodge.
+    [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+
     // Fires ONCE on a verified mutual completion (the transport resolves the FSM
     // via handshake_fsm::on_external_complete from this edge). Set before driving.
     void on_external_complete(plexus::detail::move_only_function<void()> cb) { m_on_external_complete = std::move(cb); }

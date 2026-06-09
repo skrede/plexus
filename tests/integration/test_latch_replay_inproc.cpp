@@ -90,7 +90,7 @@ TEST_CASE("inproc latch replay delivers the late joiner the retained value throu
         receive_sink sink(ex);
         auto peer = make_peer(ch, sink, "late-node");
 
-        forwarder fwd;
+        forwarder fwd{ex};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(payload));   // retained with ZERO subscribers
         ex.drain();
@@ -123,7 +123,7 @@ TEST_CASE("inproc non-latched topic does not replay on a late subscribe, looped"
         receive_sink sink(ex);
         auto peer = make_peer(ch, sink, "late-node");
 
-        forwarder fwd;
+        forwarder fwd{ex};
         fwd.publish("topic", as_bytes(std::string{"live-only"}));   // not latched, no subscriber
         ex.drain();
 
@@ -198,7 +198,7 @@ TEST_CASE("inproc LATCH-NOALLOC: steady-state latched publishing adds no retenti
 
     sink_executor ex;
     sink_channel ch(ex);
-    sink_forwarder fwd;
+    sink_forwarder fwd{ex};
     sink_forwarder::peer peer{ch, "node-a"};
     fwd.latch("topic");
     fwd.attach_for_fanout(peer, "topic");

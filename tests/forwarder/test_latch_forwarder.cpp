@@ -138,7 +138,9 @@ static_assert(plexus::Policy<sink_policy>);
 
 TEST_CASE("latch records the per-topic qos independent of any subscriber", "[latch][forwarder]")
 {
-    forwarder fwd;
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
+    forwarder fwd{ex};
     fwd.latch("topic");   // zero subscribers, no attach
     // The registry seam the headline scenario depends on: declare/latch records
     // the qos before any add_subscriber. Reach it via a fresh registry mirroring
@@ -159,7 +161,7 @@ TEST_CASE("late subscriber to a latched topic gets the retained value published 
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd;
+        forwarder fwd{ex};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(std::string{"retained-v1"}));   // NO subscriber yet
         ex.drain();
@@ -182,7 +184,7 @@ TEST_CASE("a non-latched topic does not replay on a late subscribe", "[latch][fo
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.publish("topic", as_bytes(std::string{"live-only"}));   // not latched, no subscriber
     ex.drain();
 
@@ -199,7 +201,7 @@ TEST_CASE("a latched-but-never-published topic replays nothing (empty retention)
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.latch("topic");
     REQUIRE(fwd.attach_for_fanout(peer, "topic"));   // subscribe BEFORE any publish
     ex.drain();
@@ -222,7 +224,7 @@ TEST_CASE("depth=1 replays only the last latched value", "[latch][forwarder]")
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd;
+        forwarder fwd{ex};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(std::string{"v1"}));
         fwd.publish("topic", as_bytes(std::string{"v2"}));
@@ -245,7 +247,7 @@ TEST_CASE("latch replay targets only the new subscriber, no double-receive", "[l
     auto peer_a = make_peer(ch_a, cap_a, "node-a");
     auto peer_b = make_peer(ch_b, cap_b, "node-b");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.latch("topic");
     REQUIRE(fwd.attach_for_fanout(peer_a, "topic"));   // A before the publish
     ex.drain();
@@ -271,7 +273,7 @@ TEST_CASE("latch retention survives subscriber churn", "[latch][forwarder]")
     capture cap_a(ex);
     auto peer_a = make_peer(ch_a, cap_a, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.latch("topic");
     fwd.publish("topic", as_bytes(std::string{"survivor"}));
     REQUIRE(fwd.attach_for_fanout(peer_a, "topic"));
@@ -297,7 +299,7 @@ TEST_CASE("multi-publisher to one latched topic is last-writer-wins", "[latch][f
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     fwd.latch("topic");
     fwd.publish("topic", as_bytes(std::string{"writer-1"}));
     fwd.publish("topic", as_bytes(std::string{"writer-2"}));
@@ -316,7 +318,7 @@ TEST_CASE("latched retention adds no per-publish allocation after warm-up", "[la
 
     sink_executor ex;
     sink_channel ch(ex);
-    sink_forwarder fwd;
+    sink_forwarder fwd{ex};
     sink_forwarder::peer peer{ch, "node-a"};
     fwd.latch("topic");
     fwd.attach_for_fanout(peer, "topic");

@@ -145,7 +145,8 @@ TEST_CASE("locality confinement: the fan-out gate delivers a topic only to its i
         tagged_channel local_ch{"unix"};
         tagged_channel remote_ch{"tcp"};
 
-        forwarder fwd;
+        tagged_executor tex;
+        forwarder fwd{tex};
         fwd.attach(forwarder::peer{local_ch, "local-node"}, fqn);
         fwd.attach(forwarder::peer{remote_ch, "remote-node"}, fqn);
 
@@ -341,8 +342,8 @@ struct live_link
     ::asio::io_context io;
     Transport transport{io};
 
-    pio::message_forwarder<Policy> pub_messages;
-    pio::message_forwarder<Policy> sub_messages;
+    pio::message_forwarder<Policy> pub_messages{io};
+    pio::message_forwarder<Policy> sub_messages{io};
     pio::procedure_forwarder<Policy> pub_procedures{io, std::chrono::hours(1)};
     pio::procedure_forwarder<Policy> sub_procedures{io, std::chrono::hours(1)};
 

@@ -3,9 +3,11 @@
 
 #include "plexus/io/subscriber_registry.h"
 #include "plexus/io/detail/history_ring.h"
+#include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/null_logger.h"
+#include "plexus/io/priority.h"
 #include "plexus/io/locality.h"
 #include "plexus/wire_bytes.h"
 #include "plexus/publisher_gid.h"
@@ -101,6 +103,7 @@ class message_forwarder
 {
 public:
     using channel_type = typename Policy::byte_channel_type;
+    using executor_type = typename Policy::executor_type;
 
     // A peer the forwarder fans toward: the channel plus its node-name key. The
     // public API takes peers by const& (no raw pointers).
@@ -110,8 +113,12 @@ public:
         std::string node_name;
     };
 
-    explicit message_forwarder(log::logger &logger = shared_null_logger()) noexcept
+    // The borrowed executor is required (no default): the egress scheduler cannot post a
+    // drain without one, so its absence is not meaningful. The logger keeps its default.
+    // NOT noexcept — the scheduler's per-destination maps may allocate.
+    explicit message_forwarder(executor_type executor, log::logger &logger = shared_null_logger())
         : m_logger(logger)
+        , m_egress(executor)
     {
     }
 
@@ -242,11 +249,16 @@ public:
         // The SINGLE fan-out confinement choke point: send to a subscriber only when
         // the topic's reach mask shares a bit with the subscriber's cached tier. Default
         // reach=any sends to all (no behavior change); a confined mask drops an off-scope
-        // tier and never leaks (fail-closed access control).
+        // tier and never leaks (fail-closed access control). The reach gate is UNCHANGED
+        // and stays BEFORE the egress enqueue. The scheduler governs the LIVE fan-out
+        // ONLY — control frames and latch replay use direct channel.send (see below). An
+        // inproc/sink channel (no backpressured()) short-circuits through the scheduler to
+        // a direct synchronous send, byte-identical to a bandless fan-out.
+        const std::size_t band = detail::band_of(qos.priority);
         if(subs != nullptr)
             for(const auto &sub : *subs)
                 if(any_set(reach, sub.tier))
-                    sub.channel->send(m_frame_scratch);
+                    m_egress.enqueue(*sub.channel, band, m_frame_scratch);
 
         retain_if_latched(hash);
     }
@@ -259,6 +271,7 @@ public:
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
         m_registry.remove_subscriber(hash, p.channel);
+        m_egress.remove(p.channel);
         forget_remote_topic(p.node_name, fqn);
         auto req = wire::encode_unsubscribe_request({.topic_hash = hash});
         send_control(p.channel, wire::msg_type::unsubscribe, req);
@@ -275,6 +288,7 @@ public:
     void detach_all(const peer &p)
     {
         m_registry.remove_peer(p.node_name, p.channel);
+        m_egress.remove(p.channel);
     }
 
     // remembered_topics: the durable subscribe demand for a peer's node_name — the
@@ -525,6 +539,7 @@ private:
 
     log::logger &m_logger;
     subscriber_registry<channel_type> m_registry;
+    detail::egress_scheduler<channel_type, Policy> m_egress;
     std::unordered_map<std::string, std::vector<std::string>> m_remote_topics;
     std::vector<std::byte> m_inner_scratch;
     std::vector<std::byte> m_frame_scratch;

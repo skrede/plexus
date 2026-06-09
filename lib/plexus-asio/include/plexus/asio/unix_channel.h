@@ -76,6 +76,7 @@ public:
     {
         if(!m_open)
             return;
+        m_write_queue_bytes += data.size();
         m_write_queue.emplace_back(data.begin(), data.end());
         if(!m_writing)
             do_write();
@@ -106,6 +107,9 @@ public:
 
     [[nodiscard]] ::asio::local::stream_protocol::socket &socket() noexcept { return m_socket; }
     void start_read() { m_open = true; do_read(); }
+
+    // The current queued (un-drained) write-queue byte occupancy; 0 when the socket drains.
+    [[nodiscard]] std::size_t backpressured() const noexcept { return m_write_queue_bytes; }
 
 private:
     // Wire stream_inbound's two outputs to the channel's frame + close paths.
@@ -176,6 +180,7 @@ private:
         ::asio::async_write(m_socket, ::asio::buffer(m_write_queue.front()),
             [this](std::error_code ec, std::size_t)
             {
+                m_write_queue_bytes -= m_write_queue.front().size();
                 m_write_queue.pop_front();
                 if(ec)
                     return fail(ec);
@@ -203,6 +208,7 @@ private:
     std::vector<std::byte> m_frame_scratch;
     std::array<std::byte, 4096> m_read_buf{};
     std::deque<std::vector<std::byte>> m_write_queue;
+    std::size_t m_write_queue_bytes{0};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;

@@ -426,7 +426,7 @@ TEST_CASE("udp congestion block: a windowed reliable burst stays byte-bounded an
         return f.delivered.size() == static_cast<std::size_t>(n);
     });
 
-    REQUIRE_FALSE(err.has_value());                 // the 16 MiB byte budget never overflowed
+    REQUIRE_FALSE(err.has_value());                 // the bounded byte budget never overflowed
     REQUIRE(f.delivered.size() == static_cast<std::size_t>(n));   // FULL delivery, never partial
     REQUIRE(f.delivered == sent);                   // in publish order
     REQUIRE(f.dialed->backpressured() == 0);        // the queue fully DRAINED on ack

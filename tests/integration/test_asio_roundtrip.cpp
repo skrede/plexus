@@ -89,7 +89,7 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
     // the data frame. The client's frame_router demuxes by frame_header.type — the
     // subscribe has no registered consumer and is warn-and-dropped, the
     // unidirectional data routes to its consumer — so no flush loop is needed.
-    pio::message_forwarder<pasio::asio_policy> fwd;
+    pio::message_forwarder<pasio::asio_policy> fwd{io};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "client-node"};
     fwd.attach(sub, fqn);
 

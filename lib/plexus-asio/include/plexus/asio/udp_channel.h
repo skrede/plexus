@@ -72,15 +72,16 @@ public:
     static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
     // The bounded congestion=block backpressure BYTE budget (allocated at setup, never
     // grown on the hot path): a full send window AND a full byte budget surface a stall
-    // signal rather than unbounded memory growth. Sized at 4x the 4 MiB max-message
-    // ceiling (= 16 MiB) so the queue can hold a whole one-shot large reliable message in
-    // flight plus headroom for the next, yet a sustained overrun fails closed at a bounded
-    // 16 MiB instead of the unbounded 10+ GB balloon the count cap left possible. The
-    // 16 MiB figure is the swept knee (TRANSPORT-POLICY-PROFILE.md §byte-cap sweep): it
-    // matches the publisher in-flight gate that kept the stream cells from OOMing in the
-    // re-baseline and does not throttle the in-budget flat-latency regime.
+    // signal rather than unbounded memory growth. Sized at 1x the 4 MiB max-message
+    // ceiling so this per-connection backpressure queue is the SHALLOW socket-facing
+    // buffer holding roughly one frame in flight: the deep, priority-ordered backlog now
+    // lives in the forwarder's egress bands ABOVE this queue, so a deep channel FIFO would
+    // silently defeat banding by re-accumulating an un-prioritized backlog. A sustained
+    // overrun still fails closed at a bounded cap instead of the unbounded balloon the
+    // count cap left possible. This shallow cap is a load-bearing knob — to be
+    // substantiated at the fan-out benchmark, not fixed by feel.
     static constexpr std::size_t default_backpressure_bytes =
-        4u * io::fragmentation_limits::max_message_size;
+        1u * io::fragmentation_limits::max_message_size;
 
     using arq_type = io::detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
     using reassembler_type = io::detail::reassembler<::asio::io_context &, asio_timer>;

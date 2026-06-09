@@ -84,7 +84,7 @@ TEST_CASE("message_info: the existing 2-arg deliver hands up the topic and bytes
     inproc_channel<> ch(ex);
     auto peer = make_peer(ch, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
@@ -114,7 +114,7 @@ TEST_CASE("message_info: the metadata overload delivers a fully-populated info",
     inproc_channel<> ch(ex);
     auto peer = make_peer(ch, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
@@ -164,7 +164,7 @@ TEST_CASE("message_info: the metadata overload reconstructs source_identity from
     inproc_channel<> ch(ex);
     auto peer = make_peer(ch, "node-a");
 
-    forwarder fwd;
+    forwarder fwd{ex};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
@@ -210,7 +210,7 @@ TEST_CASE("message_info: declare(emit_source_identity) mints a stable, distinct 
     capture.on_data([&](std::span<const std::byte> f) { framed.assign(f.begin(), f.end()); });
     auto peer = make_peer(sub, "node-rx");
 
-    forwarder fwd;
+    forwarder fwd{ex};
 
     // The decoded endpoint counter of the LAST frame captured on the wire (nullopt when
     // the frame's gid flag was clear).

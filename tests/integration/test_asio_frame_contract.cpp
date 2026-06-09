@@ -68,7 +68,7 @@ std::optional<wire::subscribe_request> one_control_roundtrip(std::string_view fq
         io.poll_one();
 
     // attach emits a frame_header-wrapped subscribe toward the accepted channel.
-    pio::message_forwarder<pasio::asio_policy> fwd;
+    pio::message_forwarder<pasio::asio_policy> fwd{io};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "client-node"};
     fwd.attach(sub, fqn);
 

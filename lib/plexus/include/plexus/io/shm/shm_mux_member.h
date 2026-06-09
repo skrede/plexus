@@ -103,6 +103,14 @@ public:
     void on_error(plexus::detail::move_only_function<void(io_error)> cb) { m_on_error = std::move(cb); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
 
+    // send() memcpys straight into the shared-memory slab (no bounded userspace egress
+    // queue): the bounded ring's own congestion verdict is surfaced inline at send time,
+    // so this channel keeps no queued backlog. It therefore reports 0 — "always accepts" —
+    // the accurate saturation signal for an in-slab fire-through channel, and the erasure
+    // forwards it so a mux-composed shm member exposes the same occupancy read as a stream
+    // member.
+    [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+
     // Drain every pending message into on_data as header-on bytes. The owner drives
     // this on each notifier wake (the registry's drain is a discard; this delivers).
     void pump()

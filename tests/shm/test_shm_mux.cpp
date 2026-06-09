@@ -163,6 +163,7 @@ struct dummy_stream_channel
     void on_closed(plexus::detail::move_only_function<void()>) {}
     void on_error(plexus::detail::move_only_function<void(pio::io_error)>) {}
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
+    [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
 };
 
 struct dummy_stream_member
