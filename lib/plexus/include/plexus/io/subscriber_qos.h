@@ -1,0 +1,64 @@
+#ifndef HPP_GUARD_PLEXUS_IO_SUBSCRIBER_QOS_H
+#define HPP_GUARD_PLEXUS_IO_SUBSCRIBER_QOS_H
+
+#include <cstdint>
+
+namespace plexus::io {
+
+// The subscriber-side replay choice for a latched topic. `none` declines every
+// retained frame on subscribe; `latest` takes the single most-recent retained
+// frame; `all` takes the retained history (capped at the ring depth). Wire bytes
+// {0,1,2} pin each enumerator (append-only, never renumbered).
+enum class durability : std::uint8_t
+{
+    none   = 0,
+    latest = 1,
+    all    = 2
+};
+
+// The subscriber-side delivery model. `push` lets the producer drive retained +
+// live frames at the topic's pace; `pull` defers retained delivery to an explicit
+// fetch. Wire bytes {0,1} pin each enumerator.
+enum class delivery : std::uint8_t
+{
+    push = 0,
+    pull = 1
+};
+
+// The subscriber-CHOICE QoS value struct: a different actor's decision than the
+// publisher-declared topic_qos, carried on its own wire path (the subscribe
+// request) and stored once per subscriber at attach. Plain fields with defaults,
+// trivially copyable; plexus has no QoS negotiation, so each "unset" value is a
+// genuine, tested choice — never a euphemism for an unimplemented feature.
+//
+// The two defaults are the friendly required-with-default resolution: a subscriber
+// that carries no choice genuinely chose `durability=latest` (the late-join replay
+// most consumers want) and `delivery=push`. `replay_depth=0` means "use the ring
+// depth" for an `all` replay, not "replay nothing". The reserved request-side
+// fields below are carried on the wire NOW and become enforcement inputs in later
+// work WITHOUT a further protocol bump: `requires_source_identity=false` and
+// `requested_reliability_reliable=false` are genuine "not requested" states; each
+// `*_ns=0` is "no deadline / lease requested" (absence, not zero-duration); and
+// `requested_priority=0` is the default band. No std::optional is used — the
+// 0-sentinel and the enum default ARE the meaningful, tested absence.
+struct subscriber_qos
+{
+    durability    durability_mode = durability::latest;
+    delivery      delivery_mode   = delivery::push;
+    std::uint32_t replay_depth    = 0;
+
+    bool          requires_source_identity        = false;
+    bool          requested_reliability_reliable   = false;
+    std::uint64_t requested_deadline_ns            = 0;
+    std::uint64_t requested_lease_ns               = 0;
+    std::uint8_t  requested_priority               = 0;
+
+    // A defaulted value-equality so a caller can ask "does this differ from the
+    // friendly default?" before paying the wire region — the subscribe-out path
+    // keeps the encode byte-identical when the choice IS the default.
+    friend bool operator==(const subscriber_qos &, const subscriber_qos &) = default;
+};
+
+}
+
+#endif

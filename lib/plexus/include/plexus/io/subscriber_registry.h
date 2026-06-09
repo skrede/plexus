@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_SUBSCRIBER_REGISTRY_H
 
 #include "plexus/io/locality.h"
+#include "plexus/io/subscriber_qos.h"
 #include "plexus/topic_qos.h"
 
 #include <string>
@@ -35,6 +36,10 @@ public:
         Channel *channel;
         std::string node_name;
         locality tier;   // the delivery tier, classified ONCE at attach (never per fan-out hop)
+        // The subscriber's QoS choice, stored ONCE at attach alongside the tier and
+        // read at replay — never mutated on the hot path. An absent wire region
+        // lands here as the friendly default (a real choice, not a sentinel).
+        subscriber_qos qos{};
     };
 
     struct topic_entry
@@ -94,7 +99,8 @@ public:
     // same channel). Records the topic_hash -> fqn resolution the receive tail
     // reads. Called at attach only.
     void add_subscriber(std::uint64_t topic_hash, std::string_view fqn,
-                        Channel &channel, std::string_view node_name)
+                        Channel &channel, std::string_view node_name,
+                        const subscriber_qos &qos = subscriber_qos{})
     {
         m_hash_to_fqn[topic_hash] = std::string{fqn};
         auto &entry = m_topics[topic_hash];
@@ -102,13 +108,27 @@ public:
             entry.fqn = std::string{fqn};
         for(const auto &sub : entry.subscribers)
             if(sub.channel == &channel)
-                return;
+                return;   // idempotent re-add keeps the first qos
         // Classify the delivery tier ONCE here from the channel's OWN endpoint scheme
         // (the transport that minted it, never peer-supplied data). remote_endpoint() is
         // a syscall on a real socket channel, so it is read at attach and cached — the
-        // fan-out loop only reads the stored tier.
+        // fan-out loop only reads the stored tier. The qos is stored the same way: once.
         const locality tier = tier_of(channel.remote_endpoint().scheme);
-        entry.subscribers.push_back(subscriber{&channel, std::string{node_name}, tier});
+        entry.subscribers.push_back(subscriber{&channel, std::string{node_name}, tier, qos});
+    }
+
+    // The subscriber's stored QoS for a (topic_hash, channel) pair, or the friendly
+    // subscriber_qos default when the pair is unknown — absence is the default choice
+    // (a subscriber that carried no region genuinely chose the default), not a refusal.
+    subscriber_qos qos_for_subscriber(std::uint64_t topic_hash, const Channel &channel) const
+    {
+        auto it = m_topics.find(topic_hash);
+        if(it == m_topics.end())
+            return subscriber_qos{};
+        for(const auto &sub : it->second.subscribers)
+            if(sub.channel == &channel)
+                return sub.qos;
+        return subscriber_qos{};
     }
 
     // Record a publisher-declared per-topic qos (and the topic_hash -> fqn

@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_MESSAGE_FORWARDER_H
 
 #include "plexus/io/subscriber_registry.h"
+#include "plexus/io/subscriber_qos.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/locality.h"
@@ -31,6 +32,43 @@
 #include <unordered_map>
 
 namespace plexus::io {
+
+// Pack a core subscriber_qos into the flat wire region (the wire layer carries no
+// core dependency, so the lift lives here). The requested_flags bits are packed
+// from the two request-side bools.
+inline wire::subscribe_qos_region to_wire_region(const subscriber_qos &q)
+{
+    std::uint8_t flags = 0;
+    if(q.requires_source_identity)
+        flags |= wire::detail::k_qos_flag_requires_source_identity;
+    if(q.requested_reliability_reliable)
+        flags |= wire::detail::k_qos_flag_requested_reliable;
+    return wire::subscribe_qos_region{
+            .durability            = static_cast<std::uint8_t>(q.durability_mode),
+            .delivery_mode         = static_cast<std::uint8_t>(q.delivery_mode),
+            .replay_depth          = q.replay_depth,
+            .requested_flags       = flags,
+            .requested_deadline_ns = q.requested_deadline_ns,
+            .requested_lease_ns    = q.requested_lease_ns,
+            .requested_priority    = q.requested_priority};
+}
+
+// Lift a decoded wire region back into a core subscriber_qos (the inverse of
+// to_wire_region), unpacking the requested_flags bits.
+inline subscriber_qos from_wire_region(const wire::subscribe_qos_region &r)
+{
+    return subscriber_qos{
+            .durability_mode = static_cast<durability>(r.durability),
+            .delivery_mode   = static_cast<delivery>(r.delivery_mode),
+            .replay_depth    = r.replay_depth,
+            .requires_source_identity
+                = (r.requested_flags & wire::detail::k_qos_flag_requires_source_identity) != 0,
+            .requested_reliability_reliable
+                = (r.requested_flags & wire::detail::k_qos_flag_requested_reliable) != 0,
+            .requested_deadline_ns = r.requested_deadline_ns,
+            .requested_lease_ns    = r.requested_lease_ns,
+            .requested_priority    = r.requested_priority};
+}
 
 // The slice's payload-opaque pub/sub engine: a header-only forwarder templated
 // on the Policy seam that fans opaque wire_bytes over byte_channels. A "peer" is
@@ -89,7 +127,8 @@ public:
     // subscribe.h already bound the attacker-controlled fields, and a forged type_id
     // only yields a refusal (an equality compare, no parsing risk).
     bool attach_for_fanout(const peer &p, std::string_view fqn,
-                           std::optional<std::uint64_t> subscriber_type_id = std::nullopt)
+                           std::optional<std::uint64_t> subscriber_type_id = std::nullopt,
+                           const subscriber_qos &sub_qos = subscriber_qos{})
     {
         auto hash = wire::fqn_topic_hash(fqn);
         if(type_id_mismatch(hash, subscriber_type_id))
@@ -101,7 +140,7 @@ public:
         }
         if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
             return false;
-        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name);
+        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos);
         auto resp = wire::encode_subscribe_response(
             {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
         send_control(p.channel, wire::msg_type::subscribe_response, resp);
@@ -347,6 +386,11 @@ private:
     // a frame retained, PUSH that frame to ONLY the new peer (not the fan-out loop)
     // as an ordinary data frame, after the subscribe_response. A latched-but-never-
     // published topic retains nothing, so it replays nothing.
+    //
+    // The new subscriber's stored durability choice gates the replay: `none` declines
+    // every retained frame; `latest` takes the single retained slot; `all` takes the
+    // retained history (the multi-slot history replay is built on the retained ring —
+    // here it behaves as `latest` against the depth-1 slot until that ring lands).
     void replay_if_latched(const peer &p, std::uint64_t hash)
     {
         if(!m_registry.qos_for(hash).latch)
@@ -354,7 +398,15 @@ private:
         auto it = m_retained.find(hash);
         if(it == m_retained.end() || it->second.empty())
             return;
-        p.channel.send(it->second);
+        switch(m_registry.qos_for_subscriber(hash, p.channel).durability_mode)
+        {
+        case durability::none:
+            return;
+        case durability::latest:
+        case durability::all:
+            p.channel.send(it->second);
+            return;
+        }
     }
 
     // type_id_mismatch: a refusal is warranted only when BOTH the producer and the
@@ -370,7 +422,8 @@ private:
     }
 
     void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash,
-                        std::optional<std::uint64_t> type_id = std::nullopt)
+                        std::optional<std::uint64_t> type_id = std::nullopt,
+                        const subscriber_qos &sub_qos = subscriber_qos{})
     {
         // The wire carries the type_id in the already-present type_hash field; 0 is
         // the undeclared sentinel (an undeclared subscriber writes 0, which the
@@ -382,6 +435,13 @@ private:
                 .type_hash  = type_id.value_or(0),
                 .source     = wire::endpoint_source_type::publisher
         };
+        // Carry the choice OUT only when it differs from the friendly default, so a
+        // default subscribe stays byte-identical to the pre-region encoding.
+        if(!(sub_qos == subscriber_qos{}))
+        {
+            req.has_qos = true;
+            req.qos = to_wire_region(sub_qos);
+        }
         auto bytes = wire::encode_subscribe_request(req);
         send_control(channel, wire::msg_type::subscribe, bytes);
     }

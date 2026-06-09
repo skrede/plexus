@@ -101,3 +101,19 @@ target_link_libraries(test_type_id_match PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_type_id_match TEST_PREFIX "forwarder.")
+
+# The subscriber-durability replay oracle: a none-durability subscriber receives
+# ZERO retained frames on subscribe, latest receives EXACTLY one, the friendly
+# default behaves as latest, and all replays as latest against the depth-1 slot
+# pending the retained ring. The none/latest delivery effects are looped for
+# reproducibility. Links the core, wire, and inproc layers; selected by the
+# `forwarder.` ctest prefix and by `ctest -R durability`.
+add_executable(test_durability_replay test_durability_replay.cpp)
+
+target_link_libraries(test_durability_replay PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_durability_replay TEST_PREFIX "forwarder.")

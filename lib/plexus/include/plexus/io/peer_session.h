@@ -214,7 +214,11 @@ private:
                 std::optional<std::uint64_t> subscriber_type_id;
                 if(req->type_hash != 0)
                     subscriber_type_id = req->type_hash;
-                m_messages.attach_for_fanout(m_msg_peer, req->fqn, subscriber_type_id);
+                // Lift the carried QoS region into the core choice; an absent region
+                // (has_qos clear) lands as the friendly default.
+                const subscriber_qos sub_qos = req->has_qos ? from_wire_region(req->qos)
+                                                            : subscriber_qos{};
+                m_messages.attach_for_fanout(m_msg_peer, req->fqn, subscriber_type_id, sub_qos);
             }
         });
         m_router.on_subscribe_response([this](std::span<const std::byte> inner) {

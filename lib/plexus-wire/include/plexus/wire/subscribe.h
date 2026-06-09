@@ -36,6 +36,22 @@ enum class subscribe_notification : uint8_t
     producer_gone      = 0x02
 };
 
+// The wire-layer mirror of the subscriber's QoS choices. The wire layer keeps its
+// zero-upward-dependency, so it carries a flat POD with the SAME field values as
+// io::subscriber_qos rather than including the core header (exactly as handshake.h
+// carries a raw std::array, not plexus::node_id). The core lifts this region into
+// io::subscriber_qos at the decode site, packing/unpacking requested_flags.
+struct subscribe_qos_region
+{
+    uint8_t  durability;        // {0=none, 1=latest, 2=all}
+    uint8_t  delivery_mode;     // {0=push, 1=pull}
+    uint32_t replay_depth;      // 0 => use the ring depth
+    uint8_t  requested_flags;   // bit0=requires_source_identity, bit1=requested_reliability_reliable
+    uint64_t requested_deadline_ns; // 0 = unset
+    uint64_t requested_lease_ns;    // 0 = unset
+    uint8_t  requested_priority;    // carry-only; default band 0
+};
+
 struct subscribe_request
 {
     std::string fqn;
@@ -43,6 +59,12 @@ struct subscribe_request
     uint64_t topic_hash;
     uint64_t type_hash;
     endpoint_source_type source;
+    // The flag-gated, trailing QoS region. has_qos=false (the default) encodes
+    // NO trailing bytes, so the frame is byte-identical to the pre-region layout
+    // a v3 producer would write; the decoder maps an absent region to the qos
+    // defaults. has_qos=true appends the fixed 26-byte region after type_name.
+    bool has_qos = false;
+    subscribe_qos_region qos{};
 };
 
 struct subscribe_response
@@ -90,11 +112,65 @@ constexpr std::size_t unsubscribe_response_size = 9; // 8 + 1
 constexpr std::size_t k_max_fqn       = 1024;
 constexpr std::size_t k_max_type_name = 512;
 
+// The trailing, flag-gated subscriber-QoS region. It rides one bounds-safe
+// read_length_prefixed<uint16_t> guard, then a fixed-width layout (no nested length
+// games). Present iff subscribe_request::has_qos; absent => the qos defaults, so a
+// region-clear frame is byte-identical to the pre-region encoding.
+//
+//   durability            u8  @ 0   {0=none, 1=latest, 2=all}
+//   delivery_mode         u8  @ 1   {0=push, 1=pull}
+//   replay_depth          u32 @ 2   (0 => use the ring depth)
+//   requested_flags       u8  @ 6   bit0=requires_source_identity, bit1=requested_reliability_reliable
+//   requested_deadline_ns u64 @ 7   (0 = unset)
+//   requested_lease_ns    u64 @ 15  (0 = unset)
+//   requested_priority    u8  @ 23  (carry-only)
+//   reserved              u8[2] @ 24 (=0; future wire needs ride here)
+// Byte-sum = 1+1+4+1+8+8+1+2 = 26 bytes, fixed.
+constexpr std::size_t k_qos_durability_off    = 0;
+constexpr std::size_t k_qos_delivery_off      = 1;
+constexpr std::size_t k_qos_replay_depth_off  = 2;
+constexpr std::size_t k_qos_flags_off         = 6;
+constexpr std::size_t k_qos_deadline_ns_off   = 7;
+constexpr std::size_t k_qos_lease_ns_off       = 15;
+constexpr std::size_t k_qos_priority_off       = 23;
+constexpr std::size_t k_qos_reserved_off       = 24;
+constexpr std::size_t k_qos_reserved_size      = 2;
+
+constexpr std::size_t k_qos_region_size = k_qos_reserved_off + k_qos_reserved_size;
+static_assert(k_qos_region_size == 1 + 1 + 4 + 1 + 8 + 8 + 1 + 2,
+              "the subscriber-QoS region must equal the sum of its fixed fields");
+static_assert(k_qos_region_size == 26);
+
+// The per-callsite policy lid on the attacker-controlled region length, mirroring
+// k_max_fqn / k_max_type_name: a generous cap above the fixed 26-byte region so a
+// claimed-huge uint16_t prefix is refused before any read.
+constexpr std::size_t k_max_qos_region = 64;
+
+// The QoS request-flag bit allocation inside requested_flags.
+constexpr std::uint8_t k_qos_flag_requires_source_identity = 0x01;
+constexpr std::uint8_t k_qos_flag_requested_reliable       = 0x02;
+
+}
+
+// Write the fixed 26-byte QoS region at p (caller guarantees 26 writable bytes).
+inline void write_qos_region(std::byte *p, const subscribe_qos_region &qos)
+{
+    wire::detail::write_u8(p + detail::k_qos_durability_off, qos.durability);
+    wire::detail::write_u8(p + detail::k_qos_delivery_off, qos.delivery_mode);
+    wire::detail::write_u32(p + detail::k_qos_replay_depth_off, qos.replay_depth);
+    wire::detail::write_u8(p + detail::k_qos_flags_off, qos.requested_flags);
+    wire::detail::write_u64(p + detail::k_qos_deadline_ns_off, qos.requested_deadline_ns);
+    wire::detail::write_u64(p + detail::k_qos_lease_ns_off, qos.requested_lease_ns);
+    wire::detail::write_u8(p + detail::k_qos_priority_off, qos.requested_priority);
+    wire::detail::write_u8(p + detail::k_qos_reserved_off, 0);
+    wire::detail::write_u8(p + detail::k_qos_reserved_off + 1, 0);
 }
 
 inline std::vector<std::byte> encode_subscribe_request(const subscribe_request &req)
 {
     auto total = detail::subscribe_request_fixed_prefix + 2 + req.fqn.size() + 2 + req.type_name.size();
+    if(req.has_qos)
+        total += 2 + detail::k_qos_region_size;   // uint16_t length prefix + the fixed region
     std::vector<std::byte> buf(total);
     auto *p = buf.data();
 
@@ -116,7 +192,17 @@ inline std::vector<std::byte> encode_subscribe_request(const subscribe_request &
     wire::detail::write_u16(p, static_cast<uint16_t>(req.type_name.size()));
     p += 2;
     if(!req.type_name.empty())
+    {
         std::memcpy(p, req.type_name.data(), req.type_name.size());
+        p += req.type_name.size();
+    }
+
+    if(req.has_qos)
+    {
+        wire::detail::write_u16(p, static_cast<uint16_t>(detail::k_qos_region_size));
+        p += 2;
+        write_qos_region(p, req.qos);
+    }
 
     return buf;
 }
@@ -152,6 +238,31 @@ inline std::optional<subscribe_request> decode_subscribe_request(std::span<const
     if(type_name_span->size() > detail::k_max_type_name)
         return std::nullopt;
     req.type_name.assign(reinterpret_cast<const char*>(type_name_span->data()), type_name_span->size());
+
+    // The trailing, flag-gated QoS region (a NEW untrusted-input surface). No
+    // trailing bytes => the region is absent and req.qos stays defaulted (a v3
+    // producer never wrote it). A present region must match the fixed size
+    // EXACTLY and stay within the per-callsite cap, else nullopt — never a
+    // mis-parse, never an over-read (read_length_prefixed advances consumed on
+    // success only).
+    if(consumed < payload.size())
+    {
+        auto region = read_length_prefixed<uint16_t>(payload, consumed);
+        if(!region)
+            return std::nullopt;
+        if(region->size() != detail::k_qos_region_size
+           || region->size() > detail::k_max_qos_region)
+            return std::nullopt;
+        const auto *q = region->data();
+        req.qos.durability            = wire::detail::read_u8(q + detail::k_qos_durability_off);
+        req.qos.delivery_mode         = wire::detail::read_u8(q + detail::k_qos_delivery_off);
+        req.qos.replay_depth          = wire::detail::read_u32(q + detail::k_qos_replay_depth_off);
+        req.qos.requested_flags       = wire::detail::read_u8(q + detail::k_qos_flags_off);
+        req.qos.requested_deadline_ns = wire::detail::read_u64(q + detail::k_qos_deadline_ns_off);
+        req.qos.requested_lease_ns    = wire::detail::read_u64(q + detail::k_qos_lease_ns_off);
+        req.qos.requested_priority    = wire::detail::read_u8(q + detail::k_qos_priority_off);
+        req.has_qos = true;
+    }
     return req;
 }
 

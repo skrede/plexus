@@ -23,6 +23,11 @@ static_assert(k_max_reassembler_payload_bytes < std::numeric_limits<int>::max(),
 constexpr std::byte magic_byte_0{0x56};
 constexpr std::byte magic_byte_1{0x50};
 
+// Wire-stable message-type byte. Append-only: a value is NEVER reordered or
+// reused. There is additive room beyond subscribe_response (0x0C+) for a future
+// heartbeat/control type — it rides WITHIN the current protocol version (a new
+// msg_type is byte-identical until a peer actually emits one), so no further
+// protocol bump is required to introduce it later.
 enum class msg_type : uint8_t
 {
     unidirectional      = 0x01,
@@ -56,6 +61,13 @@ enum class endpoint_source_type : uint8_t
 // is not yet encoded or decoded: a frame with the bit CLEAR is byte-identical to a
 // freshly-bumped v3 no-flag frame. Append-only: a new flag takes the next free bit.
 constexpr std::uint8_t k_flag_source_identity = 0x01;
+
+// The next free frame-header flag bit (0x02) is RESERVED (documented, NOT encoded)
+// for a future on-wire priority/control signal — e.g. a relay topology preserving
+// egress priority across a hop. It is unencoded and unread today, so a frame with
+// it CLEAR is byte-identical to a no-flag frame (exactly as k_flag_source_identity
+// was reserved before it was wired). Bits 0x04..0x80 remain free. A later signal
+// rides this reservation WITHIN the current protocol version — no further bump.
 
 struct frame_header
 {
