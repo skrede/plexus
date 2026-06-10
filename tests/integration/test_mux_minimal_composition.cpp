@@ -1,4 +1,3 @@
-#include "plexus/asio/mux_policy.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
 
@@ -7,12 +6,17 @@
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
 
+#include "plexus/policy.h"
+#include "plexus/muxify.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
 
 namespace pasio = plexus::asio;
 namespace pio = plexus::io;
+
+using mux_pol = plexus::muxify<pasio::asio_policy>;
 
 // The composability payoff: a node that wants ONLY the local (AF_UNIX) and remote (plain
 // TCP) streams instantiates the core multiplexer over exactly that member subset — no
@@ -21,9 +25,14 @@ namespace pio = plexus::io;
 // only composition. This proves the generic core composes an arbitrary member pack.
 using minimal_mux = pio::multiplexing_transport<pasio::unix_transport, pasio::asio_transport>;
 
-// The minimal composition still satisfies the single erased transport_backend surface the
-// engine drives — composing fewer members does not weaken the contract.
-static_assert(pio::transport_backend<minimal_mux, pasio::mux_policy>,
+// The generic muxify<P> lift of the asio leaf Policy onto the erased mux channel must
+// itself remain a Policy, and the minimal composition must satisfy the single erased
+// transport_backend surface the engine drives over it — composing fewer members does not
+// weaken the contract. These two static_asserts preserve the gate the deleted asio mux
+// policy header carried, now at a living site.
+static_assert(plexus::Policy<mux_pol>,
+    "muxify<asio_policy> must satisfy Policy");
+static_assert(pio::transport_backend<minimal_mux, mux_pol>,
     "the minimal unix+tcp multiplexer must satisfy transport_backend");
 
 TEST_CASE("mux_minimal: a unix+tcp multiplexer composes, constructs, and routes by scheme without the secure member",

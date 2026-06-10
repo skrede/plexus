@@ -3,7 +3,6 @@
 
 #include "plexus/asio/shm/ring_notifier.h"
 
-#include "plexus/asio/mux_policy.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
@@ -18,6 +17,8 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
+
+#include "plexus/muxify.h"
 
 #include <atomic>
 #include <cstdint>
@@ -40,7 +41,7 @@ namespace plexus::asio::shm {
 // bridge over (executor, word) once each ring is bound. The member is the FIRST positional
 // member so the preference hook (which scans candidates for the shm_eligible flag) finds it.
 using shm_member = io::shm::shm_mux_member<::plexus::shm::posix_shm_region_broker,
-                                           ring_notifier<mux_policy>>;
+                                           ring_notifier<muxify<asio_policy>>>;
 
 using all_backends_mux_shm = io::multiplexing_transport<shm_member, unix_transport,
                                                         asio_transport, tls::tls_transport,
@@ -50,10 +51,10 @@ using all_backends_mux_shm = io::multiplexing_transport<shm_member, unix_transpo
 // over (executor, word) once the registry binds each ring. Free function so the lambda
 // shape lives in one place.
 [[nodiscard]] inline io::shm::shm_topic_registry<::plexus::shm::posix_shm_region_broker,
-                                                 ring_notifier<mux_policy>>::notifier_binder
+                                                 ring_notifier<muxify<asio_policy>>>::notifier_binder
 make_bridge_binder(::asio::io_context &io)
 {
-    return [&io](std::optional<ring_notifier<mux_policy>> &slot, std::atomic<std::uint32_t> &word) {
+    return [&io](std::optional<ring_notifier<muxify<asio_policy>>> &slot, std::atomic<std::uint32_t> &word) {
         slot.emplace(io, word);
     };
 }
@@ -85,7 +86,7 @@ make_bridge_binder(::asio::io_context &io)
 }
 
 static_assert(plexus::io::transport_backend<plexus::asio::shm::all_backends_mux_shm,
-                                            plexus::asio::mux_policy>,
+                                            plexus::muxify<plexus::asio::asio_policy>>,
     "all_backends_mux_shm must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif

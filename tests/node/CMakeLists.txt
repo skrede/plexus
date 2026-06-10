@@ -20,3 +20,11 @@ add_test(NAME node.install_consume
         -DPLEXUS_BUILD_DIR=${CMAKE_BINARY_DIR}
         -DPLEXUS_CONSUME_DIR=${CMAKE_CURRENT_SOURCE_DIR}/install_consume
         -P ${CMAKE_CURRENT_SOURCE_DIR}/install_consume.cmake)
+
+# The facade vocabulary unit test — the one place that links plexus::plexus (the facade
+# library), exercising the public expected alias and the call_errc error category.
+add_executable(test_vocabulary test_vocabulary.cpp)
+target_link_libraries(test_vocabulary PRIVATE
+    plexus::plexus
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_vocabulary TEST_PREFIX "node.")
