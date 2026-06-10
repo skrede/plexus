@@ -31,6 +31,7 @@ struct mdnspp_discovery::impl
     ::asio::io_context &context;
     std::unique_ptr<::mdnspp::basic_service_server<::mdnspp::asio_policy>> server;
     std::unique_ptr<::mdnspp::basic_service_discovery<::mdnspp::asio_policy>> browser;
+    std::string advertised_name;   // the live server's service name, for the in-place-update decision
 };
 
 namespace {
@@ -107,6 +108,19 @@ void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
     info.hostname = service.name;
     info.txt_records = to_txt_records(service.metadata);
 
+    // A re-advertise on a LIVE server with an UNCHANGED service name updates the record
+    // in place (an RFC 6762 section 8.4 announcement burst), instead of tearing the
+    // server down and re-probing — the goodbye + re-probe flap a fresh server causes.
+    // The hostname tracks the service name here, so an unchanged name leaves both
+    // unchanged and mdnspp takes the no-reprobe path. A first advertise or a changed
+    // name creates the server.
+    if(m_impl->server && service.name == m_impl->advertised_name)
+    {
+        m_impl->server->update_service_info(std::move(info));
+        return;
+    }
+
+    m_impl->advertised_name = service.name;
     m_impl->server = std::make_unique<::mdnspp::basic_service_server<::mdnspp::asio_policy>>(
         m_io, std::move(info));
     m_impl->server->async_start();

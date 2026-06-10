@@ -156,3 +156,57 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     REQUIRE(read_card_value(resolved_metadata, "node_id") == "0011");
     REQUIRE(read_card_value(resolved_metadata, "plexus/tcp/port") == "5555");
 }
+
+// A re-advertise on a LIVE server with the SAME service name updates the record in
+// place (an RFC 6762 section 8.4 announcement burst) rather than tearing the server
+// down and re-probing. This drives a real mDNS announce, then a second advertise of
+// the same name carrying an ADDED TXT key, and asserts a browse sees the UPDATED
+// record. The host may aggregate the record at varying times, so the assertion is on
+// the eventually-resolved metadata (the existing test's tolerance posture), not on a
+// goodbye/announce packet count. A regression to the create-new-server path would
+// goodbye + re-probe and the updated key would arrive late or flap.
+TEST_CASE("mdnspp re-advertise on a live server updates the record in place", "[integration][asio]")
+{
+    ::asio::io_context io;
+
+    pmdns::mdnspp_discovery advertiser(io, "_plexus._tcp.local.");
+    plexus::discovery::service_info local{"inplace._plexus._tcp.local.", {"tcp", "127.0.0.1:5566"},
+                                          {{"node_id", "0022"}, {"plexus/tcp/port", "5566"}}};
+    advertiser.advertise(local);
+
+    // Let the first announce settle so the server is live (started + probed) before the
+    // in-place update — update_service_info requires a running server.
+    auto settle = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while(std::chrono::steady_clock::now() < settle)
+        io.poll();
+
+    // Re-advertise the SAME name with an ADDED key: the live server updates in place.
+    local.metadata.emplace_back("plexus/schema", "1");
+    advertiser.advertise(local);
+
+    pmdns::mdnspp_discovery discovery(io, "_plexus._tcp.local.");
+    int resolved_count = 0;
+    std::vector<std::pair<std::string, std::string>> resolved_metadata;
+    discovery.browse([&](const plexus::discovery::service_info &svc)
+    {
+        ++resolved_count;
+        if(!svc.metadata.empty())
+            resolved_metadata = svc.metadata;
+    });
+
+    // Poll past the browse silence timeout (mdnspp default 3s) so aggregation completes.
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
+    while(std::chrono::steady_clock::now() < deadline &&
+          (resolved_count == 0 || read_card_value(resolved_metadata, "plexus/schema").empty()))
+        io.poll();
+
+    discovery.stop();
+    advertiser.stop();
+    io.poll();
+
+    // The browser saw the UPDATED record: the original keys AND the added one, all
+    // through the in-place update path (no server re-construction).
+    REQUIRE(read_card_value(resolved_metadata, "node_id") == "0022");
+    REQUIRE(read_card_value(resolved_metadata, "plexus/tcp/port") == "5566");
+    REQUIRE(read_card_value(resolved_metadata, "plexus/schema") == "1");
+}

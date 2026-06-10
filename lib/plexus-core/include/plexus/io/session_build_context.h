@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SESSION_BUILD_CONTEXT_H
 #define HPP_GUARD_PLEXUS_IO_SESSION_BUILD_CONTEXT_H
 
+#include "plexus/io/message_info.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/security_seam.h"
@@ -15,8 +16,10 @@
 
 #include "plexus/detail/compat.h"
 
+#include <span>
 #include <chrono>
 #include <cstdint>
+#include <string_view>
 
 namespace plexus::io {
 
@@ -37,6 +40,14 @@ struct session_build_context
     reconnect_config redial;
     std::uint64_t redial_seed;
     log::logger &logger;
+    // The node-shared receive route every slot's session delivers data through: the
+    // engine sets it after construction, the registry threads it into every built
+    // session so a reconnect's slot REBUILD draws it again (the per-session receive
+    // seam is lost on a rebuild and raced by the posted observer fan-out). One 3-arg
+    // shape carrying the message_info serves both arities — a bytes-only consumer
+    // drops the info. Absent (unset) until the engine wires it — a session guards on it.
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>,
+                                            const message_info &)> on_message;
     // The node-shared route from any slot's session up to the engine's observer
     // fan-out: the engine sets this after construction, the registry forwards each
     // session's lifecycle edge through it. Absent (unset) on a context built before

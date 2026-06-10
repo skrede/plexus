@@ -6,16 +6,19 @@
 #include "plexus/io/endpoint.h"
 
 #include <string>
-#include <utility>
 #include <vector>
+#include <utility>
+#include <algorithm>
 
 namespace plexus::discovery {
 
-// Fixed-table discovery fallback: resolves names from a developer-provided
-// {name -> endpoint} table built at construction, no real mDNS. browse() fires
-// the callback once per seeded entry. This is the no-mDNS path the round-trip
-// tests run against; the table entries are trusted developer input, so there is
-// no untrusted network parsing here.
+// Live fixed-table discovery: a developer-provided {name -> service} table, no real
+// mDNS. browse() fires the callback once per CURRENT entry and RETAINS the callback,
+// so a later advertise() notifies every retained browser live (a late joiner is seen
+// without a re-browse). advertise() replaces a same-name entry in place rather than
+// appending a duplicate, so re-advertising a node updates its record. The table and
+// the browsers are trusted developer input, so there is no untrusted network parsing
+// here. stop() drops the retained browsers.
 class static_discovery final : public discovery
 {
 public:
@@ -26,21 +29,31 @@ public:
 
     void advertise(const service_info &service) override
     {
-        m_table.push_back(service);
+        const auto it = std::find_if(m_table.begin(), m_table.end(),
+                                     [&](const service_info &e) { return e.name == service.name; });
+        if(it != m_table.end())
+            *it = service;
+        else
+            m_table.push_back(service);
+        for(const auto &browser : m_browsers)
+            browser(service);
     }
 
     void browse(const resolved_callback &on_resolved) override
     {
         for(const auto &entry : m_table)
             on_resolved(entry);
+        m_browsers.push_back(on_resolved);
     }
 
     void stop() override
     {
+        m_browsers.clear();
     }
 
 private:
     std::vector<service_info> m_table;
+    std::vector<resolved_callback> m_browsers;
 };
 
 }

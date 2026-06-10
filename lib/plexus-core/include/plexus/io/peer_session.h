@@ -118,6 +118,17 @@ public:
     template <typename OnMessageWithInfo>
     void on_message_with_info(OnMessageWithInfo cb) { m_on_message_with_info = std::move(cb); }
 
+    // The node-shared receive route, threaded in by the registry from the build
+    // context at construction so a reconnect slot REBUILD carries it (unlike the
+    // per-session on_message/on_message_with_info seams, which a rebuild loses). The
+    // per-session seams take precedence when set; otherwise data flows through this.
+    // Carries the message_info — a bytes-only consumer drops it. Absent = silent drop.
+    void on_message_route(plexus::detail::move_only_function<
+                          void(std::string_view, std::span<const std::byte>, const message_info &)> cb)
+    {
+        m_on_message_route = std::move(cb);
+    }
+
     // The transport-drop seam, mirroring on_message: a plain settable callback
     // (absent = no routing) fired from start()'s on_error wiring when an
     // already-live channel breaks. The registry routes a dialed slot's drop to its
@@ -378,12 +389,14 @@ private:
     void deliver_data(const wire::frame_header &hdr, std::span<const std::byte> inner)
     {
         const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
+        // Precedence: a per-session info/bytes seam (the test/cold-path install) wins
+        // when set; otherwise the node-shared route (threaded by the registry, so it
+        // survives a reconnect rebuild) delivers. The shared route carries the
+        // message_info, so its delivery rides the same info-assembling path. None set
+        // = silent drop.
         if(m_on_message_with_info)
         {
-            message_info info{};
-            info.source_timestamp    = hdr.timestamp_ns;
-            info.reception_timestamp = wire::now_timestamp_ns();
-            info.from_intra_process  = tier_of(m_channel.remote_endpoint().scheme) == locality::process;
+            const message_info info = assemble_message_info(hdr);
             m_messages.deliver(m_msg_peer, inner, info, m_ctx.peer_id, has_source_identity,
                                [this](std::string_view fqn, std::span<const std::byte> data,
                                       const message_info &mi) {
@@ -391,11 +404,35 @@ private:
                                });
             return;
         }
-        m_messages.deliver(m_msg_peer, inner, m_ctx.peer_id, has_source_identity,
-                           [this](std::string_view fqn, std::span<const std::byte> data) {
-                               if(m_on_message)
+        if(m_on_message)
+        {
+            m_messages.deliver(m_msg_peer, inner, m_ctx.peer_id, has_source_identity,
+                               [this](std::string_view fqn, std::span<const std::byte> data) {
                                    m_on_message(fqn, data);
-                           });
+                               });
+            return;
+        }
+        if(m_on_message_route)
+        {
+            const message_info info = assemble_message_info(hdr);
+            m_messages.deliver(m_msg_peer, inner, info, m_ctx.peer_id, has_source_identity,
+                               [this](std::string_view fqn, std::span<const std::byte> data,
+                                      const message_info &mi) {
+                                   m_on_message_route(fqn, data, mi);
+                               });
+            return;
+        }
+        m_messages.deliver(m_msg_peer, inner, m_ctx.peer_id, has_source_identity,
+                           [](std::string_view, std::span<const std::byte>) {});
+    }
+
+    message_info assemble_message_info(const wire::frame_header &hdr)
+    {
+        message_info info{};
+        info.source_timestamp    = hdr.timestamp_ns;
+        info.reception_timestamp = wire::now_timestamp_ns();
+        info.from_intra_process  = tier_of(m_channel.remote_endpoint().scheme) == locality::process;
+        return info;
     }
 
     // Map an FSM action to channel I/O. retry stays the FSM's intent as a log line:
@@ -899,6 +936,7 @@ private:
     std::vector<std::byte> m_payload_scratch, m_frame_scratch;
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message;
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_with_info;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_route;
     plexus::detail::move_only_function<void()> m_on_drop;
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
     plexus::detail::move_only_function<void(const node_id &)> m_on_stamp_seen;
