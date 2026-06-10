@@ -79,19 +79,28 @@ void rejects_tampering(aead_cipher_id cipher)
 
     std::vector<std::byte> out;
 
+    // After a failed open() the caller's out buffer must hold no unverified plaintext.
     auto flipped_cipher = sealed;
     flipped_cipher.front() ^= std::byte{0xff};
     REQUIRE_FALSE(plexus::crypto::open(cipher, key, nonce, aad, flipped_cipher, out));
+    REQUIRE(out.empty());
 
     auto flipped_tag = sealed;
     flipped_tag.back() ^= std::byte{0xff};
     REQUIRE_FALSE(plexus::crypto::open(cipher, key, nonce, aad, flipped_tag, out));
+    REQUIRE(out.empty());
 
     const auto wrong_aad = bytes_of("AAD");
     REQUIRE_FALSE(plexus::crypto::open(cipher, key, nonce, wrong_aad, sealed, out));
+    REQUIRE(out.empty());
 
     const auto wrong_nonce = fixed_nonce(10);
     REQUIRE_FALSE(plexus::crypto::open(cipher, key, wrong_nonce, aad, sealed, out));
+    REQUIRE(out.empty());
+
+    // A successful open still recovers the exact plaintext.
+    REQUIRE(plexus::crypto::open(cipher, key, nonce, aad, sealed, out));
+    REQUIRE(out == pt);
 }
 
 }

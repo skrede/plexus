@@ -89,15 +89,29 @@ bool open(aead_cipher_id cipher, const aead_key &key,
     if(!feed_aad(ctx.get(), aad, false))
         return false;
 
+    // EVP_DecryptUpdate writes the still-unauthenticated plaintext into `out` before
+    // EVP_DecryptFinal_ex verifies the tag. On any failure `out` is cleared so the caller
+    // never reads attacker-controlled plaintext from a packet that failed authentication.
     out.resize(ct_len);
     int len = 0;
     if(EVP_DecryptUpdate(ctx.get(), as_uc(out.data()), &len, as_uc(ct), static_cast<int>(ct_len)) != 1)
+    {
+        out.clear();
         return false;
+    }
     if(EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_AEAD_SET_TAG, static_cast<int>(k_aead_tag_len),
                            const_cast<unsigned char *>(as_uc(tag))) != 1)
+    {
+        out.clear();
         return false;
+    }
     int final_len = 0;
-    return EVP_DecryptFinal_ex(ctx.get(), as_uc(out.data()) + len, &final_len) == 1;
+    if(EVP_DecryptFinal_ex(ctx.get(), as_uc(out.data()) + len, &final_len) != 1)
+    {
+        out.clear();
+        return false;
+    }
+    return true;
 }
 
 }

@@ -32,7 +32,8 @@ enum class aead_cipher_id : std::uint8_t
 
 // open verifies the appended tag (EVP's constant-time check) and writes the recovered
 // plaintext into `out`; returns false on any verification failure (a flipped ciphertext
-// byte, a flipped tag byte, wrong aad, or wrong nonce) without touching `out`'s contract.
+// byte, a flipped tag byte, wrong aad, or wrong nonce). On a failure `out` is cleared, so
+// a caller never reads attacker-controlled, unverified plaintext from a rejected packet.
 [[nodiscard]] bool open(aead_cipher_id cipher, const aead_key &key,
                         std::span<const std::byte, k_aead_nonce_len> nonce,
                         std::span<const std::byte> aad,
