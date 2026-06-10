@@ -238,6 +238,50 @@ target_include_directories(test_rxo_compatibility PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_rxo_compatibility TEST_PREFIX "integration.")
 
+# The security attach-gate bridge oracle: two peer_sessions over the inproc backend
+# drive the end-to-end attach surface — the dedicated security_event, the lifecycle
+# rejected edge, the AEAD install hook, the stream-tamper teardown, and the auth-only
+# + datagram posture refusal. No OpenSSL (the transcript seam is a deterministic fake,
+# the attach_policy a test double) — always built (inproc Policy, no backend needed).
+add_executable(test_security_attach_inproc test_security_attach_inproc.cpp)
+target_link_libraries(test_security_attach_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_security_attach_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_security_attach_inproc TEST_PREFIX "integration.")
+
+# The downgrade + posture-mismatch refusal oracle: a transcript-bound proof failure (a
+# forced cipher/version downgrade) is refused with downgrade_refused BOTH ways, and a
+# secured-vs-plain posture mismatch is refused with posture_mismatch BOTH ways —
+# fail-closed, no silent plaintext fallback. No OpenSSL (test policy + fake transcript
+# seam) — always built (inproc Policy, no backend needed).
+add_executable(test_downgrade_inproc test_downgrade_inproc.cpp)
+target_link_libraries(test_downgrade_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_downgrade_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_downgrade_inproc TEST_PREFIX "integration.")
+
+# The host-identity accessor oracle: the authenticated peer's host identity is
+# read from the security step (SPKI-derived for TLS, attach-bound for PSK), never a
+# self-asserted TXT/wire claim. Pure free-function legs + a bridge accessor leg — always
+# built (inproc Policy, no backend needed).
+add_executable(test_host_identity_inproc test_host_identity_inproc.cpp)
+target_link_libraries(test_host_identity_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_host_identity_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_host_identity_inproc TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)

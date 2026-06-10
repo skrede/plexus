@@ -198,6 +198,7 @@ private:
             wire_drop(slot, slot.record.peer_id);
         wire_lifecycle(slot);
         wire_stamp_seen(slot);
+        wire_security(slot);
         slot.session->start();
     }
 
@@ -250,6 +251,19 @@ private:
         slot.session->on_stamp_seen([this](const node_id &id) {
             if(m_build.on_stamp_seen)
                 m_build.on_stamp_seen(id);
+        });
+    }
+
+    // Borrow the node-level security seam into this slot's session (one per node) and
+    // route the session's dedicated security events up to the engine's posted
+    // fan-out via the build-context sink, mirroring wire_lifecycle. The seam pointer is
+    // stable for the engine's lifetime (the build context outlives every slot).
+    void wire_security(slot_block &slot)
+    {
+        slot.session->set_security_seam(&m_build.install_security);
+        slot.session->on_security([this](const security_event &ev) {
+            if(m_build.on_security)
+                m_build.on_security(ev);
         });
     }
 

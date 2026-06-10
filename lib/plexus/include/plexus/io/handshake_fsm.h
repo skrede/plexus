@@ -133,10 +133,11 @@ public:
     // Inbound handshake_request. inbound_is_bootstrap marks a fresh inbound with
     // no counter-direction dial in flight (the common path under demand-driven
     // lazy dial): it completes inbound-only rather than stranding the session.
-    fsm_step_result on_request(const wire::handshake_request &req, bool inbound_is_bootstrap) noexcept
+    fsm_step_result on_request(const wire::handshake_request &req, bool inbound_is_bootstrap,
+                               const security::attach_facts &facts = {}) noexcept
     {
         m_last_seen_their_protocol_version = req.protocol_version;
-        if(auto gate = validate(req.protocol_version, req.id, req.fingerprint))
+        if(auto gate = validate(req.protocol_version, req.id, req.fingerprint, facts))
             return *gate;
         if(!is_version_compatible(req.version_major, req.version_minor))
             return reject_version_result();
@@ -145,10 +146,11 @@ public:
 
     // Inbound handshake_response. Compatible + accepted completes accept_outbound;
     // a rejected status or incompatible version aborts.
-    fsm_step_result on_response(const wire::handshake_response &resp) noexcept
+    fsm_step_result on_response(const wire::handshake_response &resp,
+                                const security::attach_facts &facts = {}) noexcept
     {
         m_last_seen_their_protocol_version = resp.protocol_version;
-        if(auto gate = validate(resp.protocol_version, resp.id, resp.fingerprint))
+        if(auto gate = validate(resp.protocol_version, resp.id, resp.fingerprint, facts))
             return *gate;
         if(resp.status == wire::handshake_status::identity_conflict)
             return identity_conflict_result();
@@ -205,6 +207,11 @@ public:
     // the session's is_same_host compare null-guards on.
     shm::host_fingerprint last_seen_peer_fingerprint() const noexcept { return m_peer_fingerprint; }
     shm::host_fingerprint local_fingerprint() const noexcept { return m_cfg.local_fingerprint; }
+
+    // The node-level admission gate this FSM was configured with (null = accept-any).
+    // The bridge reads it to decide whether an attach is security-engaged: a null gate
+    // means no PSK posture, so no facts assembly, no decorator install, no event.
+    const security::attach_policy *attach_policy() const noexcept { return m_cfg.attach_policy; }
 
 private:
     // The exact-match protocol gate runs ahead of every compat / status check, and

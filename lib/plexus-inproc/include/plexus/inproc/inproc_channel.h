@@ -108,6 +108,16 @@ public:
             m_on_error(io::io_error::broken_pipe);
     }
 
+    // Surface a wire-protocol close (a framing violation or, once an AEAD decorator wraps
+    // the link, a tag-verify failure) — the on_protocol_close seam a real byte-stream
+    // channel fires, exposed here so the deterministic rig drives the misbehavior path
+    // the bus cannot otherwise produce.
+    void deliver_protocol_close(wire::close_cause cause)
+    {
+        if(m_on_protocol_close)
+            m_on_protocol_close(cause);
+    }
+
 private:
     inproc_executor<Clock> *m_exec;
     inproc_bus<Clock> *m_bus;

@@ -6,12 +6,17 @@
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/frame_router.h"
+#include "plexus/io/host_identity.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/peer_context.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/security_seam.h"
 #include "plexus/io/lifecycle_event.h"
+#include "plexus/io/security_event.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
+
+#include "plexus/io/security/attach_facts.h"
 
 #include "plexus/policy.h"
 
@@ -90,7 +95,7 @@ public:
             if(m_on_drop && !m_torn_down && !m_closed_for_protocol_error)
                 m_on_drop();
         });
-        m_channel.on_protocol_close([this](wire::close_cause cause) { close_for_protocol_error(cause); });
+        m_channel.on_protocol_close([this](wire::close_cause cause) { on_channel_protocol_close(cause); });
         register_consumers();
         arm_handshake_timer();
         if(!m_is_inbound_bootstrap)
@@ -128,6 +133,34 @@ public:
     // heartbeat through it carrying THIS peer's pinned node_id (absent = no stamp, so
     // the session stays monitor-agnostic and includes no monitor header).
     void on_stamp_seen(plexus::detail::move_only_function<void(const node_id &)> cb) { m_on_stamp_seen = std::move(cb); }
+
+    // The security-event seam, mirroring on_lifecycle: the registry wires it to forward
+    // each dedicated security event (unauthorized attach, downgrade/posture refusal,
+    // stream-tamper teardown) up to the engine's posted fan-out (absent = no routing).
+    void on_security(plexus::detail::move_only_function<void(const security_event &)> cb) { m_on_security = std::move(cb); }
+
+    // The per-session AEAD-install hook, set by the registry from the node-level seam
+    // plus THIS session's just-built channel. It is invoked exactly once on a successful
+    // security-engaged attach over a plaintext network channel: the gated layer derives
+    // the keys from the negotiation and installs the decorator over the captured channel.
+    // Absent = no AEAD posture (the accept-any plaintext path is unchanged). It stays
+    // OpenSSL-free here — the session only stores and calls a type-erased callable.
+    void on_install_security(plexus::detail::move_only_function<void(const security_negotiation &)> cb)
+    {
+        m_install_security = std::move(cb);
+    }
+
+    // Borrow the node-level security seam (the OpenSSL-free transcript digest), owned by
+    // the build context — ONE per node. Set once by the registry before start();
+    // null (the default) is the no-AEAD/accept-any posture. Borrowed, never owned: the
+    // move-only seam is shared by every session without a per-session copy.
+    void set_security_seam(const security_seam *seam) noexcept { m_install_security_seam = seam; }
+
+    // The authenticated peer's host identity, bound to the security step (SPKI-derived
+    // for a TLS peer, attach-bound for a PSK peer) — never a self-asserted TXT/wire
+    // claim. Absent until the attach resolves; a security-engaged attach latches it from
+    // the verified facts at completion, so a spoofed external identity claim is ignored.
+    std::optional<node_id> authenticated_host_identity() const noexcept { return m_authenticated_host_identity; }
 
     // The subscribe-outcome seams, mirroring on_lifecycle: an arriving subscribe_response
     // that REFUSES a match (type_mismatch / incompatible_qos / source_identity_incompatible)
@@ -183,6 +216,22 @@ public:
             fire_lifecycle(lifecycle_edge::disconnected);
     }
 
+    // The channel's protocol-close funnel. On a security-engaged session this close is a
+    // stream-tamper teardown: the installed AEAD decorator routes a tag-verify failure
+    // through on_protocol_close (a bad tag on an ordered stream is wire misbehavior with
+    // no honest resync), so fire the dedicated stream_tamper_teardown event with
+    // its cause BEFORE the close. A plaintext (un-engaged) session takes the plain close
+    // funnel unchanged. Datagram drops never reach here — the datagram decorator counts
+    // them and never tears down.
+    void on_channel_protocol_close(wire::close_cause cause)
+    {
+        if(m_torn_down)
+            return;
+        if(m_pending_attach.engaged && m_forwarders_installed)
+            fire_security(security_kind::stream_tamper_teardown, security_cause::tag_verify_failed);
+        close_for_protocol_error(cause);
+    }
+
     // The uniform close funnel for a peer that misbehaved on the wire — BOTH the
     // framing violation surfaced by the channel's on_protocol_close and the semantic
     // violations the session detects on complete frames (a header that does not
@@ -232,11 +281,24 @@ private:
     {
         m_router.on_handshake_req([this](std::span<const std::byte> inner) {
             if(auto req = wire::decode_handshake_request(inner))
-                execute(m_fsm.on_request(*req, m_is_inbound_bootstrap));
+            {
+                // Inbound request: the local node is the RESPONDER (it verifies the
+                // dialer's attach proof). Assemble the facts from the decoded peer region.
+                m_pending_attach = assemble_attach_facts(*req, security::attach_role::responder, req->id);
+                if(posture_mismatched(*req))
+                    return refuse_posture();
+                execute(m_fsm.on_request(*req, m_is_inbound_bootstrap, m_pending_attach.facts));
+            }
         });
         m_router.on_handshake_resp([this](std::span<const std::byte> inner) {
             if(auto resp = wire::decode_handshake_response(inner))
-                execute(m_fsm.on_response(*resp));
+            {
+                // Inbound response: the local node is the INITIATOR (it dialed out).
+                m_pending_attach = assemble_attach_facts(*resp, security::attach_role::initiator, resp->id);
+                if(posture_mismatched(*resp))
+                    return refuse_posture();
+                execute(m_fsm.on_response(*resp, m_pending_attach.facts));
+            }
         });
         m_router.on_subscribe([this](std::span<const std::byte> inner) {
             if(auto req = wire::decode_subscribe_request(inner))
@@ -343,13 +405,114 @@ private:
     void on_abort(handshake_outcome reason)
     {
         fire_lifecycle(lifecycle_edge::rejected, reason);
+        if(reason == handshake_outcome::reject_unauthorized)
+            fire_security(classify_unauthorized());
         close_for_protocol_error(wire::close_cause::invalid_magic);
     }
 
+    // Distinguish WHY the attach gate refused so the security event carries the cause an
+    // observer acts on. A posture mismatch is caught earlier (posture_mismatched ->
+    // refuse_posture), so a gate refusal on a SECURED pair is a transcript-bound proof
+    // failure — a forced downgrade (a stripped/forced cipher offer changed the digest the
+    // proof covered). A refusal with no security posture is a plain unauthorized attach.
+    security_kind classify_unauthorized() const noexcept
+    {
+        return m_pending_attach.engaged ? security_kind::downgrade_refused
+                                        : security_kind::unauthorized_attach;
+    }
+
+    bool seam_engaged() const noexcept
+    {
+        return m_install_security_seam != nullptr && m_install_security_seam->engaged();
+    }
+
+    // The bridge-assembled attach context: the facts the gate decides on plus the
+    // negotiation the AEAD key schedule needs. Both are filled from the SAME decoded
+    // wire region so the digest the gate bound is the digest the keys derive from.
+    struct pending_attach
+    {
+        security::attach_facts facts{};
+        security_negotiation   negotiation{};
+        bool                   engaged{false};
+    };
+
+    // Assemble the attach facts + negotiation from a decoded handshake frame (request or
+    // response — both carry the identical attach region). The peer's own_nonce is THIS
+    // side's verifier challenge in reverse: the peer chose it, so from the local node's
+    // standpoint it is the peer_nonce the proof must cover (anti-reflection). The
+    // transcript digest folds the negotiation through the injected (OpenSSL-free) seam;
+    // a disengaged seam leaves the digest zeroed and the accept-any path unchanged. The
+    // initiator/responder ids are pinned by role: the local node is one, the peer the
+    // other. No crypto runs here — the proof recompute lives in the policy, the key
+    // derivation behind the install hook.
+    template <typename Frame>
+    pending_attach assemble_attach_facts(const Frame &frame, security::attach_role local_role,
+                                         const node_id &peer_id) const
+    {
+        pending_attach out;
+        out.engaged = m_fsm.attach_policy() != nullptr && seam_engaged();
+        out.negotiation.key_id          = frame.key_id;
+        out.negotiation.role            = local_role;
+        out.negotiation.chosen_cipher   = frame.chosen_cipher;
+        // The local node's own challenge rides self_request().own_nonce; the peer's rides
+        // the decoded frame. initiator/responder nonces are assigned by the local role.
+        const auto own_nonce = self_request().own_nonce;
+        out.negotiation.initiator_nonce = local_role == security::attach_role::initiator ? own_nonce : frame.own_nonce;
+        out.negotiation.responder_nonce = local_role == security::attach_role::initiator ? frame.own_nonce : own_nonce;
+        out.facts.key_id            = frame.key_id;
+        out.facts.initiator_id      = local_role == security::attach_role::initiator ? m_fsm_cfg.self_id : peer_id;
+        out.facts.responder_id      = local_role == security::attach_role::initiator ? peer_id : m_fsm_cfg.self_id;
+        out.facts.peer_nonce        = frame.own_nonce;
+        out.facts.own_nonce         = own_nonce;
+        out.facts.role              = local_role;
+        if(out.engaged)
+            compute_transcript(out, frame);
+        out.negotiation.transcript_digest = out.facts.transcript_digest;
+        return out;
+    }
+
+    // The posture gate: a secured node (an engaged seam) and a plain peer (no
+    // cipher offered) are a hard mismatch BOTH ways — a secured local meeting a plain
+    // offer, OR a plain local meeting a secured offer — refused fail-closed with no
+    // silent plaintext fallback. The peer's posture is read from cipher_offer (a non-zero
+    // offer means it proposes AEAD). This runs ahead of the FSM accept so a mismatched
+    // pair never resolves.
+    template <typename Frame>
+    bool posture_mismatched(const Frame &frame) const noexcept
+    {
+        const bool local_secured = seam_engaged();
+        const bool peer_secured = frame.cipher_offer != 0;
+        return local_secured != peer_secured;
+    }
+
+    // Fold the negotiation transcript (cipher_offer ‖ chosen ‖ protocol_version ‖ both
+    // nonces) into the facts' digest via the seam's injected hash. The transcript bytes
+    // are assembled in a fixed order both ends agree on; a stripped/forced offer changes
+    // the digest, so the gate's recomputed proof — and the derived keys — differ
+    // (downgrade refusal).
+    template <typename Frame>
+    void compute_transcript(pending_attach &out, const Frame &frame) const
+    {
+        std::array<std::byte, 1 + 1 + 1 + 16 + 16> transcript{};
+        std::size_t n = 0;
+        transcript[n++] = static_cast<std::byte>(frame.cipher_offer);
+        transcript[n++] = static_cast<std::byte>(frame.chosen_cipher);
+        transcript[n++] = static_cast<std::byte>(wire::k_protocol_version);
+        for(auto b : out.negotiation.initiator_nonce) transcript[n++] = b;
+        for(auto b : out.negotiation.responder_nonce) transcript[n++] = b;
+        std::array<std::byte, 32> digest{};
+        if(m_install_security_seam->compute(transcript, digest))
+            out.facts.transcript_digest = digest;
+    }
+
     // The response reuses every request field and adds a status, so this is the one
-    // place the self identity/versions are stamped onto the wire.
+    // place the self identity/versions are stamped onto the wire. A secured node (an
+    // engaged seam) advertises its AEAD posture in the cipher offer/chosen so the peer's
+    // posture gate sees a secured-vs-secured pair; a plain node leaves them zero. This is
+    // what makes the posture mismatch observable both ways.
     wire::handshake_request self_request() const noexcept
     {
+        const std::uint8_t offer = seam_engaged() ? wire::cipher_offer_bits::chacha20_poly1305 : 0;
         return {.id                       = m_fsm_cfg.self_id,
                 .version_major            = m_fsm_cfg.version_major,
                 .version_minor            = m_fsm_cfg.version_minor,
@@ -359,8 +522,8 @@ private:
                 .fingerprint              = m_fsm_cfg.local_fingerprint.value,
                 .key_id                   = {},
                 .own_nonce                = {},
-                .cipher_offer             = 0,
-                .chosen_cipher            = 0};
+                .cipher_offer             = offer,
+                .chosen_cipher            = offer};
     }
 
     void send_handshake_request()
@@ -426,6 +589,8 @@ private:
         m_handshake_timer.cancel();
         mint_session_id();
         record_same_host();
+        if(!install_security_on_accept())
+            return refuse_posture();
         m_forwarders_installed = true;
         const bool reconnected = m_ctx.has_ever_connected;
         fire_connect_edge();
@@ -474,6 +639,59 @@ private:
             shm::is_same_host(m_fsm.last_seen_peer_fingerprint(), m_fsm.local_fingerprint());
     }
 
+    // On a security-engaged accept, latch the authenticated host identity from the
+    // VERIFIED facts (never a wire claim) and install the AEAD decorator over a plaintext
+    // network channel. A transport that already authenticates-encrypts (a TLS/DTLS
+    // channel) is NOT double-wrapped — the attach still bound the identity, but no AEAD
+    // decorator is installed. The install hook runs before the forwarders so subsequent
+    // frames are sealed; the bridge holds the erased channel and the gated layer owns the
+    // EVP instantiation.
+    // Returns false ONLY on a fail-closed posture refusal: an attach-gated
+    // datagram transport REQUIRES AEAD (post-admission spoofed injection is trivial on
+    // UDP), so a security-engaged accept over a plaintext datagram channel with no AEAD
+    // install hook is refused, never silently proceeded. Every other case proceeds.
+    bool install_security_on_accept()
+    {
+        if(!m_pending_attach.engaged)
+            return true;
+        m_authenticated_host_identity = authenticated_peer_id(m_pending_attach.facts);
+        if(channel_is_self_securing())
+            return true;
+        if(channel_is_plaintext_datagram() && !m_install_security)
+            return false;
+        if(m_install_security)
+            m_install_security(m_pending_attach.negotiation);
+        return true;
+    }
+
+    // The fail-closed posture refusal: clear the latched identity, fire the posture
+    // security event + the lifecycle rejected edge, and tear down — no silent plaintext
+    // fallback. Mirrors on_abort's edge ordering for an un-established session.
+    void refuse_posture()
+    {
+        m_authenticated_host_identity.reset();
+        fire_lifecycle(lifecycle_edge::rejected, handshake_outcome::reject_unauthorized);
+        fire_security(security_kind::posture_mismatch);
+        close_for_protocol_error(wire::close_cause::invalid_magic);
+    }
+
+    // A transport that already provides authenticated encryption: its scheme names a
+    // crypto handshake. The AEAD decorator decorates ONLY plaintext network channels, so
+    // a self-securing channel is left undecorated (no double-wrap).
+    bool channel_is_self_securing() const
+    {
+        const auto scheme = m_channel.remote_endpoint().scheme;
+        return scheme == "tls" || scheme == "dtls";
+    }
+
+    // A plaintext datagram channel (the lossy "udp"/"udpr" spellings) — the class an
+    // attach-gate must not admit without AEAD.
+    bool channel_is_plaintext_datagram() const
+    {
+        const auto scheme = m_channel.remote_endpoint().scheme;
+        return scheme == "udp" || scheme == "udpr";
+    }
+
     // Fire connected on the first-ever complete, reconnected on every subsequent
     // one. The discriminator is the long-lived has_ever_connected flag on the
     // record (it survives teardown): read its PRIOR value, then latch it true so it
@@ -501,6 +719,17 @@ private:
         if(!m_on_lifecycle)
             return;
         m_on_lifecycle(lifecycle_event{edge, m_ctx.peer_id, m_ctx.node_name, kind(), reason});
+    }
+
+    // Route one security event up the dedicated seam (if wired) carrying THIS peer's
+    // pinned id. The cause is meaningful only on the stream-tamper kind. Datagram
+    // replay/tamper drops never reach here — they are counted on the decorator and read
+    // on demand (the observer must not become the DoS).
+    void fire_security(security_kind kind, security_cause cause = security_cause::none)
+    {
+        if(!m_on_security)
+            return;
+        m_on_security(security_event{kind, m_ctx.peer_id, cause});
     }
 
     // The consumer half of the subscribe loop: an arriving subscribe_response drives
@@ -608,6 +837,15 @@ private:
     plexus::detail::move_only_function<void()> m_on_drop;
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
     plexus::detail::move_only_function<void(const node_id &)> m_on_stamp_seen;
+    plexus::detail::move_only_function<void(const security_event &)> m_on_security;
+    plexus::detail::move_only_function<void(const security_negotiation &)> m_install_security;
+    // The borrowed node-level OpenSSL-free seam (the transcript digest); the per-session
+    // install hook above captures the channel. The pending attach holds the assembled
+    // facts + negotiation across the gate decision and the accept install; the
+    // authenticated host identity latches at a security-engaged accept (absent otherwise).
+    const security_seam *m_install_security_seam{nullptr};
+    pending_attach m_pending_attach;
+    std::optional<node_id> m_authenticated_host_identity;
     plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> m_on_subscribe_refused;
     plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> m_on_subscribe_degraded;
 };
