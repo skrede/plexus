@@ -119,25 +119,45 @@ private:
         const auto header = bytes.subspan(k_seq_len + 1, wire::header_size);
         const auto sealed = bytes.subspan(k_seq_len + 1 + wire::header_size);
 
-        if(!select_recv_epoch(epoch_byte))
+        // RFC 4303 §3.4.3 order: verify the tag BEFORE committing any replay/epoch state.
+        // The candidate key is resolved without advancing the epoch; a non-mutating probe
+        // rejects an obvious replay/too-old without sliding the window; only a successful
+        // open commits the epoch advance and marks the sequence seen — so a forged
+        // datagram can neither wedge the window nor desync the key.
+        aead_key candidate{};
+        bool advances_epoch = false;
+        if(!candidate_key_for(epoch_byte, candidate, advances_epoch))
         {
             ++m_tamper_dropped;
             return;
         }
 
-        const auto verdict = m_window.check_and_set(seq);
-        if(verdict != replay_verdict::accept)
+        // A next-epoch datagram targets a window that the epoch advance resets, so the
+        // replay check only applies within the current epoch. Probe (not commit) so a
+        // forged current-epoch sequence cannot slide the window before authentication.
+        if(!advances_epoch && m_window.would_accept(seq) != replay_verdict::accept)
         {
             ++m_replay_dropped;
             return;
         }
 
         const auto nonce = make_nonce(epoch_byte, seq);
-        if(!open(m_cipher, m_recv_key, nonce, header, sealed, m_open_scratch))
+        if(!open(m_cipher, candidate, nonce, header, sealed, m_open_scratch))
         {
             ++m_tamper_dropped;
             return;
         }
+
+        if(advances_epoch)
+        {
+            m_recv_key = candidate;
+            ++m_recv_epoch;
+            m_window.reset();
+        }
+        // The probe already accepted; this commits the slide/set now that the tag is
+        // verified. The verdict is necessarily accept (no reordering between probe and
+        // commit on this single-threaded path), so it is intentionally discarded.
+        (void)m_window.check_and_set(seq);
 
         m_recv_frame.resize(wire::header_size + m_open_scratch.size());
         std::copy(header.begin(), header.end(), m_recv_frame.begin());
@@ -147,25 +167,26 @@ private:
             m_on_data(std::span<const std::byte>{m_recv_frame});
     }
 
-    // The receiver tracks the peer's send epoch off the explicit byte and derives its
-    // recv key forward through the identical deterministic chain when it first sees a
-    // new epoch, resetting the replay window per epoch (RFC 9147). A frame naming the
-    // current epoch resolves directly; the next epoch advances; anything else is dropped.
-    bool select_recv_epoch(std::uint8_t epoch_byte) noexcept
+    // Resolve the recv key that epoch_byte names WITHOUT committing any state: the
+    // current epoch returns the current key (advances=false); the next epoch derives the
+    // forward key into out (advances=true) but does NOT assign m_recv_key / ++m_recv_epoch
+    // / reset the window — the caller commits that only after open() verifies the tag, so
+    // a forged next-epoch datagram cannot roll the receiver's key past the sender (RFC
+    // 9147 per-epoch reset is gated on authentication). Anything else reports failure.
+    bool candidate_key_for(std::uint8_t epoch_byte, aead_key &out, bool &advances) noexcept
     {
         const auto current_low = static_cast<std::uint8_t>(m_recv_epoch & 0xffu);
         if(epoch_byte == current_low)
+        {
+            out = m_recv_key;
+            advances = false;
             return true;
+        }
         const auto next_low = static_cast<std::uint8_t>((m_recv_epoch + 1) & 0xffu);
         if(epoch_byte == next_low)
         {
-            aead_key next{};
-            if(!derive_forward(m_recv_key, next))
-                return false;
-            m_recv_key = next;
-            ++m_recv_epoch;
-            m_window.reset();
-            return true;
+            advances = true;
+            return derive_forward(m_recv_key, out);
         }
         return false;
     }
