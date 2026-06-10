@@ -223,3 +223,19 @@ target_link_libraries(test_subscriber_qos_thread PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_subscriber_qos_thread TEST_PREFIX "forwarder.")
+
+# The pure request-vs-offered relation oracle: every comparable field's compatible
+# AND incompatible rows (reliability/durability/deadline/lease per the offered>=requested
+# direction), the always-hard source-identity field refusing under both modes, strict
+# mode yielding incompatible_qos with the failing-field reason bitmask, and permissive
+# mode yielding a degraded verdict with a NON-EMPTY field set. A pure header unit (no
+# I/O, no backend) — needs only the core; selected by the `forwarder.` ctest prefix and
+# by `ctest -R 'qos rxo'` (the space-bearing case names).
+add_executable(test_qos_rxo test_qos_rxo.cpp)
+
+target_link_libraries(test_qos_rxo PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_qos_rxo TEST_PREFIX "forwarder.")

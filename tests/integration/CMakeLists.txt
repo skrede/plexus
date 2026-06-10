@@ -218,6 +218,26 @@ target_include_directories(test_deadline_liveliness PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_deadline_liveliness TEST_PREFIX "integration.")
 
+# The end-to-end request-vs-offered compatibility gate over the inproc rendezvous: a
+# subscriber demands a producer's topic carrying its requested QoS + chosen rxo_mode;
+# the producer runs the compatibility check at the fan-out gate and the outcome is
+# surfaced subscriber-side. Per soft field a strict incompatible pair is refused (no
+# data) while a compatible pair communicates, the same pair under permissive connects
+# and surfaces a NON-EMPTY degraded set, and a requires-source-identity subscriber is
+# refused regardless of mode against a non-offering producer. Each behavioral leg is
+# looped. Always built (inproc Policy, no backend needed); the `integration.` ctest
+# prefix and the "rxo compatibility" case substrings let `ctest -R 'rxo compatibility'`
+# match.
+add_executable(test_rxo_compatibility test_rxo_compatibility.cpp)
+target_link_libraries(test_rxo_compatibility PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_rxo_compatibility PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_rxo_compatibility TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)

@@ -5,6 +5,7 @@
 #include "plexus/io/detail/history_ring.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/subscriber_qos.h"
+#include "plexus/io/qos_rxo.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/priority.h"
@@ -48,6 +49,8 @@ inline wire::subscribe_qos_region to_wire_region(const subscriber_qos &q)
         flags |= wire::detail::k_qos_flag_requires_source_identity;
     if(q.requested_reliability_reliable)
         flags |= wire::detail::k_qos_flag_requested_reliable;
+    if(q.rxo == rxo_mode::strict)
+        flags |= wire::detail::k_qos_flag_rxo_strict;
     return wire::subscribe_qos_region{
             .durability            = static_cast<std::uint8_t>(q.durability_mode),
             .delivery_mode         = static_cast<std::uint8_t>(q.delivery_mode),
@@ -72,7 +75,9 @@ inline subscriber_qos from_wire_region(const wire::subscribe_qos_region &r)
                 = (r.requested_flags & wire::detail::k_qos_flag_requested_reliable) != 0,
             .requested_deadline_ns = r.requested_deadline_ns,
             .requested_lease_ns    = r.requested_lease_ns,
-            .requested_priority    = r.requested_priority};
+            .requested_priority    = r.requested_priority,
+            .rxo = (r.requested_flags & wire::detail::k_qos_flag_rxo_strict) != 0
+                       ? rxo_mode::strict : rxo_mode::permissive};
 }
 
 // A peer's durable subscribe demand carries the subscriber's OWN requested qos so a
@@ -172,11 +177,37 @@ public:
             send_control(p.channel, wire::msg_type::subscribe_response, resp);
             return false;
         }
+        // The request-vs-offered compatibility gate, generalizing the one-field
+        // type_mismatch refusal to the full QoS matrix. Both halves co-locate here:
+        // the subscriber's REQUESTED sub_qos arrived off the wire, the topic's OFFERED
+        // qos (incl. the off-wire offered periods) + the source-identity offer are read
+        // locally. A refusing verdict mirrors the type_mismatch shape exactly — reply
+        // the matching status, register NO fan-out entry, return false, leave the
+        // session up (a per-topic refusal, never a peer teardown).
+        const topic_qos offered = m_registry.qos_for(hash);
+        const bool offers_sid   = m_registry.offers_source_identity(hash);
+        const auto rxo = io::rxo_check(offered, offers_sid, sub_qos);
+        if(rxo.verdict == io::rxo_verdict::incompatible_qos
+           || rxo.verdict == io::rxo_verdict::source_identity_incompatible)
+        {
+            auto resp = wire::encode_subscribe_response(
+                {.topic_hash = hash, .status = status_of(rxo.verdict)});
+            send_control(p.channel, wire::msg_type::subscribe_response, resp);
+            return false;
+        }
         if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
             return false;
         m_registry.add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos);
-        auto resp = wire::encode_subscribe_response(
-            {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
+        // A degraded verdict ADMITS (the consumer chose permissive) but the reply
+        // carries the surfaced degraded-field set so the accept is non-silent; a clean
+        // compatible verdict replies the byte-identical bare `subscribed`.
+        auto resp = rxo.verdict == io::rxo_verdict::degraded
+            ? wire::encode_subscribe_response({.topic_hash = hash,
+                                               .status = wire::subscribe_status::subscribed_degraded,
+                                               .has_degraded = true,
+                                               .degraded_flags = rxo.degraded_fields})
+            : wire::encode_subscribe_response({.topic_hash = hash,
+                                               .status = wire::subscribe_status::subscribed});
         send_control(p.channel, wire::msg_type::subscribe_response, resp);
         replay_if_latched(p, hash);
         return true;
@@ -519,6 +550,15 @@ private:
         if(!producer_type_id || !subscriber_type_id)
             return false;
         return *producer_type_id != *subscriber_type_id;
+    }
+
+    // Map a refusing RxO verdict to its wire subscribe_status. Only the two refusing
+    // verdicts reach here; compatible/degraded are admitted (a separate reply path).
+    static wire::subscribe_status status_of(io::rxo_verdict v)
+    {
+        return v == io::rxo_verdict::source_identity_incompatible
+                   ? wire::subscribe_status::source_identity_incompatible
+                   : wire::subscribe_status::incompatible_qos;
     }
 
     void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash,

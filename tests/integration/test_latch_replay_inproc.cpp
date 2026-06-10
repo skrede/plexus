@@ -96,7 +96,11 @@ TEST_CASE("inproc latch replay delivers the late joiner the retained value throu
         ex.drain();
         REQUIRE(sink.bodies.empty());   // nothing fanned out before the late join
 
-        REQUIRE(fwd.attach_for_fanout(peer, "topic"));   // the late join drives the replay
+        // The late joiner explicitly requests single-newest replay; latch retention is
+        // delivered only to a subscriber that declares the durability that asks for it.
+        plexus::io::subscriber_qos sub_qos;
+        sub_qos.durability_mode = plexus::io::durability::latest;
+        REQUIRE(fwd.attach_for_fanout(peer, "topic", std::nullopt, sub_qos));   // the late join drives the replay
         ex.drain();
 
         REQUIRE(sink.bodies.size() == 1);

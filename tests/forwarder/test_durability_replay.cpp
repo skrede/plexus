@@ -131,7 +131,7 @@ TEST_CASE("a durability=latest subscriber gets EXACTLY ONE retained frame",
     }
 }
 
-TEST_CASE("a default-qos subscriber gets EXACTLY ONE retained frame (default == latest)",
+TEST_CASE("a default-qos subscriber gets ZERO retained frames (default == none)",
           "[durability][forwarder]")
 {
     inproc_bus<> bus;
@@ -145,14 +145,13 @@ TEST_CASE("a default-qos subscriber gets EXACTLY ONE retained frame (default == 
     fwd.publish("topic", as_bytes(std::string{"retained-v1"}));
     ex.drain();
 
-    // No qos argument: the friendly default IS latest, so un-upgraded subscribers
-    // preserve today's single-frame latch replay.
+    // No qos argument: the default durability is none, the maximally-accepting state.
+    // An unstated subscriber request never silently demands retention, so a plain
+    // subscribe declines latch replay until it explicitly opts into latest/all.
     REQUIRE(fwd.attach_for_fanout(peer, "topic"));
     ex.drain();
 
-    auto bodies = data_bodies(cap);
-    REQUIRE(bodies.size() == 1);
-    REQUIRE(bodies[0] == "retained-v1");
+    REQUIRE(data_bodies(cap).empty());   // default none -> no retained frame
 }
 
 TEST_CASE("a durability=all subscriber replays as latest against the depth-1 slot",
