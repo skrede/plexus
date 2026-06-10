@@ -151,7 +151,11 @@ private:
     // same-host-confined peer even though it rides the remote tier.
     [[nodiscard]] transport_kind tier_of(const endpoint &ep) const noexcept
     {
-        return m_selector.select(ep, reliability_hint::unspecified);
+        // The reliability axis reaches select() through dial(ep) by feeding it the path's
+        // own class (the scheme is the only routing discriminator the engine path carries),
+        // so the hint param is dial-reachable rather than a dead hardcoded constant. The
+        // tier result is unchanged — select() classifies locality hint-neutrally.
+        return m_selector.select(ep, m_selector.reliability_of_scheme(ep.scheme));
     }
 
     // Search the pack for the members serving ep.scheme within its tier, then let the

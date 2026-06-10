@@ -2,7 +2,9 @@
 #define HPP_GUARD_PLEXUS_IO_TRANSPORT_SELECTOR_H
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/reliability.h"
 #include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/reliability_requirement.h"
 
 #include <cstdint>
 #include <string_view>
@@ -45,6 +47,19 @@ enum class transport_kind : std::uint8_t
     remote,
 };
 
+// The verdict of composing a topic's reliability requirement with a path's own
+// delivery class: a requirement is admissible on a path iff the path does NOT
+// silently downgrade it. A reliable topic toward a best_effort (or unknown) path
+// is downgrade_refused — the no-silent-downgrade rule, generalized from the
+// reliable_datagram case so a reliable guarantee is never quietly weakened to a
+// lossy one. A best_effort topic asks for no guarantee, so it is admissible on
+// any path.
+enum class reliability_admissibility : std::uint8_t
+{
+    admissible,
+    downgrade_refused,
+};
+
 // A small value object owned by the multiplexing transport. It holds NO transport
 // handles and NO hint map — it is a pure function of the endpoint scheme (plus the
 // reserved reliability axis). Same-host detection reads ep.scheme: "unix"/"inproc"/"shm"
@@ -64,8 +79,14 @@ enum class transport_kind : std::uint8_t
 class transport_selector
 {
 public:
+    // The locality tier of an endpoint: a pure scheme classifier. The hint stays
+    // TIER-NEUTRAL — locality always wins, so a same-host scheme is local under any
+    // hint and an off-host scheme is remote under any hint. The reliability axis is
+    // consumed SEPARATELY by reliability_class (the verdict that composes the hint
+    // with the path's own class); the hint reaches select() only so the signature
+    // stays stable for callers that thread the axis through dial(ep).
     [[nodiscard]] transport_kind select(const endpoint &ep,
-                                        reliability_hint /*reserved for caller composition*/) const noexcept
+                                        reliability_hint /*tier-neutral; composed by reliability_class*/) const noexcept
     {
         if(ep.scheme == "unix" || ep.scheme == "inproc" || ep.scheme == "shm")
             return transport_kind::local;
@@ -98,6 +119,49 @@ public:
         if(scheme == "tcp" || scheme == "tls")
             return reliability_hint::reliable;
         return reliability_hint::unspecified;   // unix/inproc (local) and unknown: no claim
+    }
+
+    // Compose a topic's reliability requirement (expressed as a hint) with a path's
+    // own delivery class into the no-silent-downgrade verdict. A reliable hint is
+    // admissible ONLY on a scheme that scheme_is_reliable proves reliable (tcp/tls/
+    // udpr/unix/inproc); a reliable hint toward a best_effort scheme (udp/dtls) OR an
+    // unrecognized scheme is downgrade_refused — fail-CLOSED on unknown, never quietly
+    // weakening a reliable guarantee. A best_effort/unspecified hint asks for no
+    // guarantee, so it is admissible on any path. Driving the reliable branch off
+    // scheme_is_reliable DIRECTLY (not off reliability_of_scheme) keeps this verdict
+    // lock-step with the engine-side reliability gate for EVERY scheme, unknown
+    // included — the documented mirror invariant the two enforcement points share.
+    [[nodiscard]] reliability_admissibility reliability_class(const endpoint &ep,
+                                                              reliability_hint hint) const noexcept
+    {
+        if(hint == reliability_hint::reliable && !scheme_is_reliable(ep.scheme))
+            return reliability_admissibility::downgrade_refused;
+        return reliability_admissibility::admissible;
+    }
+
+    // Bridge the PUBLISHER's declared topic_qos.reliability {best_effort, reliable}
+    // into the selector's hint axis, so the declared class reaches reliability_class
+    // as a real input rather than a hardcoded constant.
+    [[nodiscard]] reliability_hint reliability_hint_of(reliability r) const noexcept
+    {
+        return r == reliability::reliable ? reliability_hint::reliable
+                                          : reliability_hint::best_effort;
+    }
+
+    // The general dispatch-consultation verdict: does a topic's declared dispatch hint
+    // prefer the fast path? It generalizes shm_eligible_for's same-host-only consumption
+    // to a transport-class PREFERENCE the broader selector exposes — the preference is
+    // true iff any hint bit is set. The locality tier governs what the SAME preference
+    // MEANS, not its value: for a LOCAL peer it is ACTIONABLE (it coincides with
+    // shm_eligible_for — the same-host shared-memory fast path); for a REMOTE peer it is
+    // ADVISORY, honest that the current mux has no datagram member to switch a remote peer
+    // to (the verdict records the preference; the routing is bounded by the member set).
+    // The endpoint is taken so a future member set can act on the tier; today the value is
+    // tier-independent by design. A pure value-object function — no ring, no member.
+    [[nodiscard]] bool dispatch_class(const endpoint & /*tier governs meaning, not value*/,
+                                      shm::dispatch_hint h) const noexcept
+    {
+        return shm::shm_eligible(h);
     }
 
     // The shared-memory eligibility decision: a (peer, topic) pair prefers
