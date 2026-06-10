@@ -11,6 +11,6 @@ target_include_directories(plexus-testing INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
-target_link_libraries(plexus-testing INTERFACE plexus::plexus plexus::wire plexus::inproc)
+target_link_libraries(plexus-testing INTERFACE plexus::core plexus::wire plexus::inproc)
 
 target_compile_features(plexus-testing INTERFACE cxx_std_20)

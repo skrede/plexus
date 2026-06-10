@@ -45,7 +45,7 @@ target_include_directories(plexus-mdnspp PUBLIC
     $<INSTALL_INTERFACE:include>)
 
 target_link_libraries(plexus-mdnspp PUBLIC
-    plexus::plexus
+    plexus::core
     mdnspp::asio
     plexus_asio_dep)
 

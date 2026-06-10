@@ -9,6 +9,6 @@ target_include_directories(plexus-inproc INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
-target_link_libraries(plexus-inproc INTERFACE plexus::plexus)
+target_link_libraries(plexus-inproc INTERFACE plexus::core)
 
 target_compile_features(plexus-inproc INTERFACE cxx_std_20)

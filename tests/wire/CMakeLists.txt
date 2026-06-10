@@ -34,11 +34,11 @@ endforeach()
 
 # The locality QoS unit oracle proves the delivery-tier bitflag truth table and the
 # scheme->tier classifier. It includes the core io/locality.h + topic_qos.h headers,
-# so it additionally links plexus::plexus (the header-only core); the rest of the wire
+# so it additionally links plexus::core (the header-only core); the rest of the wire
 # oracle needs only plexus::wire.
 add_executable(test_locality_qos test_locality_qos.cpp)
 target_link_libraries(test_locality_qos PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 catch_discover_tests(test_locality_qos TEST_PREFIX "wire.")

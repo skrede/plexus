@@ -19,7 +19,7 @@ endif()
 # wiring), this backend never touches asio: the reactor bridge is the
 # plexus-asio adapter's job, not this target's. With no asio-bearing symbols a
 # second STATIC archive cannot fold against the asio backend's copy, so a plain
-# archive is the honest shape. Link deps are PUBLIC plexus::plexus + plexus::wire
+# archive is the honest shape. Link deps are PUBLIC plexus::core + plexus::wire
 # — explicitly NOT asio.
 add_library(plexus-shm STATIC
     src/shm_backend_version.cpp
@@ -34,7 +34,7 @@ target_include_directories(plexus-shm PUBLIC
     $<INSTALL_INTERFACE:include>)
 
 target_link_libraries(plexus-shm PUBLIC
-    plexus::plexus
+    plexus::core
     plexus::wire)
 
 target_compile_features(plexus-shm PUBLIC cxx_std_20)

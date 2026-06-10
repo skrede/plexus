@@ -8,7 +8,7 @@
 # The hot-path allocation audit is deterministic (inproc Policy) — always built.
 add_executable(test_hot_path_alloc test_hot_path_alloc.cpp)
 target_link_libraries(test_hot_path_alloc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -21,7 +21,7 @@ catch_discover_tests(test_hot_path_alloc TEST_PREFIX "integration.")
 # rpc-dispatch gate — always built (inproc Policy, no backend needed).
 add_executable(test_reqres_roundtrip_inproc test_reqres_roundtrip_inproc.cpp)
 target_link_libraries(test_reqres_roundtrip_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -35,7 +35,7 @@ catch_discover_tests(test_reqres_roundtrip_inproc TEST_PREFIX "integration.")
 # Policy, no backend needed). tests/ is on the include path for support/alloc_counter.h.
 add_executable(test_latch_replay_inproc test_latch_replay_inproc.cpp)
 target_link_libraries(test_latch_replay_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -50,7 +50,7 @@ catch_discover_tests(test_latch_replay_inproc TEST_PREFIX "integration.")
 # completed handshake cancels the timer — always built (inproc Policy, no backend).
 add_executable(test_peer_session_inproc test_peer_session_inproc.cpp)
 target_link_libraries(test_peer_session_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -63,7 +63,7 @@ catch_discover_tests(test_peer_session_inproc TEST_PREFIX "integration.")
 # widened frame), and a non-same-host pair never reaches the shared-memory medium.
 add_executable(test_peer_session_same_host_inproc test_peer_session_same_host_inproc.cpp)
 target_link_libraries(test_peer_session_same_host_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -77,7 +77,7 @@ catch_discover_tests(test_peer_session_same_host_inproc TEST_PREFIX "integration
 # connection_refused — always built (inproc Policy, no backend needed).
 add_executable(test_transport_dial_inproc test_transport_dial_inproc.cpp)
 target_link_libraries(test_transport_dial_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -90,7 +90,7 @@ catch_discover_tests(test_transport_dial_inproc TEST_PREFIX "integration.")
 # always built (inproc Policy, no backend needed).
 add_executable(test_reconnect_inproc test_reconnect_inproc.cpp)
 target_link_libraries(test_reconnect_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -104,7 +104,7 @@ catch_discover_tests(test_reconnect_inproc TEST_PREFIX "integration.")
 # publish-does-not-dial — always built (inproc Policy, no backend needed).
 add_executable(test_routing_engine_inproc test_routing_engine_inproc.cpp)
 target_link_libraries(test_routing_engine_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -119,7 +119,7 @@ catch_discover_tests(test_routing_engine_inproc TEST_PREFIX "integration.")
 # a co-resident live peer is untouched — always built (inproc Policy, no backend).
 add_executable(test_drop_seam_inproc test_drop_seam_inproc.cpp)
 target_link_libraries(test_drop_seam_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -135,7 +135,7 @@ catch_discover_tests(test_drop_seam_inproc TEST_PREFIX "integration.")
 # straggler is dropped by the staleness gate — always built (inproc Policy, no backend).
 add_executable(test_multipeer_reconnect_inproc test_multipeer_reconnect_inproc.cpp)
 target_link_libraries(test_multipeer_reconnect_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -152,7 +152,7 @@ catch_discover_tests(test_multipeer_reconnect_inproc TEST_PREFIX "integration.")
 # (inproc Policy, no backend needed).
 add_executable(test_peer_observer_inproc test_peer_observer_inproc.cpp)
 target_link_libraries(test_peer_observer_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -168,7 +168,7 @@ catch_discover_tests(test_peer_observer_inproc TEST_PREFIX "integration.")
 # for support headers and the shared make_cfg helpers.
 add_executable(test_locality_confinement test_locality_confinement.cpp)
 target_link_libraries(test_locality_confinement PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -182,7 +182,7 @@ catch_discover_tests(test_locality_confinement TEST_PREFIX "integration.")
 # the type-erased selection seam. Always built (pure core, no backend needed).
 add_executable(test_mux_select_hook test_mux_select_hook.cpp)
 target_link_libraries(test_mux_select_hook PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 catch_discover_tests(test_mux_select_hook TEST_PREFIX "integration.")
@@ -195,7 +195,7 @@ catch_discover_tests(test_mux_select_hook TEST_PREFIX "integration.")
 # "transport steering" case substrings let `ctest -R 'transport steering'` match.
 add_executable(test_transport_steering test_transport_steering.cpp)
 target_link_libraries(test_transport_steering PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 catch_discover_tests(test_transport_steering TEST_PREFIX "integration.")
@@ -210,7 +210,7 @@ catch_discover_tests(test_transport_steering TEST_PREFIX "integration.")
 # the "deadline liveliness" case substrings let `ctest -R 'deadline liveliness'` match.
 add_executable(test_deadline_liveliness test_deadline_liveliness.cpp)
 target_link_libraries(test_deadline_liveliness PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -230,7 +230,7 @@ catch_discover_tests(test_deadline_liveliness TEST_PREFIX "integration.")
 # match.
 add_executable(test_rxo_compatibility test_rxo_compatibility.cpp)
 target_link_libraries(test_rxo_compatibility PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -245,7 +245,7 @@ catch_discover_tests(test_rxo_compatibility TEST_PREFIX "integration.")
 # the attach_policy a test double) — always built (inproc Policy, no backend needed).
 add_executable(test_security_attach_inproc test_security_attach_inproc.cpp)
 target_link_libraries(test_security_attach_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -260,7 +260,7 @@ catch_discover_tests(test_security_attach_inproc TEST_PREFIX "integration.")
 # seam) — always built (inproc Policy, no backend needed).
 add_executable(test_downgrade_inproc test_downgrade_inproc.cpp)
 target_link_libraries(test_downgrade_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -274,7 +274,7 @@ catch_discover_tests(test_downgrade_inproc TEST_PREFIX "integration.")
 # built (inproc Policy, no backend needed).
 add_executable(test_host_identity_inproc test_host_identity_inproc.cpp)
 target_link_libraries(test_host_identity_inproc PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -286,7 +286,7 @@ catch_discover_tests(test_host_identity_inproc TEST_PREFIX "integration.")
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
     target_link_libraries(test_asio_roundtrip PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         Catch2::Catch2WithMain)
@@ -305,7 +305,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # change). Same asio gate + `integration.` ctest prefix.
     add_executable(test_asio_frame_contract test_asio_frame_contract.cpp)
     target_link_libraries(test_asio_frame_contract PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         Catch2::Catch2WithMain)
@@ -319,7 +319,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # concurrent-outstanding stress (distinct correlation_ids in flight at once).
     add_executable(test_reqres_roundtrip_asio test_reqres_roundtrip_asio.cpp)
     target_link_libraries(test_reqres_roundtrip_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         Catch2::Catch2WithMain)
@@ -332,7 +332,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # cross-process reproducibility (a live-timing claim is never made from one run).
     add_executable(test_reqres_timeout_asio test_reqres_timeout_asio.cpp)
     target_link_libraries(test_reqres_timeout_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         Catch2::Catch2WithMain)
@@ -346,7 +346,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # ctest invocation is re-run >=3 process runs for cross-process reproducibility.
     add_executable(test_latch_replay_asio test_latch_replay_asio.cpp)
     target_link_libraries(test_latch_replay_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         Catch2::Catch2WithMain)
@@ -365,7 +365,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # the asio receiver's on_receive.
     add_executable(test_peer_session_asio test_peer_session_asio.cpp)
     target_link_libraries(test_peer_session_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -381,7 +381,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # forwarder framing path the oracle reuses.
     add_executable(test_transport_dial_asio test_transport_dial_asio.cpp)
     target_link_libraries(test_transport_dial_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -399,7 +399,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # process runs. Links plexus::inproc for the forwarder framing path.
     add_executable(test_routing_engine_asio test_routing_engine_asio.cpp)
     target_link_libraries(test_routing_engine_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -417,7 +417,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # runs. Links plexus::inproc for the forwarder framing path the peers reuse.
     add_executable(test_peer_observer_asio test_peer_observer_asio.cpp)
     target_link_libraries(test_peer_observer_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -433,7 +433,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # re-dials a closed port. Links plexus::inproc for the forwarder framing path.
     add_executable(test_reconnect_asio test_reconnect_asio.cpp)
     target_link_libraries(test_reconnect_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -449,7 +449,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # plexus::inproc for the forwarder framing path the peers reuse.
     add_executable(test_multipeer_reconnect_asio test_multipeer_reconnect_asio.cpp)
     target_link_libraries(test_multipeer_reconnect_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -465,7 +465,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # real socket. Loops each path in-body; re-run >=3 process runs.
     add_executable(test_stream_channel_asio test_stream_channel_asio.cpp)
     target_link_libraries(test_stream_channel_asio PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -502,7 +502,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # runs. Links plexus::inproc for the forwarder framing path the oracle reuses.
     add_executable(test_transport_dial_unix test_transport_dial_unix.cpp)
     target_link_libraries(test_transport_dial_unix PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -515,7 +515,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # resurrection). Links plexus::inproc for the forwarder framing path.
     add_executable(test_reconnect_unix test_reconnect_unix.cpp)
     target_link_libraries(test_reconnect_unix PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -530,7 +530,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # real local socket. Loops each path in-body; re-run >=3 process runs.
     add_executable(test_stream_channel_unix test_stream_channel_unix.cpp)
     target_link_libraries(test_stream_channel_unix PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::inproc
@@ -551,7 +551,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         add_executable(test_mux_select_unix test_mux_select_unix.cpp
             $<TARGET_OBJECTS:plexus-crypto>)
         target_link_libraries(test_mux_select_unix PRIVATE
-            plexus::plexus
+            plexus::core
             plexus::wire
             plexus::asio
             plexus::crypto
@@ -566,7 +566,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         add_executable(test_mux_select_asio test_mux_select_asio.cpp
             $<TARGET_OBJECTS:plexus-crypto>)
         target_link_libraries(test_mux_select_asio PRIVATE
-            plexus::plexus
+            plexus::core
             plexus::wire
             plexus::asio
             plexus::crypto
@@ -583,7 +583,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         add_executable(test_tls_channel_backpressure_asio test_tls_channel_backpressure_asio.cpp
             $<TARGET_OBJECTS:plexus-crypto>)
         target_link_libraries(test_tls_channel_backpressure_asio PRIVATE
-            plexus::plexus
+            plexus::core
             plexus::wire
             plexus::asio
             plexus::crypto
@@ -599,7 +599,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # member pulls in none of the crypto stack.
     add_executable(test_mux_minimal_composition test_mux_minimal_composition.cpp)
     target_link_libraries(test_mux_minimal_composition PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         Catch2::Catch2WithMain)
@@ -622,7 +622,7 @@ endif()
 if(PLEXUS_ENABLE_ASIO_BACKEND AND PLEXUS_ENABLE_MDNSPP_DISCOVERY)
     add_executable(test_shared_executor test_shared_executor.cpp)
     target_link_libraries(test_shared_executor PRIVATE
-        plexus::plexus
+        plexus::core
         plexus::wire
         plexus::asio
         plexus::mdnspp

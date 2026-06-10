@@ -16,7 +16,7 @@ target_include_directories(test_handshake_fsm PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 target_link_libraries(test_handshake_fsm PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -43,7 +43,7 @@ catch_discover_tests(test_handshake_codec TEST_PREFIX "handshake.")
 add_executable(test_version_interop test_version_interop.cpp)
 
 target_link_libraries(test_version_interop PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 

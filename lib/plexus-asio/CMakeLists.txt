@@ -1,5 +1,5 @@
 # Gated, compiled asio TCP backend: the production transport half of the slice.
-# The header-only core (plexus, plexus-wire) never links asio — this target, and
+# The header-only core (plexus-core, plexus-wire) never links asio — this target, and
 # only this target, pulls standalone asio in, and only when the backend is ON.
 # Auto-discovered by the root lib glob; self-gated so the core stays asio-free
 # when PLEXUS_ENABLE_ASIO_BACKEND is OFF.
@@ -18,7 +18,7 @@ target_include_directories(plexus-asio INTERFACE
     $<INSTALL_INTERFACE:include>)
 
 target_link_libraries(plexus-asio INTERFACE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus_asio_dep)
 

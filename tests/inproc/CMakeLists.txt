@@ -10,7 +10,7 @@ target_include_directories(test_inproc_policy PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 target_link_libraries(test_inproc_policy PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
