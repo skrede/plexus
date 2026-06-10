@@ -17,6 +17,7 @@
 #include "plexus/io/procedure_forwarder.h"
 
 #include "plexus/io/security/attach_facts.h"
+#include "plexus/io/security/attach_policy.h"
 
 #include "plexus/policy.h"
 
@@ -90,6 +91,7 @@ public:
     {
         m_torn_down = false;
         m_closed_for_protocol_error = false;
+        prime_self_credentials();
         m_channel.on_data([this](std::span<const std::byte> f) { on_receive(f); });
         m_channel.on_error([this](io_error) {
             if(m_on_drop && !m_torn_down && !m_closed_for_protocol_error)
@@ -155,6 +157,18 @@ public:
     // null (the default) is the no-AEAD/accept-any posture. Borrowed, never owned: the
     // move-only seam is shared by every session without a per-session copy.
     void set_security_seam(const security_seam *seam) noexcept { m_install_security_seam = seam; }
+
+    // The per-session entropy seam: the deployment's CSPRNG, used ONCE at start() to mint
+    // this session's own_nonce so the key schedule salt varies per session (no all-zero
+    // nonce, no cross-session keystream reuse). Absent on the accept-any plaintext path —
+    // own_nonce then stays zero and the unused proof field rides along harmlessly.
+    void set_attach_entropy(security::rand_fn rand) { m_rand = std::move(rand); }
+
+    // The attaching-side proof seam: this node's OWN keyed PSK plus the SAME hmac_fn the
+    // verifier holds. The key_id is stamped onto the outbound request/response, and the
+    // responder MACs the dialer's facts-view into the wire proof field. Absent = no proof
+    // stamped (the accept-any path). Set once at session build, mirroring set_security_seam.
+    void set_attach_prover(security::attach_prover prover) { m_prover = std::move(prover); }
 
     // The authenticated peer's host identity, bound to the security step (SPKI-derived
     // for a TLS peer, attach-bound for a PSK peer) — never a self-asserted TXT/wire
@@ -285,6 +299,7 @@ private:
                 // Inbound request: the local node is the RESPONDER (it verifies the
                 // dialer's attach proof). Assemble the facts from the decoded peer region.
                 m_pending_attach = assemble_attach_facts(*req, security::attach_role::responder, req->id);
+                latch_peer_proof(*req);
                 if(posture_mismatched(*req))
                     return refuse_posture();
                 execute(m_fsm.on_request(*req, m_is_inbound_bootstrap, m_pending_attach.facts));
@@ -295,6 +310,7 @@ private:
             {
                 // Inbound response: the local node is the INITIATOR (it dialed out).
                 m_pending_attach = assemble_attach_facts(*resp, security::attach_role::initiator, resp->id);
+                latch_peer_proof(*resp);
                 if(posture_mismatched(*resp))
                     return refuse_posture();
                 execute(m_fsm.on_response(*resp, m_pending_attach.facts));
@@ -471,6 +487,18 @@ private:
         return out;
     }
 
+    // Latch the decoded wire proof into a stable member buffer and point facts.proof at
+    // it: the policy's ct_equal reads the span THROUGH the gate's decide() call, and a span
+    // into the transient decoded frame would dangle. The buffer is the session's, so it
+    // outlives the synchronous gate. Called from the receive handlers AFTER the facts are
+    // assembled, before the FSM gate runs.
+    template <typename Frame>
+    void latch_peer_proof(const Frame &frame)
+    {
+        m_peer_proof = frame.proof;
+        m_pending_attach.facts.proof = m_peer_proof;
+    }
+
     // The posture gate: a secured node (an engaged seam) and a plain peer (no
     // cipher offered) are a hard mismatch BOTH ways — a secured local meeting a plain
     // offer, OR a plain local meeting a secured offer — refused fail-closed with no
@@ -510,6 +538,21 @@ private:
     // engaged seam) advertises its AEAD posture in the cipher offer/chosen so the peer's
     // posture gate sees a secured-vs-secured pair; a plain node leaves them zero. This is
     // what makes the posture mismatch observable both ways.
+    // Mint this session's own_nonce ONCE (a fresh per-session salt for the key schedule)
+    // and adopt the prover's key_id when an attach prover is engaged. Idempotent: a second
+    // start() (a reconnect cycle) re-mints a fresh nonce, but a single cycle fills exactly
+    // once so the SAME value feeds self_request, the transcript, and the proof. A degraded
+    // RNG (rand_fn returns false) leaves the nonce zeroed on a best-effort basis — the
+    // engaged crypto path additionally depends on the seam being installed, which the
+    // deployment owns. The accept-any path (no rand_fn) leaves the nonce zero unchanged.
+    void prime_self_credentials() noexcept
+    {
+        if(m_rand)
+            (void)m_rand(m_own_nonce);
+        if(m_prover.engaged())
+            m_key_id = m_prover.key_id();
+    }
+
     wire::handshake_request self_request() const noexcept
     {
         const std::uint8_t offer = seam_engaged() ? wire::cipher_offer_bits::chacha20_poly1305 : 0;
@@ -520,10 +563,11 @@ private:
                 .compatible_version_minor = m_fsm_cfg.compatible_version_minor,
                 .protocol_version         = wire::k_protocol_version,
                 .fingerprint              = m_fsm_cfg.local_fingerprint.value,
-                .key_id                   = {},
-                .own_nonce                = {},
+                .key_id                   = m_key_id,
+                .own_nonce                = m_own_nonce,
                 .cipher_offer             = offer,
-                .chosen_cipher            = offer};
+                .chosen_cipher            = offer,
+                .proof                    = {}};
     }
 
     void send_handshake_request()
@@ -532,6 +576,15 @@ private:
         send_control(wire::msg_type::handshake_req);
     }
 
+    // The response is the one leg the local node proves on: it is the responder for an
+    // inbound request, so it stamps the transcript-bound, reflection-resistant proof the
+    // dialer verifies on its on_response. The proof MACs the DIALER's facts-view (the
+    // dialer's role, its own_nonce as peer_nonce, the both-nonce transcript) so the
+    // dialer — recomputing under the shared PSK with its mirror view — matches byte for
+    // byte. A request carries no proof: a 1-RTT PSK dialer cannot prove before it has
+    // seen the responder's nonce, so the request leg stays accept-any (a known 1-RTT
+    // limitation). The proof is stamped only when the prover is engaged and the pending
+    // attach assembled a transcript-bound facts view for this peer.
     void send_handshake_response(handshake_outcome outcome)
     {
         const auto r = self_request();
@@ -540,9 +593,29 @@ private:
                 .compatible_version_minor = r.compatible_version_minor,
                 .protocol_version = r.protocol_version, .fingerprint = r.fingerprint,
                 .key_id = r.key_id, .own_nonce = r.own_nonce, .cipher_offer = r.cipher_offer,
-                .chosen_cipher = r.chosen_cipher, .status = status_for(outcome)};
+                .chosen_cipher = r.chosen_cipher, .proof = stamped_response_proof(),
+                .status = status_for(outcome)};
         wire::encode_handshake_response_into(m_payload_scratch, resp);
         send_control(wire::msg_type::handshake_resp);
+    }
+
+    // Compute the proof the dialer verifies: the responder reconstructs the DIALER's
+    // attach_facts view (the dialer is the initiator, so its own_nonce is the responder's
+    // peer_nonce and vice-versa) and MACs the canonical attach_proof_input under the shared
+    // PSK. The pending attach (assembled on this side's on_request) already carries the
+    // role-mirrored ids/nonces/transcript for the peer, so the dialer-view facts are that
+    // value with the role and nonces swapped to the dialer's standpoint. A disengaged
+    // prover returns a zero proof (the accept-any path leaves the field unused).
+    std::array<std::byte, wire::k_handshake_proof_len> stamped_response_proof() const
+    {
+        std::array<std::byte, wire::k_handshake_proof_len> proof{};
+        if(!m_prover.engaged())
+            return proof;
+        security::attach_facts dialer_view = m_pending_attach.facts;
+        dialer_view.role       = security::attach_role::initiator;
+        std::swap(dialer_view.peer_nonce, dialer_view.own_nonce);
+        (void)m_prover.prove(dialer_view, proof);
+        return proof;
     }
 
     static wire::handshake_status status_for(handshake_outcome outcome) noexcept
@@ -846,6 +919,15 @@ private:
     const security_seam *m_install_security_seam{nullptr};
     pending_attach m_pending_attach;
     std::optional<node_id> m_authenticated_host_identity;
+    // The per-session attach credentials: own_nonce is minted once from the rand_fn seam
+    // (a fresh key-schedule salt per session — no all-zero nonce), key_id is adopted from
+    // the engaged prover. m_peer_proof is the stable backing buffer the decoded wire proof
+    // is latched into so the facts.proof span outlives the synchronous gate decide().
+    std::array<std::byte, 16> m_own_nonce{};
+    std::array<std::byte, wire::k_handshake_key_id_len> m_key_id{};
+    std::array<std::byte, wire::k_handshake_proof_len> m_peer_proof{};
+    security::rand_fn m_rand;
+    security::attach_prover m_prover;
     plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> m_on_subscribe_refused;
     plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> m_on_subscribe_degraded;
 };

@@ -55,6 +55,12 @@ using plexus::io::lifecycle_edge;
 using plexus::io::handshake_outcome;
 using plexus::io::security::attach_policy;
 using plexus::io::security::attach_facts;
+using plexus::io::security::attach_prover;
+using plexus::io::security::psk_keystore_policy;
+using plexus::io::security::keyed_psk;
+using plexus::io::security::hmac_fn;
+using plexus::io::security::rand_fn;
+using plexus::io::security::k_key_id_len;
 using session = plexus::io::peer_session<inproc_policy>;
 using msg_forwarder = plexus::io::message_forwarder<inproc_policy>;
 using rpc_forwarder = plexus::io::procedure_forwarder<inproc_policy>;
@@ -97,6 +103,59 @@ security_seam fake_seam()
         return true;
     };
     return s;
+}
+
+// A deterministic keyed MAC over key||msg (a real keyed mixing function, NOT an identity
+// stub — every key/msg bit feeds every output byte, so a wrong key or a tampered input
+// yields a different MAC). The proof verification needs a genuine keyed dependence; this
+// mirrors the attach_policy oracle's fake_hmac so the prover and the policy agree.
+hmac_fn real_keyed_hmac()
+{
+    return [](std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out)
+    {
+        if(out.size() != 32)
+            return false;
+        for(std::size_t i = 0; i < out.size(); ++i)
+        {
+            unsigned acc = 0x811c9dc5u + static_cast<unsigned>(i);
+            for(std::size_t k = 0; k < key.size(); ++k)
+                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u + static_cast<unsigned>(k);
+            for(std::size_t m = 0; m < msg.size(); ++m)
+                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u + static_cast<unsigned>(m + i);
+            out[i] = static_cast<std::byte>(acc & 0xffu);
+        }
+        return true;
+    };
+}
+
+// A counter-seeded entropy seam: each fill advances a per-functor counter so two distinct
+// sessions mint DISTINCT own_nonces (the freshness property under test) while staying
+// fully reproducible across runs. seed separates the two ends so their nonces never
+// collide by construction.
+rand_fn counter_rand(std::uint8_t seed)
+{
+    auto counter = std::make_shared<std::uint8_t>(0);
+    return [seed, counter](std::span<std::byte> out)
+    {
+        for(auto &b : out)
+            b = static_cast<std::byte>((seed << 4) ^ (*counter)++);
+        return true;
+    };
+}
+
+std::array<std::byte, k_key_id_len> psk_key_id(std::uint8_t v)
+{
+    std::array<std::byte, k_key_id_len> id{};
+    id.fill(std::byte{v});
+    return id;
+}
+
+std::vector<std::byte> psk_material(std::uint8_t seed, std::size_t len = 16)
+{
+    std::vector<std::byte> m(len);
+    for(std::size_t i = 0; i < len; ++i)
+        m[i] = static_cast<std::byte>((seed + i) & 0xff);
+    return m;
 }
 
 // A two-node inproc link with selectable per-node attach policy + seam + the security
@@ -170,6 +229,88 @@ struct link
     }
 
     void drive() { ex.drain(); }
+};
+
+// The PSK end-to-end rig: drives the REAL psk_keystore_policy on the security decision
+// path (no verdict_policy double). The dialer's policy verifies the responder's wire proof
+// on its on_response; the responder's prover stamps the proof; both ends mint fresh nonces
+// from a counter-seeded entropy seam. A secured seam is engaged on both ends (the AEAD
+// posture the attach gate runs under), with the install hook wired so an admit completes.
+struct psk_link
+{
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    inproc_transport<> transport{ex, bus};
+
+    msg_forwarder req_messages{ex};
+    msg_forwarder resp_messages{ex};
+    rpc_forwarder req_procedures{ex, k_long_timeout};
+    rpc_forwarder resp_procedures{ex, k_long_timeout};
+
+    plexus::io::peer_context<inproc_policy> req_ctx;
+    plexus::io::peer_context<inproc_policy> resp_ctx;
+    std::optional<session> requester;
+    std::optional<session> responder;
+
+    security_seam req_seam;
+    security_seam resp_seam;
+
+    std::vector<security_event> req_security;
+    std::vector<security_event> resp_security;
+    std::vector<lifecycle_event> req_lifecycle;
+    std::vector<lifecycle_event> resp_lifecycle;
+    int req_installs{0};
+    int resp_installs{0};
+
+    // dialer_keystore: the keyed_psk set the DIALER's policy verifies the responder's proof
+    // against (an empty/wrong set drives the refuse legs). responder_key: the keyed_psk the
+    // responder PROVES under (its own material + the key_id it stamps).
+    psk_link(std::vector<keyed_psk> dialer_keystore, keyed_psk responder_key)
+    {
+        req_seam = fake_seam();
+        resp_seam = fake_seam();
+
+        transport.on_accepted([this, responder_key](std::unique_ptr<inproc_channel<>> ch) mutable {
+            resp_ctx.channel = std::move(ch);
+            resp_ctx.node_name = "requester-node";
+            resp_ctx.peer_id = make_cfg(0x02).self_id;
+            // The responder admits the version/identity-valid request (no verifiable proof
+            // in flight one) — accept_any on its on_request leg — and stamps ITS proof on
+            // the response via the prover.
+            responder.emplace(resp_ctx, ex, make_cfg(0x01, &m_accept_any), k_long_timeout,
+                              resp_messages, resp_procedures, true);
+            responder->set_security_seam(&resp_seam);
+            responder->set_attach_entropy(counter_rand(0x0a));
+            responder->set_attach_prover(attach_prover{responder_key, real_keyed_hmac()});
+            responder->on_security([this](const security_event &ev) { resp_security.push_back(ev); });
+            responder->on_lifecycle([this](const lifecycle_event &ev) { resp_lifecycle.push_back(ev); });
+            responder->on_install_security([this](const security_negotiation &) { ++resp_installs; });
+            responder->start();
+        });
+        transport.on_dialed([this, dialer_keystore](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &) mutable {
+            req_ctx.channel = std::move(ch);
+            req_ctx.node_name = "responder-node";
+            req_ctx.peer_id = make_cfg(0x01).self_id;
+            m_dialer_policy.emplace(std::move(dialer_keystore), real_keyed_hmac());
+            requester.emplace(req_ctx, ex, make_cfg(0x02, &*m_dialer_policy), k_long_timeout,
+                              req_messages, req_procedures, false);
+            requester->set_security_seam(&req_seam);
+            requester->set_attach_entropy(counter_rand(0x0b));
+            requester->on_security([this](const security_event &ev) { req_security.push_back(ev); });
+            requester->on_lifecycle([this](const lifecycle_event &ev) { req_lifecycle.push_back(ev); });
+            requester->on_install_security([this](const security_negotiation &) { ++req_installs; });
+            requester->start();
+        });
+
+        transport.listen({"inproc", "svc"});
+        transport.dial({"inproc", "svc"});
+    }
+
+    void drive() { ex.drain(); }
+
+private:
+    plexus::io::security::accept_any m_accept_any;
+    std::optional<psk_keystore_policy> m_dialer_policy;
 };
 
 int count_kind(const std::vector<security_event> &evs, security_kind k)
@@ -270,7 +411,7 @@ std::vector<std::byte> matched_request(std::uint8_t peer_seed)
     plexus::wire::handshake_request req{.id = peer, .version_major = 1, .version_minor = 0,
         .compatible_version_major = 1, .compatible_version_minor = 0,
         .protocol_version = plexus::wire::k_protocol_version, .fingerprint = 0,
-        .key_id = {}, .own_nonce = {}, .cipher_offer = 0x01, .chosen_cipher = 0x01};
+        .key_id = {}, .own_nonce = {}, .cipher_offer = 0x01, .chosen_cipher = 0x01, .proof = {}};
     auto payload = plexus::wire::encode_handshake_request(req);
     plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::handshake_req, .flags = 0,
         .session_id = 0, .timestamp_ns = 0, .payload_len = payload.size()};
@@ -312,4 +453,68 @@ TEST_CASE("io.security_attach an auth-only + datagram configuration is refused (
     REQUIRE(count_kind(security, security_kind::posture_mismatch) == 1);
     REQUIRE(count_rejected(lifecycle, handshake_outcome::reject_unauthorized) == 1);
     REQUIRE_FALSE(responder.is_complete());   // fail-closed: no silent plaintext fallback
+}
+
+TEST_CASE("io.security_attach the REAL psk_keystore_policy admits a matching-key attach end to end",
+          "[io][security_attach]")
+{
+    const auto material = psk_material(0xA0);
+    const keyed_psk key{psk_key_id(0x01), material};
+
+    // Both ends hold key_id 0x01 with the SAME material: the responder proves under it on
+    // the response, the dialer's REAL psk_keystore_policy looks it up and verifies the proof.
+    psk_link l{/*dialer_keystore=*/{key}, /*responder_key=*/key};
+    l.drive();
+
+    REQUIRE(l.requester->is_complete());
+    REQUIRE(l.responder->is_complete());
+    // The decision ran on the real policy over a real wire proof — admitted, identity
+    // latched, the install hook fired once per side, and no refusal event.
+    REQUIRE(l.requester->authenticated_host_identity().has_value());
+    REQUIRE(l.responder->authenticated_host_identity().has_value());
+    REQUIRE(l.req_installs == 1);
+    REQUIRE(l.resp_installs == 1);
+    REQUIRE(l.req_security.empty());
+    REQUIRE(l.resp_security.empty());
+}
+
+TEST_CASE("io.security_attach the REAL psk_keystore_policy refuses a wrong-key attach end to end",
+          "[io][security_attach]")
+{
+    // The responder proves under material M1; the dialer's keystore holds key_id 0x01 with
+    // a DIFFERENT material M2 — the recomputed MAC differs, so the proof fails ct_equal.
+    const keyed_psk dialer_key{psk_key_id(0x01), psk_material(0xA0)};
+    const keyed_psk responder_key{psk_key_id(0x01), psk_material(0xB0)};
+
+    psk_link l{/*dialer_keystore=*/{dialer_key}, /*responder_key=*/responder_key};
+    l.drive();
+
+    // The dialer (the verifier on the response leg) refuses with reject_unauthorized + the
+    // lifecycle rejected edge. The dedicated security event on a SECURED pair is
+    // downgrade_refused (a secured-pair gate refusal — a forced/failed transcript-bound
+    // proof — is classified distinctly from a plain no-posture unauthorized_attach; the
+    // posture mismatch is caught earlier). The reject_unauthorized verdict is the real
+    // policy's, not a double's.
+    REQUIRE(count_kind(l.req_security, security_kind::downgrade_refused) == 1);
+    REQUIRE(count_rejected(l.req_lifecycle, handshake_outcome::reject_unauthorized) == 1);
+    REQUIRE_FALSE(l.requester->is_complete());
+}
+
+TEST_CASE("io.security_attach the REAL psk_keystore_policy refuses a removed-key attach end to end",
+          "[io][security_attach]")
+{
+    // The responder proves under key_id 0x01, but the dialer's keystore omits it entirely
+    // (a rotated-out / removed key): the lookup misses and the attach is refused without
+    // dereferencing — the fail-closed removed-key path.
+    const keyed_psk responder_key{psk_key_id(0x01), psk_material(0xA0)};
+
+    psk_link l{/*dialer_keystore=*/{}, /*responder_key=*/responder_key};
+    l.drive();
+
+    // A removed key misses the lookup: the real policy refuses without dereferencing.
+    // The secured-pair gate refusal carries downgrade_refused + the reject_unauthorized
+    // lifecycle edge (same classification as the wrong-key path).
+    REQUIRE(count_kind(l.req_security, security_kind::downgrade_refused) == 1);
+    REQUIRE(count_rejected(l.req_lifecycle, handshake_outcome::reject_unauthorized) == 1);
+    REQUIRE_FALSE(l.requester->is_complete());
 }
