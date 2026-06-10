@@ -60,7 +60,8 @@ handshake_request request_with_protocol(node_id peer, std::uint8_t protocol) noe
         .key_id                   = {},
         .own_nonce                = {},
         .cipher_offer             = 0,
-        .chosen_cipher            = 0};
+        .chosen_cipher            = 0,
+        .proof                    = {}};
 }
 
 }
