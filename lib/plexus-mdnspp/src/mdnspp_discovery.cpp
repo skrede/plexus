@@ -11,6 +11,9 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <charconv>
+#include <string_view>
+#include <system_error>
 
 namespace plexus::mdnspp {
 
@@ -83,13 +86,23 @@ void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
     info.service_type = m_service_type;
 
     // The plexus endpoint address is "host:port"; split it back into the SRV
-    // hostname/port + the A-record IPv4 the responder announces.
+    // hostname/port + the A-record IPv4 the responder announces. The port tail is parsed
+    // with from_chars into a uint16 (mirroring contact_card::read_transport_port) so a
+    // non-numeric, out-of-range, or trailing-garbage port skips the advertisement rather
+    // than throwing (std::stoul) or silently truncating a >65535 value into a wrong port.
     const auto &addr = service.endpoint.address;
     auto colon = addr.rfind(':');
     if(colon != std::string::npos)
     {
+        const auto port_tail = std::string_view{addr}.substr(colon + 1);
+        std::uint16_t port{};
+        const char *first = port_tail.data();
+        const char *last = port_tail.data() + port_tail.size();
+        const auto parsed = std::from_chars(first, last, port);
+        if(parsed.ec != std::errc{} || parsed.ptr != last)
+            return;
         info.address_ipv4 = addr.substr(0, colon);
-        info.port = static_cast<std::uint16_t>(std::stoul(addr.substr(colon + 1)));
+        info.port = port;
     }
     info.hostname = service.name;
     info.txt_records = to_txt_records(service.metadata);
