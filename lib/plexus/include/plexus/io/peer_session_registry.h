@@ -131,6 +131,18 @@ public:
         return &*it->second->session;
     }
 
+    // Iterate every CONNECTED peer (a slot with a complete session), calling
+    // fn(id, session). It iterates the LIVE slot map only and skips an
+    // incomplete/torn-down slot, so a tick-driven emit (the keepalive heartbeat) never
+    // touches a dead session — the lifetime invariant. Mirrors is_connected's slot check.
+    template <typename Fn>
+    void for_each_connected(Fn &&fn)
+    {
+        for(auto &[id, slot] : m_slots)
+            if(slot->session && slot->session->is_complete())
+                fn(id, *slot->session);
+    }
+
     driver_type &driver_for(const node_id &id) { return m_slots.at(id)->driver; }
     std::uint32_t attempt_count(const node_id &id) const { return m_slots.at(id)->driver.attempt_count(); }
 
@@ -185,6 +197,7 @@ private:
         else
             wire_drop(slot, slot.record.peer_id);
         wire_lifecycle(slot);
+        wire_stamp_seen(slot);
         slot.session->start();
     }
 
@@ -225,6 +238,18 @@ private:
         slot.session->on_lifecycle([this](const lifecycle_event &ev) {
             if(m_build.on_lifecycle)
                 m_build.on_lifecycle(ev);
+        });
+    }
+
+    // Route this slot's session presence stamps up to the engine's one liveliness
+    // monitor via the node-shared build-context seam (set for both inbound and dialed
+    // slots — either may receive a heartbeat). The session passes its own pinned peer
+    // id; the forward re-checks the sink is set, mirroring wire_lifecycle.
+    void wire_stamp_seen(slot_block &slot)
+    {
+        slot.session->on_stamp_seen([this](const node_id &id) {
+            if(m_build.on_stamp_seen)
+                m_build.on_stamp_seen(id);
         });
     }
 

@@ -200,6 +200,24 @@ target_link_libraries(test_transport_steering PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_transport_steering TEST_PREFIX "integration.")
 
+# The deterministic deadline/liveliness behavioral gate on the virtual clock: a
+# subscriber drives subscribe(id, fqn, qos) with its requested periods, the engine
+# arms the one router-level monitor at the ready edge, a data gap fires exactly one
+# missed-deadline, a presence (data+heartbeat) silence fires exactly one lease-expiry,
+# and a continuing keepalive heartbeat keeps the lease alive while data lapses (the
+# two-stamp distinction end-to-end). Each timing leg is looped over the virtual clock.
+# Always built (inproc Policy, no backend needed); the `integration.` ctest prefix and
+# the "deadline liveliness" case substrings let `ctest -R 'deadline liveliness'` match.
+add_executable(test_deadline_liveliness test_deadline_liveliness.cpp)
+target_link_libraries(test_deadline_liveliness PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_deadline_liveliness PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_deadline_liveliness TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)

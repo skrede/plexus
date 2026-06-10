@@ -24,10 +24,10 @@ constexpr std::byte magic_byte_0{0x56};
 constexpr std::byte magic_byte_1{0x50};
 
 // Wire-stable message-type byte. Append-only: a value is NEVER reordered or
-// reused. There is additive room beyond subscribe_response (0x0C+) for a future
-// heartbeat/control type — it rides WITHIN the current protocol version (a new
-// msg_type is byte-identical until a peer actually emits one), so no further
-// protocol bump is required to introduce it later.
+// reused. heartbeat (0x0C) fills the additive slot beyond subscribe_response: it is
+// a session-level presence assert that rides WITHIN the current protocol version (a
+// new msg_type is byte-identical to a peer that never emits one), so introducing it
+// requires no protocol bump. Further control types take 0x0D+.
 enum class msg_type : uint8_t
 {
     unidirectional      = 0x01,
@@ -40,7 +40,8 @@ enum class msg_type : uint8_t
     fetch_metadata      = 0x08,
     rpc_request         = 0x09,
     rpc_response        = 0x0A,
-    subscribe_response  = 0x0B
+    subscribe_response  = 0x0B,
+    heartbeat           = 0x0C
 };
 
 enum class endpoint_source_type : uint8_t

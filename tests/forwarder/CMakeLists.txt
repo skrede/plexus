@@ -187,3 +187,39 @@ target_link_libraries(test_fetch_latched PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_fetch_latched TEST_PREFIX "forwarder.")
+
+# The liveliness_monitor unit oracle: the ONE router-level periodic ticker on the
+# deterministic virtual clock proves the edge-latched single-fire-per-lapse with
+# re-arm-on-resume, the two-stamp distinctness (a heartbeat keeps the lease but not
+# the deadline), the inert 0-period, the no-fire-on-a-deregistered-endpoint lifetime
+# invariant, and the zero-allocation steady-state stamp. Each timing leg is looped
+# for reproducibility. Links the core, the inproc virtual-clock substrate, and the
+# alloc-counter via tests/; selected by the `forwarder.` ctest prefix.
+add_executable(test_liveliness_monitor test_liveliness_monitor.cpp)
+
+target_include_directories(test_liveliness_monitor PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+target_link_libraries(test_liveliness_monitor PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_liveliness_monitor TEST_PREFIX "forwarder.")
+
+# The subscriber-qos thread oracle: the SUBSCRIBING node stores its OWN requested
+# deadline/lease through attach(peer, fqn, qos) so qos_for_subscriber reads back the
+# real periods (not a defaulted 0), and remember_demand carries the qos so a deferred
+# dial resurrects them. Links the core, wire, and inproc layers; selected by the
+# `forwarder.` ctest prefix.
+add_executable(test_subscriber_qos_thread test_subscriber_qos_thread.cpp)
+
+target_link_libraries(test_subscriber_qos_thread PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_subscriber_qos_thread TEST_PREFIX "forwarder.")

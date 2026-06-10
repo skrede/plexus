@@ -97,7 +97,11 @@ public:
 
     // Register a peer's fan-out entry for an fqn (idempotent on a re-add of the
     // same channel). Records the topic_hash -> fqn resolution the receive tail
-    // reads. Called at attach only.
+    // reads. Called at attach only. The qos has two distinct sources sharing this
+    // store: the SUBSCRIBE side passes the subscriber's OWN requested choice (the
+    // local monitor reads it back via qos_for_subscriber to arm the deadline/lease),
+    // and the producer-side attach_for_fanout passes the subscriber's request it
+    // learned off the wire for fan-out — the same slot, two callers.
     void add_subscriber(std::uint64_t topic_hash, std::string_view fqn,
                         Channel &channel, std::string_view node_name,
                         const subscriber_qos &qos = subscriber_qos{})

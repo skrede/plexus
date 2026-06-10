@@ -97,7 +97,7 @@ TEST_CASE("message_info: the existing 2-arg deliver hands up the topic and bytes
 
     std::string got_fqn;
     std::string got_bytes;
-    fwd.deliver(peer, inner, /*has_source_identity=*/false, [&](std::string_view fqn, std::span<const std::byte> data) {
+    fwd.deliver(peer, inner, plexus::node_id{}, /*has_source_identity=*/false, [&](std::string_view fqn, std::span<const std::byte> data) {
         got_fqn.assign(fqn);
         got_bytes.assign(reinterpret_cast<const char *>(data.data()), data.size());
     });

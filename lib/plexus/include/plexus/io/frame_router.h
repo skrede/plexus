@@ -54,6 +54,9 @@ public:
     void on_rpc_response(consumer c) { m_rpc_response = std::move(c); }
     void on_handshake_req(consumer c) { m_handshake_req = std::move(c); }
     void on_handshake_resp(consumer c) { m_handshake_resp = std::move(c); }
+    // The heartbeat is a session-level presence assert — inner-only, header-agnostic
+    // — so it rides the plain consumer/fire path, not the header-bearing data path.
+    void on_heartbeat(consumer c) { m_heartbeat = std::move(c); }
 
     // Demux one complete (header-on) frame: decode the header, switch on its
     // type, and hand the inner payload to the registered consumer. A short/
@@ -82,6 +85,7 @@ private:
             case wire::msg_type::rpc_response:       return fire(m_rpc_response, inner);
             case wire::msg_type::handshake_req:      return fire(m_handshake_req, inner);
             case wire::msg_type::handshake_resp:     return fire(m_handshake_resp, inner);
+            case wire::msg_type::heartbeat:          return fire(m_heartbeat, inner);
             default:                                 return drop("plexus: router unknown_frame_type");
         }
     }
@@ -112,6 +116,7 @@ private:
     consumer m_rpc_response;
     consumer m_handshake_req;
     consumer m_handshake_resp;
+    consumer m_heartbeat;
 };
 
 }
