@@ -1,4 +1,3 @@
-#include "plexus/asio/mux_policy.h"
 #include "plexus/asio/all_backends_mux.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
@@ -46,7 +45,7 @@ namespace pio = plexus::io;
 // The full 32-byte SHA-256 SPKI digest — the core cert_facts::spki_sha256 field type.
 using spki_digest = std::array<std::byte, 32>;
 
-static_assert(plexus::io::transport_backend<pasio::all_backends_mux, pasio::mux_policy>);
+static_assert(plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
 
 namespace {
 

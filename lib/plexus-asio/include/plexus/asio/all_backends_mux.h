@@ -1,7 +1,6 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_ALL_BACKENDS_MUX_H
 #define HPP_GUARD_PLEXUS_ASIO_ALL_BACKENDS_MUX_H
 
-#include "plexus/asio/mux_policy.h"
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/asio_channel.h"
 #include "plexus/asio/unix_channel.h"
@@ -17,6 +16,8 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
+
+#include "plexus/muxify.h"
 
 namespace plexus::asio {
 
@@ -46,7 +47,8 @@ using all_backends_mux = io::multiplexing_transport<unix_transport, asio_transpo
 
 }
 
-static_assert(plexus::io::transport_backend<plexus::asio::all_backends_mux, plexus::asio::mux_policy>,
+static_assert(plexus::io::transport_backend<plexus::asio::all_backends_mux,
+                                            plexus::muxify<plexus::asio::asio_policy>>,
     "all_backends_mux must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif

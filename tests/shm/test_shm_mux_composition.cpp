@@ -13,11 +13,11 @@
 // check so the case appears in the discovered list.
 
 static_assert(plexus::io::transport_backend<plexus::asio::shm::all_backends_mux_shm,
-                                            plexus::asio::mux_policy>,
+                                            plexus::muxify<plexus::asio::asio_policy>>,
               "the shm-bearing composition must satisfy transport_backend");
 
 static_assert(plexus::io::transport_backend<plexus::asio::all_backends_mux,
-                                            plexus::asio::mux_policy>,
+                                            plexus::muxify<plexus::asio::asio_policy>>,
               "the no-shm composition must stay intact (the shm alias is additive)");
 
 TEST_CASE("shm.mux_composition the shm-bearing and no-shm multiplexers both satisfy the backend seam",

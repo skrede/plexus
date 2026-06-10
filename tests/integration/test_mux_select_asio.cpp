@@ -1,4 +1,3 @@
-#include "plexus/asio/mux_policy.h"
 #include "plexus/asio/all_backends_mux.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
@@ -29,7 +28,7 @@ namespace pasio = plexus::asio;
 namespace ptls = plexus::tls;
 namespace pio = plexus::io;
 
-static_assert(plexus::io::transport_backend<pasio::all_backends_mux, pasio::mux_policy>);
+static_assert(plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
 
 namespace {
 
