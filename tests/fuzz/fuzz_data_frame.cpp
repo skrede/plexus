@@ -2,6 +2,7 @@
 // decode_unidirectional and decode_bidirectional on the low bit of the
 // first input byte.
 
+#include "fuzz_sink.h"
 #include "plexus/wire/data_frame.h"
 
 #include <cstddef>
@@ -21,12 +22,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
         // exercises the trailing varint endpoint-counter region (read_varint) too.
         const bool has_source_identity = Size > 0 && (Data[0] & 0x02) != 0;
         auto result = decode_unidirectional(bytes, has_source_identity);
-        (void)result;
+        fuzz_consume(result);
     }
     else
     {
         auto result = decode_bidirectional(bytes.subspan(1));
-        (void)result;
+        fuzz_consume(result);
     }
     return 0;
 }

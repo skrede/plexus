@@ -8,6 +8,7 @@
 // space around the new boundary; this harness needs no shape change for the wider
 // region because it decodes raw bytes, but the wider decode is exactly what it covers.
 
+#include "fuzz_sink.h"
 #include "plexus/wire/handshake.h"
 
 #include <span>
@@ -22,10 +23,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
         reinterpret_cast<const std::byte *>(Data), Size};
 
     auto req = decode_handshake_request(bytes);
-    (void)req;
+    fuzz_consume(req);
 
     auto resp = decode_handshake_response(bytes);
-    (void)resp;
+    fuzz_consume(resp);
 
     return 0;
 }
