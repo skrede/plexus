@@ -41,16 +41,25 @@ static_assert(max_fragment_count <= 0xFFFFu,
               "max_message_size / min_fragment_payload overruns the uint16 frag_cnt wire "
               "field — shrink max_message_size or raise min_fragment_payload with it");
 
-// The per-fragment-DATA budget left after the fragment sub-header is subtracted from the
-// caller's transport budget (the channel passes mtu_budget.max_payload; DTLS passes the
-// post-handshake DTLS_get_data_mtu — never hardcoded here). A budget at or below the
-// header overhead yields no room and is clamped to the floor so the splitter always
-// makes forward progress.
-constexpr std::size_t effective_fragment_budget(std::size_t transport_budget) noexcept
+// The Poly1305/GCM tag an AEAD-decorated channel appends per sealed fragment (RFC
+// 8439). When the channel is AEAD-decorated this is a SECOND subtraction term so the
+// sealed fragment (ciphertext + tag) still fits the transport budget instead of
+// silently overrunning the MTU.
+constexpr std::size_t k_aead_tag_overhead = 16;
+
+// The per-fragment-DATA budget left after the fragment sub-header (and, on an
+// AEAD-decorated channel, the tag) is subtracted from the caller's transport budget
+// (the channel passes mtu_budget.max_payload; DTLS passes the post-handshake
+// DTLS_get_data_mtu — never hardcoded here). A budget at or below the overhead yields
+// no room and is clamped to the floor so the splitter always makes forward progress.
+constexpr std::size_t effective_fragment_budget(std::size_t transport_budget,
+                                                bool aead_decorated = false) noexcept
 {
-    if(transport_budget <= wire::udp_fragment_header_overhead + fragmentation_limits::min_fragment_payload)
+    const std::size_t overhead = wire::udp_fragment_header_overhead +
+                                 (aead_decorated ? k_aead_tag_overhead : 0u);
+    if(transport_budget <= overhead + fragmentation_limits::min_fragment_payload)
         return fragmentation_limits::min_fragment_payload;
-    return transport_budget - wire::udp_fragment_header_overhead;
+    return transport_budget - overhead;
 }
 
 // The sink the splitter drives once per fragment, in ascending index order: the channel
