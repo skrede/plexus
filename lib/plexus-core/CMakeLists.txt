@@ -13,3 +13,7 @@ target_include_directories(plexus-core INTERFACE
 target_link_libraries(plexus-core INTERFACE plexus::wire)
 
 target_compile_features(plexus-core INTERFACE cxx_std_20)
+
+include(GNUInstallDirs)
+install(TARGETS plexus-core EXPORT plexusTargets)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

@@ -1,0 +1,19 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/plexusTargets.cmake")
+
+# Backend components (asio, crypto, shm, mdnspp, testing) ship their own
+# per-component targets file in a follow-up. The loop reports an as-yet-unshipped
+# component as not-found rather than failing the find_package, and
+# check_required_components turns a missing REQUIRED component into a hard error.
+foreach(comp ${plexus_FIND_COMPONENTS})
+    set(_f "${CMAKE_CURRENT_LIST_DIR}/plexus-${comp}-targets.cmake")
+    if(EXISTS ${_f})
+        include(${_f})
+        set(plexus_${comp}_FOUND TRUE)
+    else()
+        set(plexus_${comp}_FOUND FALSE)
+    endif()
+endforeach()
+
+check_required_components(plexus)
