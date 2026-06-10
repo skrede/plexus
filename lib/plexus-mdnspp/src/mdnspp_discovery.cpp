@@ -26,8 +26,8 @@ struct mdnspp_discovery::impl
     }
 
     ::asio::io_context &context;
-    std::unique_ptr<::mdnspp::basic_service_server<::mdnspp::AsioPolicy>> server;
-    std::unique_ptr<::mdnspp::basic_service_discovery<::mdnspp::AsioPolicy>> browser;
+    std::unique_ptr<::mdnspp::basic_service_server<::mdnspp::asio_policy>> server;
+    std::unique_ptr<::mdnspp::basic_service_discovery<::mdnspp::asio_policy>> browser;
 };
 
 namespace {
@@ -70,14 +70,14 @@ void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
     }
     info.hostname = service.name;
 
-    m_impl->server = std::make_unique<::mdnspp::basic_service_server<::mdnspp::AsioPolicy>>(
+    m_impl->server = std::make_unique<::mdnspp::basic_service_server<::mdnspp::asio_policy>>(
         m_io, std::move(info));
     m_impl->server->async_start();
 }
 
 void mdnspp_discovery::browse(const resolved_callback &on_resolved)
 {
-    m_impl->browser = std::make_unique<::mdnspp::basic_service_discovery<::mdnspp::AsioPolicy>>(m_io);
+    m_impl->browser = std::make_unique<::mdnspp::basic_service_discovery<::mdnspp::asio_policy>>(m_io);
     m_impl->browser->async_browse(
         m_service_type,
         [on_resolved](std::error_code, std::vector<::mdnspp::resolved_service> services)
