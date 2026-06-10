@@ -187,6 +187,19 @@ target_link_libraries(test_mux_select_hook PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_mux_select_hook TEST_PREFIX "integration.")
 
+# The transport-steering gate: a PURE value-object proof that a publisher's declared
+# topic_qos.reliability and dispatch observably steer the transport_selector's class
+# verdict (the no-silent-downgrade rule + the dispatch-preference consultation), and that
+# the selector verdict mirrors the engine reliability gate for every scheme. Header-only
+# core (no backend) — always built; the `integration.` ctest prefix selects it, the
+# "transport steering" case substrings let `ctest -R 'transport steering'` match.
+add_executable(test_transport_steering test_transport_steering.cpp)
+target_link_libraries(test_transport_steering PRIVATE
+    plexus::plexus
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_transport_steering TEST_PREFIX "integration.")
+
 # The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
