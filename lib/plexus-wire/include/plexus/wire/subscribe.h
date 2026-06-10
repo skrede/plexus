@@ -17,10 +17,17 @@ namespace plexus::wire {
 
 enum class subscribe_status : uint8_t
 {
-    subscribed         = 0x01,
-    created            = 0x02,
-    type_mismatch      = 0x03,
-    already_subscribed = 0x04
+    subscribed                   = 0x01,
+    created                      = 0x02,
+    type_mismatch                = 0x03,
+    already_subscribed           = 0x04,
+    // A soft request-vs-offered field failed under a strict subscriber.
+    incompatible_qos             = 0x05,
+    // The always-hard requires_source_identity field was unmet (any mode).
+    source_identity_incompatible = 0x06,
+    // A permissive accept whose trailing degraded_flags byte names the soft fields
+    // that went unsatisfied.
+    subscribed_degraded          = 0x07
 };
 
 enum class unsubscribe_status : uint8_t
@@ -71,12 +78,21 @@ struct subscribe_response
 {
     uint64_t topic_hash;
     subscribe_status status;
+    // The optional trailing degraded-field surface (gated like subscribe_request's
+    // has_qos region). has_degraded=false (the default) encodes NO trailing byte, so
+    // every refusal and every clean `subscribed` stays byte-identical to the pre-extension
+    // 9-byte layout a v4 peer wrote. has_degraded=true (a permissive subscribed_degraded
+    // accept) appends one byte carrying the unsatisfied soft-field bitmask.
+    bool has_degraded = false;
+    std::uint8_t degraded_flags = 0;
 };
 
-// Public wire size of an encoded subscribe_response payload. Used by the
+// Public wire FLOOR of an encoded subscribe_response payload. Used by the
 // receiver-side handler to early-validate the frame before decoding, and by
 // the encoder/decoder symmetrically. 8 bytes for the topic_hash + 1 byte for
-// the status enum.
+// the status enum. A permissive degraded-accept appends an OPTIONAL 10th byte;
+// the decoder floor stays `< subscribe_response_size` so a bare 9-byte response
+// from a v4 peer decodes unchanged and the trailing byte is simply absent.
 constexpr std::size_t subscribe_response_size = 9;
 
 struct unsubscribe_request
@@ -149,6 +165,9 @@ constexpr std::size_t k_max_qos_region = 64;
 // The QoS request-flag bit allocation inside requested_flags.
 constexpr std::uint8_t k_qos_flag_requires_source_identity = 0x01;
 constexpr std::uint8_t k_qos_flag_requested_reliable       = 0x02;
+// The subscriber's strict/permissive RxO choice rides the next free reserved bit;
+// clear = permissive (the friendly default), set = strict.
+constexpr std::uint8_t k_qos_flag_rxo_strict               = 0x04;
 
 }
 
@@ -268,9 +287,13 @@ inline std::optional<subscribe_request> decode_subscribe_request(std::span<const
 
 inline std::vector<std::byte> encode_subscribe_response(const subscribe_response &resp)
 {
-    std::vector<std::byte> buf(subscribe_response_size);
+    // A permissive degraded-accept appends the trailing degraded_flags byte; every
+    // other response is the byte-identical 9-byte layout.
+    std::vector<std::byte> buf(resp.has_degraded ? subscribe_response_size + 1 : subscribe_response_size);
     wire::detail::write_u64(buf.data(), resp.topic_hash);
     wire::detail::write_u8(buf.data() + 8, static_cast<uint8_t>(resp.status));
+    if(resp.has_degraded)
+        wire::detail::write_u8(buf.data() + 9, resp.degraded_flags);
     return buf;
 }
 
@@ -279,10 +302,19 @@ inline std::optional<subscribe_response> decode_subscribe_response(std::span<con
     if(payload.size() < subscribe_response_size)
         return std::nullopt;
 
-    return subscribe_response{
+    subscribe_response resp{
             .topic_hash = wire::detail::read_u64(payload.data()),
             .status     = static_cast<subscribe_status>(wire::detail::read_u8(payload.data() + 8))
     };
+    // The optional trailing degraded byte: present iff the response carried more than
+    // the 9-byte floor (a permissive degraded-accept). A bare 9-byte response from a
+    // v4 peer maps to "no degradation" — fully back-compatible.
+    if(payload.size() > subscribe_response_size)
+    {
+        resp.has_degraded   = true;
+        resp.degraded_flags = wire::detail::read_u8(payload.data() + 9);
+    }
+    return resp;
 }
 
 inline std::vector<std::byte> encode_unsubscribe_request(const unsubscribe_request &req)

@@ -25,15 +25,31 @@ enum class delivery : std::uint8_t
     pull = 1
 };
 
+// The subscriber-chosen handling of a SOFT request-vs-offered incompatibility
+// (reliability, durability, deadline, lease). `permissive` (the friendly default)
+// connects anyway but the producer surfaces which soft fields went unsatisfied — a
+// degraded-accept, never a silent one. `strict` refuses such a pair with a reason.
+// `requires_source_identity` is unaffected: it is the one always-hard field that
+// refuses regardless of this choice.
+enum class rxo_mode : std::uint8_t
+{
+    permissive = 0,
+    strict     = 1
+};
+
 // The subscriber-CHOICE QoS value struct: a different actor's decision than the
 // publisher-declared topic_qos, carried on its own wire path (the subscribe
 // request) and stored once per subscriber at attach. Plain fields with defaults,
 // trivially copyable; plexus has no QoS negotiation, so each "unset" value is a
 // genuine, tested choice — never a euphemism for an unimplemented feature.
 //
-// The two defaults are the friendly required-with-default resolution: a subscriber
-// that carries no choice genuinely chose `durability=latest` (the late-join replay
-// most consumers want) and `delivery=push`. `replay_depth=0` means "use the ring
+// The defaults are the maximally-accepting required-with-default resolution: a
+// subscriber that carries no choice genuinely chose `durability=none` (accept
+// whatever the topic offers — an unstated request never silently DEMANDS retention,
+// so a plain subscribe is always compatible) and `delivery=push`. A consumer wanting
+// late-join replay opts into `latest`/`all` explicitly; an explicit request the
+// producer cannot satisfy is then honestly surfaced (degraded) or refused per
+// `rxo`, never silently dropped. `replay_depth=0` means "use the ring
 // depth" for an `all` replay, not "replay nothing". The reserved request-side
 // fields below are carried on the wire NOW and become enforcement inputs in later
 // work WITHOUT a further protocol bump: `requires_source_identity=false` and
@@ -43,7 +59,7 @@ enum class delivery : std::uint8_t
 // 0-sentinel and the enum default ARE the meaningful, tested absence.
 struct subscriber_qos
 {
-    durability    durability_mode = durability::latest;
+    durability    durability_mode = durability::none;
     delivery      delivery_mode   = delivery::push;
     std::uint32_t replay_depth    = 0;
 
@@ -52,6 +68,12 @@ struct subscriber_qos
     std::uint64_t requested_deadline_ns            = 0;
     std::uint64_t requested_lease_ns               = 0;
     std::uint8_t  requested_priority               = 0;
+
+    // The subscriber-chosen handling of a soft RxO incompatibility. `permissive`
+    // (the friendly default) connects-but-surfaces the degraded set; `strict`
+    // refuses with a reason. It rides a reserved subscribe-request flag bit, so a
+    // permissive default keeps the wire encoding byte-identical (the bit is clear).
+    rxo_mode      rxo                              = rxo_mode::permissive;
 
     // A defaulted value-equality so a caller can ask "does this differ from the
     // friendly default?" before paying the wire region — the subscribe-out path

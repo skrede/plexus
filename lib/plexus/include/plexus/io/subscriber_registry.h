@@ -176,6 +176,17 @@ public:
         return it == m_topics.end() ? std::nullopt : it->second.producer_type_id;
     }
 
+    // The producer-declared source-identity OFFER as a first-class bool — the
+    // request-vs-offered source_identity relation reads it to decide whether a
+    // subscriber that requires source identity may attach. Distinct from
+    // source_identity_counter (which is the per-frame endpoint counter): this is the
+    // capability advertisement, true iff the topic declared emit_source_identity.
+    bool offers_source_identity(std::uint64_t topic_hash) const
+    {
+        auto it = m_topics.find(topic_hash);
+        return it != m_topics.end() && it->second.emit_source_identity;
+    }
+
     // The source-identity endpoint counter to emit for a topic, or std::nullopt when
     // the topic did not declare source identity (so publish emits 0 B and a byte-
     // identical v3-no-flag frame). Engaged iff the producer declared emit_source_identity.

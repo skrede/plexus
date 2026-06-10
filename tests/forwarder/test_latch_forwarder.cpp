@@ -167,7 +167,11 @@ TEST_CASE("late subscriber to a latched topic gets the retained value published 
         ex.drain();
         REQUIRE(cap.frames.empty());   // nothing fanned out (no subscriber)
 
-        REQUIRE(fwd.attach_for_fanout(peer, "topic"));   // the late join
+        // The late joiner explicitly requests single-newest replay; latch retention is
+        // delivered only to a subscriber that declares the durability that asks for it.
+        plexus::io::subscriber_qos sub_qos;
+        sub_qos.durability_mode = plexus::io::durability::latest;
+        REQUIRE(fwd.attach_for_fanout(peer, "topic", std::nullopt, sub_qos));   // the late join
         ex.drain();
 
         auto bodies = data_bodies(cap);
@@ -230,7 +234,11 @@ TEST_CASE("depth=1 replays only the last latched value", "[latch][forwarder]")
         fwd.publish("topic", as_bytes(std::string{"v2"}));
         ex.drain();
 
-        REQUIRE(fwd.attach_for_fanout(peer, "topic"));
+        // Request single-newest replay: latch retention is replayed only when the
+        // subscriber explicitly asks for it.
+        plexus::io::subscriber_qos sub_qos;
+        sub_qos.durability_mode = plexus::io::durability::latest;
+        REQUIRE(fwd.attach_for_fanout(peer, "topic", std::nullopt, sub_qos));
         ex.drain();
         auto bodies = data_bodies(cap);
         REQUIRE(bodies.size() == 1);
@@ -256,7 +264,11 @@ TEST_CASE("latch replay targets only the new subscriber, no double-receive", "[l
     fwd.publish("topic", as_bytes(std::string{"the-value"}));   // A gets it live, once
     ex.drain();
 
-    REQUIRE(fwd.attach_for_fanout(peer_b, "topic"));   // B after — gets the replay
+    // B explicitly requests single-newest replay; it is the late joiner that must
+    // receive the retained value, so it declares the durability that asks for it.
+    plexus::io::subscriber_qos sub_qos_b;
+    sub_qos_b.durability_mode = plexus::io::durability::latest;
+    REQUIRE(fwd.attach_for_fanout(peer_b, "topic", std::nullopt, sub_qos_b));   // B after — gets the replay
     ex.drain();
 
     REQUIRE(data_bodies(cap_a).size() == 1);   // A: exactly the one live frame, no replay
@@ -283,7 +295,11 @@ TEST_CASE("latch retention survives subscriber churn", "[latch][forwarder]")
     inproc_channel<> ch_b(ex);
     capture cap_b(ex);
     auto peer_b = make_peer(ch_b, cap_b, "node-b");
-    REQUIRE(fwd.attach_for_fanout(peer_b, "topic"));   // a new late joiner
+    // The new late joiner explicitly requests single-newest replay; the retained value
+    // is delivered only to a subscriber that declares the durability that asks for it.
+    plexus::io::subscriber_qos sub_qos_b;
+    sub_qos_b.durability_mode = plexus::io::durability::latest;
+    REQUIRE(fwd.attach_for_fanout(peer_b, "topic", std::nullopt, sub_qos_b));   // a new late joiner
     ex.drain();
 
     auto bodies = data_bodies(cap_b);
@@ -305,7 +321,11 @@ TEST_CASE("multi-publisher to one latched topic is last-writer-wins", "[latch][f
     fwd.publish("topic", as_bytes(std::string{"writer-2"}));
     ex.drain();
 
-    REQUIRE(fwd.attach_for_fanout(peer, "topic"));
+    // The subscriber explicitly requests single-newest replay; latch retention is
+    // delivered only to a subscriber that declares the durability that asks for it.
+    plexus::io::subscriber_qos sub_qos;
+    sub_qos.durability_mode = plexus::io::durability::latest;
+    REQUIRE(fwd.attach_for_fanout(peer, "topic", std::nullopt, sub_qos));
     ex.drain();
     auto bodies = data_bodies(cap);
     REQUIRE(bodies.size() == 1);

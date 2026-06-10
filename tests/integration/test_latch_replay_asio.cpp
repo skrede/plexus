@@ -96,7 +96,11 @@ late_join one_late_join(std::span<const std::byte> payload, std::string_view fqn
         fwd.latch(fqn);
     fwd.publish(fqn, payload);
 
-    fwd.attach_for_fanout(sub, fqn);
+    // The late subscriber explicitly requests single-newest replay; latch retention
+    // is delivered only to a subscriber that declares the durability that asks for it.
+    pio::subscriber_qos sub_qos;
+    sub_qos.durability_mode = pio::durability::latest;
+    fwd.attach_for_fanout(sub, fqn, std::nullopt, sub_qos);
 
     // Bounded grace: a replay over loopback arrives in microseconds, so a 50ms
     // drained window is ample to catch it and to prove its ABSENCE on a

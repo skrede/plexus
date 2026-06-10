@@ -129,6 +129,20 @@ public:
     // the session stays monitor-agnostic and includes no monitor header).
     void on_stamp_seen(plexus::detail::move_only_function<void(const node_id &)> cb) { m_on_stamp_seen = std::move(cb); }
 
+    // The subscribe-outcome seams, mirroring on_lifecycle: an arriving subscribe_response
+    // that REFUSES a match (type_mismatch / incompatible_qos / source_identity_incompatible)
+    // fires on_subscribe_refused; a permissive degraded-accept (subscribed_degraded) fires
+    // on_subscribe_degraded carrying the surfaced unsatisfied-field bitmask — the
+    // non-silent guarantee. Absent = no surfacing (the readiness decrement still runs).
+    void on_subscribe_refused(plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> cb)
+    {
+        m_on_subscribe_refused = std::move(cb);
+    }
+    void on_subscribe_degraded(plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> cb)
+    {
+        m_on_subscribe_degraded = std::move(cb);
+    }
+
     // The staleness gate runs BEFORE the router: a frame whose non-zero session_id
     // differs from the latched epoch is a previous-session straggler and is dropped;
     // the first non-zero observation latches the peer's epoch. A frame already posted
@@ -494,10 +508,40 @@ private:
         auto resp = wire::decode_subscribe_response(inner);
         if(!resp)
             return;
+        // The anti-wrap guard stays FIRST: a response with no outstanding match is a
+        // stray/duplicate/forged frame and is warned-and-dropped BEFORE anything else,
+        // so it can never fire a refusal/degraded callback (nor wrap the counter).
         if(m_outstanding_subscribes == 0)
             return m_logger.warn("plexus: subscribe_response with no outstanding match");
+        // Surface the match outcome to the subscriber (the response was previously
+        // silently swallowed). A refusal fires on_subscribe_refused; a permissive
+        // degraded-accept fires on_subscribe_degraded with the unsatisfied-field set.
+        surface_subscribe_outcome(*resp);
         --m_outstanding_subscribes;
         maybe_fire_ready();
+    }
+
+    // Fire the subscribe-outcome observables for a matched response. Kept separate so
+    // the handler reads as guard -> surface -> decrement.
+    void surface_subscribe_outcome(const wire::subscribe_response &resp)
+    {
+        if(is_refusal(resp.status))
+        {
+            if(m_on_subscribe_refused)
+                m_on_subscribe_refused(resp.topic_hash, resp.status);
+        }
+        else if(resp.status == wire::subscribe_status::subscribed_degraded)
+        {
+            if(m_on_subscribe_degraded)
+                m_on_subscribe_degraded(resp.topic_hash, resp.degraded_flags);
+        }
+    }
+
+    static bool is_refusal(wire::subscribe_status s)
+    {
+        return s == wire::subscribe_status::type_mismatch
+            || s == wire::subscribe_status::incompatible_qos
+            || s == wire::subscribe_status::source_identity_incompatible;
     }
 
     // The readiness latch: once the outstanding count reaches 0 with the latch unset,
@@ -558,6 +602,8 @@ private:
     plexus::detail::move_only_function<void()> m_on_drop;
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
     plexus::detail::move_only_function<void(const node_id &)> m_on_stamp_seen;
+    plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> m_on_subscribe_refused;
+    plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> m_on_subscribe_degraded;
 };
 
 }
