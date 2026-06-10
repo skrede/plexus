@@ -254,10 +254,14 @@ private:
         });
     }
 
-    // Borrow the node-level security seam into this slot's session (one per node) and
-    // route the session's dedicated security events up to the engine's posted
-    // fan-out via the build-context sink, mirroring wire_lifecycle. The seam pointer is
-    // stable for the engine's lifetime (the build context outlives every slot).
+    // Borrow the node-level security seam into this slot's session (one per node), route
+    // the session's dedicated security events up to the engine's posted fan-out, and
+    // thread the per-session AEAD decorator-install hook from the build-context factory
+    // (capturing THIS slot's just-built channel as the lower channel). The seam pointer,
+    // the build context and the slot's channel all outlive every incarnation built from
+    // the slot, so the captured channel reference stays valid for the hook's single fire.
+    // When no factory is set the hook is left absent, so a security-engaged accept over a
+    // plaintext channel is refused fail-closed rather than proceeding in cleartext.
     void wire_security(slot_block &slot)
     {
         slot.session->set_security_seam(&m_build.install_security);
@@ -265,6 +269,13 @@ private:
             if(m_build.on_security)
                 m_build.on_security(ev);
         });
+        if(m_build.install_security_factory)
+        {
+            channel_type &lower = *slot.record.channel;
+            slot.session->on_install_security([this, &lower](const security_negotiation &neg) {
+                m_build.install_security_factory(lower, neg);
+            });
+        }
     }
 
     // Per-slot redial routing: the driver tears down THIS slot's dead session before

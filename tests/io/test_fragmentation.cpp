@@ -98,13 +98,14 @@ struct recorded_fragment
     std::vector<std::byte> bytes;
 };
 
-std::vector<recorded_fragment> collect(std::span<const std::byte> payload, std::size_t budget)
+std::vector<recorded_fragment> collect(std::span<const std::byte> payload, std::size_t budget,
+                                       bool aead_decorated = false)
 {
     std::vector<recorded_fragment> seen;
     io::fragment_sink sink = [&seen](std::uint16_t idx, std::uint16_t cnt, std::span<const std::byte> b) {
         seen.push_back({idx, cnt, std::vector<std::byte>(b.begin(), b.end())});
     };
-    const auto returned = io::split(payload, budget, /*msg_id*/ 1, sink);
+    const auto returned = io::split(payload, budget, /*msg_id*/ 1, sink, aead_decorated);
     REQUIRE(returned == seen.size());
     return seen;
 }
@@ -155,6 +156,42 @@ TEST_CASE("split a large payload yields N fragments, N-1 full-sized in index ord
     }
     CHECK(frags.back().bytes.size() == 7);          // the remainder
     CHECK(reassembled == payload.size());
+}
+
+TEST_CASE("an AEAD-decorated split leaves room for the per-fragment seal overhead so a sealed fragment fits the MTU",
+          "[fragment][split][aead]")
+{
+    const std::size_t budget = 1400;
+    // A payload large enough to force several full-budget fragments on each path.
+    const std::vector<std::byte> payload(io::effective_fragment_budget(budget) * 3 + 13);
+
+    const auto aead = collect(payload, budget, /*aead_decorated=*/true);
+    REQUIRE(aead.size() >= 2);
+    // Every emitted fragment, once the datagram decorator prepends seq+epoch and appends
+    // the tag, stays inside the transport budget — the previously-overrunning case fits.
+    for(const auto &f : aead)
+        CHECK(f.bytes.size() + io::k_aead_tag_overhead <= budget);
+
+    // The AEAD budget is strictly tighter than the plaintext budget, so a sealed fragment
+    // sized to the plaintext budget would have overrun the MTU by exactly the seal overhead.
+    CHECK(io::effective_fragment_budget(budget, /*aead_decorated=*/true) + io::k_aead_tag_overhead
+          == io::effective_fragment_budget(budget, /*aead_decorated=*/false));
+}
+
+TEST_CASE("a non-AEAD split is byte-identical to the default path", "[fragment][split][aead]")
+{
+    const std::size_t budget = 512;
+    const std::vector<std::byte> payload(io::effective_fragment_budget(budget) * 2 + 5);
+
+    const auto plain = collect(payload, budget, /*aead_decorated=*/false);
+    const auto deflt = collect(payload, budget);
+    REQUIRE(plain.size() == deflt.size());
+    for(std::size_t i = 0; i < plain.size(); ++i)
+    {
+        CHECK(plain[i].idx == deflt[i].idx);
+        CHECK(plain[i].cnt == deflt[i].cnt);
+        CHECK(plain[i].bytes == deflt[i].bytes);
+    }
 }
 
 namespace {

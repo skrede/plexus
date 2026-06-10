@@ -719,10 +719,11 @@ private:
     // decorator is installed. The install hook runs before the forwarders so subsequent
     // frames are sealed; the bridge holds the erased channel and the gated layer owns the
     // EVP instantiation.
-    // Returns false ONLY on a fail-closed posture refusal: an attach-gated
-    // datagram transport REQUIRES AEAD (post-admission spoofed injection is trivial on
-    // UDP), so a security-engaged accept over a plaintext datagram channel with no AEAD
-    // install hook is refused, never silently proceeded. Every other case proceeds.
+    // Returns false on a fail-closed posture refusal: a security-engaged accept over ANY
+    // plaintext network channel (stream OR datagram) with no AEAD install hook is refused,
+    // never silently proceeded — without the decorator a secured posture would transmit
+    // cleartext while reporting a latched authenticated identity. The two transports fail
+    // the same way; there is no stream-only fail-open exception.
     bool install_security_on_accept()
     {
         if(!m_pending_attach.engaged)
@@ -730,10 +731,9 @@ private:
         m_authenticated_host_identity = authenticated_peer_id(m_pending_attach.facts);
         if(channel_is_self_securing())
             return true;
-        if(channel_is_plaintext_datagram() && !m_install_security)
+        if(!m_install_security)
             return false;
-        if(m_install_security)
-            m_install_security(m_pending_attach.negotiation);
+        m_install_security(m_pending_attach.negotiation);
         return true;
     }
 
@@ -755,14 +755,6 @@ private:
     {
         const auto scheme = m_channel.remote_endpoint().scheme;
         return scheme == "tls" || scheme == "dtls";
-    }
-
-    // A plaintext datagram channel (the lossy "udp"/"udpr" spellings) — the class an
-    // attach-gate must not admit without AEAD.
-    bool channel_is_plaintext_datagram() const
-    {
-        const auto scheme = m_channel.remote_endpoint().scheme;
-        return scheme == "udp" || scheme == "udpr";
     }
 
     // Fire connected on the first-ever complete, reconnected on every subsequent

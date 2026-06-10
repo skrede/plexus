@@ -41,11 +41,15 @@ static_assert(max_fragment_count <= 0xFFFFu,
               "max_message_size / min_fragment_payload overruns the uint16 frag_cnt wire "
               "field — shrink max_message_size or raise min_fragment_payload with it");
 
-// The Poly1305/GCM tag an AEAD-decorated channel appends per sealed fragment (RFC
-// 8439). When the channel is AEAD-decorated this is a SECOND subtraction term so the
-// sealed fragment (ciphertext + tag) still fits the transport budget instead of
-// silently overrunning the MTU.
-constexpr std::size_t k_aead_tag_overhead = 16;
+// The per-fragment framing the datagram AEAD decorator prepends/appends around each
+// sealed fragment: an explicit 8-byte sequence + a 1-byte key-epoch on the wire (so the
+// receiver reconstructs the nonce on a reordered/dropped datagram) plus the 16-byte
+// Poly1305/GCM tag (RFC 8439). This mirrors datagram_authenticated_channel's wire shape
+// (seq(8) || epoch(1) || header || ciphertext || tag(16)) WITHOUT a libcrypto include —
+// the core bridge stays OpenSSL-free, so the value is duplicated here, not imported. When
+// the channel is AEAD-decorated this is subtracted as a SECOND term so a sealed fragment
+// still fits the transport budget instead of silently overrunning the MTU.
+constexpr std::size_t k_aead_tag_overhead = 8 + 1 + 16;
 
 // The per-fragment-DATA budget left after the fragment sub-header (and, on an
 // AEAD-decorated channel, the tag) is subtracted from the caller's transport budget
@@ -76,9 +80,10 @@ using fragment_sink =
 // effective budget; the last carries the remainder. A payload that fits one fragment
 // emits exactly one (frag_cnt == 1). Returns the fragment count emitted.
 inline std::uint16_t split(std::span<const std::byte> payload, std::size_t transport_budget,
-                           std::uint16_t /*msg_id*/, fragment_sink &sink)
+                           std::uint16_t /*msg_id*/, fragment_sink &sink,
+                           bool aead_decorated = false)
 {
-    const std::size_t budget = effective_fragment_budget(transport_budget);
+    const std::size_t budget = effective_fragment_budget(transport_budget, aead_decorated);
     const std::size_t total = payload.size();
     const std::size_t count = total == 0 ? 1u : (total + budget - 1u) / budget;
     const auto frag_cnt = static_cast<std::uint16_t>(count);
