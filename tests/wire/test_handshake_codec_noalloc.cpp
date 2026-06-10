@@ -29,7 +29,11 @@ handshake_request sample_request()
             .compatible_version_major = 3,
             .compatible_version_minor = 4,
             .protocol_version         = 5,
-            .fingerprint              = 0xA5A5A5A5A5A5A5A5ull};
+            .fingerprint              = 0xA5A5A5A5A5A5A5A5ull,
+            .key_id                   = {},
+            .own_nonce                = {},
+            .cipher_offer             = 0,
+            .chosen_cipher            = 0};
 }
 
 handshake_response sample_response()
@@ -44,6 +48,10 @@ handshake_response sample_response()
             .compatible_version_minor = 4,
             .protocol_version         = 5,
             .fingerprint              = 0x5A5A5A5A5A5A5A5Aull,
+            .key_id                   = {},
+            .own_nonce                = {},
+            .cipher_offer             = 0,
+            .chosen_cipher            = 0,
             .status                   = handshake_status::accepted};
 }
 
@@ -58,7 +66,7 @@ TEST_CASE("Handshake encode-into: zero allocation across a steady-state loop", "
     std::vector<std::byte> req_buf;
     std::vector<std::byte> resp_buf;
 
-    // Warm-up: grow the reused buffers to their fixed 29/30-byte capacity.
+    // Warm-up: grow the reused buffers to their fixed 55/56-byte capacity.
     encode_handshake_request_into(req_buf, req);
     encode_handshake_response_into(resp_buf, resp);
 

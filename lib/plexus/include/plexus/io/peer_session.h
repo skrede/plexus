@@ -356,7 +356,11 @@ private:
                 .compatible_version_major = m_fsm_cfg.compatible_version_major,
                 .compatible_version_minor = m_fsm_cfg.compatible_version_minor,
                 .protocol_version         = wire::k_protocol_version,
-                .fingerprint              = m_fsm_cfg.local_fingerprint.value};
+                .fingerprint              = m_fsm_cfg.local_fingerprint.value,
+                .key_id                   = {},
+                .own_nonce                = {},
+                .cipher_offer             = 0,
+                .chosen_cipher            = 0};
     }
 
     void send_handshake_request()
@@ -372,7 +376,8 @@ private:
                 .version_minor = r.version_minor, .compatible_version_major = r.compatible_version_major,
                 .compatible_version_minor = r.compatible_version_minor,
                 .protocol_version = r.protocol_version, .fingerprint = r.fingerprint,
-                .status = status_for(outcome)};
+                .key_id = r.key_id, .own_nonce = r.own_nonce, .cipher_offer = r.cipher_offer,
+                .chosen_cipher = r.chosen_cipher, .status = status_for(outcome)};
         wire::encode_handshake_response_into(m_payload_scratch, resp);
         send_control(wire::msg_type::handshake_resp);
     }
@@ -381,9 +386,10 @@ private:
     {
         switch(outcome)
         {
-            case handshake_outcome::reject_version:  return wire::handshake_status::version_incompatible;
-            case handshake_outcome::reject_identity: return wire::handshake_status::identity_conflict;
-            default:                                 return wire::handshake_status::accepted;
+            case handshake_outcome::reject_version:      return wire::handshake_status::version_incompatible;
+            case handshake_outcome::reject_identity:     return wire::handshake_status::identity_conflict;
+            case handshake_outcome::reject_unauthorized: return wire::handshake_status::unauthorized;
+            default:                                     return wire::handshake_status::accepted;
         }
     }
 

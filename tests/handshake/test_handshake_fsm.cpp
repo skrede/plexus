@@ -76,7 +76,11 @@ handshake_request good_request(node_id peer) noexcept
         .compatible_version_major = 1,
         .compatible_version_minor = 0,
         .protocol_version         = k_protocol_version,
-        .fingerprint              = 0};
+        .fingerprint              = 0,
+        .key_id                   = {},
+        .own_nonce                = {},
+        .cipher_offer             = 0,
+        .chosen_cipher            = 0};
 }
 
 // A response that passes every gate by default: accepted status, matching protocol,
@@ -91,6 +95,10 @@ handshake_response good_response(node_id peer) noexcept
         .compatible_version_minor = 0,
         .protocol_version         = k_protocol_version,
         .fingerprint              = 0,
+        .key_id                   = {},
+        .own_nonce                = {},
+        .cipher_offer             = 0,
+        .chosen_cipher            = 0,
         .status                   = handshake_status::accepted};
 }
 
@@ -489,8 +497,8 @@ TEST_CASE("E: version-compat matrix and protocol-gate ordering", "[handshake]")
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_version);
 
-        static_assert(k_protocol_version == 4);
-        REQUIRE(k_protocol_version == 4);
+        static_assert(k_protocol_version == 5);
+        REQUIRE(k_protocol_version == 5);
     }
 }
 
@@ -716,9 +724,10 @@ TEST_CASE("J: compile-time pins, node_id order, and zero-alloc steady step", "[h
         static_assert(static_cast<std::uint8_t>(handshake_status::version_incompatible) == 0x02);
         static_assert(static_cast<std::uint8_t>(handshake_status::identity_conflict) == 0x03);
         static_assert(static_cast<std::uint8_t>(handshake_status::rejected_unknown) == 0x04);
-        static_assert(k_protocol_version == 4);
+        static_assert(static_cast<std::uint8_t>(handshake_status::unauthorized) == 0x05);
+        static_assert(k_protocol_version == 5);
         static_assert(std::tuple_size_v<node_id> == 16);
-        REQUIRE(k_protocol_version == 4);
+        REQUIRE(k_protocol_version == 5);
     }
 
     SECTION("J2: node_id compare is unsigned-lexicographic")
