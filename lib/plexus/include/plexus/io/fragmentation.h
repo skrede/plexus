@@ -49,7 +49,7 @@ static_assert(max_fragment_count <= 0xFFFFu,
 // the core bridge stays OpenSSL-free, so the value is duplicated here, not imported. When
 // the channel is AEAD-decorated this is subtracted as a SECOND term so a sealed fragment
 // still fits the transport budget instead of silently overrunning the MTU.
-constexpr std::size_t k_aead_tag_overhead = 8 + 1 + 16;
+constexpr std::size_t k_aead_fragment_overhead = 8 + 1 + 16;
 
 // The per-fragment-DATA budget left after the fragment sub-header (and, on an
 // AEAD-decorated channel, the tag) is subtracted from the caller's transport budget
@@ -60,7 +60,7 @@ constexpr std::size_t effective_fragment_budget(std::size_t transport_budget,
                                                 bool aead_decorated = false) noexcept
 {
     const std::size_t overhead = wire::udp_fragment_header_overhead +
-                                 (aead_decorated ? k_aead_tag_overhead : 0u);
+                                 (aead_decorated ? k_aead_fragment_overhead : 0u);
     if(transport_budget <= overhead + fragmentation_limits::min_fragment_payload)
         return fragmentation_limits::min_fragment_payload;
     return transport_budget - overhead;

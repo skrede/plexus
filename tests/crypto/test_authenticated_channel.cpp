@@ -246,19 +246,19 @@ TEST_CASE("crypto.authenticated_channel round-trips across the 256-epoch boundar
     REQUIRE(receiver.send_epoch() == 0);   // the recv-side advance does not touch the send epoch
 }
 
-TEST_CASE("crypto.authenticated_channel fragment budget subtracts the AEAD tag", "[crypto][authenticated_channel]")
+TEST_CASE("crypto.authenticated_channel fragment budget subtracts the AEAD overhead", "[crypto][authenticated_channel]")
 {
     using plexus::io::effective_fragment_budget;
-    using plexus::io::k_aead_tag_overhead;
+    using plexus::io::k_aead_fragment_overhead;
 
     const std::size_t transport_budget = 1400;
     const auto plain = effective_fragment_budget(transport_budget, false);
     const auto aead = effective_fragment_budget(transport_budget, true);
 
-    REQUIRE(k_aead_tag_overhead == 16);
-    REQUIRE(aead == plain - k_aead_tag_overhead);
+    REQUIRE(k_aead_fragment_overhead == 8 + 1 + 16);
+    REQUIRE(aead == plain - k_aead_fragment_overhead);
 
-    // A payload sized to the AEAD budget seals (ciphertext == payload size) + the tag and
-    // exactly fits inside the plaintext budget — no oversize at the edge.
-    REQUIRE(aead + k_aead_tag_overhead == plain);
+    // A payload sized to the AEAD budget seals (ciphertext == payload size), gains the
+    // per-fragment seq + epoch + tag, and exactly fits inside the plaintext budget.
+    REQUIRE(aead + k_aead_fragment_overhead == plain);
 }
