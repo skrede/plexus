@@ -54,3 +54,8 @@ set_target_properties(plexus-mdnspp PROPERTIES
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF)
+
+# No install/export rules: this target links FetchContent build-tree mdnspp targets, which
+# install(EXPORT) cannot carry from a consumed source tree. An installed-mdnspp component
+# becomes possible once mdnspp ships its own CMake package; until then the config package's
+# component loop reports plexus_mdnspp_FOUND FALSE.

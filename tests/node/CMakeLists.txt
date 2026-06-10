@@ -13,12 +13,25 @@ target_link_libraries(core_standalone PRIVATE plexus::core plexus::inproc)
 add_test(NAME node.core_standalone COMMAND core_standalone)
 
 # The install + out-of-tree consume check: a real install to a throwaway prefix, then a
-# fresh find_package(plexus CONFIG REQUIRED) + compile + link of a consumer linking
-# plexus::plexus, all driven by the cmake -P script.
+# fresh find_package(plexus CONFIG REQUIRED COMPONENTS ...) + compile + link + RUN of a
+# consumer. The component set mirrors this build's enabled backends so the check proves
+# exactly the export sets that shipped; crypto additionally drives a sealed/opened AEAD
+# round-trip so the imported OBJECT files are exercised at runtime, not just linked.
+set(_consume_components "")
+if(PLEXUS_ENABLE_ASIO_BACKEND)
+    list(APPEND _consume_components asio)
+endif()
+if(PLEXUS_ENABLE_CRYPTO_BACKEND)
+    list(APPEND _consume_components crypto)
+endif()
+if(PLEXUS_ENABLE_SHM_BACKEND)
+    list(APPEND _consume_components shm)
+endif()
 add_test(NAME node.install_consume
     COMMAND ${CMAKE_COMMAND}
         -DPLEXUS_BUILD_DIR=${CMAKE_BINARY_DIR}
         -DPLEXUS_CONSUME_DIR=${CMAKE_CURRENT_SOURCE_DIR}/install_consume
+        "-DPLEXUS_CONSUME_COMPONENTS=${_consume_components}"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/install_consume.cmake)
 
 # The facade vocabulary unit test — the one place that links plexus::plexus (the facade

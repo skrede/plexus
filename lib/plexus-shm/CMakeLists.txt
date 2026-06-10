@@ -38,3 +38,17 @@ target_link_libraries(plexus-shm PUBLIC
     plexus::wire)
 
 target_compile_features(plexus-shm PUBLIC cxx_std_20)
+
+set_target_properties(plexus-shm PROPERTIES EXPORT_NAME shm)
+
+include(GNUInstallDirs)
+
+# A plain STATIC archive whose only interface deps (plexus::core, plexus::wire) already
+# ship in plexusTargets — no find_dependency is needed in the shm config block.
+install(TARGETS plexus-shm EXPORT plexusShmTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT plexusShmTargets
+    NAMESPACE plexus::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/plexus
+    FILE plexus-shm-targets.cmake)

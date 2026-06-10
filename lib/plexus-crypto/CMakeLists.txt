@@ -56,3 +56,26 @@ target_link_libraries(plexus-crypto PUBLIC
     OpenSSL::Crypto)
 
 target_compile_features(plexus-crypto PUBLIC cxx_std_20)
+
+set_target_properties(plexus-crypto PROPERTIES EXPORT_NAME crypto)
+
+include(GNUInstallDirs)
+
+# OBJECTS DESTINATION makes the imported target carry IMPORTED_OBJECTS: the compiled
+# .o files travel to the prefix and an installed consumer folds them into its own link
+# unit. Without it CMake silently exports the OBJECT library as a bare INTERFACE and every
+# crypto symbol goes undefined at the consumer's link. The objects land beside the
+# package, not on the public include/lib path. OpenSSL is resolved at consume time via
+# the config package's find_dependency(OpenSSL).
+#
+# plexus_asio_dep belongs to plexusAsioTargets only (it is shared with the asio backend);
+# the crypto link interface reaches it through plexus::asio, so the config package includes
+# the asio component's targets file before this one. Exporting it twice trips CMake's
+# "some-but-not-all targets in this export set already defined" guard.
+install(TARGETS plexus-crypto EXPORT plexusCryptoTargets
+    OBJECTS DESTINATION ${CMAKE_INSTALL_LIBDIR}/plexus/objects)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT plexusCryptoTargets
+    NAMESPACE plexus::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/plexus
+    FILE plexus-crypto-targets.cmake)

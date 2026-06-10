@@ -12,5 +12,6 @@ target_link_libraries(plexus-api INTERFACE plexus::core)
 
 target_compile_features(plexus-api INTERFACE cxx_std_20)
 
+include(GNUInstallDirs)
 install(TARGETS plexus-api EXPORT plexusTargets)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
