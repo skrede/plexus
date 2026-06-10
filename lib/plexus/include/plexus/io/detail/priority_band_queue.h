@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PRIORITY_BAND_QUEUE_H
 
 #include "plexus/io/priority.h"
+#include "plexus/io/congestion.h"
 
 #include <span>
 #include <array>
@@ -34,11 +35,12 @@ inline std::size_t band_of(priority p) noexcept
 // One destination's N priority bands of pooled owned-node frame buffers. Each band
 // is a fixed-depth FIFO ring whose slots are grown ONCE (cloning the history_ring
 // grow-once / assign-into-slot pattern) and reused thereafter, so a steady
-// enqueue/pop loop is allocation-free. A band at capacity DROPS THE NEWEST frame
-// (refuses the new frame, bumps a counter, leaves the resident set untouched) — the
-// fixed bounded-band overflow policy for this layer; it never branches on any
-// congestion vocabulary, never evicts the oldest, never blocks. Single-owner pooled
-// vectors only: no shared_ptr, no atomics, no shared_from_this.
+// enqueue/pop loop is allocation-free. A band at capacity applies the per-message
+// congestion policy: block and drop_newest REFUSE the new frame (resident set
+// untouched, a counter bumped), drop_oldest EVICTS the oldest resident slot (advance
+// the FIFO head — recycle the slot, never a free) and admits the new frame into the
+// freed tail, so the resident count stays k_band_depth and nothing allocates.
+// Single-owner pooled vectors only: no shared_ptr, no atomics, no shared_from_this.
 class priority_band_queue
 {
 public:
@@ -51,11 +53,13 @@ public:
         return false;
     }
 
-    // Copy a framed buffer into the given band, returning false (admitting nothing)
-    // when that band is at k_band_depth — the drop-newest backpressure edge.
-    bool enqueue(std::size_t band, std::span<const std::byte> frame)
+    // Copy a framed buffer into the given band under the per-message congestion mode.
+    // A non-full band admits regardless of mode; a full band applies the policy: block
+    // and drop_newest refuse (return false), drop_oldest evicts the oldest and admits
+    // (return true).
+    bool enqueue(std::size_t band, io::congestion congestion, std::span<const std::byte> frame)
     {
-        return m_bands[band].push(frame);
+        return m_bands[band].push(congestion, frame);
     }
 
     // The front node of the highest non-empty band (lowest index), or nullptr when no
@@ -78,33 +82,56 @@ public:
                 return b.pop();
     }
 
+    [[nodiscard]] std::size_t dropped_oldest_count(std::size_t band) const noexcept
+    {
+        return m_bands[band].dropped_oldest();
+    }
+
     [[nodiscard]] std::size_t dropped_newest_count(std::size_t band) const noexcept
     {
         return m_bands[band].dropped_newest();
     }
 
+    [[nodiscard]] std::size_t blocked_count(std::size_t band) const noexcept
+    {
+        return m_bands[band].blocked();
+    }
+
 private:
     // A single band: a fixed-depth FIFO ring of pooled owned-node buffers grown once
-    // and reused via assign, with a drop-newest-at-capacity admission.
+    // and reused via assign, with a per-message congestion admission at capacity.
     struct band
     {
         [[nodiscard]] bool empty() const noexcept { return m_count == 0; }
 
         // Admit into the slot one-past the tail, growing the ring to k_band_depth on
-        // first touch; refuse + count when the band already holds k_band_depth frames.
-        bool push(std::span<const std::byte> frame)
+        // first touch. At capacity the congestion mode decides: block/drop_newest
+        // refuse, drop_oldest evicts the front to make room (handled by the helper).
+        bool push(io::congestion congestion, std::span<const std::byte> frame)
         {
-            if(m_count == k_band_depth)
-            {
-                ++m_dropped_newest;
+            if(m_count == k_band_depth && !evict_oldest_or_refuse(congestion))
                 return false;
-            }
             if(m_slots.size() != k_band_depth)
                 m_slots.resize(k_band_depth);
             const std::size_t tail = (m_head + m_count) % k_band_depth;
             m_slots[tail].assign(frame.begin(), frame.end());
             ++m_count;
             return true;
+        }
+
+        // At a full band: block/drop_newest bump their counter and refuse (false);
+        // drop_oldest recycles the oldest resident slot (pop() — never a free), bumps
+        // its counter and returns true so the caller admits the new frame into the
+        // freed tail.
+        bool evict_oldest_or_refuse(io::congestion congestion)
+        {
+            switch(congestion)
+            {
+            case io::congestion::block:       ++m_blocked;        return false;
+            case io::congestion::drop_newest: ++m_dropped_newest; return false;
+            case io::congestion::drop_oldest: pop(); ++m_dropped_oldest; return true;
+            }
+            return false;
         }
 
         [[nodiscard]] const std::vector<std::byte> &front() const { return m_slots[m_head]; }
@@ -115,12 +142,16 @@ private:
             --m_count;
         }
 
+        [[nodiscard]] std::size_t dropped_oldest() const noexcept { return m_dropped_oldest; }
         [[nodiscard]] std::size_t dropped_newest() const noexcept { return m_dropped_newest; }
+        [[nodiscard]] std::size_t blocked() const noexcept { return m_blocked; }
 
         std::vector<std::vector<std::byte>> m_slots;
         std::size_t m_head{0};
         std::size_t m_count{0};
+        std::size_t m_dropped_oldest{0};
         std::size_t m_dropped_newest{0};
+        std::size_t m_blocked{0};
     };
 
     std::array<band, k_egress_bands> m_bands;

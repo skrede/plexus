@@ -313,3 +313,166 @@ TEST_CASE("egress_priority: the MUX/ERASED path bands — realtime leaves before
         REQUIRE(rt_index < first_bg_index);   // realtime strictly before background, over the erasure
     }
 }
+
+namespace {
+
+// Decode every data body in the send-order capture, skipping control frames.
+std::vector<std::string> data_bodies(const std::vector<std::vector<std::byte>> &sends)
+{
+    std::vector<std::string> out;
+    for(const auto &f : sends)
+    {
+        const std::string b = data_body(f);
+        if(!b.empty())
+            out.emplace_back(b);
+    }
+    return out;
+}
+
+// Feed a directly-driven scheduler k_band_depth + 1 enqueues at the normal band under
+// one congestion mode while the destination reports a stall, so the band saturates and
+// the (k_band_depth+1)-th enqueue takes the at-capacity branch. Returns the band index.
+std::size_t saturate_scheduler(io::detail::egress_scheduler<stall_channel, stall_policy> &sched,
+                               stall_channel &ch, stall_state &st, io::congestion mode)
+{
+    st.reported = io::detail::k_low_water + 1;   // stalled: nothing drains, the band fills
+    const std::size_t band = io::detail::band_of(io::priority::normal);
+    for(std::size_t i = 0; i < io::detail::k_band_depth; ++i)
+        sched.enqueue(ch, band, mode, as_bytes("f" + std::to_string(i)));
+    sched.enqueue(ch, band, mode, as_bytes(std::string{"OVERFLOW"}));
+    return band;
+}
+
+}
+
+TEST_CASE("egress_priority: drop_oldest evicts the oldest resident frame; survivors arrive in FIFO order, looped",
+          "[egress_priority][forwarder]")
+{
+    constexpr int k_iterations = 100;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        // The directly-driven scheduler proves the per-band counter (the observability gate).
+        stall_state counter_st;
+        stall_channel counter_ch{counter_st};
+        stall_executor counter_ex;
+        io::detail::egress_scheduler<stall_channel, stall_policy> sched{counter_ex};
+        const std::size_t band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::drop_oldest);
+        REQUIRE(sched.dropped_oldest(counter_ch, band) == 1);
+
+        // The forwarder path proves the runtime wire EFFECT: the evicted oldest body is
+        // absent, the new body present, the survivors in FIFO order.
+        stall_state st;
+        stall_channel ch{st};
+        stall_executor ex;
+        stall_forwarder fwd{ex};
+        // The saturated topic is on the normal band; the drain trigger rides a separate
+        // realtime topic on an EMPTY higher band, so the trigger never re-saturates the
+        // normal band — it only releases the stall and kicks the inline drain.
+        fwd.declare("t", topic_qos{.congestion = io::congestion::drop_oldest, .priority = io::priority::normal});
+        fwd.declare("kick", topic_qos{.priority = io::priority::realtime});
+        REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
+        REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "kick"));
+        st.sends.clear();
+
+        st.reported = io::detail::k_low_water + 1;   // stall: every publish bands, nothing drains
+        for(std::size_t i = 0; i < io::detail::k_band_depth; ++i)
+            fwd.publish("t", as_bytes("f" + std::to_string(i)));
+        fwd.publish("t", as_bytes(std::string{"OVERFLOW"}));   // evicts f0
+        REQUIRE(st.sends.empty());
+
+        st.reported = 0;
+        fwd.publish("kick", as_bytes(std::string{"KICK"}));   // releases the stall and drains
+
+        // Drain order is highest band first: the realtime KICK leaves before the normal
+        // band survivors, then f1..f{N-1}, OVERFLOW in FIFO order (f0 evicted, absent).
+        std::vector<std::string> expected{"KICK"};
+        for(std::size_t i = 1; i < io::detail::k_band_depth; ++i)
+            expected.emplace_back("f" + std::to_string(i));
+        expected.emplace_back("OVERFLOW");
+
+        const auto bodies = data_bodies(st.sends);
+        REQUIRE(bodies == expected);   // f0 evicted (absent), OVERFLOW present, FIFO order
+    }
+}
+
+TEST_CASE("egress_priority: block refuses the new frame at a saturated band; it never reaches the wire, looped",
+          "[egress_priority][forwarder]")
+{
+    constexpr int k_iterations = 100;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        stall_state counter_st;
+        stall_channel counter_ch{counter_st};
+        stall_executor counter_ex;
+        io::detail::egress_scheduler<stall_channel, stall_policy> sched{counter_ex};
+        const std::size_t band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::block);
+        REQUIRE(sched.blocked(counter_ch, band) == 1);
+
+        stall_state st;
+        stall_channel ch{st};
+        stall_executor ex;
+        stall_forwarder fwd{ex};
+        fwd.declare("t", topic_qos{.congestion = io::congestion::block, .priority = io::priority::normal});
+        fwd.declare("kick", topic_qos{.priority = io::priority::realtime});
+        REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
+        REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "kick"));
+        st.sends.clear();
+
+        st.reported = io::detail::k_low_water + 1;
+        for(std::size_t i = 0; i < io::detail::k_band_depth; ++i)
+            fwd.publish("t", as_bytes("f" + std::to_string(i)));
+        fwd.publish("t", as_bytes(std::string{"REFUSED"}));   // refused, never admitted
+        REQUIRE(st.sends.empty());
+
+        st.reported = 0;
+        fwd.publish("kick", as_bytes(std::string{"KICK"}));   // releases the stall and drains
+
+        std::vector<std::string> expected{"KICK"};
+        for(std::size_t i = 0; i < io::detail::k_band_depth; ++i)
+            expected.emplace_back("f" + std::to_string(i));
+
+        const auto bodies = data_bodies(st.sends);
+        REQUIRE(bodies == expected);   // the original window survives, REFUSED never sent
+    }
+}
+
+TEST_CASE("egress_priority: drop_newest refuses the new frame at a saturated band; it never reaches the wire, looped",
+          "[egress_priority][forwarder]")
+{
+    constexpr int k_iterations = 100;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        stall_state counter_st;
+        stall_channel counter_ch{counter_st};
+        stall_executor counter_ex;
+        io::detail::egress_scheduler<stall_channel, stall_policy> sched{counter_ex};
+        const std::size_t band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::drop_newest);
+        REQUIRE(sched.dropped_newest(counter_ch, band) == 1);
+
+        stall_state st;
+        stall_channel ch{st};
+        stall_executor ex;
+        stall_forwarder fwd{ex};
+        fwd.declare("t", topic_qos{.congestion = io::congestion::drop_newest, .priority = io::priority::normal});
+        fwd.declare("kick", topic_qos{.priority = io::priority::realtime});
+        REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
+        REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "kick"));
+        st.sends.clear();
+
+        st.reported = io::detail::k_low_water + 1;
+        for(std::size_t i = 0; i < io::detail::k_band_depth; ++i)
+            fwd.publish("t", as_bytes("f" + std::to_string(i)));
+        fwd.publish("t", as_bytes(std::string{"REFUSED"}));   // refused, never admitted
+        REQUIRE(st.sends.empty());
+
+        st.reported = 0;
+        fwd.publish("kick", as_bytes(std::string{"KICK"}));   // releases the stall and drains
+
+        std::vector<std::string> expected{"KICK"};
+        for(std::size_t i = 0; i < io::detail::k_band_depth; ++i)
+            expected.emplace_back("f" + std::to_string(i));
+
+        const auto bodies = data_bodies(st.sends);
+        REQUIRE(bodies == expected);   // the original window survives, REFUSED never sent
+    }
+}

@@ -15,7 +15,7 @@ namespace plexus::io::shm {
 
 // The producer endpoint over one broadcast ring: it derives a fixed delivery
 // policy from the topic's QoS ONCE at construction (the reliable/best_effort
-// class and the block/drop congestion mode become two stored fields, so the hot
+// class and the block/drop_newest congestion mode become two stored fields, so the hot
 // loan() never re-reads the QoS), then exposes the two-step loan -> fill ->
 // publish handle protocol the channel facade wraps.
 //
@@ -34,9 +34,10 @@ namespace plexus::io::shm {
 // (Shared Pattern E -- NO parallel SHM backpressure enum): reliable threads
 // claim_with_policy(reliable) so the producer gates on the slowest registered
 // cursor; best_effort threads claim_with_policy(best_effort) so it overwrites the
-// latest, skipping pinned slots. The congestion field rides through to the ring
-// (block vs drop is the publisher's contract; the ring surfaces congested either
-// way and the channel/caller decides).
+// latest, skipping pinned slots — the cross-transport drop_oldest analog. The
+// congestion field rides through to the ring (block vs the drop modes is the
+// publisher's contract; the ring surfaces congested either way and the
+// channel/caller decides).
 //
 // Borrows the ring BY REFERENCE; non-copy/non-move owning endpoint.
 class slot_publisher

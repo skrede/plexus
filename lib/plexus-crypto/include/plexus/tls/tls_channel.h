@@ -260,11 +260,13 @@ private:
             on_outbox_full();
     }
 
-    // congestion=drop sheds the frame at the publisher; congestion=block surfaces
-    // would_block (the stall edge — bounded, never unbounded growth).
+    // The per-connection congestion safety net (it guards the direct-send bypass paths, at
+    // a granularity distinct from the forwarder's per-band overflow). congestion=drop_newest
+    // sheds the frame at the publisher; congestion=block surfaces would_block (the stall
+    // edge — bounded, never unbounded growth).
     void on_outbox_full()
     {
-        if(m_congestion == io::congestion::drop)
+        if(m_congestion == io::congestion::drop_newest)
         {
             ++m_dropped;
             return;

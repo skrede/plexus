@@ -45,7 +45,7 @@ class asio_channel
 public:
     // The bounded congestion=block write-queue BYTE budget (allocated at setup, never
     // grown on the hot path): a producer that outruns the socket drain back-pressures (or
-    // sheds, under drop) at a bounded cap instead of growing the userspace write deque to
+    // sheds, under drop_newest) at a bounded cap instead of growing the userspace write deque to
     // the 10+ GB OOM the unbounded queue left possible. Sized at 1x the 4 MiB max-message
     // ceiling so this per-connection FIFO is the SHALLOW socket-facing buffer holding
     // roughly one frame in flight: the deep, priority-ordered backlog now lives in the
@@ -57,7 +57,7 @@ public:
 
     // Dial/executor-alone: unconnected, not reading yet — dial() calls start_read().
     // The congestion mode + byte budget are the per-channel QoS choice (block = the safe
-    // reliable default that back-pressures; drop = the opt-out shed), threaded as
+    // reliable default that back-pressures; drop_newest = the opt-out shed), threaded as
     // required-WITH-default ctor args exactly as udp_channel threads io::congestion.
     explicit asio_channel(::asio::io_context &io, wire::stream_inbound_config cfg = {},
                           io::congestion congestion = io::congestion::block,
@@ -98,7 +98,7 @@ public:
 
     // Enqueue for the serial async_write egress, bounded by the byte budget. A frame that
     // would carry the queued total past the cap is shed at the publisher under
-    // congestion=drop (counted for the observer), or refused under congestion=block with
+    // congestion=drop_newest (counted for the observer), or refused under congestion=block with
     // the would_block stall edge surfaced (never an unbounded deque) — the same QoS edge
     // udp_channel threads. Compare-before-add so the running total never wraps.
     void send(std::span<const std::byte> data)
@@ -137,18 +137,21 @@ public:
     void start_read() { m_open = true; do_read(); }
 
     [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
-    // The count of frames shed under congestion=drop (the drop-observer's edge).
+    // The count of frames shed under congestion=drop_newest (the drop-observer's edge).
     [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
     // The current queued (un-drained) write-queue byte occupancy; 0 when the socket drains.
     [[nodiscard]] std::size_t backpressured() const noexcept { return m_egress.queued_bytes(); }
 
 private:
-    // congestion=drop sheds the frame at the publisher (the documented opt-out of the
-    // reliable guarantee); congestion=block surfaces would_block (the stall edge —
+    // The per-connection congestion safety net: it guards the DIRECT-send bypass paths
+    // (latch replay, control frames, fetch_latched) and a misconfigured low-water gate, at
+    // a granularity distinct from the forwarder's per-band overflow (no double-application).
+    // congestion=drop_newest sheds the frame at the publisher (the documented opt-out of
+    // the reliable guarantee); congestion=block surfaces would_block (the stall edge —
     // bounded, never unbounded growth). Either way the call returns without blocking.
     void on_write_queue_full()
     {
-        if(m_congestion == io::congestion::drop)
+        if(m_congestion == io::congestion::drop_newest)
         {
             ++m_dropped;
             return;

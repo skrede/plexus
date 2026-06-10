@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_EGRESS_SCHEDULER_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_EGRESS_SCHEDULER_H
 
+#include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/priority_band_queue.h"
 
@@ -40,9 +41,16 @@ constexpr std::size_t k_low_water = io::fragmentation_limits::max_message_size;
 // re-poll will post onto — the scheduler holds no owned runtime, no thread, no
 // shared_from_this, and the engine quiesces the executor before teardown.
 //
+// The per-message congestion policy (block / drop_oldest / drop_newest) is applied at the
+// destination band when it saturates: block and drop_newest refuse the new frame,
+// drop_oldest evicts the oldest resident frame and admits the new one. Each outcome is
+// observable through a per-(destination, band) counter (dropped_oldest / dropped_newest /
+// blocked) mirroring the channel-level dropped_count() shape.
+//
 // In-flight safety: a band node stays pool-resident until channel.send() COPIES it into
 // the channel's own send queue; only THEN is pop_highest called, so the scheduler never
-// frees a node the socket is mid-writing.
+// frees a node the socket is mid-writing — drop_oldest only ever recycles a slot still
+// resident in a band, never one already handed to channel.send().
 template <typename Channel, typename Policy>
     requires plexus::Policy<Policy>
 class egress_scheduler
@@ -55,20 +63,23 @@ public:
     {
     }
 
-    // Enqueue a framed buffer for a destination at the given band. A channel without a
-    // backpressure signal is sent synchronously (the inproc/sink short-circuit); a stream
-    // channel bands the frame then drains the highest-priority backlog the destination can
-    // currently accept.
-    void enqueue(Channel &ch, std::size_t band, std::span<const std::byte> frame)
+    // Enqueue a framed buffer for a destination at the given band under the publisher's
+    // per-message congestion policy. A channel without a backpressure signal is sent
+    // synchronously (the inproc/sink short-circuit) — it has no bounded band backlog, so
+    // there is no saturation site and congestion does not apply on the passthrough; a
+    // stream channel bands the frame (applying congestion at a full band) then drains the
+    // highest-priority backlog the destination can currently accept.
+    void enqueue(Channel &ch, std::size_t band, io::congestion congestion,
+                 std::span<const std::byte> frame)
     {
         if constexpr(!can_poll())
         {
-            ch.send(frame);
+            ch.send(frame);   // inproc/sink: no bounded band backlog, so congestion is moot
             return;
         }
         else
         {
-            m_queues[&ch].enqueue(band, frame);
+            m_queues[&ch].enqueue(band, congestion, frame);
             drain(ch);
         }
     }
@@ -77,6 +88,26 @@ public:
     void remove(Channel &ch)
     {
         m_queues.erase(&ch);
+    }
+
+    // The per-(destination, band) overflow counters, mirroring asio_channel::dropped_count():
+    // each reads the destination's band counter, returning 0 for a destination with no queue.
+    [[nodiscard]] std::size_t dropped_oldest(Channel &ch, std::size_t band) const
+    {
+        const auto it = m_queues.find(&ch);
+        return it == m_queues.end() ? 0u : it->second.dropped_oldest_count(band);
+    }
+
+    [[nodiscard]] std::size_t dropped_newest(Channel &ch, std::size_t band) const
+    {
+        const auto it = m_queues.find(&ch);
+        return it == m_queues.end() ? 0u : it->second.dropped_newest_count(band);
+    }
+
+    [[nodiscard]] std::size_t blocked(Channel &ch, std::size_t band) const
+    {
+        const auto it = m_queues.find(&ch);
+        return it == m_queues.end() ? 0u : it->second.blocked_count(band);
     }
 
 private:

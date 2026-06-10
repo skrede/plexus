@@ -189,13 +189,13 @@ TEST_CASE("tls channel: the bounded outbox sheds under congestion=drop and stall
             client.send(kib);
             client_io.poll();
             REQUIRE(client.backpressured() <= cap);     // NEVER grows past the cap
-            if(mode == pio::congestion::drop && client.dropped_count() > 0)
+            if(mode == pio::congestion::drop_newest && client.dropped_count() > 0)
                 break;
             if(mode == pio::congestion::block && err.has_value())
                 break;
         }
 
-        if(mode == pio::congestion::drop)
+        if(mode == pio::congestion::drop_newest)
         {
             REQUIRE(client.dropped_count() > 0);         // the overrun was shed at the publisher
         }
@@ -213,6 +213,6 @@ TEST_CASE("tls channel: the bounded outbox sheds under congestion=drop and stall
         pump(server_io, std::chrono::milliseconds(20));
     };
 
-    run(pio::congestion::drop);
+    run(pio::congestion::drop_newest);
     run(pio::congestion::block);
 }

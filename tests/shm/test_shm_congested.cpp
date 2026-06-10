@@ -92,7 +92,7 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
     // A best_effort + drop channel: it overwrites the latest and NEVER blocks; its
     // own gate returns congested only when a full lap is pinned by live takes.
     shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::best_effort,
-                                       plexus::io::congestion::drop);
+                                       plexus::io::congestion::drop_newest);
 
     // Pin every cell with a held take so no slot is recyclable. We pin directly on
     // the ring (the Dekker reader half) to set up the fully-congested state.
@@ -103,7 +103,7 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
     {
         broadcast_ring::claim_result claim;
         REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort,
-                                         plexus::io::congestion::drop, claim) == loan_status::ok);
+                                         plexus::io::congestion::drop_newest, claim) == loan_status::ok);
         const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
         std::memcpy(claim.slab.data(), &v, sizeof(v));
         REQUIRE(f.ring.commit(claim.position, sizeof(v)) == loan_status::ok);

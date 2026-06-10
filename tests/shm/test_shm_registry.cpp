@@ -241,9 +241,9 @@ TEST_CASE("shm.registry a peer collision attaches and a subscriber-only acquire 
     stub_broker   broker_a{store};
     stub_broker   broker_b{store};
     test_registry creator(broker_a, plexus::io::reliability::best_effort,
-                          plexus::io::congestion::drop);
+                          plexus::io::congestion::drop_newest);
     test_registry attacher(broker_b, plexus::io::reliability::best_effort,
-                           plexus::io::congestion::drop);
+                           plexus::io::congestion::drop_newest);
 
     const std::string fqn = "topic.shared";
 
