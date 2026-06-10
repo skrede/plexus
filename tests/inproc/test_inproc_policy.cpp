@@ -93,7 +93,7 @@ TEST_CASE("static_discovery resolves a seeded name to its endpoint", "[inproc]")
 {
     using namespace plexus::discovery;
     plexus::io::endpoint ep{"inproc", "node-a"};
-    static_discovery disc(std::vector<service_info>{{"alpha", ep}});
+    static_discovery disc(std::vector<service_info>{{"alpha", ep, {}}});
 
     std::vector<service_info> resolved;
     disc.browse([&](const service_info &s) { resolved.push_back(s); });

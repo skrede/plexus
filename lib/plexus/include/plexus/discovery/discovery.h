@@ -4,6 +4,8 @@
 #include "plexus/io/endpoint.h"
 
 #include <string>
+#include <vector>
+#include <utility>
 #include <functional>
 
 namespace plexus::discovery {
@@ -15,6 +17,12 @@ struct service_info
 {
     std::string name;
     io::endpoint endpoint;
+
+    // The node contact card: a generic ordered key/value map a backend maps onto
+    // its advertisement (the mdnspp TXT record, the static table verbatim). Ordered
+    // for deterministic round-trips and linear lookup over the handful of card keys;
+    // default-empty so an advertiser that sets none behaves as before.
+    std::vector<std::pair<std::string, std::string>> metadata;
 };
 
 // Cold-path runtime discovery interface — the first of the two locked virtual
