@@ -254,11 +254,18 @@ public:
         // ONLY — control frames and latch replay use direct channel.send (see below). An
         // inproc/sink channel (no backpressured()) short-circuits through the scheduler to
         // a direct synchronous send, byte-identical to a bandless fan-out.
+        //
+        // The scheduler ENFORCES the publisher's declared overflow policy at the
+        // destination band: qos.priority selects the band/drain order, qos.congestion
+        // decides a saturated band's outcome (block refuses, drop_oldest evicts the
+        // oldest resident frame, drop_newest refuses the new one). The reach gate,
+        // frame-once, demand-driven no-op, and the latch/control/fetch direct-send bypass
+        // are all unchanged.
         const std::size_t band = detail::band_of(qos.priority);
         if(subs != nullptr)
             for(const auto &sub : *subs)
                 if(any_set(reach, sub.tier))
-                    m_egress.enqueue(*sub.channel, band, m_frame_scratch);
+                    m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
 
         retain_if_latched(hash);
     }

@@ -56,7 +56,7 @@ struct fixture
     void put(plexus::io::reliability rel, std::uint32_t value)
     {
         broadcast_ring::claim_result claim;
-        REQUIRE(ring.claim_with_policy(sizeof(value), rel, plexus::io::congestion::drop, claim) == loan_status::ok);
+        REQUIRE(ring.claim_with_policy(sizeof(value), rel, plexus::io::congestion::drop_newest, claim) == loan_status::ok);
         std::memcpy(claim.slab.data(), &value, sizeof(value));
         REQUIRE(ring.commit(claim.position, sizeof(value)) == loan_status::ok);
     }
@@ -111,7 +111,7 @@ TEST_CASE("ring_backpressure: a full-lap-pinned ring returns congested", "[shm][
     // returns congested as the bounded fallback (it never stomps a live take).
     broadcast_ring::claim_result claim;
     REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort,
-                                     plexus::io::congestion::drop, claim) == loan_status::congested);
+                                     plexus::io::congestion::drop_newest, claim) == loan_status::congested);
 
     // Unpin the lap.
     for (std::uint64_t i = 0; i < fixture::k_cells; ++i)

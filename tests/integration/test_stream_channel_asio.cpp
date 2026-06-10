@@ -275,13 +275,13 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
             ch.send(kib);
             io.poll();                                  // let async_write make what progress it can
             REQUIRE(ch.backpressured() <= cap);         // NEVER grows past the cap
-            if(mode == pio::congestion::drop && ch.dropped_count() > 0)
+            if(mode == pio::congestion::drop_newest && ch.dropped_count() > 0)
                 break;
             if(mode == pio::congestion::block && err.has_value())
                 break;
         }
 
-        if(mode == pio::congestion::drop)
+        if(mode == pio::congestion::drop_newest)
         {
             REQUIRE(ch.dropped_count() > 0);            // the overrun was shed at the publisher
         }
@@ -294,7 +294,7 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
         REQUIRE(ch.backpressured() <= cap);
     };
 
-    run(pio::congestion::drop);
+    run(pio::congestion::drop_newest);
     run(pio::congestion::block);
 }
 

@@ -380,14 +380,16 @@ private:
         m_arq->on_window_advance([this] { drain_backpressure(); });
     }
 
-    // congestion=block enqueues a window-full reliable frame into the bounded queue (the
-    // ack handler drains it); a queue at its cap surfaces would_block (the stall signal —
-    // bounded, never unbounded growth). congestion=drop sheds the frame at the
-    // publisher (the documented opt-out of the reliable guarantee). Either way publish()
-    // stays non-blocking and the io_context is never blocked.
+    // The per-connection congestion safety net (it guards the direct-send bypass paths, at
+    // a granularity distinct from the forwarder's per-band overflow). congestion=block
+    // enqueues a window-full reliable frame into the bounded queue (the ack handler drains
+    // it); a queue at its cap surfaces would_block (the stall signal — bounded, never
+    // unbounded growth). congestion=drop_newest sheds the frame at the publisher (the
+    // documented opt-out of the reliable guarantee). Either way publish() stays
+    // non-blocking and the io_context is never blocked.
     submit_result on_window_full(std::span<const std::byte> payload)
     {
-        if(m_congestion == io::congestion::drop)
+        if(m_congestion == io::congestion::drop_newest)
         {
             ++m_dropped;                          // shed at the publisher (counted for the future observer)
             return submit_result::window_full;

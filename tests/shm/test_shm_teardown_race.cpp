@@ -100,7 +100,7 @@ bool flood(const std::string &fqn, coord *c)
 
     pio::broadcast_ring::claim_result claim;
     if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::best_effort,
-                              plexus::io::congestion::drop, claim) == pio::loan_status::ok)
+                              plexus::io::congestion::drop_newest, claim) == pio::loan_status::ok)
     {
         std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
         ring.commit(claim.position, sizeof(k_payload));
@@ -165,7 +165,7 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state",
         {
             plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
             pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(
-                ring, bridge, plexus::io::reliability::best_effort, plexus::io::congestion::drop);
+                ring, bridge, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
             bridge.arm([&] {
                 pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn

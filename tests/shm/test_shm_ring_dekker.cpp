@@ -76,7 +76,7 @@ TEST_CASE("ring_dekker: best_effort overwrite never tears a live pin", "[shm][ri
             loan_status st;
             do
                 st = ring.claim_with_policy(sizeof(payload), plexus::io::reliability::best_effort,
-                                            plexus::io::congestion::drop, claim);
+                                            plexus::io::congestion::drop_newest, claim);
             while (st == loan_status::congested);
             if (st != loan_status::ok)
                 continue;

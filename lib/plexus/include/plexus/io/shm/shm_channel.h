@@ -119,7 +119,7 @@ private:
         loan_status st = m_publisher.loan(size, out);
         if(m_publisher.delivery() != reliability::reliable ||
            m_publisher.overflow() != congestion::block)
-            return st; // best_effort / drop: surface the status as-is (no blocking)
+            return st; // best_effort / non-block: surface the status as-is (no blocking)
 
         for(int turn = 0; st == loan_status::congested && turn < k_block_spin_budget; ++turn)
         {

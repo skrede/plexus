@@ -296,9 +296,9 @@ TEST_CASE("udp congestion drop: a window-full frame is shed at the publisher", "
         // the next 3 (with no ack yet to slide it) are shed at the publisher. NO ack is
         // allowed to slide the window mid-burst (the relay holds acks back is unnecessary
         // — the burst is synchronous, so the window is full when 3,4,5 are published).
-        fixture f{pio::congestion::drop, /*window=*/2};
+        fixture f{pio::congestion::drop_newest, /*window=*/2};
         REQUIRE(f.dialed != nullptr);
-        REQUIRE(f.dialed->congestion_mode() == pio::congestion::drop);
+        REQUIRE(f.dialed->congestion_mode() == pio::congestion::drop_newest);
 
         constexpr int n = 5;
         for(int i = 0; i < n; ++i)
