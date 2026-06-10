@@ -25,6 +25,9 @@ plexus_add_fuzz_target(fuzz_data_frame)
 plexus_add_fuzz_target(fuzz_varint)
 plexus_add_fuzz_target(fuzz_rpc_frame)
 plexus_add_fuzz_target(fuzz_handshake_frame)
+plexus_add_fuzz_target(fuzz_subscribe_frame)
+plexus_add_fuzz_target(fuzz_fetch_latched_frame)
+plexus_add_fuzz_target(fuzz_heartbeat_frame)
 
 # The datagram reassembler harness drives the header-only reassembler in
 # plexus::plexus instantiated against the plexus::inproc executor/timer, beyond the
