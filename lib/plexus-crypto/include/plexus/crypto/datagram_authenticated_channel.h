@@ -69,7 +69,9 @@ public:
         const auto payload = data.subspan(wire::header_size);
 
         const std::uint64_t seq = m_send_seq++;
-        const auto nonce = make_nonce(m_send_epoch, seq);
+        // The nonce epoch field is the 8-bit wire epoch byte (only 8 bits of epoch ride
+        // the wire), so seal masks to that domain to match the receiver's open.
+        const auto nonce = make_nonce(m_send_epoch & 0xffu, seq);
         if(!seal(m_cipher, m_send_key, nonce, header, payload, m_seal_scratch))
             return;
 
@@ -193,6 +195,12 @@ private:
         return seq;
     }
 
+    // 96-bit RFC 8439 nonce = epoch(4 BE) || sequence(8 BE). The epoch field commits to
+    // the 8-bit wire epoch byte on BOTH seal and open (only that byte rides the wire), so
+    // the high three epoch bytes are always zero and the two sides agree past epoch 255.
+    // Each epoch installs a fresh key, so an 8-bit epoch disambiguator is sufficient for
+    // (key,nonce) uniqueness within a key's lifetime; the explicit per-datagram sequence
+    // guarantees within-epoch uniqueness.
     static std::array<std::byte, k_aead_nonce_len> make_nonce(std::uint32_t epoch, std::uint64_t seq) noexcept
     {
         std::array<std::byte, k_aead_nonce_len> n{};

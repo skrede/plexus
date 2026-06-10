@@ -152,6 +152,25 @@ TEST_CASE("crypto.nonce_uniqueness holds across flow, reconnect, and restart (lo
     REQUIRE(seen.size() == static_cast<std::size_t>(loops) * 3u * per_session);
 }
 
+TEST_CASE("crypto.nonce_uniqueness holds across a > 256-rekey session (epoch byte wrap)", "[crypto][nonce]")
+{
+    // Force > 256 rekeys in one session (a rekey every frame) so the 8-bit wire epoch
+    // byte wraps 0xff -> 0x00. Each epoch installs a FRESH key (a distinct fingerprint),
+    // so the (key-fingerprint, epoch, sequence, direction) set stays unique across the
+    // wrap — the wire-byte collision (epoch 5 and 261 share byte 5) never reuses a
+    // (key,nonce) pair because the keys differ.
+    std::set<nonce_tuple> seen;
+    const std::uint64_t frames = 600;   // well past 256 rekeys at threshold 1
+    drive_flow(seen, /*session_salt=*/77, frames, /*rekey_threshold=*/1);
+    REQUIRE(seen.size() == static_cast<std::size_t>(frames));
+
+    // Run a second time into a separate set to confirm the construction is reproducible
+    // (RNG-free): the identical tuple set is produced.
+    std::set<nonce_tuple> seen_again;
+    drive_flow(seen_again, /*session_salt=*/77, frames, /*rekey_threshold=*/1);
+    REQUIRE(seen_again == seen);
+}
+
 TEST_CASE("crypto.nonce_uniqueness the AEAD nonce is independent of the ARQ sequence", "[crypto][nonce]")
 {
     wire_lower wire;

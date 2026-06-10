@@ -42,9 +42,10 @@ namespace plexus::crypto {
 // re-derives its key from the retiring key and bumps the send epoch; the explicit
 // key-epoch byte ahead of the ciphertext names which key sealed a frame. The
 // receive direction tracks the peer's send epoch off that byte and derives its
-// recv key forward through the identical deterministic chain, retaining the
-// previous epoch's key for a brief drain window so an in-flight pre-rekey frame
-// still opens (no (key,nonce) reuse across the rekey).
+// recv key forward through the identical deterministic chain. On an ordered stream
+// a pre-rekey frame cannot arrive after the advance, so the receiver opens only the
+// current and the next epoch — there is no previous-epoch drain window (the per-epoch
+// sequence resets on advance, so a prior-epoch frame has no counter to open against).
 template <typename Lower>
 class authenticated_channel
 {
@@ -56,7 +57,6 @@ public:
         , m_cipher(cipher)
         , m_send_key(keys.k_send)
         , m_recv_key(keys.k_recv)
-        , m_recv_key_prev(keys.k_recv)
         , m_send_epoch(initial_epoch)
         , m_recv_epoch(initial_epoch)
         , m_rekey_threshold(rekey_threshold)
@@ -79,7 +79,9 @@ public:
         if(m_send_seq >= m_rekey_threshold)
             rekey_send();
 
-        const auto nonce = make_nonce(m_send_epoch, m_send_seq++);
+        // The nonce epoch field is the 8-bit wire epoch byte (only 8 bits of epoch
+        // ride the wire), so seal masks to that domain to match the receiver's open.
+        const auto nonce = make_nonce(m_send_epoch & 0xffu, m_send_seq++);
         if(!seal(m_cipher, m_send_key, nonce, header, payload, m_seal_scratch))
             return;
 
@@ -137,24 +139,20 @@ private:
     }
 
     // The peer advances its send epoch one step at a time; the receiver derives its
-    // recv key forward through the identical chain when it first sees the new epoch
-    // (retaining the prior key for the in-flight drain). A frame naming the current or
-    // the immediately-previous epoch resolves; anything else is unrecognized.
+    // recv key forward through the identical chain when it first sees the new epoch.
+    // A frame naming the current epoch resolves directly; the next epoch advances;
+    // anything else is unrecognized.
     const aead_key *select_recv_key(std::uint8_t epoch_byte)
     {
         const auto current_low = static_cast<std::uint8_t>(m_recv_epoch & 0xffu);
         if(epoch_byte == current_low)
             return &m_recv_key;
-        const auto prev_low = static_cast<std::uint8_t>((m_recv_epoch - 1) & 0xffu);
-        if(m_recv_epoch > 0 && epoch_byte == prev_low)
-            return &m_recv_key_prev;
         const auto next_low = static_cast<std::uint8_t>((m_recv_epoch + 1) & 0xffu);
         if(epoch_byte == next_low)
         {
             aead_key next{};
             if(!derive_forward(m_recv_key, next))
                 return nullptr;
-            m_recv_key_prev = m_recv_key;
             m_recv_key = next;
             ++m_recv_epoch;
             m_recv_seq = 0;
@@ -194,6 +192,12 @@ private:
         close();
     }
 
+    // 96-bit RFC 8439 nonce = epoch(4 BE) || sequence(8 BE). The epoch field commits to
+    // the 8-bit wire epoch byte on BOTH seal and open (only that byte rides the wire), so
+    // the high three epoch bytes are always zero and the two sides agree past epoch 255.
+    // Each epoch installs a fresh key, so an 8-bit epoch disambiguator is sufficient for
+    // (key,nonce) uniqueness within a key's lifetime; the per-direction sequence guarantees
+    // within-epoch uniqueness.
     static std::array<std::byte, k_aead_nonce_len> make_nonce(std::uint32_t epoch, std::uint64_t seq) noexcept
     {
         std::array<std::byte, k_aead_nonce_len> n{};
@@ -208,7 +212,6 @@ private:
     aead_cipher_id m_cipher;
     aead_key m_send_key;
     aead_key m_recv_key;
-    aead_key m_recv_key_prev;
     std::uint32_t m_send_epoch;
     std::uint32_t m_recv_epoch;
     std::uint64_t m_rekey_threshold;
