@@ -5,6 +5,7 @@
 // over an untrusted transport, so a short, oversize, or mis-shaped frame must
 // reject (return nullopt) rather than over-read.
 
+#include "fuzz_sink.h"
 #include "plexus/wire/subscribe.h"
 
 #include <span>
@@ -19,10 +20,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
         reinterpret_cast<const std::byte *>(Data), Size};
 
     auto req = decode_subscribe_request(bytes);
-    (void)req;
+    fuzz_consume(req);
 
     auto resp = decode_subscribe_response(bytes);
-    (void)resp;
+    fuzz_consume(resp);
 
     return 0;
 }

@@ -2,6 +2,7 @@
 // decode_rpc_request and decode_rpc_response over the same fuzzer-controlled
 // span; a fresh decode per call holds no shared state across inputs.
 
+#include "fuzz_sink.h"
 #include "plexus/wire/rpc_frame.h"
 
 #include <cstddef>
@@ -16,10 +17,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
         reinterpret_cast<const std::byte *>(Data), Size};
 
     auto req = decode_rpc_request(bytes);
-    (void)req;
+    fuzz_consume(req);
 
     auto resp = decode_rpc_response(bytes);
-    (void)resp;
+    fuzz_consume(resp);
 
     return 0;
 }

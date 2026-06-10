@@ -3,6 +3,7 @@
 // transport, so a buffer shorter than the fixed width must reject (return nullopt)
 // rather than over-read.
 
+#include "fuzz_sink.h"
 #include "plexus/wire/heartbeat.h"
 
 #include <span>
@@ -17,7 +18,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
         reinterpret_cast<const std::byte *>(Data), Size};
 
     auto hb = decode_heartbeat(bytes);
-    (void)hb;
+    fuzz_consume(hb);
 
     return 0;
 }
