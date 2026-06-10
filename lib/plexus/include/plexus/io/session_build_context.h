@@ -59,6 +59,16 @@ struct session_build_context
     // stays plaintext: an empty seam is the no-AEAD posture. The registry threads it to
     // each built session.
     security_seam install_security;
+    // The production source of each session's AEAD decorator-install action: the gated
+    // layer sets this once at spine construction; given a just-built channel and the
+    // negotiation it derives the keys and routes the channel through the EVP decorator.
+    // The registry binds it per session into peer_session::on_install_security, capturing
+    // that slot's channel. Type-erased so the core bridge links no libcrypto. Absent
+    // (unset) until the gated transport path is wired — a security-engaged accept with no
+    // factory then finds no per-session hook and is refused fail-closed (never fail-open).
+    plexus::detail::move_only_function<
+            void(typename Policy::byte_channel_type &, const security_negotiation &)>
+            install_security_factory;
 };
 
 }

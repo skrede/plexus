@@ -13,6 +13,9 @@
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
+#include "plexus/io/peer_session_registry.h"
+#include "plexus/io/session_build_context.h"
+#include "plexus/io/reconnect_config.h"
 #include "plexus/io/security/attach_policy.h"
 
 #include "plexus/inproc/inproc_policy.h"
@@ -383,6 +386,28 @@ TEST_CASE("io.security_attach an authorized secured attach installs the AEAD dec
     REQUIRE(l.responder->authenticated_host_identity().has_value());
 }
 
+TEST_CASE("io.security_attach a secured STREAM with no install hook is refused fail-closed, never proceeding in cleartext",
+          "[io][security_attach]")
+{
+    verdict_policy admit;
+    admit.admit = true;
+    // A secured posture over a plaintext (inproc) STREAM channel, but NO install hook is
+    // wired — the production gap where the registry never threaded on_install_security.
+    // The accept must be refused fail-closed (posture_mismatch + reject_unauthorized),
+    // NOT proceed undecorated in cleartext while reporting a secured posture.
+    link l{&admit, &admit, /*secured=*/true, /*wire_install=*/false};
+    l.drive();
+
+    REQUIRE_FALSE(l.requester->is_complete());
+    REQUIRE_FALSE(l.responder->is_complete());
+    REQUIRE(count_kind(l.req_security, security_kind::posture_mismatch) == 1);
+    REQUIRE(count_kind(l.resp_security, security_kind::posture_mismatch) == 1);
+    REQUIRE(count_rejected(l.req_lifecycle, handshake_outcome::reject_unauthorized) == 1);
+    REQUIRE(count_rejected(l.resp_lifecycle, handshake_outcome::reject_unauthorized) == 1);
+    REQUIRE(l.req_installs == 0);
+    REQUIRE(l.resp_installs == 0);
+}
+
 TEST_CASE("io.security_attach a stream tamper (the channel's on_protocol_close on a secured session) fires stream_tamper_teardown",
           "[io][security_attach]")
 {
@@ -453,6 +478,52 @@ TEST_CASE("io.security_attach an auth-only + datagram configuration is refused (
     REQUIRE(count_kind(security, security_kind::posture_mismatch) == 1);
     REQUIRE(count_rejected(lifecycle, handshake_outcome::reject_unauthorized) == 1);
     REQUIRE_FALSE(responder.is_complete());   // fail-closed: no silent plaintext fallback
+}
+
+TEST_CASE("io.security_attach the registry threads the install hook in production so a secured stream installs the decorator once",
+          "[io][security_attach]")
+{
+    using build_context = plexus::io::session_build_context<inproc_policy>;
+    using registry = plexus::io::peer_session_registry<inproc_policy, inproc_transport<>>;
+
+    verdict_policy admit;
+    admit.admit = true;
+
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    inproc_transport<> transport{ex, bus};
+    msg_forwarder messages{ex};
+    rpc_forwarder procedures{ex, k_long_timeout};
+
+    int installs = 0;
+    build_context build{ex, make_cfg(0x08, &admit), k_long_timeout, messages, procedures,
+                        plexus::io::reconnect_config{std::chrono::milliseconds(100),
+                                                     std::chrono::milliseconds(10000),
+                                                     std::nullopt, std::nullopt},
+                        /*redial_seed=*/1, plexus::io::shared_null_logger(),
+                        {}, {}, {}, fake_seam(), {}};
+    // The production source of each session's install hook: the gated layer sets this once;
+    // wire_security binds it per session, capturing that slot's channel. Here it just counts.
+    build.install_security_factory =
+        [&installs](inproc_channel<> &, const security_negotiation &) { ++installs; };
+
+    registry reg{transport, build};
+
+    auto channel = std::make_unique<inproc_channel<>>(ex);
+    channel->connect_to({"inproc", "peer"});   // a plaintext STREAM channel
+    const plexus::node_id inbound = reg.accept_session(std::move(channel));
+
+    session *responder = reg.session_for(inbound);
+    REQUIRE(responder != nullptr);
+
+    responder->on_receive(matched_request(0x07));
+    ex.drain();
+
+    REQUIRE(responder->is_complete());
+    // The decorator install fired through the registry-threaded hook (no manual
+    // on_install_security in this rig) exactly once on the secured stream accept.
+    REQUIRE(installs == 1);
+    REQUIRE(responder->authenticated_host_identity().has_value());
 }
 
 TEST_CASE("io.security_attach the REAL psk_keystore_policy admits a matching-key attach end to end",

@@ -80,7 +80,7 @@ public:
         , m_messages(m_executor)
         , m_procedures(executor, handshake_timeout, logger)
         , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures,
-                  redial, redial_seed, logger, {}, {}, {}, {}}
+                  redial, redial_seed, logger, {}, {}, {}, {}, {}}
         , m_registry(transport, m_build)
         , m_dial_eagerly(dial_eagerly)
     {
