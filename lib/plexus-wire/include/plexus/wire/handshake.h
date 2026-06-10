@@ -17,7 +17,7 @@ namespace plexus::wire {
 // protocol_version differs from this constant is rejected outright — there is no
 // negotiation, so a skewed peer is never silently downgraded. The two-tier
 // version model layers a compatibility window (major/minor) on top of this gate.
-constexpr std::uint8_t k_protocol_version = 4;
+constexpr std::uint8_t k_protocol_version = 5;
 
 // Wire-stable handshake status byte. Integers are append-only: a value is NEVER
 // reordered or reused; a new status takes the next free integer. rejected_unknown
@@ -28,7 +28,8 @@ enum class handshake_status : std::uint8_t
     accepted             = 0x01,
     version_incompatible = 0x02,
     identity_conflict    = 0x03,
-    rejected_unknown     = 0x04
+    rejected_unknown     = 0x04,
+    unauthorized         = 0x05
 };
 
 // Compile-time pins: each enumerator is bound to its source integer so a rename
@@ -37,6 +38,23 @@ static_assert(static_cast<std::uint8_t>(handshake_status::accepted) == 0x01);
 static_assert(static_cast<std::uint8_t>(handshake_status::version_incompatible) == 0x02);
 static_assert(static_cast<std::uint8_t>(handshake_status::identity_conflict) == 0x03);
 static_assert(static_cast<std::uint8_t>(handshake_status::rejected_unknown) == 0x04);
+static_assert(static_cast<std::uint8_t>(handshake_status::unauthorized) == 0x05);
+
+// The opaque key-id width carried in the pre-AEAD plaintext attach region (8 random
+// bytes — never a meaningful name, RFC 9257 PSK-identity privacy). This wire-local
+// constant mirrors the core attach_facts width; the bridge maps the two without this
+// header taking an upward dependency on the core.
+constexpr std::size_t k_handshake_key_id_len = 8;
+
+// The offered-AEAD-cipher bitmask carried alongside the key-id: a fixed-width byte
+// (NOT a variable-length list) so the decode stays bounds-trivial. chosen_cipher
+// echoes the single negotiated bit. Binding this offer into the attach proof's
+// transcript digest makes a stripped offer change the recomputed MAC (downgrade
+// refusal).
+namespace cipher_offer_bits {
+constexpr std::uint8_t chacha20_poly1305 = 0x01;
+constexpr std::uint8_t aes_256_gcm       = 0x02;
+}
 
 // The id field is the RAW std::array<std::byte, 16> rather than plexus::node_id so
 // this header keeps plexus-wire's zero-upward-dependency (it must not depend on the
@@ -59,6 +77,10 @@ struct handshake_request
     std::uint8_t              compatible_version_minor;
     std::uint8_t              protocol_version;
     std::uint64_t             fingerprint;
+    std::array<std::byte, k_handshake_key_id_len> key_id;
+    std::array<std::byte, 16> own_nonce;
+    std::uint8_t              cipher_offer;
+    std::uint8_t              chosen_cipher;
 };
 
 struct handshake_response
@@ -70,16 +92,21 @@ struct handshake_response
     std::uint8_t              compatible_version_minor;
     std::uint8_t              protocol_version;
     std::uint64_t             fingerprint;
+    std::array<std::byte, k_handshake_key_id_len> key_id;
+    std::array<std::byte, 16> own_nonce;
+    std::uint8_t              cipher_offer;
+    std::uint8_t              chosen_cipher;
     handshake_status          status;
 };
 
 // FIXED wire size of an encoded handshake_request: id(16) + 5 single-byte fields +
-// the appended fingerprint(8).
-constexpr std::size_t handshake_request_size = 29;
-// FIXED wire size of an encoded handshake_response: the request 29 + status(1). The
-// status stays the LAST byte (after the appended fingerprint), so the request+1
+// fingerprint(8) + the appended attach region key_id(8) + own_nonce(16) +
+// cipher_offer(1) + chosen_cipher(1) = 55.
+constexpr std::size_t handshake_request_size = 55;
+// FIXED wire size of an encoded handshake_response: the request 55 + status(1). The
+// status stays the LAST byte (after the appended attach region), so the request+1
 // relation is preserved.
-constexpr std::size_t handshake_response_size = 30;
+constexpr std::size_t handshake_response_size = 56;
 
 static_assert(handshake_response_size == handshake_request_size + 1);
 
@@ -95,6 +122,7 @@ inline bool is_defined_handshake_status(std::uint8_t byte) noexcept
     case handshake_status::version_incompatible:
     case handshake_status::identity_conflict:
     case handshake_status::rejected_unknown:
+    case handshake_status::unauthorized:
         return true;
     }
     return false;
@@ -111,6 +139,10 @@ inline void encode_handshake_request_into(std::vector<std::byte> &out, const han
     detail::write_u8(p + 19, req.compatible_version_minor);
     detail::write_u8(p + 20, req.protocol_version);
     detail::write_u64(p + 21, req.fingerprint);
+    std::memcpy(p + 29, req.key_id.data(), req.key_id.size());       // 8 bytes opaque
+    std::memcpy(p + 37, req.own_nonce.data(), req.own_nonce.size()); // 16 bytes opaque
+    detail::write_u8(p + 53, req.cipher_offer);
+    detail::write_u8(p + 54, req.chosen_cipher);
 }
 
 inline void encode_handshake_response_into(std::vector<std::byte> &out, const handshake_response &resp)
@@ -124,7 +156,11 @@ inline void encode_handshake_response_into(std::vector<std::byte> &out, const ha
     detail::write_u8(p + 19, resp.compatible_version_minor);
     detail::write_u8(p + 20, resp.protocol_version);
     detail::write_u64(p + 21, resp.fingerprint);
-    detail::write_u8(p + 29, static_cast<std::uint8_t>(resp.status));
+    std::memcpy(p + 29, resp.key_id.data(), resp.key_id.size());       // 8 bytes opaque
+    std::memcpy(p + 37, resp.own_nonce.data(), resp.own_nonce.size()); // 16 bytes opaque
+    detail::write_u8(p + 53, resp.cipher_offer);
+    detail::write_u8(p + 54, resp.chosen_cipher);
+    detail::write_u8(p + 55, static_cast<std::uint8_t>(resp.status));
 }
 
 inline std::vector<std::byte> encode_handshake_request(const handshake_request &req)
@@ -155,6 +191,10 @@ inline std::optional<handshake_request> decode_handshake_request(std::span<const
     req.compatible_version_minor = detail::read_u8(p + 19);
     req.protocol_version         = detail::read_u8(p + 20);
     req.fingerprint              = detail::read_u64(p + 21);
+    std::memcpy(req.key_id.data(), p + 29, req.key_id.size());       // 8 bytes verbatim
+    std::memcpy(req.own_nonce.data(), p + 37, req.own_nonce.size()); // 16 bytes verbatim
+    req.cipher_offer             = detail::read_u8(p + 53);
+    req.chosen_cipher            = detail::read_u8(p + 54);
     return req;
 }
 
@@ -164,7 +204,7 @@ inline std::optional<handshake_response> decode_handshake_response(std::span<con
         return std::nullopt;
 
     const auto *p = payload.data();
-    auto status_byte = detail::read_u8(p + 29);
+    auto status_byte = detail::read_u8(p + 55);
     if(!is_defined_handshake_status(status_byte))
         return std::nullopt;
 
@@ -176,6 +216,10 @@ inline std::optional<handshake_response> decode_handshake_response(std::span<con
     resp.compatible_version_minor = detail::read_u8(p + 19);
     resp.protocol_version         = detail::read_u8(p + 20);
     resp.fingerprint              = detail::read_u64(p + 21);
+    std::memcpy(resp.key_id.data(), p + 29, resp.key_id.size());       // 8 bytes verbatim
+    std::memcpy(resp.own_nonce.data(), p + 37, resp.own_nonce.size()); // 16 bytes verbatim
+    resp.cipher_offer             = detail::read_u8(p + 53);
+    resp.chosen_cipher            = detail::read_u8(p + 54);
     resp.status                   = static_cast<handshake_status>(status_byte);
     return resp;
 }

@@ -25,6 +25,20 @@ std::array<std::byte, 16> id_seed(std::uint8_t v)
     return id;
 }
 
+std::array<std::byte, 8> key_id_seed()
+{
+    std::array<std::byte, 8> k{};
+    k.fill(std::byte{0x6C});
+    return k;
+}
+
+std::array<std::byte, 16> nonce_seed()
+{
+    std::array<std::byte, 16> n{};
+    n.fill(std::byte{0x7E});
+    return n;
+}
+
 handshake_request request_with(std::uint64_t fingerprint)
 {
     return handshake_request{
@@ -34,7 +48,11 @@ handshake_request request_with(std::uint64_t fingerprint)
             .compatible_version_major = 3,
             .compatible_version_minor = 4,
             .protocol_version         = k_protocol_version,
-            .fingerprint              = fingerprint};
+            .fingerprint              = fingerprint,
+            .key_id                   = key_id_seed(),
+            .own_nonce                = nonce_seed(),
+            .cipher_offer             = cipher_offer_bits::chacha20_poly1305,
+            .chosen_cipher            = cipher_offer_bits::chacha20_poly1305};
 }
 
 handshake_response response_with(std::uint64_t fingerprint, handshake_status status)
@@ -47,6 +65,10 @@ handshake_response response_with(std::uint64_t fingerprint, handshake_status sta
             .compatible_version_minor = 4,
             .protocol_version         = k_protocol_version,
             .fingerprint              = fingerprint,
+            .key_id                   = key_id_seed(),
+            .own_nonce                = nonce_seed(),
+            .cipher_offer             = cipher_offer_bits::chacha20_poly1305,
+            .chosen_cipher            = cipher_offer_bits::chacha20_poly1305,
             .status                   = status};
 }
 
@@ -88,9 +110,10 @@ TEST_CASE("handshake codec: a zero fingerprint round-trips as the null (not-same
 
 TEST_CASE("handshake codec: the appended fingerprint widens the wire-size constants", "[handshake][codec][fingerprint]")
 {
-    // id(16) + 5 single-byte fields(5) + fingerprint(8) = 29; response adds status(1) = 30.
-    static_assert(handshake_request_size == 29);
-    static_assert(handshake_response_size == 30);
+    // id(16) + 5 single-byte fields(5) + fingerprint(8) + the attach region
+    // key_id(8)+own_nonce(16)+cipher_offer(1)+chosen(1) = 55; response adds status(1) = 56.
+    static_assert(handshake_request_size == 55);
+    static_assert(handshake_response_size == 56);
     static_assert(handshake_response_size == handshake_request_size + 1);
     CHECK(encode_handshake_request(request_with(1)).size() == handshake_request_size);
     CHECK(encode_handshake_response(response_with(1, handshake_status::accepted)).size() ==
@@ -114,9 +137,9 @@ TEST_CASE("handshake codec: the status cutoff still rejects an undefined byte un
           "[handshake][codec][fingerprint]")
 {
     auto encoded = encode_handshake_response(response_with(7, handshake_status::accepted));
-    encoded[handshake_request_size] = std::byte{0x00}; // the status byte sits AFTER the fingerprint
+    encoded[handshake_request_size] = std::byte{0x00}; // the status byte sits AFTER the attach region
     CHECK_FALSE(decode_handshake_response(encoded).has_value());
-    for(int b = 0x05; b <= 0xFF; ++b)
+    for(int b = 0x06; b <= 0xFF; ++b)
     {
         encoded[handshake_request_size] = std::byte{static_cast<std::uint8_t>(b)};
         CHECK_FALSE(decode_handshake_response(encoded).has_value());
@@ -125,6 +148,6 @@ TEST_CASE("handshake codec: the status cutoff still rejects an undefined byte un
 
 TEST_CASE("handshake codec: the protocol version gates the layout change", "[handshake][codec][fingerprint]")
 {
-    static_assert(k_protocol_version == 4); // the appended field is a layout change a skewed peer must reject
-    CHECK(k_protocol_version == 4);
+    static_assert(k_protocol_version == 5); // the appended region is a layout change a skewed peer must reject
+    CHECK(k_protocol_version == 5);
 }

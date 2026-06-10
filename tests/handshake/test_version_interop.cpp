@@ -56,7 +56,11 @@ handshake_request request_with_protocol(node_id peer, std::uint8_t protocol) noe
         .compatible_version_major = 1,
         .compatible_version_minor = 0,
         .protocol_version         = protocol,
-        .fingerprint              = 0};
+        .fingerprint              = 0,
+        .key_id                   = {},
+        .own_nonce                = {},
+        .cipher_offer             = 0,
+        .chosen_cipher            = 0};
 }
 
 }

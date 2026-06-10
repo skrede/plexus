@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_HANDSHAKE_FSM_H
 #define HPP_GUARD_PLEXUS_IO_HANDSHAKE_FSM_H
 
+#include "plexus/io/security/attach_policy.h"
+#include "plexus/io/security/attach_facts.h"
 #include "plexus/io/shm/same_host.h"
 
 #include "plexus/wire/handshake.h"
@@ -47,7 +49,8 @@ enum class handshake_outcome : std::uint8_t
     accept_outbound,
     accept_inbound,
     reject_version,
-    reject_identity
+    reject_identity,
+    reject_unauthorized
 };
 
 // Dedup arbitration verdict, populated only when a step completes with a pending
@@ -80,6 +83,9 @@ struct fsm_step_result
 // signal advertised" value — a node with no shared-memory backend leaves it null and
 // is correctly never same-host, so the default IS a valid advertisement, not a
 // stand-in for absence.
+// attach_policy is the node-level admission gate, borrowed (the node owns it for the
+// FSM's lifetime). A null policy is accept-any — the explicit no-PSK default that
+// preserves the pre-attach-gate behavior.
 struct handshake_fsm_config
 {
     node_id              self_id;
@@ -88,6 +94,7 @@ struct handshake_fsm_config
     std::uint8_t         compatible_version_major;
     std::uint8_t         compatible_version_minor;
     shm::host_fingerprint local_fingerprint{};
+    const security::attach_policy *attach_policy{nullptr};
 };
 
 // Pure, sans-IO handshake state machine. Holds no asio / transport / logger types
@@ -205,7 +212,8 @@ private:
     // never sees the equal case. Returns a populated abort result when a gate trips;
     // captures the learned peer id for the dedup arbitration on the accept path.
     std::optional<fsm_step_result> validate(std::uint8_t peer_protocol_version, const node_id &peer_id,
-                                            std::uint64_t peer_fingerprint) noexcept
+                                            std::uint64_t peer_fingerprint,
+                                            const security::attach_facts &facts = {}) noexcept
     {
         m_peer_id = peer_id;
         m_peer_fingerprint = shm::host_fingerprint{peer_fingerprint};
@@ -213,6 +221,8 @@ private:
             return reject_version_result();
         if(peer_id == m_cfg.self_id)
             return identity_conflict_result();
+        if(m_cfg.attach_policy != nullptr && !m_cfg.attach_policy->decide(facts))
+            return reject_unauthorized_result();
         return std::nullopt;
     }
 
@@ -288,6 +298,12 @@ private:
     {
         m_state = peer_fsm_state::not_connected;
         return {.action = fsm_action::abort, .outcome = handshake_outcome::reject_identity};
+    }
+
+    fsm_step_result reject_unauthorized_result() noexcept
+    {
+        m_state = peer_fsm_state::not_connected;
+        return {.action = fsm_action::abort, .outcome = handshake_outcome::reject_unauthorized};
     }
 
     handshake_fsm_config  m_cfg;
