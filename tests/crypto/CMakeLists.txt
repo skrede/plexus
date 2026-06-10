@@ -42,3 +42,19 @@ target_link_libraries(test_nonce_uniqueness PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_nonce_uniqueness TEST_PREFIX "crypto.")
+
+add_executable(test_datagram_replay test_datagram_replay.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_datagram_replay PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_datagram_replay TEST_PREFIX "crypto.")
+
+add_executable(test_anti_replay_window_sweep test_anti_replay_window_sweep.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_anti_replay_window_sweep PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_anti_replay_window_sweep TEST_PREFIX "crypto.")
