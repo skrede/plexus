@@ -50,6 +50,31 @@ inline std::string hex_encode(const node_id &id)
     return out;
 }
 
+// Parse a node_id back out of its hex form (the inverse of hex_encode). This reads
+// untrusted multicast input, so it is strict: exactly 32 lowercase hex characters
+// produce the 16-byte id; any other length, any uppercase or non-hex character, or
+// an embedded NUL yields nullopt. A caller must never note a peer on nullopt.
+[[nodiscard]] inline std::optional<node_id> hex_decode(std::string_view hex)
+{
+    node_id id{};
+    if(hex.size() != id.size() * 2)
+        return std::nullopt;
+    const auto nibble = [](char c) -> int {
+        if(c >= '0' && c <= '9') return c - '0';
+        if(c >= 'a' && c <= 'f') return c - 'a' + 10;
+        return -1;
+    };
+    for(std::size_t i = 0; i < id.size(); ++i)
+    {
+        const int hi = nibble(hex[2 * i]);
+        const int lo = nibble(hex[2 * i + 1]);
+        if(hi < 0 || lo < 0)
+            return std::nullopt;
+        id[i] = static_cast<std::byte>((hi << 4) | lo);
+    }
+    return id;
+}
+
 inline std::string port_key(std::string_view transport)
 {
     std::string key = "plexus/";

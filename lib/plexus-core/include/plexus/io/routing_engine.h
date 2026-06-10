@@ -80,7 +80,7 @@ public:
         , m_messages(m_executor)
         , m_procedures(executor, handshake_timeout, logger)
         , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures,
-                  redial, redial_seed, logger, {}, {}, {}, {}, {}}
+                  redial, redial_seed, logger, {}, {}, {}, {}, {}, {}}
         , m_registry(transport, m_build)
         , m_dial_eagerly(dial_eagerly)
     {
@@ -122,6 +122,18 @@ public:
     void on_liveness(plexus::detail::move_only_function<void(const liveness_event &)> cb)
     {
         m_on_liveness = std::move(cb);
+    }
+
+    // The node-shared receive route: stored into the build context so EVERY
+    // subsequently built session (and every reconnect rebuild) delivers data through
+    // it. Set ONCE before listen/dial — a session built before the route is wired
+    // delivers nothing through it. The 3-arg shape carries the message_info; a
+    // bytes-only consumer drops it.
+    void on_message_route(plexus::detail::move_only_function<
+                          void(std::string_view, std::span<const std::byte>,
+                               const message_info &)> route)
+    {
+        m_build.on_message = std::move(route);
     }
 
     void listen(const endpoint &ep) { m_transport.listen(ep); }

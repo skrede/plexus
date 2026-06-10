@@ -198,6 +198,7 @@ private:
             wire_drop(slot, slot.record.peer_id);
         wire_lifecycle(slot);
         wire_stamp_seen(slot);
+        wire_message_route(slot);
         wire_security(slot);
         slot.session->start();
     }
@@ -251,6 +252,20 @@ private:
         slot.session->on_stamp_seen([this](const node_id &id) {
             if(m_build.on_stamp_seen)
                 m_build.on_stamp_seen(id);
+        });
+    }
+
+    // Thread the node-shared receive route into this slot's session from the build
+    // context, set for both inbound and dialed slots. Because build_into re-runs on
+    // every reconnect rebuild, the route is re-threaded each time — this is the whole
+    // point: the per-session receive seam is lost on a rebuild, the shared route is not.
+    // The forward re-checks the sink is set, mirroring wire_lifecycle.
+    void wire_message_route(slot_block &slot)
+    {
+        slot.session->on_message_route([this](std::string_view fqn, std::span<const std::byte> data,
+                                              const message_info &mi) {
+            if(m_build.on_message)
+                m_build.on_message(fqn, data, mi);
         });
     }
 

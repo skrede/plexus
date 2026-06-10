@@ -112,6 +112,21 @@ target_include_directories(test_routing_engine_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_routing_engine_inproc TEST_PREFIX "integration.")
 
+# The node-shared receive-route oracle on the virtual clock: a route installed once
+# via routing_engine::on_message_route delivers a published message with a populated
+# message_info, SURVIVES a forced reconnect rebuild with no re-install (looped over
+# several reconnects), and yields to a per-session on_message when both are set —
+# always built (inproc Policy, no backend needed).
+add_executable(test_shared_receive_route test_shared_receive_route.cpp)
+target_link_libraries(test_shared_receive_route PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_shared_receive_route PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_shared_receive_route TEST_PREFIX "integration.")
+
 # The deterministic drop+surrender oracle on the virtual clock: an established
 # session's REAL transport drop (the partner's accepted end closes) drives an
 # automatic per-slot re-dial through the production receive path with no injection;
