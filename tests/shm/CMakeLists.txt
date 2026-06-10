@@ -25,7 +25,7 @@ catch_discover_tests(test_shm_scaffold TEST_PREFIX "shm.")
 # The header-only broadcast ring + loan/take core. These TUs include ONLY the
 # core headers under plexus/io/shm/ — they need no plexus::shm backend link
 # (the ring drives a caller-supplied anonymous mapped span), proving the core is
-# POSIX/asio-free. They link plexus::plexus for the core include path and the
+# POSIX/asio-free. They link plexus::core for the core include path and the
 # xproc harness header path.
 add_executable(test_shm_ring_core test_shm_ring_core.cpp)
 
@@ -33,7 +33,7 @@ target_include_directories(test_shm_ring_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_ring_core PRIVATE
-    plexus::plexus
+    plexus::core
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_ring_core TEST_PREFIX "shm.")
@@ -43,7 +43,7 @@ catch_discover_tests(test_shm_ring_core TEST_PREFIX "shm.")
 add_executable(test_shm_ring_backpressure test_shm_ring_backpressure.cpp)
 
 target_link_libraries(test_shm_ring_backpressure PRIVATE
-    plexus::plexus
+    plexus::core
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_ring_backpressure TEST_PREFIX "shm.")
@@ -58,7 +58,7 @@ find_package(Threads REQUIRED)
 add_executable(test_shm_ring_dekker test_shm_ring_dekker.cpp)
 
 target_link_libraries(test_shm_ring_dekker PRIVATE
-    plexus::plexus
+    plexus::core
     Threads::Threads
     Catch2::Catch2WithMain)
 
@@ -73,7 +73,7 @@ target_include_directories(test_shm_zerocopy_take PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_zerocopy_take PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -85,7 +85,7 @@ target_include_directories(test_shm_loan_lifetime PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_loan_lifetime PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -98,7 +98,7 @@ catch_discover_tests(test_shm_loan_lifetime TEST_PREFIX "shm.")
 add_executable(test_shm_dispatch_hint test_shm_dispatch_hint.cpp)
 
 target_link_libraries(test_shm_dispatch_hint PRIVATE
-    plexus::plexus
+    plexus::core
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_dispatch_hint TEST_PREFIX "shm.")
@@ -109,7 +109,7 @@ catch_discover_tests(test_shm_dispatch_hint TEST_PREFIX "shm.")
 add_executable(test_shm_same_host test_shm_same_host.cpp)
 
 target_link_libraries(test_shm_same_host PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -120,7 +120,7 @@ catch_discover_tests(test_shm_same_host TEST_PREFIX "shm.")
 add_executable(test_shm_selection test_shm_selection.cpp)
 
 target_link_libraries(test_shm_selection PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -132,7 +132,7 @@ catch_discover_tests(test_shm_selection TEST_PREFIX "shm.")
 add_executable(test_shm_seams test_shm_seams.cpp)
 
 target_link_libraries(test_shm_seams PRIVATE
-    plexus::plexus
+    plexus::core
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_seams TEST_PREFIX "shm.")
@@ -197,7 +197,7 @@ target_include_directories(test_shm_channel PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_channel PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -208,7 +208,7 @@ catch_discover_tests(test_shm_channel TEST_PREFIX "shm.")
 add_executable(test_shm_spin_park test_shm_spin_park.cpp)
 target_include_directories(test_shm_spin_park PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(test_shm_spin_park PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Threads::Threads
     Catch2::Catch2WithMain)
@@ -228,7 +228,7 @@ target_include_directories(test_shm_congested PRIVATE
     ${CMAKE_SOURCE_DIR}/tests)
 
 target_link_libraries(test_shm_congested PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Threads::Threads
     Catch2::Catch2WithMain)
@@ -248,7 +248,7 @@ target_include_directories(test_shm_registry PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_registry PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -350,7 +350,7 @@ if(LIBURING_FOUND)
             $<TARGET_OBJECTS:plexus-crypto>)
 
         target_link_libraries(test_shm_mux_composition PRIVATE
-            plexus::plexus
+            plexus::core
             plexus::wire
             plexus::asio
             plexus::shm
@@ -376,7 +376,7 @@ endif()
 add_executable(test_shm_mux test_shm_mux.cpp)
 
 target_link_libraries(test_shm_mux PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 

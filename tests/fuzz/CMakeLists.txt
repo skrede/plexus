@@ -30,7 +30,7 @@ plexus_add_fuzz_target(fuzz_fetch_latched_frame)
 plexus_add_fuzz_target(fuzz_heartbeat_frame)
 
 # The datagram reassembler harness drives the header-only reassembler in
-# plexus::plexus instantiated against the plexus::inproc executor/timer, beyond the
+# plexus::core instantiated against the plexus::inproc executor/timer, beyond the
 # plexus::wire blast radius the other harnesses share -- so it links those two as well.
 plexus_add_fuzz_target(fuzz_reassembler)
-target_link_libraries(fuzz_reassembler PRIVATE plexus::plexus plexus::inproc)
+target_link_libraries(fuzz_reassembler PRIVATE plexus::core plexus::inproc)

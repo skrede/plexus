@@ -48,7 +48,7 @@ target_include_directories(plexus-crypto PUBLIC
     $<INSTALL_INTERFACE:include>)
 
 target_link_libraries(plexus-crypto PUBLIC
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::asio
     plexus_asio_dep

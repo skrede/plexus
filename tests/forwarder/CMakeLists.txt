@@ -12,7 +12,7 @@ target_include_directories(test_message_forwarder PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 target_link_libraries(test_message_forwarder PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -27,7 +27,7 @@ catch_discover_tests(test_message_forwarder TEST_PREFIX "forwarder.")
 add_executable(test_frame_router test_frame_router.cpp)
 
 target_link_libraries(test_frame_router PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -47,7 +47,7 @@ target_include_directories(test_procedure_forwarder PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 target_link_libraries(test_procedure_forwarder PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -67,7 +67,7 @@ target_include_directories(test_latch_forwarder PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 target_link_libraries(test_latch_forwarder PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -81,7 +81,7 @@ catch_discover_tests(test_latch_forwarder TEST_PREFIX "forwarder.")
 add_executable(test_message_info test_message_info.cpp)
 
 target_link_libraries(test_message_info PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -95,7 +95,7 @@ catch_discover_tests(test_message_info TEST_PREFIX "forwarder.")
 add_executable(test_type_id_match test_type_id_match.cpp)
 
 target_link_libraries(test_type_id_match PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -111,7 +111,7 @@ catch_discover_tests(test_type_id_match TEST_PREFIX "forwarder.")
 add_executable(test_durability_replay test_durability_replay.cpp)
 
 target_link_libraries(test_durability_replay PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -127,7 +127,7 @@ catch_discover_tests(test_durability_replay TEST_PREFIX "forwarder.")
 add_executable(test_history_ring test_history_ring.cpp)
 
 target_link_libraries(test_history_ring PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -146,7 +146,7 @@ target_include_directories(test_priority_band_queue PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 target_link_libraries(test_priority_band_queue PRIVATE
-    plexus::plexus
+    plexus::core
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_priority_band_queue TEST_PREFIX "forwarder.")
@@ -165,7 +165,7 @@ target_include_directories(test_egress_priority PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 target_link_libraries(test_egress_priority PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -181,7 +181,7 @@ catch_discover_tests(test_egress_priority TEST_PREFIX "forwarder.")
 add_executable(test_fetch_latched test_fetch_latched.cpp)
 
 target_link_libraries(test_fetch_latched PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -201,7 +201,7 @@ target_include_directories(test_liveliness_monitor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 target_link_libraries(test_liveliness_monitor PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     plexus::testing
@@ -217,7 +217,7 @@ catch_discover_tests(test_liveliness_monitor TEST_PREFIX "forwarder.")
 add_executable(test_subscriber_qos_thread test_subscriber_qos_thread.cpp)
 
 target_link_libraries(test_subscriber_qos_thread PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -234,7 +234,7 @@ catch_discover_tests(test_subscriber_qos_thread TEST_PREFIX "forwarder.")
 add_executable(test_qos_rxo test_qos_rxo.cpp)
 
 target_link_libraries(test_qos_rxo PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 

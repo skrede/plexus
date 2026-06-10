@@ -4,7 +4,7 @@
 # wire layer; the `seam.` ctest prefix lets `ctest -R seam` select it by name.
 add_executable(test_seam_concepts test_seam_concepts.cpp)
 target_link_libraries(test_seam_concepts PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     Catch2::Catch2WithMain)
 catch_discover_tests(test_seam_concepts TEST_PREFIX "seam.")
@@ -15,7 +15,7 @@ catch_discover_tests(test_seam_concepts TEST_PREFIX "seam.")
 # `ctest -R udp` selects it with the rest of the phase's reliability legs.
 add_executable(test_reliability_enforcement test_reliability_enforcement.cpp)
 target_link_libraries(test_reliability_enforcement PRIVATE
-    plexus::plexus
+    plexus::core
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
