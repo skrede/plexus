@@ -35,6 +35,25 @@ class anti_replay_window
 public:
     static constexpr std::size_t width = Width;
 
+    // The verdict check_and_set would return for seq, computed WITHOUT mutating any
+    // state. The datagram path probes this before authenticating a packet so a forged
+    // replay/too-old sequence is rejected without sliding the window (RFC 4303 §3.4.3:
+    // the ICV is verified before the replay window is advanced); check_and_set then
+    // commits the slide only after a successful open.
+    [[nodiscard]] replay_verdict would_accept(std::uint64_t seq) const noexcept
+    {
+        if(!m_seen_any)
+            return replay_verdict::accept;
+        if(seq > m_highest)
+            return replay_verdict::accept;
+        const std::uint64_t back = m_highest - seq;
+        if(back >= Width)
+            return replay_verdict::reject_old;
+        if(test_bit(back))
+            return replay_verdict::reject_replay;
+        return replay_verdict::accept;
+    }
+
     [[nodiscard]] replay_verdict check_and_set(std::uint64_t seq) noexcept
     {
         if(!m_seen_any)
