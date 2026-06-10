@@ -2,6 +2,8 @@
 #define HPP_GUARD_PLEXUS_IO_SESSION_BUILD_CONTEXT_H
 
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/security_event.h"
+#include "plexus/io/security_seam.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
@@ -45,6 +47,18 @@ struct session_build_context
     // the registry wires each session's on_stamp_seen through it carrying that session's
     // pinned peer id. Absent (unset) until the engine wires it — the session guards on it.
     plexus::detail::move_only_function<void(const node_id &)> on_stamp_seen;
+    // The node-shared security-event route, shaped exactly like on_lifecycle: the engine
+    // sets it after construction, the registry forwards each session's security event
+    // through it. The single node-level attach_policy that gates every transport rides
+    // fsm_cfg.attach_policy (one per node, injected at spine construction — null is the
+    // explicit accept-any default). Absent (unset) until the engine wires it.
+    plexus::detail::move_only_function<void(const security_event &)> on_security;
+    // The node-shared, OpenSSL-free security seam (transcript digest + AEAD decorator
+    // install), injected once at spine construction. It is the type-erased boundary that
+    // keeps the EVP/decorator instantiation behind the gated target while the bridge
+    // stays plaintext: an empty seam is the no-AEAD posture. The registry threads it to
+    // each built session.
+    security_seam install_security;
 };
 
 }
