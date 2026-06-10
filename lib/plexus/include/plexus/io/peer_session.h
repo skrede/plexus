@@ -20,6 +20,7 @@
 #include "plexus/wire/frame.h"
 #include "plexus/wire/handshake.h"
 #include "plexus/wire/subscribe.h"
+#include "plexus/wire/heartbeat.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/stream_inbound.h"
 #include "plexus/wire/fetch_latched.h"
@@ -122,6 +123,12 @@ public:
     // seam (absent = no routing). Dormant until a fire-site calls fire_lifecycle.
     void on_lifecycle(plexus::detail::move_only_function<void(const lifecycle_event &)> cb) { m_on_lifecycle = std::move(cb); }
 
+    // The presence-stamp seam, mirroring on_lifecycle: a settable callback the engine
+    // wires to its liveliness monitor's stamp_seen. The session routes a decoded
+    // heartbeat through it carrying THIS peer's pinned node_id (absent = no stamp, so
+    // the session stays monitor-agnostic and includes no monitor header).
+    void on_stamp_seen(plexus::detail::move_only_function<void(const node_id &)> cb) { m_on_stamp_seen = std::move(cb); }
+
     // The staleness gate runs BEFORE the router: a frame whose non-zero session_id
     // differs from the latched epoch is a previous-session straggler and is dropped;
     // the first non-zero observation latches the peer's epoch. A frame already posted
@@ -184,10 +191,20 @@ public:
     // wire::subscribe on the channel — so the counter tracks exactly the outstanding
     // acks. The forwarder stays readiness-agnostic: it is told to attach (a byte fact)
     // and learns nothing of the count.
-    void subscribe(std::string_view fqn)
+    void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{})
     {
-        if(m_messages.attach(m_msg_peer, fqn))
+        if(m_messages.attach(m_msg_peer, fqn, qos))
             ++m_outstanding_subscribes;
+    }
+
+    // Emit a session-level keepalive heartbeat: encode the fixed-width presence
+    // payload and frame it as msg_type::heartbeat onto this peer's channel (session_id
+    // 0, consistent with every control frame). Driven by the engine on the router tick
+    // cadence — NOT a per-session timer. Reuses the session's send scratch.
+    void emit_heartbeat()
+    {
+        wire::encode_heartbeat_into(m_payload_scratch, wire::heartbeat{});
+        send_control(wire::msg_type::heartbeat);
     }
 
     bool is_complete() const noexcept { return m_forwarders_installed; }
@@ -241,6 +258,14 @@ private:
         m_router.on_rpc_response([this](std::span<const std::byte> inner) {
             m_procedures.deliver_response(m_rpc_peer, inner);
         });
+        // A heartbeat is a session-level presence assert: decode it (bounds-safe,
+        // untrusted input) and stamp THIS pinned peer's last-seen ONLY — presence,
+        // never a topic deadline. No periodic timer is armed here; the ONE ticker is
+        // the engine's monitor.
+        m_router.on_heartbeat([this](std::span<const std::byte> inner) {
+            if(wire::decode_heartbeat(inner) && m_on_stamp_seen)
+                m_on_stamp_seen(m_ctx.peer_id);
+        });
     }
 
     // The message_info assembly seam: this is the ONLY place the decoded frame_header is
@@ -274,7 +299,7 @@ private:
                                });
             return;
         }
-        m_messages.deliver(m_msg_peer, inner, has_source_identity,
+        m_messages.deliver(m_msg_peer, inner, m_ctx.peer_id, has_source_identity,
                            [this](std::string_view fqn, std::span<const std::byte> data) {
                                if(m_on_message)
                                    m_on_message(fqn, data);
@@ -411,8 +436,8 @@ private:
     // subscribe and a reconnect's still-demanded set.
     void resubscribe_all()
     {
-        for(const auto &fqn : m_messages.remembered_topics(m_ctx.node_name))
-            subscribe(fqn);
+        for(const auto &demand : m_messages.remembered_topics(m_ctx.node_name))
+            subscribe(demand.fqn, demand.qos);
     }
 
     void mint_session_id() noexcept { m_session_id = m_ctx.epochs.next(); }
@@ -532,6 +557,7 @@ private:
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_with_info;
     plexus::detail::move_only_function<void()> m_on_drop;
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
+    plexus::detail::move_only_function<void(const node_id &)> m_on_stamp_seen;
 };
 
 }

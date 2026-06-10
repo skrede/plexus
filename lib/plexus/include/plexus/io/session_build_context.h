@@ -40,6 +40,11 @@ struct session_build_context
     // session's lifecycle edge through it. Absent (unset) on a context built before
     // the engine wires it — a slot's forward guards on it being set.
     plexus::detail::move_only_function<void(const lifecycle_event &)> on_lifecycle;
+    // The node-shared presence-stamp route from any slot's session to the engine's one
+    // liveliness monitor: the engine sets this after construction to monitor.stamp_seen,
+    // the registry wires each session's on_stamp_seen through it carrying that session's
+    // pinned peer id. Absent (unset) until the engine wires it — the session guards on it.
+    plexus::detail::move_only_function<void(const node_id &)> on_stamp_seen;
 };
 
 }

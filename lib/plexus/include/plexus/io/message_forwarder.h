@@ -75,6 +75,16 @@ inline subscriber_qos from_wire_region(const wire::subscribe_qos_region &r)
             .requested_priority    = r.requested_priority};
 }
 
+// A peer's durable subscribe demand carries the subscriber's OWN requested qos so a
+// deferred dial resurrects the real periods (not a default 0) — the local liveliness
+// monitor reads them at the register seam. The fqn is the key; the qos is the
+// subscriber's chosen choice stored once.
+struct remembered_demand
+{
+    std::string    fqn;
+    subscriber_qos qos;
+};
+
 // The hard cap on a latched topic's history depth (the KEEP_LAST-N ring capacity).
 // A publisher-declared depth is an attacker-controlled count and N x max_payload is
 // a resource-exhaustion vector, so the ring capacity is clamped to [1, this]; with
@@ -128,14 +138,15 @@ public:
     // subscriber's declared type_id (std::nullopt = undeclared) rides the subscribe
     // request so the producer can match it at subscribe time.
     bool attach(const peer &p, std::string_view fqn,
+                const subscriber_qos &qos = subscriber_qos{},
                 std::optional<std::uint64_t> type_id = std::nullopt)
     {
         if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name);
-        record_remote_topic(p.node_name, fqn);
-        send_subscribe(p.channel, fqn, hash, type_id);
+        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name, qos);
+        record_remote_topic(p.node_name, fqn, qos);
+        send_subscribe(p.channel, fqn, hash, type_id, qos);
         return true;
     }
 
@@ -176,9 +187,10 @@ public:
     // session exists (an async dial has not completed) — so the demand is durable and
     // the session resurrects it through the counted path when it completes. No wire,
     // no fan-out registration here: attach (driven by the session) does both later.
-    void remember_demand(const std::string &node_name, std::string_view fqn)
+    void remember_demand(const std::string &node_name, std::string_view fqn,
+                         const subscriber_qos &qos = subscriber_qos{})
     {
-        record_remote_topic(node_name, fqn);
+        record_remote_topic(node_name, fqn, qos);
     }
 
     // declare: mark a topic with a publisher-declared qos once. A latched topic
@@ -303,9 +315,9 @@ public:
     // read (no wire emit, no mutation) so the forwarder stays readiness-agnostic: the
     // session reads this to resurrect its counted subscribes on reconnect. Returns an
     // empty vector for an unknown node_name.
-    const std::vector<std::string> &remembered_topics(const std::string &node_name) const
+    const std::vector<remembered_demand> &remembered_topics(const std::string &node_name) const
     {
-        static const std::vector<std::string> empty;
+        static const std::vector<remembered_demand> empty;
         auto it = m_remote_topics.find(node_name);
         return it == m_remote_topics.end() ? empty : it->second;
     }
@@ -317,8 +329,9 @@ public:
         auto it = m_remote_topics.find(p.node_name);
         if(it == m_remote_topics.end())
             return;
-        for(const auto &fqn : it->second)
-            send_subscribe(p.channel, fqn, wire::fqn_topic_hash(fqn));
+        for(const auto &demand : it->second)
+            send_subscribe(p.channel, demand.fqn, wire::fqn_topic_hash(demand.fqn),
+                           std::nullopt, demand.qos);
     }
 
     // The receive tail: given the source peer and the INNER unidirectional payload
@@ -331,7 +344,8 @@ public:
     // topic_hash — is warn-and-DROPPED through the injected logger&: never thrown,
     // never propagated, never crashed.
     template <typename OnMessage>
-    void deliver(const peer &p, std::span<const std::byte> inner, bool has_source_identity,
+    void deliver(const peer &p, std::span<const std::byte> inner,
+                 const node_id &source_node_id, bool has_source_identity,
                  OnMessage &&on_message)
     {
         (void)p;   // identity symmetry with the procedure receive tail; resolution is by topic_hash
@@ -347,6 +361,7 @@ public:
         if(fqn.empty())
             return drop("plexus: forwarder topic_unknown_for_data");
 
+        stamp_received(source_node_id, decoded->header.topic_hash);
         on_message(fqn, decoded->data);
     }
 
@@ -382,7 +397,19 @@ public:
         info.publication_sequence = decoded->header.sequence;
         if(decoded->endpoint_counter)
             info.source_identity = publisher_gid{source_node_id, *decoded->endpoint_counter};
+        stamp_received(source_node_id, decoded->header.topic_hash);
         on_message(fqn, decoded->data, info);
+    }
+
+    // The receive-path liveness stamp seam: invoked from BOTH deliver overloads after
+    // a successful decode, where the topic_hash is already in hand (no second decode of
+    // untrusted bytes). The endpoint is the PINNED session peer's node_id (the direct-
+    // delivery invariant), never frame-supplied. The hook is a plain settable callback
+    // the engine wires to its liveliness monitor's stamp_data; absent = no stamp, so the
+    // forwarder stays monitor-agnostic. A plain call, never a timer arm.
+    void set_on_data_stamp(plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> hook)
+    {
+        m_on_data_stamp = std::move(hook);
     }
 
     // fetch_latched: the consumer-paced PULL reply. Replay up to
@@ -519,13 +546,14 @@ private:
         send_control(channel, wire::msg_type::subscribe, bytes);
     }
 
-    void record_remote_topic(const std::string &node_name, std::string_view fqn)
+    void record_remote_topic(const std::string &node_name, std::string_view fqn,
+                             const subscriber_qos &qos)
     {
         auto &topics = m_remote_topics[node_name];
         for(const auto &existing : topics)
-            if(existing == fqn)
-                return;
-        topics.emplace_back(fqn);
+            if(existing.fqn == fqn)
+                return;   // idempotent: a re-record keeps the first stored qos
+        topics.emplace_back(remembered_demand{std::string{fqn}, qos});
     }
 
     // Forget a remembered topic on a genuine unsubscribe (detach's 1->0 transition) so
@@ -537,9 +565,17 @@ private:
         auto it = m_remote_topics.find(node_name);
         if(it == m_remote_topics.end())
             return;
-        std::erase(it->second, fqn);
+        std::erase_if(it->second, [&](const remembered_demand &d) { return d.fqn == fqn; });
         if(it->second.empty())
             m_remote_topics.erase(it);
+    }
+
+    // Stamp the endpoint's last-data-seen for this topic (deadline + presence), when
+    // the engine has wired the monitor. A plain store on the receive path — no timer.
+    void stamp_received(const node_id &source_node_id, std::uint64_t topic_hash)
+    {
+        if(m_on_data_stamp)
+            m_on_data_stamp(source_node_id, topic_hash);
     }
 
     void drop(std::string_view message) { m_logger.warn(message); }
@@ -547,12 +583,13 @@ private:
     log::logger &m_logger;
     subscriber_registry<channel_type> m_registry;
     detail::egress_scheduler<channel_type, Policy> m_egress;
-    std::unordered_map<std::string, std::vector<std::string>> m_remote_topics;
+    std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
     std::vector<std::byte> m_inner_scratch;
     std::vector<std::byte> m_frame_scratch;
     std::vector<std::byte> m_control_scratch;
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     std::uint64_t m_next_sequence{0};
+    plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp;
 };
 
 }

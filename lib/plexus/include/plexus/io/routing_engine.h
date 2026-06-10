@@ -7,13 +7,17 @@
 #include "plexus/io/reliability_requirement.h"
 #include "plexus/io/peer_observer.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/liveness_event.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/liveliness_monitor.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/peer_session_registry.h"
 #include "plexus/io/session_build_context.h"
+
+#include "plexus/wire/topic_hash.h"
 
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
@@ -72,10 +76,11 @@ public:
                    bool dial_eagerly = false, log::logger &logger = shared_null_logger())
         : m_transport(transport)
         , m_executor(executor)
+        , m_monitor(m_executor)
         , m_messages(m_executor)
         , m_procedures(executor, handshake_timeout, logger)
         , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures,
-                  redial, redial_seed, logger, {}}
+                  redial, redial_seed, logger, {}, {}}
         , m_registry(transport, m_build)
         , m_dial_eagerly(dial_eagerly)
     {
@@ -83,6 +88,24 @@ public:
         m_transport.on_accepted([this](std::unique_ptr<channel_type> ch) { on_accepted(std::move(ch)); });
         m_transport.on_dial_failed([this](const endpoint &ep, io_error) { m_registry.notify_dial_failed(ep); });
         m_build.on_lifecycle = [this](const lifecycle_event &ev) { dispatch_lifecycle(ev); };
+        // The receive path stamps the one monitor: a data frame stamps deadline +
+        // presence (set_on_data_stamp), a heartbeat stamps presence only (on_stamp_seen
+        // routed through the build context to each session). Both are plain stores.
+        m_messages.set_on_data_stamp(
+            [this](const node_id &ep, std::uint64_t topic_hash) { m_monitor.stamp_data(ep, topic_hash); });
+        m_build.on_stamp_seen = [this](const node_id &ep) { m_monitor.stamp_seen(ep); };
+        // Route a fired timing event up the engine's own posted observer seam (mirrors
+        // dispatch_lifecycle's posted fan-out — the carrier copies by value into the turn).
+        m_monitor.on_liveness([this](const liveness_event &ev) {
+            Policy::post(m_executor, [this, ev] { fan_liveness(ev); });
+        });
+        // The keepalive heartbeat emit rides the SAME single tick (an additional per-tick
+        // action, NOT a second timer): on each tick, emit a heartbeat to every connected
+        // peer so a silent-but-alive publisher still asserts presence.
+        m_monitor.on_tick_action([this] {
+            m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); });
+        });
+        m_monitor.start();
     }
 
     // Register/unregister an observer of peer liveness. The list is the registry,
@@ -90,6 +113,16 @@ public:
     // address. Operator-driven cold-path registration — no remote peer can grow it.
     void add_observer(peer_observer &o) { m_observers.push_back(&o); }
     void remove_observer(peer_observer &o) { std::erase(m_observers, &o); }
+
+    // The subscriber-side timing-gate observable (FORK-B): a dedicated settable
+    // callback the engine fires (POSTED on the executor) when the one monitor reports a
+    // missed-deadline or a lease-expiry. It is NOT folded into the peer_observer
+    // lifecycle surface — a timing lapse is a distinct event from a connection edge.
+    // Absent = dormant. Cold-path registration.
+    void on_liveness(plexus::detail::move_only_function<void(const liveness_event &)> cb)
+    {
+        m_on_liveness = std::move(cb);
+    }
 
     void listen(const endpoint &ep) { m_transport.listen(ep); }
 
@@ -142,6 +175,21 @@ public:
     void subscribe(const node_id &id, std::string_view fqn, locality reach_mask = locality::any,
                    reliability_requirement require = reliability_requirement::any)
     {
+        subscribe(id, fqn, subscriber_qos{}, reach_mask, require);
+    }
+
+    // The qos-carrying subscribe: the subscriber threads its OWN requested deadline /
+    // lease through the demand chain so the SUBSCRIBING node stores them locally
+    // (remember_demand carries the qos so a deferred dial resurrects the real periods;
+    // session->subscribe -> attach -> add_subscriber land them in the registry the
+    // local monitor reads via qos_for_subscriber at the register seam). The periods are
+    // requested-with-default: the 4-param overload delegates here with subscriber_qos{}
+    // (absence = no deadline/liveliness monitoring). The reach/reliability gates are
+    // orthogonal to the qos and unchanged.
+    void subscribe(const node_id &id, std::string_view fqn, const subscriber_qos &qos,
+                   locality reach_mask = locality::any,
+                   reliability_requirement require = reliability_requirement::any)
+    {
         if(!demand_in_scope(id, reach_mask))
             return;   // out-of-mask demand: establish NO path toward this peer
         if(!reliability_in_scope(id, require))
@@ -152,10 +200,10 @@ public:
         // counted path on completion, so a lazy subscribe that triggered the dial is
         // never lost (the first-publish-loss guard). If the session is already complete,
         // attach now so the demand takes effect immediately on the live connection.
-        m_messages.remember_demand(node_name_of(id), fqn);
+        m_messages.remember_demand(node_name_of(id), fqn, qos);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
-            session->subscribe(fqn);
+            session->subscribe(fqn, qos);
     }
 
     // A demand verb: reach then call through the owned procedure_forwarder.
@@ -252,6 +300,16 @@ private:
     // every other edge fans the peer_kind.
     void dispatch_lifecycle(const lifecycle_event &ev)
     {
+        // Register the endpoint's liveness state at the READY edge (NOT connected): the
+        // subscribe loop has drained by ready, so the subscriber's remembered demand —
+        // which carries its OWN requested periods — is populated and the monitor arms
+        // the real periods. Deregister at disconnected/dead BEFORE the executor
+        // quiesces, so a firing tick never touches a dead endpoint.
+        if(ev.edge == lifecycle_edge::ready)
+            register_endpoint(ev.id, ev.node_name);
+        else if(ev.edge == lifecycle_edge::disconnected || ev.edge == lifecycle_edge::dead)
+            m_monitor.deregister_endpoint(ev.id);
+
         switch(ev.edge)
         {
             case lifecycle_edge::connected:    return post_edge(ev, &peer_observer::on_peer_connected);
@@ -261,6 +319,25 @@ private:
             case lifecycle_edge::ready:        return post_edge(ev, &peer_observer::on_peer_ready);
             case lifecycle_edge::rejected:     return post_rejected(ev);
         }
+    }
+
+    // Arm the monitor for each topic the subscriber demanded on this endpoint. The
+    // remembered demand carries the subscriber's OWN requested periods (threaded
+    // through subscribe(id, fqn, qos)); a 0 period leaves that axis inert. Keyed by the
+    // peer's node_id and the topic_hash so the deadline is per-(endpoint, topic).
+    void register_endpoint(const node_id &id, const std::string &node_name)
+    {
+        for(const auto &demand : m_messages.remembered_topics(node_name))
+            m_monitor.register_endpoint(id, wire::fqn_topic_hash(demand.fqn),
+                                        demand.qos.requested_deadline_ns,
+                                        demand.qos.requested_lease_ns);
+    }
+
+    // Fan a fired timing event to the engine's settable observable (posted turn).
+    void fan_liveness(const liveness_event &ev)
+    {
+        if(m_on_liveness)
+            m_on_liveness(ev);
     }
 
     // Deliver to each observer over a snapshot, skipping any unregistered mid-turn, so
@@ -291,12 +368,14 @@ private:
 
     Transport &m_transport;
     executor_type m_executor;
+    liveliness_monitor<Policy, Clock> m_monitor;
     message_forwarder<Policy> m_messages;
     procedure_forwarder<Policy> m_procedures;
     session_build_context<Policy> m_build;
     registry_type m_registry;
     known_peers m_known;
     std::vector<peer_observer *> m_observers;
+    plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
     bool m_dial_eagerly;
 };
 
