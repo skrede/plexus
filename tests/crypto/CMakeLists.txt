@@ -26,3 +26,19 @@ target_link_libraries(test_rekey_threshold_sweep PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_rekey_threshold_sweep TEST_PREFIX "crypto.")
+
+add_executable(test_authenticated_channel test_authenticated_channel.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_authenticated_channel PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_authenticated_channel TEST_PREFIX "crypto.")
+
+add_executable(test_nonce_uniqueness test_nonce_uniqueness.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_nonce_uniqueness PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_nonce_uniqueness TEST_PREFIX "crypto.")
