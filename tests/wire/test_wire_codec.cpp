@@ -740,6 +740,14 @@ std::array<std::byte, 16> nonce_seed()
     return n;
 }
 
+std::array<std::byte, k_handshake_proof_len> proof_seed(std::uint8_t base = 0x90)
+{
+    std::array<std::byte, k_handshake_proof_len> pr{};
+    for(std::size_t i = 0; i < pr.size(); ++i)
+        pr[i] = static_cast<std::byte>(base + i);
+    return pr;
+}
+
 handshake_request make_request(const std::array<std::byte, 16> &id)
 {
     return handshake_request{
@@ -753,7 +761,8 @@ handshake_request make_request(const std::array<std::byte, 16> &id)
             .key_id                   = key_id_seed(),
             .own_nonce                = nonce_seed(),
             .cipher_offer             = cipher_offer_bits::chacha20_poly1305 | cipher_offer_bits::aes_256_gcm,
-            .chosen_cipher            = cipher_offer_bits::chacha20_poly1305};
+            .chosen_cipher            = cipher_offer_bits::chacha20_poly1305,
+            .proof                    = proof_seed()};
 }
 
 handshake_response make_response(const std::array<std::byte, 16> &id, handshake_status status)
@@ -770,6 +779,7 @@ handshake_response make_response(const std::array<std::byte, 16> &id, handshake_
             .own_nonce                = nonce_seed(),
             .cipher_offer             = cipher_offer_bits::chacha20_poly1305 | cipher_offer_bits::aes_256_gcm,
             .chosen_cipher            = cipher_offer_bits::aes_256_gcm,
+            .proof                    = proof_seed(0xC1),
             .status                   = status};
 }
 
@@ -786,6 +796,7 @@ void check_request_equal(const handshake_request &a, const handshake_request &b)
     CHECK(a.own_nonce == b.own_nonce);
     CHECK(a.cipher_offer == b.cipher_offer);
     CHECK(a.chosen_cipher == b.chosen_cipher);
+    CHECK(a.proof == b.proof);
 }
 
 }
@@ -828,9 +839,9 @@ TEST_CASE("Handshake response: round-trip across id field space and all four sta
 TEST_CASE("Handshake codec: encoded wire-size pins", "[wire][handshake]")
 {
     // id(16) + 5 single-byte fields + fingerprint(8) + the attach region
-    // key_id(8)+own_nonce(16)+cipher_offer(1)+chosen(1) = 55; +status(1) = 56.
-    CHECK(encode_handshake_request(make_request(id_distinct())).size() == 55);
-    CHECK(encode_handshake_response(make_response(id_distinct(), handshake_status::accepted)).size() == 56);
+    // key_id(8)+own_nonce(16)+cipher_offer(1)+chosen(1)+proof(32) = 87; +status(1) = 88.
+    CHECK(encode_handshake_request(make_request(id_distinct())).size() == 87);
+    CHECK(encode_handshake_response(make_response(id_distinct(), handshake_status::accepted)).size() == 88);
 }
 
 TEST_CASE("Handshake request: every length below the fixed size returns nullopt", "[wire][handshake]")

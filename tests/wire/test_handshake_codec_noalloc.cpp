@@ -33,7 +33,8 @@ handshake_request sample_request()
             .key_id                   = {},
             .own_nonce                = {},
             .cipher_offer             = 0,
-            .chosen_cipher            = 0};
+            .chosen_cipher            = 0,
+            .proof                    = {}};
 }
 
 handshake_response sample_response()
@@ -52,6 +53,7 @@ handshake_response sample_response()
             .own_nonce                = {},
             .cipher_offer             = 0,
             .chosen_cipher            = 0,
+            .proof                    = {},
             .status                   = handshake_status::accepted};
 }
 
@@ -66,7 +68,7 @@ TEST_CASE("Handshake encode-into: zero allocation across a steady-state loop", "
     std::vector<std::byte> req_buf;
     std::vector<std::byte> resp_buf;
 
-    // Warm-up: grow the reused buffers to their fixed 55/56-byte capacity.
+    // Warm-up: grow the reused buffers to their fixed 87/88-byte capacity.
     encode_handshake_request_into(req_buf, req);
     encode_handshake_response_into(resp_buf, resp);
 

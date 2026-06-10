@@ -163,8 +163,8 @@ TEST_CASE("an over-cap region length decodes to nullopt", "[wire][subscribe_qos]
 TEST_CASE("the protocol version is at 5 and the region is trivially copyable",
           "[wire][subscribe_qos]")
 {
-    static_assert(k_protocol_version == 5);
+    static_assert(k_protocol_version == 6);
     static_assert(detail::k_qos_region_size == 26);
     static_assert(std::is_trivially_copyable_v<subscribe_qos_region>);
-    CHECK(k_protocol_version == 5);
+    CHECK(k_protocol_version == 6);
 }
