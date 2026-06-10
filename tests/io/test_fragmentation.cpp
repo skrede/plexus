@@ -170,11 +170,11 @@ TEST_CASE("an AEAD-decorated split leaves room for the per-fragment seal overhea
     // Every emitted fragment, once the datagram decorator prepends seq+epoch and appends
     // the tag, stays inside the transport budget — the previously-overrunning case fits.
     for(const auto &f : aead)
-        CHECK(f.bytes.size() + io::k_aead_tag_overhead <= budget);
+        CHECK(f.bytes.size() + io::k_aead_fragment_overhead <= budget);
 
     // The AEAD budget is strictly tighter than the plaintext budget, so a sealed fragment
     // sized to the plaintext budget would have overrun the MTU by exactly the seal overhead.
-    CHECK(io::effective_fragment_budget(budget, /*aead_decorated=*/true) + io::k_aead_tag_overhead
+    CHECK(io::effective_fragment_budget(budget, /*aead_decorated=*/true) + io::k_aead_fragment_overhead
           == io::effective_fragment_budget(budget, /*aead_decorated=*/false));
 }
 
