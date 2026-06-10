@@ -20,6 +20,7 @@ set(PLEXUS_IO_TESTS
     test_assembly_pattern
     test_cert_facts
     test_verify_policy
+    test_attach_policy
     test_cookie_secret
     test_fragmentation
     test_identity_types

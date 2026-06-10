@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SECURITY_COOKIE_SECRET_H
 #define HPP_GUARD_PLEXUS_IO_SECURITY_COOKIE_SECRET_H
 
+#include "plexus/io/security/ct_equal.h"
 #include "plexus/detail/compat.h"
 
 #include <span>
@@ -117,20 +118,6 @@ private:
         std::vector<std::byte> msg(peer_addr.begin(), peer_addr.end());
         msg.insert(msg.end(), nonce.begin(), nonce.end());
         return m_hmac(m_key, msg, out);
-    }
-
-    // The core constant-time compare: OR-accumulate the per-byte difference over ALL
-    // bytes (no early return, no break mid-loop), then test the accumulator once. A
-    // near-miss leaks no timing about which byte differs.
-    [[nodiscard]] static bool ct_equal(std::span<const std::byte> a,
-                                       std::span<const std::byte> b) noexcept
-    {
-        if(a.size() != b.size())
-            return false;
-        std::byte diff{0};
-        for(std::size_t i = 0; i < a.size(); ++i)
-            diff |= a[i] ^ b[i];
-        return diff == std::byte{0};
     }
 
     std::array<std::byte, 32> m_key{};        // process-random HMAC key
