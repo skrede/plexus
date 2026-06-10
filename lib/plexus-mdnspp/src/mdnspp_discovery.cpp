@@ -42,6 +42,29 @@ std::string tcp_address(const ::mdnspp::resolved_service &svc)
     return svc.ipv4_addresses.front() + ":" + std::to_string(svc.port);
 }
 
+// The contact card maps onto the RFC 6763 TXT record key/value entries: a faithful
+// pass-through of whatever the card assembler produced (the assembler is the sole
+// authority on what a card may contain, so the backend never injects or filters keys).
+std::vector<::mdnspp::service_txt> to_txt_records(
+    const std::vector<std::pair<std::string, std::string>> &metadata)
+{
+    std::vector<::mdnspp::service_txt> records;
+    records.reserve(metadata.size());
+    for(const auto &[key, value] : metadata)
+        records.push_back(::mdnspp::service_txt{key, value});
+    return records;
+}
+
+std::vector<std::pair<std::string, std::string>> from_txt_entries(
+    const std::vector<::mdnspp::service_txt> &entries)
+{
+    std::vector<std::pair<std::string, std::string>> metadata;
+    metadata.reserve(entries.size());
+    for(const auto &entry : entries)
+        metadata.emplace_back(entry.key, entry.value.value_or(std::string{}));
+    return metadata;
+}
+
 }
 
 mdnspp_discovery::mdnspp_discovery(::asio::io_context &io, std::string service_type)
@@ -69,6 +92,7 @@ void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
         info.port = static_cast<std::uint16_t>(std::stoul(addr.substr(colon + 1)));
     }
     info.hostname = service.name;
+    info.txt_records = to_txt_records(service.metadata);
 
     m_impl->server = std::make_unique<::mdnspp::basic_service_server<::mdnspp::asio_policy>>(
         m_io, std::move(info));
@@ -87,6 +111,7 @@ void mdnspp_discovery::browse(const resolved_callback &on_resolved)
                 plexus::discovery::service_info out;
                 out.name = std::string{std::string_view{svc.instance_name}};
                 out.endpoint = {"tcp", tcp_address(svc)};
+                out.metadata = from_txt_entries(svc.txt_entries);
                 on_resolved(out);
             }
         });

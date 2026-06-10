@@ -22,6 +22,7 @@
 #include <memory>
 #include <string>
 #include <cstddef>
+#include <utility>
 #include <optional>
 
 namespace pasio = plexus::asio;
@@ -37,6 +38,15 @@ std::vector<std::byte> bytes_of(std::string_view s)
     for(std::size_t i = 0; i < s.size(); ++i)
         v[i] = static_cast<std::byte>(static_cast<unsigned char>(s[i]));
     return v;
+}
+
+std::string read_card_value(const std::vector<std::pair<std::string, std::string>> &card,
+                            std::string_view key)
+{
+    for(const auto &[k, v] : card)
+        if(k == key)
+            return v;
+    return {};
 }
 
 }
@@ -65,14 +75,18 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     // executor — positive evidence the discovery path runs on `io`, not merely
     // that its callback was armed.
     pmdns::mdnspp_discovery advertiser(io, "_plexus._tcp.local.");
-    plexus::discovery::service_info local{"probe._plexus._tcp.local.", {"tcp", "127.0.0.1:5555"}};
+    plexus::discovery::service_info local{"probe._plexus._tcp.local.", {"tcp", "127.0.0.1:5555"},
+                                          {{"node_id", "0011"}, {"plexus/tcp/port", "5555"}}};
     advertiser.advertise(local);
 
     pmdns::mdnspp_discovery discovery(io, "_plexus._tcp.local.");
     int resolved_count = 0;
-    discovery.browse([&](const plexus::discovery::service_info &)
+    std::vector<std::pair<std::string, std::string>> resolved_metadata;
+    discovery.browse([&](const plexus::discovery::service_info &svc)
     {
         ++resolved_count;
+        if(!svc.metadata.empty())
+            resolved_metadata = svc.metadata;
     });
 
     // --- Transport round-trip on the SAME context ---
@@ -137,4 +151,8 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     // io_context — positive evidence the discovery subsystem ran on the shared
     // executor, not merely that its callback was armed.
     REQUIRE(resolved_count >= 1);
+    // The advertised contact-card metadata round-tripped through the real mDNS TXT
+    // record (advertise maps the map to txt_records; browse maps txt_entries back).
+    REQUIRE(read_card_value(resolved_metadata, "node_id") == "0011");
+    REQUIRE(read_card_value(resolved_metadata, "plexus/tcp/port") == "5555");
 }
