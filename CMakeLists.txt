@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(plexus VERSION 0.1.0 LANGUAGES CXX)
+project(plexus VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,6 +39,27 @@ foreach(fragment ${PLEXUS_LIB_FRAGMENTS})
     get_filename_component(fragment_dir ${fragment} DIRECTORY)
     add_subdirectory(${fragment_dir})
 endforeach()
+
+# Install/export the dependency-free INTERFACE set (core, api, wire, inproc) as the
+# plexusTargets export set, namespaced plexus::. The gated backends reach link-interface
+# targets outside every export set (the asio dep, the mDNS FetchContent, OpenSSL imported
+# targets), so install(EXPORT) cannot carry them; their per-component targets files are a
+# separate follow-up the config package's COMPONENTS loop already tolerates the absence of.
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+install(EXPORT plexusTargets
+    NAMESPACE plexus::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/plexus)
+configure_package_config_file(cmake/plexusConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/plexusConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/plexus)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/plexusConfigVersion.cmake
+    COMPATIBILITY SameMajorVersion)
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/plexusConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/plexusConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/plexus)
 
 if(PLEXUS_BUILD_TESTS OR PLEXUS_BUILD_FUZZ_TESTS)
     enable_testing()

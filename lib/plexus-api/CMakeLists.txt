@@ -8,3 +8,5 @@ set_target_properties(plexus-api PROPERTIES EXPORT_NAME plexus)
 target_link_libraries(plexus-api INTERFACE plexus::core)
 
 target_compile_features(plexus-api INTERFACE cxx_std_20)
+
+install(TARGETS plexus-api EXPORT plexusTargets)
