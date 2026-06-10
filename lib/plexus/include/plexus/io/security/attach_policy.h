@@ -76,28 +76,12 @@ private:
         return nullptr;
     }
 
-    // The proof input binds a fixed label, the role byte, both node-ids, both nonces,
-    // and the transcript digest in that fixed order: the role byte makes the two
-    // directions compute distinct MACs (anti-reflection), and the transcript digest
-    // makes a downgraded cipher offer change the MAC (anti-downgrade).
+    // MAC the canonical proof input (assembled by attach_proof_input — the layout the
+    // prover reproduces byte for byte) under this key's material.
     [[nodiscard]] bool recompute_proof(const keyed_psk &key, const attach_facts &f,
                                        std::span<std::byte> out) const noexcept
     {
-        static constexpr std::array<std::byte, 13> label{
-            std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'u'},
-            std::byte{'s'}, std::byte{'-'}, std::byte{'a'}, std::byte{'t'}, std::byte{'t'},
-            std::byte{'a'}, std::byte{'c'}, std::byte{'h'}};
-        std::vector<std::byte> msg;
-        msg.reserve(label.size() + 1 + f.initiator_id.size() + f.responder_id.size() +
-                    f.peer_nonce.size() + f.own_nonce.size() + f.transcript_digest.size());
-        msg.insert(msg.end(), label.begin(), label.end());
-        msg.push_back(static_cast<std::byte>(f.role));
-        msg.insert(msg.end(), f.initiator_id.begin(), f.initiator_id.end());
-        msg.insert(msg.end(), f.responder_id.begin(), f.responder_id.end());
-        msg.insert(msg.end(), f.peer_nonce.begin(), f.peer_nonce.end());
-        msg.insert(msg.end(), f.own_nonce.begin(), f.own_nonce.end());
-        msg.insert(msg.end(), f.transcript_digest.begin(), f.transcript_digest.end());
-        return m_hmac(key.material, msg, out);
+        return m_hmac(key.material, attach_proof_input(f), out);
     }
 
     std::vector<keyed_psk> m_keys;
@@ -114,6 +98,46 @@ class accept_any final : public attach_policy
 {
 public:
     [[nodiscard]] bool decide(const attach_facts &) const noexcept override { return true; }
+};
+
+// The attaching side's counterpart to psk_keystore_policy: the prover holds its OWN
+// keyed PSK and the SAME hmac_fn the verifier uses, and stamps a proof the verifier
+// recomputes byte for byte. prove() MACs the canonical attach_proof_input(facts) under
+// the held material — the single-sourced layout — so the prover and the policy can
+// never drift. A disengaged prover (no material) leaves the proof field unused on the
+// accept-any plaintext path.
+class attach_prover
+{
+public:
+    attach_prover() = default;
+
+    attach_prover(keyed_psk key, hmac_fn hmac)
+        : m_key(std::move(key))
+        , m_hmac(std::move(hmac))
+        , m_engaged(true)
+    {
+    }
+
+    [[nodiscard]] bool engaged() const noexcept { return m_engaged; }
+
+    [[nodiscard]] const std::array<std::byte, k_key_id_len> &key_id() const noexcept { return m_key.key_id; }
+
+    // Stamp the proof for `facts` into `out` (32 bytes). The role/ids/nonces/transcript
+    // in `facts` are the prover's OWN view (its role, its own_nonce, the peer's nonce as
+    // peer_nonce), so the verifier — recomputing under the same key with its mirror view
+    // — matches. Returns false on a degraded MAC so the caller fails closed.
+    [[nodiscard]] bool prove(const attach_facts &facts, std::span<std::byte> out) const
+    {
+        return m_hmac(m_key.material, attach_proof_input(facts), out);
+    }
+
+private:
+    keyed_psk m_key;
+
+    // Invoked from the const prove() path; the C++20 fallback move_only_function has a
+    // non-const call operator, so the seam holds the MAC mutable (mirroring cookie_secret).
+    mutable hmac_fn m_hmac;
+    bool m_engaged{false};
 };
 
 }
