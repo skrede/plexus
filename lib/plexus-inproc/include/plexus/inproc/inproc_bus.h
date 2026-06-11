@@ -21,11 +21,12 @@ template <typename Clock>
 class inproc_channel;
 
 // In-process byte-packet delivery between registered channels. A channel
-// registers on construction and is handed a synthetic endpoint; send() enqueues
-// a packet addressed to a peer endpoint, and deliver_one() hands exactly one
-// queued packet to its target channel. Delivery is pull-driven by the executor's
-// step-loop, never invoked from the producing send() — that posted-only discipline
-// is what keeps the re-entrancy invariant structural.
+// registers on construction and is handed a synthetic endpoint plus a never-
+// reused integer key; send() enqueues a packet addressed by the peer's key
+// (resolved from its endpoint once, at connect_to), and deliver_one() hands
+// exactly one queued packet to its target channel. Delivery is pull-driven by
+// the executor's step-loop, never invoked from the producing send() — that
+// posted-only discipline is what keeps the re-entrancy invariant structural.
 template <typename Clock = std::chrono::steady_clock>
 class inproc_bus
 {
@@ -47,9 +48,21 @@ public:
 
     io::endpoint register_channel(inproc_channel<Clock> *chan)
     {
-        io::endpoint assigned{"inproc", std::to_string(m_next_addr++)};
-        m_channels.push_back(channel_entry{chan, assigned});
+        const std::uint64_t key = m_next_addr++;
+        io::endpoint assigned{"inproc", std::to_string(key)};
+        m_channels.push_back(channel_entry{chan, assigned, key});
         return assigned;
+    }
+
+    // Resolve a bus-minted endpoint back to its channel key (0 = unregistered).
+    // Keys are never reused, so a key resolved once at connect_to stays bound to
+    // exactly that registration — a deregistered partner simply stops matching.
+    [[nodiscard]] std::uint64_t key_for(const io::endpoint &ep) const noexcept
+    {
+        for(const auto &entry : m_channels)
+            if(entry.assigned_ep == ep)
+                return entry.key;
+        return 0;
     }
 
     void deregister_channel(inproc_channel<Clock> *chan) noexcept
@@ -79,19 +92,19 @@ public:
         std::erase_if(m_listeners, [&ep](const listener_entry &e) { return e.ep == ep; });
     }
 
-    void enqueue(const io::endpoint &to, std::span<const std::byte> data)
+    void enqueue(std::uint64_t to_key, std::span<const std::byte> data)
     {
         queued_packet &slot = push_slot();
-        slot.to = to;
+        slot.to_key = to_key;
         slot.kind = packet_kind::data;
         slot.data.assign(data.begin(), data.end());   // reuse the slot's grown capacity
         slot.carrier = {};
     }
 
-    void enqueue_close(const io::endpoint &to)
+    void enqueue_close(std::uint64_t to_key)
     {
         queued_packet &slot = push_slot();
-        slot.to = to;
+        slot.to_key = to_key;
         slot.kind = packet_kind::close;
         slot.data.clear();
         slot.carrier = {};
@@ -102,11 +115,11 @@ public:
     // carrier rides inline (no payload vector — no per-packet copy alloc). The bus
     // takes a reference (addref); deliver_one releases it after handing it on, and
     // the not-found path below releases it too so a vanished target never leaks.
-    void enqueue_object(const io::endpoint &to, const io::object_carrier &carrier)
+    void enqueue_object(std::uint64_t to_key, const io::object_carrier &carrier)
     {
         io::addref(carrier);
         queued_packet &slot = push_slot();
-        slot.to = to;
+        slot.to_key = to_key;
         slot.kind = packet_kind::object;
         slot.data.clear();
         slot.carrier = carrier;
@@ -123,7 +136,7 @@ public:
 
         bool delivered = false;
         for(auto &entry : m_channels)
-            if(pkt.to == entry.assigned_ep)
+            if(pkt.to_key == entry.key)
             {
                 if(pkt.kind == packet_kind::close)
                     entry.chan->deliver_close();
@@ -150,9 +163,13 @@ public:
 private:
     enum class packet_kind : uint8_t { data, close, object };
 
+    // Packets address their target by the registration key, never the endpoint
+    // value: two string assigns per enqueue (and a string compare per channel per
+    // delivery) were measurable on the in-process publish loop. The endpoint
+    // strings stay cold — minted at registration, compared only in key_for.
     struct queued_packet
     {
-        io::endpoint to;
+        std::uint64_t to_key{0};
         packet_kind kind{packet_kind::data};
         std::vector<std::byte> data;
         io::object_carrier carrier{};
@@ -162,6 +179,7 @@ private:
     {
         inproc_channel<Clock> *chan;
         io::endpoint assigned_ep;
+        std::uint64_t key;
     };
 
     // The FIFO rides a grown-once ring of reusable packet slots rather than a deque:
@@ -195,7 +213,7 @@ private:
     std::vector<queued_packet> m_ring;
     std::size_t m_head{0};
     std::size_t m_size{0};
-    uint32_t m_next_addr{1};
+    std::uint64_t m_next_addr{1};   // key 0 stays "unconnected": it matches no registration
 };
 
 }
