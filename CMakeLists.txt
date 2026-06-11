@@ -65,3 +65,7 @@ if(PLEXUS_BUILD_TESTS OR PLEXUS_BUILD_FUZZ_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+if(PLEXUS_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()

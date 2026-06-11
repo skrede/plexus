@@ -404,13 +404,20 @@ public:
             {
                 if(!any_set(reach, sub.tier))
                     continue;
-                if(eligible_for_object(sub, carrier))
-                    sub.channel->send_object(carrier);
-                else
+                // The object-lane send is gated at COMPILE TIME on the channel exposing
+                // it: a channel without send_object (every remote/local stream channel —
+                // the lane is process-tier only) never instantiates the call, so a typed
+                // publisher compiles over it and always takes the byte path here.
+                if constexpr(requires(channel_type &c) { c.send_object(carrier); })
                 {
-                    ensure_encoded_once();
-                    m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
+                    if(eligible_for_object(sub, carrier))
+                    {
+                        sub.channel->send_object(carrier);
+                        continue;
+                    }
                 }
+                ensure_encoded_once();
+                m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
             }
 
         // A latched topic's history ring is the byte path's memory: force exactly one
