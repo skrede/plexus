@@ -61,6 +61,10 @@ public:
         complete_pending(std::make_error_code(std::errc::operation_canceled));
     }
 
+    // The firable predicate try_fire gates on, exposed so the executor can skip
+    // the clock read entirely when nothing could fire.
+    [[nodiscard]] bool armed() const noexcept { return m_active && m_handler; }
+
     bool try_fire(typename Clock::time_point now)
     {
         if(!m_active || !m_handler || now < m_expiry)
