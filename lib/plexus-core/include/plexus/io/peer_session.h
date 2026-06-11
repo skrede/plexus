@@ -279,9 +279,10 @@ public:
     // wire::subscribe on the channel — so the counter tracks exactly the outstanding
     // acks. The forwarder stays readiness-agnostic: it is told to attach (a byte fact)
     // and learns nothing of the count.
-    void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{})
+    void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{},
+                   std::optional<std::uint64_t> type_id = std::nullopt)
     {
-        if(m_messages.attach(m_msg_peer, fqn, qos))
+        if(m_messages.attach(m_msg_peer, fqn, qos, type_id))
             ++m_outstanding_subscribes;
     }
 

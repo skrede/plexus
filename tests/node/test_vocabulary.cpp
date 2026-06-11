@@ -56,6 +56,32 @@ TEST_CASE("expected with a move-only value round-trips through value()", "[vocab
     REQUIRE(std::move(e).value() == "payload");
 }
 
+TEST_CASE("expected<void> default-constructs to a success state", "[vocabulary][expected]")
+{
+    expected<void, std::error_code> e;
+
+    REQUIRE(static_cast<bool>(e));
+    REQUIRE(e.has_value());
+}
+
+TEST_CASE("expected<void> carries an error via unexpected", "[vocabulary][expected]")
+{
+    expected<void, std::error_code> e{
+        unexpected<std::error_code>(make_error_code(call_errc::deserialize_failed))};
+
+    REQUIRE_FALSE(static_cast<bool>(e));
+    REQUIRE_FALSE(e.has_value());
+    REQUIRE(e.error() == call_errc::deserialize_failed);
+}
+
+TEST_CASE("expected<void> unexpect-tag construction", "[vocabulary][expected]")
+{
+    expected<void, std::error_code> e{unexpect, make_error_code(call_errc::error)};
+
+    REQUIRE_FALSE(e);
+    REQUIRE(e.error() == call_errc::error);
+}
+
 TEST_CASE("call_errc integrates with std::error_code", "[vocabulary][call_errc]")
 {
     std::error_code ec = call_errc::no_provider;

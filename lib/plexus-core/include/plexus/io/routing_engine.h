@@ -28,6 +28,7 @@
 #include <memory>
 #include <vector>
 #include <cstdint>
+#include <optional>
 #include <algorithm>
 #include <string_view>
 
@@ -200,7 +201,8 @@ public:
     // orthogonal to the qos and unchanged.
     void subscribe(const node_id &id, std::string_view fqn, const subscriber_qos &qos,
                    locality reach_mask = locality::any,
-                   reliability_requirement require = reliability_requirement::any)
+                   reliability_requirement require = reliability_requirement::any,
+                   std::optional<std::uint64_t> type_id = std::nullopt)
     {
         if(!demand_in_scope(id, reach_mask))
             return;   // out-of-mask demand: establish NO path toward this peer
@@ -212,10 +214,10 @@ public:
         // counted path on completion, so a lazy subscribe that triggered the dial is
         // never lost (the first-publish-loss guard). If the session is already complete,
         // attach now so the demand takes effect immediately on the live connection.
-        m_messages.remember_demand(node_name_of(id), fqn, qos);
+        m_messages.remember_demand(node_name_of(id), fqn, qos, type_id);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
-            session->subscribe(fqn, qos);
+            session->subscribe(fqn, qos, type_id);
     }
 
     // A demand verb: reach then call through the owned procedure_forwarder.

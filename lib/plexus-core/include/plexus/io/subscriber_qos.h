@@ -37,6 +37,17 @@ enum class rxo_mode : std::uint8_t
     strict     = 1
 };
 
+// The subscriber-chosen handling of attaching to a producer that declared no type.
+// `lenient` (the friendly default) attaches to an untyped producer and delivers its
+// frames as bytes; `strict` refuses such an attach with a distinct verdict so a typed
+// consumer never silently binds to a producer whose type it cannot gate. Orthogonal to
+// rxo_mode (which governs the SOFT QoS-field relations): this is the typed-family gate.
+enum class attach_posture : std::uint8_t
+{
+    lenient = 0,
+    strict  = 1
+};
+
 // The subscriber-CHOICE QoS value struct: a different actor's decision than the
 // publisher-declared topic_qos, carried on its own wire path (the subscribe
 // request) and stored once per subscriber at attach. Plain fields with defaults,
@@ -74,6 +85,12 @@ struct subscriber_qos
     // refuses with a reason. It rides a reserved subscribe-request flag bit, so a
     // permissive default keeps the wire encoding byte-identical (the bit is clear).
     rxo_mode      rxo                              = rxo_mode::permissive;
+
+    // The subscriber-chosen typed attach posture. `lenient` (the friendly default)
+    // attaches to an untyped producer; `strict` refuses it with type_undeclared. It
+    // rides a reserved subscribe-request flag bit, so the lenient default keeps the wire
+    // encoding byte-identical (the bit is clear).
+    attach_posture posture                          = attach_posture::lenient;
 
     // A defaulted value-equality so a caller can ask "does this differ from the
     // friendly default?" before paying the wire region — the subscribe-out path

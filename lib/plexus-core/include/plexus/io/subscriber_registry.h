@@ -40,6 +40,11 @@ public:
         // read at replay — never mutated on the hot path. An absent wire region
         // lands here as the friendly default (a real choice, not a sentinel).
         subscriber_qos qos{};
+        // The subscriber-declared type identity, stored ONCE at attach. std::nullopt is
+        // a distinct "undeclared type" state (NOT a zero type_id) so an untyped
+        // subscriber is never matched as if it had claimed type 0 — it gates the typed
+        // fast-path eligibility, mirroring producer_type_id's absence discipline.
+        std::optional<std::uint64_t> type_id;
     };
 
     struct topic_entry
@@ -104,7 +109,8 @@ public:
     // learned off the wire for fan-out — the same slot, two callers.
     void add_subscriber(std::uint64_t topic_hash, std::string_view fqn,
                         Channel &channel, std::string_view node_name,
-                        const subscriber_qos &qos = subscriber_qos{})
+                        const subscriber_qos &qos = subscriber_qos{},
+                        std::optional<std::uint64_t> type_id = std::nullopt)
     {
         m_hash_to_fqn[topic_hash] = std::string{fqn};
         auto &entry = m_topics[topic_hash];
@@ -118,7 +124,7 @@ public:
         // a syscall on a real socket channel, so it is read at attach and cached — the
         // fan-out loop only reads the stored tier. The qos is stored the same way: once.
         const locality tier = tier_of(channel.remote_endpoint().scheme);
-        entry.subscribers.push_back(subscriber{&channel, std::string{node_name}, tier, qos});
+        entry.subscribers.push_back(subscriber{&channel, std::string{node_name}, tier, qos, type_id});
     }
 
     // The subscriber's stored QoS for a (topic_hash, channel) pair, or the friendly

@@ -168,3 +168,33 @@ TEST_CASE("the protocol version is at 5 and the region is trivially copyable",
     static_assert(std::is_trivially_copyable_v<subscribe_qos_region>);
     CHECK(k_protocol_version == 6);
 }
+
+TEST_CASE("the typed-strict flag bit round-trips in the flags byte", "[wire][subscribe_qos]")
+{
+    auto req = base_request();
+    req.has_qos = true;
+    req.qos = non_default_region();
+    req.qos.requested_flags |= detail::k_qos_flag_typed_strict;
+
+    auto bytes = encode_subscribe_request(req);
+    auto decoded = decode_subscribe_request(bytes);
+
+    REQUIRE(decoded.has_value());
+    REQUIRE(decoded->has_qos);
+    CHECK((decoded->qos.requested_flags & detail::k_qos_flag_typed_strict) != 0);
+}
+
+TEST_CASE("the type_undeclared status round-trips through the response codec",
+          "[wire][subscribe_qos]")
+{
+    subscribe_response resp{.topic_hash = 0x1122334455667788ULL,
+                            .status = subscribe_status::type_undeclared};
+
+    auto bytes = encode_subscribe_response(resp);
+    auto decoded = decode_subscribe_response(bytes);
+
+    REQUIRE(decoded.has_value());
+    CHECK(decoded->topic_hash == resp.topic_hash);
+    CHECK(decoded->status == subscribe_status::type_undeclared);
+    CHECK_FALSE(decoded->has_degraded);
+}

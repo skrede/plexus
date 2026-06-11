@@ -224,6 +224,73 @@ TEST_CASE("drain_for re-emits one subscribe per peer-rooted remote topic", "[for
     }
 }
 
+// Decode the type_hash of the FIRST subscribe_request in a capture's recorded traffic.
+std::optional<std::uint64_t> first_subscribe_type_hash(const capture &cap)
+{
+    for(const auto &f : cap.frames)
+    {
+        auto hdr = plexus::wire::decode_header(f);
+        if(!hdr || hdr->type != plexus::wire::msg_type::subscribe)
+            continue;
+        auto inner = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
+        if(auto req = plexus::wire::decode_subscribe_request(inner))
+            return req->type_hash;
+    }
+    return std::nullopt;
+}
+
+TEST_CASE("drain_for resurrects the remembered type_id on the re-subscribe", "[forwarder][type_id]")
+{
+    // The reconnect type-gate drop: a demand remembered WITH a type_id must re-emit a
+    // subscribe carrying that SAME type_id through drain_for. Looped over several
+    // remember/drain cycles (no success from a single run).
+    constexpr std::uint64_t k_type_id = 0xC0FFEE1234567890ULL;
+    constexpr int k_cycles = 16;
+    int proven = 0;
+    for(int iter = 0; iter < k_cycles; ++iter)
+    {
+        inproc_bus<> bus;
+        inproc_executor<> ex(bus);
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "node-a");
+
+        forwarder fwd{ex};
+        fwd.remember_demand("node-a", "alpha", plexus::io::subscriber_qos{}, k_type_id);
+        fwd.drain_for(peer);
+        ex.drain();
+
+        const auto type_hash = first_subscribe_type_hash(cap);
+        REQUIRE(type_hash.has_value());
+        REQUIRE(*type_hash == k_type_id);   // the gate survived the resurrection
+        ++proven;
+    }
+    REQUIRE(proven == k_cycles);
+}
+
+TEST_CASE("drain_for keeps an undeclared demand untyped on the re-subscribe", "[forwarder][type_id]")
+{
+    // The absence-is-distinct mirror: a demand remembered WITHOUT a type_id re-emits the
+    // undeclared sentinel (0), never a fabricated type.
+    for(int iter = 0; iter < 16; ++iter)
+    {
+        inproc_bus<> bus;
+        inproc_executor<> ex(bus);
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "node-a");
+
+        forwarder fwd{ex};
+        fwd.remember_demand("node-a", "alpha");
+        fwd.drain_for(peer);
+        ex.drain();
+
+        const auto type_hash = first_subscribe_type_hash(cap);
+        REQUIRE(type_hash.has_value());
+        REQUIRE(*type_hash == 0);
+    }
+}
+
 TEST_CASE("frame-once fan-out delivers byte-identical frames to each subscriber", "[forwarder]")
 {
     for(int iter = 0; iter < 100; ++iter)
