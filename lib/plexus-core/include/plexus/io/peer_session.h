@@ -79,7 +79,9 @@ public:
         : m_ctx(ctx), m_channel(*ctx.channel), m_fsm_cfg(fsm_cfg), m_fsm(fsm_cfg)
         , m_handshake_timer(executor), m_messages(messages), m_procedures(procedures)
         , m_handshake_timeout(handshake_timeout)
-        , m_is_inbound_bootstrap(is_inbound_bootstrap), m_logger(logger)
+        , m_is_inbound_bootstrap(is_inbound_bootstrap)
+        , m_from_intra_process(tier_of(m_channel.remote_endpoint().scheme) == locality::process)
+        , m_logger(logger)
         , m_msg_peer{m_channel, ctx.node_name}, m_rpc_peer{m_channel, ctx.node_name}
     {
     }
@@ -474,7 +476,7 @@ private:
         message_info info{};
         info.source_timestamp    = hdr.timestamp_ns;
         info.reception_timestamp = wire::now_timestamp_ns();
-        info.from_intra_process  = tier_of(m_channel.remote_endpoint().scheme) == locality::process;
+        info.from_intra_process  = m_from_intra_process;
         return info;
     }
 
@@ -963,6 +965,12 @@ private:
     procedure_forwarder<Policy> &m_procedures;
     std::chrono::nanoseconds m_handshake_timeout;
     bool m_is_inbound_bootstrap;
+    // A channel's delivery tier is fixed for the session's lifetime (a session is
+    // rebuilt, never re-pointed), so the intra-process verdict is latched once here:
+    // deriving it per delivered message cost a getpeername syscall plus the endpoint
+    // string formatting on every metadata-carrying delivery (seen at ~4% of the
+    // receive-window cycles in the loopback TCP profile).
+    bool m_from_intra_process;
     std::uint64_t m_session_id{0}, m_peer_session_id{0};
     bool m_forwarders_installed{false}, m_torn_down{false};
     // Latched true by close_for_protocol_error so the on_error wiring short-circuits
