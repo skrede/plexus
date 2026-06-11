@@ -677,5 +677,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND AND PLEXUS_ENABLE_MDNSPP_DISCOVERY)
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF)
-    catch_discover_tests(test_shared_executor TEST_PREFIX "integration.")
+    # The live-mDNS tests share the host's real multicast medium -- parallel ctest
+    # workers contend on advertise/browse convergence and squeeze the pump deadlines.
+    catch_discover_tests(test_shared_executor TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK live-mdns)
 endif()
