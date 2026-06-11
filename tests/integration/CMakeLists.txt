@@ -17,6 +17,20 @@ target_include_directories(test_hot_path_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_hot_path_alloc TEST_PREFIX "integration.")
 
+# The typed in-process fast-path alloc gate: a warmed steady-state borrow->publish->drain
+# loop over the node facade allocates zero (the zero-serialization lane), with a forced-
+# fallback variant documenting the serialize path's allocation for contrast. Links the
+# facade (plexus::plexus) for the typed endpoints; tests/ is on the include path for
+# support/alloc_counter.h.
+add_executable(test_typed_inproc_alloc test_typed_inproc_alloc.cpp)
+target_link_libraries(test_typed_inproc_alloc PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_typed_inproc_alloc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_typed_inproc_alloc TEST_PREFIX "integration.")
+
 # The deterministic inproc req/res roundtrip + concurrent-outstanding + zero-alloc
 # rpc-dispatch gate — always built (inproc Policy, no backend needed).
 add_executable(test_reqres_roundtrip_inproc test_reqres_roundtrip_inproc.cpp)

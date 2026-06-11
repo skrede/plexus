@@ -6,7 +6,6 @@
 #include "plexus/detail/compat.h"
 
 #include <span>
-#include <deque>
 #include <memory>
 #include <chrono>
 #include <string>
@@ -82,12 +81,20 @@ public:
 
     void enqueue(const io::endpoint &to, std::span<const std::byte> data)
     {
-        m_queue.push_back(queued_packet{to, packet_kind::data, std::vector<std::byte>(data.begin(), data.end()), {}});
+        queued_packet &slot = push_slot();
+        slot.to = to;
+        slot.kind = packet_kind::data;
+        slot.data.assign(data.begin(), data.end());   // reuse the slot's grown capacity
+        slot.carrier = {};
     }
 
     void enqueue_close(const io::endpoint &to)
     {
-        m_queue.push_back(queued_packet{to, packet_kind::close, {}, {}});
+        queued_packet &slot = push_slot();
+        slot.to = to;
+        slot.kind = packet_kind::close;
+        slot.data.clear();
+        slot.carrier = {};
     }
 
     // Queue a process-tier object handle to a peer, sharing the same FIFO as byte
@@ -98,16 +105,21 @@ public:
     void enqueue_object(const io::endpoint &to, const io::object_carrier &carrier)
     {
         io::addref(carrier);
-        m_queue.push_back(queued_packet{to, packet_kind::object, {}, carrier});
+        queued_packet &slot = push_slot();
+        slot.to = to;
+        slot.kind = packet_kind::object;
+        slot.data.clear();
+        slot.carrier = carrier;
     }
 
     bool deliver_one()
     {
-        if(m_queue.empty())
+        if(m_size == 0)
             return false;
 
-        auto pkt = std::move(m_queue.front());
-        m_queue.pop_front();
+        queued_packet &pkt = m_ring[m_head];
+        m_head = (m_head + 1) % m_ring.size();
+        --m_size;
 
         bool delivered = false;
         for(auto &entry : m_channels)
@@ -128,11 +140,12 @@ public:
         // vanished (the loop fell through) MUST still release or its slot leaks.
         if(pkt.kind == packet_kind::object && !delivered)
             io::release(pkt.carrier);
+        pkt.carrier = {};   // drop the dangling slot pointer so a re-read never re-releases
 
         return true;
     }
 
-    [[nodiscard]] bool has_pending_packets() const noexcept { return !m_queue.empty(); }
+    [[nodiscard]] bool has_pending_packets() const noexcept { return m_size != 0; }
 
 private:
     enum class packet_kind : uint8_t { data, close, object };
@@ -140,9 +153,9 @@ private:
     struct queued_packet
     {
         io::endpoint to;
-        packet_kind kind;
+        packet_kind kind{packet_kind::data};
         std::vector<std::byte> data;
-        io::object_carrier carrier;
+        io::object_carrier carrier{};
     };
 
     struct channel_entry
@@ -151,9 +164,37 @@ private:
         io::endpoint assigned_ep;
     };
 
+    // The FIFO rides a grown-once ring of reusable packet slots rather than a deque:
+    // a deque churns block allocations as the FIFO head/tail advance, but the steady
+    // in-process publish loop must be alloc-free (the determinism invariant). The ring
+    // doubles its slot count only when it would overflow (never shrinks), and each slot
+    // reuses its data vector's grown capacity via assign — so a warmed steady state
+    // touches no heap.
+    queued_packet &push_slot()
+    {
+        if(m_size == m_ring.size())
+            grow();
+        const std::size_t tail = (m_head + m_size) % m_ring.size();
+        ++m_size;
+        return m_ring[tail];
+    }
+
+    void grow()
+    {
+        const std::size_t old_cap = m_ring.size();
+        const std::size_t new_cap = old_cap == 0 ? 8 : old_cap * 2;
+        std::vector<queued_packet> next(new_cap);
+        for(std::size_t i = 0; i < m_size; ++i)
+            next[i] = std::move(m_ring[(m_head + i) % old_cap]);
+        m_ring = std::move(next);
+        m_head = 0;
+    }
+
     std::vector<channel_entry> m_channels;
     std::vector<listener_entry> m_listeners;
-    std::deque<queued_packet> m_queue;
+    std::vector<queued_packet> m_ring;
+    std::size_t m_head{0};
+    std::size_t m_size{0};
     uint32_t m_next_addr{1};
 };
 
