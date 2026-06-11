@@ -1,4 +1,4 @@
-// The node discovery-wiring oracle (D-02), over the live static_discovery:
+// The node discovery-wiring oracle, over the live static_discovery:
 //   (a) advertise-at-birth — a constructed node's card is visible to a browser, and a
 //       dial-only (never-listening) node is visible too (the transparency invariant);
 //   (b) listen() appends exactly one plexus/<scheme>/port key with the bound port and

@@ -128,9 +128,9 @@ class procedure;
 // The consumable public surface: a node composes a routing_engine over an injected
 // substrate. Policy is explicit (the plexus convention); the trailing transport pack
 // is deduced. A single transport binds Policy directly; two or more bind muxify<Policy>
-// over a node-owned multiplexing_transport (D-07). Omitting any substrate element —
-// executor, discovery, the transports, or the options — is a COMPILE ERROR (the
-// injected-only gate, D-06): there is no owning convenience overload.
+// over a node-owned multiplexing_transport. Omitting any substrate element — executor,
+// discovery, the transports, or the options — is a COMPILE ERROR: there is no owning
+// convenience overload.
 //
 // LIFETIME: the node BORROWS its executor, discovery, and transport leaves by
 // reference and OWNS only the engine and (for >1 transport) the multiplexing glue.
@@ -149,8 +149,8 @@ template <typename Policy, typename... Transports>
                   : (io::mux_member<Transports> && ...))
 class node
 {
-    // The four endpoint handles are the ONLY construction path for an endpoint (D-11):
-    // the registration/retire seams below are PRIVATE, reachable solely through these
+    // The four endpoint handles are the ONLY construction path for an endpoint: the
+    // registration/retire seams below are PRIVATE, reachable solely through these
     // friends, so there is no public node.publish / node.subscribe / declare_* factory.
     template <typename P> requires plexus::Policy<P> friend class publisher;
     template <typename P> requires plexus::Policy<P> friend class subscriber;
@@ -164,8 +164,8 @@ public:
     using engine_type =
         io::routing_engine<engine_policy, engine_transport>;
 
-    // The node_id is taken VERBATIM (API-06): plexus compares the identity, never
-    // mints or interprets it.
+    // The node_id is taken VERBATIM: plexus compares the identity, never mints or
+    // interprets it.
     node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id,
          Transports &...transports, const node_options &opts)
         : m_id(id)
@@ -184,13 +184,13 @@ public:
             [this](std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info)
             { dispatch_message(fqn, bytes, info); });
         // Observe peer-ready edges so a standing demand re-fans to a peer that becomes
-        // ready AFTER the demand was registered (the D-01 late-join half on the sub side).
+        // ready AFTER the demand was registered (the late-join half on the sub side).
         m_engine.add_observer(m_peer_watch);
-        // D-02: advertise the (initially port-less) contact card at construction so a
-        // dial-only node is discoverable from birth, and browse to awareness. These run
+        // Advertise the (initially port-less) contact card at construction so a dial-only
+        // node is discoverable from birth, and browse to awareness. These run
         // synchronously in the ctor turn (not posted) — they install state before any
         // session exists, the set-before-listen contract. The browse handler also re-fans
-        // every standing demand toward a newly noted peer (the D-01 late-join half).
+        // every standing demand toward a newly noted peer (the late-join half).
         advertise_card();
         m_disc.browse([this](const discovery::service_info &peer) { note_from_card(peer); });
     }
@@ -210,10 +210,9 @@ public:
     node &operator=(node &&) = delete;
 
     // Forward the bind to the engine, then append this transport's {scheme, port} to
-    // the live contact card and re-advertise (the D-02 live-update path). PRECONDITION:
-    // an advertised listen requires an EXPLICIT port in ep.address ("host:port") — a
-    // port-0 auto-assign cannot be advertised this phase, because the transport_backend
-    // concept exposes no bound-port accessor (a concept extension is the seeded path). A
+    // the live contact card and re-advertise. PRECONDITION: an advertised listen requires
+    // an EXPLICIT port in ep.address ("host:port") — a port-0 auto-assign cannot be
+    // advertised, because the transport_backend concept exposes no bound-port accessor. A
     // missing/unparsable port binds the engine but advertises NO port key for it.
     void listen(const io::endpoint &ep)
     {
@@ -227,19 +226,19 @@ public:
         }
     }
 
-    // The node's own identity (API-06): verbatim from the ctor, or the name-hash
-    // derivation. The authoritative self identity the engine handshakes with.
+    // The node's own identity: verbatim from the ctor, or the name-hash derivation. The
+    // authoritative self identity the engine handshakes with.
     const plexus::node_id &id() const noexcept { return m_id; }
 
-    // Escape hatches (API-05): the live engine objects, for advanced peer-level work
-    // the topic-level public verbs deliberately hide.
+    // Escape hatches: the live engine objects, for advanced peer-level work the
+    // topic-level public verbs deliberately hide.
     engine_type &router() noexcept { return m_engine; }
     const engine_type &router() const noexcept { return m_engine; }
     auto &message_forwarder() noexcept { return m_engine.messages(); }
     executor_type executor() const noexcept { return m_executor; }
 
 private:
-    // ---- Endpoint infrastructure (the topic->peer translation, D-01) ---------------
+    // ---- Endpoint infrastructure (the topic->peer translation) ----------------------
     //
     // A locally registered subscriber: its fqn, the requested qos, and the callback the
     // demux fans a delivered frame to. Keyed by a monotonically minted registration id
@@ -301,27 +300,27 @@ private:
                 m_engine.unsubscribe(peer, fqn);
     }
 
-    // Declare a publisher's topic and mint its gid (API-04). The producer-side
-    // declaration persists for the node's life so the endpoint counter stays stable and
-    // is NEVER reused (IDENT-02) — a dropped publisher stops publishing, but its
-    // declaration is not torn down, so retire is a no-op (no resource to reclaim, and
-    // removing it would risk a gid remint). The handle drives publish directly.
+    // Declare a publisher's topic and mint its gid. The producer-side declaration
+    // persists for the node's life so the endpoint counter stays stable and is NEVER
+    // reused — a dropped publisher stops publishing, but its declaration is not torn
+    // down, so retire is a no-op (no resource to reclaim, and removing it would risk a
+    // gid remint). The handle drives publish directly.
     void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity)
     {
         m_engine.messages().declare(fqn, qos, std::nullopt, emit_source_identity);
     }
 
-    // The caller seam (D-03): resolve the FIRST connection-order peer with a complete
-    // session and route the call to it directly through the procedure forwarder (carrying
-    // the per-call deadline override and the live session epoch). on_reply is fanned with
-    // an ENGAGED wire status + the resolved provider's gid (its node_id half; the
+    // The caller seam: resolve the FIRST connection-order peer with a complete session
+    // and route the call to it directly through the procedure forwarder (carrying the
+    // per-call deadline override and the live session epoch). on_reply is fanned with an
+    // ENGAGED wire status + the resolved provider's gid (its node_id half; the
     // endpoint_counter half stays the documented absent 0 — the rpc_response wire does
     // not echo it) so the caller attributes the reply. With NO connected provider, the
     // completion is POSTED on the borrowed executor with an ABSENT status (the
     // no_provider verdict — never on the wire, so it is carried out-of-band, not as a
-    // fabricated rpc_status) and never touches the forwarder. This is the Pitfall 6 fix:
-    // the engine silently drops a pre-completion call; the facade completes the errc
-    // itself — it never hangs, buffers, or queues.
+    // fabricated rpc_status) and never touches the forwarder. The engine silently drops a
+    // pre-completion call; the facade completes the errc itself — it never hangs,
+    // buffers, or queues.
     template <typename OnReply>
     void call_seam(std::string_view fqn, std::span<const std::byte> param, OnReply on_reply,
                    std::optional<std::chrono::nanoseconds> deadline)
@@ -344,7 +343,7 @@ private:
                      { on_reply(std::nullopt, {}, std::nullopt); });
     }
 
-    // Serve a LOCAL procedure (D-03 local-uniqueness gate). The served-FQN set is checked
+    // Serve a LOCAL procedure (the local-uniqueness gate). The served-FQN set is checked
     // BEFORE the forwarder is touched, so a refused registration has ZERO side effects: a
     // second LOCAL serve on one fqn throws std::logic_error (a constructor has no
     // error-return channel, and a duplicate local provider is a programming error) and
@@ -369,8 +368,8 @@ private:
     }
 
     // Record a peer the node may fan demand toward (browse-noted or ready), dedup'd. The
-    // insertion order is connection/awareness order — it also feeds future caller target
-    // resolution (D-03), so it stays endpoint-family-agnostic.
+    // insertion order is connection/awareness order — it also feeds caller target
+    // resolution, so it stays endpoint-family-agnostic.
     void note_known_peer(const plexus::node_id &id)
     {
         if(std::find(m_known_peers.begin(), m_known_peers.end(), id) == m_known_peers.end())
@@ -452,7 +451,7 @@ private:
                           discovery::assemble_contact_card(m_id, m_listens)});
     }
 
-    // Parse a browsed card into an awareness entry (D-02). Every step is reject-on-
+    // Parse a browsed card into an awareness entry. Every step is reject-on-
     // failure (the card is untrusted multicast input): a malformed/missing node_id, a
     // self card, an address without a host, or no usable port key each abort WITHOUT a
     // note_peer. The first valid "plexus/<scheme>/port" key in card order wins; the

@@ -60,7 +60,7 @@ target_link_libraries(test_node_discovery PRIVATE
 catch_discover_tests(test_node_discovery TEST_PREFIX "node.")
 
 # The pub/sub endpoint handles: move-only RAII semantics + ctor-canonical registration,
-# and the end-to-end bytes family including the D-01 standing-demand fan.
+# and the end-to-end bytes family including the standing-demand fan.
 add_executable(test_handles test_handles.cpp)
 target_link_libraries(test_handles PRIVATE
     plexus::plexus

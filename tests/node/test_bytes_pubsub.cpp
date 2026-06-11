@@ -3,8 +3,8 @@
 //   - byte-identical delivery from a publisher.publish to a subscriber callback, looped;
 //   - the 3-arg callback receives a populated message_info while the 2-arg path is
 //     unchanged, and a source-identity-emitting publisher's gid reaches the 3-arg info;
-//   - THE STANDING FAN (D-01): a subscriber registered BEFORE the publishing peer is
-//     known still receives the peer's later publishes with no further user action.
+//   - THE STANDING FAN: a subscriber registered BEFORE the publishing peer is known
+//     still receives the peer's later publishes with no further user action.
 
 #include "plexus/node.h"
 #include "plexus/publisher.h"

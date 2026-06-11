@@ -18,16 +18,15 @@
 
 namespace plexus {
 
-// A move-only RAII subscribing endpoint (D-10/D-11): the CONSTRUCTOR is the
-// registration — it installs a STANDING topic-level demand on the node, which fans the
-// per-peer subscribe to every known peer now and to each later-discovered peer with no
-// further user action (D-01). The callback mirrors the Phase 25 receive seam (D-14): it
-// accepts EITHER a 2-arg `void(span<const std::byte>)` or a 3-arg
+// A move-only RAII subscribing endpoint: the CONSTRUCTOR is the registration — it
+// installs a STANDING topic-level demand on the node, which fans the per-peer subscribe
+// to every known peer now and to each later-discovered peer with no further user action.
+// The callback accepts EITHER a 2-arg `void(span<const std::byte>)` or a 3-arg
 // `void(span<const std::byte>, const message_info&)` callable, dispatched at
 // construction with if constexpr — a 2-arg callback costs nothing for the metadata it
 // ignores. Templated on Policy alone, so one subscriber type serves any transport pack.
 //
-// LIFETIME (D-13): a subscriber must NOT outlive its node. The canonical usage is
+// LIFETIME: a subscriber must NOT outlive its node. The canonical usage is
 // member-init aggregation (node ref first, handles after), so reverse destruction
 // retires the demand before the node. Dropping the handle retires the demand: it stops
 // the callback and, when it was the last local subscriber for the fqn, unsubscribes the
