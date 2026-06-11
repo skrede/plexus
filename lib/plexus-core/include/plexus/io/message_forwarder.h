@@ -291,10 +291,14 @@ public:
                  std::uint64_t session_id = 0)
     {
         auto hash = wire::fqn_topic_hash(fqn);
-        const auto *subs = m_registry.subscribers_for(hash);
-        const topic_qos qos = m_registry.qos_for(hash);
+        const auto *topic = m_registry.entry_for(hash);
+        const auto *subs =
+            topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
+        const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
         const bool latched = qos.latch;
         const locality reach = qos.reach;
+        // A null topic implies subs == nullptr and latched == false, so past this
+        // return `topic` is always valid.
         if(subs == nullptr && !latched)
             return;   // neither a subscriber nor a latch reason to frame
 
@@ -308,7 +312,8 @@ public:
         // receiver reconstructs publisher_gid as session.node_id ‖ counter. Absent →
         // 0 B and a byte-identical v3-no-flag frame. Per-topic, decided at framing
         // time, so the frame-ONCE-fan-to-N invariant holds (one buffer for all subs).
-        const auto counter = m_registry.source_identity_counter(hash);
+        const std::optional<std::uint64_t> counter =
+            topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
         // Frame ONCE into the reused scratch buffers: after the first publish
         // grows them, resize() reuses capacity so steady-state publishes do not
         // allocate (the SLICE-3 no-hot-path-allocation property, designed in here).
@@ -344,7 +349,7 @@ public:
                 if(any_set(reach, sub.tier))
                     m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
 
-        retain_if_latched(hash);
+        retain_if_latched(hash, qos);
     }
 
     // publish_object: the zero-serialization SIBLING of publish (never the hot
@@ -365,8 +370,10 @@ public:
                         std::uint64_t session_id = 0)
     {
         auto hash = wire::fqn_topic_hash(fqn);
-        const auto *subs = m_registry.subscribers_for(hash);
-        const topic_qos qos = m_registry.qos_for(hash);
+        const auto *topic = m_registry.entry_for(hash);
+        const auto *subs =
+            topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
+        const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
         const bool latched = qos.latch;
         const locality reach = qos.reach;
 
@@ -386,7 +393,9 @@ public:
                     .sequence   = carrier.sequence,
                     .topic_hash = hash
             };
-            const auto counter = m_registry.source_identity_counter(hash);
+            const std::optional<std::uint64_t> counter =
+                topic != nullptr && topic->emit_source_identity ? topic->endpoint_counter
+                                                                : std::nullopt;
             wire::encode_unidirectional_into(m_inner_scratch, uhdr, bytes, counter);
             wire::frame_header fhdr{
                     .type         = wire::msg_type::unidirectional,
@@ -426,7 +435,7 @@ public:
         if(latched)
         {
             ensure_encoded_once();
-            retain_if_latched(hash);
+            retain_if_latched(hash, qos);
         }
 
         release(carrier);
@@ -613,12 +622,12 @@ private:
     // grown capacity — alloc-free after warm-up. A capacity-1 ring is byte-identical
     // to the pre-ring single slot: last-writer-wins per topic_hash. The ring slots
     // OWN their bytes; they never alias m_frame_scratch (the next publish overwrites).
-    void retain_if_latched(std::uint64_t hash)
+    void retain_if_latched(std::uint64_t hash, const topic_qos &qos)
     {
-        if(!m_registry.qos_for(hash).latch)
+        if(!qos.latch)
             return;
         auto &ring = m_retained[hash];
-        ring.resize_to(std::clamp<std::size_t>(m_registry.qos_for(hash).depth, 1, k_history_depth_cap));
+        ring.resize_to(std::clamp<std::size_t>(qos.depth, 1, k_history_depth_cap));
         ring.push(m_frame_scratch);
     }
 
