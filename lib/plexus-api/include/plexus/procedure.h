@@ -2,9 +2,12 @@
 #define HPP_GUARD_PLEXUS_PROCEDURE_H
 
 #include "plexus/node.h"
+#include "plexus/expected.h"
+#include "plexus/typed_codec.h"
 
 #include "plexus/io/procedure_forwarder.h"
 
+#include "plexus/wire/varint.h"
 #include "plexus/wire/rpc_status.h"
 
 #include "plexus/policy.h"
@@ -13,20 +16,29 @@
 
 #include <span>
 #include <string>
+#include <vector>
 #include <cstddef>
 #include <utility>
+#include <system_error>
 #include <string_view>
 
 namespace plexus {
 
-// A move-only RAII serving endpoint: the CONSTRUCTOR is the registration —
-// it serves the handler on the node for the fqn — and the handle owns the served
-// lifetime. The handler mirrors the procedure_forwarder's contract: it is invoked with
-// the inbound request's opaque param bytes and a reply& it must invoke once with a
-// wire::rpc_status and the opaque return bytes. The reply is a node-owned reused
-// callable handed by reference (no per-dispatch allocation). Templated on Policy alone:
-// the handler/reply signatures carry no Policy-dependent type, so one procedure type
-// serves a node over any transport pack.
+// The serving endpoint family. The primary template names the typed endpoint
+// (procedure<Policy, Res(Req), CReq, CRes>, defined in a later plan); the bytes endpoint
+// is the procedure<Policy, void, void, void> specialization below — procedure<Policy>
+// selects it via the defaulted parameters, so every existing bytes spelling keeps
+// compiling unchanged.
+template <typename Policy, typename Sig, typename CReq, typename CRes>
+    requires plexus::Policy<Policy>
+class procedure;
+
+// The bytes serving endpoint: the CONSTRUCTOR is the registration — it serves the
+// handler on the node for the fqn — and the handle owns the served lifetime. The handler
+// mirrors the procedure_forwarder's contract: it is invoked with the inbound request's
+// opaque param bytes and a reply& it must invoke once with a wire::rpc_status and the
+// opaque return bytes. The reply is a node-owned reused callable handed by reference (no
+// per-dispatch allocation).
 //
 // DOUBLE-SERVE REFUSAL: a node REFUSES a second LOCAL registration on one fqn —
 // the constructor throws std::logic_error and leaves the first handler serving (the
@@ -42,7 +54,7 @@ namespace plexus {
 // inert (empty retire); its destructor does nothing.
 template <typename Policy>
     requires plexus::Policy<Policy>
-class procedure
+class procedure<Policy, void, void, void>
 {
 public:
     using reply_fn = typename io::procedure_forwarder<Policy>::reply_fn;
@@ -69,6 +81,82 @@ public:
     }
 
 private:
+    std::string m_fqn;
+    plexus::detail::move_only_function<void()> m_retire;
+};
+
+// The typed serving endpoint: an encode/decode adaptation around the bytes procedure.
+// The handler is expected<Res, std::error_code>(const Req&); CReq decodes the inbound
+// request, CRes encodes a successful response. There is NO inproc fast path for RPC by
+// design — a request/response always rides bytes.
+//
+// The registered bytes handler: decode the request via CReq (failure replies
+// rpc_status::deserialize_failed with no Req ever handed to the handler — a decode
+// failure never reaches the handler, the session stays up); invoke the handler; on
+// success encode the Res via CRes and reply rpc_status::success;
+// on a handler error encode the error_code's VALUE as a bounds-safe varint into the
+// otherwise-empty error-leg payload and reply rpc_status::error (the typed caller
+// reconstructs it under provider_category — value preserved, category erased).
+//
+// All the lifetime/double-serve guarantees of the bytes specialization hold verbatim:
+// the ctor is the registration, a second LOCAL serve on one fqn throws std::logic_error
+// with zero side effects, and dropping the handle retires it to rpc_status::no_handler.
+template <typename Policy, typename Res, typename Req, typename CReq, typename CRes>
+    requires plexus::Policy<Policy> && typed_codec<CReq> && typed_codec<CRes>
+class procedure<Policy, Res(Req), CReq, CRes>
+{
+public:
+    using reply_fn = typename io::procedure_forwarder<Policy>::reply_fn;
+    using handler_fn = typename io::procedure_forwarder<Policy>::handler_fn;
+
+    template <typename... NodeTs, typename Handler>
+    procedure(node<Policy, NodeTs...> &n, std::string_view fqn, Handler handler,
+              CReq req_codec = {}, CRes res_codec = {})
+        : m_fqn(fqn)
+    {
+        n.serve_procedure_seam(
+            fqn, handler_fn{adapt(std::move(handler), std::move(req_codec), std::move(res_codec))});
+        m_retire = [&n, fqn = m_fqn] { n.retire_procedure_seam(fqn); };
+    }
+
+    procedure(procedure &&) noexcept = default;
+    procedure &operator=(procedure &&) noexcept = default;
+
+    procedure(const procedure &) = delete;
+    procedure &operator=(const procedure &) = delete;
+
+    ~procedure()
+    {
+        if(m_retire != nullptr)
+            m_retire();
+    }
+
+private:
+    template <typename Handler>
+    static handler_fn adapt(Handler handler, CReq req_codec, CRes res_codec)
+    {
+        return [handler = std::move(handler), req_codec = std::move(req_codec),
+                res_codec = std::move(res_codec), scratch = std::vector<std::byte>{}](
+                   std::span<const std::byte> param, reply_fn &reply) mutable {
+            Req request{};
+            if(!req_codec.decode(param, request))
+            {
+                reply(wire::rpc_status::deserialize_failed, {});
+                return;
+            }
+            expected<Res, std::error_code> result = handler(request);
+            if(result)
+            {
+                const wire_bytes<> encoded = res_codec.encode(result.value());
+                reply(wire::rpc_status::success, static_cast<std::span<const std::byte>>(encoded));
+                return;
+            }
+            scratch.clear();
+            wire::write_varint(scratch, static_cast<std::uint64_t>(result.error().value()));
+            reply(wire::rpc_status::error, scratch);
+        };
+    }
+
     std::string m_fqn;
     plexus::detail::move_only_function<void()> m_retire;
 };

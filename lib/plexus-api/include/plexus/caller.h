@@ -4,9 +4,11 @@
 #include "plexus/node.h"
 #include "plexus/expected.h"
 #include "plexus/call_error.h"
+#include "plexus/typed_codec.h"
 
 #include "plexus/io/procedure_forwarder.h"
 
+#include "plexus/wire/varint.h"
 #include "plexus/wire/rpc_status.h"
 #include "plexus/wire/frame_codec.h"
 
@@ -70,8 +72,16 @@ struct call_options
     std::optional<std::chrono::nanoseconds> deadline{};
 };
 
-// A move-only RAII calling endpoint: the CONSTRUCTOR binds the node and fqn; the handle
-// owns the call verb. The caller is CALLBACK-ONLY — there is no blocking/future form (a
+// The calling endpoint family. The primary template names the typed endpoint
+// (caller<Policy, Res(Req), CReq, CRes>, defined in a later plan); the bytes endpoint is
+// the caller<Policy, void, void, void> specialization below — caller<Policy> selects it
+// via the defaulted parameters, so every existing bytes spelling keeps compiling.
+template <typename Policy, typename Sig, typename CReq, typename CRes>
+    requires plexus::Policy<Policy>
+class caller;
+
+// The bytes calling endpoint: the CONSTRUCTOR binds the node and fqn; the handle owns
+// the call verb. The caller is CALLBACK-ONLY — there is no blocking/future form (a
 // blocking call on the borrowed single-thread loop is a deadlock by construction; a
 // consumer owning threads wraps the callback in a few lines). The completion is exactly
 // void(plexus::expected<reply, std::error_code>): a success carries reply{bytes, info};
@@ -92,7 +102,7 @@ struct call_options
 // here. A moved-from handle is inert.
 template <typename Policy>
     requires plexus::Policy<Policy>
-class caller
+class caller<Policy, void, void, void>
 {
 public:
     // The completion-side callback the node seam fans: the wire status (ENGAGED on a
@@ -166,6 +176,112 @@ private:
     plexus::detail::move_only_function<void(
         std::string_view, std::span<const std::byte>, on_reply_fn,
         std::optional<std::chrono::nanoseconds>)> m_call;
+    std::string m_fqn;
+};
+
+// The typed calling endpoint: an encode/decode adaptation around the bytes caller.
+// call(const Req&, completion[, options]) encodes the request via CReq and completes the
+// caller with void(expected<Res, std::error_code>). There is NO inproc fast path for RPC
+// by design — a request/response always rides bytes.
+//
+// The completion adapter:
+//   - an ABSENT wire status is the facade no_provider verdict (call_errc::no_provider);
+//   - rpc_status::success decodes Res via CRes (a decode failure → deserialize_failed);
+//   - rpc_status::error with a well-formed varint error-leg payload reconstructs the
+//     provider's error VALUE under provider_category (value preserved, category erased);
+//   - an empty or MALFORMED error-leg payload falls back to from_rpc_status — so a bytes
+//     procedure replying a bare error completes this typed caller with call_errc::error
+//     (the interop fallback: a hostile varint never crashes, never half-decodes);
+//   - every other failure leg passes through from_rpc_status unchanged.
+template <typename Policy, typename Res, typename Req, typename CReq, typename CRes>
+    requires plexus::Policy<Policy> && typed_codec<CReq> && typed_codec<CRes>
+class caller<Policy, Res(Req), CReq, CRes>
+{
+public:
+    using on_reply_fn = plexus::detail::move_only_function<void(
+        std::optional<wire::rpc_status>, std::span<const std::byte>,
+        const std::optional<publisher_gid> &)>;
+
+    template <typename... NodeTs>
+    caller(node<Policy, NodeTs...> &n, std::string_view fqn, CReq req_codec = {}, CRes res_codec = {})
+        : m_call([&n](std::string_view f, std::span<const std::byte> p,
+                      on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
+                 { n.call_seam(f, p, std::move(on_reply), deadline); })
+        , m_req_codec(std::move(req_codec))
+        , m_res_codec(std::move(res_codec))
+        , m_fqn(fqn)
+    {
+    }
+
+    template <typename Completion>
+    void call(const Req &request, Completion &&completion)
+    {
+        dispatch(request, std::forward<Completion>(completion), std::nullopt);
+    }
+
+    template <typename Completion>
+    void call(const Req &request, const call_options &opts, Completion &&completion)
+    {
+        dispatch(request, std::forward<Completion>(completion), opts.deadline);
+    }
+
+    caller(caller &&) noexcept = default;
+    caller &operator=(caller &&) noexcept = default;
+
+    caller(const caller &) = delete;
+    caller &operator=(const caller &) = delete;
+
+    ~caller() = default;
+
+private:
+    template <typename Completion>
+    void dispatch(const Req &request, Completion &&completion,
+                  std::optional<std::chrono::nanoseconds> deadline)
+    {
+        const wire_bytes<> encoded = m_req_codec.encode(request);
+        m_call(m_fqn, static_cast<std::span<const std::byte>>(encoded),
+               [completion = std::forward<Completion>(completion), res_codec = m_res_codec](
+                   std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
+                   const std::optional<publisher_gid> &) mutable {
+                   if(!status)
+                   {
+                       completion(expected<Res, std::error_code>{
+                           unexpect, make_error_code(call_errc::no_provider)});
+                       return;
+                   }
+                   if(*status == wire::rpc_status::success)
+                   {
+                       Res value{};
+                       if(res_codec.decode(bytes, value))
+                           completion(expected<Res, std::error_code>{std::move(value)});
+                       else
+                           completion(expected<Res, std::error_code>{
+                               unexpect, make_error_code(call_errc::deserialize_failed)});
+                       return;
+                   }
+                   if(*status == wire::rpc_status::error)
+                   {
+                       std::size_t consumed = 0;
+                       if(const auto provider_value = wire::read_varint(bytes, consumed);
+                          provider_value && consumed == bytes.size())
+                       {
+                           completion(expected<Res, std::error_code>{
+                               unexpect,
+                               std::error_code{static_cast<int>(*provider_value), provider_category()}});
+                           return;
+                       }
+                   }
+                   completion(expected<Res, std::error_code>{
+                       unexpect, make_error_code(from_rpc_status(*status))});
+               },
+               deadline);
+    }
+
+    plexus::detail::move_only_function<void(
+        std::string_view, std::span<const std::byte>, on_reply_fn,
+        std::optional<std::chrono::nanoseconds>)> m_call;
+    CReq        m_req_codec;
+    CRes        m_res_codec;
     std::string m_fqn;
 };
 

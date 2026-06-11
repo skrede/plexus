@@ -18,13 +18,21 @@
 
 namespace plexus {
 
-// A move-only RAII subscribing endpoint: the CONSTRUCTOR is the registration — it
-// installs a STANDING topic-level demand on the node, which fans the per-peer subscribe
-// to every known peer now and to each later-discovered peer with no further user action.
-// The callback accepts EITHER a 2-arg `void(span<const std::byte>)` or a 3-arg
+// The subscribing endpoint family. The primary template names the typed endpoint
+// (subscriber<Policy, Codec>, defined in a later plan); the bytes endpoint is the
+// subscriber<Policy, void> specialization below — subscriber<Policy> selects it via the
+// defaulted Codec, so every existing bytes spelling keeps compiling unchanged.
+template <typename Policy, typename Codec>
+    requires plexus::Policy<Policy>
+class subscriber;
+
+// The bytes subscribing endpoint: the CONSTRUCTOR is the registration — it installs a
+// STANDING topic-level demand on the node, which fans the per-peer subscribe to every
+// known peer now and to each later-discovered peer with no further user action. The
+// callback accepts EITHER a 2-arg `void(span<const std::byte>)` or a 3-arg
 // `void(span<const std::byte>, const message_info&)` callable, dispatched at
 // construction with if constexpr — a 2-arg callback costs nothing for the metadata it
-// ignores. Templated on Policy alone, so one subscriber type serves any transport pack.
+// ignores.
 //
 // LIFETIME: a subscriber must NOT outlive its node. The canonical usage is
 // member-init aggregation (node ref first, handles after), so reverse destruction
@@ -34,7 +42,7 @@ namespace plexus {
 // destructor does nothing, so no callback ever fires through a dropped subscriber.
 template <typename Policy>
     requires plexus::Policy<Policy>
-class subscriber
+class subscriber<Policy, void>
 {
 public:
     template <typename... NodeTs, typename Cb>

@@ -136,3 +136,19 @@ TEST_CASE("node: the name-hash identity overload is deterministic and opt-in", "
     // The derived id is not the zero id (the derivation actually mixed the name).
     REQUIRE(a.id() != plexus::node_id{});
 }
+
+TEST_CASE("node: node_id_from_name is deterministic and distinct per name", "[node][identity]")
+{
+    // Two calls on one name are equal; distinct names differ; the derived id is non-zero.
+    REQUIRE(plexus::node_id_from_name("sensor.front") == plexus::node_id_from_name("sensor.front"));
+    REQUIRE(plexus::node_id_from_name("sensor.front") != plexus::node_id_from_name("sensor.rear"));
+    REQUIRE(plexus::node_id_from_name("sensor.front") != plexus::node_id{});
+}
+
+TEST_CASE("node: node_id_from_name equals the name-ctor's identity", "[node][identity]")
+{
+    host h;
+    inproc_node n{h.ex, h.disc, std::string_view{"sensor.front"}, h.transport, make_opts()};
+
+    REQUIRE(n.id() == plexus::node_id_from_name("sensor.front"));
+}
