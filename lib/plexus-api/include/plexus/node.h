@@ -248,6 +248,9 @@ private:
     {
         std::string        fqn;
         io::subscriber_qos qos;
+        // The subscriber-declared type identity (std::nullopt = undeclared), stored so a
+        // late-discovered peer gets the typed demand fanned with the gate intact.
+        std::optional<std::uint64_t> type_id;
         plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb;
     };
 
@@ -276,12 +279,14 @@ private:
     // currently known peer. Returns the id the retire seam keys on.
     registration_id register_subscriber_seam(
         std::string_view fqn, const io::subscriber_qos &qos,
-        plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb)
+        plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb,
+        std::optional<std::uint64_t> type_id = std::nullopt)
     {
         const registration_id rid = m_next_registration++;
-        m_subscriptions.push_back({rid, subscription{std::string{fqn}, qos, std::move(cb)}});
+        m_subscriptions.push_back({rid, subscription{std::string{fqn}, qos, type_id, std::move(cb)}});
         for(const auto &peer : m_known_peers)
-            m_engine.subscribe(peer, fqn, qos);
+            m_engine.subscribe(peer, fqn, qos, io::locality::any,
+                               io::reliability_requirement::any, type_id);
         return rid;
     }
 
@@ -305,9 +310,10 @@ private:
     // reused — a dropped publisher stops publishing, but its declaration is not torn
     // down, so retire is a no-op (no resource to reclaim, and removing it would risk a
     // gid remint). The handle drives publish directly.
-    void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity)
+    void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity,
+                                std::optional<std::uint64_t> type_id = std::nullopt)
     {
-        m_engine.messages().declare(fqn, qos, std::nullopt, emit_source_identity);
+        m_engine.messages().declare(fqn, qos, type_id, emit_source_identity);
     }
 
     // The caller seam: resolve the FIRST connection-order peer with a complete session
@@ -380,7 +386,8 @@ private:
     void fan_demands_to(const plexus::node_id &id)
     {
         for(const auto &[rid, sub] : m_subscriptions)
-            m_engine.subscribe(id, sub.fqn, sub.qos);
+            m_engine.subscribe(id, sub.fqn, sub.qos, io::locality::any,
+                               io::reliability_requirement::any, sub.type_id);
     }
 
     // The demux: fan a delivered frame to every callback registered for its fqn. A

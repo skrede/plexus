@@ -27,7 +27,11 @@ enum class subscribe_status : uint8_t
     source_identity_incompatible = 0x06,
     // A permissive accept whose trailing degraded_flags byte names the soft fields
     // that went unsatisfied.
-    subscribed_degraded          = 0x07
+    subscribed_degraded          = 0x07,
+    // A strict-posture subscriber attached to a producer that declared no type. Only
+    // ever emitted to a subscriber that requested the strict attach posture, so an old
+    // peer (which never sets that bit) never receives it (append-safe).
+    type_undeclared              = 0x08
 };
 
 enum class unsubscribe_status : uint8_t
@@ -168,6 +172,10 @@ constexpr std::uint8_t k_qos_flag_requested_reliable       = 0x02;
 // The subscriber's strict/permissive RxO choice rides the next free reserved bit;
 // clear = permissive (the friendly default), set = strict.
 constexpr std::uint8_t k_qos_flag_rxo_strict               = 0x04;
+// The subscriber's strict TYPED attach posture rides the next free reserved bit;
+// clear = lenient (the friendly default, attaches to an untyped producer), set =
+// strict (refuses an untyped producer with subscribe_status::type_undeclared).
+constexpr std::uint8_t k_qos_flag_typed_strict             = 0x08;
 
 }
 

@@ -108,6 +108,36 @@ public:
     }
 };
 
+template <typename E>
+class expected<void, E>
+{
+    std::variant<std::monostate, unexpected<E>> m_storage;
+
+public:
+    constexpr expected() noexcept : m_storage(std::monostate{})
+    {
+    }
+
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    constexpr expected(unexpected<E> err) : m_storage(std::move(err))
+    {
+    }
+
+    template <typename... Args>
+    constexpr explicit expected(unexpect_t, Args &&...args)
+        : m_storage(unexpected<E>(E(std::forward<Args>(args)...)))
+    {
+    }
+
+    constexpr explicit operator bool() const noexcept { return m_storage.index() == 0; }
+    [[nodiscard]] constexpr bool has_value() const noexcept { return m_storage.index() == 0; }
+
+    [[nodiscard]] constexpr E &error() & { return std::get<1>(m_storage).value; }
+    [[nodiscard]] constexpr const E &error() const & { return std::get<1>(m_storage).value; }
+    [[nodiscard]] constexpr E &&error() && { return std::get<1>(std::move(m_storage)).value; }
+    [[nodiscard]] constexpr const E &&error() const && { return std::get<1>(std::move(m_storage)).value; }
+};
+
 #endif
 
 }

@@ -51,6 +51,8 @@ inline wire::subscribe_qos_region to_wire_region(const subscriber_qos &q)
         flags |= wire::detail::k_qos_flag_requested_reliable;
     if(q.rxo == rxo_mode::strict)
         flags |= wire::detail::k_qos_flag_rxo_strict;
+    if(q.posture == attach_posture::strict)
+        flags |= wire::detail::k_qos_flag_typed_strict;
     return wire::subscribe_qos_region{
             .durability            = static_cast<std::uint8_t>(q.durability_mode),
             .delivery_mode         = static_cast<std::uint8_t>(q.delivery_mode),
@@ -77,7 +79,9 @@ inline subscriber_qos from_wire_region(const wire::subscribe_qos_region &r)
             .requested_lease_ns    = r.requested_lease_ns,
             .requested_priority    = r.requested_priority,
             .rxo = (r.requested_flags & wire::detail::k_qos_flag_rxo_strict) != 0
-                       ? rxo_mode::strict : rxo_mode::permissive};
+                       ? rxo_mode::strict : rxo_mode::permissive,
+            .posture = (r.requested_flags & wire::detail::k_qos_flag_typed_strict) != 0
+                       ? attach_posture::strict : attach_posture::lenient};
 }
 
 // A peer's durable subscribe demand carries the subscriber's OWN requested qos so a
@@ -88,6 +92,10 @@ struct remembered_demand
 {
     std::string    fqn;
     subscriber_qos qos;
+    // The subscriber-declared type identity carried with the durable demand so a
+    // reconnect resurrects the SAME type gate (std::nullopt = undeclared). Without it a
+    // typed subscriber surviving a reconnect would silently re-subscribe untyped.
+    std::optional<std::uint64_t> type_id;
 };
 
 // The hard cap on a latched topic's history depth (the KEEP_LAST-N ring capacity).
@@ -149,8 +157,8 @@ public:
         if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name, qos);
-        record_remote_topic(p.node_name, fqn, qos);
+        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name, qos, type_id);
+        record_remote_topic(p.node_name, fqn, qos, type_id);
         send_subscribe(p.channel, fqn, hash, type_id, qos);
         return true;
     }
@@ -177,6 +185,20 @@ public:
             send_control(p.channel, wire::msg_type::subscribe_response, resp);
             return false;
         }
+        // The strict typed attach posture: a subscriber that declared a type AND chose
+        // strict refuses to bind to a producer that declared NO type — the verdict it
+        // would otherwise silently miss. Ordered AFTER type_mismatch (a declared-vs-
+        // declared mismatch is the more specific verdict). Refusal mirrors the
+        // type_mismatch shape: reply type_undeclared, register no fan-out entry, return
+        // false, session stays up.
+        if(sub_qos.posture == attach_posture::strict && subscriber_type_id
+           && !m_registry.producer_type_id(hash))
+        {
+            auto resp = wire::encode_subscribe_response(
+                {.topic_hash = hash, .status = wire::subscribe_status::type_undeclared});
+            send_control(p.channel, wire::msg_type::subscribe_response, resp);
+            return false;
+        }
         // The request-vs-offered compatibility gate, generalizing the one-field
         // type_mismatch refusal to the full QoS matrix. Both halves co-locate here:
         // the subscriber's REQUESTED sub_qos arrived off the wire, the topic's OFFERED
@@ -197,7 +219,7 @@ public:
         }
         if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
             return false;
-        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos);
+        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos, subscriber_type_id);
         // A degraded verdict ADMITS (the consumer chose permissive) but the reply
         // carries the surfaced degraded-field set so the accept is non-silent; a clean
         // compatible verdict replies the byte-identical bare `subscribed`.
@@ -219,9 +241,10 @@ public:
     // the session resurrects it through the counted path when it completes. No wire,
     // no fan-out registration here: attach (driven by the session) does both later.
     void remember_demand(const std::string &node_name, std::string_view fqn,
-                         const subscriber_qos &qos = subscriber_qos{})
+                         const subscriber_qos &qos = subscriber_qos{},
+                         std::optional<std::uint64_t> type_id = std::nullopt)
     {
-        record_remote_topic(node_name, fqn, qos);
+        record_remote_topic(node_name, fqn, qos, type_id);
     }
 
     // forget_remembered_demand: drop a peer's durable subscribe demand WITHOUT a wire
@@ -372,7 +395,7 @@ public:
             return;
         for(const auto &demand : it->second)
             send_subscribe(p.channel, demand.fqn, wire::fqn_topic_hash(demand.fqn),
-                           std::nullopt, demand.qos);
+                           demand.type_id, demand.qos);
     }
 
     // The receive tail: given the source peer and the INNER unidirectional payload
@@ -597,13 +620,14 @@ private:
     }
 
     void record_remote_topic(const std::string &node_name, std::string_view fqn,
-                             const subscriber_qos &qos)
+                             const subscriber_qos &qos,
+                             std::optional<std::uint64_t> type_id = std::nullopt)
     {
         auto &topics = m_remote_topics[node_name];
         for(const auto &existing : topics)
             if(existing.fqn == fqn)
-                return;   // idempotent: a re-record keeps the first stored qos
-        topics.emplace_back(remembered_demand{std::string{fqn}, qos});
+                return;   // idempotent: a re-record keeps the first stored qos + type_id
+        topics.emplace_back(remembered_demand{std::string{fqn}, qos, type_id});
     }
 
     // Forget a remembered topic on a genuine unsubscribe (detach's 1->0 transition) so
