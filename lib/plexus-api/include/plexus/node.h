@@ -33,6 +33,7 @@
 #include <utility>
 #include <charconv>
 #include <optional>
+#include <stdexcept>
 #include <algorithm>
 #include <functional>
 #include <type_traits>
@@ -116,6 +117,14 @@ template <typename Policy>
     requires plexus::Policy<Policy>
 class subscriber;
 
+template <typename Policy>
+    requires plexus::Policy<Policy>
+class caller;
+
+template <typename Policy>
+    requires plexus::Policy<Policy>
+class procedure;
+
 // The consumable public surface: a node composes a routing_engine over an injected
 // substrate. Policy is explicit (the plexus convention); the trailing transport pack
 // is deduced. A single transport binds Policy directly; two or more bind muxify<Policy>
@@ -145,6 +154,8 @@ class node
     // friends, so there is no public node.publish / node.subscribe / declare_* factory.
     template <typename P> requires plexus::Policy<P> friend class publisher;
     template <typename P> requires plexus::Policy<P> friend class subscriber;
+    template <typename P> requires plexus::Policy<P> friend class caller;
+    template <typename P> requires plexus::Policy<P> friend class procedure;
 
 public:
     using executor_type = typename Policy::executor_type;
@@ -298,6 +309,63 @@ private:
     void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity)
     {
         m_engine.messages().declare(fqn, qos, std::nullopt, emit_source_identity);
+    }
+
+    // The caller seam (D-03): resolve the FIRST connection-order peer with a complete
+    // session and route the call to it directly through the procedure forwarder (carrying
+    // the per-call deadline override and the live session epoch). on_reply is fanned with
+    // an ENGAGED wire status + the resolved provider's gid (its node_id half; the
+    // endpoint_counter half stays the documented absent 0 — the rpc_response wire does
+    // not echo it) so the caller attributes the reply. With NO connected provider, the
+    // completion is POSTED on the borrowed executor with an ABSENT status (the
+    // no_provider verdict — never on the wire, so it is carried out-of-band, not as a
+    // fabricated rpc_status) and never touches the forwarder. This is the Pitfall 6 fix:
+    // the engine silently drops a pre-completion call; the facade completes the errc
+    // itself — it never hangs, buffers, or queues.
+    template <typename OnReply>
+    void call_seam(std::string_view fqn, std::span<const std::byte> param, OnReply on_reply,
+                   std::optional<std::chrono::nanoseconds> deadline)
+    {
+        for(const auto &peer : m_known_peers)
+        {
+            auto *session = m_engine.registry().session_for(peer);
+            if(session == nullptr || !session->is_complete())
+                continue;
+            const std::optional<publisher_gid> provider{publisher_gid{peer, 0}};
+            m_engine.procedures().call(
+                session->rpc_peer(), fqn, param,
+                [on_reply = std::move(on_reply), provider](
+                    wire::rpc_status status, std::span<const std::byte> bytes) mutable
+                { on_reply(status, bytes, provider); },
+                deadline, session->session_id());
+            return;
+        }
+        Policy::post(m_executor, [on_reply = std::move(on_reply)]() mutable
+                     { on_reply(std::nullopt, {}, std::nullopt); });
+    }
+
+    // Serve a LOCAL procedure (D-03 local-uniqueness gate). The served-FQN set is checked
+    // BEFORE the forwarder is touched, so a refused registration has ZERO side effects: a
+    // second LOCAL serve on one fqn throws std::logic_error (a constructor has no
+    // error-return channel, and a duplicate local provider is a programming error) and
+    // leaves the first handler serving. The forwarder's own serve() would silently
+    // overwrite — this facade gate closes that within-process hijack-by-overwrite.
+    void serve_procedure_seam(std::string_view fqn,
+                              typename io::procedure_forwarder<engine_policy>::handler_fn handler)
+    {
+        if(std::find(m_served_fqns.begin(), m_served_fqns.end(), fqn) != m_served_fqns.end())
+            throw std::logic_error("plexus: a procedure is already served locally on this fqn");
+        m_served_fqns.emplace_back(fqn);
+        m_engine.procedures().serve(fqn, std::move(handler));
+    }
+
+    // Retire a LOCAL procedure: drop the forwarder handler and the served-FQN entry so a
+    // subsequent inbound call resolves the existing rpc_status::no_handler, and the fqn is
+    // free to be served again.
+    void retire_procedure_seam(std::string_view fqn)
+    {
+        m_engine.procedures().retire(fqn);
+        std::erase(m_served_fqns, std::string{fqn});
     }
 
     // Record a peer the node may fan demand toward (browse-noted or ready), dedup'd. The
@@ -484,6 +552,7 @@ private:
     peer_watch m_peer_watch{*this};
     std::vector<plexus::node_id> m_known_peers;
     std::vector<std::pair<registration_id, subscription>> m_subscriptions;
+    std::vector<std::string> m_served_fqns;
     registration_id m_next_registration{1};
 
     engine_type m_engine;

@@ -111,6 +111,16 @@ public:
         m_providers[std::string{fqn}] = std::move(handler);
     }
 
+    // retire: drop a LOCAL provider handler so a subsequent inbound rpc_request for the
+    // fqn resolves the existing absent-handler path (rpc_status::no_handler). The inverse
+    // of serve; serve()'s direct-engine semantics (a re-serve overwrites in place) are
+    // unchanged for callers that never retire.
+    void retire(std::string_view fqn)
+    {
+        m_hash_to_fqn.erase(wire::fqn_topic_hash(fqn));
+        m_providers.erase(std::string{fqn});
+    }
+
     // call: fail fast if the peer's outstanding map is full (no insertion), else
     // allocate a corr_id, frame a frame_header-wrapped rpc_request into reused
     // scratch, send it, and ONLY THEN register the pending entry (the source
