@@ -146,3 +146,22 @@ target_link_libraries(test_typed_pubsub PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_pubsub TEST_PREFIX "node.")
+
+# The typed↔bytes interop matrix: every boundary cell between a typed and a bytes endpoint
+# (and a declared-mismatch typed pair) asserting its observable outcome, never UB.
+add_executable(test_typed_interop_matrix test_typed_interop_matrix.cpp)
+target_link_libraries(test_typed_interop_matrix PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_typed_interop_matrix TEST_PREFIX "node.")
+
+# The fast-path gates: the identity witness (cell 6) and the LOOPED fast/fallback flip
+# (cell 7) — fresh nodes per iteration, every message's path witnessed, every iteration
+# asserted, alternating eligible/ineligible sets plus pool-exhaustion bursts.
+add_executable(test_typed_fastpath test_typed_fastpath.cpp)
+target_link_libraries(test_typed_fastpath PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_typed_fastpath TEST_PREFIX "node.")
