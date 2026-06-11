@@ -14,6 +14,7 @@
 #include <vector>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 namespace plexus::inproc {
@@ -54,15 +55,23 @@ public:
     inproc_channel &operator=(inproc_channel &&) = delete;
 
     // Name the partner this channel sends toward. Pairing is a post-construction
-    // step because the Policy requires construction from the executor alone.
-    void connect_to(const io::endpoint &partner) { m_partner = partner; }
+    // step because the Policy requires construction from the executor alone. The
+    // partner's bus key is resolved HERE, once: bus keys are never reused, so the
+    // hot send path addresses packets by integer key (the endpoint strings stay
+    // cold), and a partner endpoint the bus never minted resolves to 0 — its sends
+    // drop in deliver_one exactly as an unmatched endpoint did.
+    void connect_to(const io::endpoint &partner)
+    {
+        m_partner = partner;
+        m_partner_key = m_bus ? m_bus->key_for(partner) : 0;
+    }
 
     [[nodiscard]] const io::endpoint &local_endpoint() const noexcept { return m_local; }
 
     void send(std::span<const std::byte> data)
     {
         if(m_bus && !m_closed)
-            m_bus->enqueue(m_partner, data);
+            m_bus->enqueue(m_partner_key, data);
     }
 
     // The process-tier object lane mirroring send(): enqueue a refcounted object
@@ -71,7 +80,7 @@ public:
     void send_object(const io::object_carrier &carrier)
     {
         if(m_bus && !m_closed)
-            m_bus->enqueue_object(m_partner, carrier);
+            m_bus->enqueue_object(m_partner_key, carrier);
     }
 
     void close()
@@ -83,7 +92,7 @@ public:
         // close is queued like a packet and surfaces on the partner only from
         // inproc_bus::deliver_one() inside step().
         if(m_bus)
-            m_bus->enqueue_close(m_partner);
+            m_bus->enqueue_close(m_partner_key);
     }
 
     [[nodiscard]] io::endpoint remote_endpoint() const { return m_partner; }
@@ -145,6 +154,7 @@ private:
     inproc_bus<Clock> *m_bus;
     io::endpoint m_local;
     io::endpoint m_partner;
+    std::uint64_t m_partner_key{0};
     detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     detail::move_only_function<void(const io::object_carrier &)> m_on_object;
     detail::move_only_function<void()> m_on_closed;
