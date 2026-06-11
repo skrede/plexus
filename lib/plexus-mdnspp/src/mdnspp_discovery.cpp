@@ -105,6 +105,14 @@ void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
         info.address_ipv4 = addr.substr(0, colon);
         info.port = port;
     }
+    else if(!addr.empty())
+    {
+        // A host-only address (the node advertises its reachable host and carries the
+        // real per-transport port in the contact-card TXT keys, not the SRV port). The
+        // A record still MUST carry the host or a browser resolves the service by name
+        // with no address and cannot dial it.
+        info.address_ipv4 = addr;
+    }
     info.hostname = service.name;
     info.txt_records = to_txt_records(service.metadata);
 

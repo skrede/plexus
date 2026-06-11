@@ -74,8 +74,18 @@ public:
     // transport (the multi-peer registry), so a single transport callback cannot
     // belong to one driver. The OWNER routes the transport's per-endpoint failure to
     // THIS driver's notify_dial_failed() — for a known endpoint, that is unambiguous.
+    // Begin the first dial — IDEMPOTENT while a dial is already in flight. The owner
+    // may call start() repeatedly off independent stimuli (a discovery browse that
+    // re-resolves the same peer, an eager note_peer that re-fires) before the first
+    // dial settles; without this guard each call opens a SECOND concurrent connection
+    // for the one slot, and the later session build destroys the earlier channel while
+    // its handshake write is still queued in the reactor — a use-after-free on the
+    // write completion. One in-flight dial per driver; the outcome (settled / failed /
+    // dropped) re-opens the gate.
     void start()
     {
+        if(m_dialing)
+            return;
         m_first_attempt = Clock::now();
         dial();
     }
@@ -83,12 +93,17 @@ public:
     // The owner observed a dial failure for THIS driver's endpoint: back off and
     // re-dial. (The registry/engine correlates the transport's per-endpoint failure
     // to the matching slot; a single-connection owner routes its sole failure here.)
-    void notify_dial_failed() { schedule_redial(); }
+    void notify_dial_failed() { m_dialing = false; schedule_redial(); }
+
+    // The dial produced a channel (the engine's on_dialed tail built — or will build —
+    // the session): the in-flight gate re-opens so a later drop can re-dial. Connected
+    // peers are additionally short-circuited by the engine's is_connected guard.
+    void mark_dial_settled() noexcept { m_dialing = false; }
 
     // An established session's transport dropped (broken_pipe/connection_reset on an
     // already-complete session). Back off and re-dial a fresh incarnation. A clean
     // tear_down/intentional close must NOT route here — only a transport drop does.
-    void on_channel_dropped() { schedule_redial(); }
+    void on_channel_dropped() { m_dialing = false; schedule_redial(); }
 
     std::uint32_t attempt_count() const noexcept { return m_attempt; }
     bool is_surrendered() const noexcept { return m_surrendered; }
@@ -113,6 +128,7 @@ private:
 
     void dial()
     {
+        m_dialing = true;
         if(m_on_redial)
             m_on_redial();
         m_transport.dial(m_endpoint);
@@ -144,6 +160,7 @@ private:
     typename Clock::time_point m_first_attempt{};
     std::uint32_t m_attempt{0};
     bool m_surrendered{false};
+    bool m_dialing{false};
     plexus::detail::move_only_function<void()> m_on_redial;
     plexus::detail::move_only_function<void()> m_on_dead;
 };

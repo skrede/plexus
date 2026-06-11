@@ -84,7 +84,13 @@ public:
     {
         for(auto &[id, slot] : m_slots)
             if(slot->record.dial_endpoint == ep)
+            {
+                // The dial settled into a channel: re-open the driver's in-flight gate
+                // so a subsequent drop can re-dial, and a redundant reach() during the
+                // dial window already became a no-op (the double-dial UAF guard).
+                slot->driver.mark_dial_settled();
                 return build_into(*slot, std::move(channel), false);
+            }
     }
 
     // The inbound-bootstrap tail: a peer dialed US. We build an accepted session on
