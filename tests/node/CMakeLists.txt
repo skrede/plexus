@@ -73,3 +73,20 @@ target_link_libraries(test_bytes_pubsub PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_bytes_pubsub TEST_PREFIX "node.")
+
+# The call family (caller/procedure handles): the byte-identical round-trip, the
+# double-serve refusal and retire-to-no_handler cases, and the no-provider errc proof
+# (posted, never inline; never hangs).
+add_executable(test_call_family test_call_family.cpp)
+target_link_libraries(test_call_family PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_call_family TEST_PREFIX "node.")
+
+add_executable(test_caller_errc test_caller_errc.cpp)
+target_link_libraries(test_caller_errc PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_caller_errc TEST_PREFIX "node.")
