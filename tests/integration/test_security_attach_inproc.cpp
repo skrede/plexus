@@ -501,7 +501,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
                                                      std::chrono::milliseconds(10000),
                                                      std::nullopt, std::nullopt},
                         /*redial_seed=*/1, plexus::io::shared_null_logger(),
-                        {}, {}, {}, {}, fake_seam(), {}};
+                        {}, {}, {}, {}, {}, fake_seam(), {}};
     // The production source of each session's install hook: the gated layer sets this once;
     // wire_security binds it per session, capturing that slot's channel. Here it just counts.
     build.install_security_factory =

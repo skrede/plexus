@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_INPROC_INPROC_BUS_H
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/object_carrier.h"
 #include "plexus/detail/compat.h"
 
 #include <span>
@@ -81,12 +82,23 @@ public:
 
     void enqueue(const io::endpoint &to, std::span<const std::byte> data)
     {
-        m_queue.push_back(queued_packet{to, packet_kind::data, std::vector<std::byte>(data.begin(), data.end())});
+        m_queue.push_back(queued_packet{to, packet_kind::data, std::vector<std::byte>(data.begin(), data.end()), {}});
     }
 
     void enqueue_close(const io::endpoint &to)
     {
-        m_queue.push_back(queued_packet{to, packet_kind::close, {}});
+        m_queue.push_back(queued_packet{to, packet_kind::close, {}, {}});
+    }
+
+    // Queue a process-tier object handle to a peer, sharing the same FIFO as byte
+    // packets so per-pair ordering between bytes and objects is preserved. The
+    // carrier rides inline (no payload vector — no per-packet copy alloc). The bus
+    // takes a reference (addref); deliver_one releases it after handing it on, and
+    // the not-found path below releases it too so a vanished target never leaks.
+    void enqueue_object(const io::endpoint &to, const io::object_carrier &carrier)
+    {
+        io::addref(carrier);
+        m_queue.push_back(queued_packet{to, packet_kind::object, {}, carrier});
     }
 
     bool deliver_one()
@@ -97,15 +109,25 @@ public:
         auto pkt = std::move(m_queue.front());
         m_queue.pop_front();
 
+        bool delivered = false;
         for(auto &entry : m_channels)
             if(pkt.to == entry.assigned_ep)
             {
                 if(pkt.kind == packet_kind::close)
                     entry.chan->deliver_close();
+                else if(pkt.kind == packet_kind::object)
+                    entry.chan->deliver_object(pkt.carrier);   // the channel releases on its own path
                 else
                     entry.chan->deliver(std::span<const std::byte>(pkt.data));
+                delivered = true;
                 break;
             }
+
+        // The bus's own reference is balanced here: an object handed to a live
+        // channel released it inside deliver_object; an object whose target had
+        // vanished (the loop fell through) MUST still release or its slot leaks.
+        if(pkt.kind == packet_kind::object && !delivered)
+            io::release(pkt.carrier);
 
         return true;
     }
@@ -113,13 +135,14 @@ public:
     [[nodiscard]] bool has_pending_packets() const noexcept { return !m_queue.empty(); }
 
 private:
-    enum class packet_kind : uint8_t { data, close };
+    enum class packet_kind : uint8_t { data, close, object };
 
     struct queued_packet
     {
         io::endpoint to;
         packet_kind kind;
         std::vector<std::byte> data;
+        io::object_carrier carrier;
     };
 
     struct channel_entry

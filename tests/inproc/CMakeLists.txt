@@ -16,3 +16,16 @@ target_link_libraries(test_inproc_policy PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_inproc_policy TEST_PREFIX "inproc.")
+
+# Object-lane runtime test: process-tier object-handle delivery between channels,
+# FIFO ordering vs byte packets on one pair, and leak-free refcount release on the
+# delivered, closed-partner, and vanished-target paths.
+add_executable(test_inproc_object_lane test_inproc_object_lane.cpp)
+
+target_link_libraries(test_inproc_object_lane PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_inproc_object_lane TEST_PREFIX "inproc.")

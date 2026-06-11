@@ -127,6 +127,22 @@ target_include_directories(test_shared_receive_route PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_shared_receive_route TEST_PREFIX "integration.")
 
+# The process-tier object-route oracle: an object published on one engine's forwarder
+# (publish_object) reaches the peer engine's object route in-process with zero
+# serialization (the route observes the SAME slot object address the publisher handed
+# off), an unresolvable topic_hash releases without delivering, and the node-shared
+# object route survives a forced reconnect rebuild with no re-install (looped). Every
+# delivered reference is released. Always built (inproc Policy, no backend needed).
+add_executable(test_object_route_inproc test_object_route_inproc.cpp)
+target_link_libraries(test_object_route_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_object_route_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_object_route_inproc TEST_PREFIX "integration.")
+
 # The deterministic drop+surrender oracle on the virtual clock: an established
 # session's REAL transport drop (the partner's accepted end closes) drives an
 # automatic per-slot re-dial through the production receive path with no injection;

@@ -65,6 +65,15 @@ public:
             m_bus->enqueue(m_partner, data);
     }
 
+    // The process-tier object lane mirroring send(): enqueue a refcounted object
+    // handle to the partner through the same bus FIFO. A send on a closed channel
+    // does NOT enqueue and therefore does NOT addref, so no release is owed for it.
+    void send_object(const io::object_carrier &carrier)
+    {
+        if(m_bus && !m_closed)
+            m_bus->enqueue_object(m_partner, carrier);
+    }
+
     void close()
     {
         if(m_closed)
@@ -80,6 +89,7 @@ public:
     [[nodiscard]] io::endpoint remote_endpoint() const { return m_partner; }
 
     void on_data(detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
+    void on_object(detail::move_only_function<void(const io::object_carrier &)> cb) { m_on_object = std::move(cb); }
     void on_closed(detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
     void on_error(detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
 
@@ -96,6 +106,18 @@ public:
     {
         if(!m_closed && m_on_data)
             m_on_data(data);
+    }
+
+    // Hand a delivered object to the stored callback, transferring the bus's reference
+    // TO the callback (which owns the matching release). A delivery to a closed or
+    // handlerless channel has no callback to take the reference, so it releases here —
+    // the reference the bus handed over is balanced on every path, so no slot leaks.
+    void deliver_object(const io::object_carrier &carrier)
+    {
+        if(!m_closed && m_on_object)
+            m_on_object(carrier);
+        else
+            io::release(carrier);
     }
 
     void deliver_close()
@@ -124,6 +146,7 @@ private:
     io::endpoint m_local;
     io::endpoint m_partner;
     detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
+    detail::move_only_function<void(const io::object_carrier &)> m_on_object;
     detail::move_only_function<void()> m_on_closed;
     detail::move_only_function<void(io::io_error)> m_on_error;
     detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
