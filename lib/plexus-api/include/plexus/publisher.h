@@ -18,14 +18,14 @@
 
 namespace plexus {
 
-// A move-only RAII publishing endpoint (D-10/D-11): the CONSTRUCTOR is the
-// registration — it declares the topic on the node and mints the endpoint gid
-// (API-04) — and the handle owns the publish verb. Templated on Policy ALONE (both
-// forwarders are Policy-only), so one publisher type serves a node over any transport
-// pack. publish is a DIRECT (non-virtual) forwarder call — the hot path carries no
-// type erasure; only the cold retire is erased.
+// A move-only RAII publishing endpoint: the CONSTRUCTOR is the registration — it
+// declares the topic on the node and mints the endpoint gid — and the handle owns the
+// publish verb. Templated on Policy ALONE (both forwarders are Policy-only), so one
+// publisher type serves a node over any transport pack. publish is a DIRECT
+// (non-virtual) forwarder call — the hot path carries no type erasure; only the cold
+// retire is erased.
 //
-// LIFETIME (D-13): a publisher must NOT outlive its node. The canonical usage is
+// LIFETIME: a publisher must NOT outlive its node. The canonical usage is
 // member-init aggregation — declare the node ref first and the endpoint handles after
 // it, so reverse destruction retires the handles before the node. A moved-from handle
 // is inert (null forwarder, empty retire); its destructor does nothing.
@@ -71,7 +71,7 @@ public:
     publisher &operator=(const publisher &) = delete;
 
     // The declaration persists for the node's life so the endpoint counter stays stable
-    // and is never reused (IDENT-02): a dropped publisher simply stops publishing. There
+    // and is never reused: a dropped publisher simply stops publishing. There
     // is no per-publisher resource to reclaim, so the destructor is trivial.
     ~publisher() = default;
 

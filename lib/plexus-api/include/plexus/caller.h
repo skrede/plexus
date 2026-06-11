@@ -27,26 +27,24 @@
 
 namespace plexus {
 
-// The wire+local attribution split for a reply (D-17), mirroring io::message_info.
+// The wire+local attribution split for a reply, mirroring io::message_info.
 // Populated honestly: a field carries data ONLY when the caller seam genuinely holds
 // it, and a field the response leg does not surface stays in its documented absent
 // state rather than a fabricated value.
 //
 // provider_identity is std::optional<publisher_gid>: it is engaged with the RESOLVED
-// provider node's node_id (the peer the call was deterministically targeted to, D-03),
-// so attribution is genuine at node granularity. The endpoint_counter half is the
+// provider node's node_id (the peer the call was deterministically targeted to), so
+// attribution is genuine at node granularity. The endpoint_counter half is the
 // documented absent state (0): the procedure provider's endpoint counter is not echoed
-// on the rpc_response wire, so it is never fabricated. The seeded cardinality-`many`
-// fan-in fills the same field per reply, so the signature does not change later.
+// on the rpc_response wire, so it is never fabricated.
 //
-// source_timestamp is the absent state (0) this phase: the rpc_response frame carries a
+// source_timestamp is the absent state (0): the rpc_response frame carries a
 // frame-header timestamp, but the procedure_forwarder's on_response seam delivers only
-// the status and the return bytes — surfacing the response frame's timestamp is a
-// forwarder-seam extension, seeded, not fabricated here.
+// the status and the return bytes, so it is not fabricated here.
 //
 // reception_timestamp is receiver-stamped at completion from the codec's clock.
-// from_intra_process is the absent state (false) this phase: the locality tier of the
-// answering channel is not surfaced through the on_response seam.
+// from_intra_process is the absent state (false): the locality tier of the answering
+// channel is not surfaced through the on_response seam.
 struct reply_info
 {
     std::optional<publisher_gid> provider_identity{};
@@ -64,7 +62,7 @@ struct reply
     reply_info                 info;
 };
 
-// Per-call options (D-17), an extensible designated-initializer aggregate. deadline is
+// Per-call options, an extensible designated-initializer aggregate. deadline is
 // std::optional because its ABSENCE is meaningful — absent means "use the forwarder's
 // construction-time default deadline", a distinct state from any concrete override.
 struct call_options
@@ -72,23 +70,22 @@ struct call_options
     std::optional<std::chrono::nanoseconds> deadline{};
 };
 
-// A move-only RAII calling endpoint (D-10/D-11/D-15): the CONSTRUCTOR binds the node and
-// fqn; the handle owns the call verb. The caller is CALLBACK-ONLY (D-15) — there is no
-// blocking/future form (a blocking call on the borrowed single-thread loop is a
-// deadlock by construction; a consumer owning threads wraps the callback in a few
-// lines). The completion is exactly void(plexus::expected<reply, std::error_code>)
-// (D-16): a success carries reply{bytes, info}; every failure carries a call_errc.
+// A move-only RAII calling endpoint: the CONSTRUCTOR binds the node and fqn; the handle
+// owns the call verb. The caller is CALLBACK-ONLY — there is no blocking/future form (a
+// blocking call on the borrowed single-thread loop is a deadlock by construction; a
+// consumer owning threads wraps the callback in a few lines). The completion is exactly
+// void(plexus::expected<reply, std::error_code>): a success carries reply{bytes, info};
+// every failure carries a call_errc.
 //
-// PROVIDER RESOLUTION (D-03, single-provider this phase): a call targets the FIRST
-// connection-order peer with a complete session. A node REFUSES a second LOCAL
-// procedure registration on one fqn (procedure.h), so within a process the provider is
-// unique; global multi-provider arbitration is structurally out of scope (the
-// cardinality seed owns the richer model). A call with NO connected provider does NOT
+// PROVIDER RESOLUTION (single-provider): a call targets the FIRST connection-order peer
+// with a complete session. A node REFUSES a second LOCAL procedure registration on one
+// fqn (procedure.h), so within a process the provider is unique; global multi-provider
+// arbitration is structurally out of scope. A call with NO connected provider does NOT
 // hang, buffer, or queue: the completion is POSTED on the borrowed executor carrying
 // call_errc::no_provider. A wrong-aim (a peer that does not serve the fqn) resolves
 // no_handler through the existing per-call deadline path.
 //
-// LIFETIME (D-13): a caller must NOT outlive its node. Dropping the handle is
+// LIFETIME: a caller must NOT outlive its node. Dropping the handle is
 // bookkeeping-only — it does NOT cancel an in-flight call: a completion already handed
 // to the forwarder runs to its resolution (the asio convention — the operation owns its
 // completion, not the initiating handle). Cancellation sugar is seeded, not invented

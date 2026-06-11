@@ -1,9 +1,9 @@
 // The node construction surface oracle: the injected-substrate compile-error proofs
 // (omitting executor / discovery / transports / options each makes the node
 // non-constructible), the escape hatches returning the live engine objects, and the
-// API-06 identity surface (verbatim node_id primary; the deterministic opt-in
-// name-hash overload). All over the deterministic inproc policy/transport with a
-// static_discovery — no real networking, no owned io_context.
+// identity surface (verbatim node_id primary; the deterministic opt-in name-hash
+// overload). All over the deterministic inproc policy/transport with a static_discovery
+// — no real networking, no owned io_context.
 
 #include "plexus/node.h"
 #include "plexus/node_options.h"
@@ -66,8 +66,8 @@ struct host
 }
 
 // The four injected-substrate omission proofs: the node is NOT constructible when any
-// required substrate element is missing (D-06 — there is no owning convenience
-// overload, so omission is a compile error, asserted here as non-constructibility).
+// required substrate element is missing (there is no owning convenience overload, so
+// omission is a compile error, asserted here as non-constructibility).
 static_assert(std::is_constructible_v<
                   inproc_node, inproc_executor<> &, plexus::discovery::static_discovery &,
                   const plexus::node_id &, inproc_transport<> &, const plexus::node_options &>,
