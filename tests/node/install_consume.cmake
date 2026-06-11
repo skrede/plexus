@@ -21,10 +21,15 @@ if(NOT _rc EQUAL 0)
     message(FATAL_ERROR "install failed (${_rc}):\n${_out}")
 endif()
 
+# Forward the build's CXX flags to the consumer. When plexus is built with sanitizers,
+# the installed crypto OBJECT files carry __asan_/__ubsan_ references that only resolve
+# when the consumer link pulls in the matching sanitizer runtime — so the out-of-tree
+# consumer must compile with the same instrumentation, not a bare default.
 execute_process(
     COMMAND ${CMAKE_COMMAND} -S "${PLEXUS_CONSUME_DIR}" -B "${_consume_build}"
             "-DCMAKE_PREFIX_PATH=${_prefix}"
             "-DPLEXUS_CONSUME_COMPONENTS=${PLEXUS_CONSUME_COMPONENTS}"
+            "-DCMAKE_CXX_FLAGS=${PLEXUS_CONSUME_CXX_FLAGS}"
     RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _out)
 if(NOT _rc EQUAL 0)
     message(FATAL_ERROR "consumer configure failed (${_rc}):\n${_out}")

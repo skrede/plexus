@@ -32,6 +32,7 @@ add_test(NAME node.install_consume
         -DPLEXUS_BUILD_DIR=${CMAKE_BINARY_DIR}
         -DPLEXUS_CONSUME_DIR=${CMAKE_CURRENT_SOURCE_DIR}/install_consume
         "-DPLEXUS_CONSUME_COMPONENTS=${_consume_components}"
+        "-DPLEXUS_CONSUME_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/install_consume.cmake)
 
 # The facade vocabulary unit test — the one place that links plexus::plexus (the facade
@@ -90,3 +91,22 @@ target_link_libraries(test_caller_errc PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_caller_errc TEST_PREFIX "node.")
+
+# The late-joiner gate: a peer that joins after the demand is in place exchanges data with
+# no user action on join timing, looped over both join orders, every iteration asserted.
+add_executable(test_late_join test_late_join.cpp)
+target_link_libraries(test_late_join PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_late_join TEST_PREFIX "node.")
+
+# The borrowed-executor bridge smoke: a vagus-shaped host owns the io substrate and two
+# embedded nodes borrow it; no thread is spawned and nothing progresses unless the host
+# pumps. The milestone's named correctness gate for the node facade.
+add_executable(test_borrowed_executor_bridge test_borrowed_executor_bridge.cpp)
+target_link_libraries(test_borrowed_executor_bridge PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_borrowed_executor_bridge TEST_PREFIX "node.")
