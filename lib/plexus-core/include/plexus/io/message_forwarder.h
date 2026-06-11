@@ -224,6 +224,16 @@ public:
         record_remote_topic(node_name, fqn, qos);
     }
 
+    // forget_remembered_demand: drop a peer's durable subscribe demand WITHOUT a wire
+    // emit — the inverse of remember_demand for a demand that never attached (no session
+    // completed, so there is no refcount to detach and no wire unsubscribe to send). The
+    // attached case forgets its own record on detach's 1->0 transition; this seam covers
+    // the engine's retire of a standing demand whose dial never completed.
+    void forget_remembered_demand(const std::string &node_name, std::string_view fqn)
+    {
+        forget_remote_topic(node_name, fqn);
+    }
+
     // declare: mark a topic with a publisher-declared qos once. A latched topic
     // retains its last published frame and replays it to late subscribers.
     // An optional producer type_id (std::nullopt = undeclared) is the subscribe-time

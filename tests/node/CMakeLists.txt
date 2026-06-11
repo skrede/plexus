@@ -57,3 +57,19 @@ target_link_libraries(test_node_discovery PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_node_discovery TEST_PREFIX "node.")
+
+# The pub/sub endpoint handles: move-only RAII semantics + ctor-canonical registration,
+# and the end-to-end bytes family including the D-01 standing-demand fan.
+add_executable(test_handles test_handles.cpp)
+target_link_libraries(test_handles PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_handles TEST_PREFIX "node.")
+
+add_executable(test_bytes_pubsub test_bytes_pubsub.cpp)
+target_link_libraries(test_bytes_pubsub PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_bytes_pubsub TEST_PREFIX "node.")
