@@ -112,7 +112,6 @@ public:
                         const subscriber_qos &qos = subscriber_qos{},
                         std::optional<std::uint64_t> type_id = std::nullopt)
     {
-        m_hash_to_fqn[topic_hash] = std::string{fqn};
         auto &entry = m_topics[topic_hash];
         if(entry.fqn.empty())
             entry.fqn = std::string{fqn};
@@ -150,7 +149,6 @@ public:
                  std::optional<std::uint64_t> producer_type_id = std::nullopt,
                  bool emit_source_identity = false)
     {
-        m_hash_to_fqn[topic_hash] = std::string{fqn};
         auto &entry = m_topics[topic_hash];
         if(entry.fqn.empty())
             entry.fqn = std::string{fqn};
@@ -243,18 +241,33 @@ public:
     }
 
     // Resolve a wire topic_hash back to its fqn (the receive tail). Empty when
-    // the hash names no attached topic.
+    // the hash names no attached topic. Served from the SAME per-topic record the
+    // publish verbs read (add_subscriber and declare both mint it with a non-empty
+    // fqn), so the registry keeps one hash-keyed map, not a parallel hash->fqn copy.
+    // The last resolution is memoized: receive flows repeat the same topic, and the
+    // per-delivery hash find was measurable on the in-process delivery loop. The
+    // cached pointer is safe because m_topics entries are NEVER erased (peer/sub
+    // removal empties an entry's subscriber list, never the record) and the node-
+    // based map keeps value addresses stable — an erase added to this registry
+    // would have to reset the memo.
     std::string_view fqn_for(std::uint64_t topic_hash) const
     {
-        auto it = m_hash_to_fqn.find(topic_hash);
-        return it == m_hash_to_fqn.end() ? std::string_view{} : std::string_view{it->second};
+        if(m_last_fqn != nullptr && topic_hash == m_last_fqn_hash)
+            return *m_last_fqn;
+        auto it = m_topics.find(topic_hash);
+        if(it == m_topics.end())
+            return {};
+        m_last_fqn_hash = topic_hash;
+        m_last_fqn = &it->second.fqn;
+        return *m_last_fqn;
     }
 
 private:
     static constexpr std::uint32_t k_no_entry = ~0u;
 
     std::unordered_map<std::uint64_t, topic_entry> m_topics;
-    std::unordered_map<std::uint64_t, std::string> m_hash_to_fqn;
+    mutable std::uint64_t m_last_fqn_hash{0};
+    mutable const std::string *m_last_fqn{nullptr};
     std::unordered_map<std::string, std::unordered_map<std::string, std::uint32_t>> m_refcount;
     // The per-node monotonic source-identity endpoint-counter allocator. Minted at
     // declare (cold path), never on the hot path. Starts at 1 so 0 stays free as an
