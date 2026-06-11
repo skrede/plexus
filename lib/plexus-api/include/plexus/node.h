@@ -6,6 +6,9 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/node_name.h"
 #include "plexus/io/null_logger.h"
+#include "plexus/io/message_info.h"
+#include "plexus/io/subscriber_qos.h"
+#include "plexus/io/peer_observer.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/transport_backend.h"
@@ -16,15 +19,22 @@
 
 #include "plexus/muxify.h"
 #include "plexus/node_id.h"
+#include "plexus/topic_qos.h"
 #include "plexus/policy.h"
 
+#include "plexus/detail/compat.h"
+
+#include <span>
 #include <tuple>
 #include <string>
 #include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <charconv>
 #include <optional>
+#include <algorithm>
+#include <functional>
 #include <type_traits>
 #include <string_view>
 
@@ -98,6 +108,14 @@ inline node_id hash_node_id(std::string_view name) noexcept
 
 }
 
+template <typename Policy>
+    requires plexus::Policy<Policy>
+class publisher;
+
+template <typename Policy>
+    requires plexus::Policy<Policy>
+class subscriber;
+
 // The consumable public surface: a node composes a routing_engine over an injected
 // substrate. Policy is explicit (the plexus convention); the trailing transport pack
 // is deduced. A single transport binds Policy directly; two or more bind muxify<Policy>
@@ -122,6 +140,12 @@ template <typename Policy, typename... Transports>
                   : (io::mux_member<Transports> && ...))
 class node
 {
+    // The four endpoint handles are the ONLY construction path for an endpoint (D-11):
+    // the registration/retire seams below are PRIVATE, reachable solely through these
+    // friends, so there is no public node.publish / node.subscribe / declare_* factory.
+    template <typename P> requires plexus::Policy<P> friend class publisher;
+    template <typename P> requires plexus::Policy<P> friend class subscriber;
+
 public:
     using executor_type = typename Policy::executor_type;
     using engine_policy = detail::node_engine_policy<Policy, Transports...>;
@@ -142,10 +166,20 @@ public:
                    opts.handshake_timeout, opts.reconnect, opts.redial_seed,
                    opts.dial_eagerly, resolve_logger(opts))
     {
+        // The fqn-to-callback demux: install the node-shared receive route ONCE, before
+        // any session is built (the route's set-before-listen contract). Every delivered
+        // data frame fans to every callback locally registered for its fqn.
+        m_engine.on_message_route(
+            [this](std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info)
+            { dispatch_message(fqn, bytes, info); });
+        // Observe peer-ready edges so a standing demand re-fans to a peer that becomes
+        // ready AFTER the demand was registered (the D-01 late-join half on the sub side).
+        m_engine.add_observer(m_peer_watch);
         // D-02: advertise the (initially port-less) contact card at construction so a
         // dial-only node is discoverable from birth, and browse to awareness. These run
         // synchronously in the ctor turn (not posted) — they install state before any
-        // session exists, the set-before-listen contract.
+        // session exists, the set-before-listen contract. The browse handler also re-fans
+        // every standing demand toward a newly noted peer (the D-01 late-join half).
         advertise_card();
         m_disc.browse([this](const discovery::service_info &peer) { note_from_card(peer); });
     }
@@ -194,6 +228,112 @@ public:
     executor_type executor() const noexcept { return m_executor; }
 
 private:
+    // ---- Endpoint infrastructure (the topic->peer translation, D-01) ---------------
+    //
+    // A locally registered subscriber: its fqn, the requested qos, and the callback the
+    // demux fans a delivered frame to. Keyed by a monotonically minted registration id
+    // so two subscribers on one fqn coexist and retire independently (the id is never
+    // reused, so a stale retire never collides with a later registration).
+    struct subscription
+    {
+        std::string        fqn;
+        io::subscriber_qos qos;
+        plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb;
+    };
+
+    // The standing-demand table doubling as the demux map. register_subscriber_seam
+    // fans engine.subscribe to every known peer (now) and the re-fan reaches each peer
+    // discovered/ready later; dispatch_message walks it on the receive path.
+    using registration_id = std::uint64_t;
+
+    // The private observer the node registers on its own engine: a peer-ready edge
+    // re-fans every standing demand toward that peer (idempotent — remember_demand
+    // dedups per (peer, fqn)). The fan-out runs POSTED on the borrowed executor, so this
+    // bookkeeping needs no locking. node_id is recovered from the node_name key the edge
+    // carries; an unparsable name is skipped (it never matched a known peer anyway).
+    struct peer_watch : io::peer_observer
+    {
+        node &owner;
+        explicit peer_watch(node &n) : owner(n) {}
+        void on_peer_ready(const plexus::node_id &id, std::string_view, io::peer_kind) override
+        {
+            owner.note_known_peer(id);
+            owner.fan_demands_to(id);
+        }
+    };
+
+    // Register a standing subscriber: mint its id, store it, and fan its demand to every
+    // currently known peer. Returns the id the retire seam keys on.
+    registration_id register_subscriber_seam(
+        std::string_view fqn, const io::subscriber_qos &qos,
+        plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb)
+    {
+        const registration_id rid = m_next_registration++;
+        m_subscriptions.push_back({rid, subscription{std::string{fqn}, qos, std::move(cb)}});
+        for(const auto &peer : m_known_peers)
+            m_engine.subscribe(peer, fqn, qos);
+        return rid;
+    }
+
+    // Retire a standing subscriber: drop its demux entry and, when it was the LAST local
+    // subscriber for the fqn, unsubscribe the topic from every peer it was fanned to.
+    void retire_subscriber_seam(registration_id rid)
+    {
+        auto it = std::find_if(m_subscriptions.begin(), m_subscriptions.end(),
+                               [&](const auto &e) { return e.first == rid; });
+        if(it == m_subscriptions.end())
+            return;
+        const std::string fqn = it->second.fqn;
+        m_subscriptions.erase(it);
+        if(!any_subscriber_for(fqn))
+            for(const auto &peer : m_known_peers)
+                m_engine.unsubscribe(peer, fqn);
+    }
+
+    // Declare a publisher's topic and mint its gid (API-04). The producer-side
+    // declaration persists for the node's life so the endpoint counter stays stable and
+    // is NEVER reused (IDENT-02) — a dropped publisher stops publishing, but its
+    // declaration is not torn down, so retire is a no-op (no resource to reclaim, and
+    // removing it would risk a gid remint). The handle drives publish directly.
+    void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity)
+    {
+        m_engine.messages().declare(fqn, qos, std::nullopt, emit_source_identity);
+    }
+
+    // Record a peer the node may fan demand toward (browse-noted or ready), dedup'd. The
+    // insertion order is connection/awareness order — it also feeds future caller target
+    // resolution (D-03), so it stays endpoint-family-agnostic.
+    void note_known_peer(const plexus::node_id &id)
+    {
+        if(std::find(m_known_peers.begin(), m_known_peers.end(), id) == m_known_peers.end())
+            m_known_peers.push_back(id);
+    }
+
+    // Re-fan every standing demand toward one peer (idempotent per (peer, fqn)).
+    void fan_demands_to(const plexus::node_id &id)
+    {
+        for(const auto &[rid, sub] : m_subscriptions)
+            m_engine.subscribe(id, sub.fqn, sub.qos);
+    }
+
+    // The demux: fan a delivered frame to every callback registered for its fqn. A
+    // 2-arg subscriber stored its callback behind a 3-arg adapter, so both arities ride
+    // this one path. An fqn with no local subscriber is a silent no-op.
+    void dispatch_message(std::string_view fqn, std::span<const std::byte> bytes,
+                          const io::message_info &info)
+    {
+        for(auto &[rid, sub] : m_subscriptions)
+            if(sub.fqn == fqn)
+                sub.cb(bytes, info);
+    }
+
+    bool any_subscriber_for(std::string_view fqn) const
+    {
+        return std::any_of(m_subscriptions.begin(), m_subscriptions.end(),
+                           [&](const auto &e) { return e.second.fqn == fqn; });
+    }
+    // --------------------------------------------------------------------------------
+
     static io::handshake_fsm_config make_fsm_cfg(const plexus::node_id &id, const node_options &opts)
     {
         return io::handshake_fsm_config{
@@ -258,7 +398,11 @@ private:
         if(host.empty())
             return;
         if(const auto ep = first_port_endpoint(peer.metadata, host))
+        {
             m_engine.note_peer(*peer_id, *ep);
+            note_known_peer(*peer_id);
+            fan_demands_to(*peer_id);
+        }
     }
 
     static std::optional<plexus::node_id>
@@ -333,6 +477,15 @@ private:
     std::string m_host;
     std::vector<discovery::listening_transport> m_listens;
     [[no_unique_address]] detail::node_mux_glue<Transports...> m_glue;
+
+    // The endpoint state is declared BEFORE the engine so the engine — which captures
+    // &m_peer_watch through add_observer and a `this`-bound route — is destroyed FIRST,
+    // leaving no dangling observer/route reference during teardown.
+    peer_watch m_peer_watch{*this};
+    std::vector<plexus::node_id> m_known_peers;
+    std::vector<std::pair<registration_id, subscription>> m_subscriptions;
+    registration_id m_next_registration{1};
+
     engine_type m_engine;
 };
 

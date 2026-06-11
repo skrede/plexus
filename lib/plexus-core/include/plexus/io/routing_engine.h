@@ -234,6 +234,19 @@ public:
                               std::nullopt, session->session_id());
     }
 
+    // The peer-targeted retire of a topic demand, mirroring subscribe's shape: forget
+    // the durable demand and, when a live session carries it, detach through the
+    // counted session path so the forwarder's per-(peer, fqn) gate emits the wire
+    // unsubscribe on its 1->0 transition. A demand never established (no session, or a
+    // session that never completed the attach) forgets the remembered record only.
+    void unsubscribe(const node_id &id, std::string_view fqn)
+    {
+        m_messages.forget_remembered_demand(node_name_of(id), fqn);
+        auto *session = m_registry.session_for(id);
+        if(session != nullptr && session->is_complete())
+            session->unsubscribe(fqn);
+    }
+
     // PUBLISH does NOT dial: it fans through the message_forwarder to whoever is
     // already subscribed and triggers NO reach (the demand is the remote subscribe).
     void publish(std::string_view fqn, std::span<const std::byte> payload)

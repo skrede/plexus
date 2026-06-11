@@ -285,6 +285,12 @@ public:
             ++m_outstanding_subscribes;
     }
 
+    // The counted retire of one topic demand: detach through the forwarder's per-(peer,
+    // fqn) gate, which emits the wire unsubscribe on its 1->0 transition. The mirror of
+    // subscribe — the readiness count is not decremented here (an outstanding subscribe
+    // ack and a retire are independent), and detach forgets the remembered demand.
+    void unsubscribe(std::string_view fqn) { m_messages.detach(m_msg_peer, fqn); }
+
     // Emit a session-level keepalive heartbeat: encode the fixed-width presence
     // payload and frame it as msg_type::heartbeat onto this peer's channel (session_id
     // 0, consistent with every control frame). Driven by the engine on the router tick
