@@ -239,3 +239,20 @@ target_link_libraries(test_qos_rxo PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_qos_rxo TEST_PREFIX "forwarder.")
+
+# The publish_object dual-path oracle: a matching process-tier subscriber receives the
+# object handle with encode never invoked; a bytes-family / tag-mismatch / process-
+# excluded subscriber takes the byte path with at-most-once lazy encode; a latched
+# topic forces exactly one encode even when every live subscriber fast-paths (and a
+# late bytes joiner replays the retained frame); and the caller's slot reference is
+# balanced on every path. Links the core, wire, and inproc layers; selected by the
+# `forwarder.` ctest prefix.
+add_executable(test_publish_object test_publish_object.cpp)
+
+target_link_libraries(test_publish_object PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_publish_object TEST_PREFIX "forwarder.")

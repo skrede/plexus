@@ -199,6 +199,7 @@ private:
         wire_lifecycle(slot);
         wire_stamp_seen(slot);
         wire_message_route(slot);
+        wire_object_route(slot);
         wire_security(slot);
         slot.session->start();
     }
@@ -266,6 +267,16 @@ private:
                                               const message_info &mi) {
             if(m_build.on_message)
                 m_build.on_message(fqn, data, mi);
+        });
+    }
+
+    // Thread the node-shared object-lane route into this slot's session, re-threaded on
+    // every reconnect rebuild like wire_message_route. The forward re-checks the sink.
+    void wire_object_route(slot_block &slot)
+    {
+        slot.session->on_object_route([this](std::string_view fqn, const object_carrier &c) {
+            if(m_build.on_object)
+                m_build.on_object(fqn, c);
         });
     }
 

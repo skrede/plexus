@@ -48,6 +48,10 @@ struct session_build_context
     // drops the info. Absent (unset) until the engine wires it — a session guards on it.
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>,
                                             const message_info &)> on_message;
+    // The node-shared process-tier object-lane route, shaped like on_message: the
+    // engine sets it after construction, the registry threads it into every built
+    // session so a reconnect REBUILD draws it again. Absent until the engine wires it.
+    plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> on_object;
     // The node-shared route from any slot's session up to the engine's observer
     // fan-out: the engine sets this after construction, the registry forwards each
     // session's lifecycle edge through it. Absent (unset) on a context built before

@@ -7,6 +7,7 @@
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/object_carrier.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/priority.h"
 #include "plexus/io/locality.h"
@@ -346,6 +347,84 @@ public:
         retain_if_latched(hash);
     }
 
+    // publish_object: the zero-serialization SIBLING of publish (never the hot
+    // publish signature). It fans a refcounted object handle to each subscriber
+    // behind the SAME confinement gate, then falls back to the byte path for any
+    // subscriber the fast path cannot serve. encode is invoked AT MOST ONCE per
+    // publish, lazily, the first time any byte need appears (a bytes-family
+    // subscriber, a tag mismatch, a non-process tier, an object-laneless channel, or
+    // a latched topic). The carrier's sequence is stamped from the SAME per-topic
+    // counter publish uses so mixed-path sequences stay coherent.
+    //
+    // Reference protocol: the CALLER owns one reference on entry; each fast-path
+    // send_object addrefs through the bus, and this verb releases the caller's
+    // reference once after the fan loop and latch retention — so the slot is balanced
+    // whether it fast-pathed to many subscribers, fell back to bytes, or reached none.
+    template <typename EncodeFn>
+    void publish_object(std::string_view fqn, object_carrier carrier, EncodeFn &&encode,
+                        std::uint64_t session_id = 0)
+    {
+        auto hash = wire::fqn_topic_hash(fqn);
+        const auto *subs = m_registry.subscribers_for(hash);
+        const topic_qos qos = m_registry.qos_for(hash);
+        const bool latched = qos.latch;
+        const locality reach = qos.reach;
+
+        carrier.topic_hash = hash;
+        carrier.sequence = m_next_sequence++;
+        if(carrier.source_timestamp == 0)
+            carrier.source_timestamp = wire::now_timestamp_ns();
+
+        bool encoded = false;
+        const auto ensure_encoded_once = [&] {
+            if(encoded)
+                return;
+            encoded = true;
+            std::span<const std::byte> bytes = std::forward<EncodeFn>(encode)();
+            wire::unidirectional_header uhdr{
+                    .source     = wire::endpoint_source_type::publisher,
+                    .sequence   = carrier.sequence,
+                    .topic_hash = hash
+            };
+            const auto counter = m_registry.source_identity_counter(hash);
+            wire::encode_unidirectional_into(m_inner_scratch, uhdr, bytes, counter);
+            wire::frame_header fhdr{
+                    .type         = wire::msg_type::unidirectional,
+                    .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
+                    .session_id   = session_id,
+                    .timestamp_ns = carrier.source_timestamp,
+                    .payload_len  = m_inner_scratch.size()
+            };
+            wire::encode_frame_into(m_frame_scratch, fhdr, m_inner_scratch);
+        };
+
+        const std::size_t band = detail::band_of(qos.priority);
+        if(subs != nullptr)
+            for(const auto &sub : *subs)
+            {
+                if(!any_set(reach, sub.tier))
+                    continue;
+                if(eligible_for_object(sub, carrier))
+                    sub.channel->send_object(carrier);
+                else
+                {
+                    ensure_encoded_once();
+                    m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
+                }
+            }
+
+        // A latched topic's history ring is the byte path's memory: force exactly one
+        // encode even when every live subscriber fast-pathed, so a late bytes joiner
+        // replays a real frame (retain_if_latched retains the just-framed bytes).
+        if(latched)
+        {
+            ensure_encoded_once();
+            retain_if_latched(hash);
+        }
+
+        release(carrier);
+    }
+
     // detach: per-(peer, fqn) refcount gate. On the 1->0 transition it removes
     // the fan-out entry AND emits a wire::unsubscribe_request; returns true.
     bool detach(const peer &p, std::string_view fqn)
@@ -492,6 +571,15 @@ public:
         replay_window(p, it->second, limit);
     }
 
+    // Resolve a topic_hash back to its fqn — the object-lane receive tail's analog of
+    // the byte tail's internal fqn_for (the bytes path resolves inside deliver). The
+    // subscriber side recorded the hash->fqn mapping at demand time. Empty when the
+    // hash names no attached topic.
+    std::string_view fqn_for(std::uint64_t topic_hash) const
+    {
+        return m_registry.fqn_for(topic_hash);
+    }
+
 private:
     // Wrap an inner control payload in a frame_header (Seed 3 — every control
     // frame carries the same framing as data so it survives a real reassembler-
@@ -571,6 +659,21 @@ private:
         const std::size_t count = ring.count();
         for(std::size_t i = count - limit; i < count; ++i)
             p.channel.send(ring.oldest_to_newest(i));
+    }
+
+    // eligible_for_object: a subscriber takes the zero-serialization fast path only on
+    // a same-process tier, over a channel that actually exposes the object lane
+    // (if-constexpr capability on the concrete channel type — never a byte_channel
+    // concept verb, mirroring the egress can_poll precedent), AND with a stored
+    // type_id matching the carrier's wire tag. A remote/local channel structurally
+    // lacks send_object, so the constexpr branch makes it ineligible at compile time.
+    static bool eligible_for_object(const typename subscriber_registry<channel_type>::subscriber &sub,
+                                    const object_carrier &carrier)
+    {
+        if constexpr(requires(channel_type &c) { c.send_object(carrier); })
+            return sub.tier == locality::process && sub.type_id && *sub.type_id == carrier.type_tag;
+        else
+            return false;
     }
 
     // type_id_mismatch: a refusal is warranted only when BOTH the producer and the

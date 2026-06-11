@@ -98,6 +98,11 @@ public:
                 m_on_drop();
         });
         m_channel.on_protocol_close([this](wire::close_cause cause) { on_channel_protocol_close(cause); });
+        // The process-tier object lane, wired set-before-listen like on_data but only
+        // compiled when the concrete channel exposes it (the inproc lane). A remote
+        // channel structurally lacks on_object, so this branch vanishes for it.
+        if constexpr(requires(channel_type &c) { c.on_object([](const object_carrier &) {}); })
+            m_channel.on_object([this](const object_carrier &c) { on_receive_object(c); });
         register_consumers();
         arm_handshake_timer();
         if(!m_is_inbound_bootstrap)
@@ -127,6 +132,18 @@ public:
                           void(std::string_view, std::span<const std::byte>, const message_info &)> cb)
     {
         m_on_message_route = std::move(cb);
+    }
+
+    // The node-shared object-lane route, mirroring on_message_route: a process-tier
+    // object handle arriving on this session's channel is resolved to its fqn and
+    // handed up through this. Threaded in by the registry from the build context so a
+    // reconnect slot REBUILD carries it. Absent = the object is dropped (and released).
+    // The route is a READ-ONLY delivery — the carrier is valid for the callback
+    // duration only; on_receive_object owns the single release on every path.
+    void on_object_route(plexus::detail::move_only_function<
+                         void(std::string_view, const object_carrier &)> cb)
+    {
+        m_on_object_route = std::move(cb);
     }
 
     // The transport-drop seam, mirroring on_message: a plain settable callback
@@ -431,6 +448,25 @@ private:
         }
         m_messages.deliver(m_msg_peer, inner, m_ctx.peer_id, has_source_identity,
                            [](std::string_view, std::span<const std::byte>) {});
+    }
+
+    // The object-lane receive tail: resolve the carrier's topic_hash to its fqn (the
+    // subscriber side recorded it at demand time), hand it up the route, then RELEASE
+    // the reference the channel delivered. An unresolvable hash is warn-and-dropped
+    // through the logger and still released — never delivered, never leaked. No
+    // session_id staleness gate: this lane never crosses a reconnect boundary (a
+    // torn-down channel drops and releases its queued packets).
+    void on_receive_object(const object_carrier &c)
+    {
+        auto fqn = m_messages.fqn_for(c.topic_hash);
+        if(fqn.empty())
+        {
+            m_logger.warn("plexus: peer_session object_topic_unknown");
+            return release(c);
+        }
+        if(m_on_object_route)
+            m_on_object_route(fqn, c);
+        release(c);
     }
 
     message_info assemble_message_info(const wire::frame_header &hdr)
@@ -738,8 +774,11 @@ private:
     // subscribe and a reconnect's still-demanded set.
     void resubscribe_all()
     {
+        // Carry the remembered type_id through the resurrection so a typed subscriber
+        // surviving a reconnect re-subscribes with the SAME type gate (a bare
+        // subscribe would silently re-attach untyped, dropping the typed fast path).
         for(const auto &demand : m_messages.remembered_topics(m_ctx.node_name))
-            subscribe(demand.fqn, demand.qos);
+            subscribe(demand.fqn, demand.qos, demand.type_id);
     }
 
     void mint_session_id() noexcept { m_session_id = m_ctx.epochs.next(); }
@@ -944,6 +983,7 @@ private:
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message;
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_with_info;
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_route;
+    plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> m_on_object_route;
     plexus::detail::move_only_function<void()> m_on_drop;
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
     plexus::detail::move_only_function<void(const node_id &)> m_on_stamp_seen;

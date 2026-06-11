@@ -81,7 +81,7 @@ public:
         , m_messages(m_executor)
         , m_procedures(executor, handshake_timeout, logger)
         , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures,
-                  redial, redial_seed, logger, {}, {}, {}, {}, {}, {}}
+                  redial, redial_seed, logger, {}, {}, {}, {}, {}, {}, {}}
         , m_registry(transport, m_build)
         , m_dial_eagerly(dial_eagerly)
     {
@@ -135,6 +135,16 @@ public:
                                const message_info &)> route)
     {
         m_build.on_message = std::move(route);
+    }
+
+    // The node-shared object-lane route, mirroring on_message_route exactly: stored
+    // into the build context so EVERY subsequently built session (and every reconnect
+    // rebuild) delivers a process-tier object handle through it. Set ONCE before
+    // listen/dial.
+    void on_object_route(plexus::detail::move_only_function<
+                         void(std::string_view, const object_carrier &)> route)
+    {
+        m_build.on_object = std::move(route);
     }
 
     void listen(const endpoint &ep) { m_transport.listen(ep); }
