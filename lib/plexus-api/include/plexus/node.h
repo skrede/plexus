@@ -109,19 +109,28 @@ inline node_id hash_node_id(std::string_view name) noexcept
 
 }
 
-template <typename Policy>
+// The public name-hash helper: derive a node_id from a name deterministically, so the
+// SAME name yields the SAME identity. An intentional OPT-IN property, never the default
+// (the verbatim node_id is the primary identity path) — equal to the id() of a node
+// constructed with the same name string.
+inline node_id node_id_from_name(std::string_view name) noexcept
+{
+    return detail::hash_node_id(name);
+}
+
+template <typename Policy, typename Codec = void>
     requires plexus::Policy<Policy>
 class publisher;
 
-template <typename Policy>
+template <typename Policy, typename Codec = void>
     requires plexus::Policy<Policy>
 class subscriber;
 
-template <typename Policy>
+template <typename Policy, typename Sig = void, typename CReq = void, typename CRes = void>
     requires plexus::Policy<Policy>
 class caller;
 
-template <typename Policy>
+template <typename Policy, typename Sig = void, typename CReq = void, typename CRes = void>
     requires plexus::Policy<Policy>
 class procedure;
 
@@ -152,10 +161,12 @@ class node
     // The four endpoint handles are the ONLY construction path for an endpoint: the
     // registration/retire seams below are PRIVATE, reachable solely through these
     // friends, so there is no public node.publish / node.subscribe / declare_* factory.
-    template <typename P> requires plexus::Policy<P> friend class publisher;
-    template <typename P> requires plexus::Policy<P> friend class subscriber;
-    template <typename P> requires plexus::Policy<P> friend class caller;
-    template <typename P> requires plexus::Policy<P> friend class procedure;
+    template <typename P, typename C> requires plexus::Policy<P> friend class publisher;
+    template <typename P, typename C> requires plexus::Policy<P> friend class subscriber;
+    template <typename P, typename S, typename Cq, typename Cs>
+        requires plexus::Policy<P> friend class caller;
+    template <typename P, typename S, typename Cq, typename Cs>
+        requires plexus::Policy<P> friend class procedure;
 
 public:
     using executor_type = typename Policy::executor_type;

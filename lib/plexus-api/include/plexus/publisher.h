@@ -18,12 +18,18 @@
 
 namespace plexus {
 
-// A move-only RAII publishing endpoint: the CONSTRUCTOR is the registration — it
-// declares the topic on the node and mints the endpoint gid — and the handle owns the
-// publish verb. Templated on Policy ALONE (both forwarders are Policy-only), so one
-// publisher type serves a node over any transport pack. publish is a DIRECT
-// (non-virtual) forwarder call — the hot path carries no type erasure; only the cold
-// retire is erased.
+// The publishing endpoint family. The primary template names the typed endpoint
+// (publisher<Policy, Codec>, defined in a later plan); the bytes endpoint is the
+// publisher<Policy, void> specialization below — publisher<Policy> selects it via the
+// defaulted Codec, so every existing bytes spelling keeps compiling unchanged.
+template <typename Policy, typename Codec>
+    requires plexus::Policy<Policy>
+class publisher;
+
+// The bytes publishing endpoint: the CONSTRUCTOR is the registration — it declares the
+// topic on the node and mints the endpoint gid — and the handle owns the publish verb.
+// publish is a DIRECT (non-virtual) forwarder call — the hot path carries no type
+// erasure; only the cold retire is erased.
 //
 // LIFETIME: a publisher must NOT outlive its node. The canonical usage is
 // member-init aggregation — declare the node ref first and the endpoint handles after
@@ -31,7 +37,7 @@ namespace plexus {
 // is inert (null forwarder, empty retire); its destructor does nothing.
 template <typename Policy>
     requires plexus::Policy<Policy>
-class publisher
+class publisher<Policy, void>
 {
 public:
     // The registration ctor: declare the topic (minting its gid) through the node's

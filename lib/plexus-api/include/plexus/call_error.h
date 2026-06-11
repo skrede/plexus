@@ -27,6 +27,7 @@ enum class call_errc : std::uint8_t
 };
 
 const std::error_category &call_category() noexcept;
+const std::error_category &provider_category() noexcept;
 
 inline std::error_code make_error_code(call_errc e) noexcept
 {
@@ -78,6 +79,21 @@ public:
     }
 };
 
+// Carries a typed provider handler's error VALUE across the wire under a generic
+// category: an error_category's identity is its object address, which cannot cross a
+// process, so the originating category is erased in transit and only the integer value
+// is preserved. A consumer reconstructs intent from the value against its own contract.
+class provider_error_category final : public std::error_category
+{
+public:
+    [[nodiscard]] const char *name() const noexcept override { return "plexus.provider"; }
+
+    [[nodiscard]] std::string message(int value) const override
+    {
+        return "provider error " + std::to_string(value);
+    }
+};
+
 }
 
 // A function-local static error_category: the std::error_category identity contract
@@ -86,6 +102,12 @@ public:
 inline const std::error_category &call_category() noexcept
 {
     static detail::call_error_category category;
+    return category;
+}
+
+inline const std::error_category &provider_category() noexcept
+{
+    static detail::provider_error_category category;
     return category;
 }
 

@@ -92,6 +92,24 @@ target_link_libraries(test_caller_errc PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_caller_errc TEST_PREFIX "node.")
 
+# The typed request/response family: a typed caller/procedure round-trip through real
+# encode/decode, the provider-errc value carriage under provider_category, the
+# request/reply decode-failure legs, and the bytes-procedure interop fallback.
+add_executable(test_typed_reqres test_typed_reqres.cpp)
+target_link_libraries(test_typed_reqres PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_typed_reqres TEST_PREFIX "node.")
+
+# The injected-codec concept vocabulary: typed_codec / identity_bearing trait proofs and
+# the resolve_identity precedence (explicit argument wins, else the codec's type_info).
+add_executable(test_typed_codec_concepts test_typed_codec_concepts.cpp)
+target_link_libraries(test_typed_codec_concepts PRIVATE
+    plexus::plexus
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_typed_codec_concepts TEST_PREFIX "node.")
+
 # The late-joiner gate: a peer that joins after the demand is in place exchanges data with
 # no user action on join timing, looped over both join orders, every iteration asserted.
 add_executable(test_late_join test_late_join.cpp)
