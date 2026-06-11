@@ -128,3 +128,21 @@ target_link_libraries(test_borrowed_executor_bridge PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_borrowed_executor_bridge TEST_PREFIX "node.")
+
+# The fixed-slot loan pool backing the typed publisher: borrow/publish lifecycle,
+# alloc-free slot reuse, and graceful counted exhaustion.
+add_executable(test_loan_pool test_loan_pool.cpp)
+target_link_libraries(test_loan_pool PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_loan_pool TEST_PREFIX "node.")
+
+# The typed pub/sub family end to end: the zero-serialization fast path (address witness,
+# zero encodes), the byte fallback, the decode-failure knobs, and the strict posture.
+add_executable(test_typed_pubsub test_typed_pubsub.cpp)
+target_link_libraries(test_typed_pubsub PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_typed_pubsub TEST_PREFIX "node.")

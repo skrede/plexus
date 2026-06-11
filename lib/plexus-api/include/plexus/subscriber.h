@@ -4,27 +4,47 @@
 #include "plexus/node.h"
 
 #include "plexus/io/message_info.h"
+#include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
 
+#include "plexus/typed_codec.h"
 #include "plexus/policy.h"
 
 #include "plexus/detail/compat.h"
 
 #include <span>
+#include <memory>
 #include <cstddef>
 #include <utility>
+#include <optional>
+#include <functional>
 #include <type_traits>
 #include <string_view>
+#include <system_error>
 
 namespace plexus {
 
 // The subscribing endpoint family. The primary template names the typed endpoint
-// (subscriber<Policy, Codec>, defined in a later plan); the bytes endpoint is the
-// subscriber<Policy, void> specialization below — subscriber<Policy> selects it via the
-// defaulted Codec, so every existing bytes spelling keeps compiling unchanged.
+// (subscriber<Policy, Codec> below); the bytes endpoint is the subscriber<Policy, void>
+// specialization — subscriber<Policy> selects it via the defaulted Codec, so every
+// existing bytes spelling keeps compiling unchanged.
 template <typename Policy, typename Codec>
     requires plexus::Policy<Policy>
 class subscriber;
+
+// The typed subscriber's construction-time options. posture is the typed attach gate
+// (lenient default attaches to an untyped producer; strict refuses it). on_decode_failure
+// is the opt-in escape callback receiving the raw bytes + errc instead of a dropped frame
+// — std::optional because absence is meaningful (the default is drop+count+warn alone).
+// An explicit type identity overrides the codec's own.
+struct typed_subscriber_options
+{
+    io::subscriber_qos                                                            qos{};
+    io::attach_posture                                                            posture =
+        io::attach_posture::lenient;
+    std::optional<type_identity>                                                  type_id{};
+    std::optional<std::function<void(std::span<const std::byte>, std::error_code)>> on_decode_failure{};
+};
 
 // The bytes subscribing endpoint: the CONSTRUCTOR is the registration — it installs a
 // STANDING topic-level demand on the node, which fans the per-peer subscribe to every
@@ -87,6 +107,142 @@ private:
             { cb(bytes); };
     }
 
+    plexus::detail::move_only_function<void()> m_retire;
+};
+
+// The typed subscribing endpoint: the CONSTRUCTOR installs a standing typed demand. It
+// registers BOTH a bytes decode adapter (decode → typed callback; a decode failure is
+// dropped+counted+warned, with the opt-in escape callback handed the raw bytes + errc)
+// AND a process-tier object-dispatch entry (native-key-checked, recovering the concrete T
+// from the carrier and invoking the SAME normalized callback) under ONE registration id,
+// so retire is atomic. The callback accepts EITHER `void(const T&)` or
+// `void(const T&, const message_info&)`, the arity resolved ONCE at registration.
+//
+// VIEW-T LIFETIME: a view-type value_type (one aliasing the decode span / the carrier
+// slot rather than copying) is valid for the callback invocation ONLY; deferred
+// consumption must copy the value out before the callback returns.
+//
+// LIFETIME: a subscriber must NOT outlive its node (member-init aggregation, node ref
+// first). The decode state lives in a heap block the handle owns; the node's stored
+// adapters reference it by raw pointer and are retired (removing both entries) before the
+// block is freed. A moved-from handle is inert; its destructor does nothing.
+template <typename Policy, typename Codec>
+    requires plexus::Policy<Policy>
+class subscriber
+{
+public:
+    using value_type = typename Codec::value_type;
+    using typed_callback =
+        plexus::detail::move_only_function<void(const value_type &, const io::message_info &)>;
+
+    template <typename... NodeTs, typename Cb>
+    subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, Cb cb)
+        : subscriber(n, fqn, typed_subscriber_options{}, std::move(cb), Codec{})
+    {
+    }
+
+    template <typename... NodeTs, typename Cb>
+    subscriber(node<Policy, NodeTs...> &n, std::string_view fqn,
+               const typed_subscriber_options &opts, Cb cb, Codec codec = {})
+        : m_state(std::make_unique<state>(std::move(codec), adapt(std::move(cb)),
+                                          opts.on_decode_failure))
+    {
+        static_assert(typed_codec<Codec>,
+                      "plexus: a typed subscriber needs a codec satisfying typed_codec "
+                      "(value_type; encode(const value_type&) -> wire_bytes<>; "
+                      "decode(span, value_type&) -> expected<void, error_code>).");
+
+        const auto identity = resolve_identity(m_state->codec, opts.type_id);
+        io::subscriber_qos qos = opts.qos;
+        qos.posture = opts.posture;
+
+        state *st = m_state.get();
+        auto bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info)
+        { st->on_bytes(bytes, info); };
+
+        typename node<Policy, NodeTs...>::object_entry obj{};
+        obj.native_key = &io::detail::type_key<value_type>;
+        obj.dispatch = [st](const io::object_carrier &carrier, const io::message_info &info)
+        { st->on_object(carrier, info); };
+
+        const auto rid = n.register_subscriber_seam(fqn, qos, std::move(bytes_adapter),
+                                                    identity.type_id, std::move(obj));
+        m_retire = [&n, rid] { n.retire_subscriber_seam(rid); };
+    }
+
+    // The count of inbound frames whose decode failed — dropped, never a partial T. Read
+    // through the live handle.
+    [[nodiscard]] std::size_t decode_failed() const noexcept { return m_state->decode_failed; }
+
+    subscriber(subscriber &&) noexcept = default;
+    subscriber &operator=(subscriber &&) noexcept = default;
+
+    subscriber(const subscriber &) = delete;
+    subscriber &operator=(const subscriber &) = delete;
+
+    ~subscriber()
+    {
+        if(m_retire != nullptr)
+            m_retire();
+    }
+
+private:
+    // Normalize the user callback to the 2-arg typed shape, the arity resolved ONCE here.
+    template <typename Cb>
+    static typed_callback adapt(Cb cb)
+    {
+        if constexpr(std::is_invocable_v<Cb &, const value_type &, const io::message_info &>)
+            return [cb = std::move(cb)](const value_type &v, const io::message_info &info) mutable
+            { cb(v, info); };
+        else
+            return [cb = std::move(cb)](const value_type &v, const io::message_info &) mutable
+            { cb(v); };
+    }
+
+    // The heap-stable decode state the node's adapters reference by raw pointer. It owns
+    // the codec, the normalized callback, the reused decode slot, the failure counter, and
+    // the opt-in escape callback — all cold-path setup, no per-message allocation.
+    struct state
+    {
+        Codec          codec;
+        typed_callback callback;
+        std::optional<std::function<void(std::span<const std::byte>, std::error_code)>> on_failure;
+        value_type     slot{};
+        std::size_t    decode_failed{};
+
+        state(Codec c, typed_callback cb,
+              std::optional<std::function<void(std::span<const std::byte>, std::error_code)>> fail)
+            : codec(std::move(c))
+            , callback(std::move(cb))
+            , on_failure(std::move(fail))
+        {
+        }
+
+        // The bytes path: decode into the reused slot. Success invokes the typed callback
+        // for its duration; failure increments the counter, hands the escape callback the
+        // raw bytes + errc if set, and drops — NEVER a partial T, never a teardown.
+        void on_bytes(std::span<const std::byte> bytes, const io::message_info &info)
+        {
+            auto decoded = codec.decode(bytes, slot);
+            if(decoded.has_value())
+            {
+                callback(slot, info);
+                return;
+            }
+            ++decode_failed;
+            if(on_failure)
+                (*on_failure)(bytes, decoded.error());
+        }
+
+        // The object path: recover the concrete T from the carrier's slot (the demux has
+        // already native-key-matched) and invoke the SAME callback for its duration.
+        void on_object(const io::object_carrier &carrier, const io::message_info &info)
+        {
+            callback(*static_cast<const value_type *>(carrier.slot->object), info);
+        }
+    };
+
+    std::unique_ptr<state>                     m_state;
     plexus::detail::move_only_function<void()> m_retire;
 };
 

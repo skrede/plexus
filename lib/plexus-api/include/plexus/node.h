@@ -7,12 +7,15 @@
 #include "plexus/io/node_name.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/peer_observer.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/multiplexing_transport.h"
+
+#include "plexus/log/logger.h"
 
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/contact_card.h"
@@ -182,6 +185,7 @@ public:
         : m_id(id)
         , m_executor(executor)
         , m_disc(disc)
+        , m_logger(resolve_logger(opts))
         , m_service_name(opts.name.empty() ? io::node_name_of(id) : opts.name)
         , m_glue(make_glue(transports...))
         , m_engine(engine_leaf(transports...), executor, make_fsm_cfg(id, opts),
@@ -194,6 +198,12 @@ public:
         m_engine.on_message_route(
             [this](std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info)
             { dispatch_message(fqn, bytes, info); });
+        // The object-lane demux beside the byte route: a process-tier object handle fans
+        // to every typed subscriber on its fqn, native-key-checked (never a cast on a
+        // mismatch). The route is a READ-ONLY sub-callback — the session owns the release.
+        m_engine.on_object_route(
+            [this](std::string_view fqn, const io::object_carrier &carrier)
+            { dispatch_object(fqn, carrier); });
         // Observe peer-ready edges so a standing demand re-fans to a peer that becomes
         // ready AFTER the demand was registered (the late-join half on the sub side).
         m_engine.add_observer(m_peer_watch);
@@ -248,6 +258,14 @@ public:
     auto &message_forwarder() noexcept { return m_engine.messages(); }
     executor_type executor() const noexcept { return m_executor; }
 
+    // The count of object-lane deliveries dropped at the demux because the carrier's
+    // process-local type witness did not match a tag-equal subscriber's — the never-UB
+    // backstop's readable signal (never a cast, never silent).
+    [[nodiscard]] std::size_t object_dispatch_mismatch() const noexcept
+    {
+        return m_object_dispatch_mismatch;
+    }
+
 private:
     // ---- Endpoint infrastructure (the topic->peer translation) ----------------------
     //
@@ -255,6 +273,17 @@ private:
     // demux fans a delivered frame to. Keyed by a monotonically minted registration id
     // so two subscribers on one fqn coexist and retire independently (the id is never
     // reused, so a stale retire never collides with a later registration).
+    // The object-lane dispatch entry a typed subscriber registers ALONGSIDE its bytes
+    // adapter (under the one registration id). native_key is the process-local C++ type
+    // witness (the address of a per-T inline constant); dispatch recovers the concrete T
+    // from the carrier's slot and invokes the typed callback. A NULL native_key marks a
+    // bytes-only subscription with no object entry.
+    struct object_entry
+    {
+        const void *native_key{};
+        plexus::detail::move_only_function<void(const io::object_carrier &, const io::message_info &)> dispatch;
+    };
+
     struct subscription
     {
         std::string        fqn;
@@ -263,6 +292,7 @@ private:
         // late-discovered peer gets the typed demand fanned with the gate intact.
         std::optional<std::uint64_t> type_id;
         plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb;
+        object_entry obj{};
     };
 
     // The standing-demand table doubling as the demux map. register_subscriber_seam
@@ -291,10 +321,12 @@ private:
     registration_id register_subscriber_seam(
         std::string_view fqn, const io::subscriber_qos &qos,
         plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb,
-        std::optional<std::uint64_t> type_id = std::nullopt)
+        std::optional<std::uint64_t> type_id = std::nullopt,
+        object_entry obj = {})
     {
         const registration_id rid = m_next_registration++;
-        m_subscriptions.push_back({rid, subscription{std::string{fqn}, qos, type_id, std::move(cb)}});
+        m_subscriptions.push_back(
+            {rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
         for(const auto &peer : m_known_peers)
             m_engine.subscribe(peer, fqn, qos, io::locality::any,
                                io::reliability_requirement::any, type_id);
@@ -410,6 +442,39 @@ private:
         for(auto &[rid, sub] : m_subscriptions)
             if(sub.fqn == fqn)
                 sub.cb(bytes, info);
+    }
+
+    // The object-lane demux: fan a process-tier object handle to every typed subscriber
+    // on its fqn. A native_key MATCH dispatches the concrete T to the typed callback for
+    // the callback's duration ONLY (the carrier's slot is released by the session right
+    // after this route returns). A native_key MISMATCH (a tag-equal carrier of a
+    // different C++ type) is a COUNTED, warn-and-dropped event — NEVER a cast, the
+    // never-UB backstop. A subscription with no object entry (bytes-only) is skipped: the
+    // byte fallback reaches it through dispatch_message instead.
+    void dispatch_object(std::string_view fqn, const io::object_carrier &carrier)
+    {
+        // Honest population: the carrier carries the publisher's sequence and source
+        // timestamp; reception is stamped here, from_intra_process is true (the lane is
+        // process-tier only), and source_identity is absent (the object lane carries no
+        // gid — documented).
+        io::message_info info{};
+        info.publication_sequence = carrier.sequence;
+        info.source_timestamp     = carrier.source_timestamp;
+        info.reception_timestamp  = wire::now_timestamp_ns();
+        info.from_intra_process   = true;
+
+        for(auto &[rid, sub] : m_subscriptions)
+        {
+            if(sub.fqn != fqn || sub.obj.native_key == nullptr)
+                continue;
+            if(sub.obj.native_key != carrier.native_key)
+            {
+                ++m_object_dispatch_mismatch;
+                m_logger.warn("plexus: node object_native_key_mismatch");
+                continue;
+            }
+            sub.obj.dispatch(carrier, info);
+        }
     }
 
     bool any_subscriber_for(std::string_view fqn) const
@@ -558,6 +623,7 @@ private:
     plexus::node_id m_id;
     executor_type m_executor;
     discovery::discovery &m_disc;
+    log::logger &m_logger;
     std::string m_service_name;
     std::string m_host;
     std::vector<discovery::listening_transport> m_listens;
@@ -571,6 +637,7 @@ private:
     std::vector<std::pair<registration_id, subscription>> m_subscriptions;
     std::vector<std::string> m_served_fqns;
     registration_id m_next_registration{1};
+    std::size_t m_object_dispatch_mismatch{};
 
     engine_type m_engine;
 };
