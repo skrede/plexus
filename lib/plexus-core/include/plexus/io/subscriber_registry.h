@@ -232,6 +232,16 @@ public:
         return &it->second.subscribers;
     }
 
+    // The whole per-topic record in ONE lookup, for the hot publish verbs: reading
+    // subscribers/qos/source-identity through the per-field accessors above cost
+    // three to four hash finds per publish on the same key. nullptr when the hash
+    // names no declared or attached topic.
+    const topic_entry *entry_for(std::uint64_t topic_hash) const
+    {
+        auto it = m_topics.find(topic_hash);
+        return it == m_topics.end() ? nullptr : &it->second;
+    }
+
     // Resolve a wire topic_hash back to its fqn (the receive tail). Empty when
     // the hash names no attached topic.
     std::string_view fqn_for(std::uint64_t topic_hash) const
