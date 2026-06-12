@@ -79,6 +79,7 @@ catch_discover_tests(test_bytes_pubsub TEST_PREFIX "node.")
 # double-serve refusal and retire-to-no_handler cases, and the no-provider errc proof
 # (posted, never inline; never hangs).
 add_executable(test_call_family test_call_family.cpp)
+target_compile_definitions(test_call_family PRIVATE PLEXUS_HAS_FAMILY_SPELLING)
 target_link_libraries(test_call_family PRIVATE
     plexus::plexus
     plexus::inproc
@@ -96,6 +97,7 @@ catch_discover_tests(test_caller_errc TEST_PREFIX "node.")
 # encode/decode, the provider-errc value carriage under provider_category, the
 # request/reply decode-failure legs, and the bytes-procedure interop fallback.
 add_executable(test_typed_reqres test_typed_reqres.cpp)
+target_compile_definitions(test_typed_reqres PRIVATE PLEXUS_HAS_FAMILY_SPELLING)
 target_link_libraries(test_typed_reqres PRIVATE
     plexus::plexus
     plexus::inproc

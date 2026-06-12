@@ -15,6 +15,7 @@
 #include "plexus/publisher_gid.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/function_traits.h"
 
 #include <span>
 #include <chrono>
@@ -270,6 +271,19 @@ private:
     CRes        m_res_codec;
     std::string m_fqn;
 };
+
+// The codec-family spelling: one class-template Family expands to the per-half codecs
+// Family<Req> / Family<Res> over a Res(Req) signature, collapsing the verbose four-argument
+// form to rpc<div_response(div_request), pair_codec>. An alias rather than a class because a
+// single class-template name cannot carry both a template-template Family in position two AND
+// the per-half typename CReq/CRes escape — the kinds differ and a partial specialization
+// cannot change a parameter's kind. The per-half class caller<Sig, CReq, CRes> remains the
+// general form and the asymmetric-serializer escape; Family<half> must satisfy typed_codec
+// (the typed specialization's requires-clause enforces it). Family is NON-defaulted (the user
+// always spells it; this also sidesteps the MSVC template-template defaulting hazard).
+template <typename Sig, template <typename> class Family>
+using rpc_caller =
+    caller<Sig, Family<detail::request_of_t<Sig>>, Family<detail::response_of_t<Sig>>>;
 
 }
 
