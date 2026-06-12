@@ -187,3 +187,35 @@ TEST_CASE("unix stream channel: a header with a withheld payload fires on_protoc
     }
     REQUIRE(proven == k_iterations);
 }
+
+TEST_CASE("stream_channel_unix bound: the bounded write queue holds at the cap like asio_channel",
+          "[integration][unix][bound]")
+{
+    // unix_channel composes the shared bounded stream_send_queue so its outbox is
+    // byte-capped exactly as asio_channel's — proven over a real (connected) local socket
+    // whose PEER NEVER READS, so the kernel send buffer fills and async_write stalls; the
+    // userspace outbox then accumulates and the byte cap engages. Until unix_channel adopts
+    // the bounded block its hand-rolled deque grows past the cap under this saturation (RED);
+    // once bounded it holds at the shallow cap (GREEN). The bounded surface flips this leg
+    // to the congestion-knob ctor and adds the drop_newest/block verdict-identity assertions.
+    constexpr std::size_t cap = 4096;
+    temp_sock sock;
+    ::asio::io_context io;
+    ::asio::local::stream_protocol::acceptor acc{
+        io, ::asio::local::stream_protocol::endpoint(sock.path)};
+    ::asio::local::stream_protocol::socket peer{io};
+    ::asio::local::stream_protocol::socket client{io};
+    client.connect(::asio::local::stream_protocol::endpoint(sock.path));
+    acc.accept(peer);                                   // peer adopts but NEVER reads
+
+    pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{}};
+
+    std::vector<std::byte> kib(1024, std::byte{0x5A});
+    for(int i = 0; i < 4096; ++i)
+    {
+        ch.send(kib);
+        io.poll();
+        REQUIRE(ch.backpressured() <= cap);             // NEVER grows past the cap
+    }
+    REQUIRE(ch.backpressured() <= cap);
+}
