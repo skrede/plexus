@@ -27,6 +27,7 @@
 #include "plexus/policy.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/function_traits.h"
 
 #include <span>
 #include <tuple>
@@ -121,6 +122,8 @@ inline node_id node_id_from_name(std::string_view name) noexcept
 {
     return detail::hash_node_id(name);
 }
+
+struct typed_publisher_options;
 
 template <typename Codec = void>
 class publisher;
@@ -268,6 +271,63 @@ public:
     {
         return m_object_dispatch_mismatch;
     }
+
+    // ---- Member factories (partial-explicit deduction) ------------------------------
+    //
+    // The codec FAMILY is spelled explicitly (Family is NON-defaulted, sidestepping the
+    // MSVC template-template defaulting hazard); the signature/value type is DEDUCED from
+    // the concrete callable via detail's function-traits. A function template delivers what
+    // CTAD cannot — partial-explicit template arguments with the rest deduced — so the
+    // default RPC/sub experience is `node.serve<pair_codec>("div", handler)`.
+    //
+    // A generic lambda or an overloaded-operator() handler has no single deducible
+    // signature; the deducible_handler static_assert rejects it with "spell Sig explicitly"
+    // and the caller names the signature on the endpoint instead.
+
+    // Serve a typed procedure: Sig = Res(Req) is deduced from a
+    // (const Req&) -> expected<Res, error_code> handler; the family expands to
+    // Family<Req> / Family<Res>.
+    template <template <typename> class Family, typename Handler>
+    auto serve(std::string_view fqn, Handler handler)
+    {
+        static_assert(detail::deducible_handler<Handler>,
+                      "plexus: spell Sig explicitly — a generic lambda or overloaded call "
+                      "operator has no single deducible signature; name the signature on the "
+                      "endpoint");
+        using Sig = detail::handler_signature_t<Handler>;
+        return procedure<Sig, Family>{*this, fqn, std::move(handler)};
+    }
+
+    // A typed calling endpoint. A caller has no handler to deduce from, so the signature
+    // is spelled explicitly alongside the family: node.caller<Res(Req), pair_codec>("div").
+    template <typename Sig, template <typename> class Family>
+    auto caller(std::string_view fqn)
+    {
+        return plexus::caller<Sig, Family>{*this, fqn};
+    }
+
+    // Subscribe a typed topic: the value type T is deduced from a (const T&) or
+    // (const T&, message_info) callback; the family expands to Family<T>.
+    template <template <typename> class Family, typename Cb>
+    auto subscribe(std::string_view topic, Cb cb)
+    {
+        static_assert(detail::deducible_handler<Cb>,
+                      "plexus: spell the value type explicitly — a generic lambda or "
+                      "overloaded call operator has no single deducible signature; name the "
+                      "type on the endpoint");
+        using T = detail::subscriber_value_t<Cb>;
+        return subscriber<Family<T>>{*this, topic, std::move(cb)};
+    }
+
+    // Advertise a typed topic. A publisher has no callable to deduce from, so the codec is
+    // supplied as a finished type (the pub/sub slots take finished codecs, not families):
+    // node.advertise<reading_codec>("telemetry").
+    template <typename Codec>
+    auto advertise(std::string_view topic, const typed_publisher_options &opts = {}, Codec codec = {})
+    {
+        return publisher<Codec>{*this, topic, opts, std::move(codec)};
+    }
+    // --------------------------------------------------------------------------------
 
 private:
     // ---- Endpoint infrastructure (the topic->peer translation) ----------------------
