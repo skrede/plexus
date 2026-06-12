@@ -20,6 +20,7 @@
 
 #include <asio/post.hpp>
 #include <asio/write.hpp>
+#include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/ssl/stream.hpp>
@@ -275,16 +276,24 @@ private:
             m_on_error(io::io_error::would_block);
     }
 
-    // The irreducible asio send-sink the stream_send_queue block drives: write the
-    // block-owned node's bytes through the ssl::stream and signal completion. At most one
-    // is outstanding (the block's serial discipline). On a socket error the channel fails
-    // (which closes the block), so the completion's open-guard stops the chain — the exact
-    // fail-before-chain edge the hand-rolled do_write carried, never a swallow.
+    // The irreducible asio send-sink the stream_send_queue block drives: gather the
+    // block-owned node views into one buffer sequence and issue a SINGLE async_write
+    // through the ssl::stream. TLS is NOT zero-copy (the AEAD seal produces fresh
+    // ciphertext), but OpenSSL coalesces the gathered plaintext into FEWER records around
+    // that one seal — the record-batching win, sharing the exact gather node shape the
+    // plaintext channels use (no thin TLS variant needed). At most one write is
+    // outstanding; on a socket error the channel fails (which closes the block), so the
+    // completion's open-guard stops the chain — never a swallow.
     io::detail::stream_send_queue::send_sink make_send_sink()
     {
-        return [this](std::span<const std::byte> bytes, io::detail::stream_send_queue::completion done)
+        return [this](io::detail::stream_send_queue::buffer_sequence views,
+                      io::detail::stream_send_queue::completion done)
         {
-            ::asio::async_write(m_stream, ::asio::buffer(bytes.data(), bytes.size()),
+            m_gather.clear();
+            m_gather.reserve(views.size());
+            for(const auto &v : views)
+                m_gather.emplace_back(v.data(), v.size());
+            ::asio::async_write(m_stream, m_gather,
                 [this, done = std::move(done)](std::error_code ec, std::size_t) mutable
                 {
                     if(ec)
@@ -323,6 +332,7 @@ private:
     io::detail::stream_send_queue m_egress;            // bounded byte-budgeted serial write block
     io::detail::handshake_gate m_gate;                 // open-before-data outbound buffer
     std::vector<std::byte> m_frame_scratch;
+    std::vector<::asio::const_buffer> m_gather;        // reused gather-write iovec (grows once)
     std::array<std::byte, 4096> m_read_buf{};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;

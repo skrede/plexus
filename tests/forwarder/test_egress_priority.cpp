@@ -53,6 +53,19 @@ std::string data_body(const std::vector<std::byte> &f)
     return std::string{reinterpret_cast<const char *>(decoded->data.data()), decoded->data.size()};
 }
 
+// Decode every data body in the send-order capture, skipping control frames.
+std::vector<std::string> data_bodies(const std::vector<std::vector<std::byte>> &sends)
+{
+    std::vector<std::string> out;
+    for(const auto &f : sends)
+    {
+        const std::string b = data_body(f);
+        if(!b.empty())
+            out.emplace_back(b);
+    }
+    return out;
+}
+
 // A deterministic test substrate: a byte_channel that EXPOSES a controllable
 // backpressured() stall and records each send's frame bytes in order. A test-owned
 // `stall` member holds the reported occupancy >= k_low_water until released, so the
@@ -203,6 +216,62 @@ TEST_CASE("egress_priority: a flooded background band never delays a high frame 
     }
 }
 
+TEST_CASE("egress_priority: a multi-band backlog drains in strict band-descending order — the gather never coalesces across bands, looped",
+          "[egress_priority][forwarder]")
+{
+    // The no-cross-band-coalesce invariant: the channel-level gather-write coalesces a drain
+    // turn's frames into one writev, but the SCHEDULER feeds it strictly highest-band-first
+    // one band at a time, so the send order stays band-descending and frames from different
+    // bands never share a coalesced run. Build a backlog spanning ALL four bands under a
+    // stall, release, and assert the send order is realtime -> high -> normal -> background
+    // with each band's own FIFO run intact (the within-band gather is order-preserving; the
+    // across-band boundary is never crossed).
+    constexpr int k_iterations = 100;
+    constexpr int k_per_band = 6;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        stall_state st;
+        stall_channel ch{st};
+        stall_executor ex;
+        stall_forwarder fwd{ex};
+
+        fwd.declare("bg", topic_qos{.priority = io::priority::background});
+        fwd.declare("nm", topic_qos{.priority = io::priority::normal});
+        fwd.declare("hi", topic_qos{.priority = io::priority::high});
+        fwd.declare("rt", topic_qos{.priority = io::priority::realtime});
+        for(const char *t : {"bg", "nm", "hi", "rt"})
+            REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, t));
+        st.sends.clear();
+
+        // Interleave the four bands' publishes under a stall so nothing drains; the bands
+        // hold the backlog priority-ordered regardless of publish interleave.
+        st.reported = io::detail::k_low_water + 1;
+        for(int i = 0; i < k_per_band; ++i)
+        {
+            fwd.publish("bg", as_bytes("bg" + std::to_string(i)));
+            fwd.publish("nm", as_bytes("nm" + std::to_string(i)));
+            fwd.publish("hi", as_bytes("hi" + std::to_string(i)));
+            fwd.publish("rt", as_bytes("rt" + std::to_string(i)));
+        }
+        REQUIRE(st.sends.empty());
+
+        st.reported = 0;
+        fwd.publish("rt", as_bytes(std::string{"rt-kick"}));   // releases the stall and drains all bands
+
+        // The expected order: realtime run (rt0..rt5, then rt-kick), then high, normal,
+        // background — each band FIFO, the band boundary never crossed by a coalesced run.
+        std::vector<std::string> expected;
+        for(int i = 0; i < k_per_band; ++i) expected.emplace_back("rt" + std::to_string(i));
+        expected.emplace_back("rt-kick");
+        for(int i = 0; i < k_per_band; ++i) expected.emplace_back("hi" + std::to_string(i));
+        for(int i = 0; i < k_per_band; ++i) expected.emplace_back("nm" + std::to_string(i));
+        for(int i = 0; i < k_per_band; ++i) expected.emplace_back("bg" + std::to_string(i));
+
+        const auto bodies = data_bodies(st.sends);
+        REQUIRE(bodies == expected);   // strict band-descending; no cross-band coalesce
+    }
+}
+
 TEST_CASE("egress_priority: inproc is unaffected — mixed priorities deliver in publish order, synchronously",
           "[egress_priority][forwarder]")
 {
@@ -316,19 +385,6 @@ TEST_CASE("egress_priority: the MUX/ERASED path bands — realtime leaves before
 }
 
 namespace {
-
-// Decode every data body in the send-order capture, skipping control frames.
-std::vector<std::string> data_bodies(const std::vector<std::vector<std::byte>> &sends)
-{
-    std::vector<std::string> out;
-    for(const auto &f : sends)
-    {
-        const std::string b = data_body(f);
-        if(!b.empty())
-            out.emplace_back(b);
-    }
-    return out;
-}
 
 // Feed a directly-driven scheduler k_band_depth + 1 enqueues at the normal band under
 // one congestion mode while the destination reports a stall, so the band saturates and
