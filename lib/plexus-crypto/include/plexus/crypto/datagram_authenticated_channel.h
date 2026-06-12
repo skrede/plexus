@@ -65,7 +65,13 @@ public:
     void send(std::span<const std::byte> data)
     {
         if(data.size() < wire::header_size)
+        {
+            // A frame too small to carry the AEAD-AAD header is a local malformed input, not
+            // ambient remote garbage — surface it through the drop seam (the locally-sourced
+            // tier) instead of returning silently, so the caller can observe the dropped send.
+            emit_drop(io::detail::drop_cause::malformed, io::locality::local);
             return;
+        }
         const auto header = data.first(wire::header_size);
         const auto payload = data.subspan(wire::header_size);
 
@@ -116,10 +122,10 @@ private:
         m_lower.on_data([this](std::span<const std::byte> bytes) { on_lower_data(bytes); });
     }
 
-    void emit_drop(io::detail::drop_cause cause)
+    void emit_drop(io::detail::drop_cause cause, io::locality transport = io::locality::remote)
     {
         if(m_on_drop)
-            m_on_drop(io::detail::drop_event{.cause = cause, .transport = io::locality::remote});
+            m_on_drop(io::detail::drop_event{.cause = cause, .transport = transport});
     }
 
     void on_lower_data(std::span<const std::byte> bytes)
@@ -209,6 +215,12 @@ private:
         const auto next_low = static_cast<std::uint8_t>((m_recv_epoch + 1) & 0xffu);
         if(epoch_byte == next_low)
         {
+            // BOUNDED WORK: a next-epoch datagram runs one forward-KDF before the tag check,
+            // and the replay window cannot gate it (the advance resets that window). There is
+            // no SOUND cheaper pre-check — authenticating a next-epoch datagram requires the
+            // derived key — but the cost is exactly one HKDF per inbound datagram (the
+            // size gate already ran), so it is bounded by the link's datagram rate with no
+            // amplification; weakening it with a pre-auth seq filter is declined deliberately.
             advances = true;
             return derive_forward(m_recv_key, out);
         }
