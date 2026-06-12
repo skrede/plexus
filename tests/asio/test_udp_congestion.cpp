@@ -358,13 +358,12 @@ TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_b
 TEST_CASE("udp_congestion server bound: the shared outbound send queue is byte-bounded under a saturating burst",
           "[udp][congestion][bound]")
 {
-    // The ONE shared udp_server send queue is byte-capped, so a saturating
-    // publisher cannot grow the server's outbound userspace queue without limit. A bound
-    // socket is started but the io_context is NEVER pumped during the burst, so the serial
-    // drain cannot run and a tight synchronous burst piles straight into the queue. Each
-    // datagram is 1 KiB; the burst's summed bytes far exceed the default cap. A bounded
-    // queue refuses past the cap (queued_send_bytes() <= cap); the currently-unbounded
-    // construction grows past it (RED) until the server threads the finite byte_cap.
+    // The ONE shared udp_server send queue is byte-capped, so a saturating publisher cannot
+    // grow the server's outbound userspace queue without limit. A bound socket is started
+    // but the io_context is NEVER pumped during the burst, so the serial drain cannot run
+    // and a tight synchronous burst piles straight into the queue. Each datagram is 1 KiB;
+    // the burst's summed bytes far exceed the default cap. The byte-capped queue refuses
+    // past the cap so queued_send_bytes() holds at or below the cap throughout.
     ::asio::io_context io;
     pasio::udp_server server{io};
     server.start(::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 0});

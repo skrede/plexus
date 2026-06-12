@@ -122,12 +122,11 @@ TEST_CASE("egress_saturation_bounded unix: a saturating publisher stays memory-b
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         acc.accept(peer);                               // peer adopts but NEVER reads
 
-        // Adopt the client end into an accept-mode unix_channel. Until unix_channel
-        // composes the bounded stream_send_queue its hand-rolled deque grows past the cap
-        // under this saturation (RED); once bounded it holds at the shallow cap (GREEN). The
-        // bounded surface threads the congestion + write_queue_bytes ctor args; this leg
-        // flips to the small-cap ctor then.
-        pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{}};
+        // Adopt the client end into an accept-mode unix_channel with the small cap: the
+        // bounded stream_send_queue holds the outbox at the shallow cap under this
+        // saturation, byte-identical to the plaintext channel above.
+        pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{},
+                               pio::congestion::block, k_cap};
         saturate_and_assert_bounded(io, ch);
     }
 }

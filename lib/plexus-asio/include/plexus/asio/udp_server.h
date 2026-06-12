@@ -4,6 +4,7 @@
 #include "plexus/asio/detail/asio_error_map.h"
 
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
 #include "plexus/io/detail/send_queue.h"
 #include "plexus/detail/compat.h"
 
@@ -33,9 +34,10 @@ namespace plexus::asio {
 // burst / retransmit-vs-send / multi-peer overlap. The serial outbound discipline
 // (copy-into-owned-node + one-in-flight drain) is hoisted into the core send_queue
 // block; udp_server holds ONLY the irreducible async_send_to send-sink, so it is a
-// thin pump. The block is constructed UNBOUNDED — the UDP egress admits every
-// datagram (byte-identical to a plain unbounded socket queue); the block's bounded-
-// send cap is the crypto-reusable surface, inert here.
+// thin pump. The block is BYTE-CAPPED at construction: a saturating publisher's overrun
+// is refused at the bound (the per-node congestion mode decides — drop_newest sheds,
+// block surfaces would_block) instead of growing the shared outbound queue without
+// limit, so the process stays memory-bounded under a flood.
 //
 // Single-owner, bare `this`, no shared_from_this / strand; the owning udp_transport
 // closes the socket before the server dies, so a completion firing after teardown
@@ -52,9 +54,14 @@ public:
     // substantiated at the fan-out benchmark.
     static constexpr std::size_t default_send_queue_bytes = 65536;
 
-    explicit udp_server(::asio::io_context &io)
+    // The congestion mode is the per-node QoS choice (block = the safe reliable default
+    // that surfaces would_block at the cap; drop_newest = the opt-out shed), threaded with
+    // the byte budget as required-WITH-default ctor args exactly as the stream channels.
+    explicit udp_server(::asio::io_context &io, io::congestion congestion = io::congestion::block,
+                        std::size_t send_queue_bytes = default_send_queue_bytes)
         : m_socket(io)
-        , m_send_queue(make_send_sink())
+        , m_congestion(congestion)
+        , m_send_queue(make_send_sink(), send_queue_bytes)
     {
     }
 
@@ -78,14 +85,18 @@ public:
         do_receive();
     }
 
-    // Hand the caller's bytes to the send_queue block, which copies them into an owned
-    // node (synchronously, so the caller's scratch is never referenced live across the
-    // async op) and drives the serial drain through the async_send_to send-sink.
+    // Hand the caller's bytes to the byte-capped send_queue block, which copies them into
+    // an owned node (synchronously, so the caller's scratch is never referenced live across
+    // the async op) and drives the serial drain through the async_send_to send-sink. A
+    // datagram that would carry the queued total past the cap is refused: the per-node
+    // congestion mode then decides — drop_newest sheds it (counted), block surfaces
+    // would_block (the stall edge) — never an unbounded queue. Compare-before-add (no wrap).
     void send_to(std::span<const std::byte> bytes, const endpoint_type &dest)
     {
         if(!m_open)
             return;
-        m_send_queue.enqueue(bytes, dest);
+        if(!m_send_queue.enqueue(bytes, dest))
+            on_send_queue_full();
     }
 
     // Installed by the transport: (sender, datagram bytes) per inbound completion.
@@ -107,6 +118,10 @@ public:
     // The current queued (un-drained) outbound byte occupancy; 0 when the socket drains.
     [[nodiscard]] std::size_t queued_send_bytes() const noexcept { return m_send_queue.queued_bytes(); }
 
+    [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
+    // The count of datagrams shed under congestion=drop_newest at the byte cap.
+    [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
+
     void close()
     {
         if(!m_socket.is_open())
@@ -118,6 +133,21 @@ public:
     }
 
 private:
+    // The shared-queue congestion safety net at the byte cap: drop_newest sheds the
+    // overrun datagram at the publisher (counted), block surfaces would_block (the stall
+    // edge) — mirroring the stream channel's on_write_queue_full. Either way the call
+    // returns without blocking and the queue never grows past the cap.
+    void on_send_queue_full()
+    {
+        if(m_congestion == io::congestion::drop_newest)
+        {
+            ++m_dropped;
+            return;
+        }
+        if(m_on_error)
+            m_on_error(io::io_error::would_block);
+    }
+
     // The irreducible asio send-sink the send_queue block drives: send the block-owned
     // node's bytes and signal completion when the async op finishes. At most one is
     // outstanding (the block's serial discipline), so a node's bytes stay valid until
@@ -172,7 +202,9 @@ private:
     ::asio::ip::udp::socket m_socket;
     endpoint_type m_sender{};
     std::array<std::byte, 65536> m_recv_buf{};
-    io::detail::send_queue<endpoint_type> m_send_queue;   // owned outbound discipline (unbounded)
+    io::congestion m_congestion{io::congestion::block};
+    std::size_t m_dropped{0};                             // congestion=drop shed count
+    io::detail::send_queue<endpoint_type> m_send_queue;   // byte-capped owned outbound discipline
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     bool m_open{false};
