@@ -68,6 +68,8 @@ dtls_channel::~dtls_channel()
     m_retransmit.cancel();                       // cancel the timer FIRST (no use-after-free on teardown)
     if(m_reassembler)
         m_reassembler->cancel();                 // cancel the reassembly timeout(s) before teardown
+    if(m_on_teardown)
+        m_on_teardown();                         // erase the transport demux ref BEFORE this object dies
     if(m_ssl)
     {
         ::SSL_set_ex_data(m_ssl, dtls_peer_addr_ex_index(), nullptr);

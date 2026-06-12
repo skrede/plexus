@@ -60,6 +60,18 @@ public:
 
     void erase(const endpoint_type &sender) { m_peers.erase(sender); }
 
+    // Erase the entry ONLY if it still maps to `channel`. A channel's teardown erases
+    // its own demux ref, but a re-dial to the same sender may have already OVERWRITTEN
+    // the entry with a NEW channel (insert_or_assign) before the old channel's deferred
+    // destruction runs; an unconditional erase would then drop the live re-dial's entry.
+    // The identity guard erases only the stale mapping, never a successor's.
+    void erase_if_matches(const endpoint_type &sender, const Channel *channel)
+    {
+        auto it = m_peers.find(sender);
+        if(it != m_peers.end() && it->second == channel)
+            m_peers.erase(it);
+    }
+
     [[nodiscard]] std::size_t size() const noexcept { return m_peers.size(); }
 
 private:

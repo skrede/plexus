@@ -122,6 +122,7 @@ public:
         auto *raw = ch.get();
         if(!m_demux.insert(dest, raw))
             return report_dial_fail(ep, io::io_error::address_in_use);
+        wire_teardown(*raw, dest);
 
         raw->on_external_complete([this, ep, raw] { resolve_dial(ep, raw); });
         raw->on_error([this, ep, raw](io::io_error e) { fail_dial(ep, raw, e); });
@@ -183,6 +184,7 @@ private:
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
             return;                                        // peer cap reached: drop the flood
+        wire_teardown(*raw, from);
         m_registry.insert_accepted(raw, std::move(ch));
         raw->on_external_complete([this, raw] { resolve_accept(raw); });
         raw->on_error([this, raw](io::io_error) { drop_accept(raw); });
@@ -218,6 +220,16 @@ private:
         // timeout as timed_out) so the consumer can distinguish "peer never answered"
         // from "peer presented an unpinned cert" — diagnostics + retry-policy material.
         report_dial_fail(failed, e);
+    }
+
+    // Close the borrow-vs-own footgun: the engine owns the handed-out channel but the
+    // demux keeps a non-owning ref, so when the engine destroys the channel the demux
+    // must drop its ref or the next datagram dereferences freed memory. The channel's
+    // dtor fires this seam (distinct from the consumer on_closed/on_error the engine
+    // overwrites); the identity-guarded erase leaves a same-endpoint re-dial untouched.
+    void wire_teardown(dtls_channel &ch, const endpoint_type &key)
+    {
+        ch.on_teardown([this, key, raw = &ch] { m_demux.erase_if_matches(key, raw); });
     }
 
     // An accepted server channel completed its mutual handshake: hand it to
