@@ -275,7 +275,10 @@ TEST_CASE("integration.drop_coverage malformed / reassembly_cap / reassembly_evi
     {
         drop_fixture fx;
         constexpr std::size_t frag = 256;
-        constexpr std::size_t capbytes = 2 * frag;   // room for two single-fragment partials
+        // The cap counts payload AND each entry's slot/present metadata, so size the budget
+        // for exactly two 2-fragment partials' payload plus their structural overhead.
+        constexpr std::size_t overhead = 2 * sizeof(std::vector<std::byte>) + (2u + 7u) / 8u;
+        constexpr std::size_t capbytes = 2 * (frag + overhead);   // room for two single-fragment partials
         test_reassembler r{fx.ex, {.total_memory_cap = capbytes,
                                    .per_message_timeout = std::chrono::milliseconds(1000)}};
         r.on_drop(fx.sink());
