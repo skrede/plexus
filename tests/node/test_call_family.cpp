@@ -219,3 +219,37 @@ TEST_CASE("call family: dropping the procedure retires it to no_handler", "[node
     REQUIRE(err.has_value());
     REQUIRE(*err == plexus::call_errc::no_handler);
 }
+
+#ifdef PLEXUS_HAS_FAMILY_SPELLING
+// The family-spelling positive assertions, INERT until the family wave defines
+// PLEXUS_HAS_FAMILY_SPELLING and fixes the literal procedure<Sig, Codec> / caller<Sig, Codec>
+// spelling. They assert the single-type-parameter family form names the same endpoint the
+// current multi-parameter form does, and round-trips. The family wave flips the guard on and
+// fills the chosen spelling; nothing here builds until then.
+TEST_CASE("call family: the family-form spelling names the same caller/procedure endpoint",
+          "[node][call][family]")
+{
+    using family_procedure = plexus::procedure<void(std::span<const std::byte>)>;
+    using family_caller    = plexus::caller<void(std::span<const std::byte>)>;
+
+    net n;
+    n.connect();
+
+    family_procedure proc{
+        n.b, "rpc",
+        [](std::span<const std::byte> param, family_procedure::reply_fn &reply) {
+            reply(plexus::wire::rpc_status::success, param);
+        }};
+    family_caller call{n.a, "rpc"};
+    n.drive();
+
+    std::optional<std::string> got;
+    call.call(as_bytes(std::string{"echo"}),
+              [&](plexus::expected<reply_t, std::error_code> r) {
+                  REQUIRE(static_cast<bool>(r));
+                  got = to_string(r.value().bytes);
+              });
+    n.drive();
+    REQUIRE(got == "echo");
+}
+#endif

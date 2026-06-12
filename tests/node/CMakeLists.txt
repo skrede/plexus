@@ -102,6 +102,15 @@ target_link_libraries(test_typed_reqres PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_reqres TEST_PREFIX "node.")
 
+# The deduced-serve negative-compile probe: a concrete handler deduces, a generic lambda
+# and an overloaded operator() are rejected (the "spell Sig explicitly" diagnostic), proven
+# by static_assert on a local deducibility concept the family wave repoints at the real one.
+add_executable(test_serve_deduction test_serve_deduction.cpp)
+target_link_libraries(test_serve_deduction PRIVATE
+    plexus::plexus
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_serve_deduction TEST_PREFIX "node.")
+
 # The injected-codec concept vocabulary: typed_codec / identity_bearing trait proofs and
 # the resolve_identity precedence (explicit argument wins, else the codec's type_info).
 add_executable(test_typed_codec_concepts test_typed_codec_concepts.cpp)

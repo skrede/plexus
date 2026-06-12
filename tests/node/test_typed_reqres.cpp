@@ -297,3 +297,36 @@ TEST_CASE("typed reqres: a second local serve on one fqn throws on the typed for
                          }}),
         std::logic_error);
 }
+
+#ifdef PLEXUS_HAS_FAMILY_SPELLING
+// The typed family-spelling positive assertions, INERT until the family wave defines
+// PLEXUS_HAS_FAMILY_SPELLING and fixes the literal procedure<Sig, Codec> / caller<Sig, Codec>
+// spelling (the single-codec "pair codec" form deduces both request and response codecs from
+// one paired codec type). They assert the family form round-trips identically to the current
+// four-parameter form. The family wave flips the guard on and fills the chosen spelling.
+TEST_CASE("typed reqres: the family-form spelling round-trips the typed reqres", "[node][typed][call][family]")
+{
+    using family_procedure = plexus::procedure<response_t(request_t), req_codec, res_codec>;
+    using family_caller    = plexus::caller<response_t(request_t), req_codec, res_codec>;
+
+    net n;
+    n.connect();
+
+    family_procedure proc{
+        n.b, "rpc",
+        [](const request_t &req) -> plexus::expected<response_t, std::error_code> {
+            return response_t{req.value * 2};
+        }};
+    family_caller call{n.a, "rpc"};
+    n.drive();
+
+    std::optional<std::uint32_t> got;
+    call.call(request_t{21},
+              [&](plexus::expected<response_t, std::error_code> r) {
+                  REQUIRE(static_cast<bool>(r));
+                  got = r.value().value;
+              });
+    n.drive();
+    REQUIRE(got == 42u);
+}
+#endif

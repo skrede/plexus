@@ -29,6 +29,7 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include <span>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -89,6 +90,9 @@ struct counting_codec
 
 using typed_publisher = plexus::publisher<inproc_policy, counting_codec>;
 using typed_subscriber = plexus::subscriber<inproc_policy, counting_codec>;
+
+using bytes_publisher = plexus::publisher<inproc_policy>;
+using bytes_subscriber = plexus::subscriber<inproc_policy>;
 
 plexus::node_id make_id(std::uint8_t seed)
 {
@@ -212,6 +216,46 @@ result run_fallback(std::uint64_t iterations, std::uint64_t warm)
             delivered - baseline};
 }
 
+// The bytes pub/sub A/B cell: a bytes publisher emits a fixed 4-byte span (a reused
+// buffer, so the rig adds no per-publish allocation of its own) over the SAME inproc bus
+// the typed cells use. This is the seam-cost baseline the erasure A/B measures the typed
+// object lane against — the byte path that never touches the loan pool or the object
+// carrier.
+result run_bytes(std::uint64_t iterations, std::uint64_t warm)
+{
+    net n;
+    n.connect();
+
+    std::uint64_t delivered = 0;
+    bytes_subscriber s{n.a, "topic", [&](std::span<const std::byte>) { ++delivered; }};
+    bytes_publisher p{n.b, "topic"};
+    n.drive();
+
+    std::array<std::byte, 4> buffer{};
+    auto publish_once = [&](std::uint32_t v) {
+        for(int i = 0; i < 4; ++i)
+            buffer[static_cast<std::size_t>(i)] = static_cast<std::byte>((v >> (8 * i)) & 0xff);
+        p.publish(std::span<const std::byte>{buffer});
+        n.drive();
+    };
+
+    for(std::uint64_t i = 0; i < warm; ++i)
+        publish_once(static_cast<std::uint32_t>(i));
+
+    const std::uint64_t baseline = delivered;
+    plexus::testing::reset_alloc_count();
+    const auto t0 = clock_t_::now();
+    for(std::uint64_t i = 0; i < iterations; ++i)
+        publish_once(static_cast<std::uint32_t>(i));
+    const auto t1 = clock_t_::now();
+    const std::size_t allocs = plexus::testing::alloc_count();
+
+    const double secs = std::chrono::duration<double>(t1 - t0).count();
+    return {secs * 1e9 / static_cast<double>(iterations),
+            static_cast<double>(allocs) / static_cast<double>(iterations),
+            delivered - baseline};
+}
+
 }
 
 int main(int argc, char **argv)
@@ -223,6 +267,10 @@ int main(int argc, char **argv)
                 static_cast<unsigned long long>(iterations));
     std::printf("  NOTE: the host has no CPU exclusivity; ns figures are indicative, "
                 "alloc figures are exact.\n\n");
+
+    const result by = run_bytes(iterations, warm);
+    std::printf("  bytes pub/sub (A/B baseline): per_publish=%.1fns  allocs/publish=%.4f  delivered=%llu\n\n",
+                by.per_pub_ns, by.allocs_per_pub, static_cast<unsigned long long>(by.delivered));
 
     const result fb = run_fallback(iterations, warm);
     std::printf("  forced fallback (serialize): per_publish=%.1fns  allocs/publish=%.4f  delivered=%llu\n\n",
