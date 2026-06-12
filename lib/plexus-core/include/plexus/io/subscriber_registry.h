@@ -258,13 +258,18 @@ public:
 
     // Bump the per-(topic, band) drop counter for a cause. Called at the fan-out
     // drop site with the band already in hand and the topic record already resolved — a
-    // fixed-array index, no map find, no allocation. A `none` cause (an admitted frame) is
-    // a no-op. The entry is created on first touch if the topic is undeclared (defensive).
+    // fixed-array index, no map find past the lookup, no allocation. A `none` cause (an
+    // admitted frame) is a no-op. The lookup is find-only: a drop for an undeclared topic
+    // is counted nowhere meaningful, and minting an empty-fqn entry here would let fqn_for
+    // memoize an empty string as a "resolved" view, conflating unknown with known-unnamed.
     void record_drop(std::uint64_t topic_hash, std::size_t band, detail::drop_cause cause)
     {
         if(cause == detail::drop_cause::none || band >= detail::k_egress_bands)
             return;
-        auto &c = m_topics[topic_hash].drops[band];
+        auto it = m_topics.find(topic_hash);
+        if(it == m_topics.end())
+            return;
+        auto &c = it->second.drops[band];
         switch(cause)
         {
         case detail::drop_cause::drop_oldest: ++c.dropped_oldest; return;

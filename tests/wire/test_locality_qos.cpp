@@ -7,6 +7,7 @@
 
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_registry.h"
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/topic_qos.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -105,4 +106,29 @@ TEST_CASE("locality: a non-default reach survives the declare -> qos_for round-t
     registry.declare(hash, "demo.topic", plexus::topic_qos{.reach = locality::local});
     REQUIRE(registry.qos_for(hash).reach == locality::local);
     REQUIRE(registry.qos_for(hash).reach != locality::any);
+}
+
+TEST_CASE("subscriber_registry: record_drop for an undeclared topic mints no entry — fqn_for stays empty (no cached empty-fqn)",
+          "[wire][locality]")
+{
+    namespace pdetail = plexus::io::detail;
+    plexus::io::subscriber_registry<stub_channel> registry;
+    const std::uint64_t unknown = 0xDEADBEEFu;
+    const std::size_t band = 0;
+
+    // A drop bumped for a never-declared topic must not create a record: it would let
+    // fqn_for memoize an empty fqn as a "resolved" view, conflating unknown with unnamed.
+    registry.record_drop(unknown, band, pdetail::drop_cause::drop_newest);
+
+    REQUIRE(registry.fqn_for(unknown).empty());                                  // unknown stays unresolved
+    REQUIRE(registry.entry_for(unknown) == nullptr);                             // no entry was minted
+    REQUIRE(registry.dropped(unknown, band, pdetail::drop_cause::drop_newest) == 0);
+
+    // And a real entry's fqn still resolves (the find-only path never disturbs the memo).
+    const std::uint64_t known = 0x01020304u;
+    registry.declare(known, "real.topic", plexus::topic_qos{});
+    REQUIRE(registry.fqn_for(known) == "real.topic");
+    registry.record_drop(known, band, pdetail::drop_cause::drop_newest);         // a declared topic counts
+    REQUIRE(registry.dropped(known, band, pdetail::drop_cause::drop_newest) == 1);
+    REQUIRE(registry.fqn_for(unknown).empty());                                  // still unresolved after a real drop
 }
