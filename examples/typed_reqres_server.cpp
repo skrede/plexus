@@ -68,9 +68,7 @@ int main()
         io, disc, "divide-server", transport, opts};
     node.listen({"tcp", "127.0.0.1:5576"});
 
-    using divide_procedure = plexus::procedure<plexus::asio::asio_policy,
-                                               div_response(div_request),
-                                               pair_codec<div_request>, pair_codec<div_response>>;
+    using divide_procedure = plexus::procedure<div_response(div_request), pair_codec>;
     divide_procedure divide{
         node, "divide",
         [](const div_request &req) -> plexus::expected<div_response, std::error_code> {
