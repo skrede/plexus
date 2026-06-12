@@ -39,8 +39,8 @@ using plexus::discovery::static_discovery;
 using plexus::io::message_info;
 
 using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using inproc_publisher = plexus::publisher<inproc_policy>;
-using inproc_subscriber = plexus::subscriber<inproc_policy>;
+using inproc_publisher = plexus::publisher<>;
+using inproc_subscriber = plexus::subscriber<>;
 
 plexus::node_id make_id(std::uint8_t seed)
 {

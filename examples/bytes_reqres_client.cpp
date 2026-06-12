@@ -43,7 +43,7 @@ int main()
         io, disc, "uppercase-client", transport, opts};
     node.listen({"tcp", "127.0.0.1:5573"});
 
-    plexus::caller<plexus::asio::asio_policy> uppercase{node, "uppercase"};
+    plexus::caller<> uppercase{node, "uppercase"};
 
     // Retry once a second until a provider is discovered and answers (no_provider while
     // mDNS converges is expected, so re-arm; any reply or transformed error is terminal).

@@ -84,7 +84,7 @@ int main()
         io, disc, "telemetry-publisher", transport, opts};
     node.listen({"tcp", "127.0.0.1:5574"});
 
-    plexus::publisher<plexus::asio::asio_policy, reading_codec> topic{node, "telemetry"};
+    plexus::publisher<reading_codec> topic{node, "telemetry"};
 
     std::uint32_t value = 100;
     asio::steady_timer tick{io};

@@ -5,6 +5,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/node_name.h"
+#include "plexus/io/endpoint_seam.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
@@ -121,20 +122,16 @@ inline node_id node_id_from_name(std::string_view name) noexcept
     return detail::hash_node_id(name);
 }
 
-template <typename Policy, typename Codec = void>
-    requires plexus::Policy<Policy>
+template <typename Codec = void>
 class publisher;
 
-template <typename Policy, typename Codec = void>
-    requires plexus::Policy<Policy>
+template <typename Codec = void>
 class subscriber;
 
-template <typename Policy, typename Sig = void, typename CReq = void, typename CRes = void>
-    requires plexus::Policy<Policy>
+template <typename Sig = void, typename CReq = void, typename CRes = void>
 class caller;
 
-template <typename Policy, typename Sig = void, typename CReq = void, typename CRes = void>
-    requires plexus::Policy<Policy>
+template <typename Sig = void, typename CReq = void, typename CRes = void>
 class procedure;
 
 // The consumable public surface: a node composes a routing_engine over an injected
@@ -164,12 +161,10 @@ class node
     // The four endpoint handles are the ONLY construction path for an endpoint: the
     // registration/retire seams below are PRIVATE, reachable solely through these
     // friends, so there is no public node.publish / node.subscribe / declare_* factory.
-    template <typename P, typename C> requires plexus::Policy<P> friend class publisher;
-    template <typename P, typename C> requires plexus::Policy<P> friend class subscriber;
-    template <typename P, typename S, typename Cq, typename Cs>
-        requires plexus::Policy<P> friend class caller;
-    template <typename P, typename S, typename Cq, typename Cs>
-        requires plexus::Policy<P> friend class procedure;
+    template <typename C> friend class publisher;
+    template <typename C> friend class subscriber;
+    template <typename S, typename Cq, typename Cs> friend class caller;
+    template <typename S, typename Cq, typename Cs> friend class procedure;
 
 public:
     using executor_type = typename Policy::executor_type;
@@ -398,8 +393,7 @@ private:
     // error-return channel, and a duplicate local provider is a programming error) and
     // leaves the first handler serving. The forwarder's own serve() would silently
     // overwrite — this facade gate closes that within-process hijack-by-overwrite.
-    void serve_procedure_seam(std::string_view fqn,
-                              typename io::procedure_forwarder<engine_policy>::handler_fn handler)
+    void serve_procedure_seam(std::string_view fqn, io::handler_fn handler)
     {
         if(std::find(m_served_fqns.begin(), m_served_fqns.end(), fqn) != m_served_fqns.end())
             throw std::logic_error("plexus: a procedure is already served locally on this fqn");
@@ -481,6 +475,47 @@ private:
     {
         return std::any_of(m_subscriptions.begin(), m_subscriptions.end(),
                            [&](const auto &e) { return e.second.fqn == fqn; });
+    }
+
+    // Fill the type-erased outbound-verb seam the endpoint handles capture at
+    // construction. ctx is this node; each verb is a captureless static lambda
+    // (converts to a plain fn-ptr, zero alloc) recovering the node and forwarding to the
+    // private *_seam member VERBATIM — the concrete Policy stays inside those bodies
+    // (Policy::post in call_seam, the logic_error throw in serve_procedure_seam both
+    // propagate through the trampoline). The inbound delivery path never crosses here.
+    io::endpoint_seam endpoint_seam_for() noexcept
+    {
+        io::endpoint_seam s{};
+        s.ctx = this;
+        s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos,
+                                 bool emit, std::optional<std::uint64_t> type_id)
+        { static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id); };
+        s.publish = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes)
+        { static_cast<node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
+        s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier,
+                              io::encode_thunk encode)
+        {
+            static_cast<node *>(ctx)->m_engine.messages().publish_object(
+                fqn, carrier, [&] { return io::invoke(encode); });
+        };
+        s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos,
+                                   io::bytes_cb cb, std::optional<std::uint64_t> type_id,
+                                   const void *native_key, io::object_dispatch dispatch) -> registration_id
+        {
+            return static_cast<node *>(ctx)->register_subscriber_seam(
+                fqn, qos, std::move(cb), type_id,
+                object_entry{native_key, std::move(dispatch)});
+        };
+        s.retire_subscriber = [](void *ctx, registration_id rid)
+        { static_cast<node *>(ctx)->retire_subscriber_seam(rid); };
+        s.serve_procedure = [](void *ctx, std::string_view fqn, io::handler_fn handler)
+        { static_cast<node *>(ctx)->serve_procedure_seam(fqn, std::move(handler)); };
+        s.retire_procedure = [](void *ctx, std::string_view fqn)
+        { static_cast<node *>(ctx)->retire_procedure_seam(fqn); };
+        s.call = [](void *ctx, std::string_view fqn, std::span<const std::byte> param,
+                    io::on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
+        { static_cast<node *>(ctx)->call_seam(fqn, param, std::move(on_reply), deadline); };
+        return s;
     }
     // --------------------------------------------------------------------------------
 

@@ -90,8 +90,8 @@ struct counting_codec
 
 static_assert(plexus::typed_codec<counting_codec>);
 
-using typed_publisher = plexus::publisher<inproc_policy, counting_codec>;
-using typed_subscriber = plexus::subscriber<inproc_policy, counting_codec>;
+using typed_publisher = plexus::publisher<counting_codec>;
+using typed_subscriber = plexus::subscriber<counting_codec>;
 
 plexus::node_id make_id(std::uint8_t seed)
 {

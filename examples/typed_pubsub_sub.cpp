@@ -82,7 +82,7 @@ int main()
         io, disc, "telemetry-subscriber", transport, opts};
     node.listen({"tcp", "127.0.0.1:5575"});
 
-    plexus::subscriber<plexus::asio::asio_policy, reading_codec> topic{
+    plexus::subscriber<reading_codec> topic{
         node, "telemetry", [](const reading &r) {
             std::cout << "reading: sensor=" << r.sensor << " value=" << r.value << '\n';
         }};
