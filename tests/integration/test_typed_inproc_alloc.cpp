@@ -25,12 +25,14 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/io/message_info.h"
+#include "plexus/io/endpoint_seam.h"
 
 #include "support/alloc_counter.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <array>
 #include <memory>
 #include <vector>
 #include <chrono>
@@ -225,4 +227,49 @@ TEST_CASE("typed inproc forced fallback: the serialize path's allocation is docu
     // The fallback path allocates (the codec mints a fresh owner buffer per encode); this is
     // the documented contrast to the fast path's zero, not a gated invariant.
     SUCCEED("forced-fallback steady-loop allocations recorded: " + std::to_string(after - before));
+}
+
+// The license for the encode-erasure seam: constructing an io::encode_thunk per publish
+// over a multi-pointer-capturing lambda must allocate ZERO. The thunk binds the lambda by
+// reference (state = &lambda) and dispatches through a captureless trampoline, so the
+// erased encode is a two-word POD with no heap regardless of capture size — the same gate
+// the seam refactor will rely on when publisher.h constructs the thunk per publish.
+TEST_CASE("encode-thunk construction over a multi-pointer capture is zero-alloc", "[integration]")
+{
+    constexpr int warm = 64;
+    constexpr int K = 4096;
+
+    std::array<std::byte, 4> payload{};
+    std::uint64_t            sequence = 0;
+    std::uint32_t            value = 0;
+
+    auto build_and_invoke = [&](std::uint32_t v) -> std::size_t {
+        value = v;
+        ++sequence;
+        // The encode lambda captures THREE pointers (payload, sequence, value) by
+        // reference — a capture wider than any small-buffer would inline — so a heap
+        // erasure would show here. The thunk must still allocate nothing.
+        auto encode = [&payload, &sequence, &value]() -> std::span<const std::byte> {
+            payload[0] = static_cast<std::byte>(value & 0xff);
+            payload[1] = static_cast<std::byte>((value >> 8) & 0xff);
+            payload[2] = static_cast<std::byte>(sequence & 0xff);
+            payload[3] = static_cast<std::byte>((sequence >> 8) & 0xff);
+            return std::span<const std::byte>{payload};
+        };
+        plexus::io::encode_thunk thunk = plexus::io::make_encode_thunk(encode);
+        return plexus::io::invoke(thunk).size();
+    };
+
+    std::size_t sink = 0;
+    for(int i = 0; i < warm; ++i)
+        sink += build_and_invoke(static_cast<std::uint32_t>(i));
+
+    plexus::testing::reset_alloc_count();
+    const auto before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+        sink += build_and_invoke(0xD0000000u + static_cast<std::uint32_t>(i));
+    const auto after = plexus::testing::alloc_count();
+
+    REQUIRE(sink == static_cast<std::size_t>((warm + K) * 4));
+    REQUIRE(after - before == 0);   // erased encode construction allocated nothing
 }
