@@ -144,6 +144,10 @@ public:
     // unreachable destination, a momentary buffer-full) — best-effort UDP loss that is NOT
     // surfaced through on_error per datagram, so an unreachable port cannot storm the owner.
     [[nodiscard]] std::size_t send_error_count() const noexcept { return m_send_errors; }
+    // The count of spurious connection_reset signals swallowed on the recv path (a Windows
+    // ICMP port-unreachable surfacing as a reset on the next recv) — re-armed silently, NOT
+    // surfaced through on_error, so an unreachable peer cannot storm the owner.
+    [[nodiscard]] std::size_t recv_reset_count() const noexcept { return m_recv_resets; }
 
     void close()
     {
@@ -248,6 +252,18 @@ private:
     {
         if(ec == ::asio::error::operation_aborted || !m_open)
             return;
+        if(ec == ::asio::error::connection_reset)
+        {
+            // On Windows a prior send to an unreachable port surfaces the ICMP
+            // port-unreachable as connection_reset on the NEXT recv; on POSIX it rarely
+            // fires. It is a spurious per-datagram signal on a connectionless socket, NOT a
+            // socket fault — re-arm silently so an unreachable peer cannot storm on_error
+            // (mirrors the transient-send discrimination). Counted for observability only.
+            ++m_recv_resets;
+            if(m_open)
+                do_receive();
+            return;
+        }
         report(ec);                 // a transient recv error is surfaced; the loop re-arms
         if(m_open)
             do_receive();
@@ -267,6 +283,7 @@ private:
     std::size_t m_so_rcvbuf{0};                           // SO_RCVBUF override; 0 = kernel default
     std::size_t m_dropped{0};                             // congestion=drop shed count
     std::size_t m_send_errors{0};                         // transient per-datagram send-failure discards
+    std::size_t m_recv_resets{0};                         // spurious recv connection_reset signals swallowed
     io::detail::send_queue<endpoint_type> m_send_queue;   // byte-capped owned outbound discipline
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
