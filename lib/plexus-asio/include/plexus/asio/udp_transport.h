@@ -69,7 +69,7 @@ public:
                            io::detail::udp_arq_config arq_cfg = {},
                            io::congestion congestion = io::congestion::block)
         : m_io(io)
-        , m_server(io)
+        , m_server(io, congestion)
         , m_max_payload(max_payload)
         , m_hs_ladder(hs_ladder)
         , m_arq_cfg(arq_cfg)

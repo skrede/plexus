@@ -18,6 +18,9 @@
 #include "plexus/asio/unix_listener.h"
 #include "plexus/asio/unix_policy.h"
 
+#include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
+
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/stream_inbound.h"
@@ -32,6 +35,7 @@
 
 #include <span>
 #include <array>
+#include <vector>
 #include <string>
 #include <chrono>
 #include <memory>
@@ -188,34 +192,57 @@ TEST_CASE("unix stream channel: a header with a withheld payload fires on_protoc
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("stream_channel_unix bound: the bounded write queue holds at the cap like asio_channel",
+TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to asio_channel",
           "[integration][unix][bound]")
 {
-    // unix_channel composes the shared bounded stream_send_queue so its outbox is
-    // byte-capped exactly as asio_channel's — proven over a real (connected) local socket
+    // unix_channel composes the shared bounded stream_send_queue, so its congestion verdicts
+    // are byte-identical to asio_channel's — proven over a real (connected) local socket
     // whose PEER NEVER READS, so the kernel send buffer fills and async_write stalls; the
-    // userspace outbox then accumulates and the byte cap engages. Until unix_channel adopts
-    // the bounded block its hand-rolled deque grows past the cap under this saturation (RED);
-    // once bounded it holds at the shallow cap (GREEN). The bounded surface flips this leg
-    // to the congestion-knob ctor and adds the drop_newest/block verdict-identity assertions.
-    constexpr std::size_t cap = 4096;
-    temp_sock sock;
-    ::asio::io_context io;
-    ::asio::local::stream_protocol::acceptor acc{
-        io, ::asio::local::stream_protocol::endpoint(sock.path)};
-    ::asio::local::stream_protocol::socket peer{io};
-    ::asio::local::stream_protocol::socket client{io};
-    client.connect(::asio::local::stream_protocol::endpoint(sock.path));
-    acc.accept(peer);                                   // peer adopts but NEVER reads
+    // userspace outbox then accumulates and the byte cap engages. A small cap (4 KiB) bounds
+    // it; 1 KiB frames fill it, after which drop_newest sheds (dropped_count advances) and
+    // block surfaces would_block — the SAME edge asio_channel proves, and the outbox NEVER
+    // grows past the cap.
+    namespace pio = plexus::io;
+    auto run = [](pio::congestion mode) {
+        constexpr std::size_t cap = 4096;
+        temp_sock sock;
+        ::asio::io_context io;
+        ::asio::local::stream_protocol::acceptor acc{
+            io, ::asio::local::stream_protocol::endpoint(sock.path)};
+        ::asio::local::stream_protocol::socket peer{io};
+        ::asio::local::stream_protocol::socket client{io};
+        client.connect(::asio::local::stream_protocol::endpoint(sock.path));
+        acc.accept(peer);                               // peer adopts but NEVER reads
 
-    pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{}};
+        pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode, cap};
+        REQUIRE(ch.congestion_mode() == mode);
 
-    std::vector<std::byte> kib(1024, std::byte{0x5A});
-    for(int i = 0; i < 4096; ++i)
-    {
-        ch.send(kib);
-        io.poll();
-        REQUIRE(ch.backpressured() <= cap);             // NEVER grows past the cap
-    }
-    REQUIRE(ch.backpressured() <= cap);
+        std::optional<pio::io_error> err;
+        ch.on_error([&](pio::io_error e) { err = e; });
+
+        std::vector<std::byte> kib(1024, std::byte{0x5A});
+        for(int i = 0; i < 4096; ++i)
+        {
+            ch.send(kib);
+            io.poll();
+            REQUIRE(ch.backpressured() <= cap);         // NEVER grows past the cap
+            if(mode == pio::congestion::drop_newest && ch.dropped_count() > 0)
+                break;
+            if(mode == pio::congestion::block && err.has_value())
+                break;
+        }
+
+        if(mode == pio::congestion::drop_newest)
+            REQUIRE(ch.dropped_count() > 0);            // shed at the publisher (the asio verdict)
+        else
+        {
+            REQUIRE(err.has_value());
+            REQUIRE(*err == pio::io_error::would_block); // block stalls (the asio verdict)
+            REQUIRE(ch.dropped_count() == 0);
+        }
+        REQUIRE(ch.backpressured() <= cap);
+    };
+
+    run(plexus::io::congestion::drop_newest);
+    run(plexus::io::congestion::block);
 }
