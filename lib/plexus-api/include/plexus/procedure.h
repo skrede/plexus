@@ -11,7 +11,6 @@
 #include "plexus/wire/rpc_status.h"
 
 #include "plexus/detail/compat.h"
-#include "plexus/detail/function_traits.h"
 
 #include <span>
 #include <string>
@@ -23,12 +22,16 @@
 
 namespace plexus {
 
-// The serving endpoint family. The primary template names the typed endpoint
-// (procedure<Res(Req), CReq, CRes>); the bytes endpoint is the procedure<void, void, void>
-// specialization below — procedure<> selects it via the defaulted parameters (the defaults
-// live in node.h's forward declaration, seen first), so every bytes spelling keeps
-// compiling unchanged.
-template <typename Sig, typename CReq, typename CRes>
+// The serving endpoint family. The codec slots are template-template parameters: a slot
+// takes a codec FAMILY (a class template over one value type), not a finished codec, and
+// the typed specialization applies CReq<request_t> / CRes<response_t>. The response family
+// defaults to the request family (the symmetric form), so procedure<Res(Req), pair_codec>
+// expands to pair_codec<request_t> / pair_codec<response_t>. The bytes endpoint is the
+// procedure<void, no_codec, no_codec> specialization below — procedure<> selects it via the
+// defaulted parameters (the defaults live in node.h's forward declaration, seen first), so
+// every bytes spelling keeps compiling unchanged. no_codec is a sentinel family that names
+// the bytes default and is never instantiated.
+template <typename Sig, template <typename> class CReq, template <typename> class CRes>
 class procedure;
 
 // The bytes serving endpoint: the CONSTRUCTOR is the registration — it serves the
@@ -51,7 +54,7 @@ class procedure;
 // absent-handler path), and the fqn is free to be served again. A moved-from handle is
 // inert (empty retire); its destructor does nothing.
 template <>
-class procedure<void, void, void>
+class procedure<void, no_codec, no_codec>
 {
 public:
     using reply_fn = io::reply_fn;
@@ -84,14 +87,16 @@ private:
 };
 
 // The typed serving endpoint: an encode/decode adaptation around the bytes procedure.
-// The handler is expected<Res, std::error_code>(const Req&); CReq decodes the inbound
-// request, CRes encodes a successful response. There is NO inproc fast path for RPC by
-// design — a request/response always rides bytes.
+// The codec slots are FAMILIES — CReq<Req> decodes the inbound request, CRes<Res> encodes
+// a successful response — and each expansion must satisfy typed_codec (the requires-clause
+// enforces it at the point of expansion, so a family that does not model a codec for a half
+// names that half plainly). The handler is expected<Res, std::error_code>(const Req&).
+// There is NO inproc fast path for RPC by design — a request/response always rides bytes.
 //
-// The registered bytes handler: decode the request via CReq (failure replies
+// The registered bytes handler: decode the request via CReq<Req> (failure replies
 // rpc_status::deserialize_failed with no Req ever handed to the handler — a decode
 // failure never reaches the handler, the session stays up); invoke the handler; on
-// success encode the Res via CRes and reply rpc_status::success;
+// success encode the Res via CRes<Res> and reply rpc_status::success;
 // on a handler error encode the error_code's VALUE as a bounds-safe varint into the
 // otherwise-empty error-leg payload and reply rpc_status::error (the typed caller
 // reconstructs it under provider_category — value preserved, category erased).
@@ -99,17 +104,20 @@ private:
 // All the lifetime/double-serve guarantees of the bytes specialization hold verbatim:
 // the ctor is the registration, a second LOCAL serve on one fqn throws std::logic_error
 // with zero side effects, and dropping the handle retires it to rpc_status::no_handler.
-template <typename Res, typename Req, typename CReq, typename CRes>
-    requires typed_codec<CReq> && typed_codec<CRes>
+template <typename Res, typename Req,
+          template <typename> class CReq, template <typename> class CRes>
+    requires typed_codec<CReq<Req>> && typed_codec<CRes<Res>>
 class procedure<Res(Req), CReq, CRes>
 {
 public:
     using reply_fn = io::reply_fn;
     using handler_fn = io::handler_fn;
+    using request_codec = CReq<Req>;
+    using response_codec = CRes<Res>;
 
     template <typename Policy, typename... NodeTs, typename Handler>
     procedure(node<Policy, NodeTs...> &n, std::string_view fqn, Handler handler,
-              CReq req_codec = {}, CRes res_codec = {})
+              request_codec req_codec = {}, response_codec res_codec = {})
         : m_fqn(fqn)
     {
         io::endpoint_seam seam = n.endpoint_seam_for();
@@ -133,7 +141,7 @@ public:
 
 private:
     template <typename Handler>
-    static handler_fn adapt(Handler handler, CReq req_codec, CRes res_codec)
+    static handler_fn adapt(Handler handler, request_codec req_codec, response_codec res_codec)
     {
         return [handler = std::move(handler), req_codec = std::move(req_codec),
                 res_codec = std::move(res_codec), scratch = std::vector<std::byte>{}](
@@ -160,19 +168,6 @@ private:
     std::string m_fqn;
     plexus::detail::move_only_function<void()> m_retire;
 };
-
-// The codec-family spelling: one class-template Family expands to the per-half codecs
-// Family<Req> / Family<Res> over a Res(Req) signature, collapsing the verbose four-argument
-// form to rpc<div_response(div_request), pair_codec>. An alias rather than a class because a
-// single class-template name cannot carry both a template-template Family in position two AND
-// the per-half typename CReq/CRes escape — the kinds differ and a partial specialization
-// cannot change a parameter's kind. The per-half class procedure<Sig, CReq, CRes> remains the
-// general form and the asymmetric-serializer escape; Family<half> must satisfy typed_codec
-// (the typed specialization's requires-clause enforces it). Family is NON-defaulted (the user
-// always spells it; this also sidesteps the MSVC template-template defaulting hazard).
-template <typename Sig, template <typename> class Family>
-using rpc_procedure =
-    procedure<Sig, Family<detail::request_of_t<Sig>>, Family<detail::response_of_t<Sig>>>;
 
 }
 

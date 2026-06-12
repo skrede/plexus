@@ -222,11 +222,11 @@ TEST_CASE("call family: dropping the procedure retires it to no_handler", "[node
 }
 
 #ifdef PLEXUS_HAS_FAMILY_SPELLING
-// The codec-family spelling positive assertions. rpc_procedure<Sig, Family> /
-// rpc_caller<Sig, Family> expand one class-template codec family to the per-half codecs
-// Family<Req> / Family<Res> over a Res(Req) signature; the aliases must name the SAME types as
-// the per-half four-parameter form. echo_codec is a trivial value codec family (one u32),
-// supplied here since this TU defines no codec of its own.
+// The codec-family spelling positive assertions. A codec slot takes a class-template codec
+// FAMILY; the typed endpoint applies Family<Req> / Family<Res> over a Res(Req) signature. The
+// symmetric form (one family) defaults the response family to the request family; the
+// asymmetric form spells two families, request-first. echo_codec is a trivial value codec
+// family (one u32), supplied here since this TU defines no codec of its own.
 namespace family_check {
 
 struct u32_value
@@ -261,16 +261,16 @@ struct echo_codec
     }
 };
 
-static_assert(__is_same(plexus::rpc_procedure<u32_value(u32_value), echo_codec>,
-                        plexus::procedure<u32_value(u32_value), echo_codec<u32_value>,
-                                          echo_codec<u32_value>>));
-static_assert(__is_same(plexus::rpc_caller<u32_value(u32_value), echo_codec>,
-                        plexus::caller<u32_value(u32_value), echo_codec<u32_value>,
-                                       echo_codec<u32_value>>));
+// The symmetric form defaults the response family to the request family: one spelled family
+// names the same endpoint as the explicit two-family form over a single family.
+static_assert(__is_same(plexus::procedure<u32_value(u32_value), echo_codec>,
+                        plexus::procedure<u32_value(u32_value), echo_codec, echo_codec>));
+static_assert(__is_same(plexus::caller<u32_value(u32_value), echo_codec>,
+                        plexus::caller<u32_value(u32_value), echo_codec, echo_codec>));
 
-// The asymmetric-serializer escape: the per-half explicit form binds two DIFFERENT codec
-// types for request and response (the family form cannot express this — that is its whole
-// reason to survive). A second codec family distinct from echo_codec witnesses it.
+// The asymmetric form binds two DIFFERENT families for request and response, request-first:
+// the response half is alt_codec while the request half stays echo_codec, so the endpoint
+// differs from the symmetric echo_codec spelling. A second codec family witnesses it.
 template <typename T>
 struct alt_codec
 {
@@ -284,9 +284,19 @@ struct alt_codec
 };
 
 using asymmetric_procedure =
-    plexus::procedure<u32_value(u32_value), echo_codec<u32_value>, alt_codec<u32_value>>;
+    plexus::procedure<u32_value(u32_value), echo_codec, alt_codec>;
+static_assert(__is_same(asymmetric_procedure,
+                        plexus::procedure<u32_value(u32_value), echo_codec, alt_codec>));
 static_assert(!__is_same(asymmetric_procedure,
-                         plexus::rpc_procedure<u32_value(u32_value), echo_codec>));
+                         plexus::procedure<u32_value(u32_value), echo_codec>));
+
+// The one-off concrete-codec lift idiom: an alias template lifts a finished codec into the
+// family slot (the P0522 template-template-argument path). It must bind and name the same
+// endpoint as the direct family spelling.
+template <typename>
+using lifted_echo = echo_codec<u32_value>;
+static_assert(__is_same(plexus::procedure<u32_value(u32_value), lifted_echo>,
+                        plexus::procedure<u32_value(u32_value), lifted_echo, lifted_echo>));
 static_assert(plexus::typed_codec<echo_codec<u32_value>>);
 static_assert(plexus::typed_codec<alt_codec<u32_value>>);
 
@@ -296,8 +306,8 @@ TEST_CASE("call family: the family-form spelling names the same caller/procedure
           "[node][call][family]")
 {
     using family_check::u32_value;
-    using family_procedure = plexus::rpc_procedure<u32_value(u32_value), family_check::echo_codec>;
-    using family_caller    = plexus::rpc_caller<u32_value(u32_value), family_check::echo_codec>;
+    using family_procedure = plexus::procedure<u32_value(u32_value), family_check::echo_codec>;
+    using family_caller    = plexus::caller<u32_value(u32_value), family_check::echo_codec>;
 
     net n;
     n.connect();

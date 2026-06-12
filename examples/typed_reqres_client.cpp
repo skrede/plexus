@@ -72,8 +72,7 @@ int main()
         io, disc, "divide-client", transport, opts};
     node.listen({"tcp", "127.0.0.1:5577"});
 
-    using divide_caller = plexus::caller<div_response(div_request),
-                                         pair_codec<div_request>, pair_codec<div_response>>;
+    using divide_caller = plexus::caller<div_response(div_request), pair_codec>;
     divide_caller divide{node, "divide"};
 
     auto print = [](const char *label, plexus::expected<div_response, std::error_code> r) {
