@@ -5,12 +5,10 @@
 #include "plexus/expected.h"
 #include "plexus/typed_codec.h"
 
-#include "plexus/io/procedure_forwarder.h"
+#include "plexus/io/endpoint_seam.h"
 
 #include "plexus/wire/varint.h"
 #include "plexus/wire/rpc_status.h"
-
-#include "plexus/policy.h"
 
 #include "plexus/detail/compat.h"
 
@@ -25,12 +23,11 @@
 namespace plexus {
 
 // The serving endpoint family. The primary template names the typed endpoint
-// (procedure<Policy, Res(Req), CReq, CRes>, defined in a later plan); the bytes endpoint
-// is the procedure<Policy, void, void, void> specialization below — procedure<Policy>
-// selects it via the defaulted parameters, so every existing bytes spelling keeps
+// (procedure<Res(Req), CReq, CRes>); the bytes endpoint is the procedure<void, void, void>
+// specialization below — procedure<> selects it via the defaulted parameters (the defaults
+// live in node.h's forward declaration, seen first), so every bytes spelling keeps
 // compiling unchanged.
-template <typename Policy, typename Sig, typename CReq, typename CRes>
-    requires plexus::Policy<Policy>
+template <typename Sig, typename CReq, typename CRes>
 class procedure;
 
 // The bytes serving endpoint: the CONSTRUCTOR is the registration — it serves the
@@ -52,20 +49,20 @@ class procedure;
 // subsequent inbound call for the fqn resolves rpc_status::no_handler (the existing
 // absent-handler path), and the fqn is free to be served again. A moved-from handle is
 // inert (empty retire); its destructor does nothing.
-template <typename Policy>
-    requires plexus::Policy<Policy>
-class procedure<Policy, void, void, void>
+template <>
+class procedure<void, void, void>
 {
 public:
-    using reply_fn = typename io::procedure_forwarder<Policy>::reply_fn;
-    using handler_fn = typename io::procedure_forwarder<Policy>::handler_fn;
+    using reply_fn = io::reply_fn;
+    using handler_fn = io::handler_fn;
 
-    template <typename... NodeTs, typename Handler>
+    template <typename Policy, typename... NodeTs, typename Handler>
     procedure(node<Policy, NodeTs...> &n, std::string_view fqn, Handler handler)
         : m_fqn(fqn)
     {
-        n.serve_procedure_seam(fqn, handler_fn{std::move(handler)});
-        m_retire = [&n, fqn = m_fqn] { n.retire_procedure_seam(fqn); };
+        io::endpoint_seam seam = n.endpoint_seam_for();
+        seam.serve_procedure(seam.ctx, fqn, handler_fn{std::move(handler)});
+        m_retire = [seam, fqn = m_fqn] { seam.retire_procedure(seam.ctx, fqn); };
     }
 
     procedure(procedure &&) noexcept = default;
@@ -101,22 +98,24 @@ private:
 // All the lifetime/double-serve guarantees of the bytes specialization hold verbatim:
 // the ctor is the registration, a second LOCAL serve on one fqn throws std::logic_error
 // with zero side effects, and dropping the handle retires it to rpc_status::no_handler.
-template <typename Policy, typename Res, typename Req, typename CReq, typename CRes>
-    requires plexus::Policy<Policy> && typed_codec<CReq> && typed_codec<CRes>
-class procedure<Policy, Res(Req), CReq, CRes>
+template <typename Res, typename Req, typename CReq, typename CRes>
+    requires typed_codec<CReq> && typed_codec<CRes>
+class procedure<Res(Req), CReq, CRes>
 {
 public:
-    using reply_fn = typename io::procedure_forwarder<Policy>::reply_fn;
-    using handler_fn = typename io::procedure_forwarder<Policy>::handler_fn;
+    using reply_fn = io::reply_fn;
+    using handler_fn = io::handler_fn;
 
-    template <typename... NodeTs, typename Handler>
+    template <typename Policy, typename... NodeTs, typename Handler>
     procedure(node<Policy, NodeTs...> &n, std::string_view fqn, Handler handler,
               CReq req_codec = {}, CRes res_codec = {})
         : m_fqn(fqn)
     {
-        n.serve_procedure_seam(
-            fqn, handler_fn{adapt(std::move(handler), std::move(req_codec), std::move(res_codec))});
-        m_retire = [&n, fqn = m_fqn] { n.retire_procedure_seam(fqn); };
+        io::endpoint_seam seam = n.endpoint_seam_for();
+        seam.serve_procedure(
+            seam.ctx, fqn,
+            handler_fn{adapt(std::move(handler), std::move(req_codec), std::move(res_codec))});
+        m_retire = [seam, fqn = m_fqn] { seam.retire_procedure(seam.ctx, fqn); };
     }
 
     procedure(procedure &&) noexcept = default;

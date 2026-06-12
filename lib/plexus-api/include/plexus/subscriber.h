@@ -6,9 +6,9 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
+#include "plexus/io/endpoint_seam.h"
 
 #include "plexus/typed_codec.h"
-#include "plexus/policy.h"
 
 #include "plexus/detail/compat.h"
 
@@ -25,11 +25,10 @@
 namespace plexus {
 
 // The subscribing endpoint family. The primary template names the typed endpoint
-// (subscriber<Policy, Codec> below); the bytes endpoint is the subscriber<Policy, void>
-// specialization — subscriber<Policy> selects it via the defaulted Codec, so every
-// existing bytes spelling keeps compiling unchanged.
-template <typename Policy, typename Codec>
-    requires plexus::Policy<Policy>
+// (subscriber<Codec> below); the bytes endpoint is the subscriber<void> specialization —
+// subscriber<> selects it via the defaulted Codec (the default lives in node.h's forward
+// declaration, seen first), so every bytes spelling keeps compiling unchanged.
+template <typename Codec>
 class subscriber;
 
 // The typed subscriber's construction-time options. posture is the typed attach gate
@@ -60,22 +59,23 @@ struct typed_subscriber_options
 // the callback and, when it was the last local subscriber for the fqn, unsubscribes the
 // topic from every fanned peer. A moved-from handle is inert (empty retire); its
 // destructor does nothing, so no callback ever fires through a dropped subscriber.
-template <typename Policy>
-    requires plexus::Policy<Policy>
-class subscriber<Policy, void>
+template <>
+class subscriber<void>
 {
 public:
-    template <typename... NodeTs, typename Cb>
+    template <typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, Cb cb)
         : subscriber(n, fqn, io::subscriber_qos{}, std::move(cb))
     {
     }
 
-    template <typename... NodeTs, typename Cb>
+    template <typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const io::subscriber_qos &qos, Cb cb)
     {
-        const auto rid = n.register_subscriber_seam(fqn, qos, adapt(std::move(cb)));
-        m_retire = [&n, rid] { n.retire_subscriber_seam(rid); };
+        io::endpoint_seam seam = n.endpoint_seam_for();
+        const auto rid = seam.register_subscriber(seam.ctx, fqn, qos, adapt(std::move(cb)),
+                                                  std::nullopt, nullptr, io::object_dispatch{});
+        m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
     subscriber(subscriber &&) noexcept = default;
@@ -126,8 +126,7 @@ private:
 // first). The decode state lives in a heap block the handle owns; the node's stored
 // adapters reference it by raw pointer and are retired (removing both entries) before the
 // block is freed. A moved-from handle is inert; its destructor does nothing.
-template <typename Policy, typename Codec>
-    requires plexus::Policy<Policy>
+template <typename Codec>
 class subscriber
 {
 public:
@@ -135,13 +134,13 @@ public:
     using typed_callback =
         plexus::detail::move_only_function<void(const value_type &, const io::message_info &)>;
 
-    template <typename... NodeTs, typename Cb>
+    template <typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, Cb cb)
         : subscriber(n, fqn, typed_subscriber_options{}, std::move(cb), Codec{})
     {
     }
 
-    template <typename... NodeTs, typename Cb>
+    template <typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn,
                const typed_subscriber_options &opts, Cb cb, Codec codec = {})
         : m_state(std::make_unique<state>(std::move(codec), adapt(std::move(cb)),
@@ -160,14 +159,14 @@ public:
         auto bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info)
         { st->on_bytes(bytes, info); };
 
-        typename node<Policy, NodeTs...>::object_entry obj{};
-        obj.native_key = &io::detail::type_key<value_type>;
-        obj.dispatch = [st](const io::object_carrier &carrier, const io::message_info &info)
+        io::object_dispatch dispatch = [st](const io::object_carrier &carrier, const io::message_info &info)
         { st->on_object(carrier, info); };
 
-        const auto rid = n.register_subscriber_seam(fqn, qos, std::move(bytes_adapter),
-                                                    identity.type_id, std::move(obj));
-        m_retire = [&n, rid] { n.retire_subscriber_seam(rid); };
+        io::endpoint_seam seam = n.endpoint_seam_for();
+        const auto rid = seam.register_subscriber(
+            seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id,
+            &io::detail::type_key<value_type>, std::move(dispatch));
+        m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
     // The count of inbound frames whose decode failed — dropped, never a partial T. Read

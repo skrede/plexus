@@ -88,10 +88,10 @@ struct u32_codec
 using req_codec = u32_codec<request_t>;
 using res_codec = u32_codec<response_t>;
 
-using typed_caller = plexus::caller<inproc_policy, response_t(request_t), req_codec, res_codec>;
+using typed_caller = plexus::caller<response_t(request_t), req_codec, res_codec>;
 using typed_procedure =
-    plexus::procedure<inproc_policy, response_t(request_t), req_codec, res_codec>;
-using bytes_procedure = plexus::procedure<inproc_policy>;
+    plexus::procedure<response_t(request_t), req_codec, res_codec>;
+using bytes_procedure = plexus::procedure<>;
 
 static_assert(plexus::typed_codec<req_codec>);
 static_assert(plexus::typed_codec<res_codec>);
@@ -213,7 +213,7 @@ TEST_CASE("typed reqres: a provider request-decode failure surfaces as deseriali
             return response_t{0};
         }};
     // A BYTES caller sends a malformed (non-4-byte) request to the typed procedure.
-    plexus::caller<inproc_policy> raw{n.a, "rpc"};
+    plexus::caller<> raw{n.a, "rpc"};
     n.drive();
 
     std::optional<std::error_code> err;

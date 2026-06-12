@@ -54,8 +54,8 @@ using plexus::discovery::static_discovery;
 using plexus::io::message_info;
 
 using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using bytes_publisher = plexus::publisher<inproc_policy>;
-using bytes_subscriber = plexus::subscriber<inproc_policy>;
+using bytes_publisher = plexus::publisher<>;
+using bytes_subscriber = plexus::subscriber<>;
 
 struct sample
 {
@@ -100,8 +100,8 @@ struct counting_codec
 static_assert(plexus::typed_codec<counting_codec>);
 static_assert(plexus::identity_bearing<counting_codec>);
 
-using typed_publisher = plexus::publisher<inproc_policy, counting_codec>;
-using typed_subscriber = plexus::subscriber<inproc_policy, counting_codec>;
+using typed_publisher = plexus::publisher<counting_codec>;
+using typed_subscriber = plexus::subscriber<counting_codec>;
 
 plexus::node_id make_id(std::uint8_t seed)
 {
@@ -407,8 +407,8 @@ TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is
     int sample_calls = 0;
     typed_subscriber s{n.a, "topic", plexus::typed_subscriber_options{},
                        [&](const sample &) { ++sample_calls; }, counting_codec{}};
-    plexus::publisher<inproc_policy, other_codec> p{n.b, "topic",
-                                                    plexus::typed_publisher_options{}, other_codec{}};
+    plexus::publisher<other_codec> p{n.b, "topic",
+                                     plexus::typed_publisher_options{}, other_codec{}};
     n.drive();
 
     auto loan = p.borrow();

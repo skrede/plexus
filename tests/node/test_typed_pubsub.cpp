@@ -52,7 +52,7 @@ using plexus::discovery::static_discovery;
 using plexus::io::message_info;
 
 using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using bytes_publisher = plexus::publisher<inproc_policy>;
+using bytes_publisher = plexus::publisher<>;
 
 // A trivial value type: one 32-bit number. The codec serializes it little-endian and
 // counts each encode so the fast-path zero-serialization witness is observable.
@@ -97,8 +97,8 @@ struct counting_codec
 static_assert(plexus::typed_codec<counting_codec>);
 static_assert(plexus::identity_bearing<counting_codec>);
 
-using typed_publisher = plexus::publisher<inproc_policy, counting_codec>;
-using typed_subscriber = plexus::subscriber<inproc_policy, counting_codec>;
+using typed_publisher = plexus::publisher<counting_codec>;
+using typed_subscriber = plexus::subscriber<counting_codec>;
 
 plexus::node_id make_id(std::uint8_t seed)
 {

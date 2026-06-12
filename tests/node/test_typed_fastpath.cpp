@@ -45,7 +45,7 @@ using plexus::discovery::static_discovery;
 using plexus::io::message_info;
 
 using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using bytes_subscriber = plexus::subscriber<inproc_policy>;
+using bytes_subscriber = plexus::subscriber<>;
 
 struct sample
 {
@@ -85,8 +85,8 @@ struct counting_codec
 
 static_assert(plexus::typed_codec<counting_codec>);
 
-using typed_publisher = plexus::publisher<inproc_policy, counting_codec>;
-using typed_subscriber = plexus::subscriber<inproc_policy, counting_codec>;
+using typed_publisher = plexus::publisher<counting_codec>;
+using typed_subscriber = plexus::subscriber<counting_codec>;
 
 plexus::node_id make_id(std::uint8_t seed)
 {

@@ -72,8 +72,7 @@ int main()
         io, disc, "divide-client", transport, opts};
     node.listen({"tcp", "127.0.0.1:5577"});
 
-    using divide_caller = plexus::caller<plexus::asio::asio_policy,
-                                         div_response(div_request),
+    using divide_caller = plexus::caller<div_response(div_request),
                                          pair_codec<div_request>, pair_codec<div_response>>;
     divide_caller divide{node, "divide"};
 

@@ -39,7 +39,7 @@ int main()
         io, disc, "uppercase-server", transport, opts};
     node.listen({"tcp", "127.0.0.1:5572"});
 
-    using bytes_procedure = plexus::procedure<plexus::asio::asio_policy>;
+    using bytes_procedure = plexus::procedure<>;
     bytes_procedure uppercase{
         node, "uppercase",
         [](std::span<const std::byte> param, bytes_procedure::reply_fn &reply) {

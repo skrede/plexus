@@ -43,8 +43,8 @@ using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 
 using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using inproc_caller = plexus::caller<inproc_policy>;
-using inproc_procedure = plexus::procedure<inproc_policy>;
+using inproc_caller = plexus::caller<>;
+using inproc_procedure = plexus::procedure<>;
 using reply_t = plexus::reply;
 
 plexus::node_id make_id(std::uint8_t seed)

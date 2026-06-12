@@ -42,7 +42,7 @@ int main()
         io, disc, "demo-subscriber", transport, opts};
     node.listen({"tcp", "127.0.0.1:5571"});
 
-    plexus::subscriber<plexus::asio::asio_policy> topic{
+    plexus::subscriber<> topic{
         node, "demo",
         [](std::span<const std::byte> bytes, const plexus::io::message_info &info) {
             std::string line{reinterpret_cast<const char *>(bytes.data()), bytes.size()};

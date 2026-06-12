@@ -6,14 +6,13 @@
 #include "plexus/call_error.h"
 #include "plexus/typed_codec.h"
 
-#include "plexus/io/procedure_forwarder.h"
+#include "plexus/io/endpoint_seam.h"
 
 #include "plexus/wire/varint.h"
 #include "plexus/wire/rpc_status.h"
 #include "plexus/wire/frame_codec.h"
 
 #include "plexus/publisher_gid.h"
-#include "plexus/policy.h"
 
 #include "plexus/detail/compat.h"
 
@@ -73,11 +72,11 @@ struct call_options
 };
 
 // The calling endpoint family. The primary template names the typed endpoint
-// (caller<Policy, Res(Req), CReq, CRes>, defined in a later plan); the bytes endpoint is
-// the caller<Policy, void, void, void> specialization below — caller<Policy> selects it
-// via the defaulted parameters, so every existing bytes spelling keeps compiling.
-template <typename Policy, typename Sig, typename CReq, typename CRes>
-    requires plexus::Policy<Policy>
+// (caller<Res(Req), CReq, CRes>); the bytes endpoint is the caller<void, void, void>
+// specialization below — caller<> selects it via the defaulted parameters (the defaults
+// live in node.h's forward declaration, seen first), so every bytes spelling keeps
+// compiling.
+template <typename Sig, typename CReq, typename CRes>
 class caller;
 
 // The bytes calling endpoint: the CONSTRUCTOR binds the node and fqn; the handle owns
@@ -100,24 +99,19 @@ class caller;
 // to the forwarder runs to its resolution (the asio convention — the operation owns its
 // completion, not the initiating handle). Cancellation sugar is seeded, not invented
 // here. A moved-from handle is inert.
-template <typename Policy>
-    requires plexus::Policy<Policy>
-class caller<Policy, void, void, void>
+template <>
+class caller<void, void, void>
 {
 public:
     // The completion-side callback the node seam fans: the wire status (ENGAGED on a
     // routed call, ABSENT = the facade no_provider verdict that never rode the wire),
     // the return bytes, and the RESOLVED provider gid (engaged on a routed call, absent
-    // on the no_provider leg).
-    using on_reply_fn = plexus::detail::move_only_function<void(
-        std::optional<wire::rpc_status>, std::span<const std::byte>,
-        const std::optional<publisher_gid> &)>;
+    // on the no_provider leg). The Policy-free shape lifted into endpoint_seam.h.
+    using on_reply_fn = io::on_reply_fn;
 
-    template <typename... NodeTs>
+    template <typename Policy, typename... NodeTs>
     caller(node<Policy, NodeTs...> &n, std::string_view fqn)
-        : m_call([&n](std::string_view f, std::span<const std::byte> p,
-                      on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
-                 { n.call_seam(f, p, std::move(on_reply), deadline); })
+        : m_seam(n.endpoint_seam_for())
         , m_fqn(fqn)
     {
     }
@@ -151,7 +145,7 @@ private:
     void dispatch(std::span<const std::byte> param, Completion &&completion,
                   std::optional<std::chrono::nanoseconds> deadline)
     {
-        m_call(m_fqn, param,
+        m_seam.call(m_seam.ctx, m_fqn, param,
                [completion = std::forward<Completion>(completion)](
                    std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
                    const std::optional<publisher_gid> &provider) mutable {
@@ -173,10 +167,8 @@ private:
                deadline);
     }
 
-    plexus::detail::move_only_function<void(
-        std::string_view, std::span<const std::byte>, on_reply_fn,
-        std::optional<std::chrono::nanoseconds>)> m_call;
-    std::string m_fqn;
+    io::endpoint_seam m_seam{};
+    std::string       m_fqn;
 };
 
 // The typed calling endpoint: an encode/decode adaptation around the bytes caller.
@@ -193,20 +185,16 @@ private:
 //     procedure replying a bare error completes this typed caller with call_errc::error
 //     (the interop fallback: a hostile varint never crashes, never half-decodes);
 //   - every other failure leg passes through from_rpc_status unchanged.
-template <typename Policy, typename Res, typename Req, typename CReq, typename CRes>
-    requires plexus::Policy<Policy> && typed_codec<CReq> && typed_codec<CRes>
-class caller<Policy, Res(Req), CReq, CRes>
+template <typename Res, typename Req, typename CReq, typename CRes>
+    requires typed_codec<CReq> && typed_codec<CRes>
+class caller<Res(Req), CReq, CRes>
 {
 public:
-    using on_reply_fn = plexus::detail::move_only_function<void(
-        std::optional<wire::rpc_status>, std::span<const std::byte>,
-        const std::optional<publisher_gid> &)>;
+    using on_reply_fn = io::on_reply_fn;
 
-    template <typename... NodeTs>
+    template <typename Policy, typename... NodeTs>
     caller(node<Policy, NodeTs...> &n, std::string_view fqn, CReq req_codec = {}, CRes res_codec = {})
-        : m_call([&n](std::string_view f, std::span<const std::byte> p,
-                      on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
-                 { n.call_seam(f, p, std::move(on_reply), deadline); })
+        : m_seam(n.endpoint_seam_for())
         , m_req_codec(std::move(req_codec))
         , m_res_codec(std::move(res_codec))
         , m_fqn(fqn)
@@ -239,7 +227,7 @@ private:
                   std::optional<std::chrono::nanoseconds> deadline)
     {
         const wire_bytes<> encoded = m_req_codec.encode(request);
-        m_call(m_fqn, static_cast<std::span<const std::byte>>(encoded),
+        m_seam.call(m_seam.ctx, m_fqn, static_cast<std::span<const std::byte>>(encoded),
                [completion = std::forward<Completion>(completion), res_codec = m_res_codec](
                    std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
                    const std::optional<publisher_gid> &) mutable {
@@ -277,9 +265,7 @@ private:
                deadline);
     }
 
-    plexus::detail::move_only_function<void(
-        std::string_view, std::span<const std::byte>, on_reply_fn,
-        std::optional<std::chrono::nanoseconds>)> m_call;
+    io::endpoint_seam m_seam{};
     CReq        m_req_codec;
     CRes        m_res_codec;
     std::string m_fqn;

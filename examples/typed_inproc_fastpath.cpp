@@ -124,14 +124,14 @@ void fast_path()
     auto encodes = codec.encodes;
 
     const reading *received = nullptr;
-    plexus::subscriber<inproc_policy, reading_codec> typed_sub{
+    plexus::subscriber<reading_codec> typed_sub{
         n.sub_node, "telemetry",
         [&](const reading &r, const plexus::io::message_info &info) {
             received = &r;
             std::cout << "  delivered value=" << r.value
                       << "  from_intra_process=" << std::boolalpha << info.from_intra_process << '\n';
         }};
-    plexus::publisher<inproc_policy, reading_codec> pub{
+    plexus::publisher<reading_codec> pub{
         n.pub_node, "telemetry", plexus::typed_publisher_options{}, codec};
     n.ex.drain();
 
@@ -155,12 +155,12 @@ void fallback()
     reading_codec codec;
     auto encodes = codec.encodes;
 
-    plexus::subscriber<inproc_policy> bytes_sub{
+    plexus::subscriber<> bytes_sub{
         n.sub_node, "telemetry",
         [&](std::span<const std::byte> b) {
             std::cout << "  bytes sub received " << b.size() << " bytes (the consumer decodes)\n";
         }};
-    plexus::publisher<inproc_policy, reading_codec> pub{
+    plexus::publisher<reading_codec> pub{
         n.pub_node, "telemetry", plexus::typed_publisher_options{}, codec};
     n.ex.drain();
 

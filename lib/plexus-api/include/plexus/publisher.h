@@ -3,15 +3,14 @@
 
 #include "plexus/node.h"
 
-#include "plexus/io/message_forwarder.h"
 #include "plexus/io/object_carrier.h"
+#include "plexus/io/endpoint_seam.h"
 
 #include "plexus/detail/loan_pool.h"
 
 #include "plexus/typed_codec.h"
 #include "plexus/topic_qos.h"
 #include "plexus/wire_bytes.h"
-#include "plexus/policy.h"
 
 #include "plexus/detail/compat.h"
 
@@ -26,11 +25,10 @@
 namespace plexus {
 
 // The publishing endpoint family. The primary template names the typed endpoint
-// (publisher<Policy, Codec> below); the bytes endpoint is the publisher<Policy, void>
-// specialization — publisher<Policy> selects it via the defaulted Codec, so every
-// existing bytes spelling keeps compiling unchanged.
-template <typename Policy, typename Codec>
-    requires plexus::Policy<Policy>
+// (publisher<Codec> below); the bytes endpoint is the publisher<void> specialization —
+// publisher<> selects it via the defaulted Codec (the default lives in node.h's forward
+// declaration, seen first), so every bytes spelling keeps compiling unchanged.
+template <typename Codec>
 class publisher;
 
 // The typed publisher's construction-time options. The pool depth is required-with-
@@ -55,30 +53,30 @@ struct typed_publisher_options
 // member-init aggregation — declare the node ref first and the endpoint handles after
 // it, so reverse destruction retires the handles before the node. A moved-from handle
 // is inert (null forwarder, empty retire); its destructor does nothing.
-template <typename Policy>
-    requires plexus::Policy<Policy>
-class publisher<Policy, void>
+template <>
+class publisher<void>
 {
 public:
     // The registration ctor: declare the topic (minting its gid) through the node's
-    // private friend seam, then capture the forwarder for the direct publish. Spelled
-    // over node<Policy, NodeTs...> so it binds across the node's transport pack.
-    template <typename... NodeTs>
+    // private friend seam, then capture the type-erased outbound seam for the direct
+    // publish. The ctor stays a template over <Policy, NodeTs...> so it binds across the
+    // node's transport pack; the captured seam carries no Policy.
+    template <typename Policy, typename... NodeTs>
     publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {},
               bool emit_source_identity = false)
-        : m_messages(&n.message_forwarder())
+        : m_seam(n.endpoint_seam_for())
         , m_fqn(fqn)
     {
-        n.declare_publisher_seam(fqn, qos, emit_source_identity);
+        m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt);
     }
 
-    // The hot verb: a direct fan of bytes through the owned forwarder. A moved-from
-    // publisher has a null forwarder and must not be published through (the lifetime
-    // precondition); the node sequences teardown.
-    void publish(std::span<const std::byte> bytes) { m_messages->publish(m_fqn, bytes); }
+    // The hot verb: one indirect call across the seam. A moved-from publisher has a null
+    // seam ctx and must not be published through (the lifetime precondition); the node
+    // sequences teardown.
+    void publish(std::span<const std::byte> bytes) { m_seam.publish(m_seam.ctx, m_fqn, bytes); }
 
     publisher(publisher &&other) noexcept
-        : m_messages(std::exchange(other.m_messages, nullptr))
+        : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
         , m_fqn(std::move(other.m_fqn))
     {
     }
@@ -87,7 +85,7 @@ public:
     {
         if(this != &other)
         {
-            m_messages = std::exchange(other.m_messages, nullptr);
+            m_seam = std::exchange(other.m_seam, io::endpoint_seam{});
             m_fqn = std::move(other.m_fqn);
         }
         return *this;
@@ -102,8 +100,8 @@ public:
     ~publisher() = default;
 
 private:
-    io::message_forwarder<Policy> *m_messages{};
-    std::string                    m_fqn;
+    io::endpoint_seam m_seam{};
+    std::string       m_fqn;
 };
 
 // The typed publishing endpoint: the CONSTRUCTOR declares the topic WITH its resolved
@@ -119,17 +117,16 @@ private:
 //
 // LIFETIME: a publisher must NOT outlive its node (member-init aggregation, node ref
 // first). A moved-from handle is inert (null forwarder); its destructor does nothing.
-template <typename Policy, typename Codec>
-    requires plexus::Policy<Policy>
+template <typename Codec>
 class publisher
 {
 public:
     using value_type = typename Codec::value_type;
 
-    template <typename... NodeTs>
+    template <typename Policy, typename... NodeTs>
     publisher(node<Policy, NodeTs...> &n, std::string_view fqn,
               const typed_publisher_options &opts = {}, Codec codec = {})
-        : m_messages(&n.message_forwarder())
+        : m_seam(n.endpoint_seam_for())
         , m_fqn(fqn)
         , m_codec(std::move(codec))
         , m_identity(resolve_identity(m_codec, opts.type_id))
@@ -139,7 +136,8 @@ public:
                       "plexus: a typed publisher needs a codec satisfying typed_codec "
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
-        n.declare_publisher_seam(fqn, opts.qos, opts.emit_source_identity, m_identity.type_id);
+        m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity,
+                                 m_identity.type_id);
     }
 
     // Borrow a slot to construct a value in place (zero-copy publish). An empty loan on
@@ -162,7 +160,8 @@ public:
             return;
         auto carrier = detail::loan_pool<value_type>::carrier_for(held, m_identity.type_id);
         const value_type &value = *static_cast<const value_type *>(carrier.slot->object);
-        m_messages->publish_object(m_fqn, carrier, [&] { return encode_to_span(value); });
+        auto encode = [&] { return encode_to_span(value); };
+        m_seam.publish_object(m_seam.ctx, m_fqn, carrier, io::make_encode_thunk(encode));
     }
 
     // The convenience copy form: borrow a slot, copy-construct into it, and delegate to
@@ -177,7 +176,7 @@ public:
             return;
         }
         ++m_loan_exhausted;
-        m_messages->publish(m_fqn, encode_to_span(value));
+        m_seam.publish(m_seam.ctx, m_fqn, encode_to_span(value));
     }
 
     // The count of publishes that degraded to the serialize path because the pool had no
@@ -185,7 +184,7 @@ public:
     [[nodiscard]] std::size_t loan_exhausted() const noexcept { return m_loan_exhausted; }
 
     publisher(publisher &&other) noexcept
-        : m_messages(std::exchange(other.m_messages, nullptr))
+        : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
         , m_fqn(std::move(other.m_fqn))
         , m_codec(std::move(other.m_codec))
         , m_identity(other.m_identity)
@@ -207,7 +206,7 @@ private:
         return static_cast<std::span<const std::byte>>(m_scratch);
     }
 
-    io::message_forwarder<Policy>     *m_messages{};
+    io::endpoint_seam                  m_seam{};
     std::string                        m_fqn;
     Codec                              m_codec;
     type_identity                      m_identity;

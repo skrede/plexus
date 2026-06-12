@@ -88,11 +88,11 @@ struct counting_codec
     plexus::type_identity type_info() const { return {0xABCD1234u, "sample"}; }
 };
 
-using typed_publisher = plexus::publisher<inproc_policy, counting_codec>;
-using typed_subscriber = plexus::subscriber<inproc_policy, counting_codec>;
+using typed_publisher = plexus::publisher<counting_codec>;
+using typed_subscriber = plexus::subscriber<counting_codec>;
 
-using bytes_publisher = plexus::publisher<inproc_policy>;
-using bytes_subscriber = plexus::subscriber<inproc_policy>;
+using bytes_publisher = plexus::publisher<>;
+using bytes_subscriber = plexus::subscriber<>;
 
 plexus::node_id make_id(std::uint8_t seed)
 {
