@@ -20,7 +20,7 @@ concept deducible_handler = requires { static_cast<void>(&F::operator()); };
 // technique, not a dependency): a partial specialization per member-pointer qualifier form
 // decomposes one concrete operator() into its result type and its single argument. The
 // canonical const / non-const / noexcept / & / && qualifier set is covered in full — a
-// missing form would silently leave a valid lambda non-deducible (T-34-05). The primary is
+// missing form would silently leave a valid lambda non-deducible. The primary is
 // left undefined so a non-deducible callable (generic or overloaded operator()) names no
 // member and fails the concept rather than mis-deducing.
 template <typename F>

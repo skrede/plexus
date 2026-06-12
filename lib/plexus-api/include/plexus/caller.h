@@ -238,6 +238,8 @@ private:
                   std::optional<std::chrono::nanoseconds> deadline)
     {
         const wire_bytes<> encoded = m_req_codec.encode(request);
+        // The codec is copied so the completion stays self-contained: a mid-flight move of
+        // this handle must not dangle a captured this/member reference.
         m_seam.call(m_seam.ctx, m_fqn, static_cast<std::span<const std::byte>>(encoded),
                [completion = std::forward<Completion>(completion), res_codec = m_res_codec](
                    std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,

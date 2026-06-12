@@ -52,8 +52,8 @@ inline std::span<const std::byte> invoke(const encode_thunk &thunk)
 }
 
 // The Policy-free callable shapes the endpoint handles and the node exchange across the
-// seam. They are structurally identical across every policy (Phase 28 decision log: the
-// req/res signatures name only rpc_status + spans), so the seam names them once here
+// seam. They are structurally identical across every policy (the req/res signatures name
+// only rpc_status + spans), so the seam names them once here
 // instead of through a Policy-parameterized forwarder type. Spelled FULLY QUALIFIED as
 // plexus::detail::move_only_function — io::detail shadows plexus::detail in this scope.
 using reply_fn =
