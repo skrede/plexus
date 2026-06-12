@@ -3,6 +3,7 @@
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/priority_band_queue.h"
 
 #include "plexus/policy.h"
@@ -69,18 +70,22 @@ public:
     // there is no saturation site and congestion does not apply on the passthrough; a
     // stream channel bands the frame (applying congestion at a full band) then drains the
     // highest-priority backlog the destination can currently accept.
-    void enqueue(Channel &ch, std::size_t band, io::congestion congestion,
-                 std::span<const std::byte> frame)
+    // Returns the drop cause the admission incurred (drop_cause::none on a clean admit) so
+    // the forwarder records the per-(topic, band) drop at the fan-out site. The inproc/sink
+    // short-circuit never has a bounded band backlog, so it never drops here (none).
+    drop_cause enqueue(Channel &ch, std::size_t band, io::congestion congestion,
+                       std::span<const std::byte> frame)
     {
         if constexpr(!can_poll())
         {
             ch.send(frame);   // inproc/sink: no bounded band backlog, so congestion is moot
-            return;
+            return drop_cause::none;
         }
         else
         {
-            m_queues[&ch].enqueue(band, congestion, frame);
+            const drop_cause cause = m_queues[&ch].enqueue_with_verdict(band, congestion, frame);
             drain(ch);
+            return cause;
         }
     }
 

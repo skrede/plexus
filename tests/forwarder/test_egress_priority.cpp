@@ -1,4 +1,5 @@
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 #include "plexus/io/priority.h"
@@ -434,6 +435,45 @@ TEST_CASE("egress_priority: block refuses the new frame at a saturated band; it 
         const auto bodies = data_bodies(st.sends);
         REQUIRE(bodies == expected);   // the original window survives, REFUSED never sent
     }
+}
+
+TEST_CASE("egress_priority: a forced drop is observable per-topic-per-band on the forwarder accessor",
+          "[egress_priority][forwarder]")
+{
+    // The per-(topic, band) drop counter on the topic record is bumped at the fan-out
+    // site from the band's overflow verdict, and read on demand through the forwarder
+    // accessor. Each cause increments its own tally for the topic's own band; an untouched
+    // (topic, band, cause) reads 0.
+    namespace pdetail = io::detail;
+    auto force_drops = [](io::congestion mode, pdetail::drop_cause cause, std::size_t overflows) {
+        stall_state st;
+        stall_channel ch{st};
+        stall_executor ex;
+        stall_forwarder fwd{ex};
+        fwd.declare("t", topic_qos{.congestion = mode, .priority = io::priority::normal});
+        REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
+
+        const std::size_t band = io::detail::band_of(io::priority::normal);
+        st.reported = io::detail::k_low_water + 1;            // stalled: the band fills, then overflows
+        for(std::size_t i = 0; i < io::detail::k_band_depth; ++i)
+            fwd.publish("t", as_bytes("f" + std::to_string(i)));
+        REQUIRE(fwd.dropped("t", band, cause) == 0);         // no overflow yet
+        for(std::size_t i = 0; i < overflows; ++i)
+            fwd.publish("t", as_bytes("over" + std::to_string(i)));
+
+        REQUIRE(fwd.dropped("t", band, cause) == overflows); // every overflow counted under its cause
+        // The other causes for the same (topic, band) stay zero — the verdict is exact.
+        for(auto other : {pdetail::drop_cause::drop_oldest, pdetail::drop_cause::drop_newest,
+                          pdetail::drop_cause::blocked})
+            if(other != cause)
+                REQUIRE(fwd.dropped("t", band, other) == 0);
+        // A different band for the same topic is untouched.
+        REQUIRE(fwd.dropped("t", io::detail::band_of(io::priority::realtime), cause) == 0);
+    };
+
+    force_drops(io::congestion::drop_oldest, pdetail::drop_cause::drop_oldest, 3);
+    force_drops(io::congestion::drop_newest, pdetail::drop_cause::drop_newest, 5);
+    force_drops(io::congestion::block,       pdetail::drop_cause::blocked,     4);
 }
 
 TEST_CASE("egress_priority: drop_newest refuses the new frame at a saturated band; it never reaches the wire, looped",
