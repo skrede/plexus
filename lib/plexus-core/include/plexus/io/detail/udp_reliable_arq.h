@@ -107,9 +107,9 @@ public:
     {
         for(auto &s : m_slots)
             s.timer = std::make_unique<timer_type>(m_executor);
-        m_recv.on_deliver([this](std::uint16_t seq, std::span<const std::byte> bytes) {
+        m_recv.on_deliver([this](std::uint16_t seq, bool fragmented, std::span<const std::byte> bytes) {
             if(m_on_deliver_seq)
-                m_on_deliver_seq(seq, bytes);
+                m_on_deliver_seq(seq, fragmented, bytes);
             if(m_on_deliver)
                 m_on_deliver(bytes);
         });
@@ -127,10 +127,12 @@ public:
     void on_send_ack(plexus::detail::move_only_function<void(const wire::udp_ack &)> cb) { m_on_send_ack = std::move(cb); }
     // an in-order reliable payload is ready for the application (the channel posts it).
     void on_deliver(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_deliver = std::move(cb); }
-    // the same in-order release, carrying the delivered seq: the channel correlates it
-    // against the per-seq fragmented mark (set when the inbound envelope's FRAGMENTED bit
-    // was seen) to route a reliable fragment to the reassembler instead of straight delivery.
-    void on_deliver_seq(plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> cb) { m_on_deliver_seq = std::move(cb); }
+    // the same in-order release, carrying the delivered seq and the per-segment FRAGMENTED
+    // bit (captured from the inbound envelope at on_segment and held on the reorder slot
+    // until release): the channel routes a reliable fragment to the reassembler instead of
+    // straight delivery. The bit rides acceptance, so a forged/out-of-window segment that
+    // never enters the buffer leaves no residue to prune.
+    void on_deliver_seq(plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> cb) { m_on_deliver_seq = std::move(cb); }
     // the retransmit cap was hit -> the reliable guarantee cannot be met (fatal).
     void on_exhausted(plexus::detail::move_only_function<void()> cb) { m_on_exhausted = std::move(cb); }
     // a cumulative ack slid the base, so the send window freed slots: the congestion=block
@@ -161,10 +163,11 @@ public:
         return submit_result::admitted;
     }
 
-    // A data segment arrived: drive the in-order reorder buffer, then ack what we have.
-    void on_segment(std::uint16_t seq, std::span<const std::byte> payload)
+    // A data segment arrived: drive the in-order reorder buffer (carrying the envelope's
+    // FRAGMENTED bit so it releases with the segment), then ack what we have.
+    void on_segment(std::uint16_t seq, bool fragmented, std::span<const std::byte> payload)
     {
-        m_recv.feed(seq, payload);
+        m_recv.feed(seq, fragmented, payload);
         send_ack();
     }
 
@@ -313,7 +316,7 @@ private:
     plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)> m_on_transmit;
     plexus::detail::move_only_function<void(const wire::udp_ack &)> m_on_send_ack;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_deliver;
-    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> m_on_deliver_seq;
+    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver_seq;
     plexus::detail::move_only_function<void()> m_on_exhausted;
     plexus::detail::move_only_function<void()> m_on_window_advance;
 };

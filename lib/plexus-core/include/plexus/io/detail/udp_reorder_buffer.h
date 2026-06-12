@@ -57,9 +57,11 @@ public:
     }
 
     // The owner-installed in-order delivery sink. The buffer calls it synchronously,
-    // strictly in publish order, exactly once per distinct seq. The channel posts on
-    // on_data around it (the buffer is sans-IO).
-    void on_deliver(plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> cb)
+    // strictly in publish order, exactly once per distinct seq. The fragmented bit rides
+    // the slot so the channel routes a reliable fragment to the reassembler on release
+    // (it is bound to acceptance and freed with the slot — no parallel per-seq side-set to
+    // prune). The channel posts on on_data around it (the buffer is sans-IO).
+    void on_deliver(plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> cb)
     {
         m_on_deliver = std::move(cb);
     }
@@ -68,7 +70,7 @@ public:
     // buffered successors (the gap-fill release). seq ahead of a gap -> buffer it and
     // every higher seq (HOL: nothing past the gap is released). seq behind expected ->
     // duplicate, dropped. seq at/beyond expected+W -> out of window, dropped.
-    outcome feed(std::uint16_t seq, std::span<const std::byte> bytes)
+    outcome feed(std::uint16_t seq, bool fragmented, std::span<const std::byte> bytes)
     {
         auto adv = static_cast<std::uint16_t>(seq - m_expected);
         if(adv >= half_space)
@@ -82,6 +84,7 @@ public:
             return was_gap ? outcome::buffered : outcome::duplicate;  // re-buffered hole / dup at edge
 
         slot.bytes.assign(bytes.begin(), bytes.end());
+        slot.fragmented = fragmented;
         slot.present = true;
         if(adv != 0)
             return outcome::buffered;             // a hole remains at expected -> HOL hold
@@ -112,6 +115,7 @@ private:
     {
         std::vector<std::byte> bytes;
         bool present{false};
+        bool fragmented{false};
     };
 
     // Release the run of contiguous present slots starting at the base, advancing
@@ -124,7 +128,7 @@ private:
         {
             auto &s = m_slots[m_base];
             if(m_on_deliver)
-                m_on_deliver(m_expected, std::span<const std::byte>{s.bytes});
+                m_on_deliver(m_expected, s.fragmented, std::span<const std::byte>{s.bytes});
             s.present = false;
             ++m_expected;
             m_base = (m_base + 1) % m_window;
@@ -135,7 +139,7 @@ private:
     std::vector<slot> m_slots;            // a ring of W slots, allocated at setup
     std::size_t m_base{0};                // ring index of `expected`
     std::uint16_t m_expected{0};          // the next seq to deliver in order
-    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> m_on_deliver;
+    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver;
 };
 
 }
