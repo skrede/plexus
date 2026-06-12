@@ -25,6 +25,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <memory>
 #include <string>
 #include <vector>
 #include <chrono>
@@ -221,35 +222,101 @@ TEST_CASE("call family: dropping the procedure retires it to no_handler", "[node
 }
 
 #ifdef PLEXUS_HAS_FAMILY_SPELLING
-// The family-spelling positive assertions, INERT until the family wave defines
-// PLEXUS_HAS_FAMILY_SPELLING and fixes the literal procedure<Sig, Codec> / caller<Sig, Codec>
-// spelling. They assert the single-type-parameter family form names the same endpoint the
-// current multi-parameter form does, and round-trips. The family wave flips the guard on and
-// fills the chosen spelling; nothing here builds until then.
+// The codec-family spelling positive assertions. rpc_procedure<Sig, Family> /
+// rpc_caller<Sig, Family> expand one class-template codec family to the per-half codecs
+// Family<Req> / Family<Res> over a Res(Req) signature; the aliases must name the SAME types as
+// the per-half four-parameter form. echo_codec is a trivial value codec family (one u32),
+// supplied here since this TU defines no codec of its own.
+namespace family_check {
+
+struct u32_value
+{
+    std::uint32_t value{};
+};
+
+template <typename T>
+struct echo_codec
+{
+    using value_type = T;
+
+    plexus::wire_bytes<> encode(const T &v) const
+    {
+        auto owner = std::make_shared<std::vector<std::byte>>(4);
+        for(int i = 0; i < 4; ++i)
+            (*owner)[i] = static_cast<std::byte>((v.value >> (8 * i)) & 0xff);
+        return plexus::wire_bytes<>{std::span<const std::byte>{owner->data(), owner->size()},
+                                    std::move(owner)};
+    }
+
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> b, T &out) const
+    {
+        if(b.size() != 4)
+            return plexus::expected<void, std::error_code>{
+                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+        std::uint32_t v = 0;
+        for(int i = 0; i < 4; ++i)
+            v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(b[i])) << (8 * i);
+        out.value = v;
+        return {};
+    }
+};
+
+static_assert(__is_same(plexus::rpc_procedure<u32_value(u32_value), echo_codec>,
+                        plexus::procedure<u32_value(u32_value), echo_codec<u32_value>,
+                                          echo_codec<u32_value>>));
+static_assert(__is_same(plexus::rpc_caller<u32_value(u32_value), echo_codec>,
+                        plexus::caller<u32_value(u32_value), echo_codec<u32_value>,
+                                       echo_codec<u32_value>>));
+
+// The asymmetric-serializer escape: the per-half explicit form binds two DIFFERENT codec
+// types for request and response (the family form cannot express this — that is its whole
+// reason to survive). A second codec family distinct from echo_codec witnesses it.
+template <typename T>
+struct alt_codec
+{
+    using value_type = T;
+
+    plexus::wire_bytes<> encode(const T &v) const { return echo_codec<T>{}.encode(v); }
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> b, T &out) const
+    {
+        return echo_codec<T>{}.decode(b, out);
+    }
+};
+
+using asymmetric_procedure =
+    plexus::procedure<u32_value(u32_value), echo_codec<u32_value>, alt_codec<u32_value>>;
+static_assert(!__is_same(asymmetric_procedure,
+                         plexus::rpc_procedure<u32_value(u32_value), echo_codec>));
+static_assert(plexus::typed_codec<echo_codec<u32_value>>);
+static_assert(plexus::typed_codec<alt_codec<u32_value>>);
+
+}
+
 TEST_CASE("call family: the family-form spelling names the same caller/procedure endpoint",
           "[node][call][family]")
 {
-    using family_procedure = plexus::procedure<void(std::span<const std::byte>)>;
-    using family_caller    = plexus::caller<void(std::span<const std::byte>)>;
+    using family_check::u32_value;
+    using family_procedure = plexus::rpc_procedure<u32_value(u32_value), family_check::echo_codec>;
+    using family_caller    = plexus::rpc_caller<u32_value(u32_value), family_check::echo_codec>;
 
     net n;
     n.connect();
 
     family_procedure proc{
         n.b, "rpc",
-        [](std::span<const std::byte> param, family_procedure::reply_fn &reply) {
-            reply(plexus::wire::rpc_status::success, param);
+        [](const u32_value &req) -> plexus::expected<u32_value, std::error_code> {
+            return u32_value{req.value + 1};
         }};
     family_caller call{n.a, "rpc"};
     n.drive();
 
-    std::optional<std::string> got;
-    call.call(as_bytes(std::string{"echo"}),
-              [&](plexus::expected<reply_t, std::error_code> r) {
+    std::optional<std::uint32_t> got;
+    call.call(u32_value{41},
+              [&](plexus::expected<u32_value, std::error_code> r) {
                   REQUIRE(static_cast<bool>(r));
-                  got = to_string(r.value().bytes);
+                  got = r.value().value;
               });
     n.drive();
-    REQUIRE(got == "echo");
+    REQUIRE(got == 42u);
 }
 #endif

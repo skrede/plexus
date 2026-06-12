@@ -299,15 +299,19 @@ TEST_CASE("typed reqres: a second local serve on one fqn throws on the typed for
 }
 
 #ifdef PLEXUS_HAS_FAMILY_SPELLING
-// The typed family-spelling positive assertions, INERT until the family wave defines
-// PLEXUS_HAS_FAMILY_SPELLING and fixes the literal procedure<Sig, Codec> / caller<Sig, Codec>
-// spelling (the single-codec "pair codec" form deduces both request and response codecs from
-// one paired codec type). They assert the family form round-trips identically to the current
-// four-parameter form. The family wave flips the guard on and fills the chosen spelling.
+// The codec-family spelling assertions. rpc_procedure<Sig, Family> / rpc_caller<Sig, Family>
+// expand one class-template codec family to the per-half codecs Family<Req> / Family<Res> over
+// a Res(Req) signature. u32_codec is exactly such a family. The aliases must name the SAME types
+// as the per-half four-parameter form (the static_asserts) and round-trip identically.
+static_assert(__is_same(plexus::rpc_procedure<response_t(request_t), u32_codec>,
+                        plexus::procedure<response_t(request_t), req_codec, res_codec>));
+static_assert(__is_same(plexus::rpc_caller<response_t(request_t), u32_codec>,
+                        plexus::caller<response_t(request_t), req_codec, res_codec>));
+
 TEST_CASE("typed reqres: the family-form spelling round-trips the typed reqres", "[node][typed][call][family]")
 {
-    using family_procedure = plexus::procedure<response_t(request_t), req_codec, res_codec>;
-    using family_caller    = plexus::caller<response_t(request_t), req_codec, res_codec>;
+    using family_procedure = plexus::rpc_procedure<response_t(request_t), u32_codec>;
+    using family_caller    = plexus::rpc_caller<response_t(request_t), u32_codec>;
 
     net n;
     n.connect();
