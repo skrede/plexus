@@ -154,6 +154,94 @@ struct close_notify_harness
     }
 };
 
+// A real-transport dialed loopback: a server-side and a client-side dtls_transport
+// (each cross-pinning the other) over one io_context. The accepted/dialed channels
+// land via on_accepted/on_dialed; an app frame from the dialer travels over the wire
+// to the server transport's on_datagram -> demux lookup -> deliver_inbound — the exact
+// path the engine-teardown UAF lives on (the raw OpenSSL harness above drives
+// deliver_inbound directly and so bypasses the demux).
+struct dial_link
+{
+    ::asio::io_context io;
+    ptls::tls_credential server_cred;
+    ptls::tls_credential client_cred;
+    ptls::dtls_transport server;
+    ptls::dtls_transport client;
+
+    std::unique_ptr<ptls::dtls_channel> accepted;
+    std::unique_ptr<ptls::dtls_channel> dialed;
+    bool dial_failed{false};
+
+    dial_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
+        : server_cred(pdt::pin_one(server_id, client_id.digest))
+        , client_cred(pdt::pin_one(client_id, server_id.digest))
+        , server(io, server_cred)
+        , client(io, client_cred)
+    {
+        server.on_accepted([this](std::unique_ptr<ptls::dtls_channel> ch) { accepted = std::move(ch); });
+        client.on_dialed([this](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &) { dialed = std::move(ch); });
+        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error) { dial_failed = true; });
+
+        server.listen({"dtls", "127.0.0.1:0"});
+        client.dial({"dtls", "127.0.0.1:" + std::to_string(server.port())});
+    }
+
+    void pump_until_ready()
+    {
+        pdt::pump_until(io, [this] { return (accepted && dialed) || dial_failed; });
+    }
+
+    void drain()
+    {
+        for(int i = 0; i < 256; ++i)
+        {
+            io.poll();
+            if(io.stopped())
+                io.restart();
+        }
+    }
+};
+
+}
+
+TEST_CASE("dtls.teardown: an inbound datagram after the engine destroys a completed accepted channel is safe, looped",
+          "[dtls][teardown]")
+{
+    pdt::identity_fixture server_id("td_srv");
+    pdt::identity_fixture client_id("td_cli");
+
+    // Complete the dialed handshake, then destroy the engine-owned accepted channel
+    // mid-session and have the dialer send another frame from the SAME source. Pre-fix:
+    // the server transport's demux still holds the freed accepted-channel pointer, so
+    // on_datagram -> lookup -> deliver_inbound is a heap-use-after-free (asan). The fix
+    // erases the demux entry when the channel tears down, so the frame is a clean MISS.
+    constexpr int k_iterations = 50;
+    int survived = 0;
+    for(int i = 0; i < k_iterations; ++i)
+    {
+        dial_link l(server_id, client_id);
+        l.pump_until_ready();
+        REQUIRE_FALSE(l.dial_failed);
+        REQUIRE(l.accepted != nullptr);
+        REQUIRE(l.dialed != nullptr);
+
+        // Engine teardown: destroy the completed accepted channel while the dialer (and
+        // the demux entry keyed on its source endpoint) stay live.
+        l.accepted.reset();
+        l.drain();
+
+        // The dialer sends an app frame over the live DTLS channel: it arrives at the
+        // server from the SAME source the demux is keyed on. The torn-down entry must be
+        // gone, never a freed-pointer deref.
+        const std::string payload = "after-teardown-" + std::to_string(i);
+        std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()),
+                                     reinterpret_cast<const std::byte *>(payload.data()) + payload.size());
+        l.dialed->send(std::span<const std::byte>{frame});
+        l.drain();
+
+        ++survived;   // reaching here without an asan UAF abort is the proof
+    }
+    REQUIRE(survived == k_iterations);
 }
 
 TEST_CASE("dtls.teardown: a consumer that destroys the channel in on_closed survives the close_notify, looped",

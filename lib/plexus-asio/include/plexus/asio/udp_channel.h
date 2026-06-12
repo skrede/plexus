@@ -133,6 +133,8 @@ public:
             m_reassembler->cancel();
         if(m_arq)
             m_arq->cancel();
+        if(m_on_teardown)
+            m_on_teardown();   // erase the transport demux ref BEFORE this object dies
     }
 
     // The single byte_channel send verb. A reliable_datagram-mode channel (the "udpr"
@@ -178,6 +180,13 @@ public:
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+
+    // The transport's private teardown seam, fired from the dtor — distinct from the
+    // consumer-facing on_closed/on_error the engine claims. The transport demuxes inbound
+    // by endpoint to a NON-owning raw ref; this lets it erase that ref when the engine
+    // (the channel's owner) destroys the channel, so a later datagram is a clean MISS
+    // rather than a freed-pointer deref.
+    void on_teardown(plexus::detail::move_only_function<void()> cb) { m_on_teardown = std::move(cb); }
 
     // Submit a payload on the RELIABLE in-order path: the selective-repeat ARQ stamps a
     // seq, sends a kind=1 data segment, and retransmits under an adaptive RTO until the
@@ -474,6 +483,7 @@ private:
     std::unique_ptr<reassembler_type> m_reassembler;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void()> m_on_teardown;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
     plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> m_on_reliable;

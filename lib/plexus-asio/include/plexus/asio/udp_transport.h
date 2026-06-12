@@ -127,6 +127,7 @@ public:
                                                 m_congestion, udp_channel::default_backpressure_bytes, mode);
         auto *raw = ch.get();
         m_demux.insert(dest, raw);
+        wire_teardown(*raw, dest);
 
         auto arq = std::make_unique<arq_type>(m_io, m_hs_ladder);
         auto *raw_arq = arq.get();
@@ -215,6 +216,7 @@ private:
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
             return;                                        // peer cap reached: drop the flood
+        wire_teardown(*raw, from);
         m_dials.insert_accepted(raw, std::move(ch));
         send_handshake(from, hs_type::response, hs->mode); // let the dialer's ARQ resolve, echo mode
         if(m_on_accepted)
@@ -257,6 +259,16 @@ private:
     std::unique_ptr<udp_channel> adopt_accepted(udp_channel *raw)
     {
         return m_dials.adopt_accepted(raw);
+    }
+
+    // Close the borrow-vs-own footgun: the engine owns the handed-out channel but the
+    // demux keeps a non-owning ref, so when the engine destroys the channel the demux
+    // must drop its ref or the next datagram dereferences freed memory. The channel's
+    // dtor fires this seam (distinct from the consumer on_closed/on_error the engine
+    // overwrites); the identity-guarded erase leaves a same-endpoint re-dial untouched.
+    void wire_teardown(udp_channel &ch, const endpoint_type &key)
+    {
+        ch.on_teardown([this, key, raw = &ch] { m_demux.erase_if_matches(key, raw); });
     }
 
     void send_handshake(const endpoint_type &dest, hs_type type,

@@ -114,6 +114,13 @@ public:
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
 
+    // The transport's private teardown seam, fired from the dtor — distinct from the
+    // consumer-facing on_closed/on_error the engine claims. The transport demuxes inbound
+    // by endpoint to a NON-owning raw ref; this lets it erase that ref when the engine
+    // (the channel's owner) destroys the channel, so a later datagram is a clean MISS
+    // rather than a freed-pointer deref.
+    void on_teardown(plexus::detail::move_only_function<void()> cb) { m_on_teardown = std::move(cb); }
+
     // DTLS owns no socket and keeps no bounded userspace egress queue: the post-ready
     // path fires application bytes straight through SSL_write -> drain_outbound to the
     // shared UDP server (the handshake_gate buffers only DURING the handshake and stays
@@ -214,6 +221,7 @@ private:
 
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void()> m_on_teardown;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
     plexus::detail::move_only_function<void()> m_on_external_complete;

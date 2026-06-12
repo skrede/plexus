@@ -38,6 +38,16 @@ target_link_libraries(test_udp_handshake_arq PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_handshake_arq TEST_PREFIX "udp.")
 
+# The teardown-discipline proof: an inbound datagram delivered AFTER the engine
+# destroys a completed accepted/dialed channel mid-session must resolve to a clean
+# demux MISS, never a freed-pointer deref (a heap-use-after-free under asan on the
+# pre-fix code). Run under the build-asan tree as the boundary proof.
+add_executable(test_udp_teardown test_udp_teardown.cpp)
+target_link_libraries(test_udp_teardown PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_teardown TEST_PREFIX "udp.")
+
 # The reliable-data ARQ legs (header-only inside plexus::asio): the sans-IO reorder
 # buffer's head-of-line in-order release (D-04), and the selective-repeat engine proven
 # end-to-end over deterministic loss/reorder/duplication via the lossy_relay fixture.
