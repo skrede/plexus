@@ -540,6 +540,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_udp_send_burst TEST_PREFIX "udp.")
 
+    # The large-payload datagram capability gate: a 1 MB and a 4 MB message round-trip
+    # byte-identically through the existing fragmenter + reassembler over BOTH best-effort
+    # ("udp") and reliable ("udpr") legs, looped in-body and re-run across >=3 process runs.
+    # The deterministic loss/reorder shim (tests/support, reused by the fragment-scale sweep
+    # and the lossy benchmark cell) drives the injected-loss legs and records the measured
+    # loss policy (best-effort drops the whole message; reliable retransmit-reassembles); the
+    # shim's own cross-run determinism is asserted first. Header-only inside plexus::asio;
+    # tests/ is on the include path for support/loss_reorder_shim.h.
+    add_executable(test_udp_large_payload test_udp_large_payload.cpp)
+    target_link_libraries(test_udp_large_payload PRIVATE
+        plexus::asio
+        Catch2::Catch2WithMain)
+    target_include_directories(test_udp_large_payload PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_udp_large_payload TEST_PREFIX "udp.")
+
     # The DIALED AF_UNIX transport oracle over a real local socket: the transport's
     # listen + async-connect dial stand up two peer_sessions (no hand-dial) that
     # handshake to completion, mint non-zero epochs, and flow a real published

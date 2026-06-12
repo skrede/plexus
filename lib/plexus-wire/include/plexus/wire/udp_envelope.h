@@ -49,7 +49,7 @@ constexpr std::size_t udp_envelope_overhead = 3;
 //    9       ..   bytes      this fragment's slice of the payload, passed through verbatim.
 //
 // The widths follow from the largest message a single send may fragment. At a
-// conservative ~1400-byte fragment a ~4 MB message is roughly 3000 fragments — well
+// conservative ~1200-byte fragment a ~4 MB message is roughly 3500 fragments — well
 // inside the uint16 frag_cnt/frag_idx range (65535), and the uint16 msg_id space far
 // exceeds the bounded reassembler's in-flight table so an id wrap cannot alias a live
 // entry. This sub-header is APPENDED only when the FRAGMENTED bit is set, so the common

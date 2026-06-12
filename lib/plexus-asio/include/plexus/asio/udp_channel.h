@@ -67,8 +67,8 @@ class udp_channel
 public:
     // The per-channel payload budget the oversize-reject gates consult, relocated to the
     // shared io::mtu_budget value-object so the channel and any future datagram backend
-    // read the SAME default (1400) instead of a scattered local literal. A caller MAY
-    // override it at construction (the required-with-default ctor arg below).
+    // read the SAME default instead of a scattered local literal. A caller MAY override it
+    // at construction (the required-with-default ctor arg below).
     static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
     // The bounded congestion=block backpressure BYTE budget (allocated at setup, never
     // grown on the hot path): a full send window AND a full byte budget surface a stall

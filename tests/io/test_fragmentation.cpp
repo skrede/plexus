@@ -1,5 +1,6 @@
 #include "plexus/io/detail/reassembler.h"
 #include "plexus/io/fragmentation.h"
+#include "plexus/io/mtu_budget.h"
 #include "plexus/wire/udp_envelope.h"
 
 #include "plexus/testing/harness.h"
@@ -110,6 +111,22 @@ std::vector<recorded_fragment> collect(std::span<const std::byte> payload, std::
     return seen;
 }
 
+}
+
+TEST_CASE("the splitter fragments against the default budget and honors an upward override", "[fragment][split][mtu]")
+{
+    // The splitter consults the mtu_budget the channel passes: at the conservative 1200-byte
+    // default a payload above it fragments, and an explicit higher budget (the tunable knob)
+    // yields fewer, larger fragments — the per-datagram budget is configurable up, never
+    // silently clamped to the default.
+    const std::vector<std::byte> payload(io::mtu_budget{}.max_payload * 4);
+
+    const auto at_default = collect(payload, io::mtu_budget{}.max_payload);
+    const auto at_override = collect(payload, io::mtu_budget{.max_payload = 8192}.max_payload);
+
+    REQUIRE(at_default.size() > 1);                          // genuinely fragmented at 1200
+    CHECK(at_override.size() < at_default.size());           // the larger budget fragments less
+    CHECK(at_override.front().bytes.size() > at_default.front().bytes.size());
 }
 
 TEST_CASE("split against a budget yields one fragment when the payload fits", "[fragment][split]")
