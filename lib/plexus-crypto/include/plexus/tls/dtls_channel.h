@@ -28,7 +28,6 @@
 #include <asio/ip/udp.hpp>
 
 #include <span>
-#include <array>
 #include <string>
 #include <memory>
 #include <vector>
@@ -199,7 +198,12 @@ private:
     io::detail::handshake_gate m_gate;
 
     std::vector<unsigned char> m_peer_addr_block; // [len][addr bytes] for the cookie cb
-    std::array<unsigned char, 2048> m_drain_buf{};
+    // Sized at construction from m_record_mtu (+ DTLS record framing/cipher-expansion
+    // headroom), NOT a fixed constant: SSL_read is message-oriented (a record larger than
+    // the buffer is DISCARDED) and BIO_read chunks one record across reads (a record larger
+    // than the buffer would split across datagrams). A fixed buffer truncated/split records
+    // once record_mtu rose above it; sizing it from the knob keeps one record == one buffer.
+    std::vector<unsigned char> m_drain_buf;
 
     // The fragment/reassemble blocks, composed as owned members the channel drives directly
     // (the assembly pattern): the splitter encodes each fragment into m_frag_scratch (reused,
