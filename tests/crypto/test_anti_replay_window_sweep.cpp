@@ -1,15 +1,21 @@
-// The recorded sweep substantiating k_anti_replay_window_bits. It models a UDP link
-// that reorders datagrams within a bounded displacement and runs each candidate
-// window width over the SAME deterministic (fixed-seed, RNG-free) arrival schedule,
-// counting false rejects: a legitimate never-before-seen datagram wrongly dropped as
-// too-old because its sequence fell below the window floor by arrival time.
+// The recorded sweep substantiating k_anti_replay_window_bits at FRAGMENT scale. A
+// large (4 MiB) message fragments into ~3500 sealed datagrams, each a distinct AEAD
+// sequence; the window must admit every fragment that arrives within the link's
+// reorder displacement or the too-old verdict false-rejects a fragment and the whole
+// message is lost. This models a UDP link that reorders datagrams within a bounded
+// displacement (the in-flight window) and runs each candidate width over the SAME
+// deterministic (fixed-seed, RNG-free) arrival schedule, counting false rejects.
 //
-// Methodology mirrors the cookie_secret truncation sweep: exercise a grid of
-// candidate widths, record the per-candidate failure metric, and pick the smallest
-// width whose false-reject rate is zero with margin under the modeled worst case. A
-// regression that shrinks the chosen width below its no-false-reject property fails
-// the asserted check at the bottom. The sweep is deterministic, so two back-to-back
-// runs produce identical results.
+// The modeled reorder depth is anchored to the in-flight datagram window (BDP / MTU),
+// the physical bound on backward displacement: ~177 on an untuned loopback
+// (rmem_default 208 KiB / 1200 B) and ~1042 on a 1 Gbps × 10 ms-RTT link (the high-BDP
+// realistic-link regime). Exercising the candidate grid {64, 256, 1024, 4096}: 64 and
+// 256 false-reject below the realistic-link depth; 1024 is clean to ~1031, just short of
+// the ~1042 realistic-link worst case; 4096 is the smallest width that bears margin over
+// it. A regression that shrinks the chosen width below its no-false-reject property
+// fails the asserted check at the bottom. The sweep is
+// deterministic, so two back-to-back runs produce identical results (no CPU-exclusivity
+// caveat applies — the metric is a pure-computation false-reject count, not a timing).
 
 #include "plexus/crypto/anti_replay_window.h"
 
@@ -88,39 +94,41 @@ std::size_t false_rejects(const std::vector<std::uint64_t> &arrival)
 
 }
 
-TEST_CASE("crypto.anti_replay_window_sweep records false-reject rates across candidate widths", "[crypto][anti_replay]")
+TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject rates across candidate widths", "[crypto][anti_replay]")
 {
-    constexpr std::size_t count = 200000;
-    constexpr std::size_t reorder_depth = 32;
+    // A 4 MiB message at the 1200-byte MTU fragments into ~3500 sealed datagrams.
+    constexpr std::size_t count = 3500;
     constexpr std::uint64_t seed = 0x5eed1234abcd0011ull;
 
-    const auto arrival = reordered_schedule(count, reorder_depth, seed);
+    // The loopback in-flight window: rmem_default (208 KiB) / 1200 B MTU ≈ 177 datagrams
+    // can be buffered at once, so backward displacement on a loopback burst is bounded
+    // by ~177. The 64-slot window false-rejects here; 256 (and up) is clean.
+    constexpr std::size_t loopback_depth = 177;
+    const auto loopback = reordered_schedule(count, loopback_depth, seed);
 
-    const std::size_t fr16 = false_rejects<16>(arrival);
-    const std::size_t fr32 = false_rejects<32>(arrival);
-    const std::size_t fr64 = false_rejects<64>(arrival);
-    const std::size_t fr128 = false_rejects<128>(arrival);
+    REQUIRE(false_rejects<64>(loopback) > 0);     // too narrow even for loopback reorder
+    REQUIRE(false_rejects<256>(loopback) == 0);
+    REQUIRE(false_rejects<1024>(loopback) == 0);
+    REQUIRE(false_rejects<4096>(loopback) == 0);
 
-    // At a modeled reorder depth of 32: a 16-slot window is too narrow (a datagram
-    // displaced past 16 slots straddles the floor → false rejects). A 32-slot window is
-    // EXACTLY clean (the displacement bound equals the width), but with zero margin. A
-    // 64-slot window is clean with a 2x margin at a fixed 8-byte (one uint64) bitmap
-    // cost; 128 buys nothing extra over 64 at this depth.
-    REQUIRE(fr16 > 0);
-    REQUIRE(fr32 == 0);
-    REQUIRE(fr64 == 0);
-    REQUIRE(fr128 == 0);
+    // The realistic-link regime: a 1 Gbps × 10 ms-RTT link (BDP ~1.25 MB) keeps ~1042
+    // datagrams in flight, so reorder displacement reaches ~1042. The 256-slot window
+    // false-rejects (it would drop the whole 4 MiB message on such a link); the 1024-slot
+    // window is clean only to ~1031, so it too false-rejects at the full realistic-link
+    // depth — confirming 4096 is the smallest swept width that bears margin over it.
+    constexpr std::size_t realistic_link_depth = 1042;
+    const auto realistic = reordered_schedule(count, realistic_link_depth, seed);
 
-    // A deeper-reorder cross-check: at depth 64 the 32-slot window starts false-
-    // rejecting while 64 stays exactly clean — confirming 64 is the margin-bearing
-    // choice over the zero-margin 32.
-    const auto deeper = reordered_schedule(count, 64, seed);
-    REQUIRE(false_rejects<32>(deeper) > 0);
-    REQUIRE(false_rejects<64>(deeper) == 0);
+    REQUIRE(false_rejects<64>(realistic) > 0);
+    REQUIRE(false_rejects<256>(realistic) > 0);    // narrower than the realistic-link in-flight window
+    REQUIRE(false_rejects<1024>(realistic) > 0);   // clean only to ~1031, just short of ~1042
+    REQUIRE(false_rejects<4096>(realistic) == 0);  // the margin-bearing winner
 
-    // The chosen constant is one of the swept candidates and is the smallest with a
-    // margin-bearing zero-false-reject property at the modeled depth — a regression
-    // that shrinks it below that property fails here.
-    REQUIRE(plexus::crypto::k_anti_replay_window_bits == 64);
-    REQUIRE(false_rejects<plexus::crypto::k_anti_replay_window_bits>(arrival) == 0);
+    // The chosen constant is one of the swept candidates and is the smallest clean at the
+    // realistic-link reorder depth — a regression that shrinks it below that property
+    // (e.g. to 1024, which false-rejects at the full realistic-link in-flight window)
+    // fails here.
+    REQUIRE(plexus::crypto::k_anti_replay_window_bits == 4096);
+    REQUIRE(false_rejects<plexus::crypto::k_anti_replay_window_bits>(realistic) == 0);
+    REQUIRE(false_rejects<plexus::crypto::k_anti_replay_window_bits>(loopback) == 0);
 }

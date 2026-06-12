@@ -9,13 +9,18 @@ namespace plexus::crypto {
 
 // The sliding-window width (in slots) the datagram anti-replay filter tracks below
 // the highest accepted sequence. Set from a recorded reproducible sweep
-// (anti_replay_window_sweep_test) over {32, 64, 128, 256} under a modeled UDP
-// reorder/loss distribution: 64 is the smallest width whose false-reject rate is
-// zero at a reorder depth of 32 (a 2x margin to the modeled worst case) at a fixed
-// 8-byte (one std::uint64_t) memory cost. A datagram displaced further back than
-// this many slots is treated as too-old and dropped — bounded O(1) state, never an
-// unbounded seen-set (the IPsec/DTLS RFC 4303 shape).
-constexpr std::size_t k_anti_replay_window_bits = 64;
+// (anti_replay_window_sweep_test) over {64, 256, 1024, 4096} at FRAGMENT scale: a
+// large (4 MiB) message fragments into ~3500 sealed datagrams, and the worst-case
+// reorder displacement is bounded by the in-flight datagram window (BDP / MTU) — ~177
+// on an untuned loopback (rmem_default / 1200 B) and ~1042 on a 1 Gbps × 10 ms-RTT
+// link. 64 and 256 false-reject below that realistic-link depth, and 1024 is clean to
+// a displacement of ~1031 — just short of the ~1042 realistic-link worst case. 4096 is
+// the smallest swept width that bears margin over the realistic-link in-flight window
+// (clean well past 1042), covering the loopback and LAN regimes with a >20x margin, at
+// a fixed 512-byte (64 × uint64) cost. A datagram displaced further back is treated as
+// too-old and dropped — bounded O(1) state, never an unbounded seen-set (the IPsec/DTLS
+// RFC 4303 shape).
+constexpr std::size_t k_anti_replay_window_bits = 4096;
 
 enum class replay_verdict : std::uint8_t
 {

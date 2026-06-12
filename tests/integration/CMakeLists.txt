@@ -31,6 +31,21 @@ target_include_directories(test_typed_inproc_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_typed_inproc_alloc TEST_PREFIX "integration.")
 
+# The reassembly-DoS bound: each reassembler bound (total-memory cap, per-message
+# ceiling, malformed rejection, timeout eviction) is forced + looped and the in-flight
+# state asserted bounded, plus the demux peer-cap bounding the spoofed-source channel
+# count. Deterministic (inproc test clock via plexus::testing, no backend); tests/ is on
+# the include path for support headers.
+add_executable(test_reassembler_dos test_reassembler_dos.cpp)
+target_link_libraries(test_reassembler_dos PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::testing
+    Catch2::Catch2WithMain)
+target_include_directories(test_reassembler_dos PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_reassembler_dos TEST_PREFIX "integration.")
+
 # The deterministic inproc req/res roundtrip + concurrent-outstanding + zero-alloc
 # rpc-dispatch gate — always built (inproc Policy, no backend needed).
 add_executable(test_reqres_roundtrip_inproc test_reqres_roundtrip_inproc.cpp)
@@ -691,6 +706,25 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
             Catch2::Catch2WithMain)
         catch_discover_tests(test_tls_dial_teardown TEST_PREFIX "integration."
             PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+
+        # The AEAD x fragment composition proof: the per-fragment seal composes with
+        # io::split + the reassembler end to end — a sealed-fragment large message
+        # round-trips byte-identically in order and under fragment-scale reorder (the
+        # deterministic loss/reorder scheduler), and a forged fragment dies at the tag
+        # check before reaching the reassembler. Deterministic (no socket, no wall clock:
+        # the receiver reassembler runs on the inproc test clock via plexus::testing);
+        # tests/ is on the include path for support/loss_reorder_shim.h.
+        add_executable(test_aead_fragment test_aead_fragment.cpp
+            $<TARGET_OBJECTS:plexus-crypto>)
+        target_link_libraries(test_aead_fragment PRIVATE
+            plexus::core
+            plexus::wire
+            plexus::crypto
+            plexus::testing
+            Catch2::Catch2WithMain)
+        target_include_directories(test_aead_fragment PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/..)
+        catch_discover_tests(test_aead_fragment TEST_PREFIX "integration.")
     endif()
 
     # The minimal-composition proof: the core multiplexer instantiated DIRECTLY over a
