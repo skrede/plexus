@@ -3,6 +3,7 @@
 
 #include "plexus/io/priority.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/detail/drop_event.h"
 
 #include <span>
 #include <array>
@@ -62,6 +63,16 @@ public:
         return m_bands[band].push(congestion, frame);
     }
 
+    // As enqueue, but returns the drop cause that the admission incurred (drop_cause::none
+    // on a clean admit; drop_oldest when a full band evicted its oldest to admit; drop_newest
+    // / blocked when a full band refused the new frame). The per-(topic, band) drop counter
+    // is bumped from this verdict at the forwarder fan-out site.
+    drop_cause enqueue_with_verdict(std::size_t band, io::congestion congestion,
+                                    std::span<const std::byte> frame)
+    {
+        return m_bands[band].push_with_verdict(congestion, frame);
+    }
+
     // The front node of the highest non-empty band (lowest index), or nullptr when no
     // band holds work. The node stays pool-resident until the caller copies it out and
     // then calls pop_highest — the in-flight-safe ordering.
@@ -107,31 +118,46 @@ private:
         // Admit into the slot one-past the tail, growing the ring to k_band_depth on
         // first touch. At capacity the congestion mode decides: block/drop_newest
         // refuse, drop_oldest evicts the front to make room (handled by the helper).
+        // True iff the new frame was admitted (a refusing verdict — drop_newest/blocked —
+        // is the only non-admit). Expressed over push_with_verdict so the two cannot diverge.
         bool push(io::congestion congestion, std::span<const std::byte> frame)
         {
-            if(m_count == k_band_depth && !evict_oldest_or_refuse(congestion))
-                return false;
+            const drop_cause cause = push_with_verdict(congestion, frame);
+            return cause != drop_cause::drop_newest && cause != drop_cause::blocked;
+        }
+
+        // The verdict-returning admission: drop_cause::none on a clean admit, drop_oldest
+        // when a full band evicted to admit, drop_newest/blocked when a full band refused.
+        drop_cause push_with_verdict(io::congestion congestion, std::span<const std::byte> frame)
+        {
+            drop_cause cause = drop_cause::none;
+            if(m_count == k_band_depth)
+            {
+                cause = evict_oldest_or_refuse_cause(congestion);
+                if(cause == drop_cause::drop_newest || cause == drop_cause::blocked)
+                    return cause;   // refused: the resident set is untouched
+            }
             if(m_slots.size() != k_band_depth)
                 m_slots.resize(k_band_depth);
             const std::size_t tail = (m_head + m_count) % k_band_depth;
             m_slots[tail].assign(frame.begin(), frame.end());
             ++m_count;
-            return true;
+            return cause;   // none on a clean admit, drop_oldest when an eviction made room
         }
 
-        // At a full band: block/drop_newest bump their counter and refuse (false);
-        // drop_oldest recycles the oldest resident slot (pop() — never a free), bumps
-        // its counter and returns true so the caller admits the new frame into the
-        // freed tail.
-        bool evict_oldest_or_refuse(io::congestion congestion)
+        // At a full band: block/drop_newest bump their counter and refuse (returning the
+        // refusing cause); drop_oldest recycles the oldest resident slot (pop() — never a
+        // free), bumps its counter and returns drop_oldest so the caller admits the new
+        // frame into the freed tail. The cause mirrors the per-cause counter it bumps.
+        drop_cause evict_oldest_or_refuse_cause(io::congestion congestion)
         {
             switch(congestion)
             {
-            case io::congestion::block:       ++m_blocked;        return false;
-            case io::congestion::drop_newest: ++m_dropped_newest; return false;
-            case io::congestion::drop_oldest: pop(); ++m_dropped_oldest; return true;
+            case io::congestion::block:       ++m_blocked;        return drop_cause::blocked;
+            case io::congestion::drop_newest: ++m_dropped_newest; return drop_cause::drop_newest;
+            case io::congestion::drop_oldest: pop(); ++m_dropped_oldest; return drop_cause::drop_oldest;
             }
-            return false;
+            return drop_cause::blocked;
         }
 
         [[nodiscard]] const std::vector<std::byte> &front() const { return m_slots[m_head]; }

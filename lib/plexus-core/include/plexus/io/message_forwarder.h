@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_MESSAGE_FORWARDER_H
 
 #include "plexus/io/subscriber_registry.h"
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/history_ring.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/subscriber_qos.h"
@@ -347,7 +348,15 @@ public:
         if(subs != nullptr)
             for(const auto &sub : *subs)
                 if(any_set(reach, sub.tier))
-                    m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
+                {
+                    // The drop EMISSION POINT: the band overflow verdict feeds the per-topic-
+                    // per-band counter. The consuming observer hook wires in later; the
+                    // counter is bumped now, zero-alloc on the shed path.
+                    const detail::drop_cause cause =
+                        m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
+                    if(cause != detail::drop_cause::none)
+                        m_registry.record_drop(hash, band, cause);
+                }
 
         retain_if_latched(hash, qos);
     }
@@ -426,7 +435,10 @@ public:
                     }
                 }
                 ensure_encoded_once();
-                m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
+                const detail::drop_cause cause =
+                    m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
+                if(cause != detail::drop_cause::none)
+                    m_registry.record_drop(hash, band, cause);
             }
 
         // A latched topic's history ring is the byte path's memory: force exactly one
@@ -594,6 +606,14 @@ public:
     std::string_view fqn_for(std::uint64_t topic_hash) const
     {
         return m_registry.fqn_for(topic_hash);
+    }
+
+    // The per-(topic, band, cause) drop tally, read on demand (occupancy style). The
+    // band is detail::band_of(priority); the cause is one of the egress overflow causes.
+    // 0 for an unknown topic or out-of-range band.
+    [[nodiscard]] std::size_t dropped(std::string_view fqn, std::size_t band, detail::drop_cause cause) const
+    {
+        return m_registry.dropped(wire::fqn_topic_hash(fqn), band, cause);
     }
 
 private:

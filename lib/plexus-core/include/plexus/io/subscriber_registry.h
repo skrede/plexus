@@ -3,8 +3,11 @@
 
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_qos.h"
+#include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/priority_band_queue.h"
 #include "plexus/topic_qos.h"
 
+#include <array>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -47,11 +50,24 @@ public:
         std::optional<std::uint64_t> type_id;
     };
 
+    // One band's per-cause drop tallies on the per-topic record: fixed cardinality,
+    // bumped at the fan-out drop site, read on demand (the replay_count occupancy precedent
+    // — no atomics on the single-threaded egress path, no map, no per-drop allocation).
+    struct band_drop_counters
+    {
+        std::size_t dropped_oldest{0};
+        std::size_t dropped_newest{0};
+        std::size_t blocked{0};
+    };
+
     struct topic_entry
     {
         std::string fqn;
         std::vector<subscriber> subscribers;
         topic_qos qos{};
+        // The per-band drop tallies for this topic (fixed k_egress_bands array — no map, no
+        // alloc at drop). The operator's per-topic-per-band statistics ask; read on demand.
+        std::array<band_drop_counters, detail::k_egress_bands> drops{};
         // The producer-declared type identity for this topic. std::nullopt is a
         // distinct "undeclared type" state (NOT a zero type_id) so an unknown
         // producer type never false-refuses a subscriber — matching applies only
@@ -238,6 +254,42 @@ public:
     {
         auto it = m_topics.find(topic_hash);
         return it == m_topics.end() ? nullptr : &it->second;
+    }
+
+    // Bump the per-(topic, band) drop counter for a cause. Called at the fan-out
+    // drop site with the band already in hand and the topic record already resolved — a
+    // fixed-array index, no map find, no allocation. A `none` cause (an admitted frame) is
+    // a no-op. The entry is created on first touch if the topic is undeclared (defensive).
+    void record_drop(std::uint64_t topic_hash, std::size_t band, detail::drop_cause cause)
+    {
+        if(cause == detail::drop_cause::none || band >= detail::k_egress_bands)
+            return;
+        auto &c = m_topics[topic_hash].drops[band];
+        switch(cause)
+        {
+        case detail::drop_cause::drop_oldest: ++c.dropped_oldest; return;
+        case detail::drop_cause::drop_newest: ++c.dropped_newest; return;
+        case detail::drop_cause::blocked:     ++c.blocked;        return;
+        case detail::drop_cause::none:        return;
+        }
+    }
+
+    // The per-(topic, band, cause) drop tally, read on demand (occupancy style). Returns 0
+    // for an unknown topic or out-of-range band.
+    std::size_t dropped(std::uint64_t topic_hash, std::size_t band, detail::drop_cause cause) const
+    {
+        auto it = m_topics.find(topic_hash);
+        if(it == m_topics.end() || band >= detail::k_egress_bands)
+            return 0;
+        const auto &c = it->second.drops[band];
+        switch(cause)
+        {
+        case detail::drop_cause::drop_oldest: return c.dropped_oldest;
+        case detail::drop_cause::drop_newest: return c.dropped_newest;
+        case detail::drop_cause::blocked:     return c.blocked;
+        case detail::drop_cause::none:        return 0;
+        }
+        return 0;
     }
 
     // Resolve a wire topic_hash back to its fqn (the receive tail). Empty when
