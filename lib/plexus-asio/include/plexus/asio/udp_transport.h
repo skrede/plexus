@@ -25,11 +25,13 @@
 
 #include <span>
 #include <array>
+#include <random>
 #include <memory>
 #include <string>
 #include <vector>
 #include <utility>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <system_error>
@@ -74,6 +76,7 @@ public:
         , m_hs_ladder(hs_ladder)
         , m_arq_cfg(arq_cfg)
         , m_congestion(congestion)
+        , m_isn_rng(std::random_device{}())
         , m_dials(make_defer_destroy())
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { on_datagram(from, bytes); });
@@ -123,15 +126,16 @@ public:
         ensure_bound(dest.protocol());      // a dial-only transport still needs a bound socket to send/recv
 
         const auto mode = mode_of_scheme(ep.scheme);
+        const std::uint16_t isn = next_isn();   // the dialer's per-session ISN, advertised in the request
         auto ch = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg,
-                                                m_congestion, udp_channel::default_backpressure_bytes, mode);
+                                                m_congestion, udp_channel::default_backpressure_bytes, mode, isn);
         auto *raw = ch.get();
         m_demux.insert(dest, raw);
         wire_teardown(*raw, dest);
 
         auto arq = std::make_unique<arq_type>(m_io, m_hs_ladder);
         auto *raw_arq = arq.get();
-        raw_arq->on_transmit([this, dest, mode] { send_handshake(dest, hs_type::request, mode); });
+        raw_arq->on_transmit([this, dest, mode, isn] { send_handshake(dest, hs_type::request, mode, isn); });
         raw_arq->on_established([this, ep, raw] { resolve_dial(ep, raw); });
         raw_arq->on_timeout([this, ep, raw] { fail_dial(ep, raw); });
 
@@ -195,7 +199,7 @@ private:
             if(hs->type == hs_type::response)
                 resolve_paired(ch);
             else
-                send_handshake(from, hs_type::response, hs->mode);   // re-ack a retransmitted request, echo mode
+                send_handshake(from, hs_type::response, hs->mode, hs->initial_seq);   // re-ack a retransmit, echo mode+ISN
             return;
         }
         ch->deliver_inbound(bytes);
@@ -211,14 +215,18 @@ private:
         auto hs = io::detail::decode_handshake(bytes);
         if(!hs || hs->type != hs_type::request)
             return;
+        // Bind the dialer's advertised ISN: the acceptor's receiver (reorder buffer) must
+        // expect the peer's sender ISN, and the response ECHOES it (symmetric, like mode) so
+        // both ends start the cumulative-ack edge from the same negotiated sequence.
         auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg,
-                                                m_congestion, udp_channel::default_backpressure_bytes, hs->mode);
+                                                m_congestion, udp_channel::default_backpressure_bytes,
+                                                hs->mode, hs->initial_seq);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
             return;                                        // peer cap reached: drop the flood
         wire_teardown(*raw, from);
         m_dials.insert_accepted(raw, std::move(ch));
-        send_handshake(from, hs_type::response, hs->mode); // let the dialer's ARQ resolve, echo mode
+        send_handshake(from, hs_type::response, hs->mode, hs->initial_seq); // resolve the dialer's ARQ, echo mode+ISN
         if(m_on_accepted)
             m_on_accepted(adopt_accepted(raw));
     }
@@ -272,9 +280,10 @@ private:
     }
 
     void send_handshake(const endpoint_type &dest, hs_type type,
-                        io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort)
+                        io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort,
+                        std::uint16_t initial_seq = 0)
     {
-        io::detail::encode_handshake_into(m_hs_scratch, type, mode);
+        io::detail::encode_handshake_into(m_hs_scratch, type, mode, initial_seq);
         m_server.send_to(m_hs_scratch, dest);
     }
 
@@ -287,6 +296,15 @@ private:
                                 : io::detail::udp_channel_mode::best_effort;
     }
 
+    // Draw a random per-session ISN (RFC 6528 lineage) from the setup-time-seeded PRNG —
+    // a setup-time event (one draw per dial/accept), NOT a per-packet RNG. The range omits
+    // 0 so a negotiated ISN is always distinguishable from the legacy back-compat default
+    // (an absent ISN field decodes 0) and the spoof-resistance property always holds.
+    std::uint16_t next_isn()
+    {
+        return std::uniform_int_distribution<std::uint16_t>{1, 0xFFFF}(m_isn_rng);
+    }
+
     void report_dial_fail(const io::endpoint &ep, io::io_error e) { if(m_on_dial_failed) m_on_dial_failed(ep, e); }
     void report_error(io::io_error e) { if(m_on_error) m_on_error(e); }
 
@@ -297,6 +315,7 @@ private:
     arq_type::schedule m_hs_ladder;
     io::detail::udp_arq_config m_arq_cfg;
     io::congestion m_congestion;
+    std::mt19937 m_isn_rng;                  // setup-time-seeded; one draw per dial/accept (no hot-path RNG)
     std::vector<std::byte> m_hs_scratch;
     dial_registry m_dials;                  // the half-open dial table + the accepted table
     plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> m_on_accepted;
