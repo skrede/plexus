@@ -268,6 +268,38 @@ TEST_CASE("integration.drop_coverage replay / too_old / tamper post through the 
     }
 }
 
+TEST_CASE("integration.drop_coverage a too-small datagram send surfaces a local malformed drop instead of silent loss",
+          "[integration][drop_coverage][datagram]")
+{
+    for(int loop = 0; loop < 4; ++loop)
+    {
+        const auto keys = fixed_keys();
+        wire_lower send_wire;
+        plexus::crypto::datagram_authenticated_channel<wire_lower> sender(
+                send_wire, plexus::crypto::aead_cipher_id::chacha20_poly1305, keys);
+
+        std::vector<cause::drop_event> drops;
+        std::size_t on_wire = 0;
+        send_wire.m_sink = [&](std::span<const std::byte>) { ++on_wire; };
+        sender.on_drop([&](const cause::drop_event &ev) { drops.push_back(ev); });
+
+        // A frame shorter than the AEAD-AAD wire header cannot be sealed. Pre-fix send()
+        // returned silently; now it emits a malformed drop at the local tier and nothing
+        // crosses the wire.
+        sender.send(filler(plexus::wire::header_size - 1));
+
+        REQUIRE(on_wire == 0);
+        REQUIRE(drops.size() == 1);
+        REQUIRE(drops[0].cause == cause::drop_cause::malformed);
+        REQUIRE(drops[0].transport == plexus::io::locality::local);
+
+        // A well-formed frame (header-sized or larger) still seals and crosses unaffected.
+        sender.send(make_frame(7, "ok"));
+        REQUIRE(on_wire == 1);
+        REQUIRE(drops.size() == 1);
+    }
+}
+
 TEST_CASE("integration.drop_coverage malformed / reassembly_cap / reassembly_evicted post through the engine hook",
           "[integration][drop_coverage][reassembler]")
 {
