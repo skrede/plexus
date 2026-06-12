@@ -16,6 +16,7 @@
 
 #include <asio/post.hpp>
 #include <asio/write.hpp>
+#include <asio/buffer.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/io_context.hpp>
 
@@ -217,16 +218,23 @@ private:
         });
     }
 
-    // The irreducible asio send-sink the stream_send_queue block drives: write the
-    // block-owned node's bytes and signal completion when the async op finishes. At most
-    // one is outstanding (the block's serial discipline). On a socket error the channel
-    // fails (which closes the block), so the completion's open-guard stops the chain — the
-    // exact fail-before-chain edge the hand-rolled do_write carried, never a swallow.
+    // The irreducible asio send-sink the stream_send_queue block drives: gather the
+    // block-owned node views into one ConstBufferSequence and issue a SINGLE async_write
+    // (asio lowers the sequence to one writev/WSASend — N frames, one syscall) and signal
+    // completion when it finishes. At most one is outstanding (the block's serial
+    // discipline). On a socket error the channel fails (which closes the block), so the
+    // completion's open-guard stops the chain — the exact fail-before-chain edge the
+    // hand-rolled do_write carried, never a swallow.
     io::detail::stream_send_queue::send_sink make_send_sink()
     {
-        return [this](std::span<const std::byte> bytes, io::detail::stream_send_queue::completion done)
+        return [this](io::detail::stream_send_queue::buffer_sequence views,
+                      io::detail::stream_send_queue::completion done)
         {
-            ::asio::async_write(m_socket, ::asio::buffer(bytes.data(), bytes.size()),
+            m_gather.clear();
+            m_gather.reserve(views.size());
+            for(const auto &v : views)
+                m_gather.emplace_back(v.data(), v.size());
+            ::asio::async_write(m_socket, m_gather,
                 [this, done = std::move(done)](std::error_code ec, std::size_t) mutable
                 {
                     if(ec)
@@ -254,6 +262,7 @@ private:
     ::asio::ip::tcp::socket m_socket;
     wire::stream_inbound<asio_timer, ::asio::io_context &> m_inbound;
     std::vector<std::byte> m_frame_scratch;
+    std::vector<::asio::const_buffer> m_gather;           // reused gather-write iovec (grows once)
     std::array<std::byte, 4096> m_read_buf{};
     io::congestion m_congestion;
     std::size_t m_dropped{0};                             // congestion=drop shed count

@@ -1,11 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_STREAM_SEND_QUEUE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_STREAM_SEND_QUEUE_H
 
+#include "plexus/wire_bytes.h"
 #include "plexus/detail/compat.h"
 
 #include <span>
 #include <deque>
 #include <limits>
+#include <memory>
 #include <vector>
 #include <cstddef>
 #include <utility>
@@ -17,13 +19,20 @@ namespace plexus::io::detail {
 // plaintext TCP channel and the TLS channel reuse ONE block instead of each
 // hand-rolling a near-identical bounded byte-FIFO write loop. The only structural
 // difference from send_queue is the absence of an Endpoint: a stream is already
-// point-to-point, so the send-sink is async_write(socket/stream, buffer) with no
-// destination. The discipline is otherwise byte-identical: enqueue() copies the
-// caller's bytes SYNCHRONOUSLY into a block-OWNED node (the async write is a
-// non-owning view and does not copy, so a reused caller scratch would corrupt an
-// in-flight frame); the queue drains SERIALLY (at most one async_write outstanding,
-// its completion pops the front and chains the next); close() drops the queue and a
-// completion firing after close is a guarded no-op.
+// point-to-point, so the send-sink is async_write(socket/stream, buffers) with no
+// destination.
+//
+// A drain turn issues ONE async_write over a buffer SEQUENCE gathering the front-N
+// queued nodes (asio lowers a ConstBufferSequence to a single writev/WSASend in the
+// composer, never per-frame), so N queued frames cost one syscall instead of N. Each
+// node holds a wire_bytes OWNER handle: enqueue(span) copies the caller's bytes into a
+// node-owned buffer (the async write is a non-owning view, so a reused caller scratch
+// would corrupt an in-flight frame), while enqueue(wire_bytes) holds the supplied owner
+// and passes its view with NO copy (the zero-copy plaintext path). Either way the
+// gathered owners stay resident in the in-flight set until the SINGLE completion fires —
+// the kernel reads all N buffers in the one writev, so releasing any owner before the
+// completion would be a read-after-free. close() drops the queue and a completion firing
+// after close is a guarded no-op.
 //
 // Capacity is a required-WITH-default knob (default = unbounded, a no-cap sentinel):
 // under the default the block is byte-identical to an unbounded socket write queue
@@ -37,7 +46,7 @@ namespace plexus::io::detail {
 // The fail-on-error edge (Pitfall 4): a stream channel FAILS the channel on a socket
 // error. The composer's send-sink reports the error and then closes the block; the
 // completion's open-guard makes the post-close chaining a no-op, so the next queued
-// frame is never written through the failed socket. The error is surfaced to the
+// frames are never written through the failed socket. The error is surfaced to the
 // composer, never swallowed by the block. Single-owner, bare `this`, no shared
 // lifetime — the owner closes the block before it dies.
 class stream_send_queue
@@ -45,30 +54,53 @@ class stream_send_queue
 public:
     static constexpr std::size_t unbounded = std::numeric_limits<std::size_t>::max();
 
-    // The send-sink: given the block-owned bytes view, perform the irreducible
-    // async_write and invoke the completion with ok once it finishes.
-    using completion = plexus::detail::move_only_function<void(bool)>;
-    using send_sink = plexus::detail::move_only_function<void(std::span<const std::byte>, completion)>;
+    // The gather count per drain turn: the bound on how many queued frames coalesce
+    // into one writev. Sized so the gathered iovec stays well under the IOV_MAX floor
+    // (Linux/macOS guarantee at least 1024 iovecs per writev/sendmsg) while large
+    // enough that a steady producer amortizes the syscall over a deep batch; the
+    // residual cost the gather removes is the per-frame syscall, so the batch only
+    // needs to be deep enough to dominate it. Substantiated by the gather-count sweep
+    // recorded with this plan, not fixed by feel.
+    static constexpr std::size_t default_gather_limit = 64;
 
-    explicit stream_send_queue(send_sink sink, std::size_t byte_cap = unbounded)
+    // The send-sink: given a SEQUENCE of block-owned byte views (the front-N gathered
+    // nodes), perform the irreducible single async_write over them and invoke the
+    // completion with ok once it finishes.
+    using buffer_sequence = std::span<const std::span<const std::byte>>;
+    using completion = plexus::detail::move_only_function<void(bool)>;
+    using send_sink = plexus::detail::move_only_function<void(buffer_sequence, completion)>;
+
+    explicit stream_send_queue(send_sink sink, std::size_t byte_cap = unbounded,
+                               std::size_t gather_limit = default_gather_limit)
         : m_sink(std::move(sink))
         , m_byte_cap(byte_cap)
+        , m_gather_limit(gather_limit)
     {
     }
 
-    // Copy the caller's bytes into an owned node and kick the serial drain if idle.
-    // Returns false (admitting nothing) when admitting this frame would carry the queued
-    // byte total past the cap — the at-capacity backpressure signal; inert under the
-    // unbounded default. Compare-before-add (no wrap).
+    // Copy the caller's bytes into a node-owned buffer and kick the serial drain if idle.
+    // The copy is the price of a transient caller view: the band-drain path hands a
+    // recycled pool slot, so the node must own its bytes past the slot's reuse. Returns
+    // false (admitting nothing) when admitting this frame would carry the queued byte
+    // total past the cap — the at-capacity backpressure signal; inert under the unbounded
+    // default. Compare-before-add (no wrap).
     bool enqueue(std::span<const std::byte> bytes)
     {
         if(!admits(bytes.size()))
             return false;
-        m_bytes += bytes.size();
-        m_queue.emplace_back(bytes.begin(), bytes.end());
-        if(!m_sending)
-            drive();
-        return true;
+        auto owned = std::make_shared<std::vector<std::byte>>(bytes.begin(), bytes.end());
+        std::span<const std::byte> view{*owned};
+        return admit(wire_bytes<>{view, std::move(owned)});
+    }
+
+    // Hold the supplied wire_bytes owner and pass its view with NO copy (the zero-copy
+    // plaintext path): the owner keeps the bytes alive across the single gather-write
+    // completion. Same compare-before-add cap admission as the copying overload.
+    bool enqueue(wire_bytes<> frame)
+    {
+        if(!admits(frame.size()))
+            return false;
+        return admit(std::move(frame));
     }
 
     // True when the queued byte total has reached the cap; always false when unbounded.
@@ -87,22 +119,33 @@ public:
     {
         m_open = false;
         m_sending = false;
+        m_in_flight = 0;
         m_queue.clear();
+        m_views.clear();
         m_bytes = 0;
     }
 
 private:
-    // Compare-before-add admission: a frame fits only when the cap is not already met AND
-    // its size is within the remaining budget (cap - bytes, no wrap).
     [[nodiscard]] bool admits(std::size_t size) const noexcept
     {
         return m_bytes < m_byte_cap && size <= m_byte_cap - m_bytes;
     }
 
-    // Send the front node, and on completion pop it (freeing a slot under a finite cap)
-    // and chain the next. At most one send-sink invocation is outstanding, so a node's
-    // bytes stay valid until its own completion runs; the open-guard stops the chain
-    // after the composer fails (and closes) the block on a socket error.
+    bool admit(wire_bytes<> frame)
+    {
+        m_bytes += frame.size();
+        m_queue.push_back(std::move(frame));
+        if(!m_sending)
+            drive();
+        return true;
+    }
+
+    // Gather the front-N nodes (N bounded by the gather limit) into one buffer sequence
+    // and issue a SINGLE async_write; on completion pop exactly those N (freeing slots
+    // under a finite cap) and chain the next turn. The gathered nodes stay RESIDENT in
+    // m_queue across the in-flight write — the kernel reads all N owners in the one
+    // writev, so an owner freed before the completion would be read-after-free. The
+    // open-guard stops the chain after the composer fails (and closes) the block.
     void drive()
     {
         if(m_queue.empty())
@@ -111,20 +154,30 @@ private:
             return;
         }
         m_sending = true;
-        m_sink(std::span<const std::byte>{m_queue.front()},
+        m_in_flight = std::min(m_gather_limit, m_queue.size());
+        m_views.clear();
+        for(std::size_t i = 0; i < m_in_flight; ++i)
+            m_views.push_back(static_cast<std::span<const std::byte>>(m_queue[i]));
+        m_sink(buffer_sequence{m_views},
             [this](bool /*ok*/)
             {
                 if(!m_open)
                     return;
-                m_bytes -= m_queue.front().size();
-                m_queue.pop_front();
+                for(std::size_t i = 0; i < m_in_flight; ++i)
+                {
+                    m_bytes -= m_queue.front().size();
+                    m_queue.pop_front();
+                }
                 drive();
             });
     }
 
     send_sink m_sink;
     std::size_t m_byte_cap;
-    std::deque<std::vector<std::byte>> m_queue;
+    std::size_t m_gather_limit;
+    std::deque<wire_bytes<>> m_queue;
+    std::vector<std::span<const std::byte>> m_views;   // reused gather scratch (grows once)
+    std::size_t m_in_flight{0};
     std::size_t m_bytes{0};
     bool m_open{true};
     bool m_sending{false};
