@@ -125,26 +125,36 @@ private:
             return false;
     }
 
-    // Pop the highest non-empty band and send it while the channel accepts; leave any
-    // remaining backlog priority-ordered in the bands for the next publish to resume
-    // (event-driven re-arm — strict highest-band-first, low-band starvation is intended).
+    // Pop the highest non-empty band and send it while the channel has headroom for THAT
+    // frame's bytes; leave any remaining backlog priority-ordered in the bands for the next
+    // publish to resume (event-driven re-arm — strict highest-band-first, low-band
+    // starvation is intended). The gate is headroom-for-the-frame, NOT bare occupancy: the
+    // low-water threshold equals the channel's own write-queue byte cap, so popping a frame
+    // the channel would refuse at that cap would lose it AND bypass the band drop counters.
+    // Checking backpressured()+size() against the gate keeps the band and channel bounds in
+    // agreement — the band never hands over a frame the channel cannot admit (channel
+    // SIGNALS occupancy, the band DECIDES the hand-off).
     void drain(Channel &ch)
     {
         auto &q = m_queues[&ch];
-        while(accepts(ch) && q.has_work())
+        while(q.has_work())
         {
             const auto *node = q.front_highest();
+            if(!admits(ch, node->size()))
+                break;
             ch.send(*node);   // copies into the channel's send queue BEFORE the band advances
             q.pop_highest();
         }
     }
 
-    // The channel can take more while its queued occupancy is below the low-water gate;
-    // a channel with no backpressure signal always accepts (the short-circuit path).
-    bool accepts(Channel &ch) const
+    // The channel has room for a frame of this size while its queued occupancy plus the
+    // frame stays within the low-water gate; a channel with no backpressure signal always
+    // admits (the short-circuit path). The gate equals the channel's write-queue cap, so a
+    // single max-message frame on an idle channel still admits (occupancy 0 + size == gate).
+    bool admits(Channel &ch, std::size_t size) const
     {
         if constexpr(can_poll())
-            return ch.backpressured() < k_low_water;
+            return ch.backpressured() + size <= k_low_water;
         else
             return true;
     }

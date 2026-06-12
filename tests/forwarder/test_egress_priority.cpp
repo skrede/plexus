@@ -122,6 +122,64 @@ static_assert(plexus::Policy<stall_policy>);
 
 using stall_forwarder = io::message_forwarder<stall_policy>;
 
+// A channel that models the production write-queue BYTE cap: send() admits only while the
+// queued total plus the frame stays within the cap (compare-before-add, as the real
+// stream_send_queue), refusing past it and counting a channel-level drop. backpressured()
+// reports the live queued occupancy. release() drains the queue (an ack/socket-drain
+// analog) so the scheduler can resume. It exposes the same surface the egress scheduler
+// reads, so a frame the cap would refuse is observable as a refused send, not a silent loss.
+struct capped_state
+{
+    std::size_t cap{0};
+    std::size_t queued{0};
+    std::size_t refused{0};                        // sends the byte cap turned away
+    std::vector<std::vector<std::byte>> sends;     // every frame the channel actually admitted
+};
+
+struct capped_channel
+{
+    explicit capped_channel(capped_state &st) : m_st(&st) {}
+    capped_channel(stall_executor &) {}
+    capped_channel(stall_executor &, std::error_code &) {}
+
+    void send(std::span<const std::byte> d)
+    {
+        if(m_st->queued != 0 && d.size() > m_st->cap - m_st->queued)   // compare-before-add, no wrap
+        {
+            ++m_st->refused;
+            return;
+        }
+        if(d.size() > m_st->cap)
+        {
+            ++m_st->refused;
+            return;
+        }
+        m_st->queued += d.size();
+        m_st->sends.emplace_back(d.begin(), d.end());
+    }
+    void close() {}
+    [[nodiscard]] io::endpoint remote_endpoint() const { return {"tcp", "127.0.0.1:0"}; }
+    void on_data(detail::move_only_function<void(std::span<const std::byte>)>) {}
+    void on_closed(detail::move_only_function<void()>) {}
+    void on_error(detail::move_only_function<void(io::io_error)>) {}
+    void on_protocol_close(detail::move_only_function<void(wire::close_cause)>) {}
+    [[nodiscard]] std::size_t backpressured() const noexcept { return m_st->queued; }
+
+    capped_state *m_st{nullptr};
+};
+
+struct capped_policy
+{
+    using executor_type = stall_executor &;
+    using byte_channel_type = capped_channel;
+    using timer_type = stall_timer;
+    using byte_owner = std::shared_ptr<const void>;
+
+    static void post(executor_type, detail::move_only_function<void()> fn) { fn(); }
+};
+
+static_assert(plexus::Policy<capped_policy>);
+
 }
 
 TEST_CASE("egress_priority: a realtime frame leaves a stalled destination before a background flood, looped",
@@ -571,4 +629,45 @@ TEST_CASE("egress_priority: drop_newest refuses the new frame at a saturated ban
         const auto bodies = data_bodies(st.sends);
         REQUIRE(bodies == expected);   // the original window survives, REFUSED never sent
     }
+}
+
+TEST_CASE("egress_priority: the drain leaves a frame the channel cap cannot admit banded — never popped-and-lost, and the channel never refuses a scheduler hand-off",
+          "[egress_priority][forwarder]")
+{
+    // The band/channel bounds must agree: the scheduler hands a frame to channel.send()
+    // ONLY when the channel can admit it at its write-queue byte cap. A frame larger than
+    // the channel's residual headroom is left banded (priority-ordered) for the next drain
+    // — never popped and dropped by a channel cap that the band drop counters do not see.
+    // Driven directly so the cap interaction is deterministic without a runtime.
+    capped_state cst;
+    cst.cap = io::detail::k_low_water;   // the gate equals the channel's own write-queue cap
+    capped_channel ch{cst};
+    stall_executor ex;
+    io::detail::egress_scheduler<capped_channel, capped_policy> sched{ex};
+
+    const std::size_t band = io::detail::band_of(io::priority::normal);
+    const std::size_t small = io::detail::k_low_water / 2;     // fits with room left
+    const std::size_t big   = io::detail::k_low_water;         // needs the whole budget
+
+    // Admit one small frame (drains immediately — headroom for it). Then enqueue a big
+    // frame: with the small frame still queued there is NO headroom for big, so the drain
+    // must leave it banded rather than hand it to a channel that would refuse it.
+    REQUIRE(sched.enqueue(ch, band, io::congestion::block, std::vector<std::byte>(small)) ==
+            io::detail::drop_cause::none);
+    REQUIRE(cst.sends.size() == 1);                            // the small frame drained
+    REQUIRE(cst.queued == small);
+
+    REQUIRE(sched.enqueue(ch, band, io::congestion::block, std::vector<std::byte>(big)) ==
+            io::detail::drop_cause::none);                     // admitted into the band, not dropped
+    REQUIRE(cst.sends.size() == 1);                            // big stayed banded (no headroom)
+    REQUIRE(cst.refused == 0);                                 // the channel cap never refused a hand-off
+
+    // Drain the channel (an ack/socket-drain analog), then resume with one more publish:
+    // now there IS headroom for the banded big frame, so it leaves — proving it was held,
+    // not lost. The kick frame itself stays banded behind big (big consumes the whole
+    // budget), so exactly the held big frame surfaces this turn.
+    cst.queued = 0;
+    sched.enqueue(ch, band, io::congestion::block, std::vector<std::byte>(small));   // resumes the drain
+    REQUIRE(cst.sends.size() == 2);                            // the held big frame finally drained
+    REQUIRE(cst.refused == 0);                                 // still never a refused hand-off
 }
