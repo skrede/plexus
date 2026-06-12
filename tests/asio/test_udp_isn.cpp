@@ -42,6 +42,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <iterator>
+#include <algorithm>
 
 namespace pasio = plexus::asio;
 namespace wire = plexus::wire;
@@ -223,6 +225,61 @@ TEST_CASE("udp isn: a spoofed seq=0 reliable-data segment is rejected on a non-z
         ++proven;
     }
     REQUIRE(proven == k_iterations);
+}
+
+TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not a reconstructible stream",
+          "[udp][isn][entropy]")
+{
+    // The dialer's per-session ISN is now drawn directly from std::random_device (the OS
+    // CSPRNG) instead of a single setup-time-seeded std::mt19937 whose stream was
+    // reconstructible from ISNs echoed in cleartext handshakes. Sniff the request handshakes
+    // from many INDEPENDENT client transports (each draws its own ISN) at a raw udp_server
+    // and assert the collected ISNs are well-distributed: never 0, overwhelmingly distinct,
+    // and no fixed sequential step (the signatures a low-entropy / reconstructible source
+    // would leave). This is a statistical property, so the bar is loose enough to never flake
+    // on a sound CSPRNG yet tight enough to catch a constant / counter / single-seed stream.
+    namespace iod = pio::detail;
+    constexpr int k_sessions = 64;
+
+    ::asio::io_context io;
+    pasio::udp_server sniffer{io};
+    std::vector<std::uint16_t> isns;
+    sniffer.on_datagram([&](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) {
+        if(auto hs = iod::decode_handshake(b); hs && hs->type == iod::udp_hs_type::request)
+            isns.push_back(hs->initial_seq);
+    });
+    sniffer.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
+    pump_until(io, [&] { return sniffer.port() != 0; });
+
+    std::vector<std::unique_ptr<pasio::udp_transport>> clients;
+    for(int i = 0; i < k_sessions; ++i)
+    {
+        auto c = std::make_unique<pasio::udp_transport>(io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq());
+        c->dial({"udpr", "127.0.0.1:" + std::to_string(sniffer.port())});
+        clients.push_back(std::move(c));
+    }
+    pump_until(io, [&] { return isns.size() >= static_cast<std::size_t>(k_sessions); });
+
+    REQUIRE(isns.size() >= static_cast<std::size_t>(k_sessions));
+    isns.resize(k_sessions);
+
+    for(auto v : isns)
+        REQUIRE(v != 0);                                   // 0 is reserved for the legacy default
+
+    std::vector<std::uint16_t> sorted = isns;
+    std::sort(sorted.begin(), sorted.end());
+    const auto distinct = static_cast<std::size_t>(std::distance(sorted.begin(), std::unique(sorted.begin(), sorted.end())));
+    REQUIRE(distinct >= static_cast<std::size_t>(k_sessions - 2));   // ~no collisions over a 16-bit space
+
+    // No fixed step: a counter / single-stride sequence would show one dominant delta. Across
+    // arrival order the consecutive deltas must vary (a CSPRNG yields a spread of deltas).
+    std::size_t distinct_deltas = 0;
+    std::vector<int> deltas;
+    for(std::size_t i = 1; i < isns.size(); ++i)
+        deltas.push_back(static_cast<int>(isns[i]) - static_cast<int>(isns[i - 1]));
+    std::sort(deltas.begin(), deltas.end());
+    distinct_deltas = static_cast<std::size_t>(std::distance(deltas.begin(), std::unique(deltas.begin(), deltas.end())));
+    REQUIRE(distinct_deltas > deltas.size() / 2);          // not a single repeating stride
 }
 
 TEST_CASE("udp isn: forged fragmented-flagged segments the reorder buffer rejects leave no residue",

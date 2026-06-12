@@ -81,7 +81,6 @@ public:
         , m_hs_ladder(hs_ladder)
         , m_arq_cfg(arq_cfg)
         , m_congestion(congestion)
-        , m_isn_rng(std::random_device{}())
         , m_dials(make_defer_destroy())
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { on_datagram(from, bytes); });
@@ -312,13 +311,20 @@ private:
                                 : io::detail::udp_channel_mode::best_effort;
     }
 
-    // Draw a random per-session ISN (RFC 6528 lineage) from the setup-time-seeded PRNG —
-    // a setup-time event (one draw per dial/accept), NOT a per-packet RNG. The range omits
-    // 0 so a negotiated ISN is always distinguishable from the legacy back-compat default
-    // (an absent ISN field decodes 0) and the spoof-resistance property always holds.
+    // Draw a per-session ISN (RFC 6528 lineage) DIRECTLY from std::random_device, the OS
+    // CSPRNG (getrandom / BCryptGenRandom / arc4random on the supported platforms). A setup-
+    // time event (one draw per dial/accept), NOT a per-packet RNG. The former shared
+    // std::mt19937 stream was reconstructible from ISNs echoed in cleartext handshakes,
+    // letting an attacker predict CONCURRENT sessions' ISNs; a per-session OS-entropy draw
+    // stores no reconstructible stream state, so observing one session's ISN reveals nothing
+    // about another's. The range omits 0 so a negotiated ISN is always distinguishable from
+    // the legacy back-compat default (an absent ISN field decodes 0).
     std::uint16_t next_isn()
     {
-        return std::uniform_int_distribution<std::uint16_t>{1, 0xFFFF}(m_isn_rng);
+        // random_device::result_type is at least 32 bits and non-deterministic by contract;
+        // fold it into [1, 0xFFFF]. The modulo bias across a 16-bit window of a >=32-bit
+        // draw is negligible for an unpredictability (not uniformity) requirement.
+        return static_cast<std::uint16_t>(m_isn_rng() % 0xFFFFu) + 1u;
     }
 
     void report_dial_fail(const io::endpoint &ep, io::io_error e) { if(m_on_dial_failed) m_on_dial_failed(ep, e); }
@@ -332,7 +338,7 @@ private:
     arq_type::schedule m_hs_ladder;
     io::detail::udp_arq_config m_arq_cfg;
     io::congestion m_congestion;
-    std::mt19937 m_isn_rng;                  // setup-time-seeded; one draw per dial/accept (no hot-path RNG)
+    std::random_device m_isn_rng;            // OS CSPRNG; one draw per dial/accept (no hot-path RNG, no stream state)
     std::vector<std::byte> m_hs_scratch;
     dial_registry m_dials;                  // the half-open dial table + the accepted table
     plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> m_on_accepted;
