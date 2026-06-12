@@ -355,6 +355,32 @@ TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_b
     REQUIRE(ch.dropped_count() == 0);             // block does not shed — it stalls
 }
 
+TEST_CASE("udp_congestion server bound: the shared outbound send queue is byte-bounded under a saturating burst",
+          "[udp][congestion][bound]")
+{
+    // The ONE shared udp_server send queue is byte-capped, so a saturating
+    // publisher cannot grow the server's outbound userspace queue without limit. A bound
+    // socket is started but the io_context is NEVER pumped during the burst, so the serial
+    // drain cannot run and a tight synchronous burst piles straight into the queue. Each
+    // datagram is 1 KiB; the burst's summed bytes far exceed the default cap. A bounded
+    // queue refuses past the cap (queued_send_bytes() <= cap); the currently-unbounded
+    // construction grows past it (RED) until the server threads the finite byte_cap.
+    ::asio::io_context io;
+    pasio::udp_server server{io};
+    server.start(::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 0});
+
+    const ::asio::ip::udp::endpoint dest{::asio::ip::make_address_v4("127.0.0.1"), 9};
+    std::vector<std::byte> kib(1024, std::byte{0x5A});
+    const std::size_t cap = pasio::udp_server::default_send_queue_bytes;
+    const std::size_t bursts = (cap / kib.size()) + 64;     // overshoot the cap
+    for(std::size_t i = 0; i < bursts; ++i)
+    {
+        server.send_to(kib, dest);                          // synchronous enqueue; NO poll between
+        REQUIRE(server.queued_send_bytes() <= cap);         // the structural memory bound
+    }
+    REQUIRE(server.queued_send_bytes() <= cap);
+}
+
 TEST_CASE("udp congestion block: a sustained reliable load completes within a bounded budget (no freeze)",
           "[udp][congestion]")
 {

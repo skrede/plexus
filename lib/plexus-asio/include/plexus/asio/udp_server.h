@@ -45,6 +45,13 @@ class udp_server
 public:
     using endpoint_type = ::asio::ip::udp::endpoint;
 
+    // The bounded outbound-queue BYTE budget (allocated at setup, never grown on the hot
+    // path): the shared server queue holds roughly one max-UDP datagram in flight while a
+    // saturating publisher's overrun is refused at the bound — the same shallow
+    // socket-facing budget the stream channels carry. A load-bearing knob, to be
+    // substantiated at the fan-out benchmark.
+    static constexpr std::size_t default_send_queue_bytes = 65536;
+
     explicit udp_server(::asio::io_context &io)
         : m_socket(io)
         , m_send_queue(make_send_sink())
@@ -96,6 +103,9 @@ public:
     }
 
     [[nodiscard]] bool is_open() const noexcept { return m_open; }
+
+    // The current queued (un-drained) outbound byte occupancy; 0 when the socket drains.
+    [[nodiscard]] std::size_t queued_send_bytes() const noexcept { return m_send_queue.queued_bytes(); }
 
     void close()
     {

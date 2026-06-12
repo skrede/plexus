@@ -582,6 +582,30 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_stream_channel_unix TEST_PREFIX "integration.")
 
+    # The saturating-publisher memory-bound gate: a producer outrunning a never-reading
+    # peer drives each stream channel's bounded write queue to its cap and no further — the
+    # byte budget is the structural memory bound. Looped per tcp/unix transport; re-run >=3
+    # process runs. The byte cap IS the residency bound (no RSS sampling needed).
+    add_executable(test_egress_saturation_bounded test_egress_saturation_bounded.cpp)
+    target_link_libraries(test_egress_saturation_bounded PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_egress_saturation_bounded TEST_PREFIX "integration.")
+
+    # The af_unix permissions model gate: a real unix_listener over a per-test owner-only
+    # temp dir, stat the on-disk socket inode for the configured mode (0700 default + a
+    # widened knob), and exercise the accept-time peer-credential gate (admit/refuse fail-
+    # closed) plus the closed unlink-before-bind TOCTOU window.
+    add_executable(test_unix_permissions test_unix_permissions.cpp)
+    target_link_libraries(test_unix_permissions PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_unix_permissions TEST_PREFIX "integration.")
+
     # The multiplexing transport now composes a secure (TLS) member alongside the local
     # and remote ones, so its header pulls in plexus::crypto and these mux oracles link it
     # (and only build when the secure backend is ON). The secure member stays inert on
@@ -634,6 +658,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
             plexus::crypto
             Catch2::Catch2WithMain)
         catch_discover_tests(test_tls_channel_backpressure_asio TEST_PREFIX "integration."
+            PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+
+        # The TLS pending-dial teardown asan proof: an in-flight TLS dial whose io_context
+        # (and owning transport) is destroyed mid-handshake leaks nothing — the transport-
+        # owned pending_dial_registry frees the half-open channel/socket/timer with no
+        # leak/UAF (a verify-and-prove rider). Serialized + RESOURCE_LOCK on the
+        # shared loopback resource alongside the other real-socket legs.
+        add_executable(test_tls_dial_teardown test_tls_dial_teardown.cpp
+            $<TARGET_OBJECTS:plexus-crypto>)
+        target_link_libraries(test_tls_dial_teardown PRIVATE
+            plexus::core
+            plexus::wire
+            plexus::asio
+            plexus::crypto
+            Catch2::Catch2WithMain)
+        catch_discover_tests(test_tls_dial_teardown TEST_PREFIX "integration."
             PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
     endif()
 

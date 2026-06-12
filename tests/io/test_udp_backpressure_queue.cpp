@@ -6,6 +6,7 @@
 // total below the cap and re-admit unboundedly, mitigating the T-23-D2 integer-overflow
 // threat). plexus::plexus only (header-only core; no backend link).
 
+#include "plexus/io/detail/send_queue.h"
 #include "plexus/io/detail/udp_backpressure_queue.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -13,6 +14,7 @@
 #include <span>
 #include <vector>
 #include <cstddef>
+#include <utility>
 
 using queue = plexus::io::detail::udp_backpressure_queue;
 
@@ -91,4 +93,28 @@ TEST_CASE("udp_backpressure_queue near-cap boundary: byte accounting does not wr
     REQUIRE(q.queued_bytes() == 1);
     REQUIRE(q.admit(frame(30)));
     REQUIRE(q.queued_bytes() == 31);
+}
+
+TEST_CASE("send_queue: a finite byte cap refuses past the bound (the udp_server outbound bound)", "[io][backpressure][bound]")
+{
+    // The cap mechanism at the block the shared udp_server outbound queue is built from: a
+    // finite byte_cap refuses enqueue past the cap (the at-capacity signal the server reacts
+    // to under congestion), while an unbounded queue (today's server construction) admits
+    // every datagram unboundedly. A WITHHOLDING sink (never invokes its completion)
+    // simulates a stalled socket so the serial drain cannot free room.
+    using sq = plexus::io::detail::send_queue<int>;
+
+    // The bounded queue: a 16-byte cap, a sink that withholds completion so nothing drains.
+    sq bounded{[](std::span<const std::byte>, const int &, sq::completion) { /* withhold */ }, 16};
+    REQUIRE(bounded.enqueue(frame(10), 0));       // 10 of 16 — admitted, in flight (no completion)
+    REQUIRE(bounded.enqueue(frame(6), 0));        // exactly to the cap — admitted into the queue
+    REQUIRE_FALSE(bounded.enqueue(frame(1), 0));  // past the cap — REFUSED (the congestion signal)
+    REQUIRE(bounded.queued_bytes() == 16);
+
+    // The unbounded queue (today's server): the same withholding sink, no cap — it admits
+    // far past any bound, the OOM path the finite cap closes.
+    sq unbounded{[](std::span<const std::byte>, const int &, sq::completion) { /* withhold */ }};
+    for(int i = 0; i < 1000; ++i)
+        REQUIRE(unbounded.enqueue(frame(64), 0));
+    REQUIRE(unbounded.queued_bytes() == 64 * 1000);
 }
