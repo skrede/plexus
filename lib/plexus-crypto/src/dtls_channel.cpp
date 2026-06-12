@@ -37,6 +37,13 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
     , m_gate([this](std::span<const std::byte> bytes) { secure_send(bytes); })
     , m_peer_addr_block(detail::pack_peer_addr(m_dest))
 {
+    // Hold the largest single DTLS record either direction in ONE buffer: the configured
+    // record budget plus headroom for the 13-byte record header and worst-case cipher
+    // expansion (IV/tag/block padding). Sizing from the knob (not a 2048 constant) keeps
+    // SSL_read from discarding and BIO_read from splitting a record once record_mtu rises.
+    constexpr std::size_t k_record_overhead = 256;
+    m_drain_buf.resize(m_record_mtu + k_record_overhead);
+
     BIO *internal = nullptr;
     BIO *external = nullptr;
     if(::BIO_new_bio_pair(&internal, 0, &external, 0) != 1)
@@ -188,10 +195,10 @@ void dtls_channel::drain_outbound()
         const int n = ::BIO_read(bio, m_drain_buf.data(), to_int(m_drain_buf.size()));
         if(n <= 0)
             break;
-        // Send DIRECTLY from the owned 2048-byte drain buffer (no per-datagram scratch
-        // reallocation on the steady-state hot path): udp_server's outbound queue owns
-        // each in-flight datagram's bytes across its async_send_to, so the buffer is
-        // free to be overwritten by the next BIO_read on return.
+        // Send DIRECTLY from the owned drain buffer (sized at construction from the record
+        // budget, no per-datagram scratch reallocation on the steady-state hot path):
+        // udp_server's outbound queue owns each in-flight datagram's bytes across its
+        // async_send_to, so the buffer is free to be overwritten by the next BIO_read on return.
         m_server.send_to(std::span<const std::byte>{
             reinterpret_cast<const std::byte *>(m_drain_buf.data()), static_cast<std::size_t>(n)}, m_dest);
     }
