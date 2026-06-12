@@ -22,6 +22,11 @@ namespace plexus::io::detail {
 // regardless of how a large message divides into fragments. Admission is compare-BEFORE-add
 // (cap - bytes, no wrap) so a crafted sequence of large frames cannot overflow the running
 // total past the cap and re-admit unboundedly.
+//
+// Each parked frame carries its FRAGMENTED disposition alongside the bytes: a fragment of a
+// large message parks here when the send window is full, and the flag must survive the round
+// trip through the queue so the drain re-submits it as a fragment (without it the peer would
+// route the in-order payload to whole-message delivery instead of the reassembler).
 class udp_backpressure_queue
 {
 public:
@@ -30,15 +35,15 @@ public:
     {
     }
 
-    // Park a window-full frame. Returns false if admitting it would carry the parked byte
-    // total past the cap (the caller surfaces the stall signal); the bytes are copied into
-    // an owned slot otherwise.
-    bool admit(std::span<const std::byte> frame)
+    // Park a window-full frame and its FRAGMENTED disposition. Returns false if admitting it
+    // would carry the parked byte total past the cap (the caller surfaces the stall signal);
+    // the bytes are copied into an owned slot otherwise.
+    bool admit(std::span<const std::byte> frame, bool fragmented)
     {
         if(!admits(frame.size()))
             return false;
         m_bytes += frame.size();
-        m_queue.emplace_back(frame.begin(), frame.end());
+        m_queue.push_back(entry{{frame.begin(), frame.end()}, fragmented});
         return true;
     }
 
@@ -47,14 +52,21 @@ public:
     [[nodiscard]] std::size_t queued_bytes() const noexcept { return m_bytes; }
 
     // The front parked frame (a non-owning view valid until the next pop/admit).
-    [[nodiscard]] std::span<const std::byte> front() const { return std::span<const std::byte>{m_queue.front()}; }
+    [[nodiscard]] std::span<const std::byte> front() const { return std::span<const std::byte>{m_queue.front().bytes}; }
+    [[nodiscard]] bool front_fragmented() const noexcept { return m_queue.front().fragmented; }
     void pop_front()
     {
-        m_bytes -= m_queue.front().size();
+        m_bytes -= m_queue.front().bytes.size();
         m_queue.pop_front();
     }
 
 private:
+    struct entry
+    {
+        std::vector<std::byte> bytes;
+        bool fragmented;
+    };
+
     // Compare-before-add: a frame fits only when the cap is not already met AND its size
     // is within the remaining budget (cap - bytes, both unsigned with bytes < cap by the
     // first clause), so no crafted size can wrap the comparison.
@@ -65,7 +77,7 @@ private:
 
     std::size_t m_byte_cap;
     std::size_t m_bytes{0};
-    std::deque<std::vector<std::byte>> m_queue;
+    std::deque<entry> m_queue;
 };
 
 }
