@@ -9,6 +9,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/security/peer_cred_policy.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -16,10 +17,16 @@
 
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(__linux__)
+#include <sys/socket.h>
+#elif defined(__APPLE__) || defined(__FreeBSD__)
+#include <unistd.h>
+#endif
 
 #include <string>
 #include <memory>
 #include <cerrno>
+#include <cstdint>
 #include <utility>
 #include <system_error>
 
@@ -37,18 +44,31 @@ namespace plexus::asio {
 //
 // SECURITY CONTRACT (caller-owned): the socket path MUST live in a directory the
 // owner controls (not a world-writable shared tmp), so the unlink-before-bind cannot
-// be raced and the 0700 mode is the effective access boundary. Tightening this
-// (atomic mode via an owner-only parent dir, and on-connect peer-credential checks)
-// is deferred hardening — see seeds/af-unix-permissions-model.md.
+// be raced. The socket mode (0700 owner-only by default, a widened knob) is the access
+// boundary; the bind happens under a restrictive umask so the inode is created at the
+// mode atomically (no post-bind chmod window). An injected peer_cred_policy is
+// defense-in-depth ABOVE the mode: it judges {uid, gid, pid} at accept and refuses an
+// unauthorized local peer fail-closed (accept_any is the named default).
 class unix_listener
 {
 public:
-    // cfg is the node-level hardening config (required-WITH-default), stamped onto
-    // every channel this listener accepts so each minted stream arms it structurally.
-    explicit unix_listener(::asio::io_context &io, wire::stream_inbound_config cfg = {})
+    // The default socket mode: owner-only 0700, the fail-closed boundary. The knob widens
+    // deliberately (e.g. 0770) — loosening is an informed choice, never a default.
+    static constexpr ::mode_t default_socket_mode = S_IRWXU;
+
+    // cfg is the node-level hardening config (required-WITH-default), stamped onto every
+    // channel this listener accepts. mode is the socket-file permission (required-WITH-
+    // default 0700). policy is the borrowed accept-time peer-credential allowlist
+    // (defense-in-depth; the named accept_any default admits every local peer).
+    explicit unix_listener(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+                           ::mode_t mode = default_socket_mode,
+                           const io::security::peer_cred_policy &policy
+                               = io::security::shared_accept_any_peer_cred())
         : m_io(io)
         , m_acceptor(io)
         , m_cfg(cfg)
+        , m_mode(mode)
+        , m_peer_policy(&policy)
     {
     }
 
@@ -66,16 +86,28 @@ public:
         auto ep = detail::parse_unix(bind_ep.address, ec);
         if(ec)
             return report(ec);
+#if !defined(__linux__) && !defined(__APPLE__) && !defined(__FreeBSD__)
+        // Windows AF_UNIX exposes no peer credentials. A non-accept_any policy cannot be
+        // honored, so refuse at listen (fail-closed) rather than silently admit every peer.
+        if(!m_peer_policy->accepts_without_credentials())
+            return report(std::make_error_code(std::errc::operation_not_supported));
+#endif
         const auto &path = bind_ep.address;
         unlink_path(path);                        // clear a stale socket file before bind
         m_acceptor.open(ep.protocol(), ec);
         if(ec)
             return report(ec);
+        // Bind under a restrictive umask so the socket inode is created with NO access for
+        // group/other from the outset — this closes the TOCTOU window between bind (which
+        // would otherwise create a world-accessible inode) and the mode application. The
+        // umask is restored immediately after bind.
+        const ::mode_t prev_umask = ::umask(0077);
         m_acceptor.bind(ep, ec);                  // NO reuse_address for AF_UNIX
+        (void)::umask(prev_umask);
         if(ec)
             return abort_start(ec);               // close the opened acceptor
         m_bound_path = path;                      // bind created the inode — own it so any later failure unlinks it
-        if(::chmod(path.c_str(), S_IRWXU) != 0)   // owner-only 0700 access control
+        if(::chmod(path.c_str(), m_mode) != 0)    // apply the configured mode (0700 default, or a widened knob)
             return abort_start(std::error_code(errno, std::generic_category()));
         m_acceptor.listen(::asio::socket_base::max_listen_connections, ec);
         if(ec)
@@ -131,12 +163,51 @@ private:
                         report(ec);
                     return;
                 }
-                auto channel = std::make_unique<unix_channel>(m_io, std::move(peer), m_cfg);
-                if(m_on_accepted)
-                    m_on_accepted(std::move(channel));
+                // Consult the borrowed peer-credential policy BEFORE adopting the channel.
+                // A reject closes the accepted socket fail-closed (no channel handed up),
+                // the session stays unestablished, and the accept loop continues.
+                if(!admit_peer(peer))
+                {
+                    std::error_code ic;
+                    (void)peer.close(ic);
+                }
+                else
+                {
+                    auto channel = std::make_unique<unix_channel>(m_io, std::move(peer), m_cfg);
+                    if(m_on_accepted)
+                        m_on_accepted(std::move(channel));
+                }
                 if(m_running)
                     do_accept();
             });
+    }
+
+    // Read the accepted peer's local credentials and run them past the injected policy. The
+    // credential read is per-platform (Linux SO_PEERCRED, macOS/BSD getpeereid with pid=0).
+    // A read failure is itself a refusal (fail-closed — an unidentifiable peer is not
+    // admitted). NOTE: the macOS/BSD path is unverified on this Linux host (flagged for CI).
+    bool admit_peer(::asio::local::stream_protocol::socket &peer) const
+    {
+#if defined(__linux__)
+        ::ucred cred{};
+        ::socklen_t len = sizeof(cred);
+        if(::getsockopt(peer.native_handle(), SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0)
+            return false;
+        return m_peer_policy->decide(io::security::peer_cred{
+            static_cast<std::uint32_t>(cred.uid),
+            static_cast<std::uint32_t>(cred.gid),
+            static_cast<std::uint32_t>(cred.pid)});
+#elif defined(__APPLE__) || defined(__FreeBSD__)
+        ::uid_t uid = 0;
+        ::gid_t gid = 0;
+        if(::getpeereid(peer.native_handle(), &uid, &gid) != 0)   // no pid on Darwin/BSD => pid=0
+            return false;
+        return m_peer_policy->decide(io::security::peer_cred{
+            static_cast<std::uint32_t>(uid), static_cast<std::uint32_t>(gid), 0});
+#else
+        (void)peer;
+        return m_peer_policy->accepts_without_credentials();   // Windows AF_UNIX: no creds (refused at listen)
+#endif
     }
 
     void report(const std::error_code &ec)
@@ -148,6 +219,8 @@ private:
     ::asio::io_context &m_io;
     ::asio::local::stream_protocol::acceptor m_acceptor;
     wire::stream_inbound_config m_cfg;
+    ::mode_t m_mode;
+    const io::security::peer_cred_policy *m_peer_policy;   // borrowed; never owned
     std::string m_bound_path;
     plexus::detail::move_only_function<void(std::unique_ptr<unix_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
