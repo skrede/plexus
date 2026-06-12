@@ -70,9 +70,11 @@ public:
                            arq_type::schedule hs_ladder = arq_type::default_ladder,
                            io::detail::udp_arq_config arq_cfg = {},
                            io::congestion congestion = io::congestion::block,
-                           std::size_t max_peers = detail::udp_inbound_demux::default_max_peers)
+                           std::size_t max_peers = detail::udp_inbound_demux::default_max_peers,
+                           std::size_t so_sndbuf = udp_server::default_so_sndbuf,
+                           std::size_t so_rcvbuf = udp_server::default_so_rcvbuf)
         : m_io(io)
-        , m_server(io, congestion)
+        , m_server(io, congestion, udp_server::default_send_queue_bytes, so_sndbuf, so_rcvbuf)
         , m_max_peers(max_peers)
         , m_demux(max_peers)
         , m_max_payload(max_payload)
