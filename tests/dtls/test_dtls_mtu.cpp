@@ -187,13 +187,19 @@ TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fra
         REQUIRE(l.client_complete);
         REQUIRE(l.server_complete);
 
-        // Find the exact accept/reject boundary. DTLS_get_data_mtu is the configured
-        // record budget (1400) minus the DTLS 1.2 AEAD-GCM record overhead (13B header +
-        // 8B explicit IV + 16B auth tag = 37B), so the accepted ceiling lands at ~1363
-        // — proving the cap binds the encrypted record budget, not the plaintext size.
-        const std::size_t cap = l.probe_one_record_ceiling(100, 1400);
-        REQUIRE(cap >= 1300);                          // the ~1360 encrypted data MTU (1400 - 37B - 3B envelope)
-        REQUIRE(cap < 1400);                           // strictly below the configured budget (overhead subtracted)
+        // Find the exact accept/reject boundary. The single-record ceiling is the
+        // encrypted record budget DTLS_get_data_mtu reports — the configured record MTU
+        // (default_record_mtu) minus the DTLS 1.2 AEAD-GCM record overhead (13B header +
+        // 8B explicit IV + 16B auth tag = 37B) minus the 3B udp envelope — so it lands
+        // strictly below the configured budget. The bound is DERIVED from the record MTU
+        // and a worst-case overhead ceiling, not a hardcoded number, so it tracks the
+        // mtu_budget default rather than restating a stale 1400-era constant.
+        constexpr std::size_t k_record_mtu = ptls::dtls_channel::default_record_mtu;
+        constexpr std::size_t k_max_record_overhead =
+            37u + plexus::wire::udp_envelope_overhead;  // DTLS 1.2 AEAD-GCM record + udp envelope
+        const std::size_t cap = l.probe_one_record_ceiling(100, k_record_mtu);
+        REQUIRE(cap >= k_record_mtu - k_max_record_overhead);  // within the overhead band below the record MTU
+        REQUIRE(cap < k_record_mtu);                           // strictly below (overhead subtracted)
         observed_cap = cap;
 
         // The boundary frame is delivered intact AS ONE record (no fragmentation): the
