@@ -24,7 +24,6 @@
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
 
-#include <set>
 #include <span>
 #include <string>
 #include <vector>
@@ -250,9 +249,10 @@ public:
         }
         else if(m_mode == io::detail::udp_channel_mode::reliable_datagram)
         {
-            if(dec->fragmented)
-                m_frag_recv_seqs.insert(dec->seq);   // mark this ARQ seq's in-order delivery as a fragment
-            deliver_reliable(dec->seq, dec->frame);
+            // The FRAGMENTED bit rides the ARQ segment into the reorder buffer slot and is
+            // released with the in-order payload — bound to acceptance, so a forged or
+            // out-of-window segment that the buffer rejects leaves no per-seq residue.
+            deliver_reliable(dec->seq, dec->fragmented, dec->frame);
         }
         // else: a kind=1 datagram on a best_effort channel is not expected — DROP it.
         // The source endpoint is not trusted as identity, so routing it to the reliable
@@ -348,9 +348,9 @@ private:
     // A reliable in-order payload: if its ARQ seq was flagged FRAGMENTED on the wire, the
     // payload is [msg_id:2][idx:2][cnt:2][slice] — decode and feed the reassembler; else it
     // is a whole reliable message delivered byte-identically to the unfragmented path.
-    void deliver_reliable_inorder(std::uint16_t seq, std::span<const std::byte> payload)
+    void deliver_reliable_inorder(bool fragmented, std::span<const std::byte> payload)
     {
-        if(m_frag_recv_seqs.erase(seq) == 0)
+        if(!fragmented)
             return post_on_data(payload);            // whole reliable message: unchanged path
         ensure_reassembler();
         auto h = wire::decode_udp_fragment_header(payload);
@@ -391,7 +391,7 @@ private:
             wire::wrap_udp_into(m_ack_scratch, wire::udp_envelope_kind::reliable_arq, 0, m_arq_inner);
             m_server.send_to(m_ack_scratch, m_dest);
         });
-        m_arq->on_deliver_seq([this](std::uint16_t seq, std::span<const std::byte> payload) { deliver_reliable_inorder(seq, payload); });
+        m_arq->on_deliver_seq([this](std::uint16_t, bool fragmented, std::span<const std::byte> payload) { deliver_reliable_inorder(fragmented, payload); });
         m_arq->on_exhausted([this] { if(m_on_error) m_on_error(io::io_error::timed_out); });
         // congestion=block: when an ack frees window slots, drain the backpressure queue
         // by re-submitting the admissible queued frames (the window-drain re-arm idiom,
@@ -443,7 +443,7 @@ private:
     // drives on_segment (in-order delivery + ack), an ack drives on_ack (window slide).
     // A test-installed raw observer (m_on_reliable) sees the segment too. A frame whose
     // marker is neither (a handshake byte, already split off upstream) is dropped.
-    void deliver_reliable(std::uint16_t seq, std::span<const std::byte> inner)
+    void deliver_reliable(std::uint16_t seq, bool fragmented, std::span<const std::byte> inner)
     {
         auto kind = wire::peek_udp_arq_kind(inner);
         if(!kind)
@@ -460,7 +460,7 @@ private:
         if(m_on_reliable)
             m_on_reliable(seq, *payload);
         ensure_arq();
-        m_arq->on_segment(seq, *payload);
+        m_arq->on_segment(seq, fragmented, *payload);
     }
 
     // on_data is ALWAYS posted (the byte_channel contract). The owning vector keeps
@@ -492,7 +492,6 @@ private:
     std::vector<std::byte> m_ack_scratch;
     std::vector<std::byte> m_arq_inner;
     std::vector<std::byte> m_frag_scratch;               // reused fragment-encode buffer (allocated at setup)
-    std::set<std::uint16_t> m_frag_recv_seqs;            // ARQ seqs whose in-order payload is a reliable fragment
     std::unique_ptr<arq_type> m_arq;
     std::unique_ptr<reassembler_type> m_reassembler;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
