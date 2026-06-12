@@ -1,9 +1,8 @@
 // The MTU-budget value-object oracle: a pure value-level check of the static
-// per-channel payload budget. Proves the default (1400, the behavior-preserving
-// relocation of the formerly scattered literal), a caller override, and the
-// oversize-boundary arithmetic the channel's reject gates evaluate
-// (size + envelope_overhead (+ a reliable marker byte) > max_payload). No socket,
-// no backend — header-only core, linked against plexus::plexus only.
+// per-channel payload budget. Proves the default (1200, the RFC 9000 §14 conservative
+// datagram bound), a caller override, and the oversize-boundary arithmetic the channel's
+// reject gates evaluate (size + envelope_overhead (+ a reliable marker byte) > max_payload).
+// No socket, no backend — header-only core, linked against plexus::plexus only.
 
 #include "plexus/io/mtu_budget.h"
 
@@ -15,9 +14,9 @@
 
 using plexus::io::mtu_budget;
 
-TEST_CASE("mtu_budget default is the conservative 1400-byte payload floor", "[io][mtu_budget]")
+TEST_CASE("mtu_budget default is the conservative 1200-byte payload floor", "[io][mtu_budget]")
 {
-    REQUIRE(mtu_budget{}.max_payload == 1400);
+    REQUIRE(mtu_budget{}.max_payload == 1200);
 }
 
 TEST_CASE("mtu_budget admits a caller override (required-with-default)", "[io][mtu_budget]")
