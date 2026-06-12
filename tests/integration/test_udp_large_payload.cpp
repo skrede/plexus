@@ -49,6 +49,16 @@ inline pio::detail::udp_arq_config large_arq()
         .window = 1024, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{160}, .max_retransmit = 40};
 }
 
+// A DELIBERATELY tiny send window so a many-fragment message has far more fragments than
+// the window admits: the bulk of fragments must transit the bounded congestion=block
+// backpressure queue, which is the path that must preserve each fragment's FRAGMENTED
+// envelope bit (a window-sized message never parks a fragment and would not exercise it).
+inline pio::detail::udp_arq_config tiny_window_arq()
+{
+    return pio::detail::udp_arq_config{
+        .window = 8, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{160}, .max_retransmit = 40};
+}
+
 // A deterministic, position-dependent payload byte-checked against a regenerated oracle.
 std::vector<std::byte> make_payload(std::size_t n, std::uint8_t salt)
 {
@@ -205,6 +215,20 @@ TEST_CASE("udp_large_payload: a 4 MB message (the max_message_size ceiling) roun
     // ceiling message rides the reliable ARQ and reassembles byte-equal.
     constexpr std::size_t budget = 8192;
     REQUIRE(roundtrip_clean("udpr", budget, 4u * 1024 * 1024, large_arq(), /*iterations=*/4) == 4);
+}
+
+TEST_CASE("udp_large_payload: a fragmented udpr message whose fragment count exceeds the send window reassembles through the backpressure queue, looped",
+          "[udp_large_payload]")
+{
+    // Regression: a reliable fragment that parks in the congestion=block backpressure queue
+    // (because the send window is full) must KEEP its FRAGMENTED envelope bit when it drains.
+    // A tiny 8-segment window against a 1 MiB message (~128 fragments at an 8 KiB budget)
+    // forces all but the first few fragments through the queue. If a drained fragment lost
+    // the flag the peer would post each raw [msg_id][idx][cnt][slice] blob as a whole message
+    // instead of reassembling — got would fill with many wrong-sized blobs and never match the
+    // payload, so the single-byte-equal-delivery assertion below fails closed.
+    constexpr std::size_t budget = 8192;
+    REQUIRE(roundtrip_clean("udpr", budget, 1u * 1024 * 1024, tiny_window_arq(), /*iterations=*/4) == 4);
 }
 
 TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured — UDP drops the whole message, udpr reassembles",

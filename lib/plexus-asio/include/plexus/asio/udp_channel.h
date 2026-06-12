@@ -220,7 +220,7 @@ public:
         const auto r = m_arq->submit(payload);
         if(r == submit_result::admitted)
             return r;
-        return on_window_full(payload);          // block: enqueue/drain; drop: shed
+        return on_window_full(payload, /*fragmented=*/false);   // block: enqueue/drain; drop: shed
     }
 
     // The reliable-ARQ recv hook (kind=1). The data ARQ is wired here: a kind=1 datagram
@@ -331,7 +331,7 @@ private:
         const auto r = m_arq->submit(m_frag_scratch, /*fragmented=*/true);
         if(r == submit_result::admitted)
             return r;
-        return on_window_full(m_frag_scratch);
+        return on_window_full(m_frag_scratch, /*fragmented=*/true);
     }
 
     // A best_effort inbound fragment: decode its wire sub-header (fail-closed) and feed
@@ -406,7 +406,7 @@ private:
     // unbounded growth). congestion=drop_newest sheds the frame at the publisher (the
     // documented opt-out of the reliable guarantee). Either way publish() stays
     // non-blocking and the io_context is never blocked.
-    submit_result on_window_full(std::span<const std::byte> payload)
+    submit_result on_window_full(std::span<const std::byte> payload, bool fragmented)
     {
         if(m_congestion == io::congestion::drop_newest)
         {
@@ -416,7 +416,7 @@ private:
                                                  .transport = io::locality::remote});
             return submit_result::window_full;
         }
-        if(!m_backpressure.admit(payload))
+        if(!m_backpressure.admit(payload, fragmented))
         {
             if(m_on_error)
                 m_on_error(io::io_error::would_block);   // queue at cap: the stall edge
@@ -433,7 +433,7 @@ private:
     {
         while(!m_backpressure.empty() && m_arq && m_arq->window_has_room())
         {
-            if(m_arq->submit(m_backpressure.front()) != submit_result::admitted)
+            if(m_arq->submit(m_backpressure.front(), m_backpressure.front_fragmented()) != submit_result::admitted)
                 break;
             m_backpressure.pop_front();
         }
