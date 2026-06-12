@@ -380,6 +380,41 @@ TEST_CASE("udp_congestion server bound: the shared outbound send queue is byte-b
     REQUIRE(server.queued_send_bytes() <= cap);
 }
 
+TEST_CASE("udp_server send: a transient per-datagram send error is counted, never storms on_error, and the drain continues",
+          "[udp][congestion][bound]")
+{
+    // A best-effort UDP send failure must NOT fire on_error per datagram (an unreachable
+    // port could otherwise storm the owner) and must NOT stall the serial drain. An
+    // oversized datagram (past the one-datagram IPv4 payload max) deterministically yields
+    // EMSGSIZE on send — a transient class — so the server counts the discard, leaves
+    // on_error unfired, and keeps draining the queue. Looped: a transport claim is never
+    // made from a single run.
+    constexpr int k_iterations = 20;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        ::asio::io_context io;
+        // A byte cap large enough to admit the oversized datagrams (the queue must not
+        // refuse them first — the failure under test is the send sink's, not the cap's).
+        pasio::udp_server server{io, pio::congestion::block, 1u << 20};
+        std::optional<pio::io_error> err;
+        server.on_error([&](pio::io_error e) { err = e; });
+        server.start(::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 0});
+
+        const ::asio::ip::udp::endpoint dest{::asio::ip::make_address_v4("127.0.0.1"), 9};
+        std::vector<std::byte> oversized(70000, std::byte{0x5A});   // past the 65507 IPv4 UDP max
+        constexpr int n = 4;
+        for(int i = 0; i < n; ++i)
+            server.send_to(oversized, dest);
+
+        pump_until(io, [&] { return server.send_error_count() == static_cast<std::size_t>(n); });
+
+        REQUIRE(server.send_error_count() == static_cast<std::size_t>(n));   // every oversized send counted
+        REQUIRE_FALSE(err.has_value());                                      // on_error NEVER fired per datagram
+        REQUIRE(server.queued_send_bytes() == 0);                            // the drain chained past every failure
+        REQUIRE(server.is_open());                                           // a transient error never closes the socket
+    }
+}
+
 TEST_CASE("udp congestion block: a sustained reliable load completes within a bounded budget (no freeze)",
           "[udp][congestion]")
 {

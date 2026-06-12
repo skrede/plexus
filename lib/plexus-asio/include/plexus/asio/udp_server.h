@@ -121,6 +121,10 @@ public:
     [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
     // The count of datagrams shed under congestion=drop_newest at the byte cap.
     [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
+    // The count of datagrams discarded on a transient per-datagram send error (an
+    // unreachable destination, a momentary buffer-full) — best-effort UDP loss that is NOT
+    // surfaced through on_error per datagram, so an unreachable port cannot storm the owner.
+    [[nodiscard]] std::size_t send_error_count() const noexcept { return m_send_errors; }
 
     void close()
     {
@@ -150,9 +154,13 @@ private:
 
     // The irreducible asio send-sink the send_queue block drives: send the block-owned
     // node's bytes and signal completion when the async op finishes. At most one is
-    // outstanding (the block's serial discipline), so a node's bytes stay valid until
-    // its own completion runs. A send error is surfaced through report; the !m_open
-    // guard stops the drain after teardown.
+    // outstanding (the block's serial discipline), so a node's bytes stay valid until its
+    // own completion runs. The completion discriminates the error class (mirroring how the
+    // stream channels split fatal from teardown): a transient per-datagram failure (an
+    // unreachable destination, a momentary buffer-full) is best-effort UDP loss — counted,
+    // NOT surfaced through on_error per datagram, and the drain chains past it; a fatal
+    // socket error closes the queue (stopping the chain so the same failure does not loop)
+    // and is reported once; an aborted/post-teardown completion is a guarded no-op.
     io::detail::send_queue<endpoint_type>::send_sink make_send_sink()
     {
         return [this](std::span<const std::byte> bytes, const endpoint_type &dest,
@@ -161,13 +169,32 @@ private:
             m_socket.async_send_to(::asio::buffer(bytes.data(), bytes.size()), dest,
                 [this, done = std::move(done)](std::error_code ec, std::size_t) mutable
                 {
-                    if(ec)
-                        report(ec);
-                    if(!m_open)
+                    if(ec == ::asio::error::operation_aborted || !m_open)
                         return;
-                    done(!ec);
+                    if(!ec)
+                        return done(true);
+                    if(transient_send_error(ec))
+                    {
+                        ++m_send_errors;   // best-effort UDP loss: chain past it, do not storm on_error
+                        return done(true);
+                    }
+                    report(ec);            // a fatal socket error: report once and stop the chain
+                    m_send_queue.close();
                 });
         };
+    }
+
+    // A transient send error is a per-datagram, best-effort UDP failure (an unreachable
+    // destination via an ICMP error, a momentary buffer-full) that the next datagram may
+    // not hit — discarded silently, the drain continues. A fatal error indicates the socket
+    // itself is unusable going forward (a bad descriptor, an unsupported op, the network
+    // down), where chaining would only loop the same failure; everything not in that fatal
+    // set is treated as transient so best-effort delivery is the default.
+    static bool transient_send_error(const std::error_code &ec) noexcept
+    {
+        return ec != ::asio::error::bad_descriptor
+               && ec != ::asio::error::operation_not_supported
+               && ec != ::asio::error::network_down;
     }
 
     void do_receive()
@@ -204,6 +231,7 @@ private:
     std::array<std::byte, 65536> m_recv_buf{};
     io::congestion m_congestion{io::congestion::block};
     std::size_t m_dropped{0};                             // congestion=drop shed count
+    std::size_t m_send_errors{0};                         // transient per-datagram send-failure discards
     io::detail::send_queue<endpoint_type> m_send_queue;   // byte-capped owned outbound discipline
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
