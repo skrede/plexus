@@ -69,9 +69,12 @@ public:
     explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload,
                            arq_type::schedule hs_ladder = arq_type::default_ladder,
                            io::detail::udp_arq_config arq_cfg = {},
-                           io::congestion congestion = io::congestion::block)
+                           io::congestion congestion = io::congestion::block,
+                           std::size_t max_peers = detail::udp_inbound_demux::default_max_peers)
         : m_io(io)
         , m_server(io, congestion)
+        , m_max_peers(max_peers)
+        , m_demux(max_peers)
         , m_max_payload(max_payload)
         , m_hs_ladder(hs_ladder)
         , m_arq_cfg(arq_cfg)
@@ -100,6 +103,12 @@ public:
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> cb) { m_on_accepted = std::move(cb); }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
+
+    // The drop-observability seam (null by default — zero cost when unobserved). The owner
+    // installs the engine's posted drop_sink; an inbound flood refused by the per-peer
+    // demux cap emits demux_refused here. The sink POSTS, so the spoof-flood refusal site
+    // never fires the observer synchronously (the cap exists to bound exactly that flood).
+    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
 
     void listen(const io::endpoint &ep)
@@ -152,7 +161,7 @@ public:
         // error before touching the freed ARQ), so the "cancel every pending ARQ timer
         // then drop" teardown semantics hold.
         m_dials.clear();
-        m_demux = detail::udp_inbound_demux{};
+        m_demux = detail::udp_inbound_demux{m_max_peers};
         m_server.close();
     }
 
@@ -223,7 +232,12 @@ private:
                                                 hs->mode, hs->initial_seq);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
+        {
+            if(m_on_drop)
+                m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::demux_refused,
+                                                 .transport = io::locality::remote});
             return;                                        // peer cap reached: drop the flood
+        }
         wire_teardown(*raw, from);
         m_dials.insert_accepted(raw, std::move(ch));
         send_handshake(from, hs_type::response, hs->mode, hs->initial_seq); // resolve the dialer's ARQ, echo mode+ISN
@@ -310,6 +324,7 @@ private:
 
     ::asio::io_context &m_io;
     udp_server m_server;
+    std::size_t m_max_peers;
     detail::udp_inbound_demux m_demux;
     std::size_t m_max_payload;
     arq_type::schedule m_hs_ladder;
@@ -320,6 +335,7 @@ private:
     dial_registry m_dials;                  // the half-open dial table + the accepted table
     plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
 };

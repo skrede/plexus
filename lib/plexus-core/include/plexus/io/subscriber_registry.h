@@ -275,7 +275,9 @@ public:
         case detail::drop_cause::drop_oldest: ++c.dropped_oldest; return;
         case detail::drop_cause::drop_newest: ++c.dropped_newest; return;
         case detail::drop_cause::blocked:     ++c.blocked;        return;
-        case detail::drop_cause::none:        return;
+        // The receive-side datagram causes carry their own occupancy counters at the
+        // datagram sites — this per-(topic,band) egress table holds the overflow trio only.
+        default:                                                 return;
         }
     }
 
@@ -292,9 +294,8 @@ public:
         case detail::drop_cause::drop_oldest: return c.dropped_oldest;
         case detail::drop_cause::drop_newest: return c.dropped_newest;
         case detail::drop_cause::blocked:     return c.blocked;
-        case detail::drop_cause::none:        return 0;
+        default:                              return 0;
         }
-        return 0;
     }
 
     // Resolve a wire topic_hash back to its fqn (the receive tail). Empty when

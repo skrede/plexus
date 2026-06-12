@@ -643,6 +643,24 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # these unix/tcp routes — its credential is a default (invalid) one, never touched
     # because no "tls" channel is ever dialed/accepted here.
     if(PLEXUS_ENABLE_CRYPTO_BACKEND)
+        # The drop-observability coverage oracle: each datagram-path drop cause is forced on
+        # a real component, the engine's posted drop-observer hook delivers it, and the
+        # per-cause occupancy counter is asserted. Needs crypto (the AEAD datagram channel)
+        # and asio (the udp channel/transport drop sites); the engine + reassembler ride the
+        # inproc virtual-clock executor. Loops each leg.
+        add_executable(test_drop_coverage test_drop_coverage.cpp
+            $<TARGET_OBJECTS:plexus-crypto>)
+        target_link_libraries(test_drop_coverage PRIVATE
+            plexus::core
+            plexus::wire
+            plexus::asio
+            plexus::crypto
+            plexus::inproc
+            Catch2::Catch2WithMain)
+        target_include_directories(test_drop_coverage PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/..)
+        catch_discover_tests(test_drop_coverage TEST_PREFIX "integration.")
+
         # The live per-peer mux-selection oracle over real AF_UNIX: a multiplexing_transport
         # over a unix + tcp + tls triple, dialing a same-host ("unix") endpoint, completes
         # over the local stream — the dialed AND accepted mux_channels report the "unix"

@@ -183,6 +183,13 @@ public:
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
 
+    // The drop-observability seam (null by default — zero cost when unobserved). The owner
+    // installs the engine's posted drop_sink; an ARQ shed at the publisher emits here, and
+    // the lazily-built reassembler's own drop sink is forwarded onto this one so a
+    // malformed/over-cap/timed-out fragment surfaces through the same edge. The sink POSTS,
+    // so neither the shed site nor a reassembler fragment fires the observer synchronously.
+    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
+
     // The transport's private teardown seam, fired from the dtor — distinct from the
     // consumer-facing on_closed/on_error the engine claims. The transport demuxes inbound
     // by endpoint to a NON-owning raw ref; this lets it erase that ref when the engine
@@ -360,6 +367,7 @@ private:
             return;
         m_reassembler = std::make_unique<reassembler_type>(m_io);
         m_reassembler->on_deliver([this](std::span<const std::byte> msg) { post_on_data(msg); });
+        m_reassembler->on_drop([this](const io::detail::drop_event &ev) { if(m_on_drop) m_on_drop(ev); });
     }
 
     // Build the selective-repeat ARQ on first reliable use and wire its actions: a
@@ -402,7 +410,10 @@ private:
     {
         if(m_congestion == io::congestion::drop_newest)
         {
-            ++m_dropped;                          // shed at the publisher (counted for the future observer)
+            ++m_dropped;                          // shed at the publisher (occupancy counter)
+            if(m_on_drop)
+                m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::arq_shed,
+                                                 .transport = io::locality::remote});
             return submit_result::window_full;
         }
         if(!m_backpressure.admit(payload))
@@ -490,6 +501,7 @@ private:
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
     plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> m_on_reliable;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
     bool m_open{true};
 };
 

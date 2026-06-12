@@ -15,6 +15,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/io/pending_dial_registry.h"
 #include "plexus/detail/compat.h"
 
@@ -95,6 +96,11 @@ public:
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
+
+    // The drop-observability seam (null by default — zero cost when unobserved). The
+    // per-peer demux cap refusal emits demux_refused here, the cross-transport twin of the
+    // plain-UDP seam. The sink POSTS, so the spoof-flood refusal never fires inline.
+    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
 
     void listen(const io::endpoint &ep)
     {
@@ -183,7 +189,12 @@ private:
                                                  dtls_channel::role::server, m_max_payload);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
+        {
+            if(m_on_drop)
+                m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::demux_refused,
+                                                 .transport = io::locality::remote});
             return;                                        // peer cap reached: drop the flood
+        }
         wire_teardown(*raw, from);
         m_registry.insert_accepted(raw, std::move(ch));
         raw->on_external_complete([this, raw] { resolve_accept(raw); });
@@ -267,6 +278,7 @@ private:
     plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
 };
 
 }

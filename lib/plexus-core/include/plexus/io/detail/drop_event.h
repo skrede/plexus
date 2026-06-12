@@ -10,14 +10,23 @@ namespace plexus::io::detail {
 
 // Why a frame was shed. The three egress-overflow causes mirror the per-band overflow
 // verdicts (a saturated band evicting the oldest, refusing the newest, or refusing under
-// block); `none` is the no-drop verdict an admitted frame reports. A future receive-side
-// cause (a tamper/replay drop) extends this append-only — the event spine is shared.
+// block); `none` is the no-drop verdict an admitted frame reports. The receive-side
+// datagram causes extend this append-only (never reorder existing values — both the wire-
+// stable counter index and any persisted record depend on the ordinal staying fixed).
 enum class drop_cause : std::uint8_t
 {
     none = 0,
     drop_oldest,
     drop_newest,
     blocked,
+    replay,             // a sequence the anti-replay window already saw / slid past
+    too_old,            // a sequence below the anti-replay window (folded with replay at the site)
+    tamper,             // an AEAD tag failure or a too-short / unkeyed datagram
+    reassembly_evicted, // a stalled partial reclaimed by the per-message timeout
+    reassembly_cap,     // a new partial refused by the total-memory cap
+    malformed,          // a fragment with idx>=cnt, an oversize count, or a ceiling overrun
+    demux_refused,      // an inbound datagram refused by the per-peer demux cap
+    arq_shed,           // a reliable frame shed at the publisher under congestion=drop
 };
 
 // A plain serializable drop record: cause, peer, topic, transport tier, band, and a
