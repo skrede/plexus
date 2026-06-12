@@ -6,6 +6,7 @@
 #include "plexus/io/known_peers.h"
 #include "plexus/io/reliability_requirement.h"
 #include "plexus/io/peer_observer.h"
+#include "plexus/io/drop_observer.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/lifecycle_event.h"
@@ -114,6 +115,22 @@ public:
     // address. Operator-driven cold-path registration — no remote peer can grow it.
     void add_observer(peer_observer &o) { m_observers.push_back(&o); }
     void remove_observer(peer_observer &o) { std::erase(m_observers, &o); }
+
+    // The drop-observer registry, the exact cold-path twin of the peer-observer pair:
+    // operator-driven, const& store, no remote peer can grow it.
+    void add_drop_observer(drop_observer &o) { m_drop_observers.push_back(&o); }
+    void remove_drop_observer(drop_observer &o) { std::erase(m_drop_observers, &o); }
+
+    // The seam a drop site posts a coalesced event into. It is a value-capturing,
+    // engine-posted callable: every drop fans out on the BORROWED executor over a
+    // snapshot, NEVER synchronously from the site — the per-packet-inline-fire DoS guard
+    // (a receive-side site holds this and increments its own occupancy counter, then
+    // hands the event here). The returned sink owns no lifetime; the engine outlives the
+    // channels it installs the sink into (the single-owner teardown discipline).
+    [[nodiscard]] plexus::detail::move_only_function<void(const detail::drop_event &)> drop_sink()
+    {
+        return [this](const detail::drop_event &ev) { post_drop(ev); };
+    }
 
     // The subscriber-side timing-gate observable (FORK-B): a dedicated settable
     // callback the engine fires (POSTED on the executor) when the one monitor reports a
@@ -403,6 +420,27 @@ private:
         });
     }
 
+    // Deliver a drop to each drop-observer over a snapshot (the fan_out shape), skipping
+    // any unregistered mid-turn so a callback may safely (un)register.
+    template<class Deliver>
+    void fan_drop(Deliver deliver)
+    {
+        const auto snapshot = m_drop_observers;
+        for(auto *o : snapshot)
+            if(std::find(m_drop_observers.begin(), m_drop_observers.end(), o) != m_drop_observers.end())
+                deliver(*o);
+    }
+
+    // POST the drop on the borrowed executor, capturing the POD by value into the turn
+    // (all scalars + a node_id — a cheap, lifetime-free copy). This is the indirection
+    // that keeps a per-packet drop site off the synchronous observer path.
+    void post_drop(const detail::drop_event &ev)
+    {
+        Policy::post(m_executor, [this, ev] {
+            fan_drop([&](drop_observer &o) { o.on_drop(ev); });
+        });
+    }
+
     Transport &m_transport;
     executor_type m_executor;
     liveliness_monitor<Policy, Clock> m_monitor;
@@ -412,6 +450,7 @@ private:
     registry_type m_registry;
     known_peers m_known;
     std::vector<peer_observer *> m_observers;
+    std::vector<drop_observer *> m_drop_observers;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
     bool m_dial_eagerly;
 };

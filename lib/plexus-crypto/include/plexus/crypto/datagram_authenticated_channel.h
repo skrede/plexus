@@ -8,6 +8,7 @@
 #include "plexus/wire/stream_inbound.h"
 #include "plexus/wire/frame.h"
 
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/io_error.h"
@@ -93,6 +94,14 @@ public:
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_lower.on_error(std::move(cb)); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_lower.on_protocol_close(std::move(cb)); }
 
+    // The drop-observability seam (null by default — zero cost when unobserved). The
+    // owner installs the engine's posted drop_sink; this decorator increments its
+    // occupancy counter at each drop site AND hands a coalesced event to the sink. The
+    // sink POSTS, so the per-packet site never fires the observer synchronously (the DoS
+    // guard). peer/topic are left default here — this decorator sits below the demux that
+    // knows them; the cause is the load-bearing field.
+    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
+
     [[nodiscard]] std::size_t dropped_count() const noexcept { return m_replay_dropped + m_tamper_dropped; }
     [[nodiscard]] std::size_t replay_count() const noexcept { return m_replay_dropped; }
     [[nodiscard]] std::size_t tamper_dropped_count() const noexcept { return m_tamper_dropped; }
@@ -107,11 +116,18 @@ private:
         m_lower.on_data([this](std::span<const std::byte> bytes) { on_lower_data(bytes); });
     }
 
+    void emit_drop(io::detail::drop_cause cause)
+    {
+        if(m_on_drop)
+            m_on_drop(io::detail::drop_event{.cause = cause, .transport = io::locality::remote});
+    }
+
     void on_lower_data(std::span<const std::byte> bytes)
     {
         if(bytes.size() < k_frame_overhead)
         {
             ++m_tamper_dropped;
+            emit_drop(io::detail::drop_cause::tamper);
             return;
         }
         const std::uint64_t seq = read_seq(bytes.data());
@@ -129,22 +145,30 @@ private:
         if(!candidate_key_for(epoch_byte, candidate, advances_epoch))
         {
             ++m_tamper_dropped;
+            emit_drop(io::detail::drop_cause::tamper);
             return;
         }
 
         // A next-epoch datagram targets a window that the epoch advance resets, so the
         // replay check only applies within the current epoch. Probe (not commit) so a
         // forged current-epoch sequence cannot slide the window before authentication.
-        if(!advances_epoch && m_window.would_accept(seq) != replay_verdict::accept)
+        if(!advances_epoch)
         {
-            ++m_replay_dropped;
-            return;
+            const auto verdict = m_window.would_accept(seq);
+            if(verdict != replay_verdict::accept)
+            {
+                ++m_replay_dropped;
+                emit_drop(verdict == replay_verdict::reject_old ? io::detail::drop_cause::too_old
+                                                                : io::detail::drop_cause::replay);
+                return;
+            }
         }
 
         const auto nonce = make_nonce(epoch_byte, seq);
         if(!open(m_cipher, candidate, nonce, header, sealed, m_open_scratch))
         {
             ++m_tamper_dropped;
+            emit_drop(io::detail::drop_cause::tamper);
             return;
         }
 
@@ -247,6 +271,7 @@ private:
     std::vector<std::byte> m_send_frame;
     std::vector<std::byte> m_recv_frame;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
 };
 
 }

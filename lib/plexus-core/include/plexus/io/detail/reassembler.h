@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_REASSEMBLER_H
 
 #include "plexus/io/fragmentation.h"
+#include "plexus/io/detail/drop_event.h"
 
 #include "plexus/policy.h"
 #include "plexus/detail/compat.h"
@@ -73,7 +74,15 @@ public:
     reassembler(const reassembler &) = delete;
     reassembler &operator=(const reassembler &) = delete;
 
+    using drop_sink = plexus::detail::move_only_function<void(const drop_event &)>;
+
     void on_deliver(deliver_sink cb) { m_on_deliver = std::move(cb); }
+
+    // The drop-observability seam (null by default — zero cost when unobserved). The owner
+    // installs the engine's posted drop_sink; a malformed/over-cap fragment and a
+    // timed-out partial each hand a coalesced event here. The sink POSTS, so the receive
+    // site never fires the observer synchronously.
+    void on_drop(drop_sink cb) { m_on_drop = std::move(cb); }
 
     // Feed an untrusted fragment. Range-checks precede every index; an in-order or
     // out-of-order arrival of all frag_cnt fragments for one msg_id assembles the message
@@ -81,9 +90,14 @@ public:
     outcome feed(std::uint16_t msg_id, std::uint16_t frag_idx, std::uint16_t frag_cnt,
                  std::span<const std::byte> bytes)
     {
-        if(frag_cnt == 0 || frag_idx >= frag_cnt || frag_cnt > max_fragment_count)
-            return outcome::dropped_malformed;
-        return admit_fragment(msg_id, frag_idx, frag_cnt, bytes);
+        const outcome o = (frag_cnt == 0 || frag_idx >= frag_cnt || frag_cnt > max_fragment_count)
+                              ? outcome::dropped_malformed
+                              : admit_fragment(msg_id, frag_idx, frag_cnt, bytes);
+        if(o == outcome::dropped_malformed)
+            emit_drop(drop_cause::malformed);
+        else if(o == outcome::dropped_cap)
+            emit_drop(drop_cause::reassembly_cap);
+        return o;
     }
 
     // Owner teardown: stop every timer firing into a dying reassembler.
@@ -170,7 +184,14 @@ private:
             if(ec || m_dead)
                 return;                               // cancelled by completion / teardown
             evict(msg_id);                            // best-effort reclaim of the stalled partial
+            emit_drop(drop_cause::reassembly_evicted);
         });
+    }
+
+    void emit_drop(drop_cause cause)
+    {
+        if(m_on_drop)
+            m_on_drop(drop_event{.cause = cause, .transport = locality::remote});
     }
 
     void evict(std::uint16_t msg_id)
@@ -189,6 +210,7 @@ private:
     std::size_t m_held{0};
     bool m_dead{false};
     deliver_sink m_on_deliver;
+    drop_sink m_on_drop;
 };
 
 }
