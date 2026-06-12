@@ -66,5 +66,6 @@ cmake-build-*
 .planning/
 CLAUDE.md
 GEMINI.md
+tests/fuzz/corpus/
 
 **/*vcpkg_installed/
