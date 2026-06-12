@@ -97,7 +97,8 @@ public:
                 io::detail::udp_arq_config arq_cfg = {},
                 io::congestion congestion = io::congestion::block,
                 std::size_t backpressure_bytes = default_backpressure_bytes,
-                io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort)
+                io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort,
+                std::uint16_t initial_seq = 0)
         : m_io(io)
         , m_server(server)
         , m_dest(std::move(dest))
@@ -106,6 +107,7 @@ public:
         , m_congestion(congestion)
         , m_backpressure(backpressure_bytes)
         , m_mode(mode)
+        , m_initial_seq(initial_seq)
     {
     }
 
@@ -367,7 +369,7 @@ private:
     {
         if(m_arq)
             return;
-        m_arq = std::make_unique<arq_type>(m_io, m_arq_cfg);
+        m_arq = std::make_unique<arq_type>(m_io, m_arq_cfg, m_initial_seq);
         m_arq->on_transmit([this](std::uint16_t seq, std::span<const std::byte> payload, bool fragmented) {
             wire::encode_udp_segment_into(m_arq_inner, payload);
             if(fragmented)
@@ -471,6 +473,7 @@ private:
     io::detail::udp_backpressure_queue m_backpressure;       // bounded congestion=block queue
     std::size_t m_dropped{0};                            // congestion=drop shed count
     io::detail::udp_channel_mode m_mode;                     // best_effort vs reliable_datagram
+    std::uint16_t m_initial_seq;                             // negotiated per-session ISN (RFC 6528); 0 = legacy
     std::uint16_t m_out_seq{0};
     std::uint16_t m_out_msg_id{0};                       // per-message fragment grouping id (sender)
     wire::udp_dedup_window m_dedup;

@@ -108,6 +108,16 @@ target_link_libraries(test_udp_reliable_datagram PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_reliable_datagram TEST_PREFIX "udp.")
 
+# The randomized per-session ISN (RFC 6528 lineage): the handshake frame carries the ISN
+# append-only (legacy frames decode to 0), and a spoofed seq=0 reliable-data segment on a
+# non-zero-ISN plaintext udpr session is rejected as out of window. Header-only inside
+# plexus::asio; the `udp.` ctest prefix selects it.
+add_executable(test_udp_isn test_udp_isn.cpp)
+target_link_libraries(test_udp_isn PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_isn TEST_PREFIX "udp.")
+
 # Live large-payload fragmentation legs: an oversize payload is split across numbered
 # datagrams and reassembled into ONE message at the peer — best_effort (drop-whole on a
 # lost fragment via the reassembly timeout) and reliable (each fragment ARQ'd above the
