@@ -28,9 +28,13 @@ namespace plexus::io::detail {
 // BOUNDS (required-WITH-default config, structural — not setters; sweep-substantiated):
 // a per-message reassembly ceiling (max_message_size); a TOTAL reassembly-memory cap
 // across all in-flight entries (the hard DoS bound — a new partial that would exceed it
-// is rejected, so many small fragments claiming a huge total cannot exhaust memory); and
-// a per-message timeout (the Policy timer reclaims a stalled best-effort partial whose
-// fragments never complete). The cap default (16 MiB) admits 4 concurrent full
+// is rejected, so many small fragments claiming a huge total cannot exhaust memory). The
+// cap counts BOTH held payload AND the per-entry slot/present metadata a claimed frag_cnt
+// forces (charged at open_entry), so a tiny datagram claiming frag_cnt=32768 cannot mint
+// ~786 KB of slot table accounted as a single payload byte — the metadata is bounded by
+// the same cap, not just the payload. A per-message timeout (the Policy timer reclaims a
+// stalled best-effort partial whose fragments never complete) closes the slow path. The
+// cap default (16 MiB) admits 4 concurrent full
 // max_message_size (4 MiB) partials per peer — multi-message headroom above the single-
 // message ceiling — while bounding the aggregate worst case (the demux peer cap × this)
 // to 64 GiB rather than the 256 GiB a 64 MiB per-peer cap would expose. The timeout
@@ -117,9 +121,21 @@ private:
         std::vector<std::vector<std::byte>> slots;   // per-index fragment bytes
         std::vector<bool> present;
         std::size_t received{0};
-        std::size_t size{0};                         // bytes held by this entry
+        std::size_t size{0};                         // payload bytes held by this entry
+        std::size_t overhead{0};                     // structural slot/present cost charged to the cap
         std::unique_ptr<Timer> timer;
     };
+
+    // The per-entry structural cost a claimed frag_cnt forces: the slots vector (one
+    // std::vector handle per fragment) plus the present bitmap. Charged against the SAME cap
+    // as payload so a tiny datagram claiming frag_cnt=32768 cannot mint ~786 KB of metadata
+    // accounted as one payload byte — without this the cap bounds payload but not the
+    // amplified slot table (the documented hard DoS bound would be false for the metadata).
+    [[nodiscard]] static constexpr std::size_t structural_cost(std::uint16_t frag_cnt) noexcept
+    {
+        return static_cast<std::size_t>(frag_cnt) * sizeof(std::vector<std::byte>)
+               + (static_cast<std::size_t>(frag_cnt) + 7u) / 8u;
+    }
 
     outcome admit_fragment(std::uint16_t msg_id, std::uint16_t frag_idx, std::uint16_t frag_cnt,
                            std::span<const std::byte> bytes)
@@ -127,8 +143,8 @@ private:
         auto it = m_table.find(msg_id);
         if(it == m_table.end())
         {
-            if(m_held + bytes.size() > m_cfg.total_memory_cap)
-                return outcome::dropped_cap;          // a new partial cannot fit the cap
+            if(m_held + structural_cost(frag_cnt) + bytes.size() > m_cfg.total_memory_cap)
+                return outcome::dropped_cap;          // structural + payload cost cannot fit the cap
             it = open_entry(msg_id, frag_cnt);
         }
         return store(it->second, msg_id, frag_idx, bytes);
@@ -139,7 +155,9 @@ private:
         entry e;
         e.slots.resize(frag_cnt);
         e.present.assign(frag_cnt, false);
+        e.overhead = structural_cost(frag_cnt);
         e.timer = std::make_unique<Timer>(m_executor);
+        m_held += e.overhead;                         // charge the structural cost up front
         auto [it, _] = m_table.emplace(msg_id, std::move(e));
         arm_timeout(msg_id, it->second);
         return it;
@@ -200,7 +218,7 @@ private:
         if(it == m_table.end())
             return;
         it->second.timer->cancel();
-        m_held -= it->second.size;
+        m_held -= it->second.size + it->second.overhead;
         m_table.erase(it);
     }
 
