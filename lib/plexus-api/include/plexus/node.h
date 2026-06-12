@@ -128,10 +128,16 @@ class publisher;
 template <typename Codec = void>
 class subscriber;
 
-template <typename Sig = void, typename CReq = void, typename CRes = void>
+template <typename T> struct no_codec;
+
+template <typename Sig = void,
+          template <typename> class CReq = no_codec,
+          template <typename> class CRes = CReq>
 class caller;
 
-template <typename Sig = void, typename CReq = void, typename CRes = void>
+template <typename Sig = void,
+          template <typename> class CReq = no_codec,
+          template <typename> class CRes = CReq>
 class procedure;
 
 // The consumable public surface: a node composes a routing_engine over an injected
@@ -163,8 +169,10 @@ class node
     // friends, so there is no public node.publish / node.subscribe / declare_* factory.
     template <typename C> friend class publisher;
     template <typename C> friend class subscriber;
-    template <typename S, typename Cq, typename Cs> friend class caller;
-    template <typename S, typename Cq, typename Cs> friend class procedure;
+    template <typename S, template <typename> class Cq, template <typename> class Cs>
+    friend class caller;
+    template <typename S, template <typename> class Cq, template <typename> class Cs>
+    friend class procedure;
 
 public:
     using executor_type = typename Policy::executor_type;
