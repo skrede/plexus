@@ -92,6 +92,14 @@ struct subscriber_qos
     // encoding byte-identical (the bit is clear).
     attach_posture posture                          = attach_posture::lenient;
 
+    // The local-only inproc stamp demand: true (default) means this subscriber consumes
+    // message_info timestamps; false elides the receive-side clock read and delivers a
+    // documented 0 stamp. Set implicitly from the callback arity (a 2-arg subscriber wants
+    // no info) and overridable on a 3-arg subscriber. NEVER crosses a socket: an inproc
+    // subscriber is local by definition, so this field is not encoded into the subscribe
+    // wire region (a cross-process demand leak is forbidden).
+    bool          wants_message_info               = true;
+
     // A defaulted value-equality so a caller can ask "does this differ from the
     // friendly default?" before paying the wire region — the subscribe-out path
     // keeps the encode byte-identical when the choice IS the default.

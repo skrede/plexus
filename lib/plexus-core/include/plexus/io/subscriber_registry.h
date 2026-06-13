@@ -84,6 +84,15 @@ public:
         // so an endpoint's gid is stable per IDENT-02.
         bool emit_source_identity{false};
         std::optional<std::uint64_t> endpoint_counter;
+        // The per-topic stamp-demand latch: true iff ANY attached subscriber wants
+        // message_info (the OR-reduce over subscribers' qos.wants_message_info). The hot
+        // publish reads this one bool to gate the source-stamp clock read; it is recomputed
+        // at attach/retire (cold path), never on the fan-out loop. Default true on an empty
+        // topic is the safe always-on stamping. NOTE: wants_message_info is local-only and
+        // never crosses the subscribe wire, so a producer-side fan-out entry built from a
+        // remote subscribe always reads back the default true — the elision only fires for a
+        // genuinely local (same-node) demander whose real arity is visible here.
+        bool any_subscriber_wants_info{true};
     };
 
     // Bump the (peer, fqn) refcount; returns the post-increment count. The 0->1
@@ -140,6 +149,7 @@ public:
         // fan-out loop only reads the stored tier. The qos is stored the same way: once.
         const locality tier = tier_of(channel.remote_endpoint().scheme);
         entry.subscribers.push_back(subscriber{&channel, std::string{node_name}, tier, qos, type_id});
+        recompute_wants_info(entry);
     }
 
     // The subscriber's stored QoS for a (topic_hash, channel) pair, or the friendly
@@ -226,14 +236,18 @@ public:
             return;
         std::erase_if(it->second.subscribers,
                       [&](const subscriber &s) { return s.channel == &channel; });
+        recompute_wants_info(it->second);
     }
 
     // Drop every fan-out entry and refcount for one peer (peer-death path).
     void remove_peer(std::string_view node_name, const Channel &channel)
     {
         for(auto &[hash, entry] : m_topics)
+        {
             std::erase_if(entry.subscribers,
                           [&](const subscriber &s) { return s.channel == &channel; });
+            recompute_wants_info(entry);
+        }
         m_refcount.erase(std::string{node_name});
     }
 
@@ -254,6 +268,16 @@ public:
     {
         auto it = m_topics.find(topic_hash);
         return it == m_topics.end() ? nullptr : &it->second;
+    }
+
+    // The per-topic stamp-demand latch as a query (read-only). True for an unknown topic
+    // (the safe always-on default — an undeclared/unattached topic stamps). The hot publish
+    // reads topic_entry::any_subscriber_wants_info directly; this accessor is for the
+    // off-hot-path inspection of the pure no-demander case.
+    bool any_subscriber_wants_info(std::uint64_t topic_hash) const
+    {
+        auto it = m_topics.find(topic_hash);
+        return it == m_topics.end() ? true : it->second.any_subscriber_wants_info;
     }
 
     // Bump the per-(topic, band) drop counter for a cause. Called at the fan-out
@@ -321,6 +345,21 @@ public:
     }
 
 private:
+    // OR-reduce the per-topic stamp-demand latch over the entry's subscribers. An empty
+    // subscriber set latches true (the safe always-on default). Cold path: called at
+    // attach/retire only, never on the fan-out loop.
+    static void recompute_wants_info(topic_entry &entry)
+    {
+        if(entry.subscribers.empty())
+        {
+            entry.any_subscriber_wants_info = true;
+            return;
+        }
+        entry.any_subscriber_wants_info =
+            std::any_of(entry.subscribers.begin(), entry.subscribers.end(),
+                        [](const subscriber &s) { return s.qos.wants_message_info; });
+    }
+
     static constexpr std::uint32_t k_no_entry = ~0u;
 
     std::unordered_map<std::uint64_t, topic_entry> m_topics;

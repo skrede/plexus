@@ -515,15 +515,14 @@ private:
     // byte fallback reaches it through dispatch_message instead.
     void dispatch_object(std::string_view fqn, const io::object_carrier &carrier)
     {
-        // Honest population: the carrier carries the publisher's sequence and source
-        // timestamp; reception is stamped here, from_intra_process is true (the lane is
-        // process-tier only), and source_identity is absent (the object lane carries no
-        // gid — documented).
-        io::message_info info{};
-        info.publication_sequence = carrier.sequence;
-        info.source_timestamp     = carrier.source_timestamp;
-        info.reception_timestamp  = wire::now_timestamp_ns();
-        info.from_intra_process   = true;
+        // Demand-driven reception stamp: read the receive clock at most ONCE, and only if
+        // some matching subscriber actually wants message_info (its local arity demand). A
+        // subscriber that wants no info is delivered a documented-0 stamp (both source and
+        // reception zeroed) and never triggers the clock read. publication_sequence and
+        // from_intra_process are arity-independent and always honest; source_identity is
+        // absent (the object lane carries no gid).
+        std::uint64_t reception = 0;
+        bool reception_read = false;
 
         for(auto &[rid, sub] : m_subscriptions)
         {
@@ -534,6 +533,19 @@ private:
                 ++m_object_dispatch_mismatch;
                 m_logger.warn("plexus: node object_native_key_mismatch");
                 continue;
+            }
+            io::message_info info{};
+            info.publication_sequence = carrier.sequence;
+            info.from_intra_process   = true;
+            if(sub.qos.wants_message_info)
+            {
+                if(!reception_read)
+                {
+                    reception = wire::now_timestamp_ns();
+                    reception_read = true;
+                }
+                info.source_timestamp    = carrier.source_timestamp;
+                info.reception_timestamp = reception;
             }
             sub.obj.dispatch(carrier, info);
         }

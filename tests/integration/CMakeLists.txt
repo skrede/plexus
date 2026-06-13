@@ -31,6 +31,20 @@ target_include_directories(test_typed_inproc_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_typed_inproc_alloc TEST_PREFIX "integration.")
 
+# The inproc stamp-demand behavioral gate: a 3-arg subscriber sees populated message_info
+# timestamps; a 3-arg subscriber that opts out through subscriber_qos sees a documented 0;
+# the per-topic latch OR-reduces over local subscriber demand. Links the facade for the
+# typed endpoints; tests/ is on the include path for support headers.
+add_executable(test_inproc_stamp_demand test_inproc_stamp_demand.cpp)
+target_link_libraries(test_inproc_stamp_demand PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_inproc_stamp_demand PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_inproc_stamp_demand TEST_PREFIX "integration.")
+
 # The reassembly-DoS bound: each reassembler bound (total-memory cap, per-message
 # ceiling, malformed rejection, timeout eviction) is forced + looped and the in-flight
 # state asserted bounded, plus the demux peer-cap bounding the spoofed-source channel

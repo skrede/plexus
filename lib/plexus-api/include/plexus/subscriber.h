@@ -72,8 +72,14 @@ public:
     template <typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const io::subscriber_qos &qos, Cb cb)
     {
+        // The arity is the implicit stamp demand: a 2-arg callback provably consumes no
+        // message_info, so it never wants the receive-side clock read. Resolved once here
+        // (the same if constexpr adapt() keys on) and carried on the LOCAL qos only.
+        io::subscriber_qos local_qos = qos;
+        local_qos.wants_message_info =
+            std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>;
         io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto rid = seam.register_subscriber(seam.ctx, fqn, qos, adapt(std::move(cb)),
+        const auto rid = seam.register_subscriber(seam.ctx, fqn, local_qos, adapt(std::move(cb)),
                                                   std::nullopt, nullptr, io::object_dispatch{});
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
@@ -154,6 +160,12 @@ public:
         const auto identity = resolve_identity(m_state->codec, opts.type_id);
         io::subscriber_qos qos = opts.qos;
         qos.posture = opts.posture;
+        // A 2-arg typed callback consumes no message_info, so it never wants the receive-
+        // side clock read; a 3-arg callback wants it UNLESS the qos explicitly opted out.
+        // Carried on the LOCAL qos only — never the subscribe wire region.
+        qos.wants_message_info =
+            std::is_invocable_v<Cb &, const value_type &, const io::message_info &>
+            && opts.qos.wants_message_info;
 
         state *st = m_state.get();
         auto bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info)

@@ -388,7 +388,12 @@ public:
 
         carrier.topic_hash = hash;
         carrier.sequence = m_next_sequence++;
-        if(carrier.source_timestamp == 0)
+        // Gate the source-stamp clock read on the per-topic demand latch: skip it when no
+        // attached subscriber wants message_info, leaving source_timestamp == 0 (the
+        // documented "not stamped" sentinel the ==0 keying already relies on). The latch is
+        // local-only, so a producer fanning to a remote-decoded subscriber reads true and
+        // stamps exactly as before; the elision fires for a same-node no-info demander.
+        if(carrier.source_timestamp == 0 && (topic == nullptr || topic->any_subscriber_wants_info))
             carrier.source_timestamp = wire::now_timestamp_ns();
 
         bool encoded = false;
@@ -614,6 +619,15 @@ public:
     [[nodiscard]] std::size_t dropped(std::string_view fqn, std::size_t band, detail::drop_cause cause) const
     {
         return m_registry.dropped(wire::fqn_topic_hash(fqn), band, cause);
+    }
+
+    // The per-topic stamp-demand latch, read on demand (occupancy style, read-only). True
+    // when any attached subscriber wants message_info OR the topic is unknown (the safe
+    // always-on default); false only once every attached subscriber elided the stamp. The
+    // publish verb reads the latch off the resolved record directly; this is for inspection.
+    [[nodiscard]] bool any_subscriber_wants_info(std::string_view fqn) const
+    {
+        return m_registry.any_subscriber_wants_info(wire::fqn_topic_hash(fqn));
     }
 
 private:
