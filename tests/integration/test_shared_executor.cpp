@@ -51,7 +51,7 @@ std::string read_card_value(const std::vector<std::pair<std::string, std::string
 
 }
 
-// SLICE-2 locked requirement: mdnspp and the plexus asio transport share ONE
+// Requirement: mdnspp and the plexus asio transport share ONE
 // io_context, driven on ONE thread. This test constructs an mdnspp_discovery AND
 // the plexus asio channels from a single asio::io_context and pumps that single
 // context with a bounded poll loop on the calling thread (no second context, no

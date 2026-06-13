@@ -119,7 +119,7 @@ static_assert(plexus::Policy<banding_sink_policy>);
 
 }
 
-// SLICE-3 determinism invariant: the steady-state publish -> frame-once -> fan-out
+// Determinism invariant: the steady-state publish -> frame-once -> fan-out
 // loop allocates ZERO bytes after warm-up. The forwarder frames each publish once
 // into reused member scratch and shares the one buffer across N subscribers; the
 // architecture mandates no allocation on this hot path ("allocate at setup;
