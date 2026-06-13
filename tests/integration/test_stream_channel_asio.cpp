@@ -265,6 +265,13 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
     //   * congestion=drop sheds the overrun at the publisher (dropped_count advances), and
     //   * congestion=block surfaces would_block (the stall edge) and sheds nothing.
     // The queue NEVER grows past the cap (backpressured() stays <= cap).
+    //
+    // The stall is forced STRUCTURALLY, not by out-pacing the kernel: both endpoints'
+    // socket buffers are pinned to the floor (SO_SNDBUF on the channel end, SO_RCVBUF on
+    // the never-reading peer) BEFORE adoption, so a few KiB in flight stalls async_write
+    // outright. Without this the test depends on writing megabytes faster than the serial
+    // drain empties them — a race that asan instrumentation loses (the drain keeps pace,
+    // the queue never reaches the cap, and the shed/stall edge never fires).
     auto run = [](pio::congestion mode) {
         ::asio::io_context io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
@@ -272,6 +279,13 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
         ::asio::ip::tcp::socket client{io};
         client.connect(acc.local_endpoint());
         acc.accept(peer);                               // peer adopts but NEVER reads
+
+        // Pin both kernel buffers to the floor so async_write stalls after a few KiB, not
+        // after megabytes. The kernel may round up, but to its own minimum (KiB-scale),
+        // never to the default 100s of KiB — enough headroom collapses that the 4 KiB
+        // userspace cap engages deterministically regardless of producer/drain timing.
+        client.set_option(::asio::socket_base::send_buffer_size{1024});
+        peer.set_option(::asio::socket_base::receive_buffer_size{1024});
 
         constexpr std::size_t cap = 4096;
         // Adopt the connected client end into an accept-mode channel with the small cap.
@@ -281,6 +295,8 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
         ch.on_error([&](pio::io_error e) { err = e; });
 
         // Send 1 KiB frames until the byte cap engages (peer not reading -> buffer fills).
+        // With the floored buffers the stall arrives in the first handful of frames; the
+        // loop bound is a generous safety ceiling, not a timing dependency.
         std::vector<std::byte> kib(1024, std::byte{0x5A});
         for(int i = 0; i < 4096; ++i)
         {
