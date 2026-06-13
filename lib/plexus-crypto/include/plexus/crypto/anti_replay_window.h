@@ -105,6 +105,11 @@ private:
         return (m_bitmap[b / k_word_bits] & (1ull << (b % k_word_bits))) != 0u;
     }
 
+    // RFC 4303 §3.4.3 sliding-window advance as a whole-word shift: bit k tracks
+    // m_highest - k, so a forward advance moves every bit toward a higher index. The
+    // displacement splits into a word_shift word move plus a bit_shift intra-word carry
+    // (the bit_shift == 0 edge is a pure word move — no carry term, so >> (64 - 0) is
+    // never evaluated).
     void slide(std::uint64_t by) noexcept
     {
         if(by >= Width)
@@ -112,20 +117,27 @@ private:
             m_bitmap.fill(0u);
             return;
         }
-        for(std::size_t b = Width; b-- > 0;)
+        const std::size_t word_shift = static_cast<std::size_t>(by) / k_word_bits;
+        const std::size_t bit_shift = static_cast<std::size_t>(by) % k_word_bits;
+        for(std::size_t i = k_words; i-- > 0;)
         {
-            const bool was = (b >= by) && test_bit(b - by);
-            assign_bit(b, was);
+            const std::size_t src = i - word_shift;
+            std::uint64_t w = (i >= word_shift) ? (m_bitmap[src] << bit_shift) : 0u;
+            if(bit_shift != 0 && i > word_shift)
+                w |= m_bitmap[src - 1] >> (k_word_bits - bit_shift);
+            m_bitmap[i] = w;
         }
+        mask_above_width();
     }
 
-    void assign_bit(std::size_t b, bool v) noexcept
+    // Width is currently a whole multiple of k_word_bits (no partial top word), but keep
+    // the shift correct for a future non-multiple Width: clear any bit at or above Width
+    // so a displaced word cannot admit a phantom slot past the window.
+    void mask_above_width() noexcept
     {
-        const std::uint64_t mask = 1ull << (b % k_word_bits);
-        if(v)
-            m_bitmap[b / k_word_bits] |= mask;
-        else
-            m_bitmap[b / k_word_bits] &= ~mask;
+        constexpr std::size_t top_bits = Width % k_word_bits;
+        if constexpr(top_bits != 0)
+            m_bitmap[k_words - 1] &= (1ull << top_bits) - 1u;
     }
 
     std::array<std::uint64_t, k_words> m_bitmap{};

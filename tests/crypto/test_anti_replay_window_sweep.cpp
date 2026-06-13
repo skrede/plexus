@@ -94,6 +94,109 @@ std::size_t false_rejects(const std::vector<std::uint64_t> &arrival)
 
 }
 
+// A bit-by-bit reference of the sliding window: the same contract as anti_replay_window
+// but with the pre-optimization slide (each new bit b draws from old bit b - by). The
+// word-shift slide() must produce the SAME verdict as this reference for every sequence,
+// which pins it byte-identical across every by displacement.
+template <std::size_t Width>
+class reference_window
+{
+public:
+    replay_verdict check_and_set(std::uint64_t seq)
+    {
+        if(!m_seen_any)
+        {
+            m_seen_any = true;
+            m_highest = seq;
+            m_bits[0] = true;
+            return replay_verdict::accept;
+        }
+        if(seq > m_highest)
+        {
+            slide(seq - m_highest);
+            m_highest = seq;
+            m_bits[0] = true;
+            return replay_verdict::accept;
+        }
+        const std::uint64_t back = m_highest - seq;
+        if(back >= Width)
+            return replay_verdict::reject_old;
+        if(m_bits[back])
+            return replay_verdict::reject_replay;
+        m_bits[back] = true;
+        return replay_verdict::accept;
+    }
+
+private:
+    void slide(std::uint64_t by)
+    {
+        if(by >= Width)
+        {
+            m_bits.assign(Width, false);
+            return;
+        }
+        for(std::size_t b = Width; b-- > 0;)
+            m_bits[b] = (b >= by) && m_bits[b - by];
+    }
+
+    std::vector<bool> m_bits = std::vector<bool>(Width, false);
+    std::uint64_t m_highest{0};
+    bool m_seen_any{false};
+};
+
+// Drive the production window and the bit-by-bit reference through the SAME schedule;
+// the word-shift is byte-identical iff every verdict matches.
+template <std::size_t Width>
+bool verdicts_match(const std::vector<std::uint64_t> &arrival)
+{
+    anti_replay_window<Width> w;
+    reference_window<Width> ref;
+    for(std::uint64_t seq : arrival)
+        if(w.check_and_set(seq) != ref.check_and_set(seq))
+            return false;
+    return true;
+}
+
+TEST_CASE("crypto.anti_replay_window word-shift slide is bitmap-identical to the bit-by-bit reference", "[crypto][anti_replay]")
+{
+    // A schedule spanning the displacement classes the word-shift must get right:
+    // by % 64 == 0 (pure word move, the shift-by-64 edge), by % 64 != 0 (intra-word
+    // carry), by < 64, by > 64, by == Width - 1, and by >= Width (the fill-0 fast path).
+    const std::array<std::uint64_t, 18> by_classes{
+        1, 63, 64, 65, 127, 128, 200, 256, 1000, 1024, 1025,
+        plexus::crypto::k_anti_replay_window_bits - 1,
+        plexus::crypto::k_anti_replay_window_bits,
+        plexus::crypto::k_anti_replay_window_bits + 1,
+        7, 33, 4095, 8192};
+
+    std::vector<std::uint64_t> arrival;
+    std::uint64_t highest = 0;
+    for(std::uint64_t by : by_classes)
+    {
+        highest += by;
+        arrival.push_back(highest);              // a forward advance that drives slide(by)
+        if(highest >= 5)
+        {
+            arrival.push_back(highest - 1);      // an in-window fresh slot
+            arrival.push_back(highest - 5);      // another, after the advance
+            arrival.push_back(highest - 1);      // a replay of an already-set slot
+        }
+    }
+
+    REQUIRE(verdicts_match<64>(arrival));
+    REQUIRE(verdicts_match<256>(arrival));
+    REQUIRE(verdicts_match<1024>(arrival));
+    REQUIRE(verdicts_match<plexus::crypto::k_anti_replay_window_bits>(arrival));
+
+    // Also pin the reordered sweep schedule (the same arrival the reject-set sweep uses)
+    // across the candidate widths — a verdict divergence anywhere fails the identity.
+    const auto reordered = reordered_schedule(3500, 1042, 0x5eed1234abcd0011ull);
+    REQUIRE(verdicts_match<64>(reordered));
+    REQUIRE(verdicts_match<256>(reordered));
+    REQUIRE(verdicts_match<1024>(reordered));
+    REQUIRE(verdicts_match<plexus::crypto::k_anti_replay_window_bits>(reordered));
+}
+
 TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject rates across candidate widths", "[crypto][anti_replay]")
 {
     // A 4 MiB message at the 1200-byte MTU fragments into ~3500 sealed datagrams.

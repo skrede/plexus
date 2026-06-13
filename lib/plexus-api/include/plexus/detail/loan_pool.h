@@ -113,8 +113,27 @@ public:
 
     loan_pool(const loan_pool &) = delete;
     loan_pool &operator=(const loan_pool &) = delete;
-    loan_pool(loan_pool &&) = delete;
-    loan_pool &operator=(loan_pool &&) = delete;
+
+    loan_pool(loan_pool &&other) noexcept
+        : m_slots(std::exchange(other.m_slots, nullptr))
+        , m_free(std::exchange(other.m_free, nullptr))
+        , m_capacity(std::exchange(other.m_capacity, 0))
+    {
+        restamp_owner();
+    }
+
+    loan_pool &operator=(loan_pool &&other) noexcept
+    {
+        if(this != &other)
+        {
+            delete[] m_slots;
+            m_slots = std::exchange(other.m_slots, nullptr);
+            m_free = std::exchange(other.m_free, nullptr);
+            m_capacity = std::exchange(other.m_capacity, 0);
+            restamp_owner();
+        }
+        return *this;
+    }
 
     // Borrow a slot and construct a T in place from the forwarded arguments. Returns an
     // empty loan on exhaustion. The slot's refcount starts at 1 (the loan's own
@@ -166,6 +185,16 @@ private:
         std::launder(reinterpret_cast<T *>(&n->storage))->~T();
         control->object = nullptr;
         n->owner->push_free(n);
+    }
+
+    // The move steals the node array by pointer, so every m_slot (&n->control) and every
+    // next_free link stays valid — but each slot's owner still names the moved-from pool.
+    // Re-stamp it: release_slot routes a freed slot through n->owner->push_free, so a stale
+    // owner would push onto a dead pool's freelist (a use-after-free).
+    void restamp_owner() noexcept
+    {
+        for(std::size_t i = 0; i < m_capacity; ++i)
+            m_slots[i].owner = this;
     }
 
     node *pop_free() noexcept
