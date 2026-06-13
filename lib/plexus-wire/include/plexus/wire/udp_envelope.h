@@ -1,11 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_WIRE_UDP_ENVELOPE_H
 #define HPP_GUARD_PLEXUS_WIRE_UDP_ENVELOPE_H
 
-#include "plexus/wire/byte_order.h"
+#include "plexus/wire/cursor.h"
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <span>
 #include <vector>
@@ -93,13 +92,11 @@ struct udp_decode_result
 inline std::vector<std::byte> wrap_udp(udp_envelope_kind kind, std::uint16_t seq, std::span<const std::byte> frame)
 {
     std::vector<std::byte> buf(udp_envelope_overhead + frame.size());
-    auto *p = buf.data();
+    writer w{buf};
 
-    detail::write_u8(p, detail::pack_ver_flags(kind));
-    detail::write_u16(p + 1, seq);
-
-    if(!frame.empty())
-        std::memcpy(p + udp_envelope_overhead, frame.data(), frame.size());
+    w.u8(detail::pack_ver_flags(kind));
+    w.u16(seq);
+    w.bytes(frame);
 
     return buf;
 }
@@ -111,13 +108,11 @@ inline void wrap_udp_into(std::vector<std::byte> &out, udp_envelope_kind kind, s
                           std::span<const std::byte> frame)
 {
     out.resize(udp_envelope_overhead + frame.size());
-    auto *p = out.data();
+    writer w{out};
 
-    detail::write_u8(p, detail::pack_ver_flags(kind));
-    detail::write_u16(p + 1, seq);
-
-    if(!frame.empty())
-        std::memcpy(p + udp_envelope_overhead, frame.data(), frame.size());
+    w.u8(detail::pack_ver_flags(kind));
+    w.u16(seq);
+    w.bytes(frame);
 }
 
 // Decode an untrusted datagram. A buffer shorter than the fixed overhead is
@@ -133,13 +128,14 @@ inline std::optional<udp_decode_result> unwrap_udp(std::span<const std::byte> da
     if(datagram.size() < udp_envelope_overhead)
         return std::nullopt;
 
-    auto *p = datagram.data();
-    const auto ver_flags = detail::read_u8(p);
+    reader r{datagram};
+    const auto ver_flags = r.u8();
+    const auto seq = r.u16();
 
     return udp_decode_result{
             .kind       = static_cast<udp_envelope_kind>((ver_flags & detail::udp_kind_mask) >> detail::udp_kind_shift),
-            .seq        = detail::read_u16(p + 1),
-            .frame      = datagram.subspan(udp_envelope_overhead),
+            .seq        = seq,
+            .frame      = r.rest(),
             .fragmented = (ver_flags & detail::udp_fragmented_bit) != 0u
     };
 }
@@ -154,13 +150,11 @@ inline void wrap_udp_into_fragmented(std::vector<std::byte> &out, udp_envelope_k
                                      std::span<const std::byte> frame)
 {
     out.resize(udp_envelope_overhead + frame.size());
-    auto *p = out.data();
+    writer w{out};
 
-    detail::write_u8(p, detail::pack_ver_flags(kind, true));
-    detail::write_u16(p + 1, seq);
-
-    if(!frame.empty())
-        std::memcpy(p + udp_envelope_overhead, frame.data(), frame.size());
+    w.u8(detail::pack_ver_flags(kind, true));
+    w.u16(seq);
+    w.bytes(frame);
 }
 
 // The decoded fragment sub-header: the message-grouping id, this fragment's index and
@@ -184,16 +178,14 @@ inline void wrap_udp_fragment_into(std::vector<std::byte> &out, udp_envelope_kin
                                    std::span<const std::byte> frag_bytes)
 {
     out.resize(udp_fragment_header_overhead + frag_bytes.size());
-    auto *p = out.data();
+    writer w{out};
 
-    detail::write_u8(p, detail::pack_ver_flags(kind, true));
-    detail::write_u16(p + 1, seq);
-    detail::write_u16(p + 3, msg_id);
-    detail::write_u16(p + 5, frag_idx);
-    detail::write_u16(p + 7, frag_cnt);
-
-    if(!frag_bytes.empty())
-        std::memcpy(p + udp_fragment_header_overhead, frag_bytes.data(), frag_bytes.size());
+    w.u8(detail::pack_ver_flags(kind, true));
+    w.u16(seq);
+    w.u16(msg_id);
+    w.u16(frag_idx);
+    w.u16(frag_cnt);
+    w.bytes(frag_bytes);
 }
 
 // Encode the BARE fragment sub-header + slice — [msg_id:2][frag_idx:2][frag_cnt:2][slice]
@@ -205,14 +197,12 @@ inline void encode_udp_fragment_payload_into(std::vector<std::byte> &out, std::u
                                              std::span<const std::byte> slice)
 {
     out.resize(udp_fragment_subheader + slice.size());
-    auto *p = out.data();
+    writer w{out};
 
-    detail::write_u16(p, msg_id);
-    detail::write_u16(p + 2, frag_idx);
-    detail::write_u16(p + 4, frag_cnt);
-
-    if(!slice.empty())
-        std::memcpy(p + udp_fragment_subheader, slice.data(), slice.size());
+    w.u16(msg_id);
+    w.u16(frag_idx);
+    w.u16(frag_cnt);
+    w.bytes(slice);
 }
 
 // Decode the fragment sub-header from an untrusted inner frame (the .frame an unwrap
@@ -224,12 +214,15 @@ inline std::optional<udp_fragment_header> decode_udp_fragment_header(std::span<c
     if(frame.size() < udp_fragment_subheader)
         return std::nullopt;
 
-    auto *p = frame.data();
+    reader r{frame};
+    auto msg_id = r.u16();
+    auto frag_idx = r.u16();
+    auto frag_cnt = r.u16();
     return udp_fragment_header{
-            .msg_id   = detail::read_u16(p),
-            .frag_idx = detail::read_u16(p + 2),
-            .frag_cnt = detail::read_u16(p + 4),
-            .payload  = frame.subspan(udp_fragment_subheader)
+            .msg_id   = msg_id,
+            .frag_idx = frag_idx,
+            .frag_cnt = frag_cnt,
+            .payload  = r.rest()
     };
 }
 

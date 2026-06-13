@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_WIRE_FRAME_CODEC_H
 #define HPP_GUARD_PLEXUS_WIRE_FRAME_CODEC_H
 
-#include "plexus/wire/byte_order.h"
+#include "plexus/wire/cursor.h"
 #include "plexus/wire/frame.h"
 
 #include <array>
@@ -17,15 +17,15 @@ namespace plexus::wire {
 inline std::array<std::byte, header_size> encode_header(const frame_header &hdr)
 {
     std::array<std::byte, header_size> buf{};
-    auto *p = buf.data();
+    writer w{std::span<std::byte>{buf}};
 
-    p[0] = magic_byte_0;
-    p[1] = magic_byte_1;
-    detail::write_u8(p + 2, static_cast<uint8_t>(hdr.type));
-    detail::write_u8(p + 3, hdr.flags);
-    detail::write_u64(p + 4, hdr.session_id);
-    detail::write_u64(p + 12, hdr.timestamp_ns);
-    detail::write_u64(p + 20, hdr.payload_len);
+    w.u8(std::to_integer<std::uint8_t>(magic_byte_0));
+    w.u8(std::to_integer<std::uint8_t>(magic_byte_1));
+    w.u8(static_cast<uint8_t>(hdr.type));
+    w.u8(hdr.flags);
+    w.u64(hdr.session_id);
+    w.u64(hdr.timestamp_ns);
+    w.u64(hdr.payload_len);
 
     return buf;
 }
@@ -38,13 +38,15 @@ inline std::optional<frame_header> decode_header(std::span<const std::byte> data
     if(data[0] != magic_byte_0 || data[1] != magic_byte_1)
         return std::nullopt;
 
-    auto *p = data.data();
+    reader r{data};
+    r.u8();
+    r.u8();
     return frame_header{
-            .type         = static_cast<msg_type>(detail::read_u8(p + 2)),
-            .flags        = detail::read_u8(p + 3),
-            .session_id   = detail::read_u64(p + 4),
-            .timestamp_ns = detail::read_u64(p + 12),
-            .payload_len  = detail::read_u64(p + 20)
+            .type         = static_cast<msg_type>(r.u8()),
+            .flags        = r.u8(),
+            .session_id   = r.u64(),
+            .timestamp_ns = r.u64(),
+            .payload_len  = r.u64()
     };
 }
 

@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_WIRE_RPC_FRAME_H
 #define HPP_GUARD_PLEXUS_WIRE_RPC_FRAME_H
 
+#include "plexus/wire/cursor.h"
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/rpc_status.h"
 
@@ -114,18 +115,16 @@ inline void encode_rpc_response_into(std::vector<std::byte> &out,
                                      std::span<const std::byte> return_data)
 {
     out.resize(bidirectional_header_size + 1 + return_data.size());
-    auto *p = out.data();
+    writer w{out};
 
-    detail::write_u8(p, static_cast<uint8_t>(hdr.source));
-    detail::write_u64(p + 1, hdr.sequence);
-    detail::write_u64(p + 9, hdr.topic_hash);
-    detail::write_u64(p + 17, hdr.type_hash_1);
-    detail::write_u64(p + 25, hdr.type_hash_2);
-    detail::write_u64(p + 33, hdr.correlation_id);
-    detail::write_u8(p + bidirectional_header_size, static_cast<uint8_t>(status));
-
-    if(!return_data.empty())
-        std::memcpy(p + bidirectional_header_size + 1, return_data.data(), return_data.size());
+    w.u8(static_cast<uint8_t>(hdr.source));
+    w.u64(hdr.sequence);
+    w.u64(hdr.topic_hash);
+    w.u64(hdr.type_hash_1);
+    w.u64(hdr.type_hash_2);
+    w.u64(hdr.correlation_id);
+    w.u8(static_cast<uint8_t>(status));
+    w.bytes(return_data);
 }
 
 }
