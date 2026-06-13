@@ -285,12 +285,21 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
 TEST_CASE("udp isn: forged fragmented-flagged segments the reorder buffer rejects leave no residue",
           "[udp][isn][spoof][frag]")
 {
-    // A forged reliable-data segment carrying the FRAGMENTED envelope bit at an
-    // out-of-window seq must not deposit any per-seq receive-side state: the fragmented
+    // A forged reliable-data segment carrying the FRAGMENTED envelope bit that the reorder
+    // buffer PROVABLY rejects must not deposit any per-seq receive-side state: the fragmented
     // flag rides reorder-buffer ACCEPTANCE, so a rejected segment leaves nothing behind and
-    // cannot corrupt a subsequent legitimate delivery on the same channel. The observable
-    // proof is end-to-end: after a burst of forged fragmented segments, a normal udpr
-    // exchange still round-trips byte-identically and nothing forged is ever delivered.
+    // cannot corrupt a subsequent legitimate delivery on the same channel. The forged seqs
+    // are placed strictly BELOW the receiver's negotiated ISN, so they are guaranteed-old
+    // duplicates under the RFC-1982 serial arithmetic (adv >= half_space) regardless of the
+    // session's random ISN — a deterministically-rejected burst, not one whose rejection
+    // depends on a probabilistic ISN/seq-range relationship. The observable proof is
+    // end-to-end: after the rejected burst, a normal udpr exchange still round-trips
+    // byte-identically and nothing forged is ever delivered.
+    //
+    // This asserts the TRUE plaintext-path contract: a segment the buffer rejects leaves no
+    // residue. Absolute segment authenticity (rejecting a forgery that lands INSIDE the
+    // window) is the AEAD path's job; the cleartext udpr path is cleartext-equivalent by
+    // design (udp_envelope.h) and its sole off-path defense is the random ISN.
     constexpr int k_iterations = 20;
     int proven = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
@@ -315,12 +324,16 @@ TEST_CASE("udp isn: forged fragmented-flagged segments the reorder buffer reject
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
-        // A burst of forged FRAGMENTED-flagged data segments at scattered seqs that sit
-        // outside the receiver's in-order window (the negotiated ISN is non-zero, so low
-        // seqs are below expected). Pre-fix these inserted into a per-seq set BEFORE the
-        // reorder buffer ever validated the seq; post-fix the bit rides acceptance only.
-        for(std::uint16_t s = 0; s < 200; ++s)
+        // A burst of forged FRAGMENTED-flagged data segments at the 200 seqs immediately
+        // BELOW the receiver's negotiated ISN (isn-1, isn-2, ...). Each adv = seq - expected
+        // wraps to >= half_space, so the reorder buffer classifies every one as a duplicate
+        // and drops it — a provable rejection independent of the random ISN value. Pre-fix
+        // these inserted into a per-seq set BEFORE the reorder buffer ever validated the seq;
+        // post-fix the bit rides acceptance only, so a rejected seq deposits nothing.
+        const std::uint16_t isn = accepted->initial_seq();
+        for(std::uint16_t k = 1; k <= 200; ++k)
         {
+            const auto s = static_cast<std::uint16_t>(isn - k);
             std::vector<std::byte> inner;
             wire::encode_udp_segment_into(inner, bytes_of("FORGED-FRAG"));
             std::vector<std::byte> spoof;

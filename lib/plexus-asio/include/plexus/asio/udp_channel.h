@@ -177,6 +177,12 @@ public:
 
     [[nodiscard]] io::detail::udp_channel_mode mode() const noexcept { return m_mode; }
 
+    // The negotiated per-session ISN (RFC 6528) this channel's receiver expects as its
+    // first in-order seq; 0 on the legacy back-compat default. Behavior-only — it exposes
+    // the value already bound at construction so a caller can reason about which seqs sit
+    // below the receive window (a seq strictly below this is a provable duplicate).
+    [[nodiscard]] std::uint16_t initial_seq() const noexcept { return m_initial_seq; }
+
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
