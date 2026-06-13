@@ -39,17 +39,22 @@ namespace plexus::io::shm {
 // ~0% CPU. The budget is a required-WITH-default consumer policy knob — 0 = always park
 // (the futex floor), large = effectively always spin (busy-poll). The park MECHANISM stays
 // the backend notifier's futex/io_uring wait; this is only the GENERIC consumer spin
-// policy, so it lives here in core. The default is the swept knee (see
-// TRANSPORT-POLICY-PROFILE.md §SHM spin-budget sweep): it catches the back-to-back arrival
-// at near-busy-poll latency while parking when idle.
+// policy, so it lives here in core. The default is the conservative swept knee (see
+// default_spin_budget): it catches a genuine back-to-back arrival while staying
+// CPU-cheap and park-dominated, with the knob for a latency-maximalist consumer to opt up.
 //
 // Borrows the ring BY REFERENCE; non-copy/non-move owning endpoint.
 class slot_subscriber
 {
 public:
-    // The swept default spin budget (TRANSPORT-POLICY-PROFILE.md §SHM spin-budget sweep):
-    // the knee where back-to-back latency has collapsed toward busy-poll while idle CPU is
-    // still negligible (the spin exits on the first idle-with-traffic-absent window).
+    // The conservative default spin budget, confirmed by a {0,64,256,1k,4k,16k} x rate x
+    // payload sweep on the bench rig (shm-spin-budget-sweep-2026-06-13): the latency knee is
+    // rate-dependent (the spin window only catches the next message when arrival falls inside
+    // it), so no fixed budget is optimal everywhere. 256 reclaims a real share of the wakeup
+    // cost on the high-rate back-to-back path over pure-park (~-50% P50 at 100kHz) at a sub-1us
+    // per-message spin window, never busy-spins idle (0% at 1Hz), and parks otherwise; a
+    // latency-maximalist consumer raises this knob rather than the default imposing a large
+    // per-message spin burn on every consumer.
     static constexpr std::uint32_t default_spin_budget = 256;
 
     explicit slot_subscriber(broadcast_ring &ring,
