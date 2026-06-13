@@ -283,7 +283,7 @@ TEST_CASE("reassembler reclaims a stalled partial on the per-message timeout", "
 
     CHECK(r.feed(3, 0, 4, seq_bytes(8, 0)) == test_reassembler::outcome::admitted);
     REQUIRE(r.in_flight() == 1);
-    REQUIRE(r.held_bytes() == 8);
+    REQUIRE(r.held_bytes() == 8 + test_reassembler::structural_cost(4));
 
     h.advance(std::chrono::duration_cast<testing::test_clock::duration>(1500ms));
 
@@ -295,17 +295,18 @@ TEST_CASE("reassembler reclaims a stalled partial on the per-message timeout", "
 TEST_CASE("reassembler rejects a new partial that would breach the total-memory cap", "[fragment][reassemble]")
 {
     testing::harness h;
-    test_reassembler r{h.ex, {.total_memory_cap = 16}};
+    const auto one_msg = 10 + test_reassembler::structural_cost(2);
+    test_reassembler r{h.ex, {.total_memory_cap = one_msg + 5}};
 
     // First message takes a fragment in-flight, consuming part of the cap.
     CHECK(r.feed(1, 0, 2, seq_bytes(10, 0)) == test_reassembler::outcome::admitted);
-    REQUIRE(r.held_bytes() == 10);
+    REQUIRE(r.held_bytes() == one_msg);
 
     // A NEW msg_id whose first fragment would breach the cap is rejected; the in-progress
     // entry is untouched (no OOM, no eviction of live work).
     CHECK(r.feed(2, 0, 2, seq_bytes(10, 0)) == test_reassembler::outcome::dropped_cap);
     CHECK(r.in_flight() == 1);
-    CHECK(r.held_bytes() == 10);
+    CHECK(r.held_bytes() == one_msg);
 }
 
 TEST_CASE("reassembler fails closed on malformed fragments without indexing past the span", "[fragment][reassemble]")
