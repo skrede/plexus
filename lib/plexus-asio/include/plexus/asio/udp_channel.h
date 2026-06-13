@@ -15,6 +15,7 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/reassembler.h"
+#include "plexus/io/detail/scheduler_key.h"
 #include "plexus/io/detail/udp_reliable_arq.h"
 #include "plexus/io/detail/udp_handshake_frame.h"
 #include "plexus/io/detail/udp_backpressure_queue.h"
@@ -266,6 +267,11 @@ public:
         // fire-and-forget channel. Mode, not envelope kind alone, gates the engine.
     }
 
+    // The stable per-construction id the egress scheduler keys its band map on (read via a
+    // capability probe): unique per object, so a reused heap address cannot bleed a stale
+    // band entry across — the same minted-once key every byte channel carries.
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return m_scheduler_key; }
+
     [[nodiscard]] const ::asio::ip::udp::endpoint &dest() const noexcept { return m_dest; }
     [[nodiscard]] bool is_open() const noexcept { return m_open; }
     [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
@@ -503,6 +509,7 @@ private:
     std::size_t m_dropped{0};                            // congestion=drop shed count
     io::detail::udp_channel_mode m_mode;                     // best_effort vs reliable_datagram
     std::uint16_t m_initial_seq;                             // negotiated per-session ISN (RFC 6528); 0 = legacy
+    std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()};   // stable per-construction egress key
     std::uint16_t m_out_seq{0};
     std::uint16_t m_out_msg_id{0};                       // per-message fragment grouping id (sender)
     wire::udp_dedup_window m_dedup;
