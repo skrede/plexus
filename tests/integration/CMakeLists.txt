@@ -141,6 +141,22 @@ target_include_directories(test_reconnect_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_reconnect_inproc TEST_PREFIX "integration.")
 
+# The reconnect-survives-observer oracle on the virtual clock: an observer installed
+# once on a node still receives the post-reconnect lifecycle edge after a forced
+# down-then-up cycle, proving the registry re-threads its observer wiring on every
+# reconnect rebuild. The shared recording_observer.h resolves via the tests/integration
+# include dir — always built (inproc Policy, no backend needed).
+add_executable(test_reconnect_observer_inproc test_reconnect_observer_inproc.cpp)
+target_link_libraries(test_reconnect_observer_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_reconnect_observer_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_reconnect_observer_inproc TEST_PREFIX "integration.")
+
 # The deterministic two-node routing oracle on the virtual clock: two engines over
 # one inproc bus prove lazy-no-dial-until-demand, eager-dial-on-awareness, awareness-
 # without-connect, receive-path identity, single-slot reconnect isolation, and
@@ -311,6 +327,18 @@ target_link_libraries(test_rxo_compatibility PRIVATE
 target_include_directories(test_rxo_compatibility PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_rxo_compatibility TEST_PREFIX "integration.")
+
+# The subscriber-QoS wire round-trip identity unit: from_wire_region(to_wire_region(q))
+# reproduces q over every requested_flags bit, the scalar/enum fields, and a couple of
+# combinations. Pure header-only core (no backend needed) — always built; the
+# `integration.` ctest prefix and the "subscribe qos wire" case substrings let
+# `ctest -R subscribe_qos_wire` and `ctest -R 'subscribe qos wire'` both match.
+add_executable(test_subscribe_qos_wire test_subscribe_qos_wire.cpp)
+target_link_libraries(test_subscribe_qos_wire PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_subscribe_qos_wire TEST_PREFIX "integration.")
 
 # The security attach-gate bridge oracle: two peer_sessions over the inproc backend
 # drive the end-to-end attach surface — the dedicated security_event, the lifecycle

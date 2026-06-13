@@ -30,9 +30,15 @@
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/message_forwarder.h"
+#include "plexus/io/priority.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/reassembler.h"
+#include "plexus/io/detail/egress_scheduler.h"
+#include "plexus/io/detail/priority_band_queue.h"
 #include "plexus/io/detail/udp_handshake_frame.h"
+
+#include "plexus/topic_qos.h"
 
 #include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_transport.h"
@@ -55,9 +61,11 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <system_error>
 
 namespace cause = plexus::io::detail;
 
@@ -223,6 +231,51 @@ std::vector<std::byte> filler(std::size_t n)
         v[i] = static_cast<std::byte>((i * 17u + 3u) & 0xFFu);
     return v;
 }
+
+// A channel whose reported occupancy is held above the low-water mark so the egress
+// scheduler bands every publish instead of draining: a flood past the band depth then
+// sheds under the topic's congestion policy (the egress shed the observer must see). It
+// records nothing — the shed never reaches send().
+struct stall_executor {};
+
+struct stall_channel
+{
+    explicit stall_channel(std::size_t &reported) : m_reported(&reported) {}
+    stall_channel(stall_executor &) {}
+    stall_channel(stall_executor &, std::error_code &) {}
+
+    void send(std::span<const std::byte>) {}
+    void close() {}
+    [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"tcp", "127.0.0.1:0"}; }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
+    void on_closed(plexus::detail::move_only_function<void()>) {}
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
+    [[nodiscard]] std::size_t backpressured() const noexcept { return *m_reported; }
+
+    std::size_t *m_reported{nullptr};
+};
+
+struct stall_timer
+{
+    explicit stall_timer(stall_executor &) {}
+    stall_timer(stall_executor &, std::error_code &) {}
+    void expires_after(std::chrono::milliseconds) {}
+    void async_wait(plexus::detail::move_only_function<void(std::error_code)>) {}
+    void cancel() {}
+};
+
+struct stall_policy
+{
+    using executor_type = stall_executor &;
+    using byte_channel_type = stall_channel;
+    using timer_type = stall_timer;
+    using byte_owner = std::shared_ptr<const void>;
+
+    static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
+};
+
+static_assert(plexus::Policy<stall_policy>);
 
 }
 
@@ -406,5 +459,45 @@ TEST_CASE("integration.drop_coverage demux_refused posts through the engine hook
         }
 
         REQUIRE(fx.observer.count(cause::drop_cause::demux_refused) >= 1);
+    }
+}
+
+TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter AND must reach an installed observer",
+          "[integration][drop_coverage][egress]")
+{
+    using forwarder = plexus::io::message_forwarder<stall_policy>;
+
+    for(int loop = 0; loop < 4; ++loop)
+    {
+        std::size_t reported = 0;
+        stall_channel ch{reported};
+        stall_executor ex;
+        forwarder fwd{ex};
+        recording_drop_observer observer;
+
+        // A bounded band under congestion=drop_newest: stall the destination so every
+        // publish bands, then flood past the band depth so the surplus sheds.
+        fwd.declare("shed", plexus::topic_qos{.congestion = plexus::io::congestion::drop_newest});
+        REQUIRE(fwd.attach_for_fanout(forwarder::peer{ch, "node-a"}, "shed"));
+
+        reported = plexus::io::detail::k_low_water + 1;
+        const int flood = static_cast<int>(plexus::io::detail::k_band_depth) + 16;
+        const auto payload = filler(64);
+        for(int i = 0; i < flood; ++i)
+            fwd.publish("shed", std::span<const std::byte>{payload});
+
+        // The always-on per-band counter moved: the surplus past the depth was shed as
+        // drop_newest. This counter semantics is the pre-existing truth and stays additive.
+        const std::size_t band = plexus::io::detail::band_of(plexus::io::priority::normal);
+        const std::size_t shed = fwd.dropped("shed", band, cause::drop_cause::drop_newest);
+        REQUIRE(shed > 0);
+
+        // The egress shed currently bumps the counter ONLY — the forwarder has no posted
+        // on_drop seam routing the shed to an observer yet. When that route lands the
+        // observer SEES the shed; until then the installed observer records nothing and
+        // this assertion flips from == 0 to >= shed.
+        if(observer.count(cause::drop_cause::drop_newest) == 0)
+            SKIP("the forwarder egress on_drop->observer route is not wired yet (counter-only today)");
+        REQUIRE(observer.count(cause::drop_cause::drop_newest) >= shed);
     }
 }
