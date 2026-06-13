@@ -346,12 +346,29 @@ private:
     // endpoint deterministically identifies the originating slot.
     void on_dialed(std::unique_ptr<channel_type> channel, const endpoint &dialed)
     {
+        wire_channel_drop(*channel);
         m_registry.build_session_for_endpoint(dialed, std::move(channel));
     }
 
     void on_accepted(std::unique_ptr<channel_type> channel)
     {
+        wire_channel_drop(*channel);
         m_registry.accept_session(std::move(channel));
+    }
+
+    // Install the posted drop_sink onto a freshly minted channel that carries the
+    // optional on_drop edge — the SAME edge m_messages.on_drop(drop_sink()) gives
+    // egress, threaded here at the single point every backend's dialed/accepted
+    // channel reaches the engine. A channel whose tier surfaces no drop edge (on_drop
+    // is not a byte_channel verb; the multiplexer's erased channel exposes none) is
+    // left untouched at compile time — the sink is routing policy the engine owns, not
+    // a per-backend obligation. The drop stays POSTED: the inproc unmatched-partner
+    // edge fires off the bus step-loop and the shm send-ring verdict reaches the
+    // observer through drop_sink(), never inline.
+    void wire_channel_drop(channel_type &channel)
+    {
+        if constexpr(requires { channel.on_drop(drop_sink()); })
+            channel.on_drop(drop_sink());
     }
 
     // The session→observer fan-out. Every edge is delivered POSTED on the executor,

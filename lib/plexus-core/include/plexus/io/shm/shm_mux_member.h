@@ -139,8 +139,8 @@ private:
     // The shm ring's congestion/rejection verdict surfaces inline at send time (the ring
     // has no userspace egress queue to post from); the drop edge is therefore reported
     // straight off send(). It carries drop_cause::blocked (a congestion-drop) at the local
-    // tier. The engine binds this through its posted drop_sink, so the per-emit boundary
-    // back at the engine fan-out stays posted.
+    // tier. The engine binds m_on_drop to its posted drop_sink at the dial/accept point, so
+    // the synchronous emit here reaches the observer fan-out POSTED, never inline.
     void emit_drop()
     {
         if(m_on_drop)

@@ -28,6 +28,8 @@
 #include "plexus/io/reliability.h"
 #include "plexus/io/detail/drop_event.h"
 
+#include "plexus/io/polymorphic_byte_channel.h"
+
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_layout.h"
 #include "plexus/io/shm/loan_status.h"
@@ -592,6 +594,56 @@ TEST_CASE("inproc drop seam: a data packet to a vanished partner is dropped AND 
     }
 }
 
+TEST_CASE("inproc drop seam: an engine-installed observer sees an unroutable inproc drop through the PRODUCTION channel binding (no test-local on_drop)",
+          "[integration][drop_seam][inproc][unmatched][production]")
+{
+    for(int loop = 0; loop < 4; ++loop)
+    {
+        manual_clock::reset();
+        inproc_bus<manual_clock> bus;
+        inproc_executor<manual_clock> ex{bus};
+        transport_t transport_a{ex, bus};
+        transport_t transport_b{ex, bus};
+
+        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, false);
+        // B's engine is destroyed mid-test to make A's heartbeat target vanish, so it
+        // lives in an optional A's slot outlives (no clock advance => no re-dial yet).
+        std::optional<engine> b;
+        b.emplace(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, false);
+
+        plexus::node_id id_b = make_id(0xB2);
+        endpoint ep_b{"inproc", "node-b"};
+        a.listen({"inproc", "node-a"});
+        b->listen(ep_b);
+
+        // The observer is installed ONLY through the engine's public add_observer — the
+        // test never touches the channel's on_drop. The drop must reach it solely via the
+        // engine's wire_channel_drop binding the dialer channel's on_drop to drop_sink().
+        recording_drop_observer observer;
+        a.add_observer(observer);
+
+        a.note_peer(id_b, ep_b);
+        a.reach(id_b);
+        ex.drain();
+        REQUIRE(a.is_connected(id_b));
+
+        // Destroy B: its accepted inproc_channel deregisters from the bus, so A's dialer's
+        // resolved partner key now matches no live channel. A's slot is untouched.
+        b.reset();
+
+        // A heartbeat on A's OWN live session sends a frame the bus cannot route — the
+        // unmatched-partner path in deliver_one fires report_unroutable on A's channel,
+        // which the engine bound to its posted drop_sink at dial time.
+        auto *a_session = a.session_for(id_b);
+        REQUIRE(a_session != nullptr);
+        a_session->emit_heartbeat();
+        ex.drain();   // the bus fails to match inside the step loop, then the posted drop fans out
+
+        REQUIRE(observer.any());
+        REQUIRE(observer.seen.front() == plexus::io::detail::drop_cause::unroutable);
+    }
+}
+
 TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdict AND must reach an installed observer",
           "[integration][drop_seam][shm][congested]")
 {
@@ -650,6 +702,91 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         // The byte_channel send hits the congested verdict and emits the drop edge
         // ADDITIVELY (on_error stays available); the observer sees the congestion drop.
         bytechan.send(std::span<const std::byte>(bytes, sizeof(bytes)));
+
+        REQUIRE(observer.any());
+        REQUIRE(observer.seen.front() == plexus::io::detail::drop_cause::blocked);
+
+        for(std::uint64_t i = 0; i < cells; ++i)
+            ring.refcount_at(i).fetch_sub(1);
+        ring.unregister_cursor(idx);
+    }
+}
+
+TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed observer through the ERASED production binding and the posted fan-out",
+          "[integration][drop_seam][shm][congested][production]")
+{
+    using plexus::io::shm::broadcast_ring;
+    using plexus::io::shm::loan_status;
+    using plexus::io::shm::shm_channel;
+    using plexus::io::shm::shm_byte_channel;
+    using plexus::io::shm::shm_topic_registry;
+    using plexus::io::shm::control_region_bytes;
+    using plexus::io::shm::slab_region_bytes;
+
+    constexpr std::uint64_t cells = 16;
+    constexpr std::uint64_t slot = 64;
+
+    for(int loop = 0; loop < 4; ++loop)
+    {
+        manual_clock::reset();
+
+        // The engine is the drop_sink owner + posted fan-out + observer registry — the SAME
+        // role it plays for a real shm node. A same-host shm member only ever rides the
+        // multiplexer, so its channel reaches the engine ERASED as a polymorphic_byte_channel;
+        // the engine binds on_drop through that erasure (wire_channel_drop). This proves the
+        // erased on_drop forwards to the concrete shm channel and posts to the observer.
+        inproc_bus<manual_clock> bus;
+        inproc_executor<manual_clock> ex{bus};
+        transport_t transport{ex, bus};
+        engine eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, false);
+        recording_drop_observer observer;
+        eng.add_observer(observer);
+
+        backing_region control{control_region_bytes(cells)};
+        backing_region slab{slab_region_bytes(cells, slot)};
+        broadcast_ring ring;
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) == loan_status::ok);
+        null_notifier notify;
+
+        shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort,
+                                           plexus::io::congestion::drop_newest);
+        stub_broker broker;
+        shm_topic_registry<stub_broker, null_notifier> registry(
+                broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+
+        // Erase the concrete shm channel behind the production polymorphic_byte_channel and
+        // install the engine's posted drop_sink through the ERASED on_drop verb — exactly
+        // the call wire_channel_drop makes for a muxed shm node. NO concrete on_drop is bound
+        // by the test; remove either the erasure forward or the engine binding and this fails.
+        auto concrete = std::make_unique<shm_byte_channel<stub_broker, null_notifier>>(
+                registry, channel, "shm-topic", plexus::io::endpoint{"shm", "shm-topic"});
+        plexus::io::polymorphic_byte_channel erased(
+                std::make_unique<plexus::io::channel_adapter<shm_byte_channel<stub_broker, null_notifier>>>(
+                        std::move(concrete)));
+        erased.on_drop(eng.drop_sink());
+
+        std::uint32_t idx = 0;
+        REQUIRE(ring.register_cursor(idx) == loan_status::ok);
+        std::uint64_t cursor = ring.tail_position();
+        for(std::uint64_t i = 0; i < cells; ++i)
+        {
+            broadcast_ring::claim_result claim;
+            REQUIRE(ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort,
+                                           plexus::io::congestion::drop_newest, claim) == loan_status::ok);
+            const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
+            std::memcpy(claim.slab.data(), &v, sizeof(v));
+            REQUIRE(ring.commit(claim.position, sizeof(v)) == loan_status::ok);
+            REQUIRE(ring.pin_if_current(cursor) == true);
+            ++cursor;
+        }
+
+        std::uint32_t payload = 0xFEEDFACEu;
+        std::byte bytes[sizeof(payload)];
+        std::memcpy(bytes, &payload, sizeof(payload));
+        // The send hits the congested verdict and emits the drop edge; it travels concrete
+        // on_drop -> engine drop_sink -> POSTED fan-out. Drain the executor for the posted turn.
+        erased.send(std::span<const std::byte>(bytes, sizeof(bytes)));
+        ex.drain();
 
         REQUIRE(observer.any());
         REQUIRE(observer.seen.front() == plexus::io::detail::drop_cause::blocked);
