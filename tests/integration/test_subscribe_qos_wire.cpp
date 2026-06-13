@@ -1,12 +1,11 @@
 // The subscriber-QoS wire round-trip identity unit: from_wire_region(to_wire_region(q))
 // reproduces q over every requested_flags bit (each set independently), a couple of
-// combinations, and the all-clear default. The two free functions currently live in
-// message_forwarder.h; the include path is the only line that moves when the qos-wire
-// functions are lifted into their own header. wants_message_info is the one
+// combinations, and the all-clear default. The two free functions live in
+// subscribe_qos_wire.h. wants_message_info is the one
 // subscriber_qos field that NEVER crosses the wire (an inproc-local stamp demand), so it
 // stays at its default in every swept value — the region cannot carry it back.
 
-#include "plexus/io/message_forwarder.h"
+#include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/subscriber_qos.h"
 
 #include <catch2/catch_test_macros.hpp>
