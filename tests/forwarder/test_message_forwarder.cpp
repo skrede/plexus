@@ -38,7 +38,7 @@ using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_channel;
 using forwarder = plexus::io::message_forwarder<inproc_policy>;
 
-// SLICE-4 maintainability gate: the forwarder models the wire_forwarder shape.
+// Maintainability gate: the forwarder models the wire_forwarder shape.
 static_assert(plexus::io::wire_forwarder<forwarder, forwarder::peer>);
 
 namespace {

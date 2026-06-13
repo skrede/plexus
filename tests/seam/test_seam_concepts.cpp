@@ -1,8 +1,8 @@
 // Seam-concept smoke test: compile-time proof that the byte_channel / Policy
 // concepts are satisfiable, plus the one-line-diagnostic affordance and the
-// wire_bytes owner-keeps-bytes-alive guarantee. This is the SLICE-4
-// maintainability evidence — the concept surface rejects a non-conforming
-// backend with a single static_assert line, not a template-instantiation dump.
+// wire_bytes owner-keeps-bytes-alive guarantee. This is the maintainability
+// evidence — the concept surface rejects a non-conforming backend with a
+// single static_assert line, not a template-instantiation dump.
 
 #include "plexus/policy.h"
 #include "plexus/io/byte_channel.h"
