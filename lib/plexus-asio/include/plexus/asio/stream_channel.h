@@ -11,8 +11,9 @@
 #include "plexus/asio/asio_timer.h"
 #include "plexus/asio/detail/asio_error_map.h"
 
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/stream_inbound.h"
+
+#include "plexus/wire_bytes.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -27,7 +28,6 @@
 #include <asio/io_context.hpp>
 
 #include <span>
-#include <array>
 #include <memory>
 #include <vector>
 #include <utility>
@@ -63,6 +63,10 @@ public:
     // benchmark, not fixed by feel.
     static constexpr std::size_t default_write_queue_bytes =
         1u * io::fragmentation_limits::max_message_size;
+
+    // The per-read kernel buffer (heap, sized once — never a stack array). 64 KiB clears one max
+    // TLS record (~16 KiB) and dwarfs the 4 KiB that forced 16-1024 reads per large message.
+    static constexpr std::size_t k_stream_read_buffer_bytes = 64u * 1024u;
 
     // Dial/executor-alone: unconnected, not reading yet — the transport arms the open path
     // (start_read for plaintext, the handshake for TLS). BootstrapArgs forward the per-backend
@@ -230,19 +234,16 @@ private:
             });
     }
 
-    // The stream_inbound on_frame target: re-frame the reassembled frame into a COMPLETE
-    // header-on frame and post THAT, so on_data delivers a full frame (identical to the
-    // inproc channel) and the frame_router sees frame_header.type. The re-frame uses a reused
-    // member scratch (no per-frame alloc); the owning vector keeps the bytes alive across the
-    // post.
+    // The stream_inbound on_frame target: the reassembler already materialized the full
+    // header-on frame as the owning shared_bytes, so on_data delivers it verbatim. The posted
+    // closure CAPTURES the owner, keeping the bytes alive past this call (the post runs later).
     void post_frame(const wire::complete_frame &frame)
     {
-        wire::encode_frame_into(m_frame_scratch, frame.header, frame.payload);
-        auto owned = std::make_shared<std::vector<std::byte>>(m_frame_scratch);
-        ::asio::post(m_io, [this, owned]
+        wire_bytes<> owned{frame.payload};
+        ::asio::post(m_io, [this, owned = std::move(owned)]
         {
             if(m_on_data)
-                m_on_data(std::span<const std::byte>{*owned});
+                m_on_data(static_cast<std::span<const std::byte>>(owned));
         });
     }
 
@@ -290,9 +291,8 @@ private:
     Bootstrap m_bootstrap;
     Stream m_stream;
     wire::stream_inbound<asio_timer, ::asio::io_context &> m_inbound;
-    std::vector<std::byte> m_frame_scratch;
     std::vector<::asio::const_buffer> m_gather;           // reused gather-write iovec (grows once)
-    std::array<std::byte, 4096> m_read_buf{};
+    std::vector<std::byte> m_read_buf = std::vector<std::byte>(k_stream_read_buffer_bytes);
     io::congestion m_congestion;
     std::size_t m_dropped{0};                             // congestion=drop shed count
     io::detail::stream_send_queue m_egress;               // bounded byte-budgeted serial write block
