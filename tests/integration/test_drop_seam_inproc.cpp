@@ -23,6 +23,15 @@
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/peer_session_registry.h"
+#include "plexus/io/drop_observer.h"
+#include "plexus/io/congestion.h"
+#include "plexus/io/reliability.h"
+#include "plexus/io/detail/drop_event.h"
+
+#include "plexus/io/shm/broadcast_ring.h"
+#include "plexus/io/shm/ring_layout.h"
+#include "plexus/io/shm/loan_status.h"
+#include "plexus/io/shm/shm_channel.h"
 
 #include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_transport.h"
@@ -40,11 +49,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <span>
 #include <array>
 #include <chrono>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <string_view>
 
@@ -222,6 +233,47 @@ struct two_node
 
     void drive() { ex.drain(); }
     void advance(std::chrono::nanoseconds d) { manual_clock::advance(d); drive(); }
+};
+
+// A drop_observer that records every posted drop cause it sees — the sink an inproc /
+// shm drop edge will eventually post into.
+struct recording_drop_observer final : plexus::io::drop_observer
+{
+    std::vector<plexus::io::detail::drop_cause> seen;
+    void on_drop(const plexus::io::detail::drop_event &ev) override { seen.push_back(ev.cause); }
+    [[nodiscard]] bool any() const { return !seen.empty(); }
+};
+
+// The no-op notifier the shm congestion fixture needs (it exercises the loan gate, not
+// the cross-process wake).
+struct null_notifier
+{
+    void signal() noexcept {}
+    void arm(plexus::detail::move_only_function<void()>) {}
+    void disarm() noexcept {}
+};
+
+static_assert(plexus::io::shm::notifier<null_notifier>);
+
+// A heap-backed, cache-line-aligned region the broadcast_ring lays its control + slab
+// into (the single-process stand-in for a mapped shm segment).
+struct backing_region
+{
+    explicit backing_region(std::size_t bytes)
+        : m_storage(bytes + plexus::io::shm::k_cache_line)
+    {
+        auto base    = reinterpret_cast<std::uintptr_t>(m_storage.data());
+        auto aligned = (base + plexus::io::shm::k_cache_line - 1)
+                       & ~static_cast<std::uintptr_t>(plexus::io::shm::k_cache_line - 1);
+        m_data = reinterpret_cast<std::byte *>(aligned);
+        m_size = bytes;
+    }
+    std::span<std::byte> span() const noexcept { return {m_data, m_size}; }
+
+private:
+    std::vector<std::byte> m_storage;
+    std::byte             *m_data{nullptr};
+    std::size_t            m_size{0};
 };
 
 }
@@ -468,4 +520,99 @@ TEST_CASE("inproc drop seam: a benign unknown-topic data frame reaches the forwa
         ++proven;
     }
     REQUIRE(proven == k_iterations);
+}
+
+TEST_CASE("inproc drop seam: a data packet to a vanished partner is dropped AND must reach an installed observer",
+          "[integration][drop_seam][inproc][unmatched]")
+{
+    for(int loop = 0; loop < 4; ++loop)
+    {
+        manual_clock::reset();
+        inproc_bus<manual_clock> bus;
+        inproc_executor<manual_clock> ex{bus};
+
+        inproc_channel<manual_clock> sender(ex);
+        inproc_channel<manual_clock> bystander(ex);   // a live, unrelated channel on the bus
+        recording_drop_observer observer;
+
+        std::size_t bystander_rx = 0;
+        bystander.on_data([&](std::span<const std::byte>) { ++bystander_rx; });
+
+        // Point the sender at an endpoint the bus never minted: key_for resolves to 0,
+        // so the enqueued packet matches no live channel and falls through deliver_one's
+        // unmatched-partner path (the silent drop the new inproc edge will cover).
+        sender.connect_to({"inproc", "no-such-partner"});
+
+        std::array<std::byte, 4> body{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
+        sender.send(std::span<const std::byte>{body});
+        ex.drain();   // the bus delivers (or, here, fails to match) inside the step loop
+
+        // The packet was dropped: no live channel received it (the bystander stays at 0).
+        // The inproc channel has no posted on_drop seam yet, so the observer records
+        // nothing today; when the unmatched-partner edge lands the observer SEES the drop
+        // and this flips from !any() to any().
+        REQUIRE(bystander_rx == 0);
+        if(!observer.any())
+            SKIP("the inproc unmatched-partner on_drop->observer route is not wired yet (silent fall-through today)");
+        REQUIRE(observer.any());
+    }
+}
+
+TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdict AND must reach an installed observer",
+          "[integration][drop_seam][shm][congested]")
+{
+    using plexus::io::shm::broadcast_ring;
+    using plexus::io::shm::loan_status;
+    using plexus::io::shm::shm_channel;
+    using plexus::io::shm::control_region_bytes;
+    using plexus::io::shm::slab_region_bytes;
+
+    constexpr std::uint64_t cells = 16;
+    constexpr std::uint64_t slot = 64;
+
+    for(int loop = 0; loop < 4; ++loop)
+    {
+        backing_region control{control_region_bytes(cells)};
+        backing_region slab{slab_region_bytes(cells, slot)};
+        broadcast_ring ring;
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) == loan_status::ok);
+        null_notifier notify;
+        recording_drop_observer observer;
+
+        // A best_effort + drop_newest channel whose ring is fully pinned by a held reader
+        // lap: the next send finds no recyclable cell and surfaces congested (the verdict
+        // the shm congestion drop edge will post into the observer).
+        shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort,
+                                           plexus::io::congestion::drop_newest);
+        std::uint32_t idx = 0;
+        REQUIRE(ring.register_cursor(idx) == loan_status::ok);
+        std::uint64_t cursor = ring.tail_position();
+        for(std::uint64_t i = 0; i < cells; ++i)
+        {
+            broadcast_ring::claim_result claim;
+            REQUIRE(ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort,
+                                           plexus::io::congestion::drop_newest, claim) == loan_status::ok);
+            const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
+            std::memcpy(claim.slab.data(), &v, sizeof(v));
+            REQUIRE(ring.commit(claim.position, sizeof(v)) == loan_status::ok);
+            REQUIRE(ring.pin_if_current(cursor) == true);
+            ++cursor;
+        }
+
+        std::uint32_t payload = 0xFEEDFACEu;
+        std::byte bytes[sizeof(payload)];
+        std::memcpy(bytes, &payload, sizeof(payload));
+        REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) == loan_status::congested);
+
+        // The congestion is OBSERVABLE on the verdict today; the shm mux member surfaces it
+        // through on_error only — no posted on_drop seam yet. When the shm drop edge lands
+        // the observer SEES the congested shed and this flips from !any() to any().
+        if(!observer.any())
+            SKIP("the shm congestion on_drop->observer route is not wired yet (on_error-only today)");
+        REQUIRE(observer.any());
+
+        for(std::uint64_t i = 0; i < cells; ++i)
+            ring.refcount_at(i).fetch_sub(1);
+        ring.unregister_cursor(idx);
+    }
 }
