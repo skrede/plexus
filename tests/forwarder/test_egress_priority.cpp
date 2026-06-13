@@ -1,6 +1,7 @@
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/egress_scheduler.h"
+#include "plexus/wire_bytes.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 #include "plexus/io/priority.h"
 
@@ -38,6 +39,16 @@ std::span<const std::byte> as_bytes(const std::string &s)
 {
     return {reinterpret_cast<const std::byte *>(s.data()), s.size()};
 }
+
+// A frame-owner the directly-driven scheduler shares into the band (the production
+// carrier): a span over an owning shared_ptr<vector>, mirroring the forwarder's frame.
+plexus::wire_bytes<> owned(std::span<const std::byte> bytes)
+{
+    auto buf = std::make_shared<std::vector<std::byte>>(bytes.begin(), bytes.end());
+    std::span<const std::byte> view{*buf};
+    return plexus::wire_bytes<>{view, std::shared_ptr<const void>{std::move(buf)}};
+}
+plexus::wire_bytes<> owned(const std::string &s) { return owned(as_bytes(s)); }
 
 // Decode the opaque body of a UNIDIRECTIONAL data frame; returns "" for a control
 // frame (subscribe_response etc.) so the send-order capture counts only data.
@@ -449,8 +460,8 @@ std::size_t saturate_scheduler(io::detail::egress_scheduler<stall_channel, stall
     st.reported = io::detail::k_low_water + 1;   // stalled: nothing drains, the band fills
     const std::size_t band = io::detail::band_of(io::priority::normal);
     for(std::size_t i = 0; i < io::detail::k_band_depth; ++i)
-        sched.enqueue(ch, band, mode, as_bytes("f" + std::to_string(i)));
-    sched.enqueue(ch, band, mode, as_bytes(std::string{"OVERFLOW"}));
+        sched.enqueue(ch, band, mode, owned("f" + std::to_string(i)));
+    sched.enqueue(ch, band, mode, owned(std::string{"OVERFLOW"}));
     return band;
 }
 
@@ -640,12 +651,12 @@ TEST_CASE("egress_priority: the drain leaves a frame the channel cap cannot admi
     // Admit one small frame (drains immediately — headroom for it). Then enqueue a big
     // frame: with the small frame still queued there is NO headroom for big, so the drain
     // must leave it banded rather than hand it to a channel that would refuse it.
-    REQUIRE(sched.enqueue(ch, band, io::congestion::block, std::vector<std::byte>(small)) ==
+    REQUIRE(sched.enqueue(ch, band, io::congestion::block, owned(std::vector<std::byte>(small))) ==
             io::detail::drop_cause::none);
     REQUIRE(cst.sends.size() == 1);                            // the small frame drained
     REQUIRE(cst.queued == small);
 
-    REQUIRE(sched.enqueue(ch, band, io::congestion::block, std::vector<std::byte>(big)) ==
+    REQUIRE(sched.enqueue(ch, band, io::congestion::block, owned(std::vector<std::byte>(big))) ==
             io::detail::drop_cause::none);                     // admitted into the band, not dropped
     REQUIRE(cst.sends.size() == 1);                            // big stayed banded (no headroom)
     REQUIRE(cst.refused == 0);                                 // the channel cap never refused a hand-off
@@ -655,7 +666,7 @@ TEST_CASE("egress_priority: the drain leaves a frame the channel cap cannot admi
     // not lost. The kick frame itself stays banded behind big (big consumes the whole
     // budget), so exactly the held big frame surfaces this turn.
     cst.queued = 0;
-    sched.enqueue(ch, band, io::congestion::block, std::vector<std::byte>(small));   // resumes the drain
+    sched.enqueue(ch, band, io::congestion::block, owned(std::vector<std::byte>(small)));   // resumes the drain
     REQUIRE(cst.sends.size() == 2);                            // the held big frame finally drained
     REQUIRE(cst.refused == 0);                                 // still never a refused hand-off
 }

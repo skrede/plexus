@@ -58,6 +58,21 @@ public:
         m_offset += blob.size();
     }
 
+    // Emit the LEB128 encoding of `value` at the cursor (1..10 bytes for a u64),
+    // matching write_varint's byte sequence so an inline counter is byte-identical
+    // to the append-based encoders. The caller sizes the region for varint_size(value).
+    void varint(std::uint64_t value) noexcept
+    {
+        do
+        {
+            auto byte = static_cast<std::uint8_t>(value & 0x7Fu);
+            value >>= 7u;
+            if(value != 0)
+                byte |= 0x80u;
+            m_region[m_offset++] = static_cast<std::byte>(byte);
+        } while(value != 0);
+    }
+
     [[nodiscard]] std::size_t offset() const noexcept { return m_offset; }
 
 private:

@@ -129,6 +129,18 @@ public:
         m_bootstrap.submit(*this, data);
     }
 
+    // Owner-carry send: hold the supplied wire_bytes owner across the async write so the
+    // egress writes its view with NO copy (the plaintext zero-copy path). The Bootstrap
+    // routes it: plaintext hands the owner straight to the serial egress; TLS forwards the
+    // owner's view through its open-before-data gate (which copies pre-handshake), so the
+    // owner overload is byte-equivalent there.
+    void send(wire_bytes<> data)
+    {
+        if(!m_open)
+            return;
+        m_bootstrap.submit(*this, std::move(data));
+    }
+
     void close()
     {
         if(!socket().is_open())
@@ -161,6 +173,14 @@ public:
     void enqueue_egress(std::span<const std::byte> bytes)
     {
         if(!m_egress.enqueue(bytes))
+            on_write_queue_full();
+    }
+    // The owner-carry sibling: hold the supplied owner in the serial egress (no byte copy)
+    // across the gather-write completion. Same at-capacity shed/stall edge as the copying
+    // overload.
+    void enqueue_egress_owned(wire_bytes<> bytes)
+    {
+        if(!m_egress.enqueue(std::move(bytes)))
             on_write_queue_full();
     }
     void start_read_loop() { do_read(); }

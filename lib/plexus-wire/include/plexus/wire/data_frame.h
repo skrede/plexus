@@ -4,6 +4,7 @@
 #include "plexus/wire/cursor.h"
 #include "plexus/wire/frame.h"
 #include "plexus/wire/varint.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -93,6 +94,35 @@ inline std::vector<std::byte> encode_unidirectional(const unidirectional_header 
     std::vector<std::byte> out;
     encode_unidirectional_into(out, hdr, data, endpoint_counter);
     return out;
+}
+
+// One-pass combined framing: write [frame_header][unidirectional_header][counter?][payload]
+// into ONE reused buffer, inserting the payload exactly once. Byte-identical to
+// encode_unidirectional_into followed by encode_frame_into (the payload_len the outer
+// header carries is the inner region's size), but without the intermediate inner buffer
+// and its second payload copy. resize() reuses capacity, so a steady-state publish loop
+// allocates nothing after warm-up.
+inline void encode_unidirectional_frame_into(std::vector<std::byte> &out, const frame_header &fhdr,
+                                             const unidirectional_header &uhdr,
+                                             std::span<const std::byte> payload,
+                                             std::optional<std::uint64_t> endpoint_counter = std::nullopt)
+{
+    const std::size_t counter_len = endpoint_counter ? varint_size(*endpoint_counter) : 0;
+    const std::size_t payload_len = unidirectional_header_size + counter_len + payload.size();
+
+    auto adjusted = fhdr;
+    adjusted.payload_len = payload_len;
+    const auto header_bytes = encode_header(adjusted);
+
+    out.resize(header_size + payload_len);
+    writer w{out};
+    w.bytes(header_bytes);
+    w.u8(static_cast<uint8_t>(uhdr.source));
+    w.u64(uhdr.sequence);
+    w.u64(uhdr.topic_hash);
+    if(endpoint_counter)
+        w.varint(*endpoint_counter);
+    w.bytes(payload);
 }
 
 // Decode a unidirectional payload. has_source_identity MUST mirror the frame's gid
