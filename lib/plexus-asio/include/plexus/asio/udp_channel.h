@@ -372,7 +372,7 @@ private:
         if(m_reassembler)
             return;
         m_reassembler = std::make_unique<reassembler_type>(m_io);
-        m_reassembler->on_deliver([this](std::span<const std::byte> msg) { post_on_data(msg); });
+        m_reassembler->on_deliver([this](wire::shared_bytes msg) { post_on_data_owned(std::move(msg)); });
         m_reassembler->on_drop([this](const io::detail::drop_event &ev) { if(m_on_drop) m_on_drop(ev); });
     }
 
@@ -478,6 +478,18 @@ private:
         {
             if(m_on_data)
                 m_on_data(std::span<const std::byte>{*owned});
+        });
+    }
+
+    // A reassembled message already owns its bytes once: carry the owner straight into the
+    // posted closure (no second copy) and hand its span up. The owner pins the bytes across
+    // the post exactly as the copied vector does above.
+    void post_on_data_owned(wire::shared_bytes owned)
+    {
+        ::asio::post(m_io, [this, owned = std::move(owned)]
+        {
+            if(m_on_data)
+                m_on_data(static_cast<std::span<const std::byte>>(owned));
         });
     }
 
