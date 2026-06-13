@@ -7,6 +7,7 @@
 #include <span>
 #include <memory>
 #include <vector>
+#include <cstring>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -57,6 +58,10 @@ private:
 
 struct complete_frame
 {
+    // header is the decoded POD; payload is the FULL header-on frame (the
+    // serialized header followed by its inner bytes), one contiguous owner, so
+    // the receive seam carries this owner straight to delivery instead of
+    // re-prepending the header downstream.
     frame_header header;
     shared_bytes payload;
 };
@@ -144,9 +149,16 @@ public:
                     break;
 
                 auto payload_span = remaining.subspan(0, m_pending_header.payload_len);
+
+                std::vector<std::byte> framed(header_size + m_pending_header.payload_len);
+                auto header_bytes = encode_header(m_pending_header);
+                writer{std::span<std::byte>{framed}}.bytes(header_bytes);
+                if(!payload_span.empty())
+                    std::memcpy(framed.data() + header_size, payload_span.data(), payload_span.size());
+
                 result.frames.push_back(complete_frame{
                             .header  = m_pending_header,
-                            .payload = shared_bytes{std::vector<std::byte>(payload_span.begin(), payload_span.end())}
+                            .payload = shared_bytes{std::move(framed)}
                     }
                 );
 

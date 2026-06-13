@@ -31,7 +31,7 @@ TEST_CASE("reassembler extracts single complete frame", "[wire][reassembler]")
     REQUIRE(result.frames.size() == 1);
     CHECK(result.frames[0].header.type == msg_type::unidirectional);
     CHECK(result.frames[0].header.payload_len == 5);
-    CHECK(result.frames[0].payload == payload);
+    CHECK(result.frames[0].payload == std::span<const std::byte>(frame));
     CHECK(ra.buffered_bytes() == 0);
 }
 
@@ -53,9 +53,9 @@ TEST_CASE("reassembler extracts multiple frames from single feed", "[wire][reass
     CHECK(result.error == feed_error::none);
     REQUIRE(result.frames.size() == 2);
     CHECK(result.frames[0].header.type == msg_type::unidirectional);
-    CHECK(result.frames[0].payload == p1);
+    CHECK(result.frames[0].payload == std::span<const std::byte>(f1));
     CHECK(result.frames[1].header.type == msg_type::bidirectional);
-    CHECK(result.frames[1].payload == p2);
+    CHECK(result.frames[1].payload == std::span<const std::byte>(f2));
 }
 
 TEST_CASE("reassembler handles header split mid-way", "[wire][reassembler]")
@@ -75,7 +75,7 @@ TEST_CASE("reassembler handles header split mid-way", "[wire][reassembler]")
     CHECK(r2.error == feed_error::none);
     REQUIRE(r2.frames.size() == 1);
     CHECK(r2.frames[0].header.type == msg_type::unidirectional);
-    CHECK(r2.frames[0].payload == payload);
+    CHECK(r2.frames[0].payload == std::span<const std::byte>(frame));
 }
 
 TEST_CASE("reassembler handles payload split", "[wire][reassembler]")
@@ -93,7 +93,7 @@ TEST_CASE("reassembler handles payload split", "[wire][reassembler]")
     auto r2 = ra.feed(rest);
     CHECK(r2.error == feed_error::none);
     REQUIRE(r2.frames.size() == 1);
-    CHECK(r2.frames[0].payload == payload);
+    CHECK(r2.frames[0].payload == std::span<const std::byte>(frame));
 }
 
 TEST_CASE("reassembler handles single-byte drip feed", "[wire][reassembler]")
@@ -113,7 +113,7 @@ TEST_CASE("reassembler handles single-byte drip feed", "[wire][reassembler]")
     auto final_result = ra.feed(std::span<const std::byte>{&frame.back(), 1});
     CHECK(final_result.error == feed_error::none);
     REQUIRE(final_result.frames.size() == 1);
-    CHECK(final_result.frames[0].payload == payload);
+    CHECK(final_result.frames[0].payload == std::span<const std::byte>(frame));
 }
 
 TEST_CASE("reassembler returns empty on zero-length feed", "[wire][reassembler]")
@@ -174,7 +174,7 @@ TEST_CASE("reassembler reset clears state", "[wire][reassembler]")
     auto result = ra.feed(frame);
     CHECK(result.error == feed_error::none);
     REQUIRE(result.frames.size() == 1);
-    CHECK(result.frames[0].payload == payload);
+    CHECK(result.frames[0].payload == std::span<const std::byte>(frame));
 }
 
 TEST_CASE("reassembler buffered_bytes reports correctly", "[wire][reassembler]")

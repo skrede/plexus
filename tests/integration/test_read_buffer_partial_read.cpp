@@ -1,9 +1,9 @@
 // The read-buffer partial-read oracle: one framed wire message fed to the
 // frame_reassembler in many small chunks — split below the fixed header, split
 // mid-payload, and one byte at a time — still produces EXACTLY one complete_frame whose
-// payload is byte-identical to the original. The reassembler accumulates partial reads
-// across feeds and emits a frame only once the full header-plus-payload is buffered, so
-// the oracle pins the accumulation behavior any later read-buffer resize must preserve.
+// payload is the byte-identical full header-on frame. The reassembler accumulates partial
+// reads across feeds and emits a frame only once the full header-plus-payload is buffered,
+// so the oracle pins the accumulation behavior any later read-buffer resize must preserve.
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
@@ -68,8 +68,8 @@ TEST_CASE("one framed message split one byte at a time reassembles to a single b
     auto frames = feed_in_chunks(r, wire_bytes, 1);   // sub-header AND mid-payload splits
 
     REQUIRE(frames.size() == 1);
-    REQUIRE(frames.front().payload.size() == payload.size());
-    CHECK(frames.front().payload == std::span<const std::byte>(payload));
+    REQUIRE(frames.front().payload.size() == wire_bytes.size());
+    CHECK(frames.front().payload == std::span<const std::byte>(wire_bytes));
     CHECK_FALSE(r.frame_in_progress());
 }
 
@@ -97,7 +97,7 @@ TEST_CASE("a framed message split at the header/payload boundary reassembles int
     auto third = r.feed(std::span<const std::byte>(wire_bytes).subspan(fed));
     REQUIRE(third.error == wire::feed_error::none);
     REQUIRE(third.frames.size() == 1);
-    REQUIRE(third.frames.front().payload.size() == payload.size());
-    CHECK(third.frames.front().payload == std::span<const std::byte>(payload));
+    REQUIRE(third.frames.front().payload.size() == wire_bytes.size());
+    CHECK(third.frames.front().payload == std::span<const std::byte>(wire_bytes));
     CHECK_FALSE(r.frame_in_progress());
 }
