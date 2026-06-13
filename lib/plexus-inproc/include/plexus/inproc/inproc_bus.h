@@ -92,11 +92,12 @@ public:
         std::erase_if(m_listeners, [&ep](const listener_entry &e) { return e.ep == ep; });
     }
 
-    void enqueue(std::uint64_t to_key, std::span<const std::byte> data)
+    void enqueue(std::uint64_t to_key, std::span<const std::byte> data, inproc_channel<Clock> *from)
     {
         queued_packet &slot = push_slot();
         slot.to_key = to_key;
         slot.kind = packet_kind::data;
+        slot.from = from;
         slot.data.assign(data.begin(), data.end());   // reuse the slot's grown capacity
         slot.carrier = {};
     }
@@ -106,6 +107,7 @@ public:
         queued_packet &slot = push_slot();
         slot.to_key = to_key;
         slot.kind = packet_kind::close;
+        slot.from = nullptr;
         slot.data.clear();
         slot.carrier = {};
     }
@@ -121,6 +123,7 @@ public:
         queued_packet &slot = push_slot();
         slot.to_key = to_key;
         slot.kind = packet_kind::object;
+        slot.from = nullptr;
         slot.data.clear();
         slot.carrier = carrier;
     }
@@ -153,7 +156,14 @@ public:
         // vanished (the loop fell through) MUST still release or its slot leaks.
         if(pkt.kind == packet_kind::object && !delivered)
             io::release(pkt.carrier);
+        // A data packet that matched no live partner is an unmatched-partner drop: report
+        // it on the sender (if it is still registered — a deregistered sender's report is
+        // skipped, its pointer is no longer dereferenceable). This delivery runs inside the
+        // step-loop, so the report is already off the synchronous send() path.
+        if(pkt.kind == packet_kind::data && !delivered && pkt.from && sender_live(pkt.from))
+            pkt.from->report_unroutable();
         pkt.carrier = {};   // drop the dangling slot pointer so a re-read never re-releases
+        pkt.from = nullptr;
 
         return true;
     }
@@ -161,6 +171,17 @@ public:
     [[nodiscard]] bool has_pending_packets() const noexcept { return m_size != 0; }
 
 private:
+    // Whether a queued packet's sender is still a registered channel (so its
+    // report_unroutable target is live): a sender that deregistered between send and
+    // delivery is skipped rather than dereferenced.
+    [[nodiscard]] bool sender_live(inproc_channel<Clock> *from) const noexcept
+    {
+        for(const auto &entry : m_channels)
+            if(entry.chan == from)
+                return true;
+        return false;
+    }
+
     enum class packet_kind : uint8_t { data, close, object };
 
     // Packets address their target by the registration key, never the endpoint
@@ -171,6 +192,7 @@ private:
     {
         std::uint64_t to_key{0};
         packet_kind kind{packet_kind::data};
+        inproc_channel<Clock> *from{nullptr};   // the sender, for the unmatched-partner drop report
         std::vector<std::byte> data;
         io::object_carrier carrier{};
     };

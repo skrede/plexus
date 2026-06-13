@@ -26,7 +26,7 @@
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/udp_transport.h"
 
-#include "plexus/io/drop_observer.h"
+#include "plexus/io/observer.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/handshake_fsm.h"
@@ -105,8 +105,8 @@ using test_reassembler =
         plexus::io::detail::reassembler<plexus::inproc::inproc_executor<manual_clock> &,
                                         plexus::inproc::inproc_timer<manual_clock>>;
 
-// A drop_observer that records the cause of every posted drop it sees.
-struct recording_drop_observer final : plexus::io::drop_observer
+// An observer that records the cause of every posted drop it sees.
+struct recording_drop_observer final : plexus::io::observer
 {
     std::vector<cause::drop_cause> seen;
     void on_drop(const cause::drop_event &ev) override { seen.push_back(ev.cause); }
@@ -142,7 +142,7 @@ struct drop_fixture
                     0xC0FFEEu, false};
     recording_drop_observer observer;
 
-    drop_fixture() { manual_clock::reset(); engine.add_drop_observer(observer); }
+    drop_fixture() { manual_clock::reset(); engine.add_observer(observer); }
 
     [[nodiscard]] auto sink() { return engine.drop_sink(); }
     void drain() { ex.drain(); }
@@ -477,6 +477,7 @@ TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter A
 
         // A bounded band under congestion=drop_newest: stall the destination so every
         // publish bands, then flood past the band depth so the surplus sheds.
+        fwd.on_drop([&observer](const cause::drop_event &ev) { observer.on_drop(ev); });
         fwd.declare("shed", plexus::topic_qos{.congestion = plexus::io::congestion::drop_newest});
         REQUIRE(fwd.attach_for_fanout(forwarder::peer{ch, "node-a"}, "shed"));
 
@@ -492,12 +493,8 @@ TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter A
         const std::size_t shed = fwd.dropped("shed", band, cause::drop_cause::drop_newest);
         REQUIRE(shed > 0);
 
-        // The egress shed currently bumps the counter ONLY — the forwarder has no posted
-        // on_drop seam routing the shed to an observer yet. When that route lands the
-        // observer SEES the shed; until then the installed observer records nothing and
-        // this assertion flips from == 0 to >= shed.
-        if(observer.count(cause::drop_cause::drop_newest) == 0)
-            SKIP("the forwarder egress on_drop->observer route is not wired yet (counter-only today)");
+        // The egress shed bumps the always-on counter AND routes through the forwarder's
+        // on_drop seam to the installed observer: the observer sees every shed.
         REQUIRE(observer.count(cause::drop_cause::drop_newest) >= shed);
     }
 }

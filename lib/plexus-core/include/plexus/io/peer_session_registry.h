@@ -202,8 +202,7 @@ private:
             wire_inbound_drop(slot, slot.record.peer_id);
         else
             wire_drop(slot, slot.record.peer_id);
-        wire_lifecycle(slot);
-        wire_stamp_seen(slot);
+        wire_observer(slot);
         wire_message_route(slot);
         wire_object_route(slot);
         wire_security(slot);
@@ -236,29 +235,26 @@ private:
         });
     }
 
-    // Route this slot's session lifecycle edges up to the engine's observer fan-out
-    // via the node-shared build-context sink. Unlike wire_drop (dialed-only — an
-    // accepted slot owns no redial), this is set for BOTH inbound and dialed slots:
-    // an accepted peer still fires connected/disconnected/ready. The forward goes
-    // straight to m_build.on_lifecycle (the engine sink) — no per-slot driver to
-    // route to — so it needs no id indirection, only a re-check that the sink is set.
-    void wire_lifecycle(slot_block &slot)
+    // Route this slot's session events up to the engine through the node-shared build
+    // context: the lifecycle edge and the presence stamp ride their typed sinks (the
+    // engine arms its monitor off them), and the security edge rides the one shared
+    // observer. Set for BOTH inbound and dialed slots (an accepted peer still fires
+    // connected/disconnected/ready and may receive a heartbeat). Because build_into
+    // re-runs on every reconnect rebuild this re-threads each incarnation, so a single
+    // installed observer survives reconnect; the security forward goes straight into the
+    // engine's posted fan-out adapter, so it stays posted, never inline.
+    void wire_observer(slot_block &slot)
     {
         slot.session->on_lifecycle([this](const lifecycle_event &ev) {
             if(m_build.on_lifecycle)
                 m_build.on_lifecycle(ev);
         });
-    }
-
-    // Route this slot's session presence stamps up to the engine's one liveliness
-    // monitor via the node-shared build-context seam (set for both inbound and dialed
-    // slots — either may receive a heartbeat). The session passes its own pinned peer
-    // id; the forward re-checks the sink is set, mirroring wire_lifecycle.
-    void wire_stamp_seen(slot_block &slot)
-    {
         slot.session->on_stamp_seen([this](const node_id &id) {
             if(m_build.on_stamp_seen)
                 m_build.on_stamp_seen(id);
+        });
+        slot.session->on_security([this](const security_event &ev) {
+            m_build.session_observer.on_security(ev);
         });
     }
 
@@ -286,21 +282,18 @@ private:
         });
     }
 
-    // Borrow the node-level security seam into this slot's session (one per node), route
-    // the session's dedicated security events up to the engine's posted fan-out, and
+    // Borrow the node-level security seam into this slot's session (one per node) and
     // thread the per-session AEAD decorator-install hook from the build-context factory
-    // (capturing THIS slot's just-built channel as the lower channel). The seam pointer,
-    // the build context and the slot's channel all outlive every incarnation built from
-    // the slot, so the captured channel reference stays valid for the hook's single fire.
-    // When no factory is set the hook is left absent, so a security-engaged accept over a
-    // plaintext channel is refused fail-closed rather than proceeding in cleartext.
+    // (capturing THIS slot's just-built channel as the lower channel). The session's
+    // security EVENT leg is wired in wire_observer; this installs the channel-level seam.
+    // The seam pointer, the build context and the slot's channel all outlive every
+    // incarnation built from the slot, so the captured channel reference stays valid for
+    // the hook's single fire. When no factory is set the hook is left absent, so a
+    // security-engaged accept over a plaintext channel is refused fail-closed rather than
+    // proceeding in cleartext.
     void wire_security(slot_block &slot)
     {
         slot.session->set_security_seam(&m_build.install_security);
-        slot.session->on_security([this](const security_event &ev) {
-            if(m_build.on_security)
-                m_build.on_security(ev);
-        });
         if(m_build.install_security_factory)
         {
             channel_type &lower = *slot.record.channel;
