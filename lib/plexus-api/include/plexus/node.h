@@ -27,7 +27,9 @@
 #include "plexus/policy.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/address_parse.h"
 #include "plexus/detail/function_traits.h"
+#include "plexus/detail/node_internals.h"
 
 #include <span>
 #include <tuple>
@@ -158,6 +160,11 @@ class procedure;
 // discipline the engine relies on. There is no per-callback liveness guard (a guard
 // reading a member would itself touch dead `this`); the owner sequences teardown.
 // The node pins `this` into those callbacks, so it is non-copyable and non-movable.
+//
+// Exceeds the navigable line cap: the facade proper is one cohesive class (ctor, the
+// member endpoint factories, and the private outbound seams) whose members capture
+// `this` and reach node-private state, so they cannot relocate without becoming a
+// behavior-changing rewrite. The relocatable internals already live in detail/.
 template <typename Policy, typename... Transports>
     requires plexus::Policy<Policy>
           && (sizeof...(Transports) >= 1)
@@ -244,10 +251,10 @@ public:
     void listen(const io::endpoint &ep)
     {
         m_engine.listen(ep);
-        if(const auto port = port_of(ep.address))
+        if(const auto port = plexus::detail::port_of(ep.address))
         {
             if(m_host.empty())
-                m_host = host_of(ep.address);
+                m_host = plexus::detail::host_of(ep.address);
             m_listens.push_back({ep.scheme, *port});
             advertise_card();
         }
@@ -329,55 +336,18 @@ public:
     }
     // --------------------------------------------------------------------------------
 
+    friend struct detail::peer_watch<node>;
+
 private:
     // ---- Endpoint infrastructure (the topic->peer translation) ----------------------
-    //
-    // A locally registered subscriber: its fqn, the requested qos, and the callback the
-    // demux fans a delivered frame to. Keyed by a monotonically minted registration id
-    // so two subscribers on one fqn coexist and retire independently (the id is never
-    // reused, so a stale retire never collides with a later registration).
-    // The object-lane dispatch entry a typed subscriber registers ALONGSIDE its bytes
-    // adapter (under the one registration id). native_key is the process-local C++ type
-    // witness (the address of a per-T inline constant); dispatch recovers the concrete T
-    // from the carrier's slot and invokes the typed callback. A NULL native_key marks a
-    // bytes-only subscription with no object entry.
-    struct object_entry
-    {
-        const void *native_key{};
-        plexus::detail::move_only_function<void(const io::object_carrier &, const io::message_info &)> dispatch;
-    };
-
-    struct subscription
-    {
-        std::string        fqn;
-        io::subscriber_qos qos;
-        // The subscriber-declared type identity (std::nullopt = undeclared), stored so a
-        // late-discovered peer gets the typed demand fanned with the gate intact.
-        std::optional<std::uint64_t> type_id;
-        plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb;
-        object_entry obj{};
-    };
+    using object_entry = detail::object_entry;
+    using subscription = detail::subscription;
+    using peer_watch   = detail::peer_watch<node>;
 
     // The standing-demand table doubling as the demux map. register_subscriber_seam
     // fans engine.subscribe to every known peer (now) and the re-fan reaches each peer
     // discovered/ready later; dispatch_message walks it on the receive path.
     using registration_id = std::uint64_t;
-
-    // The private observer the node registers on its own engine: a peer-ready edge
-    // re-fans every standing demand toward that peer (idempotent — remember_demand
-    // dedups per (peer, fqn)). The fan-out runs POSTED on the borrowed executor, so this
-    // bookkeeping needs no locking. node_id is recovered from the node_name key the edge
-    // carries; an unparsable name is skipped (it never matched a known peer anyway).
-    struct peer_watch : io::peer_observer
-    {
-        node &owner;
-        explicit peer_watch(node &n) : owner(n) {}
-        void on_peer_ready(const plexus::node_id &id, std::string_view, io::peer_kind) override
-        {
-            owner.note_known_peer(id);
-            owner.fan_demands_to(id);
-        }
-    };
 
     // Register a standing subscriber: mint its id, store it, and fan its demand to every
     // currently known peer. Returns the id the retire seam keys on.
@@ -656,83 +626,18 @@ private:
     // resolved SRV endpoint port is IGNORED (a port-less advertisement leaves it 0).
     void note_from_card(const discovery::service_info &peer)
     {
-        const auto peer_id = card_node_id(peer.metadata);
+        const auto peer_id = plexus::detail::card_node_id(peer.metadata);
         if(!peer_id || *peer_id == m_id)
             return;
-        const std::string host = host_of(peer.endpoint.address);
+        const std::string host = plexus::detail::host_of(peer.endpoint.address);
         if(host.empty())
             return;
-        if(const auto ep = first_port_endpoint(peer.metadata, host))
+        if(const auto ep = plexus::detail::first_port_endpoint(peer.metadata, host))
         {
             m_engine.note_peer(*peer_id, *ep);
             note_known_peer(*peer_id);
             fan_demands_to(*peer_id);
         }
-    }
-
-    static std::optional<plexus::node_id>
-    card_node_id(const std::vector<std::pair<std::string, std::string>> &card)
-    {
-        for(const auto &[k, v] : card)
-            if(k == discovery::k_card_node_id_key)
-                return discovery::detail::hex_decode(v);
-        return std::nullopt;
-    }
-
-    // The host portion of a "host:port" address, with any trailing ":port" stripped.
-    // An IPv6-style address (multiple colons) is left verbatim — only a single
-    // trailing host:port pair is split.
-    static std::string host_of(const std::string &address)
-    {
-        const auto colon = address.rfind(':');
-        if(colon == std::string::npos)
-            return address;
-        return address.substr(0, colon);
-    }
-
-    // The first "plexus/<scheme>/port" key in card order, resolved to {scheme, host:port}.
-    static std::optional<io::endpoint>
-    first_port_endpoint(const std::vector<std::pair<std::string, std::string>> &card,
-                        const std::string &host)
-    {
-        constexpr std::string_view k_prefix = "plexus/";
-        constexpr std::string_view k_suffix = "/port";
-        for(const auto &[k, v] : card)
-        {
-            std::string_view key{k};
-            if(key.size() <= k_prefix.size() + k_suffix.size())
-                continue;
-            if(key.substr(0, k_prefix.size()) != k_prefix)
-                continue;
-            if(key.substr(key.size() - k_suffix.size()) != k_suffix)
-                continue;
-            const std::string_view scheme =
-                key.substr(k_prefix.size(), key.size() - k_prefix.size() - k_suffix.size());
-            if(const auto port = port_of_value(v))
-                return io::endpoint{std::string{scheme}, host + ":" + std::to_string(*port)};
-        }
-        return std::nullopt;
-    }
-
-    // Parse the explicit port out of a "host:port" listen address (guarded — a missing
-    // or non-numeric port yields absence, the auto-assign-not-advertisable precondition).
-    static std::optional<std::uint16_t> port_of(const std::string &address)
-    {
-        const auto colon = address.rfind(':');
-        if(colon == std::string::npos)
-            return std::nullopt;
-        return port_of_value(address.substr(colon + 1));
-    }
-
-    static std::optional<std::uint16_t> port_of_value(std::string_view v)
-    {
-        std::uint16_t port{};
-        const char *first = v.data();
-        const char *last = v.data() + v.size();
-        const auto res = std::from_chars(first, last, port);
-        if(res.ec != std::errc{} || res.ptr != last)
-            return std::nullopt;
-        return port;
     }
 
     plexus::node_id m_id;
