@@ -100,6 +100,7 @@ struct banding_sink_channel
     void on_error(detail::move_only_function<void(io::io_error)>) {}
     void on_protocol_close(detail::move_only_function<void(wire::close_cause)>) {}
     [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return 1; }
 
     std::size_t total_bytes{0};
     std::size_t sends{0};

@@ -15,6 +15,7 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/scheduler_key.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/wire/stream_inbound.h"
@@ -122,6 +123,12 @@ public:
     // member.
     [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
 
+    // The stable per-construction egress key (the erasure forwards it so a mux-composed shm
+    // member keys the scheduler band map exactly as a stream member). An in-slab fire-through
+    // channel always admits (backpressured()==0), so its band is never saturated, but the key
+    // is still distinct so a reconnect cannot alias a freed member's entry.
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return m_scheduler_key; }
+
     // Drain every pending message into on_data as header-on bytes. The owner drives
     // this on each notifier wake (the registry's drain is a discard; this delivers).
     void pump()
@@ -152,6 +159,7 @@ private:
     shm_channel<Notifier> &m_channel;
     std::string           m_fqn;
     endpoint              m_remote;
+    std::uint64_t         m_scheduler_key{detail::next_scheduler_key()};
     bool                  m_released = false;
     plexus::detail::move_only_function<void(std::span<const std::byte>)>      m_on_data;
     plexus::detail::move_only_function<void()>                               m_on_closed;

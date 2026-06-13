@@ -20,6 +20,7 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/stream_send_queue.h"
+#include "plexus/io/detail/scheduler_key.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -30,11 +31,30 @@
 #include <span>
 #include <memory>
 #include <vector>
+#include <cstdint>
 #include <utility>
 #include <cstddef>
 #include <system_error>
 
 namespace plexus::asio {
+
+// The kernel socket knobs a stream backend applies once at the open transition. Every
+// field is a required-WITH-default sentinel: 0 (or false) means "leave the kernel default
+// untouched", a non-zero value is an explicit consumer-sovereign override applied
+// best-effort (the kernel may clamp; a rejection is swallowed since a buffer size is a
+// throughput hint, not a correctness requirement). NOT std::optional — absence is not
+// meaningful here, the disabled state is a real default. The granular keepalive intervals
+// apply ONLY when keepalive is true AND the interval is non-zero (per-platform setsockopt,
+// see tcp_traits); on a backend with no TCP keepalive (AF_UNIX) the whole struct is a no-op.
+struct stream_socket_options
+{
+    std::size_t   so_sndbuf = 0;
+    std::size_t   so_rcvbuf = 0;
+    bool          keepalive = false;
+    std::uint32_t keepalive_idle_secs = 0;
+    std::uint32_t keepalive_interval_secs = 0;
+    std::uint32_t keepalive_count = 0;
+};
 
 // A byte_channel over an asio stream type (a bare socket, or an ssl::stream). Inbound bytes
 // feed a member wire::stream_inbound (which composes the frame_reassembler and owns the
@@ -77,12 +97,13 @@ public:
     template <typename... BootstrapArgs>
     explicit stream_channel(::asio::io_context &io, wire::stream_inbound_config cfg,
                             io::congestion congestion, std::size_t write_queue_bytes,
-                            BootstrapArgs &&...bargs)
+                            stream_socket_options socket_options, BootstrapArgs &&...bargs)
         : m_io(io)
         , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
         , m_stream(m_bootstrap.make_stream(io))
         , m_inbound(io, cfg)
         , m_congestion(congestion)
+        , m_socket_options(socket_options)
         , m_egress(make_send_sink(), write_queue_bytes)
     {
         bind_bootstrap();
@@ -96,17 +117,19 @@ public:
     template <typename Connected, typename... BootstrapArgs>
     stream_channel(::asio::io_context &io, Connected connected, wire::stream_inbound_config cfg,
                    io::congestion congestion, std::size_t write_queue_bytes,
-                   BootstrapArgs &&...bargs)
+                   stream_socket_options socket_options, BootstrapArgs &&...bargs)
         : m_io(io)
         , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
         , m_stream(m_bootstrap.make_stream(io, std::move(connected)))
         , m_inbound(io, cfg)
         , m_congestion(congestion)
+        , m_socket_options(socket_options)
         , m_egress(make_send_sink(), write_queue_bytes)
     {
         bind_bootstrap();
         wire_inbound();
         m_bootstrap.arm_on_accept(*this);
+        apply_socket_options();   // a plaintext accept is already open; a TLS accept defers (is_open guard)
     }
 
     // The dtor only tears the stream/timer down — it never posts on_closed (a this-capturing
@@ -146,8 +169,12 @@ public:
         if(!socket().is_open())
             return;
         m_inbound.shutdown();
-        shutdown_socket();
-        m_egress.close();   // an aborted in-flight write must not chain onto the closed socket
+        // Count the still-unsent backlog BEFORE teardown and surface it as loss: close abandons
+        // the queued bytes rather than flushing them (a synchronous non-blocking write would
+        // bypass the TLS layer; a graceful async drain-with-deadline is a separate feature), so
+        // the residual is never silently dropped — it lands on the same edge a shed frame does.
+        m_dropped += m_egress.close_and_drain();
+        shutdown_socket();   // an aborted in-flight write must not chain onto the closed socket
         ::asio::post(m_io, [this] { if(m_on_closed) m_on_closed(); });   // posted, never synchronous
     }
 
@@ -160,7 +187,12 @@ public:
 
     [[nodiscard]] decltype(auto) socket() noexcept { return Traits::lowest_layer(m_stream); }
     [[nodiscard]] decltype(auto) socket() const noexcept { return Traits::lowest_layer(m_stream); }
-    void start_read() { m_open = true; do_read(); }
+    void start_read() { m_open = true; apply_socket_options(); do_read(); }
+
+    // The stable per-construction id the egress scheduler keys its band map on (read via a
+    // capability probe): unique per object, so a reconnect at a reused heap address cannot
+    // bleed a stale band entry across.
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return m_scheduler_key; }
 
     [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
     // The count of frames shed under congestion=drop_newest (the drop-observer's edge).
@@ -228,6 +260,18 @@ private:
         if(m_on_protocol_close)
             m_on_protocol_close(cause);
         close();
+    }
+
+    // Apply the consumer-supplied kernel knobs once, at the open transition, routing the
+    // per-backend divergence through the Traits (tcp applies, unix no-ops). Guarded on an
+    // open socket so a not-yet-open TLS accept defers to its own start_read; best-effort
+    // (the ec is swallowed — a clamped/rejected size keeps the socket usable).
+    void apply_socket_options()
+    {
+        if(!socket().is_open())
+            return;
+        std::error_code ec;
+        Traits::apply_socket_options(socket(), m_socket_options, ec);
     }
 
     void shutdown_socket()
@@ -314,6 +358,8 @@ private:
     std::vector<::asio::const_buffer> m_gather;           // reused gather-write iovec (grows once)
     std::vector<std::byte> m_read_buf = std::vector<std::byte>(k_stream_read_buffer_bytes);
     io::congestion m_congestion;
+    stream_socket_options m_socket_options;
+    std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()};   // stable per-construction egress key
     std::size_t m_dropped{0};                             // congestion=drop shed count
     io::detail::stream_send_queue m_egress;               // bounded byte-budgeted serial write block
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;

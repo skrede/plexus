@@ -125,6 +125,18 @@ public:
         m_bytes = 0;
     }
 
+    // Close and report the count of still-queued frames abandoned in the process: a clean
+    // close returns 0, a close over a backlog returns the residual frame count the caller
+    // surfaces as loss (the channel adds it to its drop edge under drop_cause::closed_unsent).
+    // The abandoned bytes are NOT flushed — a synchronous non-blocking write would bypass the
+    // TLS layer of the owning stream, and a graceful async drain-with-deadline is out of scope.
+    [[nodiscard]] std::size_t close_and_drain() noexcept
+    {
+        const std::size_t residual = m_queue.size();
+        close();
+        return residual;
+    }
+
 private:
     [[nodiscard]] bool admits(std::size_t size) const noexcept
     {

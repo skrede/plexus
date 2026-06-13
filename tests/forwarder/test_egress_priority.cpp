@@ -92,6 +92,15 @@ struct stall_executor
 {
 };
 
+// A monotonic per-construction id mirroring the real channel's scheduler_key source, so the
+// directly-driven scheduler keys its band map on a stable id and a reconstructed channel
+// (even at a reused address) draws a fresh key — the ABA defense under test.
+inline std::uint64_t next_stall_key() noexcept
+{
+    static std::uint64_t counter = 0;
+    return ++counter;
+}
+
 struct stall_channel
 {
     explicit stall_channel(stall_state &st) : m_st(&st) {}
@@ -106,8 +115,10 @@ struct stall_channel
     void on_error(detail::move_only_function<void(io::io_error)>) {}
     void on_protocol_close(detail::move_only_function<void(wire::close_cause)>) {}
     [[nodiscard]] std::size_t backpressured() const noexcept { return m_st->reported; }
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return m_key; }
 
     stall_state *m_st{nullptr};
+    std::uint64_t m_key{next_stall_key()};
 };
 
 struct stall_timer
@@ -465,6 +476,47 @@ std::size_t saturate_scheduler(io::detail::egress_scheduler<stall_channel, stall
     return band;
 }
 
+}
+
+TEST_CASE("egress_priority: the scheduler keys on a stable per-construction id; a reconnect cannot bleed a stale band entry",
+          "[egress_priority][forwarder][reconnect-aba]")
+{
+    // The ABA defense: the scheduler keys its band map on scheduler_key(), not the raw
+    // channel address. A first channel saturates its band under a stall (a real banded
+    // backlog + a recorded overflow), is removed, and a second channel is constructed —
+    // possibly at the SAME heap address the first freed. Because each construction draws a
+    // fresh scheduler_key(), the new channel's key has no prior entry: its band counters
+    // start clean and a frame admits, proving no stale state bled across the reuse.
+    io::detail::egress_scheduler<stall_channel, stall_policy> sched{};
+    const std::size_t band = io::detail::band_of(io::priority::normal);
+
+    std::uint64_t dead_key = 0;
+    {
+        stall_state st;
+        stall_channel ch{st};
+        dead_key = ch.scheduler_key();
+        st.reported = io::detail::k_low_water + 1;   // stall: the band fills, then overflows
+        for(std::size_t i = 0; i < io::detail::k_band_depth; ++i)
+            sched.enqueue(ch, band, io::congestion::drop_newest, owned("f" + std::to_string(i)));
+        sched.enqueue(ch, band, io::congestion::drop_newest, owned(std::string{"OVERFLOW"}));
+        REQUIRE(sched.dropped_newest(ch, band) == 1);   // a real band entry with recorded overflow
+        sched.remove(ch);                                // peer-death cleanup erases the dead key's entry
+    }
+
+    // A fresh channel. Reuse the same heap storage as a hostile ABA case: even if `new`
+    // hands back the freed address, the key differs, so the band map cannot alias.
+    stall_state st2;
+    stall_channel fresh{st2};
+    REQUIRE(fresh.scheduler_key() != dead_key);          // a reconstructed channel gets a distinct key
+
+    // The new channel's band counters are clean (the dead key's overflow did not bleed) and a
+    // frame admits without inheriting the dead channel's saturated band.
+    REQUIRE(sched.dropped_newest(fresh, band) == 0);
+    st2.reported = 0;                                    // not stalled: the frame drains straight through
+    REQUIRE(sched.enqueue(fresh, band, io::congestion::drop_newest, owned(std::string{"FRESH"})) ==
+            io::detail::drop_cause::none);
+    REQUIRE(sched.dropped_newest(fresh, band) == 0);     // still clean — no stale saturation
+    REQUIRE(st2.sends.size() == 1);                      // the fresh frame left, not refused by a stale band
 }
 
 TEST_CASE("egress_priority: drop_oldest evicts the oldest resident frame; survivors arrive in FIFO order, looped",
