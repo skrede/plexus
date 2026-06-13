@@ -17,6 +17,7 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/handshake_gate.h"
 #include "plexus/io/detail/reassembler.h"
+#include "plexus/io/detail/scheduler_key.h"
 #include "plexus/detail/compat.h"
 
 #include "plexus/node_id.h"
@@ -127,6 +128,11 @@ public:
     // saturation signal for a fire-through datagram channel, NOT a short-circuit dodge.
     [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
 
+    // The stable per-construction id the egress scheduler keys its band map on (read via a
+    // capability probe): unique per object, so a reused heap address cannot bleed a stale
+    // band entry across — the same minted-once key every byte channel carries.
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return m_scheduler_key; }
+
     // Fires ONCE on a verified mutual completion (the transport resolves the FSM
     // via handshake_fsm::on_external_complete from this edge). Set before driving.
     void on_external_complete(plexus::detail::move_only_function<void()> cb) { m_on_external_complete = std::move(cb); }
@@ -183,6 +189,7 @@ private:
     role m_role;
     std::size_t m_max_payload;
     std::size_t m_record_mtu;
+    std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()};   // stable per-construction egress key
 
     detail::shared_ssl_ctx m_ssl_ctx;            // up_ref'd shared SSL_CTX
     ssl_st *m_ssl{nullptr};

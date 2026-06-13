@@ -9,6 +9,7 @@
 #include "plexus/io/byte_channel.h"
 
 #include <asio/socket_base.hpp>
+#include <asio/basic_socket.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/io_context.hpp>
 
@@ -56,8 +57,10 @@ struct tcp_traits
     // portable asio option, so they go through the native handle behind a per-platform guard
     // (only the Linux path is exercised on this host; macOS/Windows are compile-guarded and
     // proven on-platform later). Every set is best-effort: a clamped/rejected knob keeps the
-    // socket usable, so the ec is swallowed (a buffer size is a throughput hint).
-    static void apply_socket_options(::asio::ip::tcp::socket &sock,
+    // socket usable, so the ec is swallowed (a buffer size is a throughput hint). The socket
+    // is taken as the lowest-layer basic_socket so the TLS channel routes its TCP lowest layer
+    // through this same hook (its lowest_layer_type IS basic_socket<tcp>, not tcp::socket).
+    static void apply_socket_options(::asio::basic_socket<::asio::ip::tcp> &sock,
                                      const stream_socket_options &opts, std::error_code &ec)
     {
         if(opts.so_sndbuf != 0)
