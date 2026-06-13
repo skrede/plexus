@@ -14,6 +14,7 @@
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/attach_negotiator.h"
 #include "plexus/io/procedure_forwarder.h"
 
