@@ -23,6 +23,8 @@
 
 #include "plexus/policy.h"
 
+#include "plexus/wire/rpc_status.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
@@ -144,6 +146,41 @@ struct fan_net
     std::vector<std::unique_ptr<engine>> subs;
 };
 
+// A caller engine and a provider engine on one inproc bus, connected through the
+// production dial+handshake path so the RPC taps fire over a real session. The caller
+// fires on_rpc_call + on_rpc_reply; the provider fires on_rpc_serve. The observer is
+// registered on BOTH so a test reads each engine's taps.
+struct rpc_net
+{
+    static constexpr std::uint8_t k_caller_seed = 0xA1;
+    static constexpr std::uint8_t k_provider_seed = 0xB2;
+    static constexpr const char *k_proc = "svc";
+
+    rpc_net()
+        : caller_transport(ex, bus)
+        , provider_transport(ex, bus)
+        , caller(caller_transport, ex, make_cfg(k_caller_seed), k_long_timeout, forever_cfg(), k_seed, false)
+        , provider(provider_transport, ex, make_cfg(k_provider_seed), k_long_timeout, forever_cfg(), k_seed, false)
+    {
+        caller.listen({"inproc", "caller"});
+        provider.listen({"inproc", "provider"});
+        caller.note_peer(provider_id(), {"inproc", "provider"});
+        caller.reach(provider_id());
+    }
+
+    static plexus::node_id caller_id() { return make_id(k_caller_seed); }
+    static plexus::node_id provider_id() { return make_id(k_provider_seed); }
+
+    void drive() { ex.drain(); }
+
+    inproc_bus<manual_clock> bus;
+    inproc_executor<manual_clock> ex{bus};
+    transport_t caller_transport;
+    transport_t provider_transport;
+    engine caller;
+    engine provider;
+};
+
 }
 
 TEST_CASE("obs tap: one publish to N subscribers fires published once and delivered once per destination",
@@ -193,4 +230,40 @@ TEST_CASE("obs tap: the delivered view borrows the surfaced owner (a shared addr
     // allocation handed in by value.
     REQUIRE(t.last_view_owner != nullptr);
     REQUIRE(t.last_view_use_count >= 1);
+}
+
+TEST_CASE("obs tap: an rpc round-trip fires call once (caller), serve once (provider), reply once (caller)",
+          "[integration][observer][tap]")
+{
+    using plexus::wire::rpc_status;
+
+    manual_clock::reset();
+    rpc_net net;
+    recording_observer caller_rec;
+    recording_observer provider_rec;
+    net.caller.add_observer(caller_rec);
+    net.provider.add_observer(provider_rec);
+    net.drive();   // settle the dial + handshake
+    REQUIRE(net.caller.is_connected(rpc_net::provider_id()));
+
+    net.provider.procedures().serve(rpc_net::k_proc,
+        [](std::span<const std::byte>,
+           plexus::io::procedure_forwarder<manual_policy>::reply_fn &reply) {
+            reply(plexus::wire::rpc_status::success, {});
+        });
+
+    rpc_status got = rpc_status::error;
+    net.caller.call(rpc_net::provider_id(), rpc_net::k_proc, as_bytes(std::string{"ping"}),
+        [&](rpc_status s, std::span<const std::byte>) { got = s; });
+
+    // Posted-not-inline: the call tap fans out on the executor, so the caller's counter
+    // is still zero synchronously at the call() return.
+    REQUIRE(caller_rec.for_topic(rpc_net::k_proc).rpc_call == 0);
+
+    net.drive();   // pump the request, the dispatch + reply, and the posted tap turns
+
+    REQUIRE(caller_rec.for_topic(rpc_net::k_proc).rpc_call == 1);    // call() once on the caller
+    REQUIRE(provider_rec.for_topic(rpc_net::k_proc).rpc_serve == 1); // deliver_request() once on the provider
+    REQUIRE(caller_rec.for_topic(rpc_net::k_proc).rpc_reply == 1);   // deliver_response() once on the caller
+    REQUIRE(got == rpc_status::success);
 }

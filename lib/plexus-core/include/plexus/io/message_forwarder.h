@@ -11,6 +11,7 @@
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
+#include "plexus/io/observation_events.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/priority.h"
 #include "plexus/io/locality.h"
@@ -96,6 +97,7 @@ public:
         m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, qos, type_id);
         record_remote_topic(p.node_name, fqn, qos, type_id);
         send_subscribe(p.channel, fqn, hash, type_id, qos);
+        emit_qos_change(qos_edge::accepted, hash, qos, rxo_verdict::compatible, type_id);
         return true;
     }
 
@@ -139,11 +141,14 @@ public:
             auto resp = wire::encode_subscribe_response(
                 {.topic_hash = hash, .status = status_of(rxo.verdict)});
             send_control(p.channel, wire::msg_type::subscribe_response, resp);
+            emit_qos_change(qos_edge::refused, hash, sub_qos, rxo.verdict, subscriber_type_id);
             return false;
         }
         if(m_endpoint.registry().bump_refcount(p.node_name, fqn) != 1u)
             return false;
         m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos, subscriber_type_id);
+        emit_qos_change(rxo.verdict == io::rxo_verdict::degraded ? qos_edge::degraded : qos_edge::accepted,
+                        hash, sub_qos, rxo.verdict, subscriber_type_id);
         // A degraded verdict ADMITS (the consumer chose permissive) but the reply carries
         // the degraded-field set so the accept is non-silent.
         auto resp = rxo.verdict == io::rxo_verdict::degraded
@@ -233,6 +238,14 @@ public:
         // queue with no further copy.
         const wire_bytes<> framed = frame_owned(fhdr, uhdr, payload, counter);
 
+        // The published tap fires ONCE after framing, borrowing the framed owner (an
+        // addref of the single per-publish buffer, never a copy); the delivered tap fires
+        // ONCE per fanned destination below. Both stay posted through the engine sink.
+        emit_published(fqn, framed);
+
+        const message_info pub_info{.publication_sequence = uhdr.sequence,
+                                    .source_timestamp = fhdr.timestamp_ns};
+
         // The fan-out confinement gate: send to a subscriber only when the topic's reach
         // mask shares a bit with the subscriber's cached tier (fail-closed access control).
         // The reach gate stays BEFORE the egress enqueue. The scheduler governs the LIVE
@@ -246,6 +259,7 @@ public:
                         m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
                     if(cause != detail::drop_cause::none)
                         shed(hash, band, cause, sub.tier);
+                    emit_delivered(fqn, pub_info, framed);
                 }
 
         retain_if_latched(hash, qos, framed);
@@ -307,6 +321,14 @@ public:
             framed = frame_owned(fhdr, uhdr, bytes, counter);
         };
 
+        // The typed loan path carries NO payload, so its observation view is ENVELOPE-ONLY
+        // by default (the carrier's metadata, no payload encode): recording payload on the
+        // zero-serialization lane is a sovereign opt-in, never silently imposed. The
+        // published tap fires once, the delivered tap once per fanned destination below.
+        const message_info obj_info{.publication_sequence = carrier.sequence,
+                                    .source_timestamp = carrier.source_timestamp};
+        emit_published(fqn, message_view{});
+
         const std::size_t band = detail::band_of(qos.priority);
         if(subs != nullptr)
             for(const auto &sub : *subs)
@@ -321,6 +343,7 @@ public:
                     if(eligible_for_object(sub, carrier))
                     {
                         sub.channel->send_object(carrier);
+                        emit_delivered(fqn, obj_info, message_view{});
                         continue;
                     }
                 }
@@ -329,6 +352,7 @@ public:
                     m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
                 if(cause != detail::drop_cause::none)
                     shed(hash, band, cause, sub.tier);
+                emit_delivered(fqn, obj_info, message_view{});
             }
 
         // Force one encode even when every live subscriber fast-pathed, so a late bytes
@@ -449,6 +473,29 @@ public:
     void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> hook)
     {
         m_on_drop = std::move(hook);
+    }
+
+    // The data-path observation sinks, wired by the engine to its posted fan-out (the
+    // drop_sink precedent): publish fires the published sink ONCE after framing and the
+    // delivered sink ONCE per fanned destination, both handing the framed buffer's view
+    // (a shared addref of the single per-publish owner — no copy); an attach/detach verdict
+    // fires the qos-change sink. Each sink posts, so a per-publish/per-destination fan never
+    // touches an observer inline. Absent = one predictable branch (the forwarder stays
+    // observer-agnostic when unwired).
+    void on_published(plexus::detail::move_only_function<void(std::string_view, const message_view &)> hook)
+    {
+        m_on_published = std::move(hook);
+    }
+
+    void on_delivered(plexus::detail::move_only_function<
+                      void(std::string_view, const message_info &, const message_view &)> hook)
+    {
+        m_on_delivered = std::move(hook);
+    }
+
+    void on_qos_change(plexus::detail::move_only_function<void(const qos_change_event &)> hook)
+    {
+        m_on_qos_change = std::move(hook);
     }
 
     // The consumer-paced PULL reply: replay up to min(max_samples, ring.count(),
@@ -654,6 +701,34 @@ private:
                                          .band = static_cast<std::uint8_t>(band), .topic_hash = hash});
     }
 
+    // Hand the published/delivered view to the engine sink (which posts a snapshot to the
+    // observer fan-out); absent = one branch. The view borrows the framed owner — the posted
+    // closure on the engine side captures it by value (a shared addref), so the buffer
+    // outlives the deferred turn (the owner-lifetime guarantee).
+    void emit_published(std::string_view fqn, const message_view &view)
+    {
+        if(m_on_published)
+            m_on_published(fqn, view);
+    }
+
+    void emit_delivered(std::string_view fqn, const message_info &info, const message_view &view)
+    {
+        if(m_on_delivered)
+            m_on_delivered(fqn, info, view);
+    }
+
+    // Hand a resolved attach/detach QoS verdict to the engine sink. The subscriber struct
+    // carries no peer node_id, so the event is peer-less (node_id{}) — consistent with the
+    // peer-less drop_event the shed site emits.
+    void emit_qos_change(qos_edge edge, std::uint64_t hash, const subscriber_qos &requested,
+                         rxo_verdict verdict, std::optional<std::uint64_t> type_id)
+    {
+        if(m_on_qos_change)
+            m_on_qos_change(qos_change_event{.edge = edge, .topic_hash = hash, .peer = node_id{},
+                                             .requested = requested, .verdict = verdict,
+                                             .type_id = type_id});
+    }
+
     void drop(std::string_view message) { m_logger.warn(message); }
 
     log::logger &m_logger;
@@ -663,6 +738,10 @@ private:
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop;
+    plexus::detail::move_only_function<void(std::string_view, const message_view &)> m_on_published;
+    plexus::detail::move_only_function<
+        void(std::string_view, const message_info &, const message_view &)> m_on_delivered;
+    plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change;
 };
 
 }

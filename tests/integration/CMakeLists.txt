@@ -267,6 +267,7 @@ target_link_libraries(test_obs_tap_points PRIVATE
 target_include_directories(test_obs_tap_points PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_obs_tap_points TEST_PREFIX "integration.")
 
 # The read-buffer partial-read oracle: one framed wire message fed to the frame_reassembler
 # in many small sub-header and mid-payload chunks still produces exactly one byte-identical
