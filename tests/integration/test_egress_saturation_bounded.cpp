@@ -120,6 +120,7 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
                                      pio::congestion::block, k_cap};
             idle.close();
             REQUIRE(idle.dropped_count() == 0);   // a drained/empty close bumps nothing
+            io.poll();   // drain close()'s posted on_closed while idle is still alive (it captures `this`)
         }
 
         pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
@@ -138,6 +139,7 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
 
         ch.close();
         REQUIRE(ch.dropped_count() > 0);          // the abandoned backlog surfaced as a counted drop
+        io.poll();   // drain close()'s posted on_closed before ch leaves scope (the post captures `this`)
     }
 }
 
