@@ -39,6 +39,11 @@ struct unix_traits
 
     static ::asio::local::stream_protocol::socket &lowest_layer(::asio::local::stream_protocol::socket &s) noexcept { return s; }
     static const ::asio::local::stream_protocol::socket &lowest_layer(const ::asio::local::stream_protocol::socket &s) noexcept { return s; }
+
+    // An explicit no-op: an AF_UNIX socket has no TCP keepalive, and SO_SNDBUF/SO_RCVBUF are
+    // non-diagnostic on a local socket — the knobs do not apply on this backend.
+    static void apply_socket_options(::asio::local::stream_protocol::socket &,
+                                     const stream_socket_options &, std::error_code &) noexcept {}
 };
 
 class unix_channel
@@ -51,16 +56,18 @@ class unix_channel
 public:
     explicit unix_channel(::asio::io_context &io, wire::stream_inbound_config cfg = {},
                           io::congestion congestion = io::congestion::block,
-                          std::size_t write_queue_bytes = base::default_write_queue_bytes)
-        : base(io, cfg, congestion, write_queue_bytes)
+                          std::size_t write_queue_bytes = base::default_write_queue_bytes,
+                          stream_socket_options opts = {})
+        : base(io, cfg, congestion, write_queue_bytes, opts)
     {
     }
 
     unix_channel(::asio::io_context &io, ::asio::local::stream_protocol::socket connected,
                  wire::stream_inbound_config cfg = {},
                  io::congestion congestion = io::congestion::block,
-                 std::size_t write_queue_bytes = base::default_write_queue_bytes)
-        : base(io, std::move(connected), cfg, congestion, write_queue_bytes)
+                 std::size_t write_queue_bytes = base::default_write_queue_bytes,
+                 stream_socket_options opts = {})
+        : base(io, std::move(connected), cfg, congestion, write_queue_bytes, opts)
     {
     }
 };

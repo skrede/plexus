@@ -12,6 +12,7 @@
 #include <span>
 #include <utility>
 #include <cstddef>
+#include <cstdint>
 #include <unordered_map>
 
 namespace plexus::io::detail {
@@ -80,7 +81,7 @@ public:
         else
         {
             const drop_cause cause =
-                m_queues[&ch].enqueue_with_verdict(band, congestion, std::move(frame));
+                m_queues[key_of(ch)].enqueue_with_verdict(band, congestion, std::move(frame));
             drain(ch);
             return cause;
         }
@@ -89,26 +90,26 @@ public:
     // Drop a departed peer's bands (peer-death cleanup, called beside the registry removal).
     void remove(Channel &ch)
     {
-        m_queues.erase(&ch);
+        m_queues.erase(key_of(ch));
     }
 
     // The per-(destination, band) overflow counters, mirroring asio_channel::dropped_count():
     // each reads the destination's band counter, returning 0 for a destination with no queue.
     [[nodiscard]] std::size_t dropped_oldest(Channel &ch, std::size_t band) const
     {
-        const auto it = m_queues.find(&ch);
+        const auto it = m_queues.find(key_of(ch));
         return it == m_queues.end() ? 0u : it->second.dropped_oldest_count(band);
     }
 
     [[nodiscard]] std::size_t dropped_newest(Channel &ch, std::size_t band) const
     {
-        const auto it = m_queues.find(&ch);
+        const auto it = m_queues.find(key_of(ch));
         return it == m_queues.end() ? 0u : it->second.dropped_newest_count(band);
     }
 
     [[nodiscard]] std::size_t blocked(Channel &ch, std::size_t band) const
     {
-        const auto it = m_queues.find(&ch);
+        const auto it = m_queues.find(key_of(ch));
         return it == m_queues.end() ? 0u : it->second.blocked_count(band);
     }
 
@@ -122,6 +123,19 @@ private:
             return false;
     }
 
+    // The stable map key for a channel: its per-construction scheduler_key() (so a reconnect
+    // at a reused heap address cannot collide with a freed channel's band entry), read via a
+    // capability probe mirroring can_poll(). A channel without the verb is the inproc/sink
+    // short-circuit that never reaches m_queues, so its key is never the banding path — the
+    // 0 branch only exists so the no-verb case still instantiates.
+    static std::uint64_t key_of(Channel &ch)
+    {
+        if constexpr(requires(Channel &c) { c.scheduler_key(); })
+            return ch.scheduler_key();
+        else
+            return 0;
+    }
+
     // Pop the highest non-empty band and send it while the channel has headroom for THAT
     // frame's bytes; leave any remaining backlog priority-ordered in the bands for the next
     // publish to resume (event-driven re-arm — strict highest-band-first, low-band
@@ -133,7 +147,7 @@ private:
     // SIGNALS occupancy, the band DECIDES the hand-off).
     void drain(Channel &ch)
     {
-        auto &q = m_queues[&ch];
+        auto &q = m_queues[key_of(ch)];
         while(q.has_work())
         {
             const auto *node = q.front_highest();
@@ -160,7 +174,7 @@ private:
             return true;
     }
 
-    std::unordered_map<Channel *, priority_band_queue> m_queues;
+    std::unordered_map<std::uint64_t, priority_band_queue> m_queues;
 };
 
 }

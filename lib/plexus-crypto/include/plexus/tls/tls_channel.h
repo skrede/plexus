@@ -5,6 +5,7 @@
 #include "plexus/tls/detail/tls_bootstrap.h"
 
 #include "plexus/asio/stream_channel.h"
+#include "plexus/asio/asio_channel.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
@@ -49,6 +50,15 @@ struct tls_traits
 
     static lowest_layer_type &lowest_layer(stream_type &s) noexcept { return s.lowest_layer(); }
     static const lowest_layer_type &lowest_layer(const stream_type &s) noexcept { return s.lowest_layer(); }
+
+    // The TLS lowest layer is the TCP socket, so the buffer + keepalive knobs apply through
+    // the same portable/granular path the TCP channel uses (the read loop arms only post-
+    // handshake, so the knobs land on the live TCP socket).
+    static void apply_socket_options(lowest_layer_type &sock,
+                                     const plexus::asio::stream_socket_options &opts, std::error_code &ec)
+    {
+        plexus::asio::tcp_traits::apply_socket_options(sock, opts, ec);
+    }
 };
 
 class tls_channel
@@ -66,8 +76,9 @@ public:
     tls_channel(::asio::io_context &io, const tls_credential &cred,
                 wire::stream_inbound_config cfg = {},
                 io::congestion congestion = io::congestion::block,
-                std::size_t outbox_bytes = default_outbox_bytes)
-        : base(io, cfg, congestion, outbox_bytes, cred)
+                std::size_t outbox_bytes = default_outbox_bytes,
+                plexus::asio::stream_socket_options opts = {})
+        : base(io, cfg, congestion, outbox_bytes, opts, cred)
     {
     }
 
@@ -79,8 +90,9 @@ public:
     tls_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected,
                 const tls_credential &cred, wire::stream_inbound_config cfg = {},
                 io::congestion congestion = io::congestion::block,
-                std::size_t outbox_bytes = default_outbox_bytes)
-        : base(io, std::move(connected), cfg, congestion, outbox_bytes, cred)
+                std::size_t outbox_bytes = default_outbox_bytes,
+                plexus::asio::stream_socket_options opts = {})
+        : base(io, std::move(connected), cfg, congestion, outbox_bytes, opts, cred)
     {
     }
 

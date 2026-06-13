@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 #include <string_view>
 
@@ -35,6 +36,7 @@ struct dummy_channel
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
     [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return 1; }
 };
 
 static_assert(pio::byte_channel<dummy_channel>);

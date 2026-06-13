@@ -88,6 +88,59 @@ struct unix_pair
 
 }
 
+TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog as a counted drop, never silent loss",
+          "[integration][bound][saturation][close-drain]")
+{
+    // close() over a non-empty write-queue backlog must surface the still-unsent frames as
+    // loss (dropped_count bumps by the residual frame count), never silently zero them. A
+    // never-reading peer is pinned so async_write stalls and a backlog accumulates under the
+    // cap; close() then abandons it (the bytes are NOT flushed — a TLS-safe synchronous
+    // teardown precludes a non-blocking flush) and records the residual as a drop.
+    for(int loop = 0; loop < k_loops; ++loop)
+    {
+        ::asio::io_context io;
+        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+        ::asio::ip::tcp::socket peer{io};
+        ::asio::ip::tcp::socket client{io};
+        client.connect(acc.local_endpoint());
+        acc.accept(peer);                               // peer adopts but NEVER reads
+
+        // Floor both kernel buffers so async_write stalls after a few KiB and a backlog
+        // accumulates in the userspace queue rather than draining into the kernel.
+        client.set_option(::asio::socket_base::send_buffer_size{1024});
+        peer.set_option(::asio::socket_base::receive_buffer_size{1024});
+
+        // A clean close on a never-used channel reports zero residual (the common path).
+        {
+            ::asio::ip::tcp::socket idle_peer{io};
+            ::asio::ip::tcp::socket idle_client{io};
+            idle_client.connect(acc.local_endpoint());
+            acc.accept(idle_peer);
+            pasio::asio_channel idle{io, std::move(idle_client), wire::stream_inbound_config{},
+                                     pio::congestion::block, k_cap};
+            idle.close();
+            REQUIRE(idle.dropped_count() == 0);   // a drained/empty close bumps nothing
+        }
+
+        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
+                               pio::congestion::block, k_cap};
+
+        // Fill past one drain turn: send 1 KiB frames until the stalled queue holds a backlog
+        // (backpressured() > 0 means frames are queued, undrained, behind the stalled socket).
+        std::vector<std::byte> kib(1024, std::byte{0x5A});
+        for(int i = 0; i < k_frames && ch.backpressured() == 0; ++i)
+        {
+            ch.send(kib);
+            io.poll();
+        }
+        REQUIRE(ch.backpressured() > 0);          // a real undrained backlog is present
+        REQUIRE(ch.dropped_count() == 0);         // nothing shed yet (block stalls, never drops)
+
+        ch.close();
+        REQUIRE(ch.dropped_count() > 0);          // the abandoned backlog surfaced as a counted drop
+    }
+}
+
 TEST_CASE("egress_saturation_bounded tcp: a saturating publisher stays memory-bounded",
           "[integration][bound][saturation]")
 {

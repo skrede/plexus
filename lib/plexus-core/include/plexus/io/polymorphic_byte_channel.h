@@ -14,6 +14,7 @@
 #include <memory>
 #include <utility>
 #include <cstddef>
+#include <cstdint>
 
 namespace plexus::io {
 
@@ -50,6 +51,7 @@ public:
     virtual void on_error(plexus::detail::move_only_function<void(io_error)> cb) = 0;
     virtual void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) = 0;
     [[nodiscard]] virtual std::size_t backpressured() const = 0;
+    [[nodiscard]] virtual std::uint64_t scheduler_key() const = 0;
 
     // The optional drop edge: a wrapped channel that surfaces unroutable/congested drops
     // (inproc, shm) forwards the engine's posted drop_sink down to its concrete on_drop;
@@ -72,6 +74,7 @@ public:
     void on_error(plexus::detail::move_only_function<void(io_error)> cb) override { m_c->on_error(std::move(cb)); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) override { m_c->on_protocol_close(std::move(cb)); }
     [[nodiscard]] std::size_t backpressured() const override { return m_c->backpressured(); }
+    [[nodiscard]] std::uint64_t scheduler_key() const override { return m_c->scheduler_key(); }
 
     // Forward the drop_sink install only to a concrete channel that has the edge; a channel
     // without on_drop leaves the base default (the install is dropped — that tier surfaces
@@ -104,6 +107,7 @@ public:
     void on_error(plexus::detail::move_only_function<void(io_error)> cb) { m_impl->on_error(std::move(cb)); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_impl->on_protocol_close(std::move(cb)); }
     [[nodiscard]] std::size_t backpressured() const { return m_impl->backpressured(); }
+    [[nodiscard]] std::uint64_t scheduler_key() const { return m_impl->scheduler_key(); }
     void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> cb) { m_impl->on_drop(std::move(cb)); }
 
 private:
