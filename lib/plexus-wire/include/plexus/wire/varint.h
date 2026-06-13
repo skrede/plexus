@@ -67,6 +67,16 @@ read_varint(std::span<const std::byte> data, std::size_t &consumed) noexcept
     return std::nullopt; // continuation bit still set on the 10th byte: over-long
 }
 
+// The byte length the LEB128 encoding of `value` will occupy (1..10 for a u64),
+// so a one-pass writer can size a region before emitting the counter inline.
+[[nodiscard]] inline std::size_t varint_size(std::uint64_t value) noexcept
+{
+    std::size_t bytes = 1;
+    while((value >>= 7u) != 0)
+        ++bytes;
+    return bytes;
+}
+
 // Append the LEB128 encoding of `value` to `out`. Emits one byte per 7 value
 // bits (1..10 bytes for a u64), mirroring the zero-clear append discipline of the
 // codec's `_into` writers: the caller's existing bytes are preserved.

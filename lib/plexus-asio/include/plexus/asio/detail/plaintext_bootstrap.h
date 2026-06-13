@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_DETAIL_PLAINTEXT_BOOTSTRAP_H
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_PLAINTEXT_BOOTSTRAP_H
 
+#include "plexus/wire_bytes.h"
+
 #include <span>
 #include <utility>
 #include <cstddef>
@@ -29,6 +31,11 @@ public:
 
     template <typename Channel>
     void submit(Channel &c, std::span<const std::byte> data) { c.enqueue_egress(data); }
+
+    // No pre-data handshake to gate on, so the owner rides straight to the serial egress
+    // with no copy (the plaintext zero-copy send path).
+    template <typename Channel>
+    void submit(Channel &c, plexus::wire_bytes<> data) { c.enqueue_egress_owned(std::move(data)); }
 
     template <typename Channel>
     void arm_on_accept(Channel &c) { c.mark_open(); c.start_read_loop(); }

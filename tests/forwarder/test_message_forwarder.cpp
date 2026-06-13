@@ -451,37 +451,45 @@ TEST_CASE("default forwarder drops a malformed frame silently via null_logger", 
     REQUIRE_FALSE(fired);           // dropped silently, no crash
 }
 
-TEST_CASE("frame-once fan-out allocates nothing after warm-up", "[forwarder]")
+TEST_CASE("frame-once fan-out: the per-publish allocation does not scale with the subscriber count",
+          "[forwarder]")
 {
-    // Measured over the non-allocating sink Policy so the only heap traffic in
-    // the loop would be the forwarder's own: framing into the reused scratch +
-    // the fan-out dispatch. The inproc bus's per-packet copy is the transport's
-    // allocation and is audited separately (plan 06).
+    // Measured over the non-allocating sink Policy so the only heap traffic in the loop
+    // is the forwarder's own. The owner-carry path frames ONCE per publish into a single
+    // shared owning buffer and addref-shares it to every subscriber (frame-once-fan-to-N),
+    // so the per-publish heap cost is the ONE shared frame owner — independent of how many
+    // destinations it fans to. (The inproc bus's per-packet copy is the transport's
+    // allocation and is audited separately.) The sink channel has no backpressure signal,
+    // so the egress short-circuits to a direct owner-converting send — no band, no copy.
     using sink_forwarder = plexus::io::message_forwarder<sink_policy>;
 
-    sink_executor ex;
-    sink_channel ch_a(ex), ch_b(ex);
-    sink_forwarder fwd{};
-    sink_forwarder::peer peer_a{ch_a, "node-a"};
-    sink_forwarder::peer peer_b{ch_b, "node-b"};
-    fwd.attach(peer_a, "alpha");
-    fwd.attach(peer_b, "alpha");
-
     const std::string payload = "steady-state-body";
-
-    // Warm-up: one publish grows the scratch buffers to their steady-state size.
-    fwd.publish("alpha", as_bytes(payload));
-    const auto sends_a_before = ch_a.sends;
-    const auto sends_b_before = ch_b.sends;
-
     constexpr int K = 256;
-    plexus::testing::reset_alloc_count();
-    const auto before = plexus::testing::alloc_count();
-    for(int i = 0; i < K; ++i)
-        fwd.publish("alpha", as_bytes(payload));
-    const auto after = plexus::testing::alloc_count();
 
-    REQUIRE(ch_a.sends - sends_a_before == K);  // every publish fanned to both
-    REQUIRE(ch_b.sends - sends_b_before == K);
-    REQUIRE(after - before == 0);   // forwarder framing + dispatch: zero alloc
+    // The per-publish allocation count for a fan-out of N subscribers, after warm-up.
+    const auto allocs_per_publish = [&](int subscribers) {
+        sink_executor ex;
+        std::vector<std::unique_ptr<sink_channel>> chs;
+        sink_forwarder fwd{};
+        for(int i = 0; i < subscribers; ++i)
+        {
+            chs.emplace_back(std::make_unique<sink_channel>(ex));
+            fwd.attach(sink_forwarder::peer{*chs.back(), "node-" + std::to_string(i)}, "alpha");
+        }
+        fwd.publish("alpha", as_bytes(payload));   // warm-up
+        plexus::testing::reset_alloc_count();
+        const auto before = plexus::testing::alloc_count();
+        for(int i = 0; i < K; ++i)
+            fwd.publish("alpha", as_bytes(payload));
+        const auto after = plexus::testing::alloc_count();
+        for(const auto &c : chs)
+            REQUIRE(c->sends >= static_cast<std::size_t>(K));   // every publish fanned to each
+        return (after - before) / K;
+    };
+
+    // frame-once-fan-to-N: the same per-publish alloc count whether fanning to 2 or to 8 —
+    // the cost is the single shared frame owner, NOT one buffer per destination.
+    const auto two = allocs_per_publish(2);
+    const auto eight = allocs_per_publish(8);
+    REQUIRE(two == eight);
 }

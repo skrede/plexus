@@ -221,17 +221,17 @@ public:
         // frame-ONCE-fan-to-N invariant holds (one buffer for all subs).
         const std::optional<std::uint64_t> counter =
             topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
-        // resize() reuses grown capacity, so steady-state publishes do not allocate.
-        wire::encode_unidirectional_into(m_inner_scratch, uhdr, payload, counter);
-
         wire::frame_header fhdr{
                 .type         = wire::msg_type::unidirectional,
                 .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
                 .session_id   = session_id,
                 .timestamp_ns = wire::now_timestamp_ns(),
-                .payload_len  = m_inner_scratch.size()
+                .payload_len  = 0   // set inside the one-pass encode from the framed region size
         };
-        wire::encode_frame_into(m_frame_scratch, fhdr, m_inner_scratch);
+        // Frame ONCE into a single owning buffer; the owner is addref-shared to each
+        // subscriber's band slot (frame-once-fan-to-N) and rides the band → channel send
+        // queue with no further copy.
+        const wire_bytes<> framed = frame_owned(fhdr, uhdr, payload, counter);
 
         // The fan-out confinement gate: send to a subscriber only when the topic's reach
         // mask shares a bit with the subscriber's cached tier (fail-closed access control).
@@ -243,12 +243,12 @@ public:
                 if(any_set(reach, sub.tier))
                 {
                     const detail::drop_cause cause =
-                        m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
+                        m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
                     if(cause != detail::drop_cause::none)
                         shed(hash, band, cause, sub.tier);
                 }
 
-        retain_if_latched(hash, qos);
+        retain_if_latched(hash, qos, framed);
     }
 
     // The zero-serialization sibling of publish: fans a refcounted object handle behind
@@ -279,8 +279,12 @@ public:
         if(carrier.source_timestamp == 0 && (topic == nullptr || topic->any_subscriber_wants_info))
             carrier.source_timestamp = wire::now_timestamp_ns();
 
+        // Framed lazily AT MOST ONCE into a single owning buffer the first time any byte
+        // need appears, then addref-shared across every byte-path subscriber + the latch
+        // ring (frame-once-fan-to-N).
+        wire_bytes<> framed;
         bool encoded = false;
-        const auto ensure_encoded_once = [&] {
+        const auto encode_once = [&] {
             if(encoded)
                 return;
             encoded = true;
@@ -293,15 +297,14 @@ public:
             const std::optional<std::uint64_t> counter =
                 topic != nullptr && topic->emit_source_identity ? topic->endpoint_counter
                                                                 : std::nullopt;
-            wire::encode_unidirectional_into(m_inner_scratch, uhdr, bytes, counter);
             wire::frame_header fhdr{
                     .type         = wire::msg_type::unidirectional,
                     .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
                     .session_id   = session_id,
                     .timestamp_ns = carrier.source_timestamp,
-                    .payload_len  = m_inner_scratch.size()
+                    .payload_len  = 0   // set inside the one-pass encode from the framed region size
             };
-            wire::encode_frame_into(m_frame_scratch, fhdr, m_inner_scratch);
+            framed = frame_owned(fhdr, uhdr, bytes, counter);
         };
 
         const std::size_t band = detail::band_of(qos.priority);
@@ -321,9 +324,9 @@ public:
                         continue;
                     }
                 }
-                ensure_encoded_once();
+                encode_once();
                 const detail::drop_cause cause =
-                    m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
+                    m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
                 if(cause != detail::drop_cause::none)
                     shed(hash, band, cause, sub.tier);
             }
@@ -332,8 +335,8 @@ public:
         // joiner replays a real frame from the history ring.
         if(latched)
         {
-            ensure_encoded_once();
-            retain_if_latched(hash, qos);
+            encode_once();
+            retain_if_latched(hash, qos, framed);
         }
 
         release(carrier);
@@ -488,17 +491,31 @@ private:
         m_endpoint.send_control(channel, type, inner);
     }
 
+    // Frame [frame_header][unidirectional_header][counter?][payload] ONCE into a freshly
+    // allocated owning buffer and return a wire_bytes whose view aliases it. The owner
+    // (shared_ptr<const vector>) is the single per-publish allocation that the fan-out
+    // shares by addref across every band slot + the latch ring — no per-destination copy.
+    wire_bytes<> frame_owned(const wire::frame_header &fhdr, const wire::unidirectional_header &uhdr,
+                             std::span<const std::byte> payload,
+                             std::optional<std::uint64_t> counter)
+    {
+        auto buf = std::make_shared<std::vector<std::byte>>();
+        wire::encode_unidirectional_frame_into(*buf, fhdr, uhdr, payload, counter);
+        std::span<const std::byte> view{*buf};
+        return wire_bytes<>{view, std::shared_ptr<const void>{std::move(buf)}};
+    }
+
     // Push the just-framed frame into the per-topic KEEP_LAST-N history ring, sized once
     // from the declared depth (clamped to [1, k_history_depth_cap] so a hostile declare
-    // cannot drive N x max_payload to OOM). The ring slots OWN their bytes; they never
-    // alias m_frame_scratch (the next publish overwrites it).
-    void retain_if_latched(std::uint64_t hash, const topic_qos &qos)
+    // cannot drive N x max_payload to OOM). The ring slots OWN their bytes; they copy
+    // from the framed view (the publish's owner is released when the call returns).
+    void retain_if_latched(std::uint64_t hash, const topic_qos &qos, const wire_bytes<> &framed)
     {
         if(!qos.latch)
             return;
         auto &ring = m_retained[hash];
         ring.resize_to(std::clamp<std::size_t>(qos.depth, 1, k_history_depth_cap));
-        ring.push(m_frame_scratch);
+        ring.push(static_cast<std::span<const std::byte>>(framed));
     }
 
     // Replay a latched topic's retained history to ONLY the new peer (not the fan-out
@@ -643,8 +660,6 @@ private:
     endpoint_type m_endpoint;
     detail::egress_scheduler<channel_type, Policy> m_egress;
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
-    std::vector<std::byte> m_inner_scratch;
-    std::vector<std::byte> m_frame_scratch;
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop;

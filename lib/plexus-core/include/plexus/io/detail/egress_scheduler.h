@@ -5,10 +5,12 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/priority_band_queue.h"
+#include "plexus/wire_bytes.h"
 
 #include "plexus/policy.h"
 
 #include <span>
+#include <utility>
 #include <cstddef>
 #include <unordered_map>
 
@@ -64,17 +66,20 @@ public:
     // Returns the drop cause the admission incurred (drop_cause::none on a clean admit) so
     // the forwarder records the per-(topic, band) drop at the fan-out site. The inproc/sink
     // short-circuit never has a bounded band backlog, so it never drops here (none).
-    drop_cause enqueue(Channel &ch, std::size_t band, io::congestion congestion,
-                       std::span<const std::byte> frame)
+    drop_cause enqueue(Channel &ch, std::size_t band, io::congestion congestion, wire_bytes<> frame)
     {
         if constexpr(!can_poll())
         {
-            ch.send(frame);   // inproc/sink: no bounded band backlog, so congestion is moot
+            // inproc/sink: no bounded band backlog, so congestion is moot. The owner
+            // converts to a span for the direct send — byte-identical to the pre-owner
+            // passthrough (the short-circuit never holds a backlog to pin).
+            ch.send(static_cast<std::span<const std::byte>>(frame));
             return drop_cause::none;
         }
         else
         {
-            const drop_cause cause = m_queues[&ch].enqueue_with_verdict(band, congestion, frame);
+            const drop_cause cause =
+                m_queues[&ch].enqueue_with_verdict(band, congestion, std::move(frame));
             drain(ch);
             return cause;
         }
@@ -133,7 +138,11 @@ private:
             const auto *node = q.front_highest();
             if(!admits(ch, node->size()))
                 break;
-            ch.send(*node);   // copies into the channel's send queue BEFORE the band advances
+            // Hand the owner to the channel BEFORE the band advances: a channel with a
+            // wire_bytes send overload shares the owner into its send queue (no copy);
+            // one with only the span overload copies (the TLS/inproc fallback). Either
+            // way the bytes are pinned by the channel before pop_highest releases the slot.
+            ch.send(*node);
             q.pop_highest();
         }
     }

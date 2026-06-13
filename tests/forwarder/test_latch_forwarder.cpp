@@ -332,30 +332,35 @@ TEST_CASE("multi-publisher to one latched topic is last-writer-wins", "[latch][f
     REQUIRE(bodies[0] == "writer-2");   // one slot per topic_hash, last write retained
 }
 
-TEST_CASE("latched retention adds no per-publish allocation after warm-up", "[latch][forwarder]")
+TEST_CASE("latched retention adds no allocation beyond the frame-once publish", "[latch][forwarder]")
 {
     using sink_forwarder = plexus::io::message_forwarder<sink_policy>;
 
-    sink_executor ex;
-    sink_channel ch(ex);
-    sink_forwarder fwd{};
-    sink_forwarder::peer peer{ch, "node-a"};
-    fwd.latch("topic");
-    fwd.attach_for_fanout(peer, "topic");
-
     const std::string payload = "steady-state-body";
-
-    // Warm-up: one publish grows the scratch buffers AND the retained slot.
-    fwd.publish("topic", as_bytes(payload));
-    const auto sends_before = ch.sends;
-
     constexpr int K = 256;
-    plexus::testing::reset_alloc_count();
-    const auto before = plexus::testing::alloc_count();
-    for(int i = 0; i < K; ++i)
-        fwd.publish("topic", as_bytes(payload));
-    const auto after = plexus::testing::alloc_count();
 
-    REQUIRE(ch.sends - sends_before == K);   // every latched publish fanned out
-    REQUIRE(after - before == 0);            // framing + retain: zero alloc after warm-up
+    // The per-publish allocation count over a single subscriber, with the topic either
+    // latched (retain in the loop) or not (publish + fan-out only). The retain holds the
+    // already-framed shared owner by addref, so it adds nothing beyond the publish owner.
+    const auto allocs_per_publish = [&](bool latched) {
+        sink_executor ex;
+        sink_channel ch(ex);
+        sink_forwarder fwd{};
+        sink_forwarder::peer peer{ch, "node-a"};
+        if(latched)
+            fwd.latch("topic");
+        fwd.attach_for_fanout(peer, "topic");
+        fwd.publish("topic", as_bytes(payload));   // warm-up: grow scratch AND first-touch the slot
+        plexus::testing::reset_alloc_count();
+        const auto before = plexus::testing::alloc_count();
+        for(int i = 0; i < K; ++i)
+            fwd.publish("topic", as_bytes(payload));
+        const auto after = plexus::testing::alloc_count();
+        REQUIRE(ch.sends >= static_cast<std::size_t>(K));   // every latched publish fanned out
+        return after - before;
+    };
+
+    // Retention adds nothing beyond the publish: the latched and unlatched per-publish
+    // allocation counts are identical — the slot retains the frame owner by addref.
+    REQUIRE(allocs_per_publish(true) == allocs_per_publish(false));
 }

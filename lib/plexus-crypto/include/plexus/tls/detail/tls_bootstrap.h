@@ -5,6 +5,7 @@
 #include "plexus/tls/detail/tls_context.h"
 
 #include "plexus/io/detail/handshake_gate.h"
+#include "plexus/wire_bytes.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/ssl/stream.hpp>
@@ -51,6 +52,16 @@ public:
     // the gate buffers an owned copy; post-ready it forwards straight through to the egress.
     template <typename Channel>
     void submit(Channel &, std::span<const std::byte> data) { m_gate.submit(data); }
+
+    // The TLS open-before-data gate buffers an owned copy pre-handshake and forwards
+    // post-handshake, so it cannot hold a borrowed owner across the handshake window; the
+    // owner overload therefore submits the owner's view (the gate copies) — byte-identical
+    // to the span path. The owner is released when this returns.
+    template <typename Channel>
+    void submit(Channel &, plexus::wire_bytes<> data)
+    {
+        m_gate.submit(static_cast<std::span<const std::byte>>(data));
+    }
 
     // An accepted TLS channel does NOT read at accept — the server handshake (started by
     // the listener) arms the read loop. arm_on_accept is the no-op the channel calls in the
