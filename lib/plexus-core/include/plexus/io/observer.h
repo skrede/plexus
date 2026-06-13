@@ -56,6 +56,14 @@ public:
     virtual void on_rpc_serve(std::string_view, const rpc_view &) {}
     virtual void on_rpc_reply(std::string_view, const rpc_reply_view &) {}
     virtual void on_qos_change(const qos_change_event &) {}
+
+    // The data-path opt-in: the message/rpc/qos taps fire once per publish/destination/call,
+    // so their posted fan-out is a HOT cost (an fqn copy + a posted closure per emit). The
+    // engine fans them only while at least one registered observer declares interest here, so
+    // a node's always-on lifecycle machinery (and any observer that watches only connection
+    // edges) pays nothing on the data path. Override to true to receive the data-path taps;
+    // the default keeps the hot path one predictable branch for a lifecycle-only observer.
+    virtual bool observes_data_path() const { return false; }
 };
 
 // The shared inert observer a build context defaults to when no observer is installed:

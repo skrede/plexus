@@ -94,6 +94,18 @@ public:
         // already install it at their sites) so an egress overflow reaches the observer
         // POSTED, never inline from the per-publish fan loop.
         m_messages.on_drop(drop_sink());
+        // The data-path observation sinks ride the SAME posted fan-out the drop sink uses:
+        // the forwarder invokes them at the publish/fan/attach sites and each posts a
+        // snapshot to the observer fan-out on the borrowed executor, never inline from the
+        // per-publish loop (the DoS-amplifier guard). The view borrows the framed owner; the
+        // posted closure captures it by value (a shared addref), so the buffer outlives the
+        // deferred turn.
+        m_messages.on_published(publish_sink());
+        m_messages.on_delivered(deliver_sink());
+        m_messages.on_qos_change(qos_change_sink());
+        m_procedures.on_rpc_call(rpc_call_sink());
+        m_procedures.on_rpc_serve(rpc_serve_sink());
+        m_procedures.on_rpc_reply(rpc_reply_sink());
         // The receive path stamps the one monitor: a data frame stamps deadline +
         // presence (set_on_data_stamp), a heartbeat stamps presence only (on_stamp_seen
         // routed through the build context to each session). Both are plain stores.
@@ -118,8 +130,18 @@ public:
     // list is the registry, not a wire-exposed param: the add/remove API takes a const&
     // and stores the address. Operator-driven cold-path registration — no remote peer
     // can grow it.
-    void add_observer(observer &o) { m_observers.push_back(&o); }
-    void remove_observer(observer &o) { std::erase(m_observers, &o); }
+    void add_observer(observer &o)
+    {
+        m_observers.push_back(&o);
+        if(o.observes_data_path())
+            ++m_data_observers;
+    }
+    void remove_observer(observer &o)
+    {
+        const auto erased = std::erase(m_observers, &o);
+        if(erased != 0 && o.observes_data_path())
+            --m_data_observers;
+    }
 
     // The seam a drop site posts a coalesced event into. It is a value-capturing,
     // engine-posted callable: every drop fans out on the BORROWED executor over a
@@ -130,6 +152,86 @@ public:
     [[nodiscard]] plexus::detail::move_only_function<void(const detail::drop_event &)> drop_sink()
     {
         return [this](const detail::drop_event &ev) { post_drop(ev); };
+    }
+
+    // The data-path observation sinks, shaped exactly like drop_sink: value-capturing,
+    // engine-posted callables the forwarders invoke at their located sites. Each posts a
+    // snapshot to the observer fan-out on the BORROWED executor, capturing the view (a
+    // shared addref of the framed owner) or the scalar POD by value — never synchronously
+    // from the per-publish/per-RPC site. The fqn is copied into the turn since the
+    // forwarder's borrowed view outlives only the synchronous call.
+    // The fqn-string copy + the posted closure are a per-publish heap cost, so each sink
+    // SHORT-CIRCUITS when no registered observer opted into the data path (m_data_observers):
+    // an unobserved node (or one watching only lifecycle edges) pays one predictable branch
+    // and allocates nothing (the typed fast path stays zero-alloc). The post still rides the
+    // BORROWED executor — never inline from the per-publish/per-RPC site — when a data-path
+    // observer is registered.
+    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const message_view &)> publish_sink()
+    {
+        return [this](std::string_view fqn, const message_view &v) {
+            if(m_data_observers == 0)
+                return;
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
+                fan_out([&](observer &o) { o.on_message_published(fqn, v); });
+            });
+        };
+    }
+
+    [[nodiscard]] plexus::detail::move_only_function<
+        void(std::string_view, const message_info &, const message_view &)> deliver_sink()
+    {
+        return [this](std::string_view fqn, const message_info &info, const message_view &v) {
+            if(m_data_observers == 0)
+                return;
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, info, v] {
+                fan_out([&](observer &o) { o.on_message_delivered(fqn, info, v); });
+            });
+        };
+    }
+
+    [[nodiscard]] plexus::detail::move_only_function<void(const qos_change_event &)> qos_change_sink()
+    {
+        return [this](const qos_change_event &ev) {
+            if(m_data_observers == 0)
+                return;
+            Policy::post(m_executor, [this, ev] {
+                fan_out([&](observer &o) { o.on_qos_change(ev); });
+            });
+        };
+    }
+
+    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> rpc_call_sink()
+    {
+        return [this](std::string_view fqn, const rpc_view &v) {
+            if(m_data_observers == 0)
+                return;
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
+                fan_out([&](observer &o) { o.on_rpc_call(fqn, v); });
+            });
+        };
+    }
+
+    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> rpc_serve_sink()
+    {
+        return [this](std::string_view fqn, const rpc_view &v) {
+            if(m_data_observers == 0)
+                return;
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
+                fan_out([&](observer &o) { o.on_rpc_serve(fqn, v); });
+            });
+        };
+    }
+
+    [[nodiscard]] plexus::detail::move_only_function<
+        void(std::string_view, const rpc_reply_view &)> rpc_reply_sink()
+    {
+        return [this](std::string_view fqn, const rpc_reply_view &v) {
+            if(m_data_observers == 0)
+                return;
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
+                fan_out([&](observer &o) { o.on_rpc_reply(fqn, v); });
+            });
+        };
     }
 
     // The subscriber-side timing-gate observable (FORK-B): a dedicated settable
@@ -478,6 +580,10 @@ private:
     registry_type m_registry;
     known_peers m_known;
     std::vector<observer *> m_observers;
+    // The count of registered observers that opted into the data-path taps (observes_data_path).
+    // The hot publish/deliver/rpc sinks gate on it being nonzero, so a node's always-on
+    // lifecycle observer leaves the data path one predictable branch with no posted closure.
+    std::size_t m_data_observers{0};
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
     bool m_dial_eagerly;
 };

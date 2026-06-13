@@ -125,6 +125,11 @@ public:
         ++m_topics[std::string{fqn}].rpc_reply;
     }
 
+    // Opt into the data-path taps: this observer counts the message/rpc edges, so the
+    // engine must fan them here (a lifecycle-only observer leaves the default false and
+    // pays nothing on the hot path).
+    bool observes_data_path() const override { return true; }
+
     // Per-peer accessor: an absent peer reads as all-zero (the default-constructed
     // counts), so a test can assert "this edge never fired" without a contains check.
     const counts &for_peer(const plexus::node_id &id) const

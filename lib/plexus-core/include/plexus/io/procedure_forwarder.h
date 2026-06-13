@@ -3,6 +3,7 @@
 
 #include "plexus/io/subscriber_registry.h"
 #include "plexus/io/subscription_endpoint.h"
+#include "plexus/io/observation_events.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/policy.h"
 #include "plexus/log/logger.h"
@@ -98,6 +99,29 @@ public:
     {
     }
 
+    // The RPC observation sinks, wired by the engine to its posted fan-out (the drop_sink
+    // precedent): call() fires the call sink, deliver_request() the serve sink, and
+    // deliver_response() the reply sink — each carrying the correlation_id (and status for a
+    // reply). Each sink posts a snapshot to the observer fan-out, never inline from the
+    // per-call/per-dispatch site. The param/return bytes are transient (caller-owned or
+    // reused scratch), so the surfaced view is envelope-only — recording the bytes is a
+    // sovereign opt-in, never a silent per-call copy into the posted turn. Absent = one
+    // predictable branch.
+    void on_rpc_call(plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> hook)
+    {
+        m_on_rpc_call = std::move(hook);
+    }
+
+    void on_rpc_serve(plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> hook)
+    {
+        m_on_rpc_serve = std::move(hook);
+    }
+
+    void on_rpc_reply(plexus::detail::move_only_function<void(std::string_view, const rpc_reply_view &)> hook)
+    {
+        m_on_rpc_reply = std::move(hook);
+    }
+
     // serve: register a LOCAL provider handler and record the topic_hash -> fqn
     // resolution deliver_request reads. Emits no wire.
     void serve(std::string_view fqn, handler_fn handler)
@@ -142,6 +166,7 @@ public:
         };
         wire::encode_rpc_request_into(m_req_scratch, hdr, param);
         send_data(p.channel, wire::msg_type::rpc_request, m_req_scratch, session_id);
+        emit_rpc_call(fqn, corr_id);
 
         auto [it, _] = per_peer.emplace(corr_id, pending_rpc{
                 std::string{fqn}, std::move(on_response),
@@ -240,6 +265,7 @@ public:
         m_active_req_hdr = req_hdr;
         m_active_session_id = session_id;
         ensure_reply_ready();
+        emit_rpc_serve(hash_it->second, req_hdr.correlation_id);
         m_providers.find(hash_it->second)->second(decoded->param_data, m_reply);
     }
 
@@ -264,6 +290,7 @@ public:
         pending_rpc pending = std::move(entry_it->second);
         peer_it->second.erase(entry_it);
         pending.timer->cancel();   // cancel-on-match: no late timeout for a resolved call
+        emit_rpc_reply(pending.fqn, decoded->header.correlation_id, decoded->status);
         pending.on_response(decoded->status, decoded->return_data);
     }
 
@@ -380,6 +407,28 @@ private:
         m_endpoint.send_subscribe(channel, req);
     }
 
+    // Hand the call/serve/reply edge to the engine sink (which posts a snapshot to the
+    // observer fan-out); absent = one branch. The surfaced view is envelope-only (the
+    // correlation_id, and status for a reply) — the param/return spans are transient, so
+    // no borrowed-span dangles into the deferred turn and no per-call copy is imposed.
+    void emit_rpc_call(std::string_view fqn, std::uint64_t corr_id)
+    {
+        if(m_on_rpc_call)
+            m_on_rpc_call(fqn, rpc_view{.correlation_id = corr_id});
+    }
+
+    void emit_rpc_serve(std::string_view fqn, std::uint64_t corr_id)
+    {
+        if(m_on_rpc_serve)
+            m_on_rpc_serve(fqn, rpc_view{.correlation_id = corr_id});
+    }
+
+    void emit_rpc_reply(std::string_view fqn, std::uint64_t corr_id, wire::rpc_status status)
+    {
+        if(m_on_rpc_reply)
+            m_on_rpc_reply(fqn, rpc_reply_view{.correlation_id = corr_id, .status = status});
+    }
+
     void drop(std::string_view message) { m_logger.warn(message); }
 
     log::logger &m_logger;
@@ -398,6 +447,9 @@ private:
     std::uint64_t m_active_session_id{0};
     std::uint64_t m_next_correlation_id{1};
     std::size_t m_max_outstanding;
+    plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> m_on_rpc_call;
+    plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> m_on_rpc_serve;
+    plexus::detail::move_only_function<void(std::string_view, const rpc_reply_view &)> m_on_rpc_reply;
 };
 
 }
