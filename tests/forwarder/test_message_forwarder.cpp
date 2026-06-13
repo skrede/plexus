@@ -74,9 +74,9 @@ forwarder::peer make_peer(inproc_channel<> &fwd_channel, capture &cap, std::stri
 }
 
 // Counts frame_header-wrapped subscribe_request frames in a capture's recorded
-// traffic. Control frames are now framed (Seed 3), so the helper FIRST strips and
-// asserts the frame_header.type, THEN decodes the inner payload — a frame whose
-// header type is not `subscribe` is not counted.
+// traffic. Control frames are framed, so the helper FIRST strips and asserts the
+// frame_header.type, THEN decodes the inner payload — a frame whose header type is
+// not `subscribe` is not counted.
 std::size_t count_subscribes(const capture &cap)
 {
     std::size_t n = 0;
