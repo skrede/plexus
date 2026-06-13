@@ -99,22 +99,21 @@ public:
 
     feed_result feed(std::span<const std::byte> data)
     {
+        compact();
         m_buffer.insert(m_buffer.end(), data.begin(), data.end());
 
         feed_result result;
 
-        if(m_buffer.size() > m_buffered_bytes_cap)
+        if(live_bytes() > m_buffered_bytes_cap)
         {
             result.error = feed_error::buffer_overflow;
             reset();
             return result;
         }
 
-        std::size_t consumed = 0;
-
         for(;;)
         {
-            auto remaining = std::span<const std::byte>{m_buffer}.subspan(consumed);
+            auto remaining = std::span<const std::byte>{m_buffer}.subspan(m_consumed);
 
             if(m_state == state::reading_header)
             {
@@ -130,7 +129,7 @@ public:
                 }
 
                 m_pending_header = *hdr;
-                consumed += header_size;
+                m_consumed += header_size;
                 m_state = state::reading_payload;
             }
 
@@ -143,7 +142,7 @@ public:
                     return result;
                 }
 
-                remaining = std::span<const std::byte>{m_buffer}.subspan(consumed);
+                remaining = std::span<const std::byte>{m_buffer}.subspan(m_consumed);
 
                 if(remaining.size() < m_pending_header.payload_len)
                     break;
@@ -162,29 +161,29 @@ public:
                     }
                 );
 
-                consumed += m_pending_header.payload_len;
+                m_consumed += m_pending_header.payload_len;
                 m_state = state::reading_header;
             }
         }
 
-        m_buffer.erase(m_buffer.begin(), m_buffer.begin() + static_cast<std::ptrdiff_t>(consumed));
         return result;
     }
 
     void reset()
     {
         m_buffer.clear();
+        m_consumed = 0;
         m_state = state::reading_header;
         m_pending_header = {};
     }
 
-    [[nodiscard]] std::size_t buffered_bytes() const { return m_buffer.size(); }
+    [[nodiscard]] std::size_t buffered_bytes() const { return live_bytes(); }
 
     // A frame is mid-assembly when its header is decoded (reading_payload) or any
-    // bytes sit buffered (a partial header). False only when idle between frames.
+    // unconsumed bytes sit buffered (a partial header). False only when idle between frames.
     [[nodiscard]] bool frame_in_progress() const
     {
-        return m_state == state::reading_payload || !m_buffer.empty();
+        return m_state == state::reading_payload || live_bytes() != 0;
     }
 
     // The declared payload length of the in-progress frame once its header is
@@ -199,9 +198,25 @@ public:
     }
 
 private:
+    // The cap bounds the LIVE (unconsumed) tail, not the physical buffer: the cursor
+    // changes WHEN consumed bytes are reclaimed, never how many live bytes may be held.
+    [[nodiscard]] std::size_t live_bytes() const { return m_buffer.size() - m_consumed; }
+
+    // Reclaim the consumed prefix once it dominates the buffer, amortizing the front
+    // erase across feeds instead of paying an O(n) tail memmove on every frame boundary.
+    void compact()
+    {
+        if(m_consumed != 0 && m_consumed >= m_buffer.size() - m_consumed)
+        {
+            m_buffer.erase(m_buffer.begin(), m_buffer.begin() + static_cast<std::ptrdiff_t>(m_consumed));
+            m_consumed = 0;
+        }
+    }
+
     state m_state{state::reading_header};
     std::size_t m_max_payload_size;
     std::size_t m_buffered_bytes_cap;
+    std::size_t m_consumed{0};
     frame_header m_pending_header{};
     std::vector<std::byte> m_buffer;
 };
