@@ -1,5 +1,5 @@
 # Forwarder behavioral oracle: the refcount-gated subscribe handshake,
-# drain_for resurrection, byte-identical frame-once fan-out, detach_all,
+# remembered-demand resurrection, byte-identical frame-once fan-out, detach_all,
 # unsubscribe, resolve-by-topic_hash receive path, demand-driven no-send, and the
 # warn-and-drop receive tail through an injected logger. A focused forwarder-level
 # alloc-delta gate runs over a non-allocating sink Policy. Links the header-only
@@ -34,7 +34,7 @@ target_link_libraries(test_frame_router PRIVATE
 catch_discover_tests(test_frame_router TEST_PREFIX "forwarder.")
 
 # The procedure (req/res) forwarder behavioral oracle: the refcount-gated procedure
-# subscribe handshake, drain_for resurrection, the call/serve roundtrip recovering
+# subscribe handshake, the call/serve roundtrip recovering
 # exact opaque param/return bytes matched by correlation_id, the no_handler and
 # orphan-drop failure legs, detach_all failing every outstanding call with
 # peer_disconnected, concurrent corr_ids resolving without cross-talk, and a

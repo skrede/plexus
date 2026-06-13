@@ -169,8 +169,8 @@ struct link
     inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
-    msg_forwarder req_messages{ex};
-    msg_forwarder resp_messages{ex};
+    msg_forwarder req_messages{};
+    msg_forwarder resp_messages{};
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
@@ -245,8 +245,8 @@ struct psk_link
     inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
-    msg_forwarder req_messages{ex};
-    msg_forwarder resp_messages{ex};
+    msg_forwarder req_messages{};
+    msg_forwarder resp_messages{};
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
@@ -451,7 +451,7 @@ TEST_CASE("io.security_attach an auth-only + datagram configuration is refused (
 
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    msg_forwarder messages{ex};
+    msg_forwarder messages{};
     rpc_forwarder procedures{ex, k_long_timeout};
 
     plexus::io::peer_context<inproc_policy> ctx;
@@ -492,7 +492,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
-    msg_forwarder messages{ex};
+    msg_forwarder messages{};
     rpc_forwarder procedures{ex, k_long_timeout};
 
     int installs = 0;

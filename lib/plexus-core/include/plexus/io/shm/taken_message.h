@@ -47,9 +47,7 @@ public:
     taken_message(taken_message &&other) noexcept
         : m_payload(other.m_payload),
           m_length(other.m_length),
-          m_refcount(other.m_refcount),
-          m_cell_index(other.m_cell_index),
-          m_generation(other.m_generation)
+          m_refcount(other.m_refcount)
     {
         other.m_payload  = nullptr;
         other.m_length   = 0;
@@ -66,8 +64,6 @@ public:
         m_payload    = other.m_payload;
         m_length     = other.m_length;
         m_refcount   = other.m_refcount;
-        m_cell_index = other.m_cell_index;
-        m_generation = other.m_generation;
 
         other.m_payload  = nullptr;
         other.m_length   = 0;
@@ -109,13 +105,10 @@ private:
     friend struct ::plexus::io::shm::test::handle_test_access;
 
     taken_message(const std::byte *payload, std::size_t length,
-                  std::atomic<std::uint32_t> *refcount, std::uint64_t cell_index,
-                  std::uint64_t generation) noexcept
+                  std::atomic<std::uint32_t> *refcount) noexcept
         : m_payload(payload),
           m_length(length),
-          m_refcount(refcount),
-          m_cell_index(cell_index),
-          m_generation(generation)
+          m_refcount(refcount)
     {
         if(m_refcount != nullptr)
             m_refcount->fetch_add(1, std::memory_order_acq_rel); // pin at take()
@@ -125,13 +118,10 @@ private:
     // fetch_add). reclaim() still decrements once, so the held pin is released
     // exactly once when the handle dies.
     taken_message(adopt_pin_t, const std::byte *payload, std::size_t length,
-                  std::atomic<std::uint32_t> *refcount, std::uint64_t cell_index,
-                  std::uint64_t generation) noexcept
+                  std::atomic<std::uint32_t> *refcount) noexcept
         : m_payload(payload),
           m_length(length),
-          m_refcount(refcount),
-          m_cell_index(cell_index),
-          m_generation(generation)
+          m_refcount(refcount)
     {
     }
 
@@ -150,8 +140,6 @@ private:
     const std::byte             *m_payload{nullptr};
     std::size_t                  m_length{0};
     std::atomic<std::uint32_t>  *m_refcount{nullptr};
-    std::uint64_t                m_cell_index{0};
-    std::uint64_t                m_generation{0};
 };
 
 }

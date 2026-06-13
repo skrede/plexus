@@ -64,8 +64,8 @@ struct dial_link
     inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
-    msg_forwarder req_messages{ex};
-    msg_forwarder resp_messages{ex};
+    msg_forwarder req_messages{};
+    msg_forwarder resp_messages{};
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 

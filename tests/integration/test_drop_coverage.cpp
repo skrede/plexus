@@ -471,8 +471,7 @@ TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter A
     {
         std::size_t reported = 0;
         stall_channel ch{reported};
-        stall_executor ex;
-        forwarder fwd{ex};
+        forwarder fwd{};
         recording_drop_observer observer;
 
         // A bounded band under congestion=drop_newest: stall the destination so every

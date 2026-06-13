@@ -90,7 +90,7 @@ TEST_CASE("a durability=none subscriber gets ZERO retained frames on subscribe",
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{ex};
+        forwarder fwd{};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(std::string{"retained-v1"}));
         ex.drain();
@@ -115,7 +115,7 @@ TEST_CASE("a durability=latest subscriber gets EXACTLY ONE retained frame",
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{ex};
+        forwarder fwd{};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(std::string{"retained-v1"}));
         ex.drain();
@@ -140,7 +140,7 @@ TEST_CASE("a default-qos subscriber gets ZERO retained frames (default == none)"
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     fwd.latch("topic");
     fwd.publish("topic", as_bytes(std::string{"retained-v1"}));
     ex.drain();
@@ -163,7 +163,7 @@ TEST_CASE("a durability=all subscriber replays as latest against the depth-1 slo
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     fwd.latch("topic");
     fwd.publish("topic", as_bytes(std::string{"retained-v1"}));
     ex.drain();

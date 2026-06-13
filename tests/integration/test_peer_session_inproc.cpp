@@ -81,8 +81,8 @@ struct link
     inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
-    msg_forwarder req_messages{ex};
-    msg_forwarder resp_messages{ex};
+    msg_forwarder req_messages{};
+    msg_forwarder resp_messages{};
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
@@ -358,7 +358,7 @@ std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    msg_forwarder framer{ex};
+    msg_forwarder framer{};
     inproc_channel<> capture(ex);
     inproc_channel<> tx(ex);
     tx.connect_to(capture.local_endpoint());
@@ -495,7 +495,7 @@ struct timeout_harness
     inproc_executor<manual_clock> ex{bus};
     inproc_channel<manual_clock> peer_ch{ex};   // a silent peer that never responds
 
-    manual_msg messages{ex};
+    manual_msg messages{};
     manual_rpc procedures{ex, std::chrono::hours(1)};
 
     plexus::io::peer_context<manual_policy> ctx;   // the record owns the dialer channel
@@ -546,8 +546,8 @@ struct manual_link
     inproc_executor<manual_clock> ex{bus};
     inproc_transport<manual_clock> transport{ex, bus};
 
-    manual_msg req_messages{ex};
-    manual_msg resp_messages{ex};
+    manual_msg req_messages{};
+    manual_msg resp_messages{};
     manual_rpc req_procedures{ex, std::chrono::hours(1)};
     manual_rpc resp_procedures{ex, std::chrono::hours(1)};
 

@@ -63,8 +63,7 @@ public:
         if(st != loan_status::ok)
             return st;
 
-        out = loaned_buffer(claim.slab.data(), claim.slab.size(),
-                            claim.position & (m_ring.cell_count() - 1), claim.position);
+        out = loaned_buffer(claim.slab.data(), claim.slab.size(), claim.position);
         return st;
     }
 

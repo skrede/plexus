@@ -223,28 +223,6 @@ TEST_CASE("attach succeeds on 0->1 for an arbitrary fqn (no remote registry)", "
     }
 }
 
-TEST_CASE("drain_for re-emits one subscribe per peer-rooted procedure", "[procedure]")
-{
-    for(int iter = 0; iter < 100; ++iter)
-    {
-        inproc_bus<> bus;
-        inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        capture cap(ex);
-        auto peer = make_peer(ch, cap, "provider-node");
-
-        procedure_forwarder fwd{ex, k_long_deadline};
-        fwd.attach(peer, "svc.a");
-        fwd.attach(peer, "svc.b");
-        ex.drain();
-        cap.frames.clear();
-
-        fwd.drain_for(peer);
-        ex.drain();
-        REQUIRE(count_subscribes(cap) == 2);
-    }
-}
-
 TEST_CASE("roundtrip recovers exact opaque param and return bytes matched by corr_id", "[procedure]")
 {
     for(int iter = 0; iter < 100; ++iter)

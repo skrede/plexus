@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_MESSAGE_FORWARDER_H
 
 #include "plexus/io/subscriber_registry.h"
+#include "plexus/io/subscription_endpoint.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/history_ring.h"
 #include "plexus/io/detail/egress_scheduler.h"
@@ -74,19 +75,11 @@ class message_forwarder
 {
 public:
     using channel_type = typename Policy::byte_channel_type;
-    using executor_type = typename Policy::executor_type;
+    using endpoint_type = subscription_endpoint<channel_type>;
+    using peer = typename endpoint_type::peer;
 
-    struct peer
-    {
-        channel_type &channel;
-        std::string node_name;
-    };
-
-    // The executor is required (no default): the egress scheduler cannot post a drain
-    // without one. NOT noexcept — the scheduler's per-destination maps may allocate.
-    explicit message_forwarder(executor_type executor, log::logger &logger = shared_null_logger())
+    explicit message_forwarder(log::logger &logger = shared_null_logger())
         : m_logger(logger)
-        , m_egress(executor)
     {
     }
 
@@ -97,10 +90,10 @@ public:
                 const subscriber_qos &qos = subscriber_qos{},
                 std::optional<std::uint64_t> type_id = std::nullopt)
     {
-        if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
+        if(!m_endpoint.attach_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name, qos, type_id);
+        m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, qos, type_id);
         record_remote_topic(p.node_name, fqn, qos, type_id);
         send_subscribe(p.channel, fqn, hash, type_id, qos);
         return true;
@@ -127,7 +120,7 @@ public:
         // Strict typed posture: a typed-and-strict subscriber refuses an untyped producer.
         // Ordered AFTER type_mismatch (a declared-vs-declared mismatch is more specific).
         if(sub_qos.posture == attach_posture::strict && subscriber_type_id
-           && !m_registry.producer_type_id(hash))
+           && !m_endpoint.registry().producer_type_id(hash))
         {
             auto resp = wire::encode_subscribe_response(
                 {.topic_hash = hash, .status = wire::subscribe_status::type_undeclared});
@@ -137,8 +130,8 @@ public:
         // The request-vs-offered compatibility gate over the full QoS matrix: the
         // subscriber's REQUESTED sub_qos arrived off the wire; the topic's OFFERED qos and
         // source-identity offer are read locally.
-        const topic_qos offered = m_registry.qos_for(hash);
-        const bool offers_sid   = m_registry.offers_source_identity(hash);
+        const topic_qos offered = m_endpoint.registry().qos_for(hash);
+        const bool offers_sid   = m_endpoint.registry().offers_source_identity(hash);
         const auto rxo = io::rxo_check(offered, offers_sid, sub_qos);
         if(rxo.verdict == io::rxo_verdict::incompatible_qos
            || rxo.verdict == io::rxo_verdict::source_identity_incompatible)
@@ -148,9 +141,9 @@ public:
             send_control(p.channel, wire::msg_type::subscribe_response, resp);
             return false;
         }
-        if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
+        if(m_endpoint.registry().bump_refcount(p.node_name, fqn) != 1u)
             return false;
-        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos, subscriber_type_id);
+        m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos, subscriber_type_id);
         // A degraded verdict ADMITS (the consumer chose permissive) but the reply carries
         // the degraded-field set so the accept is non-silent.
         auto resp = rxo.verdict == io::rxo_verdict::degraded
@@ -191,7 +184,7 @@ public:
                  std::optional<std::uint64_t> producer_type_id = std::nullopt,
                  bool emit_source_identity = false)
     {
-        m_registry.declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id, emit_source_identity);
+        m_endpoint.registry().declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id, emit_source_identity);
     }
 
     void latch(std::string_view fqn)
@@ -206,7 +199,7 @@ public:
                  std::uint64_t session_id = 0)
     {
         auto hash = wire::fqn_topic_hash(fqn);
-        const auto *topic = m_registry.entry_for(hash);
+        const auto *topic = m_endpoint.registry().entry_for(hash);
         const auto *subs =
             topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
         const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
@@ -219,7 +212,7 @@ public:
 
         wire::unidirectional_header uhdr{
                 .source     = wire::endpoint_source_type::publisher,
-                .sequence   = m_next_sequence++,
+                .sequence   = m_endpoint.next_sequence(),
                 .topic_hash = hash
         };
         // When the topic offers source identity, frame the gid flag + a varint endpoint
@@ -271,7 +264,7 @@ public:
                         std::uint64_t session_id = 0)
     {
         auto hash = wire::fqn_topic_hash(fqn);
-        const auto *topic = m_registry.entry_for(hash);
+        const auto *topic = m_endpoint.registry().entry_for(hash);
         const auto *subs =
             topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
         const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
@@ -279,7 +272,7 @@ public:
         const locality reach = qos.reach;
 
         carrier.topic_hash = hash;
-        carrier.sequence = m_next_sequence++;
+        carrier.sequence = m_endpoint.next_sequence();
         // Skip the source-stamp clock read when no attached subscriber wants message_info,
         // leaving source_timestamp == 0 (the "not stamped" sentinel the ==0 keying relies
         // on). The latch is local-only, so a remote-decoded subscriber always reads true.
@@ -350,10 +343,10 @@ public:
     // and emits a wire unsubscribe_request.
     bool detach(const peer &p, std::string_view fqn)
     {
-        if(m_registry.drop_refcount(p.node_name, fqn) != 0u)
+        if(!m_endpoint.detach_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_registry.remove_subscriber(hash, p.channel);
+        m_endpoint.registry().remove_subscriber(hash, p.channel);
         m_egress.remove(p.channel);
         forget_remote_topic(p.node_name, fqn);
         auto req = wire::encode_unsubscribe_request({.topic_hash = hash});
@@ -367,7 +360,7 @@ public:
     // prunes its own record on detach's 1->0 transition.
     void detach_all(const peer &p)
     {
-        m_registry.remove_peer(p.node_name, p.channel);
+        m_endpoint.remove_peer(p);
         m_egress.remove(p.channel);
     }
 
@@ -379,18 +372,6 @@ public:
         static const std::vector<remembered_demand> empty;
         auto it = m_remote_topics.find(node_name);
         return it == m_remote_topics.end() ? empty : it->second;
-    }
-
-    // Re-emit a subscribe for each remote topic rooted at the peer's node name
-    // (subscription resurrection on reconnect).
-    void drain_for(const peer &p)
-    {
-        auto it = m_remote_topics.find(p.node_name);
-        if(it == m_remote_topics.end())
-            return;
-        for(const auto &demand : it->second)
-            send_subscribe(p.channel, demand.fqn, wire::fqn_topic_hash(demand.fqn),
-                           demand.type_id, demand.qos);
     }
 
     // The receive tail: decode the INNER unidirectional payload (the frame_router owns the
@@ -411,7 +392,7 @@ public:
         if(!decoded)
             return drop("plexus: forwarder unidirectional_decode_failed");
 
-        auto fqn = m_registry.fqn_for(decoded->header.topic_hash);
+        auto fqn = m_endpoint.registry().fqn_for(decoded->header.topic_hash);
         if(fqn.empty())
             return drop("plexus: forwarder topic_unknown_for_data");
 
@@ -440,7 +421,7 @@ public:
         if(!decoded)
             return drop("plexus: forwarder unidirectional_decode_failed");
 
-        auto fqn = m_registry.fqn_for(decoded->header.topic_hash);
+        auto fqn = m_endpoint.registry().fqn_for(decoded->header.topic_hash);
         if(fqn.empty())
             return drop("plexus: forwarder topic_unknown_for_data");
 
@@ -484,13 +465,13 @@ public:
     // resolution the bytes path does inside deliver. Empty when the hash names no topic.
     std::string_view fqn_for(std::uint64_t topic_hash) const
     {
-        return m_registry.fqn_for(topic_hash);
+        return m_endpoint.registry().fqn_for(topic_hash);
     }
 
     // The per-(topic, band, cause) drop tally; 0 for an unknown topic or out-of-range band.
     [[nodiscard]] std::size_t dropped(std::string_view fqn, std::size_t band, detail::drop_cause cause) const
     {
-        return m_registry.dropped(wire::fqn_topic_hash(fqn), band, cause);
+        return m_endpoint.registry().dropped(wire::fqn_topic_hash(fqn), band, cause);
     }
 
     // The per-topic stamp-demand latch (for inspection — publish reads the record
@@ -498,24 +479,13 @@ public:
     // safe always-on default).
     [[nodiscard]] bool any_subscriber_wants_info(std::string_view fqn) const
     {
-        return m_registry.any_subscriber_wants_info(wire::fqn_topic_hash(fqn));
+        return m_endpoint.registry().any_subscriber_wants_info(wire::fqn_topic_hash(fqn));
     }
 
 private:
-    // Wrap an inner control payload in a frame_header so it carries the same framing as
-    // data and survives a reassembler-framed stream; session_id = 0 on every control
-    // frame. Reuses a member scratch to stay allocation-light.
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
-        wire::frame_header fhdr{
-                .type         = type,
-                .flags        = 0,
-                .session_id   = 0,
-                .timestamp_ns = wire::now_timestamp_ns(),
-                .payload_len  = inner.size()
-        };
-        wire::encode_frame_into(m_control_scratch, fhdr, inner);
-        channel.send(m_control_scratch);
+        m_endpoint.send_control(channel, type, inner);
     }
 
     // Push the just-framed frame into the per-topic KEEP_LAST-N history ring, sized once
@@ -536,12 +506,12 @@ private:
     // takes the newest frame, `all` takes the history oldest->newest capped to replay_depth.
     void replay_if_latched(const peer &p, std::uint64_t hash)
     {
-        if(!m_registry.qos_for(hash).latch)
+        if(!m_endpoint.registry().qos_for(hash).latch)
             return;
         auto it = m_retained.find(hash);
         if(it == m_retained.end() || it->second.empty())
             return;
-        const subscriber_qos sub = m_registry.qos_for_subscriber(hash, p.channel);
+        const subscriber_qos sub = m_endpoint.registry().qos_for_subscriber(hash, p.channel);
         switch(sub.durability_mode)
         {
         case durability::none:
@@ -587,7 +557,7 @@ private:
     // zero type_id that would false-refuse.
     bool type_id_mismatch(std::uint64_t hash, std::optional<std::uint64_t> subscriber_type_id) const
     {
-        const auto producer_type_id = m_registry.producer_type_id(hash);
+        const auto producer_type_id = m_endpoint.registry().producer_type_id(hash);
         if(!producer_type_id || !subscriber_type_id)
             return false;
         return *producer_type_id != *subscriber_type_id;
@@ -622,8 +592,7 @@ private:
             req.has_qos = true;
             req.qos = to_wire_region(sub_qos);
         }
-        auto bytes = wire::encode_subscribe_request(req);
-        send_control(channel, wire::msg_type::subscribe, bytes);
+        m_endpoint.send_subscribe(channel, req);
     }
 
     void record_remote_topic(const std::string &node_name, std::string_view fqn,
@@ -662,7 +631,7 @@ private:
     // so the event is peer-less (node_id{}); tier is the subscriber's delivery locality.
     void shed(std::uint64_t hash, std::size_t band, detail::drop_cause cause, locality tier)
     {
-        m_registry.record_drop(hash, band, cause);
+        m_endpoint.registry().record_drop(hash, band, cause);
         if(m_on_drop)
             m_on_drop(detail::drop_event{.cause = cause, .transport = tier,
                                          .band = static_cast<std::uint8_t>(band), .topic_hash = hash});
@@ -671,14 +640,12 @@ private:
     void drop(std::string_view message) { m_logger.warn(message); }
 
     log::logger &m_logger;
-    subscriber_registry<channel_type> m_registry;
+    endpoint_type m_endpoint;
     detail::egress_scheduler<channel_type, Policy> m_egress;
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
     std::vector<std::byte> m_inner_scratch;
     std::vector<std::byte> m_frame_scratch;
-    std::vector<std::byte> m_control_scratch;
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
-    std::uint64_t m_next_sequence{0};
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop;
 };

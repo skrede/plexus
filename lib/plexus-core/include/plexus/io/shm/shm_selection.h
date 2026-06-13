@@ -3,11 +3,10 @@
 
 #include "plexus/io/shm/dispatch_hint.h"
 #include "plexus/io/shm/same_host.h"
+#include "plexus/io/detail/keyed_refcount.h"
 
 #include <cstdint>
-#include <string>
 #include <string_view>
-#include <unordered_map>
 
 namespace plexus::io::shm {
 
@@ -78,19 +77,18 @@ enum class same_host_medium : std::uint8_t
 // by the selection caller (no singleton — each forwarder owns its own set, the
 // vagus discipline), and it keys on the plexus (node_name, fqn) identity mirroring
 // subscriber_registry. It holds only the bookkeeping; the registry.acquire call
-// that maps the actual ring wires in later. The refcount is a structural copy of
-// subscriber_registry's (peer, fqn) refcount shape so the two stay consistent.
+// that maps the actual ring wires in later.
 class acquired_ring_set
 {
 public:
+    static constexpr std::uint32_t k_no_entry = detail::keyed_refcount::k_no_entry;
+
     // Record one demand for a same-host ring; returns the post-increment count. The
     // 0->1 result is the gate the forwarder issues registry.acquire on (this wave
     // only books the demand; the acquire wires in a later wave).
     std::uint32_t acquire(std::string_view node_name, std::string_view fqn)
     {
-        auto &per_peer = m_refcount[std::string{node_name}];
-        auto [it, inserted] = per_peer.try_emplace(std::string{fqn}, 0u);
-        return ++it->second;
+        return m_refcount.bump(node_name, fqn);
     }
 
     // Drop one demand; returns the post-decrement count. The 1->0 result is the
@@ -98,36 +96,17 @@ public:
     // pair is unknown so the caller treats it as "no transition".
     std::uint32_t release(std::string_view node_name, std::string_view fqn)
     {
-        auto peer_it = m_refcount.find(std::string{node_name});
-        if(peer_it == m_refcount.end())
-            return k_no_entry;
-        auto fqn_it = peer_it->second.find(std::string{fqn});
-        if(fqn_it == peer_it->second.end())
-            return k_no_entry;
-        std::uint32_t remaining = --fqn_it->second;
-        if(remaining == 0)
-        {
-            peer_it->second.erase(fqn_it);
-            if(peer_it->second.empty())
-                m_refcount.erase(peer_it);
-        }
-        return remaining;
+        return m_refcount.drop(node_name, fqn);
     }
 
     // Whether this forwarder currently holds a same-host ring for the pair.
     [[nodiscard]] bool holds(std::string_view node_name, std::string_view fqn) const
     {
-        auto peer_it = m_refcount.find(std::string{node_name});
-        if(peer_it == m_refcount.end())
-            return false;
-        auto fqn_it = peer_it->second.find(std::string{fqn});
-        return fqn_it != peer_it->second.end() && fqn_it->second > 0;
+        return m_refcount.holds(node_name, fqn);
     }
 
-    static constexpr std::uint32_t k_no_entry = ~0u;
-
 private:
-    std::unordered_map<std::string, std::unordered_map<std::string, std::uint32_t>> m_refcount;
+    detail::keyed_refcount m_refcount;
 };
 
 }

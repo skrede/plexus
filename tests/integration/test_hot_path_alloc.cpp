@@ -141,7 +141,7 @@ TEST_CASE("steady-state publish->frame-once->fan-out loop is zero-alloc", "[inte
     channels.reserve(N);
     peers.reserve(N);
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     for(int i = 0; i < N; ++i)
     {
         channels.push_back(std::make_unique<sink_channel>(ex));
@@ -189,7 +189,7 @@ TEST_CASE("steady-state depth-N history-ring retain is zero-alloc", "[integratio
     sink_channel ch(ex);
     forwarder::peer peer{ch, "node-a"};
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     fwd.declare(fqn, topic_qos{.latch = true, .depth = N});
     fwd.attach(peer, fqn);
 
@@ -226,7 +226,7 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
     sink_channel ch(ex);
     forwarder::peer peer{ch, "node-rx"};
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     fwd.attach(peer, fqn);   // resolves topic_hash -> fqn for the receive tail
 
     // Build the inner unidirectional payload ONCE (the borrowed receive buffer).
@@ -310,7 +310,7 @@ TEST_CASE("steady-state publish through the egress scheduler bands is zero-alloc
     channels.reserve(N);
     peers.reserve(N);
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     for(int i = 0; i < N; ++i)
     {
         channels.push_back(std::make_unique<banding_sink_channel>(ex));

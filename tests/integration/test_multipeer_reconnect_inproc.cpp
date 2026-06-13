@@ -104,7 +104,7 @@ std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t
 {
     inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex(bus);
-    plexus::io::message_forwarder<manual_policy> framer{ex};
+    plexus::io::message_forwarder<manual_policy> framer{};
     inproc_channel<manual_clock> capture(ex);
     inproc_channel<manual_clock> tx(ex);
     tx.connect_to(capture.local_endpoint());

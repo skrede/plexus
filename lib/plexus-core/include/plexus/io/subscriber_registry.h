@@ -4,6 +4,7 @@
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/keyed_refcount.h"
 #include "plexus/io/detail/priority_band_queue.h"
 #include "plexus/topic_qos.h"
 
@@ -99,9 +100,7 @@ public:
     // result is the gate the forwarder emits a subscribe on.
     std::uint32_t bump_refcount(std::string_view node_name, std::string_view fqn)
     {
-        auto &per_peer = m_refcount[std::string{node_name}];
-        auto [it, inserted] = per_peer.try_emplace(std::string{fqn}, 0u);
-        return ++it->second;
+        return m_refcount.bump(node_name, fqn);
     }
 
     // Drop the (peer, fqn) refcount; returns the post-decrement count. The 1->0
@@ -109,20 +108,7 @@ public:
     // sentinel when the pair is unknown so the caller treats it as "no transition".
     std::uint32_t drop_refcount(std::string_view node_name, std::string_view fqn)
     {
-        auto peer_it = m_refcount.find(std::string{node_name});
-        if(peer_it == m_refcount.end())
-            return k_no_entry;
-        auto fqn_it = peer_it->second.find(std::string{fqn});
-        if(fqn_it == peer_it->second.end())
-            return k_no_entry;
-        std::uint32_t remaining = --fqn_it->second;
-        if(remaining == 0)
-        {
-            peer_it->second.erase(fqn_it);
-            if(peer_it->second.empty())
-                m_refcount.erase(peer_it);
-        }
-        return remaining;
+        return m_refcount.drop(node_name, fqn);
     }
 
     // Register a peer's fan-out entry for an fqn (idempotent on a re-add of the
@@ -208,24 +194,13 @@ public:
 
     // The producer-declared source-identity OFFER as a first-class bool — the
     // request-vs-offered source_identity relation reads it to decide whether a
-    // subscriber that requires source identity may attach. Distinct from
-    // source_identity_counter (which is the per-frame endpoint counter): this is the
-    // capability advertisement, true iff the topic declared emit_source_identity.
+    // subscriber that requires source identity may attach. This is the capability
+    // advertisement, true iff the topic declared emit_source_identity (distinct from
+    // the per-frame endpoint counter publish reads off the topic record directly).
     bool offers_source_identity(std::uint64_t topic_hash) const
     {
         auto it = m_topics.find(topic_hash);
         return it != m_topics.end() && it->second.emit_source_identity;
-    }
-
-    // The source-identity endpoint counter to emit for a topic, or std::nullopt when
-    // the topic did not declare source identity (so publish emits 0 B and a byte-
-    // identical v3-no-flag frame). Engaged iff the producer declared emit_source_identity.
-    std::optional<std::uint64_t> source_identity_counter(std::uint64_t topic_hash) const
-    {
-        auto it = m_topics.find(topic_hash);
-        if(it == m_topics.end() || !it->second.emit_source_identity)
-            return std::nullopt;
-        return it->second.endpoint_counter;
     }
 
     // Drop one peer's fan-out entry for an fqn.
@@ -248,16 +223,7 @@ public:
                           [&](const subscriber &s) { return s.channel == &channel; });
             recompute_wants_info(entry);
         }
-        m_refcount.erase(std::string{node_name});
-    }
-
-    // The fan-out target list for a topic_hash, or nullptr when none subscribe.
-    const std::vector<subscriber> *subscribers_for(std::uint64_t topic_hash) const
-    {
-        auto it = m_topics.find(topic_hash);
-        if(it == m_topics.end() || it->second.subscribers.empty())
-            return nullptr;
-        return &it->second.subscribers;
+        m_refcount.forget(node_name);
     }
 
     // The whole per-topic record in ONE lookup, for the hot publish verbs: reading
@@ -360,12 +326,10 @@ private:
                         [](const subscriber &s) { return s.qos.wants_message_info; });
     }
 
-    static constexpr std::uint32_t k_no_entry = ~0u;
-
     std::unordered_map<std::uint64_t, topic_entry> m_topics;
     mutable std::uint64_t m_last_fqn_hash{0};
     mutable const std::string *m_last_fqn{nullptr};
-    std::unordered_map<std::string, std::unordered_map<std::string, std::uint32_t>> m_refcount;
+    detail::keyed_refcount m_refcount;
     // The per-node monotonic source-identity endpoint-counter allocator. Minted at
     // declare (cold path), never on the hot path. Starts at 1 so 0 stays free as an
     // "unminted" value if ever needed; gid uniqueness comes from node_id ‖ counter.

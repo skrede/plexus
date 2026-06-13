@@ -191,8 +191,7 @@ TEST_CASE("egress_priority: a realtime frame leaves a stalled destination before
     {
         stall_state st;
         stall_channel ch{st};
-        stall_executor ex;
-        stall_forwarder fwd{ex};
+        stall_forwarder fwd{};
 
         // Two topics over the SAME destination, one background and one realtime.
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
@@ -239,8 +238,7 @@ TEST_CASE("egress_priority: a flooded background band never delays a high frame 
     {
         stall_state st;
         stall_channel ch{st};
-        stall_executor ex;
-        stall_forwarder fwd{ex};
+        stall_forwarder fwd{};
 
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("hi", topic_qos{.priority = io::priority::high});
@@ -290,8 +288,7 @@ TEST_CASE("egress_priority: a multi-band backlog drains in strict band-descendin
     {
         stall_state st;
         stall_channel ch{st};
-        stall_executor ex;
-        stall_forwarder fwd{ex};
+        stall_forwarder fwd{};
 
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("nm", topic_qos{.priority = io::priority::normal});
@@ -346,7 +343,7 @@ TEST_CASE("egress_priority: inproc is unaffected — mixed priorities deliver in
         std::vector<std::vector<std::byte>> frames;
         sink.on_data([&](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
 
-        inproc_forwarder fwd{ex};
+        inproc_forwarder fwd{};
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("rt", topic_qos{.priority = io::priority::realtime});
         REQUIRE(fwd.attach_for_fanout(inproc_forwarder::peer{ch, "node-a"}, "bg"));
@@ -408,8 +405,7 @@ TEST_CASE("egress_priority: the MUX/ERASED path bands — realtime leaves before
         auto inner = std::make_unique<stall_channel>(st);
         pio::polymorphic_byte_channel ch(
             std::make_unique<pio::channel_adapter<stall_channel>>(std::move(inner)));
-        stall_executor ex;
-        erased_forwarder fwd{ex};
+        erased_forwarder fwd{};
 
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("rt", topic_qos{.priority = io::priority::realtime});
@@ -469,8 +465,7 @@ TEST_CASE("egress_priority: drop_oldest evicts the oldest resident frame; surviv
         // The directly-driven scheduler proves the per-band counter (the observability gate).
         stall_state counter_st;
         stall_channel counter_ch{counter_st};
-        stall_executor counter_ex;
-        io::detail::egress_scheduler<stall_channel, stall_policy> sched{counter_ex};
+        io::detail::egress_scheduler<stall_channel, stall_policy> sched{};
         const std::size_t band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::drop_oldest);
         REQUIRE(sched.dropped_oldest(counter_ch, band) == 1);
 
@@ -478,8 +473,7 @@ TEST_CASE("egress_priority: drop_oldest evicts the oldest resident frame; surviv
         // absent, the new body present, the survivors in FIFO order.
         stall_state st;
         stall_channel ch{st};
-        stall_executor ex;
-        stall_forwarder fwd{ex};
+        stall_forwarder fwd{};
         // The saturated topic is on the normal band; the drain trigger rides a separate
         // realtime topic on an EMPTY higher band, so the trigger never re-saturates the
         // normal band — it only releases the stall and kicks the inline drain.
@@ -518,15 +512,13 @@ TEST_CASE("egress_priority: block refuses the new frame at a saturated band; it 
     {
         stall_state counter_st;
         stall_channel counter_ch{counter_st};
-        stall_executor counter_ex;
-        io::detail::egress_scheduler<stall_channel, stall_policy> sched{counter_ex};
+        io::detail::egress_scheduler<stall_channel, stall_policy> sched{};
         const std::size_t band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::block);
         REQUIRE(sched.blocked(counter_ch, band) == 1);
 
         stall_state st;
         stall_channel ch{st};
-        stall_executor ex;
-        stall_forwarder fwd{ex};
+        stall_forwarder fwd{};
         fwd.declare("t", topic_qos{.congestion = io::congestion::block, .priority = io::priority::normal});
         fwd.declare("kick", topic_qos{.priority = io::priority::realtime});
         REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
@@ -562,8 +554,7 @@ TEST_CASE("egress_priority: a forced drop is observable per-topic-per-band on th
     auto force_drops = [](io::congestion mode, pdetail::drop_cause cause, std::size_t overflows) {
         stall_state st;
         stall_channel ch{st};
-        stall_executor ex;
-        stall_forwarder fwd{ex};
+        stall_forwarder fwd{};
         fwd.declare("t", topic_qos{.congestion = mode, .priority = io::priority::normal});
         REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
 
@@ -598,15 +589,13 @@ TEST_CASE("egress_priority: drop_newest refuses the new frame at a saturated ban
     {
         stall_state counter_st;
         stall_channel counter_ch{counter_st};
-        stall_executor counter_ex;
-        io::detail::egress_scheduler<stall_channel, stall_policy> sched{counter_ex};
+        io::detail::egress_scheduler<stall_channel, stall_policy> sched{};
         const std::size_t band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::drop_newest);
         REQUIRE(sched.dropped_newest(counter_ch, band) == 1);
 
         stall_state st;
         stall_channel ch{st};
-        stall_executor ex;
-        stall_forwarder fwd{ex};
+        stall_forwarder fwd{};
         fwd.declare("t", topic_qos{.congestion = io::congestion::drop_newest, .priority = io::priority::normal});
         fwd.declare("kick", topic_qos{.priority = io::priority::realtime});
         REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
@@ -642,8 +631,7 @@ TEST_CASE("egress_priority: the drain leaves a frame the channel cap cannot admi
     capped_state cst;
     cst.cap = io::detail::k_low_water;   // the gate equals the channel's own write-queue cap
     capped_channel ch{cst};
-    stall_executor ex;
-    io::detail::egress_scheduler<capped_channel, capped_policy> sched{ex};
+    io::detail::egress_scheduler<capped_channel, capped_policy> sched{};
 
     const std::size_t band = io::detail::band_of(io::priority::normal);
     const std::size_t small = io::detail::k_low_water / 2;     // fits with room left
