@@ -48,10 +48,11 @@ constexpr std::size_t k_low_water = io::fragmentation_limits::max_message_size;
 // observable through a per-(destination, band) counter (dropped_oldest / dropped_newest /
 // blocked) mirroring the channel-level dropped_count() shape.
 //
-// In-flight safety: a band node stays pool-resident until channel.send() COPIES it into
-// the channel's own send queue; only THEN is pop_highest called, so the scheduler never
-// frees a node the socket is mid-writing — drop_oldest only ever recycles a slot still
-// resident in a band, never one already handed to channel.send().
+// In-flight safety: a band node stays pool-resident until channel.send() has taken the
+// frame — sharing the owner into its own send queue (the wire_bytes overload, no copy) or
+// copying it (the span-only TLS/inproc fallback); only THEN is pop_highest called, so the
+// scheduler never frees a node the socket is mid-writing — drop_oldest only ever recycles a
+// slot still resident in a band, never one already handed to channel.send().
 template <typename Channel, typename Policy>
     requires plexus::Policy<Policy>
 class egress_scheduler
