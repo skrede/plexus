@@ -92,7 +92,7 @@ TEST_CASE("a none+pull subscriber gets 0 on subscribe, then fetch_latched caps a
         // The topic_hash the wire fetch_latched_request would carry.
         const auto hash = plexus::wire::fqn_topic_hash("topic");
 
-        forwarder fwd{ex};
+        forwarder fwd{};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
         for(int i = 0; i < 5; ++i)
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));
@@ -129,7 +129,7 @@ TEST_CASE("fetch_latched against a never-declared topic replays zero frames (no 
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     fwd.fetch_latched(peer, plexus::wire::fqn_topic_hash("nope"), 5);
     ex.drain();
     REQUIRE(data_bodies(cap).empty());

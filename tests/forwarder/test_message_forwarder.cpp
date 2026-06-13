@@ -193,7 +193,7 @@ TEST_CASE("attach refcount gate emits exactly one subscribe on 0->1", "[forwarde
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{ex};
+        forwarder fwd{};
         REQUIRE(fwd.attach(peer, "alpha"));    // 0->1
         REQUIRE_FALSE(fwd.attach(peer, "alpha")); // 1->2, no emit
         ex.drain();
@@ -202,7 +202,18 @@ TEST_CASE("attach refcount gate emits exactly one subscribe on 0->1", "[forwarde
     }
 }
 
-TEST_CASE("drain_for re-emits one subscribe per peer-rooted remote topic", "[forwarder]")
+// Resurrect every remembered demand through the COUNTED attach path the session's
+// reconnect uses (peer_session::resubscribe_all reads remembered_topics and re-attaches
+// each demand carrying its stored qos + type_id). A forwarder with no live refcount for
+// a pair re-attaches as a 0->1 transition, emitting exactly one subscribe — the
+// resurrection contract exercised through the path production actually drives.
+void resurrect(forwarder &fwd, const forwarder::peer &peer)
+{
+    for(const auto &demand : fwd.remembered_topics(peer.node_name))
+        fwd.attach(peer, demand.fqn, demand.qos, demand.type_id);
+}
+
+TEST_CASE("resurrection re-emits one subscribe per peer-rooted remembered topic", "[forwarder]")
 {
     for(int iter = 0; iter < 100; ++iter)
     {
@@ -212,15 +223,15 @@ TEST_CASE("drain_for re-emits one subscribe per peer-rooted remote topic", "[for
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{ex};
-        fwd.attach(peer, "alpha");
-        fwd.attach(peer, "beta");
+        forwarder fwd{};
+        fwd.remember_demand("node-a", "alpha");
+        fwd.remember_demand("node-a", "beta");
         ex.drain();
         cap.frames.clear();
 
-        fwd.drain_for(peer);
+        resurrect(fwd, peer);
         ex.drain();
-        REQUIRE(count_subscribes(cap) == 2);   // one per recorded remote topic
+        REQUIRE(count_subscribes(cap) == 2);   // one per recorded remembered topic
     }
 }
 
@@ -239,11 +250,11 @@ std::optional<std::uint64_t> first_subscribe_type_hash(const capture &cap)
     return std::nullopt;
 }
 
-TEST_CASE("drain_for resurrects the remembered type_id on the re-subscribe", "[forwarder][type_id]")
+TEST_CASE("resurrection carries the remembered type_id onto the re-subscribe", "[forwarder][type_id]")
 {
     // The reconnect type-gate drop: a demand remembered WITH a type_id must re-emit a
-    // subscribe carrying that SAME type_id through drain_for. Looped over several
-    // remember/drain cycles (no success from a single run).
+    // subscribe carrying that SAME type_id when the counted path resurrects it. Looped
+    // over several remember/resurrect cycles (no success from a single run).
     constexpr std::uint64_t k_type_id = 0xC0FFEE1234567890ULL;
     constexpr int k_cycles = 16;
     int proven = 0;
@@ -255,9 +266,9 @@ TEST_CASE("drain_for resurrects the remembered type_id on the re-subscribe", "[f
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{ex};
+        forwarder fwd{};
         fwd.remember_demand("node-a", "alpha", plexus::io::subscriber_qos{}, k_type_id);
-        fwd.drain_for(peer);
+        resurrect(fwd, peer);
         ex.drain();
 
         const auto type_hash = first_subscribe_type_hash(cap);
@@ -268,7 +279,7 @@ TEST_CASE("drain_for resurrects the remembered type_id on the re-subscribe", "[f
     REQUIRE(proven == k_cycles);
 }
 
-TEST_CASE("drain_for keeps an undeclared demand untyped on the re-subscribe", "[forwarder][type_id]")
+TEST_CASE("resurrection keeps an undeclared demand untyped on the re-subscribe", "[forwarder][type_id]")
 {
     // The absence-is-distinct mirror: a demand remembered WITHOUT a type_id re-emits the
     // undeclared sentinel (0), never a fabricated type.
@@ -280,9 +291,9 @@ TEST_CASE("drain_for keeps an undeclared demand untyped on the re-subscribe", "[
         capture cap(ex);
         auto peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{ex};
+        forwarder fwd{};
         fwd.remember_demand("node-a", "alpha");
-        fwd.drain_for(peer);
+        resurrect(fwd, peer);
         ex.drain();
 
         const auto type_hash = first_subscribe_type_hash(cap);
@@ -302,7 +313,7 @@ TEST_CASE("frame-once fan-out delivers byte-identical frames to each subscriber"
         auto peer_a = make_peer(ch_a, cap_a, "node-a");
         auto peer_b = make_peer(ch_b, cap_b, "node-b");
 
-        forwarder fwd{ex};
+        forwarder fwd{};
         fwd.attach(peer_a, "alpha");
         fwd.attach(peer_b, "alpha");
         ex.drain();
@@ -327,7 +338,7 @@ TEST_CASE("detach_all stops fan-out", "[forwarder]")
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     fwd.attach(peer, "alpha");
     ex.drain();
     cap.frames.clear();
@@ -346,7 +357,7 @@ TEST_CASE("detach on 1->0 emits exactly one unsubscribe_request", "[forwarder]")
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     fwd.attach(peer, "alpha");
     fwd.attach(peer, "alpha");      // refcount 2
     ex.drain();
@@ -366,7 +377,7 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     fwd.attach(peer, "alpha");     // registers the topic_hash -> fqn resolution
 
     const std::string body = "the-opaque-payload";
@@ -394,7 +405,7 @@ TEST_CASE("no-subscriber publish sends nothing (demand-driven)", "[forwarder]")
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     fwd.publish("alpha", as_bytes(std::string{"nobody-home"}));
     ex.drain();
     REQUIRE_FALSE(bus.has_pending_packets());   // nothing was ever enqueued
@@ -405,7 +416,7 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
     counting_logger log;
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{ex, log};
+    forwarder fwd{log};
     inproc_channel<> ch(ex);
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
@@ -426,7 +437,7 @@ TEST_CASE("default forwarder drops a malformed frame silently via null_logger", 
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{ex};                  // no logger argument: shared null_logger
+    forwarder fwd{};                  // no logger argument: shared null_logger
     inproc_channel<> ch(ex);
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");
@@ -450,7 +461,7 @@ TEST_CASE("frame-once fan-out allocates nothing after warm-up", "[forwarder]")
 
     sink_executor ex;
     sink_channel ch_a(ex), ch_b(ex);
-    sink_forwarder fwd{ex};
+    sink_forwarder fwd{};
     sink_forwarder::peer peer_a{ch_a, "node-a"};
     sink_forwarder::peer peer_b{ch_b, "node-b"};
     fwd.attach(peer_a, "alpha");

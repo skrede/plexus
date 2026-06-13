@@ -101,7 +101,7 @@ TEST_CASE("publish_object: a matching process-tier subscriber receives the objec
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{ex};
+    forwarder fwd{};
     sink_peer s(ex, "node-a");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
@@ -131,7 +131,7 @@ TEST_CASE("publish_object: a bytes-family subscriber takes the byte path with on
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{ex};
+    forwarder fwd{};
     sink_peer s(ex, "node-a");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
@@ -159,7 +159,7 @@ TEST_CASE("publish_object: a mixed subscriber set delivers object AND bytes with
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{ex};
+    forwarder fwd{};
     sink_peer typed(ex, "node-typed");
     sink_peer bytes(ex, "node-bytes");
 
@@ -189,7 +189,7 @@ TEST_CASE("publish_object: a tag mismatch falls back to the byte path", "[forwar
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{ex};
+    forwarder fwd{};
     sink_peer s(ex, "node-a");
 
     // Producer + subscriber both declare the SAME type (so attach is accepted), but
@@ -219,7 +219,7 @@ TEST_CASE("publish_object: a process-excluding reach mask produces no object and
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{ex};
+    forwarder fwd{};
     sink_peer s(ex, "node-a");
 
     // reach excludes the process tier, so the single same-process subscriber is gated
@@ -251,7 +251,7 @@ TEST_CASE("publish_object: a latched topic forces one encode even when every sub
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{ex};
+    forwarder fwd{};
     sink_peer typed(ex, "node-typed");
 
     plexus::topic_qos qos;
@@ -289,7 +289,7 @@ TEST_CASE("publish_object: the caller reference is balanced when no subscriber m
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{ex};
+    forwarder fwd{};
 
     // No subscribers, unlatched topic: nothing to deliver, encode never runs, but the
     // caller's reference must still be released exactly once.

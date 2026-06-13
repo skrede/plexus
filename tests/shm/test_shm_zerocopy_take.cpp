@@ -34,7 +34,7 @@ TEST_CASE("zerocopy_take: wire_bytes aliases the slot and pins the refcount", "[
             // The subscriber pins the slot at take() time (refcount -> 1) and hands
             // out a move-only taken_message aliasing the slot bytes.
             taken_message msg = test::handle_test_access::make_taken(
-                slot, sizeof(slot), &refcount, /*cell_index=*/0, /*generation=*/0);
+                slot, sizeof(slot), &refcount);
             REQUIRE(refcount.load() == 1);
 
             {
@@ -64,7 +64,7 @@ TEST_CASE("zerocopy_take: a moved wire_bytes owner unpins exactly once", "[shm][
 
     {
         taken_message msg = test::handle_test_access::make_taken(
-            slot, sizeof(slot), &refcount, 0, 0);
+            slot, sizeof(slot), &refcount);
         plexus::wire_bytes<shm_slot_owner> a = msg.as_wire_bytes();
         REQUIRE(refcount.load() == 2); // handle pin + view pin
 

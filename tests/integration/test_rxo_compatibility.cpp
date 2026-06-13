@@ -93,8 +93,8 @@ struct link
     inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
-    msg_forwarder sub_messages{ex};    // the subscriber's forwarder
-    msg_forwarder prod_messages{ex};   // the producer's forwarder
+    msg_forwarder sub_messages{};    // the subscriber's forwarder
+    msg_forwarder prod_messages{};   // the producer's forwarder
     rpc_forwarder sub_procedures{ex, k_long_timeout};
     rpc_forwarder prod_procedures{ex, k_long_timeout};
 

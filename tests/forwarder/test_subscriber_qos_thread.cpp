@@ -34,7 +34,7 @@ TEST_CASE("forwarder: a subscriber qos thread stores the requested periods in th
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
 
-    forwarder fwd{ex};
+    forwarder fwd{};
     inproc_channel<> ch{ex};
     forwarder::peer peer{ch, "node-a"};
 

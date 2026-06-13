@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_PROCEDURE_FORWARDER_H
 
 #include "plexus/io/subscriber_registry.h"
+#include "plexus/io/subscription_endpoint.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/policy.h"
 #include "plexus/log/logger.h"
@@ -63,14 +64,8 @@ public:
     using channel_type = typename Policy::byte_channel_type;
     using executor_type = typename Policy::executor_type;
     using timer_type = typename Policy::timer_type;
-
-    // A peer the forwarder talks to: the channel a frame rides plus the node-name
-    // key its outstanding table is rooted at (mirror message_forwarder).
-    struct peer
-    {
-        channel_type &channel;
-        std::string node_name;
-    };
+    using endpoint_type = subscription_endpoint<channel_type>;
+    using peer = typename endpoint_type::peer;
 
     // The provider's async reply: invoke reply(status, return_bytes) to frame an
     // rpc_response carrying the request's correlation_id. Passed to a handler by
@@ -139,7 +134,7 @@ public:
         std::uint64_t corr_id = m_next_correlation_id++;
         wire::bidirectional_header hdr{
                 .source         = wire::endpoint_source_type::caller,
-                .sequence       = m_next_sequence++,
+                .sequence       = m_endpoint.next_sequence(),
                 .topic_hash     = wire::fqn_topic_hash(fqn),
                 .type_hash_1    = 0,
                 .type_hash_2    = 0,
@@ -160,11 +155,10 @@ public:
     // unknown remote topic. A call() needs no prior attach (point-to-point).
     bool attach(const peer &p, std::string_view fqn)
     {
-        if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
+        if(!m_endpoint.attach_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name);
-        record_remote_topic(p.node_name, fqn);
+        m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name);
         send_subscribe(p.channel, fqn, hash);
         return true;
     }
@@ -173,10 +167,10 @@ public:
     // provider's reaction to an arriving subscribe).
     bool attach_for_fanout(const peer &p, std::string_view fqn)
     {
-        if(m_registry.bump_refcount(p.node_name, fqn) != 1u)
+        if(!m_endpoint.attach_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_registry.add_subscriber(hash, fqn, p.channel, p.node_name);
+        m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name);
         auto resp = wire::encode_subscribe_response(
                 {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
         send_control(p.channel, wire::msg_type::subscribe_response, resp);
@@ -186,10 +180,10 @@ public:
     // detach: per-(peer, fqn) refcount gate. On 1->0 it emits an unsubscribe.
     bool detach(const peer &p, std::string_view fqn)
     {
-        if(m_registry.drop_refcount(p.node_name, fqn) != 0u)
+        if(!m_endpoint.detach_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_registry.remove_subscriber(hash, p.channel);
+        m_endpoint.registry().remove_subscriber(hash, p.channel);
         auto req = wire::encode_unsubscribe_request({.topic_hash = hash});
         send_control(p.channel, wire::msg_type::unsubscribe, req);
         return true;
@@ -201,8 +195,7 @@ public:
     // entry never fires a late timeout. The peer-death resolution path.
     void detach_all(const peer &p)
     {
-        m_registry.remove_peer(p.node_name, p.channel);
-        m_remote_topics.erase(p.node_name);
+        m_endpoint.remove_peer(p);
 
         auto peer_it = m_outstanding.find(p.node_name);
         if(peer_it == m_outstanding.end())
@@ -213,17 +206,6 @@ public:
             pending.on_response(wire::rpc_status::peer_disconnected, {});
         }
         m_outstanding.erase(peer_it);
-    }
-
-    // drain_for: re-emit a subscribe for each remote topic rooted at the peer's
-    // node name (subscription resurrection on reconnect).
-    void drain_for(const peer &p)
-    {
-        auto it = m_remote_topics.find(p.node_name);
-        if(it == m_remote_topics.end())
-            return;
-        for(const auto &fqn : it->second)
-            send_subscribe(p.channel, fqn, wire::fqn_topic_hash(fqn));
     }
 
     // deliver_request (provider receive tail): decode the inbound (header-off)
@@ -245,7 +227,7 @@ public:
         auto hash_it = m_hash_to_fqn.find(req_hdr.topic_hash);
         if(hash_it == m_hash_to_fqn.end())
         {
-            auto status = m_registry.fqn_for(req_hdr.topic_hash).empty()
+            auto status = m_endpoint.registry().fqn_for(req_hdr.topic_hash).empty()
                               ? wire::rpc_status::no_handler
                               : wire::rpc_status::topic_not_found;
             return reply_status(p.channel, req_hdr, status, {}, session_id);
@@ -350,7 +332,7 @@ private:
     {
         wire::bidirectional_header resp_hdr{
                 .source         = wire::endpoint_source_type::procedure,
-                .sequence       = m_next_sequence++,
+                .sequence       = m_endpoint.next_sequence(),
                 .topic_hash     = req_hdr.topic_hash,
                 .type_hash_1    = 0,
                 .type_hash_2    = 0,
@@ -383,7 +365,7 @@ private:
     // pre-session) into reused scratch and send it.
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
-        send_data(channel, type, inner, 0);
+        m_endpoint.send_control(channel, type, inner);
     }
 
     void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash)
@@ -395,29 +377,18 @@ private:
                 .type_hash  = 0,
                 .source     = wire::endpoint_source_type::caller
         };
-        auto bytes = wire::encode_subscribe_request(req);
-        send_control(channel, wire::msg_type::subscribe, bytes);
-    }
-
-    void record_remote_topic(const std::string &node_name, std::string_view fqn)
-    {
-        auto &topics = m_remote_topics[node_name];
-        for(const auto &existing : topics)
-            if(existing == fqn)
-                return;
-        topics.emplace_back(fqn);
+        m_endpoint.send_subscribe(channel, req);
     }
 
     void drop(std::string_view message) { m_logger.warn(message); }
 
     log::logger &m_logger;
+    endpoint_type m_endpoint;
     executor_type m_executor;
     std::chrono::nanoseconds m_default_deadline;
-    subscriber_registry<channel_type> m_registry;
     std::unordered_map<std::string, handler_fn> m_providers;
     std::unordered_map<std::uint64_t, std::string> m_hash_to_fqn;
     std::unordered_map<std::string, std::unordered_map<std::uint64_t, pending_rpc>> m_outstanding;
-    std::unordered_map<std::string, std::vector<std::string>> m_remote_topics;
     std::vector<std::byte> m_req_scratch;
     std::vector<std::byte> m_resp_scratch;
     std::vector<std::byte> m_frame_scratch;
@@ -426,7 +397,6 @@ private:
     wire::bidirectional_header m_active_req_hdr{};
     std::uint64_t m_active_session_id{0};
     std::uint64_t m_next_correlation_id{1};
-    std::uint64_t m_next_sequence{0};
     std::size_t m_max_outstanding;
 };
 

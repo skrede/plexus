@@ -16,7 +16,6 @@ concept wire_forwarder = requires(F &f, const Peer &peer, std::string_view fqn)
 {
     { f.attach(peer, fqn) } -> std::convertible_to<bool>;
     { f.detach_all(peer) }  -> std::same_as<void>;
-    { f.drain_for(peer) }   -> std::same_as<void>;
 };
 
 }

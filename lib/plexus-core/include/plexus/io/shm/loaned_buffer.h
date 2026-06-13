@@ -15,10 +15,9 @@ struct handle_test_access;
 }
 
 // Move-only producer handle: a writable byte window into the slot a loan claimed,
-// plus an opaque slot ticket (cell index + the ring position whose lap the publish
-// commits). Transport-neutral by design -- it exposes neither the ring, the
-// region, nor any shared-memory internal, only an opaque writable window and the
-// filled length.
+// plus an opaque slot ticket (the ring position whose lap the publish commits).
+// Transport-neutral by design -- it exposes neither the ring, the region, nor any
+// shared-memory internal, only an opaque writable window and the filled length.
 //
 // Cross-host forward constraint: for the shared-memory model the window IS memory
 // the consumer maps, but a future cross-host model would frame a LOCAL buffer onto
@@ -44,7 +43,6 @@ public:
         : m_slot(other.m_slot),
           m_capacity(other.m_capacity),
           m_filled(other.m_filled),
-          m_cell_index(other.m_cell_index),
           m_position(other.m_position)
     {
         other.m_slot     = nullptr;
@@ -62,7 +60,6 @@ public:
         m_slot       = other.m_slot;
         m_capacity   = other.m_capacity;
         m_filled     = other.m_filled;
-        m_cell_index = other.m_cell_index;
         m_position   = other.m_position;
 
         other.m_slot     = nullptr;
@@ -93,9 +90,8 @@ private:
     friend class slot_publisher;
     friend struct ::plexus::io::shm::test::handle_test_access;
 
-    loaned_buffer(std::byte *slot, std::size_t capacity, std::uint64_t cell_index,
-                  std::uint64_t position) noexcept
-        : m_slot(slot), m_capacity(capacity), m_cell_index(cell_index), m_position(position)
+    loaned_buffer(std::byte *slot, std::size_t capacity, std::uint64_t position) noexcept
+        : m_slot(slot), m_capacity(capacity), m_position(position)
     {
     }
 
@@ -113,7 +109,6 @@ private:
     std::byte    *m_slot{nullptr};
     std::size_t   m_capacity{0};
     std::size_t   m_filled{0};
-    std::uint64_t m_cell_index{0};
     std::uint64_t m_position{0};
 };
 

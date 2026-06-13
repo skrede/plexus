@@ -38,9 +38,7 @@ constexpr std::size_t k_low_water = io::fragmentation_limits::max_message_size;
 // destination goes full the remaining backlog stays priority-ordered in the bands and the
 // NEXT publish's enqueue resumes the drain (event-driven re-arm). A periodic liveness
 // re-poll for a destination that goes full AND then receives no further publishes is a
-// separate later concern; the borrowed executor is threaded in now as the substrate that
-// re-poll will post onto — the scheduler holds no owned runtime, no thread, no
-// shared_from_this, and the engine quiesces the executor before teardown.
+// separate later concern.
 //
 // The per-message congestion policy (block / drop_oldest / drop_newest) is applied at the
 // destination band when it saturates: block and drop_newest refuse the new frame,
@@ -57,13 +55,6 @@ template <typename Channel, typename Policy>
 class egress_scheduler
 {
 public:
-    using executor_type = typename Policy::executor_type;
-
-    explicit egress_scheduler(executor_type executor)
-        : m_executor(executor)
-    {
-    }
-
     // Enqueue a framed buffer for a destination at the given band under the publisher's
     // per-message congestion policy. A channel without a backpressure signal is sent
     // synchronously (the inproc/sink short-circuit) — it has no bounded band backlog, so
@@ -159,7 +150,6 @@ private:
             return true;
     }
 
-    executor_type m_executor;
     std::unordered_map<Channel *, priority_band_queue> m_queues;
 };
 

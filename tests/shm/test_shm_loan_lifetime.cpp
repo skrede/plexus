@@ -21,7 +21,7 @@ TEST_CASE("loan_lifetime: a moved-from loaned_buffer is inert", "[shm][loan_life
 {
     alignas(8) std::byte slot[32]{};
 
-    loaned_buffer a = test::handle_test_access::make_loaned(slot, sizeof(slot), 0, 0);
+    loaned_buffer a = test::handle_test_access::make_loaned(slot, sizeof(slot), 0);
     REQUIRE(a.capacity() == sizeof(slot));
     REQUIRE(a.bytes().data() == slot);
 
@@ -45,7 +45,7 @@ TEST_CASE("loan_lifetime: a moved-from taken_message unpins exactly once", "[shm
     std::atomic<std::uint32_t> refcount{0};
 
     {
-        taken_message a = test::handle_test_access::make_taken(slot, sizeof(slot), &refcount, 0, 0);
+        taken_message a = test::handle_test_access::make_taken(slot, sizeof(slot), &refcount);
         REQUIRE(refcount.load() == 1);
 
         taken_message b = std::move(a);

@@ -209,7 +209,7 @@ struct session_under_peer
     pasio::asio_listener listener{io, short_cfg()};
     ::asio::ip::tcp::socket client{io};
 
-    msg_forwarder messages{io};
+    msg_forwarder messages{};
     rpc_forwarder procedures{io, k_long_timeout};
     pio::peer_context<asio_policy> ctx;
     std::optional<session> peer;
