@@ -61,3 +61,13 @@ add_executable(test_handshake_codec_noalloc test_handshake_codec_noalloc.cpp)
 target_link_libraries(test_handshake_codec_noalloc PRIVATE plexus::wire Catch2::Catch2WithMain)
 target_include_directories(test_handshake_codec_noalloc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_handshake_codec_noalloc TEST_PREFIX "wire.")
+
+# The wire::reader/writer cursor oracle: the field-list round-trip, the fail-closed
+# per-read bound, the over-long-varint delegation, and the writer-into-a-reserved-
+# buffer no-realloc property. The no-realloc case includes support/alloc_counter.h
+# (one operator-new override per program), so it lives in its own executable like the
+# handshake noalloc gate; tests/ is on the include path for it.
+add_executable(test_wire_cursor test_wire_cursor.cpp)
+target_link_libraries(test_wire_cursor PRIVATE plexus::wire Catch2::Catch2WithMain)
+target_include_directories(test_wire_cursor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_wire_cursor TEST_PREFIX "wire_cursor.")

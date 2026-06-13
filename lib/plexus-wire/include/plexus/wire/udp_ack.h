@@ -1,12 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_WIRE_UDP_ACK_H
 #define HPP_GUARD_PLEXUS_WIRE_UDP_ACK_H
 
-#include "plexus/wire/byte_order.h"
+#include "plexus/wire/cursor.h"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <span>
 #include <vector>
@@ -67,11 +66,12 @@ constexpr std::size_t udp_ack_frame_size = 1 + 2 + udp_ack::bitmap_bytes;
 inline void encode_udp_ack_into(std::vector<std::byte> &out, const udp_ack &ack)
 {
     out.resize(udp_ack_frame_size);
-    auto *p = out.data();
+    writer w{out};
 
-    detail::write_u8(p, static_cast<std::uint8_t>(udp_arq_kind::ack));
-    detail::write_u16(p + 1, ack.cumulative);
-    std::memcpy(p + 3, ack.selective.data(), udp_ack::bitmap_bytes);
+    w.u8(static_cast<std::uint8_t>(udp_arq_kind::ack));
+    w.u16(ack.cumulative);
+    w.bytes(std::span<const std::byte>{
+            reinterpret_cast<const std::byte *>(ack.selective.data()), udp_ack::bitmap_bytes});
 }
 
 // Decode an untrusted ack control frame. Fail-closed: a frame that is not exactly the
@@ -82,13 +82,13 @@ inline std::optional<udp_ack> decode_udp_ack(std::span<const std::byte> frame)
     if(frame.size() != udp_ack_frame_size)
         return std::nullopt;
 
-    auto *p = frame.data();
-    if(detail::read_u8(p) != static_cast<std::uint8_t>(udp_arq_kind::ack))
+    reader r{frame};
+    if(r.u8() != static_cast<std::uint8_t>(udp_arq_kind::ack))
         return std::nullopt;
 
     udp_ack ack;
-    ack.cumulative = detail::read_u16(p + 1);
-    std::memcpy(ack.selective.data(), p + 3, udp_ack::bitmap_bytes);
+    ack.cumulative = r.u16();
+    r.copy_to(reinterpret_cast<std::byte *>(ack.selective.data()), udp_ack::bitmap_bytes);
     return ack;
 }
 
@@ -98,18 +98,19 @@ inline std::optional<udp_ack> decode_udp_ack(std::span<const std::byte> frame)
 inline void encode_udp_segment_into(std::vector<std::byte> &out, std::span<const std::byte> payload)
 {
     out.resize(1 + payload.size());
-    detail::write_u8(out.data(), static_cast<std::uint8_t>(udp_arq_kind::segment));
-    if(!payload.empty())
-        std::memcpy(out.data() + 1, payload.data(), payload.size());
+    writer w{out};
+    w.u8(static_cast<std::uint8_t>(udp_arq_kind::segment));
+    w.bytes(payload);
 }
 
 // Strip the segment marker, returning the inner payload. Fail-closed: an empty frame
 // or a non-segment marker yields nullopt (the caller drops / dispatches elsewhere).
 inline std::optional<std::span<const std::byte>> decode_udp_segment(std::span<const std::byte> frame)
 {
-    if(frame.empty() || detail::read_u8(frame.data()) != static_cast<std::uint8_t>(udp_arq_kind::segment))
+    reader r{frame};
+    if(r.u8() != static_cast<std::uint8_t>(udp_arq_kind::segment))
         return std::nullopt;
-    return frame.subspan(1);
+    return r.rest();
 }
 
 // Classify a reliable_arq inner frame by its leading marker WITHOUT decoding it. Used
@@ -117,9 +118,10 @@ inline std::optional<std::span<const std::byte>> decode_udp_segment(std::span<co
 // on_ack. A frame too short or with an unknown marker yields nullopt (dropped).
 inline std::optional<udp_arq_kind> peek_udp_arq_kind(std::span<const std::byte> frame)
 {
-    if(frame.empty())
+    reader r{frame};
+    auto marker = r.u8();
+    if(!r.ok())
         return std::nullopt;
-    auto marker = detail::read_u8(frame.data());
     if(marker == static_cast<std::uint8_t>(udp_arq_kind::segment))
         return udp_arq_kind::segment;
     if(marker == static_cast<std::uint8_t>(udp_arq_kind::ack))

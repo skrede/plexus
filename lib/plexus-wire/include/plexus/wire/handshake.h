@@ -1,14 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_WIRE_HANDSHAKE_H
 #define HPP_GUARD_PLEXUS_WIRE_HANDSHAKE_H
 
-#include "plexus/wire/byte_order.h"
+#include "plexus/wire/cursor.h"
 
 #include <span>
 #include <array>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 
 namespace plexus::wire {
@@ -140,38 +139,38 @@ inline bool is_defined_handshake_status(std::uint8_t byte) noexcept
 inline void encode_handshake_request_into(std::vector<std::byte> &out, const handshake_request &req)
 {
     out.resize(handshake_request_size);
-    auto *p = out.data();
-    std::memcpy(p, req.id.data(), req.id.size()); // 16 bytes verbatim (opaque)
-    detail::write_u8(p + 16, req.version_major);
-    detail::write_u8(p + 17, req.version_minor);
-    detail::write_u8(p + 18, req.compatible_version_major);
-    detail::write_u8(p + 19, req.compatible_version_minor);
-    detail::write_u8(p + 20, req.protocol_version);
-    detail::write_u64(p + 21, req.fingerprint);
-    std::memcpy(p + 29, req.key_id.data(), req.key_id.size());       // 8 bytes opaque
-    std::memcpy(p + 37, req.own_nonce.data(), req.own_nonce.size()); // 16 bytes opaque
-    detail::write_u8(p + 53, req.cipher_offer);
-    detail::write_u8(p + 54, req.chosen_cipher);
-    std::memcpy(p + 55, req.proof.data(), req.proof.size()); // 32 bytes opaque MAC
+    writer w{out};
+    w.bytes(req.id);
+    w.u8(req.version_major);
+    w.u8(req.version_minor);
+    w.u8(req.compatible_version_major);
+    w.u8(req.compatible_version_minor);
+    w.u8(req.protocol_version);
+    w.u64(req.fingerprint);
+    w.bytes(req.key_id);
+    w.bytes(req.own_nonce);
+    w.u8(req.cipher_offer);
+    w.u8(req.chosen_cipher);
+    w.bytes(req.proof);
 }
 
 inline void encode_handshake_response_into(std::vector<std::byte> &out, const handshake_response &resp)
 {
     out.resize(handshake_response_size);
-    auto *p = out.data();
-    std::memcpy(p, resp.id.data(), resp.id.size()); // 16 bytes verbatim (opaque)
-    detail::write_u8(p + 16, resp.version_major);
-    detail::write_u8(p + 17, resp.version_minor);
-    detail::write_u8(p + 18, resp.compatible_version_major);
-    detail::write_u8(p + 19, resp.compatible_version_minor);
-    detail::write_u8(p + 20, resp.protocol_version);
-    detail::write_u64(p + 21, resp.fingerprint);
-    std::memcpy(p + 29, resp.key_id.data(), resp.key_id.size());       // 8 bytes opaque
-    std::memcpy(p + 37, resp.own_nonce.data(), resp.own_nonce.size()); // 16 bytes opaque
-    detail::write_u8(p + 53, resp.cipher_offer);
-    detail::write_u8(p + 54, resp.chosen_cipher);
-    std::memcpy(p + 55, resp.proof.data(), resp.proof.size()); // 32 bytes opaque MAC
-    detail::write_u8(p + 87, static_cast<std::uint8_t>(resp.status));
+    writer w{out};
+    w.bytes(resp.id);
+    w.u8(resp.version_major);
+    w.u8(resp.version_minor);
+    w.u8(resp.compatible_version_major);
+    w.u8(resp.compatible_version_minor);
+    w.u8(resp.protocol_version);
+    w.u64(resp.fingerprint);
+    w.bytes(resp.key_id);
+    w.bytes(resp.own_nonce);
+    w.u8(resp.cipher_offer);
+    w.u8(resp.chosen_cipher);
+    w.bytes(resp.proof);
+    w.u8(static_cast<std::uint8_t>(resp.status));
 }
 
 inline std::vector<std::byte> encode_handshake_request(const handshake_request &req)
@@ -194,19 +193,19 @@ inline std::optional<handshake_request> decode_handshake_request(std::span<const
         return std::nullopt;
 
     handshake_request req{};
-    const auto *p = payload.data();
-    std::memcpy(req.id.data(), p, req.id.size()); // 16 bytes verbatim (opaque)
-    req.version_major            = detail::read_u8(p + 16);
-    req.version_minor            = detail::read_u8(p + 17);
-    req.compatible_version_major = detail::read_u8(p + 18);
-    req.compatible_version_minor = detail::read_u8(p + 19);
-    req.protocol_version         = detail::read_u8(p + 20);
-    req.fingerprint              = detail::read_u64(p + 21);
-    std::memcpy(req.key_id.data(), p + 29, req.key_id.size());       // 8 bytes verbatim
-    std::memcpy(req.own_nonce.data(), p + 37, req.own_nonce.size()); // 16 bytes verbatim
-    req.cipher_offer             = detail::read_u8(p + 53);
-    req.chosen_cipher            = detail::read_u8(p + 54);
-    std::memcpy(req.proof.data(), p + 55, req.proof.size()); // 32 bytes verbatim
+    reader r{payload};
+    r.copy_to(req.id.data(), req.id.size());
+    req.version_major            = r.u8();
+    req.version_minor            = r.u8();
+    req.compatible_version_major = r.u8();
+    req.compatible_version_minor = r.u8();
+    req.protocol_version         = r.u8();
+    req.fingerprint              = r.u64();
+    r.copy_to(req.key_id.data(), req.key_id.size());
+    r.copy_to(req.own_nonce.data(), req.own_nonce.size());
+    req.cipher_offer             = r.u8();
+    req.chosen_cipher            = r.u8();
+    r.copy_to(req.proof.data(), req.proof.size());
     return req;
 }
 
@@ -215,24 +214,24 @@ inline std::optional<handshake_response> decode_handshake_response(std::span<con
     if(payload.size() < handshake_response_size)
         return std::nullopt;
 
-    const auto *p = payload.data();
-    auto status_byte = detail::read_u8(p + 87);
+    handshake_response resp{};
+    reader r{payload};
+    r.copy_to(resp.id.data(), resp.id.size());
+    resp.version_major            = r.u8();
+    resp.version_minor            = r.u8();
+    resp.compatible_version_major = r.u8();
+    resp.compatible_version_minor = r.u8();
+    resp.protocol_version         = r.u8();
+    resp.fingerprint              = r.u64();
+    r.copy_to(resp.key_id.data(), resp.key_id.size());
+    r.copy_to(resp.own_nonce.data(), resp.own_nonce.size());
+    resp.cipher_offer             = r.u8();
+    resp.chosen_cipher            = r.u8();
+    r.copy_to(resp.proof.data(), resp.proof.size());
+
+    auto status_byte = r.u8();
     if(!is_defined_handshake_status(status_byte))
         return std::nullopt;
-
-    handshake_response resp{};
-    std::memcpy(resp.id.data(), p, resp.id.size()); // 16 bytes verbatim (opaque)
-    resp.version_major            = detail::read_u8(p + 16);
-    resp.version_minor            = detail::read_u8(p + 17);
-    resp.compatible_version_major = detail::read_u8(p + 18);
-    resp.compatible_version_minor = detail::read_u8(p + 19);
-    resp.protocol_version         = detail::read_u8(p + 20);
-    resp.fingerprint              = detail::read_u64(p + 21);
-    std::memcpy(resp.key_id.data(), p + 29, resp.key_id.size());       // 8 bytes verbatim
-    std::memcpy(resp.own_nonce.data(), p + 37, resp.own_nonce.size()); // 16 bytes verbatim
-    resp.cipher_offer             = detail::read_u8(p + 53);
-    resp.chosen_cipher            = detail::read_u8(p + 54);
-    std::memcpy(resp.proof.data(), p + 55, resp.proof.size()); // 32 bytes verbatim
     resp.status                   = static_cast<handshake_status>(status_byte);
     return resp;
 }
