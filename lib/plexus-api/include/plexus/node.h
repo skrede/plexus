@@ -10,7 +10,7 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
-#include "plexus/io/peer_observer.h"
+#include "plexus/io/observer.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/transport_backend.h"

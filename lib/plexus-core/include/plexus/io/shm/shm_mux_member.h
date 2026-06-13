@@ -11,8 +11,10 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/locality.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/wire/stream_inbound.h"
@@ -70,10 +72,18 @@ public:
     void send(std::span<const std::byte> data)
     {
         const loan_status st = m_channel.send(data);
-        if(st == loan_status::rejected && m_on_error)
-            m_on_error(io_error::message_too_large);
-        else if(st == loan_status::congested && m_on_error)
-            m_on_error(io_error::would_block);
+        if(st == loan_status::rejected)
+        {
+            if(m_on_error)
+                m_on_error(io_error::message_too_large);
+            emit_drop();
+        }
+        else if(st == loan_status::congested)
+        {
+            if(m_on_error)
+                m_on_error(io_error::would_block);
+            emit_drop();
+        }
     }
 
     // Release the ring back to the registry (idempotent: a second close is a no-op).
@@ -101,6 +111,7 @@ public:
 
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
     void on_error(plexus::detail::move_only_function<void(io_error)> cb) { m_on_error = std::move(cb); }
+    void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
 
     // send() memcpys straight into the shared-memory slab (no bounded userspace egress
@@ -125,15 +136,28 @@ public:
     }
 
 private:
+    // The shm ring's congestion/rejection verdict surfaces inline at send time (the ring
+    // has no userspace egress queue to post from); the drop edge is therefore reported
+    // straight off send(). It carries drop_cause::blocked (a congestion-drop) at the local
+    // tier. The engine binds this through its posted drop_sink, so the per-emit boundary
+    // back at the engine fan-out stays posted.
+    void emit_drop()
+    {
+        if(m_on_drop)
+            m_on_drop(detail::drop_event{.cause = detail::drop_cause::blocked,
+                                         .transport = locality::local});
+    }
+
     registry_type        &m_registry;
     shm_channel<Notifier> &m_channel;
     std::string           m_fqn;
     endpoint              m_remote;
     bool                  m_released = false;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                           m_on_closed;
-    plexus::detail::move_only_function<void(io_error)>                   m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)>          m_on_protocol_close;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)>      m_on_data;
+    plexus::detail::move_only_function<void()>                               m_on_closed;
+    plexus::detail::move_only_function<void(io_error)>                       m_on_error;
+    plexus::detail::move_only_function<void(const detail::drop_event &)>      m_on_drop;
+    plexus::detail::move_only_function<void(wire::close_cause)>              m_on_protocol_close;
 };
 
 // The shared-memory mux member: the SECOND same-host (local-tier) transport, joining

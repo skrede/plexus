@@ -495,7 +495,7 @@ TEST_CASE("inproc observer: calling engine.subscribe from inside an observer cal
     // through the engine. Delivery is posted, so the nested call cannot re-enter the
     // fire-site synchronously; it takes effect on a later drained turn. The case is
     // also the ASan-critical posted-edge path (the suite runs under asan/ubsan).
-    struct reentrant_observer final : public plexus::io::peer_observer
+    struct reentrant_observer final : public plexus::io::observer
     {
         engine *eng{nullptr};
         plexus::node_id target{};
@@ -538,7 +538,7 @@ TEST_CASE("inproc observer: (un)registering an observer from inside a lifecycle 
     // observer in the same turn still receives its edge. The suite runs under
     // asan/ubsan, which turns a mid-loop vector mutation into a hard failure — so this
     // case is the structural proof that add_observer/remove_observer are callback-safe.
-    struct self_removing_observer final : public plexus::io::peer_observer
+    struct self_removing_observer final : public plexus::io::observer
     {
         engine *eng{nullptr};
         int connected{0};

@@ -27,6 +27,7 @@ enum class drop_cause : std::uint8_t
     malformed,          // a fragment with idx>=cnt, an oversize count, or a ceiling overrun
     demux_refused,      // an inbound datagram refused by the per-peer demux cap
     arq_shed,           // a reliable frame shed at the publisher under congestion=drop
+    unroutable,         // a process-tier packet to a partner the bus never minted / since vanished
 };
 
 // A plain serializable drop record: cause, peer, topic, transport tier, band, and a

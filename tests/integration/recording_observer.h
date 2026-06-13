@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_OBSERVER_H
 #define HPP_GUARD_TESTS_INTEGRATION_RECORDING_OBSERVER_H
 
-#include "plexus/io/peer_observer.h"
+#include "plexus/io/observer.h"
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/handshake_fsm.h"
 
@@ -13,14 +13,14 @@
 #include <string_view>
 
 // The reusable recording observer the lifecycle/readiness suites assert against.
-// It subclasses the public peer_observer and counts each EDGE per peer — it never
+// It subclasses the public observer and counts each EDGE per peer — it never
 // reaches into the session for an internal emit counter (the world-class bar
 // rejects a test-only mutator). The keys are the peer's stable node_id, so a test
 // inspecting one peer's edges is unaffected by another's. The last rejected reason
 // and the last observed peer_kind are recorded per peer for the reason/kind
 // assertions. Every method body stays tiny (the per-peer struct does the work),
 // keeping the consuming test files within the file-size guidance.
-class recording_observer final : public plexus::io::peer_observer
+class recording_observer final : public plexus::io::observer
 {
 public:
     struct counts

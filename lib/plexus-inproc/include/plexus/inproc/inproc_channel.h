@@ -8,6 +8,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/detail/compat.h"
 
 #include <span>
@@ -71,7 +72,7 @@ public:
     void send(std::span<const std::byte> data)
     {
         if(m_bus && !m_closed)
-            m_bus->enqueue(m_partner_key, data);
+            m_bus->enqueue(m_partner_key, data, this);
     }
 
     // The process-tier object lane mirroring send(): enqueue a refcounted object
@@ -101,6 +102,7 @@ public:
     void on_object(detail::move_only_function<void(const io::object_carrier &)> cb) { m_on_object = std::move(cb); }
     void on_closed(detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
     void on_error(detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
+    void on_drop(detail::move_only_function<void(const io::detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
 
     // The non-stream opt-out: inproc moves whole pre-framed packets, so no partial
     // frame — and thus no framing violation or slowloris stall — can ever exist on
@@ -139,6 +141,17 @@ public:
             m_on_error(io::io_error::broken_pipe);
     }
 
+    // Report a process-tier packet the bus could not route to any live partner (the
+    // sender's connect_to named an endpoint the bus never minted, or the partner
+    // deregistered). The bus calls this from deliver_one (inside the executor step-loop),
+    // so the report is already off the synchronous send() path — the posted drop contract.
+    void report_unroutable()
+    {
+        if(m_on_drop)
+            m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::unroutable,
+                                             .transport = io::locality::process});
+    }
+
     // Surface a wire-protocol close (a framing violation or, once an AEAD decorator wraps
     // the link, a tag-verify failure) — the on_protocol_close seam a real byte-stream
     // channel fires, exposed here so the deterministic rig drives the misbehavior path
@@ -159,6 +172,7 @@ private:
     detail::move_only_function<void(const io::object_carrier &)> m_on_object;
     detail::move_only_function<void()> m_on_closed;
     detail::move_only_function<void(io::io_error)> m_on_error;
+    detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
     detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
     bool m_closed{false};
 };

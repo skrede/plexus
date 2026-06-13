@@ -436,7 +436,7 @@ TEST_CASE("observer over asio: an accepted (inbound) peer fires connected/discon
 TEST_CASE("observer over asio: calling engine.subscribe from inside an observer callback is posted-safe over real TCP (no re-entrancy crash)",
           "[integration][observer][asio]")
 {
-    struct reentrant_observer final : public plexus::io::peer_observer
+    struct reentrant_observer final : public plexus::io::observer
     {
         engine *eng{nullptr};
         plexus::node_id target{};

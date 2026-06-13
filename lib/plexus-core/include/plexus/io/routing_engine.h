@@ -5,8 +5,7 @@
 #include "plexus/io/locality.h"
 #include "plexus/io/known_peers.h"
 #include "plexus/io/reliability_requirement.h"
-#include "plexus/io/peer_observer.h"
-#include "plexus/io/drop_observer.h"
+#include "plexus/io/observer.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/lifecycle_event.h"
@@ -81,8 +80,9 @@ public:
         , m_monitor(m_executor)
         , m_messages(m_executor)
         , m_procedures(executor, handshake_timeout, logger)
+        , m_security_fanout{*this}
         , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures,
-                  redial, redial_seed, logger, {}, {}, {}, {}, {}, {}, {}}
+                  redial, redial_seed, logger, {}, {}, {}, {}, m_security_fanout, {}, {}}
         , m_registry(transport, m_build)
         , m_dial_eagerly(dial_eagerly)
     {
@@ -90,6 +90,10 @@ public:
         m_transport.on_accepted([this](std::unique_ptr<channel_type> ch) { on_accepted(std::move(ch)); });
         m_transport.on_dial_failed([this](const endpoint &ep, io_error) { m_registry.notify_dial_failed(ep); });
         m_build.on_lifecycle = [this](const lifecycle_event &ev) { dispatch_lifecycle(ev); };
+        // The egress shed routes through the posted drop_sink (the receive-side causes
+        // already install it at their sites) so an egress overflow reaches the observer
+        // POSTED, never inline from the per-publish fan loop.
+        m_messages.on_drop(drop_sink());
         // The receive path stamps the one monitor: a data frame stamps deadline +
         // presence (set_on_data_stamp), a heartbeat stamps presence only (on_stamp_seen
         // routed through the build context to each session). Both are plain stores.
@@ -110,16 +114,12 @@ public:
         m_monitor.start();
     }
 
-    // Register/unregister an observer of peer liveness. The list is the registry,
-    // not a wire-exposed param: the add/remove API takes a const& and stores the
-    // address. Operator-driven cold-path registration — no remote peer can grow it.
-    void add_observer(peer_observer &o) { m_observers.push_back(&o); }
-    void remove_observer(peer_observer &o) { std::erase(m_observers, &o); }
-
-    // The drop-observer registry, the exact cold-path twin of the peer-observer pair:
-    // operator-driven, const& store, no remote peer can grow it.
-    void add_drop_observer(drop_observer &o) { m_drop_observers.push_back(&o); }
-    void remove_drop_observer(drop_observer &o) { std::erase(m_drop_observers, &o); }
+    // Register/unregister a session observer (lifecycle, drop, and security edges). The
+    // list is the registry, not a wire-exposed param: the add/remove API takes a const&
+    // and stores the address. Operator-driven cold-path registration — no remote peer
+    // can grow it.
+    void add_observer(observer &o) { m_observers.push_back(&o); }
+    void remove_observer(observer &o) { std::erase(m_observers, &o); }
 
     // The seam a drop site posts a coalesced event into. It is a value-capturing,
     // engine-posted callable: every drop fans out on the BORROWED executor over a
@@ -134,7 +134,7 @@ public:
 
     // The subscriber-side timing-gate observable (FORK-B): a dedicated settable
     // callback the engine fires (POSTED on the executor) when the one monitor reports a
-    // missed-deadline or a lease-expiry. It is NOT folded into the peer_observer
+    // missed-deadline or a lease-expiry. It is NOT folded into the observer
     // lifecycle surface — a timing lapse is a distinct event from a connection edge.
     // Absent = dormant. Cold-path registration.
     void on_liveness(plexus::detail::move_only_function<void(const liveness_event &)> cb)
@@ -295,6 +295,16 @@ public:
     registry_type &registry() noexcept { return m_registry; }
 
 private:
+    // The build-context observer the registry routes each session's security edge into:
+    // it forwards into the engine's posted fan-out, so the install is by reference (the
+    // engine outlives every session built from the context) and every emit stays posted.
+    struct security_fanout : observer
+    {
+        routing_engine &engine;
+        explicit security_fanout(routing_engine &e) : engine(e) {}
+        void on_security(const security_event &ev) override { engine.post_security(ev); }
+    };
+
     // The demand-side confinement gate: does a subscription's reach mask admit the
     // target peer's delivery tier? The default any admits every peer (existing callers
     // are never refused). A confined mask classifies the tier from the endpoint scheme
@@ -366,11 +376,11 @@ private:
 
         switch(ev.edge)
         {
-            case lifecycle_edge::connected:    return post_edge(ev, &peer_observer::on_peer_connected);
-            case lifecycle_edge::disconnected: return post_edge(ev, &peer_observer::on_peer_disconnected);
-            case lifecycle_edge::reconnected:  return post_edge(ev, &peer_observer::on_peer_reconnected);
-            case lifecycle_edge::dead:         return post_edge(ev, &peer_observer::on_peer_dead);
-            case lifecycle_edge::ready:        return post_edge(ev, &peer_observer::on_peer_ready);
+            case lifecycle_edge::connected:    return post_edge(ev, &observer::on_peer_connected);
+            case lifecycle_edge::disconnected: return post_edge(ev, &observer::on_peer_disconnected);
+            case lifecycle_edge::reconnected:  return post_edge(ev, &observer::on_peer_reconnected);
+            case lifecycle_edge::dead:         return post_edge(ev, &observer::on_peer_dead);
+            case lifecycle_edge::ready:        return post_edge(ev, &observer::on_peer_ready);
             case lifecycle_edge::rejected:     return post_rejected(ev);
         }
     }
@@ -406,29 +416,18 @@ private:
     }
 
     void post_edge(const lifecycle_event &ev,
-                   void (peer_observer::*edge)(const node_id &, std::string_view, peer_kind))
+                   void (observer::*edge)(const node_id &, std::string_view, peer_kind))
     {
         Policy::post(m_executor, [this, ev, edge] {
-            fan_out([&](peer_observer &o) { (o.*edge)(ev.id, ev.node_name, ev.kind); });
+            fan_out([&](observer &o) { (o.*edge)(ev.id, ev.node_name, ev.kind); });
         });
     }
 
     void post_rejected(const lifecycle_event &ev)
     {
         Policy::post(m_executor, [this, ev] {
-            fan_out([&](peer_observer &o) { o.on_peer_rejected(ev.id, ev.node_name, ev.reason); });
+            fan_out([&](observer &o) { o.on_peer_rejected(ev.id, ev.node_name, ev.reason); });
         });
-    }
-
-    // Deliver a drop to each drop-observer over a snapshot (the fan_out shape), skipping
-    // any unregistered mid-turn so a callback may safely (un)register.
-    template<class Deliver>
-    void fan_drop(Deliver deliver)
-    {
-        const auto snapshot = m_drop_observers;
-        for(auto *o : snapshot)
-            if(std::find(m_drop_observers.begin(), m_drop_observers.end(), o) != m_drop_observers.end())
-                deliver(*o);
     }
 
     // POST the drop on the borrowed executor, capturing the POD by value into the turn
@@ -437,20 +436,31 @@ private:
     void post_drop(const detail::drop_event &ev)
     {
         Policy::post(m_executor, [this, ev] {
-            fan_drop([&](drop_observer &o) { o.on_drop(ev); });
+            fan_out([&](observer &o) { o.on_drop(ev); });
         });
     }
+
+    // POST a security transition over the same snapshot fan-out the lifecycle and drop
+    // edges use, capturing the flat POD by value — never inline from the session's
+    // teardown/refusal frame.
+    void post_security(const security_event &ev)
+    {
+        Policy::post(m_executor, [this, ev] {
+            fan_out([&](observer &o) { o.on_security(ev); });
+        });
+    }
+
 
     Transport &m_transport;
     executor_type m_executor;
     liveliness_monitor<Policy, Clock> m_monitor;
     message_forwarder<Policy> m_messages;
     procedure_forwarder<Policy> m_procedures;
+    security_fanout m_security_fanout;
     session_build_context<Policy> m_build;
     registry_type m_registry;
     known_peers m_known;
-    std::vector<peer_observer *> m_observers;
-    std::vector<drop_observer *> m_drop_observers;
+    std::vector<observer *> m_observers;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
     bool m_dial_eagerly;
 };

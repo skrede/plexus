@@ -2,7 +2,7 @@
 #define HPP_GUARD_PLEXUS_DETAIL_NODE_INTERNALS_H
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/peer_observer.h"
+#include "plexus/io/observer.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
@@ -48,7 +48,7 @@ struct subscription
 // bookkeeping needs no locking. node_id is recovered from the node_name key the edge
 // carries; an unparsable name is skipped (it never matched a known peer anyway).
 template <typename Node>
-struct peer_watch : io::peer_observer
+struct peer_watch : io::observer
 {
     Node &owner;
     explicit peer_watch(Node &n) : owner(n) {}

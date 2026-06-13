@@ -23,7 +23,7 @@
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/peer_session_registry.h"
-#include "plexus/io/drop_observer.h"
+#include "plexus/io/observer.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/detail/drop_event.h"
@@ -32,6 +32,9 @@
 #include "plexus/io/shm/ring_layout.h"
 #include "plexus/io/shm/loan_status.h"
 #include "plexus/io/shm/shm_channel.h"
+#include "plexus/io/shm/shm_mux_member.h"
+#include "plexus/io/shm/shm_topic_registry.h"
+#include "plexus/io/shm/region_broker_concept.h"
 
 #include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_transport.h"
@@ -235,9 +238,9 @@ struct two_node
     void advance(std::chrono::nanoseconds d) { manual_clock::advance(d); drive(); }
 };
 
-// A drop_observer that records every posted drop cause it sees — the sink an inproc /
+// An observer that records every posted drop cause it sees — the sink an inproc /
 // shm drop edge will eventually post into.
-struct recording_drop_observer final : plexus::io::drop_observer
+struct recording_drop_observer final : plexus::io::observer
 {
     std::vector<plexus::io::detail::drop_cause> seen;
     void on_drop(const plexus::io::detail::drop_event &ev) override { seen.push_back(ev.cause); }
@@ -275,6 +278,38 @@ private:
     std::byte             *m_data{nullptr};
     std::size_t            m_size{0};
 };
+
+// A move-only handle over a heap region (the single-process stand-in for a mapped
+// segment) the stub broker hands back — only needed so shm_byte_channel's dtor release
+// has a registry to call into; this oracle never acquires a ring through it.
+class stub_region_handle
+{
+public:
+    stub_region_handle() = default;
+    std::span<std::byte> bytes() const { return {}; }
+};
+
+// The minimal region_broker the shm drop-edge oracle needs: shm_byte_channel borrows a
+// registry by reference and calls release(fqn, request) on destruction. The channel here
+// is built over a hand-pinned ring, never acquired through the broker, so create/attach
+// stay unused; the registry's release on an unknown key is a no-op.
+class stub_broker
+{
+public:
+    using region_handle = stub_region_handle;
+    plexus::io::shm::region_status create(std::string_view, std::size_t,
+                                          const plexus::io::shm::create_options &, region_handle &)
+    {
+        return plexus::io::shm::region_status::failed;
+    }
+    plexus::io::shm::region_status attach(std::string_view, region_handle &)
+    {
+        return plexus::io::shm::region_status::not_found;
+    }
+    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>) {}
+};
+
+static_assert(plexus::io::shm::region_broker<stub_broker>);
 
 }
 
@@ -537,10 +572,11 @@ TEST_CASE("inproc drop seam: a data packet to a vanished partner is dropped AND 
 
         std::size_t bystander_rx = 0;
         bystander.on_data([&](std::span<const std::byte>) { ++bystander_rx; });
+        sender.on_drop([&](const plexus::io::detail::drop_event &ev) { observer.on_drop(ev); });
 
         // Point the sender at an endpoint the bus never minted: key_for resolves to 0,
         // so the enqueued packet matches no live channel and falls through deliver_one's
-        // unmatched-partner path (the silent drop the new inproc edge will cover).
+        // unmatched-partner path (the silent drop the new inproc edge now covers).
         sender.connect_to({"inproc", "no-such-partner"});
 
         std::array<std::byte, 4> body{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
@@ -548,13 +584,11 @@ TEST_CASE("inproc drop seam: a data packet to a vanished partner is dropped AND 
         ex.drain();   // the bus delivers (or, here, fails to match) inside the step loop
 
         // The packet was dropped: no live channel received it (the bystander stays at 0).
-        // The inproc channel has no posted on_drop seam yet, so the observer records
-        // nothing today; when the unmatched-partner edge lands the observer SEES the drop
-        // and this flips from !any() to any().
+        // The inproc unmatched-partner edge reports the drop on the sender's on_drop seam,
+        // which routes to the observer — so the observer SEES the unroutable drop.
         REQUIRE(bystander_rx == 0);
-        if(!observer.any())
-            SKIP("the inproc unmatched-partner on_drop->observer route is not wired yet (silent fall-through today)");
         REQUIRE(observer.any());
+        REQUIRE(observer.seen.front() == plexus::io::detail::drop_cause::unroutable);
     }
 }
 
@@ -564,6 +598,8 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
     using plexus::io::shm::broadcast_ring;
     using plexus::io::shm::loan_status;
     using plexus::io::shm::shm_channel;
+    using plexus::io::shm::shm_byte_channel;
+    using plexus::io::shm::shm_topic_registry;
     using plexus::io::shm::control_region_bytes;
     using plexus::io::shm::slab_region_bytes;
 
@@ -581,9 +617,18 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
 
         // A best_effort + drop_newest channel whose ring is fully pinned by a held reader
         // lap: the next send finds no recyclable cell and surfaces congested (the verdict
-        // the shm congestion drop edge will post into the observer).
+        // the shm congestion drop edge posts into the observer). The byte_channel wraps the
+        // channel and owns the on_drop edge; the registry is borrowed only for its dtor
+        // release, which is a no-op for this hand-built (never-acquired) ring.
         shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort,
                                            plexus::io::congestion::drop_newest);
+        stub_broker broker;
+        shm_topic_registry<stub_broker, null_notifier> registry(
+                broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+        shm_byte_channel<stub_broker, null_notifier> bytechan(registry, channel, "shm-topic",
+                                                              plexus::io::endpoint{"shm", "shm-topic"});
+        bytechan.on_drop([&](const plexus::io::detail::drop_event &ev) { observer.on_drop(ev); });
+
         std::uint32_t idx = 0;
         REQUIRE(ring.register_cursor(idx) == loan_status::ok);
         std::uint64_t cursor = ring.tail_position();
@@ -602,14 +647,12 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         std::uint32_t payload = 0xFEEDFACEu;
         std::byte bytes[sizeof(payload)];
         std::memcpy(bytes, &payload, sizeof(payload));
-        REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) == loan_status::congested);
+        // The byte_channel send hits the congested verdict and emits the drop edge
+        // ADDITIVELY (on_error stays available); the observer sees the congestion drop.
+        bytechan.send(std::span<const std::byte>(bytes, sizeof(bytes)));
 
-        // The congestion is OBSERVABLE on the verdict today; the shm mux member surfaces it
-        // through on_error only — no posted on_drop seam yet. When the shm drop edge lands
-        // the observer SEES the congested shed and this flips from !any() to any().
-        if(!observer.any())
-            SKIP("the shm congestion on_drop->observer route is not wired yet (on_error-only today)");
         REQUIRE(observer.any());
+        REQUIRE(observer.seen.front() == plexus::io::detail::drop_cause::blocked);
 
         for(std::uint64_t i = 0; i < cells; ++i)
             ring.refcount_at(i).fetch_sub(1);

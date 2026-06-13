@@ -252,7 +252,7 @@ public:
                     const detail::drop_cause cause =
                         m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
                     if(cause != detail::drop_cause::none)
-                        m_registry.record_drop(hash, band, cause);
+                        shed(hash, band, cause, sub.tier);
                 }
 
         retain_if_latched(hash, qos);
@@ -332,7 +332,7 @@ public:
                 const detail::drop_cause cause =
                     m_egress.enqueue(*sub.channel, band, qos.congestion, m_frame_scratch);
                 if(cause != detail::drop_cause::none)
-                    m_registry.record_drop(hash, band, cause);
+                    shed(hash, band, cause, sub.tier);
             }
 
         // Force one encode even when every live subscriber fast-pathed, so a late bytes
@@ -456,6 +456,15 @@ public:
     void set_on_data_stamp(plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> hook)
     {
         m_on_data_stamp = std::move(hook);
+    }
+
+    // The egress-shed drop edge, wired by the engine to its posted drop_sink(): an egress
+    // overflow ALSO emits a drop_event here (additively — the per-band counter still
+    // moves). The sink posts, so the per-publish shed site never fires an observer inline.
+    // Absent = counter-only (the forwarder stays observer-agnostic when unwired).
+    void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> hook)
+    {
+        m_on_drop = std::move(hook);
     }
 
     // The consumer-paced PULL reply: replay up to min(max_samples, ring.count(),
@@ -648,6 +657,17 @@ private:
             m_on_data_stamp(source_node_id, topic_hash);
     }
 
+    // Record the per-band shed counter (always on) AND, when the egress drop edge is
+    // wired, emit the posted drop_event. The subscriber struct carries no peer node_id,
+    // so the event is peer-less (node_id{}); tier is the subscriber's delivery locality.
+    void shed(std::uint64_t hash, std::size_t band, detail::drop_cause cause, locality tier)
+    {
+        m_registry.record_drop(hash, band, cause);
+        if(m_on_drop)
+            m_on_drop(detail::drop_event{.cause = cause, .transport = tier,
+                                         .band = static_cast<std::uint8_t>(band), .topic_hash = hash});
+    }
+
     void drop(std::string_view message) { m_logger.warn(message); }
 
     log::logger &m_logger;
@@ -660,6 +680,7 @@ private:
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     std::uint64_t m_next_sequence{0};
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp;
+    plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop;
 };
 
 }

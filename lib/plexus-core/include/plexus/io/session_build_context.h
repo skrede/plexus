@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SESSION_BUILD_CONTEXT_H
 #define HPP_GUARD_PLEXUS_IO_SESSION_BUILD_CONTEXT_H
 
+#include "plexus/io/observer.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/security_event.h"
@@ -54,20 +55,26 @@ struct session_build_context
     plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> on_object;
     // The node-shared route from any slot's session up to the engine's observer
     // fan-out: the engine sets this after construction, the registry forwards each
-    // session's lifecycle edge through it. Absent (unset) on a context built before
-    // the engine wires it — a slot's forward guards on it being set.
+    // session's lifecycle edge through it. It carries a lifecycle_event (the engine
+    // arms its liveliness monitor off the edge before fanning the per-edge observer
+    // method out posted), so it is a typed sink, NOT one of the observer's per-edge
+    // methods. Absent (unset) on a context built before the engine wires it — a slot's
+    // forward guards on it being set.
     plexus::detail::move_only_function<void(const lifecycle_event &)> on_lifecycle;
     // The node-shared presence-stamp route from any slot's session to the engine's one
     // liveliness monitor: the engine sets this after construction to monitor.stamp_seen,
     // the registry wires each session's on_stamp_seen through it carrying that session's
     // pinned peer id. Absent (unset) until the engine wires it — the session guards on it.
     plexus::detail::move_only_function<void(const node_id &)> on_stamp_seen;
-    // The node-shared security-event route, shaped exactly like on_lifecycle: the engine
-    // sets it after construction, the registry forwards each session's security event
-    // through it. The single node-level attach_policy that gates every transport rides
-    // fsm_cfg.attach_policy (one per node, injected at spine construction — null is the
-    // explicit accept-any default). Absent (unset) until the engine wires it.
-    plexus::detail::move_only_function<void(const security_event &)> on_security;
+    // The one node-shared observer every slot's session events reach: the security edge
+    // routes straight into session_observer.on_security (the lifecycle edge keeps its
+    // typed on_lifecycle sink above because the engine arms the monitor off it first).
+    // The engine installs its own posting fan-out adapter here so a security transition
+    // reaches the registered observers POSTED, never inline from the session. The default
+    // is the shared inert observer (one predictable branch when no node observer is set),
+    // and the registry re-threads it on every reconnect rebuild. The single node-level
+    // attach_policy that gates every transport rides fsm_cfg.attach_policy.
+    observer &session_observer = shared_null_observer();
     // The node-shared, OpenSSL-free security seam (transcript digest + AEAD decorator
     // install), injected once at spine construction. It is the type-erased boundary that
     // keeps the EVP/decorator instantiation behind the gated target while the bridge
