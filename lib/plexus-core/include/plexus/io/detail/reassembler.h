@@ -115,17 +115,6 @@ public:
     [[nodiscard]] std::size_t in_flight() const noexcept { return m_table.size(); }
     [[nodiscard]] std::size_t held_bytes() const noexcept { return m_held; }
 
-private:
-    struct entry
-    {
-        std::vector<std::vector<std::byte>> slots;   // per-index fragment bytes
-        std::vector<bool> present;
-        std::size_t received{0};
-        std::size_t size{0};                         // payload bytes held by this entry
-        std::size_t overhead{0};                     // structural slot/present cost charged to the cap
-        std::unique_ptr<Timer> timer;
-    };
-
     // The per-entry structural cost a claimed frag_cnt forces: the slots vector (one
     // std::vector handle per fragment) plus the present bitmap. Charged against the SAME cap
     // as payload so a tiny datagram claiming frag_cnt=32768 cannot mint ~786 KB of metadata
@@ -136,6 +125,17 @@ private:
         return static_cast<std::size_t>(frag_cnt) * sizeof(std::vector<std::byte>)
                + (static_cast<std::size_t>(frag_cnt) + 7u) / 8u;
     }
+
+private:
+    struct entry
+    {
+        std::vector<std::vector<std::byte>> slots;   // per-index fragment bytes
+        std::vector<bool> present;
+        std::size_t received{0};
+        std::size_t size{0};                         // payload bytes held by this entry
+        std::size_t overhead{0};                     // structural slot/present cost charged to the cap
+        std::unique_ptr<Timer> timer;
+    };
 
     outcome admit_fragment(std::uint16_t msg_id, std::uint16_t frag_idx, std::uint16_t frag_cnt,
                            std::span<const std::byte> bytes)
