@@ -2,9 +2,11 @@
 #define HPP_GUARD_PLEXUS_IO_OBSERVER_H
 
 #include "plexus/io/peer_kind.h"
+#include "plexus/io/message_info.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/detail/drop_event.h"
+#include "plexus/io/observation_events.h"
 
 #include "plexus/node_id.h"
 
@@ -42,6 +44,18 @@ public:
     virtual void on_peer_rejected(const node_id &, std::string_view, handshake_outcome) {}
     virtual void on_drop(const io::detail::drop_event &) {}
     virtual void on_security(const security_event &) {}
+
+    // The data-path taps, posted on the executor like the lifecycle edges. A publish
+    // fires on_message_published once at the fan-out gate; on_message_delivered fires
+    // once per destination, carrying the borrowed view (its owner shares the delivered
+    // buffer — no copy). The rpc taps surface the borrowed call/serve/reply views, and
+    // on_qos_change reports a subscriber attach's resolved verdict. All default-empty.
+    virtual void on_message_published(std::string_view, const message_view &) {}
+    virtual void on_message_delivered(std::string_view, const message_info &, const message_view &) {}
+    virtual void on_rpc_call(std::string_view, const rpc_view &) {}
+    virtual void on_rpc_serve(std::string_view, const rpc_view &) {}
+    virtual void on_rpc_reply(std::string_view, const rpc_reply_view &) {}
+    virtual void on_qos_change(const qos_change_event &) {}
 };
 
 // The shared inert observer a build context defaults to when no observer is installed:

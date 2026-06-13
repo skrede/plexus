@@ -23,6 +23,7 @@ set(PLEXUS_IO_TESTS
     test_attach_policy
     test_cookie_secret
     test_fragmentation
+    test_reassembler_flat_bound
     test_identity_types
     test_epoch_source)
 
@@ -41,3 +42,8 @@ target_link_libraries(test_mtu_budget PRIVATE plexus::wire)
 # reassembler deterministically on the virtual-clock harness, so it additionally links
 # the wire codec and the plexus::testing substrate (still sans-IO — no backend, no socket).
 target_link_libraries(test_fragmentation PRIVATE plexus::wire plexus::testing)
+
+# The reassembler structural-cost bound oracle drives feed() directly against a crafted
+# frag_cnt on the virtual-clock harness, so it additionally links the plexus::testing
+# substrate (still sans-IO — no backend, no socket).
+target_link_libraries(test_reassembler_flat_bound PRIVATE plexus::testing)
