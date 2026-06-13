@@ -188,7 +188,7 @@ public:
         , m_fqn(std::move(other.m_fqn))
         , m_codec(std::move(other.m_codec))
         , m_identity(other.m_identity)
-        , m_pool(other.m_pool.capacity())
+        , m_pool(std::move(other.m_pool))
         , m_loan_exhausted(other.m_loan_exhausted)
     {
     }
