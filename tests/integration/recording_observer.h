@@ -3,11 +3,14 @@
 
 #include "plexus/io/observer.h"
 #include "plexus/io/peer_kind.h"
+#include "plexus/io/message_info.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/observation_events.h"
 
 #include "plexus/node_id.h"
 
 #include <map>
+#include <memory>
 #include <string>
 #include <cstdint>
 #include <string_view>
@@ -33,6 +36,22 @@ public:
         int rejected{0};
         plexus::io::peer_kind last_kind{plexus::io::peer_kind::dialed};
         plexus::io::handshake_outcome last_reason{plexus::io::handshake_outcome::none};
+    };
+
+    // The per-topic data-path edge tally, keyed by the delivered fqn (mirroring the
+    // per-peer struct so the tap bodies stay tiny). published counts the once-per-publish
+    // edge, delivered the once-per-destination edge, the rpc fields the request/reply
+    // edges. last_view_owner / last_view_use_count capture the delivered view's owner so a
+    // test can assert the view BORROWS the buffer (a shared addref) rather than copies it.
+    struct topic_counts
+    {
+        int                         published{0};
+        int                         delivered{0};
+        int                         rpc_call{0};
+        int                         rpc_serve{0};
+        int                         rpc_reply{0};
+        std::shared_ptr<const void> last_view_owner{};
+        long                        last_view_use_count{0};
     };
 
     void on_peer_connected(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
@@ -77,12 +96,50 @@ public:
         c.last_reason = reason;
     }
 
+    void on_message_published(std::string_view fqn, const plexus::io::message_view &) override
+    {
+        ++m_topics[std::string{fqn}].published;
+    }
+
+    void on_message_delivered(std::string_view fqn, const plexus::io::message_info &,
+                              const plexus::io::message_view &view) override
+    {
+        auto &t = m_topics[std::string{fqn}];
+        ++t.delivered;
+        t.last_view_owner = view.owner();
+        t.last_view_use_count = view.owner().use_count();
+    }
+
+    void on_rpc_call(std::string_view fqn, const plexus::io::rpc_view &) override
+    {
+        ++m_topics[std::string{fqn}].rpc_call;
+    }
+
+    void on_rpc_serve(std::string_view fqn, const plexus::io::rpc_view &) override
+    {
+        ++m_topics[std::string{fqn}].rpc_serve;
+    }
+
+    void on_rpc_reply(std::string_view fqn, const plexus::io::rpc_reply_view &) override
+    {
+        ++m_topics[std::string{fqn}].rpc_reply;
+    }
+
     // Per-peer accessor: an absent peer reads as all-zero (the default-constructed
     // counts), so a test can assert "this edge never fired" without a contains check.
     const counts &for_peer(const plexus::node_id &id) const
     {
         auto it = m_peers.find(id);
         return it == m_peers.end() ? m_empty : it->second;
+    }
+
+    // Per-topic accessor: an unseen fqn reads as all-zero, so a test can assert a tap
+    // never fired (the counter is still zero before the executor pumps) without a
+    // contains check.
+    const topic_counts &for_topic(std::string_view fqn) const
+    {
+        auto it = m_topics.find(std::string{fqn});
+        return it == m_topics.end() ? m_empty_topic : it->second;
     }
 
     // The single accepted peer is keyed by a synthetic inbound identity the test does
@@ -96,7 +153,9 @@ public:
 
 private:
     std::map<plexus::node_id, counts> m_peers;
+    std::map<std::string, topic_counts> m_topics;
     counts m_empty{};
+    topic_counts m_empty_topic{};
 };
 
 #endif

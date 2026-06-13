@@ -251,6 +251,34 @@ target_include_directories(test_peer_observer_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_peer_observer_inproc TEST_PREFIX "integration.")
 
+# The data-path tap-point oracle: a recording observer on a publishing routing_engine
+# forces the message-fan-out taps — one publish to N subscribers fires on_message_published
+# once and on_message_delivered once per destination, both posted, and the delivered view
+# borrows the surfaced owner (a shared addref, not a copy). The runtime assertions activate
+# once the data-path emit sites land; this target is BUILT as the compile gate but its ctest
+# discovery is intentionally withheld until the taps make it green. The shared
+# recording_observer.h resolves via the tests/integration include dir.
+add_executable(test_obs_tap_points test_obs_tap_points.cpp)
+target_link_libraries(test_obs_tap_points PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_obs_tap_points PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+# The read-buffer partial-read oracle: one framed wire message fed to the frame_reassembler
+# in many small sub-header and mid-payload chunks still produces exactly one byte-identical
+# complete_frame — the accumulation behavior any later read-buffer resize must preserve.
+# Header-only wire codec (no backend needed) — always built.
+add_executable(test_read_buffer_partial_read test_read_buffer_partial_read.cpp)
+target_link_libraries(test_read_buffer_partial_read PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_read_buffer_partial_read TEST_PREFIX "integration.")
+
 # The locality confinement matrix: the deterministic fan-out gate (synthetic schemes)
 # + the engine demand-side gate (inproc bus) are always built (no backend); the live
 # AF_UNIX/TCP confinement legs compile in only when the asio backend is on (guarded by
