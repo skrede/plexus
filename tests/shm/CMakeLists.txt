@@ -515,3 +515,24 @@ target_link_libraries(test_shm_wire_fallback PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_wire_fallback TEST_PREFIX "shm.")
+
+# The wire_fallback PRODUCTION-SEAM proof: the same-host medium decision a node reaches
+# through node.advertise(...) is the multiplexer's prefer_shm_hook over the shm-bearing
+# pack, gated by the now MODE-AWARE shm_mux_member::can_acquire. A wire_fallback topic
+# (provisioned by the SAME set_topic_geometry the node declare path calls) declines the
+# ring so its same-host channel is the WIRE (the fail-safe); the two reliable-ring modes
+# prefer SHM unchanged. The declined probe holds no refcount, and an over-cap message
+# crosses a real process boundary byte-exact (repeated). Links plexus::shm (the POSIX
+# broker) + plexus::wire (the fqn-hash region naming).
+add_executable(test_shm_wire_fallback_node test_shm_wire_fallback_node.cpp)
+
+target_include_directories(test_shm_wire_fallback_node PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_wire_fallback_node PRIVATE
+    plexus::core
+    plexus::shm
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_wire_fallback_node TEST_PREFIX "shm.")

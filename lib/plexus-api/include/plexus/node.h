@@ -14,7 +14,10 @@
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
+
+#include "plexus/io/shm/shm_mux_member.h"
 
 #include "plexus/log/logger.h"
 
@@ -646,14 +649,47 @@ private:
         return opts.logger != nullptr ? *opts.logger : io::shared_null_logger();
     }
 
-    // The single-transport node has no glue (an empty member); the multi-transport
-    // node constructs the multiplexing_transport from the borrowed leaves.
+    // Whether a member exposes the same-host ring-acquire probe (the shm member). The
+    // node reads it to install the same-host preference hook only when a composition
+    // actually carries shared memory; a composition without it keeps the default
+    // first-candidate hook unchanged.
+    template <typename M>
+    static constexpr bool has_can_acquire =
+        requires(M &m) { { m.can_acquire(std::declval<const io::endpoint &>()) } -> std::convertible_to<bool>; };
+
+    static constexpr bool any_shm_member = (has_can_acquire<Transports> || ...);
+
+    // The single-transport node has no glue (an empty member); the multi-transport node
+    // constructs the multiplexing_transport from the borrowed leaves. When the pack
+    // carries a shared-memory member, the node installs the same-host preference hook
+    // (prefer shm when the ring acquires, else AF_UNIX) so the local tier's >1 candidate
+    // resolves by the runtime acquire rather than positional order. The hook is
+    // can_acquire-gated, which is mode-aware: a wire_fallback topic declines the ring so
+    // its same-host channel is the wire (the fail-safe — a too-large message always has a
+    // reliable channel), while the two reliable-ring modes prefer shm. A composition with
+    // no shm member keeps the default first-candidate hook.
     static detail::node_mux_glue<Transports...> make_glue(Transports &...transports)
     {
         if constexpr(sizeof...(Transports) == 1)
             return detail::no_mux_glue{};
+        else if constexpr(any_shm_member)
+            return io::multiplexing_transport<Transports...>{
+                transports..., io::transport_selector{}, shm_preference_hook(transports...)};
         else
             return io::multiplexing_transport<Transports...>{transports...};
+    }
+
+    // Build the same-host preference hook over whichever borrowed member exposes the ring
+    // acquire probe. The fold visits each leaf and captures the shm member by reference
+    // (it outlives the node-owned glue); prefer_shm_hook reads can_acquire per same-host
+    // dial. Precondition (any_shm_member): exactly the shm-bearing composition reaches here.
+    static io::selection_hook shm_preference_hook(Transports &...transports)
+    {
+        io::selection_hook hook = io::first_candidate{};
+        (void)((has_can_acquire<Transports>
+                    ? (hook = io::shm::prefer_shm_hook(transports), true)
+                    : false) || ...);
+        return hook;
     }
 
     // The engine's transport leaf: the one borrowed transport directly, or the
