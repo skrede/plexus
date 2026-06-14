@@ -328,6 +328,9 @@ TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_b
     // byte cap, then the next window-full publish has nowhere to go and surfaces would_block
     // (the stall edge — bounded by BYTES, never unbounded growth). publish() stays
     // non-blocking throughout. Each "q-N" frame is 3 bytes, so a 9-byte cap holds exactly 3.
+    // The per-message ceiling is set to the byte cap so the back-pressure floor (which keeps a
+    // single within-ceiling message always admissible) does not lift this deliberately small
+    // cap — the stall edge being proven here is for BACKLOG beyond one within-ceiling message.
     ::asio::io_context io;
     pasio::udp_server server{io};                 // unbound: send_to is a no-op sink, the window never drains
     constexpr std::size_t window = 2;
@@ -336,7 +339,8 @@ TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_b
     constexpr std::size_t byte_cap = queued * frame_bytes;
     pasio::udp_channel ch{io, server, ::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 9},
                           pasio::udp_channel::default_max_payload, small_window_arq(window),
-                          pio::congestion::block, byte_cap, pio::detail::udp_channel_mode::reliable_datagram};
+                          pio::congestion::block, byte_cap, pio::detail::udp_channel_mode::reliable_datagram,
+                          /*initial_seq=*/0, /*max_message_bytes=*/byte_cap};
 
     std::optional<pio::io_error> err;
     ch.on_error([&](pio::io_error e) { err = e; });

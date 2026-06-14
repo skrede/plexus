@@ -33,6 +33,7 @@
 #include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <algorithm>
 
 namespace plexus::asio {
 
@@ -72,15 +73,16 @@ public:
     // at construction (the required-with-default ctor arg below).
     static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
     // The bounded congestion=block backpressure BYTE budget (allocated at setup, never
-    // grown on the hot path): a full send window AND a full byte budget surface a stall
-    // signal rather than unbounded memory growth. Sized at 1x the 4 MiB max-message
-    // ceiling so this per-connection backpressure queue is the SHALLOW socket-facing
-    // buffer holding roughly one frame in flight: the deep, priority-ordered backlog now
-    // lives in the forwarder's egress bands ABOVE this queue, so a deep channel FIFO would
-    // silently defeat banding by re-accumulating an un-prioritized backlog. A sustained
-    // overrun still fails closed at a bounded cap instead of the unbounded balloon the
-    // count cap left possible. This shallow cap is a load-bearing knob — to be
-    // substantiated at the fan-out benchmark, not fixed by feel.
+    // grown on the hot path): the not-yet-windowed fragments of a paced reliable message
+    // park here while the ARQ send window is full, drained by the next ack. This cap bounds
+    // ADDITIONAL backlog ONLY — it is a local back-pressure resource knob, NOT a message-size
+    // authority: the negotiated per-message ceiling (effective_max, enforced at publish) is
+    // the SOLE bound on a single message's size, so the live cap is floored at that ceiling
+    // (see m_backpressure construction) and a within-ceiling message's whole fragment backlog
+    // is always admissible regardless of this default. The default sizes the EXTRA backlog a
+    // producer outrunning the drain may pile up beyond one in-flight message; a sustained
+    // overrun still fails closed at the floored cap. A load-bearing knob — to be substantiated
+    // at the fan-out benchmark, not fixed by feel.
     static constexpr std::size_t default_backpressure_bytes =
         1u * io::fragmentation_limits::max_message_size;
 
@@ -117,7 +119,11 @@ public:
         , m_reassembly_timeout(reassembly_timeout)
         , m_arq_cfg(arq_cfg)
         , m_congestion(congestion)
-        , m_backpressure(backpressure_bytes)
+        // Floor the back-pressure cap at the per-message ceiling: the negotiated ceiling is
+        // the sole size authority, so a single within-ceiling message's full fragment backlog
+        // must always be admissible no matter how the operator tuned the back-pressure knob.
+        // The knob only raises the cap above the floor to allow EXTRA backlog past one message.
+        , m_backpressure(std::max(backpressure_bytes, max_message_bytes))
         , m_mode(mode)
         , m_initial_seq(initial_seq)
     {

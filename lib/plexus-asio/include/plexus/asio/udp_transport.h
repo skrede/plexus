@@ -73,8 +73,10 @@ public:
     // into every minted channel; a per-topic override resolves through io::effective_max.
     // max_payload here remains the per-FRAGMENT MTU budget (a separate axis).
     // backpressure_bytes is the per-channel bounded send queue for fragments awaiting ARQ
-    // window room (required-WITH-default); it must reach the largest in-flight reliable
-    // message, so a node carrying messages above the default is sized through this knob.
+    // window room (required-WITH-default). It bounds ADDITIONAL backlog only — the channel
+    // floors the live cap at the per-message ceiling, so a single within-ceiling message's
+    // fragment backlog is always admissible regardless of this knob (the ceiling, not this
+    // cap, is the message-size authority); raise it only to allow extra backlog past one message.
     explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload,
                            arq_type::schedule hs_ladder = arq_type::default_ladder,
                            io::detail::udp_arq_config arq_cfg = {},

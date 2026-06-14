@@ -36,12 +36,16 @@ namespace plexus::io::detail {
 //
 // Capacity is a required-WITH-default knob (default = unbounded, a no-cap sentinel):
 // under the default the block is byte-identical to an unbounded socket write queue
-// and the at-capacity signal is inert. With a finite capacity, enqueue() refuses to
-// admit past the cap (returns false; full() observes the state) so a capped channel
-// can shed (congestion=drop) or stall (congestion=block) at the bound; admission
-// resumes once a drain frees room. The cap accounts the SUMMED PAYLOAD BYTES, not the
-// entry count, with a compare-BEFORE-add admission so a crafted large frame cannot
-// wrap the running total past the cap and re-admit.
+// and the at-capacity signal is inert. With a finite capacity the cap bounds ADDITIONAL
+// queued BACKLOG, not the size of a single message: an EMPTY queue always admits one
+// frame of ANY size (the negotiated per-message ceiling, enforced upstream at publish,
+// is the SOLE authority over message size; this local cap only governs how much extra
+// backlog may pile up behind an in-flight message). Past the first frame a finite cap
+// refuses to admit beyond the bound (returns false; full() observes the state) so a
+// capped channel can shed (congestion=drop) or stall (congestion=block) on the backlog;
+// admission resumes once a drain frees room. The cap accounts the SUMMED PAYLOAD BYTES,
+// not the entry count, with a compare-BEFORE-add admission so a crafted large frame
+// cannot wrap the running total past the cap and re-admit.
 //
 // The fail-on-error edge (Pitfall 4): a stream channel FAILS the channel on a socket
 // error. The composer's send-sink reports the error and then closes the block; the
@@ -138,9 +142,13 @@ public:
     }
 
 private:
+    // An empty queue admits one frame of ANY size: the per-message ceiling already bounds
+    // the message upstream at publish, so this cap must never refuse a single within-ceiling
+    // message — it only bounds the EXTRA backlog queued behind an in-flight one. Past the
+    // first frame, compare-before-add against the remaining budget (no wrap).
     [[nodiscard]] bool admits(std::size_t size) const noexcept
     {
-        return m_bytes < m_byte_cap && size <= m_byte_cap - m_bytes;
+        return m_bytes == 0 || (m_bytes < m_byte_cap && size <= m_byte_cap - m_bytes);
     }
 
     bool admit(wire_bytes<> frame)
