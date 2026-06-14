@@ -35,10 +35,11 @@ namespace plexus::io::detail {
 // tiny datagram claiming frag_cnt=32768 cannot mint ~786 KB of slot table accounted as a single
 // payload byte — the metadata is bounded by the same cap, not just the payload. A per-message
 // timeout (the Policy timer reclaims a stalled best-effort partial whose fragments never complete)
-// closes the slow path. The cap default (16 MiB) admits 4 concurrent full max_message_size (4 MiB)
-// partials per peer while bounding the aggregate worst case (the demux peer cap × this) to 64 GiB.
-// The timeout default (5000 ms) exceeds the ~3355 ms a 4 MiB message takes over a 10 Mbit/s link
-// (so an honest slow message is not evicted) while reclaiming a stalled partial within five seconds.
+// closes the slow path. The cap default (reassembly_memory_budget = 16 MiB) admits two concurrent
+// full global_default_max_message_bytes (8 MiB) partials per peer while bounding the aggregate
+// worst case (the demux peer cap × this) — the always-on aggregate DoS bound regardless of the
+// per-topic ceiling. The timeout default (5000 ms) gives an honest slow message room to complete
+// while reclaiming a stalled partial within five seconds.
 //
 // LIFETIME: single-owner, bare `this`, no shared lifetime. Each in-flight entry owns its timeout
 // timer; the owning channel cancels the reassembler before it dies, so a timer firing after
@@ -55,8 +56,8 @@ public:
 
     struct config
     {
-        std::size_t max_message_size{fragmentation_limits::max_message_size};
-        std::size_t total_memory_cap{16u * 1024u * 1024u};
+        std::size_t max_message_size{global_default_max_message_bytes};
+        std::size_t total_memory_cap{reassembly_memory_budget};
         std::chrono::milliseconds per_message_timeout{5000};
     };
 

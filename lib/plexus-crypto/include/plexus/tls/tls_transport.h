@@ -15,6 +15,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/pending_dial_registry.h"
@@ -55,15 +56,22 @@ public:
     // no_delay disables Nagle on every dialed + accepted TCP lowest layer (required-WITH-
     // default true — the latency-MW default; overridable for a Nagle use-case). Threaded to
     // the listener for the accept side and set on the dial socket post-connect below.
+    // global_default is the node-level per-MESSAGE receive ceiling and reassembly_budget the
+    // aggregate reassembly-memory cap — the two operator-facing message-size node options
+    // (required-WITH-default, bound to the shipped named constants). Stamped onto every
+    // minted channel's inbound config; a per-topic override resolves through io::effective_max.
     tls_transport(::asio::io_context &io, const tls_credential &cred,
                   wire::stream_inbound_config cfg = {}, bool no_delay = true,
                   io::congestion congestion = io::congestion::block,
                   std::size_t outbox_bytes = tls_channel::default_outbox_bytes,
-                  plexus::asio::stream_socket_options socket_options = {})
+                  plexus::asio::stream_socket_options socket_options = {},
+                  std::size_t global_default = io::global_default_max_message_bytes,
+                  std::size_t reassembly_budget = io::reassembly_memory_budget)
         : m_io(io)
         , m_cred(cred)
-        , m_listener(io, cred, cfg, no_delay, congestion, outbox_bytes, socket_options)
-        , m_cfg(cfg)
+        , m_listener(io, cred, wire::with_message_limits(cfg, global_default, reassembly_budget),
+                     no_delay, congestion, outbox_bytes, socket_options)
+        , m_cfg(wire::with_message_limits(cfg, global_default, reassembly_budget))
         , m_no_delay(no_delay)
         , m_congestion(congestion)
         , m_outbox_bytes(outbox_bytes)

@@ -11,6 +11,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/security/peer_cred_policy.h"
@@ -43,12 +44,20 @@ class unix_transport
     using base = stream_transport<unix_channel, unix_listener, unix_transport_traits>;
 
 public:
+    // global_default is the node-level per-MESSAGE receive ceiling and reassembly_budget the
+    // aggregate reassembly-memory cap — the two operator-facing message-size node options
+    // (required-WITH-default, bound to the shipped named constants). Stamped onto every
+    // minted channel's inbound config; a per-topic override resolves through io::effective_max.
     explicit unix_transport(::asio::io_context &io, wire::stream_inbound_config cfg = {},
                             io::congestion congestion = io::congestion::block,
                             std::size_t write_queue_bytes = unix_channel::default_write_queue_bytes,
-                            stream_socket_options socket_options = {})
-        : base(io, cfg, false, congestion, write_queue_bytes, socket_options,
-               io, cfg, unix_listener::default_socket_mode,
+                            stream_socket_options socket_options = {},
+                            std::size_t global_default = io::global_default_max_message_bytes,
+                            std::size_t reassembly_budget = io::reassembly_memory_budget)
+        : base(io, wire::with_message_limits(cfg, global_default, reassembly_budget), false,
+               congestion, write_queue_bytes, socket_options,
+               io, wire::with_message_limits(cfg, global_default, reassembly_budget),
+               unix_listener::default_socket_mode,
                io::security::shared_accept_any_peer_cred(),
                congestion, write_queue_bytes, socket_options)
     {

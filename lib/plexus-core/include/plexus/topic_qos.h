@@ -34,10 +34,13 @@ namespace plexus {
 //
 // `dispatch` is the shared-memory eligibility hint (a FLAGS bitmask; none = 0 is
 // the absence): a same-host topic with any bit set prefers the shared-memory
-// medium, none keeps it on the local stream. `max_payload` (0 = unset) is the
-// publisher's ring-sizing authority for that medium: it sizes the broadcast ring's
-// slot width; 0 falls back to the default ring geometry (the case for a
-// subscriber-only upgrade, where no publisher declared a width).
+// medium, none keeps it on the local stream. `max_message_bytes` (0 = unset) is the
+// per-MESSAGE size authority for the topic: it is the per-topic override of the
+// node-level message ceiling that bounds the stream + datagram receive reassembly
+// and the send-side oversize-reject (resolved through io::effective_max); 0 falls
+// back to the node default. It is the per-MESSAGE size — distinct from the
+// per-FRAGMENT io::mtu_budget::max_payload. uint32 (a 4 GiB ceiling far exceeds the
+// shipped low-MiB target).
 struct topic_qos
 {
     bool                  latch       = false;
@@ -47,7 +50,7 @@ struct topic_qos
     io::congestion        congestion  = io::congestion::block;
     io::priority          priority    = io::priority::normal;
     io::shm::dispatch_hint dispatch   = io::shm::dispatch_hint::none;
-    std::uint32_t         max_payload = 0;
+    std::uint32_t         max_message_bytes = 0;
 
     // The publisher's OFFERED deadline/liveliness periods — the offered half of the
     // request-vs-offered deadline/lease contract. 0 = not offered = always compatible

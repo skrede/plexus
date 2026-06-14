@@ -9,7 +9,7 @@
 // The dispatch_hint FLAGS type (D-01) + the selector's locality x dispatch
 // SHM-eligibility decision (D-02). dispatch_hint is a bitmask modeled on
 // locality.h: none = 0 is the absence; shm_eligible(h) is true iff any bit is set;
-// the operators compose. topic_qos carries it (and max_payload), both defaulting to
+// the operators compose. topic_qos carries it (and max_message_bytes), both defaulting to
 // "unset". The selector gates SHM on same-host AND a qualifying hint.
 
 using plexus::io::shm::dispatch_hint;
@@ -41,12 +41,12 @@ TEST_CASE("dispatch_hint: the operators compose like locality's bitflags", "[shm
     REQUIRE(shm_eligible(both & dispatch_hint::frequent));
 }
 
-TEST_CASE("topic_qos default-constructs with dispatch == none and max_payload == 0", "[shm][dispatch_hint]")
+TEST_CASE("topic_qos default-constructs with dispatch == none and max_message_bytes == 0", "[shm][dispatch_hint]")
 {
     plexus::topic_qos qos{};
 
     REQUIRE(qos.dispatch == dispatch_hint::none);
-    REQUIRE(qos.max_payload == 0u);
+    REQUIRE(qos.max_message_bytes == 0u);
     REQUIRE_FALSE(shm_eligible(qos.dispatch));
 }
 
