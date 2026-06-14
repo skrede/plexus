@@ -1,10 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SHM_SHM_SELECTION_H
 #define HPP_GUARD_PLEXUS_IO_SHM_SHM_SELECTION_H
 
+#include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/dispatch_hint.h"
 #include "plexus/io/shm/same_host.h"
 #include "plexus/io/detail/keyed_refcount.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -39,6 +41,28 @@ enum class same_host_medium : std::uint8_t
     if(is_same_host(peer, local) && shm_eligible(combined_hint))
         return same_host_medium::shm;
     return same_host_medium::stream;
+}
+
+// The ONLY per-message medium decision in plexus, and the sole distinct value of
+// wire_fallback: every other selection (select_same_host_medium, attempt_shm_upgrade)
+// is per-(peer, topic) and decided ONCE at dial time on host-distinctness + hint.
+// wire_fallback keeps a BOUNDED (capped) reliable ring for messages that fit and
+// reroutes any message larger than the cap over the same-host wire — so a same-host
+// peer in this mode needs a per-message size check the other modes never run.
+//
+// It is a no-op (always shm) for reliable_preserving and best_effort_large: their
+// per-peer verdict already chose the medium once, so this returns shm and the caller's
+// gate (mode == wire_fallback) keeps the branch out of their path entirely. Only
+// wire_fallback AND message_bytes > the capped slot capacity routes to the wire
+// (stream); a wire_fallback message that fits the cap rides the ring. Pure: it reads
+// the LOCAL message size against the LOCALLY-resolved cap, never anything wire-supplied.
+[[nodiscard]] inline same_host_medium route_message_medium(ring_geometry_mode mode,
+                                                          std::size_t message_bytes,
+                                                          std::uint64_t capped_slot_capacity) noexcept
+{
+    if(mode != ring_geometry_mode::wire_fallback)
+        return same_host_medium::shm;
+    return message_bytes <= capped_slot_capacity ? same_host_medium::shm : same_host_medium::stream;
 }
 
 // The bilateral, consumer-sovereign upgrade decision: whether THIS end
