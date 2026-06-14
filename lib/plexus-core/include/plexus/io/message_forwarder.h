@@ -8,6 +8,7 @@
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/subscriber_qos.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
@@ -134,7 +135,7 @@ public:
         // source-identity offer are read locally.
         const topic_qos offered = m_endpoint.registry().qos_for(hash);
         const bool offers_sid   = m_endpoint.registry().offers_source_identity(hash);
-        const auto rxo = io::rxo_check(offered, offers_sid, sub_qos);
+        const auto rxo = io::rxo_check(offered, offers_sid, m_global_default, sub_qos);
         if(rxo.verdict == io::rxo_verdict::incompatible_qos
            || rxo.verdict == io::rxo_verdict::source_identity_incompatible)
         {
@@ -732,6 +733,11 @@ private:
     void drop(std::string_view message) { m_logger.warn(message); }
 
     log::logger &m_logger;
+    // The node-level per-message size default the RxO size relation resolves an offered
+    // topic's 0=unset max against (effective_max). It mirrors the transport ctors' default
+    // so a topic that declared no per-message override negotiates against the same ceiling
+    // the data path enforces.
+    std::size_t m_global_default = io::global_default_max_message_bytes;
     endpoint_type m_endpoint;
     detail::egress_scheduler<channel_type, Policy> m_egress;
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
