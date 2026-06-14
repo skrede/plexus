@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Backends and extras are opt-in, gated targets — never required by the core.
 option(PLEXUS_ENABLE_ASIO_BACKEND "Build the asio executor/socket/timer backend" OFF)
+# Declared at root (ahead of the lib glob below) so every fragment sees it: the
+# glob processes lib/plexus-asio before lib/plexus-shm alphabetically, and the
+# asio backend's gated shm fragment must read the correct value on a fresh configure.
+option(PLEXUS_ENABLE_SHM_BACKEND "Build the gated POSIX shared-memory backend (linux-first)" OFF)
 option(PLEXUS_BUILD_TESTS "Build the test suite" OFF)
 option(PLEXUS_BUILD_FUZZ_TESTS "Build the libFuzzer harnesses" OFF)
 option(PLEXUS_BUILD_EXAMPLES "Build the examples" OFF)

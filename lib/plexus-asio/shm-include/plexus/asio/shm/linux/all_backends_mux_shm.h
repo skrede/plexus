@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_ASIO_SHM_ALL_BACKENDS_MUX_SHM_H
-#define HPP_GUARD_PLEXUS_ASIO_SHM_ALL_BACKENDS_MUX_SHM_H
+#ifndef HPP_GUARD_PLEXUS_ASIO_SHM_LINUX_ALL_BACKENDS_MUX_SHM_H
+#define HPP_GUARD_PLEXUS_ASIO_SHM_LINUX_ALL_BACKENDS_MUX_SHM_H
 
-#include "plexus/asio/shm/ring_notifier.h"
+#include "plexus/asio/shm/linux/ring_notifier.h"
 
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"

@@ -39,3 +39,35 @@ install(EXPORT plexusAsioTargets
     NAMESPACE plexus::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/plexus
     FILE plexus-asio-targets.cmake)
+
+# The gated Linux shared-memory reactor + composition. Its headers live under a
+# SEPARATE shm-include/ root, NOT the unconditional include/ above: only this
+# fragment puts shm-include/ on the compiler include path, and only when the shm
+# backend is ON. So a bare plexus::asio consumer (crypto, mdnspp, the generic asio
+# part) has no path to plexus/asio/shm/linux/* — the directory boundary is a real
+# compile barrier, not a convention. Linking plexus::asio gives the composition's
+# cross-root includes (udp/asio/unix transports) their include/ path back, and
+# plexus::shm supplies the broker the liburing-bearing headers compose over.
+if(PLEXUS_ENABLE_SHM_BACKEND)
+    add_library(plexus-asio-shm INTERFACE)
+    add_library(plexus::asio::shm ALIAS plexus-asio-shm)
+
+    target_include_directories(plexus-asio-shm INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/shm-include>
+        $<INSTALL_INTERFACE:shm-include>)
+
+    target_link_libraries(plexus-asio-shm INTERFACE
+        plexus::asio
+        plexus::shm)
+
+    target_compile_features(plexus-asio-shm INTERFACE cxx_std_20)
+
+    set_target_properties(plexus-asio-shm PROPERTIES EXPORT_NAME asio-shm)
+
+    install(TARGETS plexus-asio-shm EXPORT plexusAsioShmTargets)
+    install(DIRECTORY shm-include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    install(EXPORT plexusAsioShmTargets
+        NAMESPACE plexus::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/plexus
+        FILE plexus-asio-shm-targets.cmake)
+endif()
