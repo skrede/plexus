@@ -31,7 +31,7 @@ inline constexpr std::size_t k_max_consumers = 16;
 // Magic + version word stamped by the creator into the control header and
 // re-validated by an attacher before it trusts any other header field. A
 // mismatch means the region is foreign or a layout-incompatible build.
-inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'32'00ull; // "PLXRNG2\0"
+inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'33'00ull; // "PLXRNG3\0"
 
 // The 3-state encoding of the parked-waiter word in control_header_t (a SEPARATE
 // atom from notify_generation: the generation says WHAT to drain, the park-state
@@ -139,6 +139,14 @@ struct control_header_t
     std::uint64_t slot_capacity; // multiple of 8
     std::uint64_t mask;          // cell_count - 1
 
+    // The per-ring LOGICAL consumer bound. depth was derived to strictly exceed it
+    // (the reclaim-headroom invariant), and the cursor verbs scan only this many of
+    // the fixed cursor slots, so a ring declared for few consumers neither over-sizes
+    // its depth nor touches cursor lines it does not use. The physical cursors array
+    // below stays the fixed cap, so this is a bound over a fixed region, never a
+    // variable-length tail: any value in [1, k_max_consumers] is representable.
+    std::uint64_t consumer_capacity;
+
     alignas(k_cache_line) cursor_t cursors[k_max_consumers];
 
     // Monotonic wakeup-generation counter for the cross-process consumer
@@ -171,6 +179,11 @@ struct control_header_t
     // On its OWN cache line so a register-time bump never thrashes the producer's
     // park/generation lines.
     alignas(k_cache_line) std::atomic<std::uint32_t> high_water;
+
+    [[nodiscard]] constexpr std::size_t cursor_region_capacity() const noexcept
+    {
+        return static_cast<std::size_t>(consumer_capacity);
+    }
 };
 
 // Cross-process validity gates. A non-lock-free atomic on the target would
@@ -190,10 +203,12 @@ static_assert(std::is_standard_layout_v<control_header_t>,
 
 // Pin the cross-process layout: enqueue_pos line + config line + cursor array +
 // notify_generation line + park_state line + high_water line, each
-// cache-line-aligned. An unintended field add/reorder (which would shift every
-// in-region offset and silently mismap a peer) fails the build here. A deliberate
-// layout change updates this size AND bumps k_ring_magic so an old region
-// fails-closed on attach.
+// cache-line-aligned. consumer_capacity rides the existing config line (it fits the
+// 64 bytes alongside magic/cell_count/slot_capacity/mask), so adding it does not
+// grow the header and this size formula is unchanged. An unintended field add/reorder
+// (which would shift every in-region offset and silently mismap a peer) fails the
+// build here. A deliberate layout change updates this size AND bumps k_ring_magic so
+// an old region fails-closed on attach.
 static_assert(sizeof(control_header_t) ==
                   k_cache_line * 2 + k_max_consumers * sizeof(cursor_t) + k_cache_line * 3,
               "control_header_t layout drift -- update the size guard and bump k_ring_magic");

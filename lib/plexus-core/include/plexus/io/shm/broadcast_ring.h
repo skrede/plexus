@@ -125,9 +125,12 @@ public:
     // geometry (control_region_bytes / slab_region_bytes).
     static loan_status create(std::span<std::byte> control, std::span<std::byte> slab,
                               std::uint64_t cell_count, std::uint64_t slot_capacity,
-                              broadcast_ring &out) noexcept
+                              broadcast_ring &out,
+                              std::uint64_t consumer_capacity = k_max_consumers) noexcept
     {
         if(!is_power_of_two(cell_count) || slot_capacity == 0)
+            return loan_status::rejected;
+        if(consumer_capacity == 0 || consumer_capacity > k_max_consumers)
             return loan_status::rejected;
         if(control.size() < control_region_bytes(cell_count) ||
            slab.size() < slab_region_bytes(cell_count, slot_capacity))
@@ -135,10 +138,11 @@ public:
 
         auto *header = ::new(control.data()) control_header_t{};
         header->enqueue_pos.store(0, std::memory_order_relaxed);
-        header->magic         = k_ring_magic;
-        header->cell_count    = cell_count;
-        header->slot_capacity = slot_capacity;
-        header->mask          = cell_count - 1;
+        header->magic             = k_ring_magic;
+        header->cell_count        = cell_count;
+        header->slot_capacity     = slot_capacity;
+        header->mask              = cell_count - 1;
+        header->consumer_capacity = consumer_capacity;
         header->notify_generation.store(0, std::memory_order_relaxed);
         header->park_state.store(k_park_empty, std::memory_order_relaxed);
         header->high_water.store(0, std::memory_order_relaxed);
@@ -157,7 +161,8 @@ public:
             cells[i].take_refcount.store(0, std::memory_order_relaxed);
         }
 
-        out.bind(control, slab, header, cells, cell_count, slot_capacity, cell_count - 1);
+        out.bind(control, slab, header, cells, cell_count, slot_capacity, cell_count - 1,
+                 consumer_capacity);
         return loan_status::ok;
     }
 
@@ -177,6 +182,8 @@ public:
             return loan_status::rejected;
         if(header->mask != header->cell_count - 1)
             return loan_status::rejected;
+        if(header->consumer_capacity == 0 || header->consumer_capacity > k_max_consumers)
+            return loan_status::rejected;
 
         const std::uint64_t stride = round_up_8(header->slot_capacity);
         if(control.size() < control_region_bytes(header->cell_count) ||
@@ -184,7 +191,8 @@ public:
             return loan_status::rejected;
 
         auto *cells = std::launder(reinterpret_cast<cell_t *>(control.data() + sizeof(control_header_t)));
-        out.bind(control, slab, header, cells, header->cell_count, header->slot_capacity, header->mask);
+        out.bind(control, slab, header, cells, header->cell_count, header->slot_capacity, header->mask,
+                 header->consumer_capacity);
         return loan_status::ok;
     }
 
@@ -283,11 +291,12 @@ public:
     }
 
     // Registers a broadcast cursor in the header's fixed-bound array; out_index is
-    // initialized to k_cursor_idle (not gating). rejected when k_max_consumers are
-    // already registered.
+    // initialized to k_cursor_idle (not gating). rejected when the per-ring
+    // consumer_capacity slots are already registered (<= k_max_consumers).
     loan_status register_cursor(std::uint32_t &out_index) noexcept
     {
-        for(std::uint32_t i = 0; i < k_max_consumers; ++i)
+        const std::uint32_t capacity = static_cast<std::uint32_t>(m_consumer_capacity);
+        for(std::uint32_t i = 0; i < capacity; ++i)
         {
             std::uint32_t expected = 0;
             if(m_header->cursors[i].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
@@ -304,7 +313,7 @@ public:
     // Releases a previously-registered cursor so it stops gating reclamation.
     void unregister_cursor(std::uint32_t index) noexcept
     {
-        if(index >= k_max_consumers)
+        if(index >= m_consumer_capacity)
             return;
         m_header->cursors[index].position.store(k_cursor_idle, std::memory_order_release);
         m_header->cursors[index].active.store(0, std::memory_order_release);
@@ -314,7 +323,7 @@ public:
     // reclamation gate observes it.
     void publish_cursor(std::uint32_t index, std::uint64_t position) noexcept
     {
-        if(index >= k_max_consumers)
+        if(index >= m_consumer_capacity)
             return;
         m_header->cursors[index].position.store(position, std::memory_order_release);
     }
@@ -405,16 +414,17 @@ private:
 
     void bind(std::span<std::byte> control, std::span<std::byte> slab, control_header_t *header,
               cell_t *cells, std::uint64_t cell_count, std::uint64_t slot_capacity,
-              std::uint64_t mask) noexcept
+              std::uint64_t mask, std::uint64_t consumer_capacity) noexcept
     {
-        m_control       = control;
-        m_slab          = slab;
-        m_header        = header;
-        m_cells         = cells;
-        m_cell_count    = cell_count;
-        m_slot_capacity = slot_capacity;
-        m_mask          = mask;
-        m_stride        = round_up_8(slot_capacity);
+        m_control           = control;
+        m_slab              = slab;
+        m_header            = header;
+        m_cells             = cells;
+        m_cell_count        = cell_count;
+        m_slot_capacity     = slot_capacity;
+        m_mask              = mask;
+        m_stride            = round_up_8(slot_capacity);
+        m_consumer_capacity = consumer_capacity;
     }
 
     cell_t &cell_at(std::uint64_t position) noexcept { return m_cells[position & m_mask]; }
@@ -586,6 +596,7 @@ private:
     std::uint64_t m_slot_capacity{0};
     std::uint64_t m_mask{0};
     std::uint64_t m_stride{0};
+    std::uint64_t m_consumer_capacity{0};
 };
 
 static_assert(broadcast_ring::k_cursor_idle == UINT64_MAX,
