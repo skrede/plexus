@@ -50,6 +50,8 @@ TEST_CASE("subscribe_qos_wire: the scalar and enum fields round-trip")
     REQUIRE(round_trips(subscriber_qos{.requested_deadline_ns = 1'000'000ull}));
     REQUIRE(round_trips(subscriber_qos{.requested_lease_ns = 9'999'999ull}));
     REQUIRE(round_trips(subscriber_qos{.requested_priority = 7}));
+    REQUIRE(round_trips(subscriber_qos{.requested_max_message_bytes = 0x00ABCDEFu}));
+    REQUIRE(round_trips(subscriber_qos{.requested_max_message_bytes = 0xFFFFFFFFu}));
 }
 
 TEST_CASE("subscribe_qos_wire: combinations of every flag and field round-trip together")
@@ -62,6 +64,7 @@ TEST_CASE("subscribe_qos_wire: combinations of every flag and field round-trip t
                                        .requested_deadline_ns = 200,
                                        .requested_lease_ns = 400,
                                        .requested_priority = 3,
+                                       .requested_max_message_bytes = 8u * 1024u * 1024u,
                                        .rxo = rxo_mode::strict,
                                        .posture = attach_posture::strict}));
 

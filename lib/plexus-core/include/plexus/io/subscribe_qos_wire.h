@@ -29,7 +29,8 @@ inline wire::subscribe_qos_region to_wire_region(const subscriber_qos &q)
             .requested_flags       = flags,
             .requested_deadline_ns = q.requested_deadline_ns,
             .requested_lease_ns    = q.requested_lease_ns,
-            .requested_priority    = q.requested_priority};
+            .requested_priority    = q.requested_priority,
+            .requested_max_message_bytes = q.requested_max_message_bytes};
 }
 
 inline subscriber_qos from_wire_region(const wire::subscribe_qos_region &r)
@@ -45,6 +46,7 @@ inline subscriber_qos from_wire_region(const wire::subscribe_qos_region &r)
             .requested_deadline_ns = r.requested_deadline_ns,
             .requested_lease_ns    = r.requested_lease_ns,
             .requested_priority    = r.requested_priority,
+            .requested_max_message_bytes = r.requested_max_message_bytes,
             .rxo = (r.requested_flags & wire::detail::k_qos_flag_rxo_strict) != 0
                        ? rxo_mode::strict : rxo_mode::permissive,
             .posture = (r.requested_flags & wire::detail::k_qos_flag_typed_strict) != 0

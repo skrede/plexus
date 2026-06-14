@@ -61,6 +61,7 @@ struct subscribe_qos_region
     uint64_t requested_deadline_ns; // 0 = unset
     uint64_t requested_lease_ns;    // 0 = unset
     uint8_t  requested_priority;    // carry-only; default band 0
+    uint32_t requested_max_message_bytes; // 0 = unset = always compatible
 };
 
 struct subscribe_request
@@ -73,7 +74,7 @@ struct subscribe_request
     // The flag-gated, trailing QoS region. has_qos=false (the default) encodes
     // NO trailing bytes, so the frame is byte-identical to the pre-region layout
     // a v3 producer would write; the decoder maps an absent region to the qos
-    // defaults. has_qos=true appends the fixed 26-byte region after type_name.
+    // defaults. has_qos=true appends the fixed 30-byte region after type_name.
     bool has_qos = false;
     subscribe_qos_region qos{};
 };
@@ -144,8 +145,9 @@ constexpr std::size_t k_max_type_name = 512;
 //   requested_deadline_ns u64 @ 7   (0 = unset)
 //   requested_lease_ns    u64 @ 15  (0 = unset)
 //   requested_priority    u8  @ 23  (carry-only)
-//   reserved              u8[2] @ 24 (=0; future wire needs ride here)
-// Byte-sum = 1+1+4+1+8+8+1+2 = 26 bytes, fixed.
+//   requested_max_message_bytes u32 @ 24 (0 = unset = always compatible)
+//   reserved              u8[2] @ 28 (=0; future wire needs ride here)
+// Byte-sum = 1+1+4+1+8+8+1+4+2 = 30 bytes, fixed.
 constexpr std::size_t k_qos_durability_off    = 0;
 constexpr std::size_t k_qos_delivery_off      = 1;
 constexpr std::size_t k_qos_replay_depth_off  = 2;
@@ -153,16 +155,17 @@ constexpr std::size_t k_qos_flags_off         = 6;
 constexpr std::size_t k_qos_deadline_ns_off   = 7;
 constexpr std::size_t k_qos_lease_ns_off       = 15;
 constexpr std::size_t k_qos_priority_off       = 23;
-constexpr std::size_t k_qos_reserved_off       = 24;
+constexpr std::size_t k_qos_max_message_off    = 24;
+constexpr std::size_t k_qos_reserved_off       = 28;
 constexpr std::size_t k_qos_reserved_size      = 2;
 
 constexpr std::size_t k_qos_region_size = k_qos_reserved_off + k_qos_reserved_size;
-static_assert(k_qos_region_size == 1 + 1 + 4 + 1 + 8 + 8 + 1 + 2,
+static_assert(k_qos_region_size == 1 + 1 + 4 + 1 + 8 + 8 + 1 + 4 + 2,
               "the subscriber-QoS region must equal the sum of its fixed fields");
-static_assert(k_qos_region_size == 26);
+static_assert(k_qos_region_size == 30);
 
 // The per-callsite policy lid on the attacker-controlled region length, mirroring
-// k_max_fqn / k_max_type_name: a generous cap above the fixed 26-byte region so a
+// k_max_fqn / k_max_type_name: a generous cap above the fixed 30-byte region so a
 // claimed-huge uint16_t prefix is refused before any read.
 constexpr std::size_t k_max_qos_region = 64;
 
@@ -179,7 +182,7 @@ constexpr std::uint8_t k_qos_flag_typed_strict             = 0x08;
 
 }
 
-// Write the fixed 26-byte QoS region at p (caller guarantees 26 writable bytes).
+// Write the fixed 30-byte QoS region at p (caller guarantees 30 writable bytes).
 inline void write_qos_region(std::byte *p, const subscribe_qos_region &qos)
 {
     wire::detail::write_u8(p + detail::k_qos_durability_off, qos.durability);
@@ -189,6 +192,7 @@ inline void write_qos_region(std::byte *p, const subscribe_qos_region &qos)
     wire::detail::write_u64(p + detail::k_qos_deadline_ns_off, qos.requested_deadline_ns);
     wire::detail::write_u64(p + detail::k_qos_lease_ns_off, qos.requested_lease_ns);
     wire::detail::write_u8(p + detail::k_qos_priority_off, qos.requested_priority);
+    wire::detail::write_u32(p + detail::k_qos_max_message_off, qos.requested_max_message_bytes);
     wire::detail::write_u8(p + detail::k_qos_reserved_off, 0);
     wire::detail::write_u8(p + detail::k_qos_reserved_off + 1, 0);
 }
@@ -288,6 +292,8 @@ inline std::optional<subscribe_request> decode_subscribe_request(std::span<const
         req.qos.requested_deadline_ns = wire::detail::read_u64(q + detail::k_qos_deadline_ns_off);
         req.qos.requested_lease_ns    = wire::detail::read_u64(q + detail::k_qos_lease_ns_off);
         req.qos.requested_priority    = wire::detail::read_u8(q + detail::k_qos_priority_off);
+        req.qos.requested_max_message_bytes
+            = wire::detail::read_u32(q + detail::k_qos_max_message_off);
         req.has_qos = true;
     }
     return req;

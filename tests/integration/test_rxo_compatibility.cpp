@@ -57,6 +57,7 @@ using rpc_forwarder = plexus::io::procedure_forwarder<inproc_policy>;
 using plexus::io::k_rxo_field_reliability;
 using plexus::io::k_rxo_field_durability;
 using plexus::io::k_rxo_field_deadline;
+using plexus::io::k_rxo_field_max_message_bytes;
 
 namespace {
 
@@ -259,6 +260,75 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = true});
             l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::all,
                                                             .rxo = rxo_mode::permissive});
+            l.drive();
+            REQUIRE(l.refusals.empty());
+            REQUIRE(l.degraded.empty());
+        }
+        ++proven;
+    }
+    REQUIRE(proven == k_loops);
+}
+
+TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested ceiling refuses under strict and surfaces under permissive")
+{
+    int proven = 0;
+    for(int iter = 0; iter < k_loops; ++iter)
+    {
+        // The producer declares a 16 MiB per-message max; the subscriber requests a
+        // 4 MiB ceiling — the publisher can emit larger than the subscriber accepts, the
+        // incompatible direction. Strict refuses with the size bit named.
+        {
+            link l;
+            l.drive();
+            REQUIRE(l.complete());
+            l.prod_messages.declare("topic",
+                plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
+            l.subscriber->subscribe("topic",
+                subscriber_qos{.durability_mode = durability::none,
+                               .requested_max_message_bytes = 4u * 1024u * 1024u,
+                               .rxo = rxo_mode::strict});
+            l.drive();
+            REQUIRE(l.refusals.size() == 1);
+            REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
+            REQUIRE(l.degraded.empty());
+
+            l.prod_messages.publish("topic", as_bytes("payload"), l.producer->session_id());
+            l.drive();
+            REQUIRE(l.received.empty());   // refused: no fan-out entry, no data
+        }
+        // The SAME pair under permissive connects, data flows, and the size bit surfaces.
+        {
+            link l;
+            l.drive();
+            REQUIRE(l.complete());
+            l.prod_messages.declare("topic",
+                plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
+            l.subscriber->subscribe("topic",
+                subscriber_qos{.durability_mode = durability::none,
+                               .requested_max_message_bytes = 4u * 1024u * 1024u,
+                               .rxo = rxo_mode::permissive});
+            l.drive();
+            REQUIRE(l.refusals.empty());
+            REQUIRE(l.degraded.size() == 1);
+            REQUIRE(l.degraded[0] != 0);
+            REQUIRE((l.degraded[0] & k_rxo_field_max_message_bytes) != 0);
+
+            l.prod_messages.publish("topic", as_bytes("payload"), l.producer->session_id());
+            l.drive();
+            REQUIRE(l.received.size() == 1);
+            REQUIRE(l.received[0] == "payload");
+        }
+        // A subscriber requesting a ceiling AT/ABOVE the producer's max is admitted clean.
+        {
+            link l;
+            l.drive();
+            REQUIRE(l.complete());
+            l.prod_messages.declare("topic",
+                plexus::topic_qos{.max_message_bytes = 4u * 1024u * 1024u});
+            l.subscriber->subscribe("topic",
+                subscriber_qos{.durability_mode = durability::none,
+                               .requested_max_message_bytes = 16u * 1024u * 1024u,
+                               .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());

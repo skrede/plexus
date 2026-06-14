@@ -3,9 +3,11 @@
 
 #include "plexus/topic_qos.h"
 
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/subscriber_qos.h"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace plexus::io {
@@ -14,8 +16,8 @@ namespace plexus::io {
 // field the producer's OFFERED value must be at-least-as-strong as the subscriber's
 // REQUESTED value. Each relation is a pure value comparison — no I/O, no registry
 // dependency — so the matrix is auditable and unit-testable in isolation. The
-// carry-only fields (priority, dispatch, congestion, history depth, reach, max
-// payload) are NOT compared here: they ride along without ever gating a match.
+// carry-only fields (priority, dispatch, congestion, history depth, reach) are NOT
+// compared here: they ride along without ever gating a match.
 
 // Reliability: a reliable request needs a reliable offer (the no-silent-downgrade
 // direction). A best-effort request matches any offer.
@@ -56,13 +58,26 @@ inline bool source_identity_compatible(bool offered_emit, bool requires_sid) noe
     return !requires_sid || offered_emit;
 }
 
+// Per-message size: the publisher's OFFERED effective-max must fit the subscriber's
+// REQUESTED ceiling (offered_effective_max <= requested_max) — a subscriber that
+// declared a smaller ceiling cannot receive a larger message, so the incompatible
+// direction is a publisher that can emit past what the subscriber accepts. A 0
+// requested ceiling is "not requested" and is always compatible (the offered side is
+// already resolved through effective_max at the call site, so its 0=unset is gone).
+inline bool max_message_bytes_compatible(std::size_t offered_effective_max,
+                                         std::uint32_t requested_max) noexcept
+{
+    return requested_max == 0 || offered_effective_max <= requested_max;
+}
+
 // The soft-field bit allocation for the degraded-field bitmask. Each bit names a
 // soft (consumer-tunable) field that went unsatisfied under a permissive accept.
 // Source identity is NOT a degradable field — it is the one always-hard verdict.
-constexpr std::uint8_t k_rxo_field_reliability = 0x01;
-constexpr std::uint8_t k_rxo_field_durability  = 0x02;
-constexpr std::uint8_t k_rxo_field_deadline    = 0x04;
-constexpr std::uint8_t k_rxo_field_lease       = 0x08;
+constexpr std::uint8_t k_rxo_field_reliability       = 0x01;
+constexpr std::uint8_t k_rxo_field_durability        = 0x02;
+constexpr std::uint8_t k_rxo_field_deadline          = 0x04;
+constexpr std::uint8_t k_rxo_field_lease             = 0x08;
+constexpr std::uint8_t k_rxo_field_max_message_bytes = 0x10;
 
 // The verdict of a full RxO check. `compatible` admits cleanly; `degraded` admits a
 // permissive subscriber but with one or more soft fields unsatisfied (the surfaced
@@ -89,11 +104,13 @@ struct rxo_result
 
 // Compose the per-field relations into a single verdict. Source identity is the one
 // always-hard field: it is evaluated FIRST and refuses regardless of the subscriber's
-// chosen rxo_mode. The soft fields (reliability, durability, deadline, lease) are
-// mode-gated: a strict subscriber is refused with the failing-field bitmask as the
-// reason; a permissive subscriber connects but the unsatisfied set is surfaced so the
-// accept is never silent.
+// chosen rxo_mode. The soft fields (reliability, durability, deadline, lease, max
+// message bytes) are mode-gated: a strict subscriber is refused with the failing-field
+// bitmask as the reason; a permissive subscriber connects but the unsatisfied set is
+// surfaced so the accept is never silent. global_default resolves the offered topic's
+// 0=unset max into the publisher's effective-max for the size relation.
 inline rxo_result rxo_check(const topic_qos &offered, bool offers_source_identity,
+                            std::size_t global_default,
                             const subscriber_qos &requested) noexcept
 {
     if(!source_identity_compatible(offers_source_identity, requested.requires_source_identity))
@@ -108,6 +125,9 @@ inline rxo_result rxo_check(const topic_qos &offered, bool offers_source_identit
         bits |= k_rxo_field_deadline;
     if(!lease_compatible(offered.offered_lease_ns, requested.requested_lease_ns))
         bits |= k_rxo_field_lease;
+    if(!max_message_bytes_compatible(effective_max(offered, global_default),
+                                     requested.requested_max_message_bytes))
+        bits |= k_rxo_field_max_message_bytes;
 
     if(bits == 0)
         return {rxo_verdict::compatible, 0};

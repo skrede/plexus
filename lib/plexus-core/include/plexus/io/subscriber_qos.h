@@ -80,6 +80,13 @@ struct subscriber_qos
     std::uint64_t requested_lease_ns               = 0;
     std::uint8_t  requested_priority               = 0;
 
+    // The subscriber's requested per-MESSAGE size ceiling: the largest message it will
+    // accept. 0 = unset = always compatible (a genuine "not requested" state, the same
+    // 0-sentinel semantics as the deadline/lease fields — never a std::optional). It rides
+    // the subscribe wire region and gates the RxO max-message-bytes relation: a publisher
+    // whose effective-max exceeds this is refused (strict) or degraded (permissive).
+    std::uint32_t requested_max_message_bytes      = 0;
+
     // The subscriber-chosen handling of a soft RxO incompatibility. `permissive`
     // (the friendly default) connects-but-surfaces the degraded set; `strict`
     // refuses with a reason. It rides a reserved subscribe-request flag bit, so a

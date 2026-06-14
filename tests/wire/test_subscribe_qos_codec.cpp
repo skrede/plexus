@@ -27,7 +27,8 @@ subscribe_qos_region non_default_region()
                                      | detail::k_qos_flag_requested_reliable,
             .requested_deadline_ns = 0xA1B2C3D4E5F60789ULL,
             .requested_lease_ns    = 0x0102030405060708ULL,
-            .requested_priority    = 5};
+            .requested_priority    = 5,
+            .requested_max_message_bytes = 0x00ABCDEFu};
 }
 
 subscribe_request base_request()
@@ -64,6 +65,7 @@ TEST_CASE("subscribe_qos region round-trips every field", "[wire][subscribe_qos]
     CHECK(decoded->qos.requested_deadline_ns == req.qos.requested_deadline_ns);
     CHECK(decoded->qos.requested_lease_ns == req.qos.requested_lease_ns);
     CHECK(decoded->qos.requested_priority == 5);
+    CHECK(decoded->qos.requested_max_message_bytes == req.qos.requested_max_message_bytes);
 }
 
 TEST_CASE("has_qos=false encode is byte-identical to the pre-region encoding",
@@ -83,7 +85,7 @@ TEST_CASE("has_qos=false encode is byte-identical to the pre-region encoding",
     auto reference = encode_subscribe_request(plain);
 
     CHECK(with_struct == reference);
-    // And the encoded size is the pre-region minimum-plus-strings (no +28).
+    // And the encoded size is the pre-region minimum-plus-strings (no +32).
     CHECK(with_struct.size()
           == detail::subscribe_request_fixed_prefix + 2 + req.fqn.size()
                  + 2 + req.type_name.size());
@@ -120,7 +122,7 @@ TEST_CASE("a truncated QoS region decodes to nullopt", "[wire][subscribe_qos]")
     CHECK_FALSE(decoded.has_value());
 }
 
-TEST_CASE("a region whose declared length is not exactly 26 decodes to nullopt",
+TEST_CASE("a region whose declared length is not exactly 30 decodes to nullopt",
           "[wire][subscribe_qos]")
 {
     auto req = base_request();
@@ -130,11 +132,11 @@ TEST_CASE("a region whose declared length is not exactly 26 decodes to nullopt",
 
     // Locate the region length prefix: it sits right after fqn + type_name, i.e.
     // at fixed_prefix + 2 + fqn + 2 + type_name. Rewrite it to a wrong (in-range
-    // but != 26) value while leaving 26 bytes present -> exact-length check fails.
+    // but != 30) value while leaving 30 bytes present -> exact-length check fails.
     const std::size_t prefix_off = detail::subscribe_request_fixed_prefix
                                    + 2 + req.fqn.size() + 2 + req.type_name.size();
     REQUIRE(prefix_off + 2 <= bytes.size());
-    detail::write_u16(bytes.data() + prefix_off, 25);   // claim 25, not 26
+    detail::write_u16(bytes.data() + prefix_off, 29);   // claim 29, not 30
     // Shorten the trailing payload to match the smaller claim so the buffer is
     // self-consistent (the length read succeeds) but the exact-26 gate rejects it.
     bytes.pop_back();
@@ -164,7 +166,7 @@ TEST_CASE("the protocol version is at 7 and the region is trivially copyable",
           "[wire][subscribe_qos]")
 {
     static_assert(k_protocol_version == 7);
-    static_assert(detail::k_qos_region_size == 26);
+    static_assert(detail::k_qos_region_size == 30);
     static_assert(std::is_trivially_copyable_v<subscribe_qos_region>);
     CHECK(k_protocol_version == 7);
 }
