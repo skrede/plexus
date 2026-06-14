@@ -137,7 +137,7 @@ std::vector<std::byte> frame_for_fragment(std::span<const std::byte> frag_payloa
 std::vector<std::vector<std::byte>> fragment_and_seal(const derived_keys &keys,
                                                       std::span<const std::byte> message,
                                                       std::size_t budget, std::uint16_t msg_id,
-                                                      std::uint16_t &frag_cnt_out)
+                                                      std::uint32_t &frag_cnt_out)
 {
     wire_lower send_wire;
     datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys);
@@ -147,7 +147,7 @@ std::vector<std::vector<std::byte>> fragment_and_seal(const derived_keys &keys,
 
     std::vector<std::byte> frag_scratch;
     plexus::io::fragment_sink sink =
-        [&](std::uint16_t idx, std::uint16_t cnt, std::span<const std::byte> slice) {
+        [&](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice) {
             plexus::wire::encode_udp_fragment_payload_into(frag_scratch, msg_id, idx, cnt, slice);
             sender.send(frame_for_fragment(frag_scratch));
         };
@@ -197,7 +197,7 @@ TEST_CASE("integration.aead_fragment a sealed-fragment large message round-trips
 
     for(int run = 0; run < 3; ++run)   // a transport claim is never made from one run
     {
-        std::uint16_t frag_cnt = 0;
+        std::uint32_t frag_cnt = 0;
         const auto wire = fragment_and_seal(keys, message, budget, /*msg_id=*/0x2A, frag_cnt);
         REQUIRE(frag_cnt > 1);
         REQUIRE(wire.size() == frag_cnt);
@@ -225,7 +225,7 @@ TEST_CASE("integration.aead_fragment a sealed-fragment large message round-trips
 
     for(int run = 0; run < 3; ++run)
     {
-        std::uint16_t frag_cnt = 0;
+        std::uint32_t frag_cnt = 0;
         const auto wire = fragment_and_seal(keys, message, budget, /*msg_id=*/0x2A, frag_cnt);
 
         // Reorder the sealed datagrams at fragment scale through the deterministic
@@ -266,7 +266,7 @@ TEST_CASE("integration.aead_fragment a forged fragment dies at the tag check bef
 
     for(int run = 0; run < 3; ++run)
     {
-        std::uint16_t frag_cnt = 0;
+        std::uint32_t frag_cnt = 0;
         auto wire = fragment_and_seal(keys, message, budget, /*msg_id=*/0x2A, frag_cnt);
         REQUIRE(frag_cnt > 2);
 
@@ -304,7 +304,7 @@ TEST_CASE("integration.aead_fragment the AEAD-decorated budget leaves room for t
     REQUIRE(eff_aead + plexus::io::k_aead_fragment_overhead == eff_plain);
 
     // The fragment SLICE the splitter emits respects the AEAD-decorated budget so a
-    // fragment sealed as the udp sub-header(6) + slice + the 25-byte seal overhead fits
+    // fragment sealed as the udp sub-header(10) + slice + the 25-byte seal overhead fits
     // the transport budget. This harness additionally wraps each fragment payload in a
     // frame_header (the AEAD AAD), so the on-wire sealed datagram carries that fixed
     // header_size too — the production datagram fragment path keys the budget off the udp
@@ -312,7 +312,7 @@ TEST_CASE("integration.aead_fragment the AEAD-decorated budget leaves room for t
     // transport budget plus the harness's header framing.
     const auto keys = fixed_keys();
     const auto message = make_message(eff_aead * 3 + 17);
-    std::uint16_t frag_cnt = 0;
+    std::uint32_t frag_cnt = 0;
     const auto wire = fragment_and_seal(keys, message, budget, /*msg_id=*/1, frag_cnt);
     REQUIRE(frag_cnt >= 2);
     for(const auto &dg : wire)

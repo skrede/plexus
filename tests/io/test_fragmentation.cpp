@@ -94,8 +94,8 @@ namespace {
 
 struct recorded_fragment
 {
-    std::uint16_t idx;
-    std::uint16_t cnt;
+    std::uint32_t idx;
+    std::uint32_t cnt;
     std::vector<std::byte> bytes;
 };
 
@@ -103,7 +103,7 @@ std::vector<recorded_fragment> collect(std::span<const std::byte> payload, std::
                                        bool aead_decorated = false)
 {
     std::vector<recorded_fragment> seen;
-    io::fragment_sink sink = [&seen](std::uint16_t idx, std::uint16_t cnt, std::span<const std::byte> b) {
+    io::fragment_sink sink = [&seen](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> b) {
         seen.push_back({idx, cnt, std::vector<std::byte>(b.begin(), b.end())});
     };
     const auto returned = io::split(payload, budget, /*msg_id*/ 1, sink, aead_decorated);

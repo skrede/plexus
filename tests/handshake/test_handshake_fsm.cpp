@@ -499,8 +499,8 @@ TEST_CASE("E: version-compat matrix and protocol-gate ordering", "[handshake]")
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_version);
 
-        static_assert(k_protocol_version == 6);
-        REQUIRE(k_protocol_version == 6);
+        static_assert(k_protocol_version == 7);
+        REQUIRE(k_protocol_version == 7);
     }
 }
 
@@ -727,9 +727,9 @@ TEST_CASE("J: compile-time pins, node_id order, and zero-alloc steady step", "[h
         static_assert(static_cast<std::uint8_t>(handshake_status::identity_conflict) == 0x03);
         static_assert(static_cast<std::uint8_t>(handshake_status::rejected_unknown) == 0x04);
         static_assert(static_cast<std::uint8_t>(handshake_status::unauthorized) == 0x05);
-        static_assert(k_protocol_version == 6);
+        static_assert(k_protocol_version == 7);
         static_assert(std::tuple_size_v<node_id> == 16);
-        REQUIRE(k_protocol_version == 6);
+        REQUIRE(k_protocol_version == 7);
     }
 
     SECTION("J2: node_id compare is unsigned-lexicographic")

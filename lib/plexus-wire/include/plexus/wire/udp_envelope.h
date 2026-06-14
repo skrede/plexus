@@ -37,23 +37,25 @@ namespace plexus::wire {
 // its own anti-replay and handshake retransmit). Reserved here; nothing is built.
 constexpr std::size_t udp_envelope_overhead = 3;
 
-// A fragmented datagram carries a 6-byte sub-header AFTER the 3-byte envelope:
+// A fragmented datagram carries a 10-byte sub-header AFTER the 3-byte envelope:
 //
 //   offset  size  field
 //   ------  ----  ----------------------------------------------------------------
 //    3       2    msg_id     uint16, big-endian. Groups the fragments of one logical
 //                            message; the reassembler keys its partial-message table on it.
-//    5       2    frag_idx   uint16, big-endian. This fragment's 0-based position.
-//    7       2    frag_cnt   uint16, big-endian. The total fragment count for the message.
-//    9       ..   bytes      this fragment's slice of the payload, passed through verbatim.
+//    5       4    frag_idx   uint32, big-endian. This fragment's 0-based position.
+//    9       4    frag_cnt   uint32, big-endian. The total fragment count for the message.
+//   13       ..   bytes      this fragment's slice of the payload, passed through verbatim.
 //
-// The widths follow from the largest message a single send may fragment. At a
-// conservative ~1200-byte fragment a ~4 MB message is roughly 3500 fragments — well
-// inside the uint16 frag_cnt/frag_idx range (65535), and the uint16 msg_id space far
-// exceeds the bounded reassembler's in-flight table so an id wrap cannot alias a live
-// entry. This sub-header is APPENDED only when the FRAGMENTED bit is set, so the common
-// single-datagram path keeps the 3-byte overhead with zero fragmentation cost.
-constexpr std::size_t udp_fragment_subheader = 6;
+// frag_idx/frag_cnt are uint32 because the fragment count of one message is bounded by
+// the message size over the minimum fragment payload, which can exceed the uint16 range;
+// the field width must not be the limiter on how large a message may fragment. msg_id
+// stays uint16 deliberately: it does NOT count fragments — it groups them, and is sized to
+// exceed the bounded reassembler's in-flight table, so an id wrap cannot alias a live entry
+// even at a far larger per-message fragment count. This sub-header is APPENDED only when the
+// FRAGMENTED bit is set, so the common single-datagram path keeps the 3-byte overhead with
+// zero fragmentation cost.
+constexpr std::size_t udp_fragment_subheader = 10;
 constexpr std::size_t udp_fragment_header_overhead = udp_envelope_overhead + udp_fragment_subheader;
 
 enum class udp_envelope_kind : std::uint8_t
@@ -163,18 +165,18 @@ inline void wrap_udp_into_fragmented(std::vector<std::byte> &out, udp_envelope_k
 struct udp_fragment_header
 {
     std::uint16_t msg_id;
-    std::uint16_t frag_idx;
-    std::uint16_t frag_cnt;
+    std::uint32_t frag_idx;
+    std::uint32_t frag_cnt;
     std::span<const std::byte> payload;
 };
 
 // Wrap one fragment into a caller-owned buffer reused across sends: the 3-byte envelope
-// with the FRAGMENTED bit set, the 6-byte fragment sub-header, then the fragment bytes.
+// with the FRAGMENTED bit set, the 10-byte fragment sub-header, then the fragment bytes.
 // resize() reuses the buffer's capacity so a fragmenting send loop allocates nothing
 // after the warm-up grow. The unfragmented wrap_udp_into above is untouched — this
 // overhead exists only on the fragmenting path.
 inline void wrap_udp_fragment_into(std::vector<std::byte> &out, udp_envelope_kind kind, std::uint16_t seq,
-                                   std::uint16_t msg_id, std::uint16_t frag_idx, std::uint16_t frag_cnt,
+                                   std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt,
                                    std::span<const std::byte> frag_bytes)
 {
     out.resize(udp_fragment_header_overhead + frag_bytes.size());
@@ -183,30 +185,30 @@ inline void wrap_udp_fragment_into(std::vector<std::byte> &out, udp_envelope_kin
     w.u8(detail::pack_ver_flags(kind, true));
     w.u16(seq);
     w.u16(msg_id);
-    w.u16(frag_idx);
-    w.u16(frag_cnt);
+    w.u32(frag_idx);
+    w.u32(frag_cnt);
     w.bytes(frag_bytes);
 }
 
-// Encode the BARE fragment sub-header + slice — [msg_id:2][frag_idx:2][frag_cnt:2][slice]
+// Encode the BARE fragment sub-header + slice — [msg_id:2][frag_idx:4][frag_cnt:4][slice]
 // — with no envelope. This is the reliable-ARQ fragment payload: the fragment rides as
 // one ARQ segment whose in-order delivery the peer decodes with decode_udp_fragment_header
 // (the layout is identical to the wire sub-header). Reused caller buffer, no per-send alloc.
 inline void encode_udp_fragment_payload_into(std::vector<std::byte> &out, std::uint16_t msg_id,
-                                             std::uint16_t frag_idx, std::uint16_t frag_cnt,
+                                             std::uint32_t frag_idx, std::uint32_t frag_cnt,
                                              std::span<const std::byte> slice)
 {
     out.resize(udp_fragment_subheader + slice.size());
     writer w{out};
 
     w.u16(msg_id);
-    w.u16(frag_idx);
-    w.u16(frag_cnt);
+    w.u32(frag_idx);
+    w.u32(frag_cnt);
     w.bytes(slice);
 }
 
 // Decode the fragment sub-header from an untrusted inner frame (the .frame an unwrap
-// of a fragmented datagram yields). Fail-closed: a frame shorter than the 6-byte
+// of a fragmented datagram yields). Fail-closed: a frame shorter than the 10-byte
 // sub-header is rejected to nullopt before any read, never indexing past the span. The
 // returned payload is a view into the caller's frame (frame.subspan past the sub-header).
 inline std::optional<udp_fragment_header> decode_udp_fragment_header(std::span<const std::byte> frame)
@@ -216,8 +218,8 @@ inline std::optional<udp_fragment_header> decode_udp_fragment_header(std::span<c
 
     reader r{frame};
     auto msg_id = r.u16();
-    auto frag_idx = r.u16();
-    auto frag_cnt = r.u16();
+    auto frag_idx = r.u32();
+    auto frag_cnt = r.u32();
     return udp_fragment_header{
             .msg_id   = msg_id,
             .frag_idx = frag_idx,

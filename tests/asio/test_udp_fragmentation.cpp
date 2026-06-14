@@ -235,16 +235,16 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
     auto payload = make_payload(1000, 0x5A);
     const std::uint16_t msg_id = 7;
     std::vector<std::vector<std::byte>> datagrams;
-    pio::fragment_sink sink = [&](std::uint16_t idx, std::uint16_t cnt, std::span<const std::byte> slice) {
+    pio::fragment_sink sink = [&](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice) {
         std::vector<std::byte> dg;
         wire::wrap_udp_fragment_into(dg, wire::udp_envelope_kind::best_effort,
                                      static_cast<std::uint16_t>(idx), msg_id, idx, cnt, slice);
         datagrams.push_back(std::move(dg));
     };
-    const std::uint16_t cnt = pio::split(payload, /*budget=*/256, msg_id, sink);
+    const std::uint32_t cnt = pio::split(payload, /*budget=*/256, msg_id, sink);
     REQUIRE(cnt >= 3);
 
-    for(std::uint16_t i = 0; i < cnt; ++i)
+    for(std::uint32_t i = 0; i < cnt; ++i)
         if(i != 2)
             accepted->deliver_inbound(datagrams[i]);     // withhold fragment index 2
 

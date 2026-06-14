@@ -149,7 +149,7 @@ void dtls_channel::send_large(std::span<const std::byte> bytes)
         return;
     }
     const std::uint16_t msg_id = m_out_msg_id++;
-    io::fragment_sink sink = [this, msg_id](std::uint16_t idx, std::uint16_t cnt, std::span<const std::byte> slice) {
+    io::fragment_sink sink = [this, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice) {
         // Each fragment is one FRAGMENTED-bit envelope (kind is nominal — DTLS owns its own
         // anti-replay, so the seq field is unused) submitted through the ready gate; the per-
         // record budget bounds the wrapped fragment to one DTLS record (drop-whole on loss).

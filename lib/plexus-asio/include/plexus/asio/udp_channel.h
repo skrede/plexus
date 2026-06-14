@@ -304,7 +304,7 @@ private:
         if(exceeds_max_message(frame.size()))
             return reject_oversize();
         const std::uint16_t msg_id = m_out_msg_id++;
-        io::fragment_sink sink = [this, msg_id](std::uint16_t idx, std::uint16_t cnt, std::span<const std::byte> slice) {
+        io::fragment_sink sink = [this, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice) {
             wire::wrap_udp_fragment_into(m_frag_scratch, wire::udp_envelope_kind::best_effort, m_out_seq++, msg_id, idx, cnt, slice);
             m_server.send_to(m_frag_scratch, m_dest);
         };
@@ -327,16 +327,16 @@ private:
         ensure_arq();
         const std::uint16_t msg_id = m_out_msg_id++;
         submit_result last = submit_result::admitted;
-        io::fragment_sink sink = [this, msg_id, &last](std::uint16_t idx, std::uint16_t cnt, std::span<const std::byte> slice) {
+        io::fragment_sink sink = [this, msg_id, &last](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice) {
             last = submit_reliable_fragment(msg_id, idx, cnt, slice);
         };
         io::split(payload, m_max_payload, msg_id, sink);
         return last;
     }
 
-    // Encode one reliable fragment as [msg_id:2][idx:2][cnt:2][slice] and submit it to the
+    // Encode one reliable fragment as [msg_id:2][idx:4][cnt:4][slice] and submit it to the
     // ARQ with the fragmented flag set; a full window backpressures through the bounded queue.
-    submit_result submit_reliable_fragment(std::uint16_t msg_id, std::uint16_t idx, std::uint16_t cnt,
+    submit_result submit_reliable_fragment(std::uint16_t msg_id, std::uint32_t idx, std::uint32_t cnt,
                                            std::span<const std::byte> slice)
     {
         wire::encode_udp_fragment_payload_into(m_frag_scratch, msg_id, idx, cnt, slice);
@@ -358,7 +358,7 @@ private:
     }
 
     // A reliable in-order payload: if its ARQ seq was flagged FRAGMENTED on the wire, the
-    // payload is [msg_id:2][idx:2][cnt:2][slice] — decode and feed the reassembler; else it
+    // payload is [msg_id:2][idx:4][cnt:4][slice] — decode and feed the reassembler; else it
     // is a whole reliable message delivered byte-identically to the unfragmented path.
     void deliver_reliable_inorder(bool fragmented, std::span<const std::byte> payload)
     {

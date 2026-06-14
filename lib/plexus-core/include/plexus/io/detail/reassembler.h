@@ -90,7 +90,7 @@ public:
     // Feed an untrusted fragment. Range-checks precede every index; once all frag_cnt fragments
     // for one msg_id have arrived (in any order) the message assembles and fires on_deliver
     // exactly once. Returns the per-fragment outcome.
-    outcome feed(std::uint16_t msg_id, std::uint16_t frag_idx, std::uint16_t frag_cnt,
+    outcome feed(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt,
                  std::span<const std::byte> bytes)
     {
         const outcome o = (frag_cnt == 0 || frag_idx >= frag_cnt || frag_cnt > max_fragment_count)
@@ -116,7 +116,7 @@ public:
 
     // The per-entry structural cost a claimed frag_cnt forces (the slots vector plus the present
     // bitmap), charged against the same cap as payload — see the BOUNDS note at the class head.
-    [[nodiscard]] static constexpr std::size_t structural_cost(std::uint16_t frag_cnt) noexcept
+    [[nodiscard]] static constexpr std::size_t structural_cost(std::uint32_t frag_cnt) noexcept
     {
         return static_cast<std::size_t>(frag_cnt) * sizeof(std::vector<std::byte>)
                + (static_cast<std::size_t>(frag_cnt) + 7u) / 8u;
@@ -133,7 +133,7 @@ private:
         std::unique_ptr<Timer> timer;
     };
 
-    outcome admit_fragment(std::uint16_t msg_id, std::uint16_t frag_idx, std::uint16_t frag_cnt,
+    outcome admit_fragment(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt,
                            std::span<const std::byte> bytes)
     {
         auto it = m_table.find(msg_id);
@@ -146,7 +146,7 @@ private:
         return store(it->second, msg_id, frag_idx, bytes);
     }
 
-    typename reassembler_flat_map<entry>::iterator open_entry(std::uint16_t msg_id, std::uint16_t frag_cnt, std::size_t payload)
+    typename reassembler_flat_map<entry>::iterator open_entry(std::uint16_t msg_id, std::uint32_t frag_cnt, std::size_t payload)
     {
         if(m_held + structural_cost(frag_cnt) + payload > m_cfg.total_memory_cap)
             return m_table.end();                     // structural + payload cost cannot fit the cap
@@ -163,7 +163,7 @@ private:
         return it;
     }
 
-    outcome store(entry &e, std::uint16_t msg_id, std::uint16_t frag_idx, std::span<const std::byte> bytes)
+    outcome store(entry &e, std::uint16_t msg_id, std::uint32_t frag_idx, std::span<const std::byte> bytes)
     {
         if(frag_idx >= e.slots.size())
             return outcome::dropped_malformed;        // frag_cnt disagreed with the open entry
