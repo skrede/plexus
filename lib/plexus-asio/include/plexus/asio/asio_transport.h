@@ -10,6 +10,7 @@
 #include "plexus/wire/stream_inbound.h"
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/congestion.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 
@@ -17,6 +18,7 @@
 #include <asio/io_context.hpp>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <system_error>
 #include <string_view>
@@ -49,8 +51,11 @@ class asio_transport
 
 public:
     explicit asio_transport(::asio::io_context &io, wire::stream_inbound_config cfg = {},
-                            bool no_delay = true)
-        : base(io, cfg, no_delay, io, cfg, no_delay)
+                            bool no_delay = true, io::congestion congestion = io::congestion::block,
+                            std::size_t write_queue_bytes = asio_channel::default_write_queue_bytes,
+                            stream_socket_options socket_options = {})
+        : base(io, cfg, no_delay, congestion, write_queue_bytes, socket_options,
+               io, cfg, no_delay, congestion, write_queue_bytes, socket_options)
     {
     }
 

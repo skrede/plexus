@@ -54,6 +54,8 @@ struct stream_inbound_config
 {
     std::chrono::nanoseconds no_progress_floor{std::chrono::seconds{30}};
     std::size_t min_throughput_bytes_per_sec{64 * 1024};
+    std::size_t max_payload_size{k_max_reassembler_payload_bytes};
+    std::size_t buffered_bytes_cap{k_max_reassembler_payload_bytes + header_size};
 };
 
 // The shared byte-stream framing-hardening detection layer. It composes the
@@ -73,7 +75,8 @@ class stream_inbound
 {
 public:
     stream_inbound(Executor ex, stream_inbound_config cfg)
-        : m_timer(ex)
+        : m_reassembler(cfg.max_payload_size, cfg.buffered_bytes_cap)
+        , m_timer(ex)
         , m_cfg(cfg)
     {
     }

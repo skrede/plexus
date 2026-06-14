@@ -9,6 +9,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/ip/tcp.hpp>
@@ -17,6 +18,7 @@
 #include <string>
 #include <memory>
 #include <utility>
+#include <cstddef>
 #include <cstdint>
 #include <system_error>
 
@@ -36,11 +38,17 @@ public:
     // latency-MW default; a Nagle use-case overrides it): set BEFORE the channel adopts
     // the socket, since the accept ctor starts reading immediately.
     explicit asio_listener(::asio::io_context &io, wire::stream_inbound_config cfg = {},
-                           bool no_delay = true)
+                           bool no_delay = true,
+                           io::congestion congestion = io::congestion::block,
+                           std::size_t write_queue_bytes = asio_channel::default_write_queue_bytes,
+                           stream_socket_options socket_options = {})
         : m_io(io)
         , m_acceptor(io)
         , m_cfg(cfg)
         , m_no_delay(no_delay)
+        , m_congestion(congestion)
+        , m_write_queue_bytes(write_queue_bytes)
+        , m_socket_options(socket_options)
     {
     }
 
@@ -102,7 +110,8 @@ private:
                     std::error_code nec;
                     (void)peer.set_option(::asio::ip::tcp::no_delay(true), nec);   // disable Nagle pre-adopt
                 }
-                auto channel = std::make_unique<asio_channel>(m_io, std::move(peer), m_cfg);
+                auto channel = std::make_unique<asio_channel>(m_io, std::move(peer), m_cfg,
+                                                              m_congestion, m_write_queue_bytes, m_socket_options);
                 if(m_on_accepted)
                     m_on_accepted(std::move(channel));
                 if(m_running)
@@ -120,6 +129,9 @@ private:
     ::asio::ip::tcp::acceptor m_acceptor;
     wire::stream_inbound_config m_cfg;
     bool m_no_delay;
+    io::congestion m_congestion;
+    std::size_t m_write_queue_bytes;
+    stream_socket_options m_socket_options;
     plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     bool m_running{false};
