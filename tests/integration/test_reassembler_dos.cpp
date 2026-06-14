@@ -150,11 +150,22 @@ TEST_CASE("integration.reassembler_dos malformed fragments are rejected without 
         plexus::testing::harness h;
         test_reassembler r{h.ex};
 
-        // idx >= cnt, cnt == 0, and cnt past the uint16 field-width max are each rejected
+        // idx >= cnt, cnt == 0, and cnt past the max_fragment_count ceiling are each rejected
         // before any indexing — looped so a state-carrying regression is caught.
         REQUIRE(r.feed(1, 5, 3, filler(64)) == test_reassembler::outcome::dropped_malformed);   // idx >= cnt
         REQUIRE(r.feed(1, 0, 0, filler(64)) == test_reassembler::outcome::dropped_malformed);   // cnt == 0
         REQUIRE(r.feed(1, 0, 0xFFFF, filler(64)) == test_reassembler::outcome::dropped_malformed); // cnt over max
+        REQUIRE(r.in_flight() == 0);
+        REQUIRE(r.held_bytes() == 0);
+
+        // Now that frag_cnt is a uint32 wire field, a forged fragment can claim a count near
+        // 2^32. The malformed gate (frag_cnt > max_fragment_count) refuses it BEFORE open_entry
+        // runs, so neither structural_cost is charged nor any slot table allocated — the widened
+        // field cannot be turned into a metadata-amplification allocation. structural_cost itself
+        // casts to size_t before the multiply, so even the rejected count cannot overflow the
+        // cost computation on the path that does evaluate it.
+        REQUIRE(r.feed(1, 0, 0xFFFFFFFFu, filler(64)) == test_reassembler::outcome::dropped_malformed);
+        REQUIRE(r.feed(1, 0, 0xFFFFFFF0u, filler(64)) == test_reassembler::outcome::dropped_malformed);
         REQUIRE(r.in_flight() == 0);
         REQUIRE(r.held_bytes() == 0);
 

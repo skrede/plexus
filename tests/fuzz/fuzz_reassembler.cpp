@@ -36,6 +36,17 @@ std::uint16_t read_u16_lenient(std::span<const std::byte> b, std::size_t off) no
     return static_cast<std::uint16_t>((hi << 8) | lo);
 }
 
+// Read up to four bytes as a big-endian uint32 with the same short-span tolerance, so the
+// widened frag_idx/frag_cnt range (including a near-2^32 forged count) is exercised against
+// the reassembler's malformed gate and structural-cost charge.
+std::uint32_t read_u32_lenient(std::span<const std::byte> b, std::size_t off) noexcept
+{
+    std::uint32_t v = 0;
+    for(std::size_t i = 0; i < 4; ++i)
+        v = (v << 8) | (off + i < b.size() ? static_cast<std::uint8_t>(b[off + i]) : 0u);
+    return v;
+}
+
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
@@ -58,8 +69,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
     // derived directly from the raw bytes (so idx/cnt combinations the decode would
     // never surface are still exercised), feeding the trailing bytes as the payload.
     const auto msg_id = read_u16_lenient(bytes, 0);
-    const auto frag_idx = read_u16_lenient(bytes, 2);
-    const auto frag_cnt = read_u16_lenient(bytes, 4);
+    const auto frag_idx = read_u32_lenient(bytes, 2);
+    const auto frag_cnt = read_u32_lenient(bytes, 6);
     const auto payload = bytes.size() > wire::udp_fragment_subheader
                              ? bytes.subspan(wire::udp_fragment_subheader)
                              : std::span<const std::byte>{};
