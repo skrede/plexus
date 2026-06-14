@@ -79,6 +79,14 @@ public:
     reliability delivery() const noexcept { return m_reliability; }
     congestion overflow() const noexcept { return m_congestion; }
 
+    // The slowest registered consumer cursor -- the back-pressure progress signal a
+    // blocking reliable producer watches to tell a live-but-slow consumer from a
+    // wedged one.
+    std::uint64_t slowest_consumer_position() const noexcept
+    {
+        return m_ring.slowest_consumer_position();
+    }
+
 private:
     broadcast_ring &m_ring;
     reliability     m_reliability;
