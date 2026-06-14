@@ -1,4 +1,4 @@
-#include "plexus/asio/shm/ring_notifier.h"
+#include "plexus/asio/shm/linux/ring_notifier.h"
 
 #include "plexus/shm/posix_shm_region_broker.h"
 #include "plexus/shm/region_handle.h"

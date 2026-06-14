@@ -311,6 +311,7 @@ if(LIBURING_FOUND)
 
     target_link_libraries(test_shm_notifier_bridge PRIVATE
         plexus::asio
+        plexus::asio::shm
         plexus::shm
         plexus::wire
         PkgConfig::LIBURING
@@ -330,6 +331,7 @@ if(LIBURING_FOUND)
 
     target_link_libraries(test_shm_teardown_race PRIVATE
         plexus::asio
+        plexus::asio::shm
         plexus::shm
         plexus::wire
         PkgConfig::LIBURING
@@ -349,6 +351,7 @@ if(LIBURING_FOUND)
 
     target_link_libraries(test_shm_dual_delivery PRIVATE
         plexus::asio
+        plexus::asio::shm
         plexus::shm
         plexus::wire
         PkgConfig::LIBURING
@@ -369,6 +372,7 @@ if(LIBURING_FOUND)
             plexus::core
             plexus::wire
             plexus::asio
+            plexus::asio::shm
             plexus::shm
             plexus::crypto
             PkgConfig::LIBURING

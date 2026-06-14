@@ -5,11 +5,9 @@
 # and only when the backend is ON. Auto-discovered by the root lib glob;
 # self-gated so the core stays shm-free when PLEXUS_ENABLE_SHM_BACKEND is OFF.
 #
-# The option is declared HERE (not in the root CMakeLists.txt) so the target
-# registers by adding this fragment alone, matching the discovery-adapter
-# precedent.
-option(PLEXUS_ENABLE_SHM_BACKEND "Build the gated POSIX shared-memory backend (linux-first)" OFF)
-
+# The option is declared at root (ahead of the lib glob) so every fragment —
+# including the asio backend, globbed before this one — reads it; here it is only
+# read, via the early return.
 if(NOT PLEXUS_ENABLE_SHM_BACKEND)
     return()
 endif()
