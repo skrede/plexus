@@ -270,6 +270,40 @@ target_link_libraries(test_shm_registry PRIVATE
 
 catch_discover_tests(test_shm_registry TEST_PREFIX "shm.")
 
+# The ring memory cost query (header-only core): ring_memory_for equals the layout
+# helpers AND the bytes the registry actually requests from the broker for a
+# (payload, capacity) table, pinning the depth-32 16 MiB figure (512 MiB) so a
+# depth-17 / deep-tier regression is caught. A recording stub broker captures the
+# requested slab sizes; the TU includes only core headers.
+add_executable(test_shm_ring_memory_query test_shm_ring_memory_query.cpp)
+
+target_include_directories(test_shm_ring_memory_query PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_ring_memory_query PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_ring_memory_query TEST_PREFIX "shm.")
+
+# The safe-defaults regression + the unified fail-closed path (header-only core): the
+# small-payload default geometry is byte-identical to the shipped values, and a
+# registration over the tunable ceiling AND one the broker/OS cannot map BOTH fail
+# closed naming which bound was hit (ceiling vs OS allocator) with the ask vs available
+# — never a silent downgrade. A heap-backed stub broker drives both legs.
+add_executable(test_shm_geometry_defaults test_shm_geometry_defaults.cpp)
+
+target_include_directories(test_shm_geometry_defaults PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_geometry_defaults PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_geometry_defaults TEST_PREFIX "shm.")
+
 # The thread-free notifier spike (NON-GATING): probes whether an
 # IORING_OP_FUTEX_WAIT CQE on a MAP_SHARED word can be reaped alongside an asio
 # reactor without a plexus-spawned thread. Built only when the host distro's
@@ -420,6 +454,26 @@ target_link_libraries(test_shm_bilateral PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_bilateral TEST_PREFIX "shm.")
+
+# The large-message live-mux round-trip (xproc): a publisher declares a sizing
+# shm_geometry and mints the ring through shm_mux_member's ACQUIRE path (not the unit
+# registry); a >1 MiB then a 16 MiB payload crosses byte-exact to a converged
+# subscriber, per notifier variant (futex-wake shmn + reactor-reaped/spin shmr;
+# busy-poll shm excluded). The large cells run >= 2 times per ctest invocation. The
+# probe-higher cell proves reliable_preserving fails closed above the ceiling while
+# explicit best_effort_large round-trips. Links plexus::shm (the POSIX broker + the
+# futex primitive) + plexus::wire (the fqn-hash region naming).
+add_executable(test_shm_large_message test_shm_large_message.cpp)
+
+target_include_directories(test_shm_large_message PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_large_message PRIVATE
+    plexus::shm
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_large_message TEST_PREFIX "shm.")
 
 # The crashed-creator orphan-reclaim proof (xproc): a child creates a region,
 # stamps a sentinel, and _exits WITHOUT unlinking (the create-owns-unlink dtor
