@@ -416,7 +416,7 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
     counting_logger log;
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{log};
+    forwarder fwd{plexus::io::global_default_max_message_bytes, log};
     inproc_channel<> ch(ex);
     capture cap(ex);
     auto peer = make_peer(ch, cap, "node-a");

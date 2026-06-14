@@ -80,8 +80,14 @@ public:
     using endpoint_type = subscription_endpoint<channel_type>;
     using peer = typename endpoint_type::peer;
 
-    explicit message_forwarder(log::logger &logger = shared_null_logger())
-        : m_logger(logger)
+    // global_default is the node-level per-message size default the RxO size relation
+    // resolves an offered topic's 0=unset max against — the SAME node-level value the
+    // data-path transports resolve against, so a remote subscribe is admitted against
+    // one consistent ceiling rather than a forwarder-local constant that could drift.
+    // It is required-with-default: the shipped constant is the meaningful fallback.
+    explicit message_forwarder(std::size_t global_default = io::global_default_max_message_bytes,
+                               log::logger &logger = shared_null_logger())
+        : m_logger(logger), m_global_default(global_default)
     {
     }
 
@@ -734,10 +740,10 @@ private:
 
     log::logger &m_logger;
     // The node-level per-message size default the RxO size relation resolves an offered
-    // topic's 0=unset max against (effective_max). It mirrors the transport ctors' default
-    // so a topic that declared no per-message override negotiates against the same ceiling
-    // the data path enforces.
-    std::size_t m_global_default = io::global_default_max_message_bytes;
+    // topic's 0=unset max against (effective_max). Set from the node-level default at
+    // construction (no independent constant default here) so the forwarder and the data
+    // path resolve against ONE value.
+    std::size_t m_global_default;
     endpoint_type m_endpoint;
     detail::egress_scheduler<channel_type, Policy> m_egress;
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;

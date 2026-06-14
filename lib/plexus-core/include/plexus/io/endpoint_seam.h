@@ -4,6 +4,7 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/object_carrier.h"
+#include "plexus/io/shm/ring_geometry_mode.h"
 
 #include "plexus/topic_qos.h"
 #include "plexus/publisher_gid.h"
@@ -89,7 +90,8 @@ struct endpoint_seam
     void *ctx;
 
     void (*declare_publisher)(void *ctx, std::string_view fqn, const topic_qos &qos,
-                              bool emit_source_identity, std::optional<std::uint64_t> type_id);
+                              bool emit_source_identity, std::optional<std::uint64_t> type_id,
+                              std::optional<shm::shm_geometry> shm_geometry);
     void (*publish)(void *ctx, std::string_view fqn, std::span<const std::byte> bytes);
     void (*publish_object)(void *ctx, std::string_view fqn, const object_carrier &carrier,
                            encode_thunk encode);

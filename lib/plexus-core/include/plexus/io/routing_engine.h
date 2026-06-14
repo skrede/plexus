@@ -74,11 +74,12 @@ public:
     routing_engine(Transport &transport, executor_type executor,
                    const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout,
                    const reconnect_config &redial, std::uint64_t redial_seed,
-                   bool dial_eagerly = false, log::logger &logger = shared_null_logger())
+                   bool dial_eagerly = false, log::logger &logger = shared_null_logger(),
+                   std::size_t global_default = io::global_default_max_message_bytes)
         : m_transport(transport)
         , m_executor(executor)
         , m_monitor(m_executor)
-        , m_messages()
+        , m_messages(global_default, logger)
         , m_procedures(executor, handshake_timeout, logger)
         , m_security_fanout{*this}
         , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures,

@@ -129,6 +129,14 @@ public:
     void dial(const endpoint &ep)   { dispatch(route_of(ep), [&](auto &m) { m.dial(ep); }); }
     void close() { std::apply([](auto &...m) { (m.close(), ...); }, m_members); }
 
+    // Apply fn to each borrowed member by reference (cold-path, dial/declare-time): the
+    // caller selects the member it cares about with an if-constexpr capability check on
+    // the member type, so a member that lacks the targeted verb is a no-op. Used by the
+    // node's declare path to provision the same-host ring geometry on the shm member
+    // without coupling to the member pack's order or concrete types.
+    template <typename F>
+    void for_each_member(F &&fn) { std::apply([&](auto &...m) { (fn(m), ...); }, m_members); }
+
 private:
     template <typename C>
     static std::unique_ptr<polymorphic_byte_channel> wrap(std::unique_ptr<C> ch)
