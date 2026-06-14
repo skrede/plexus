@@ -107,15 +107,16 @@ int main()
     constexpr std::size_t k_node_ceiling = k_message_16mb + 1u * 1024u * 1024u;   // raised above the 8 MiB default
     constexpr std::size_t k_reassembly_budget = 48u * 1024u * 1024u;              // room for the 16 MB message
 
-    // The receive-side ceiling rides the inbound config; the send-side queue must also hold
-    // the whole framed message under congestion=block, or a publish would stall instead of
-    // completing — so the write-queue byte budget is raised to match.
+    // Only TWO knobs govern the large-message path: the per-MESSAGE ceiling (the sole size
+    // authority) and the aggregate reassembly budget (the receive-side memory backstop). The
+    // send-side write-queue cap is a back-pressure backlog knob, NOT a message-size bound, so
+    // it stays at its default — a within-ceiling message always sends regardless of the cap.
     wire::stream_inbound_config cfg{};
-    constexpr std::size_t k_write_queue = k_node_ceiling + 2u * 1024u * 1024u;
 
     auto make_transport = [&] {
         return pasio::asio_transport{
-            io, cfg, /*no_delay=*/true, pio::congestion::block, k_write_queue,
+            io, cfg, /*no_delay=*/true, pio::congestion::block,
+            pasio::asio_channel::default_write_queue_bytes,
             /*socket_options=*/{}, k_node_ceiling, k_reassembly_budget};
     };
     auto pub_transport = make_transport();

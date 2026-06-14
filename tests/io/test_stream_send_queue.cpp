@@ -183,6 +183,34 @@ TEST_CASE("stream_send_queue bounded capacity fires the at-capacity signal and r
     REQUIRE(q.size() == 2);
 }
 
+TEST_CASE("stream_send_queue admits a single frame LARGER than the cap onto an empty queue", "[io][stream_send_queue]")
+{
+    // The decoupling contract: the byte cap bounds ADDITIONAL backlog, NOT a single message's
+    // size — the per-message ceiling (enforced upstream at publish) is the sole size authority.
+    // So an EMPTY queue must admit one frame of any size, even one far past the cap; only the
+    // EXTRA frames queued behind it are refused once the cap is reached.
+    recorder rec;
+    stream_send_queue q{rec.sink(), 4};                  // a tiny 4-byte backlog cap
+
+    // A 10-byte frame (> the 4-byte cap) is admitted onto the empty queue and driven.
+    REQUIRE(q.enqueue(std::vector<std::byte>(10)));
+    REQUIRE(q.size() == 1);
+    REQUIRE(q.queued_bytes() == 10);
+    REQUIRE(q.full());                                   // already past the cap: no more backlog
+
+    // With the cap already exceeded by the in-flight frame, a further frame is refused —
+    // the cap still bounds the EXTRA backlog behind the admitted message.
+    REQUIRE_FALSE(q.enqueue(std::vector<std::byte>(1)));
+    REQUIRE(q.size() == 1);
+
+    // Once the oversized frame drains, the empty queue again admits one frame of any size.
+    rec.complete_front();
+    REQUIRE(q.size() == 0);
+    REQUIRE_FALSE(q.full());
+    REQUIRE(q.enqueue(std::vector<std::byte>(9)));       // another > cap frame onto the now-empty queue
+    REQUIRE(q.queued_bytes() == 9);
+}
+
 TEST_CASE("stream_send_queue caps on summed BYTES, not entry count", "[io][stream_send_queue]")
 {
     recorder rec;

@@ -100,7 +100,14 @@ public:
         m_closed_for_protocol_error = false;
         m_negotiator.prime();
         m_channel.on_data([this](std::span<const std::byte> f) { on_receive(f); });
-        m_channel.on_error([this](io_error) {
+        m_channel.on_error([this](io_error e) {
+            // would_block is a TRANSIENT back-pressure stall (a full write queue under
+            // congestion=block), NOT a broken channel — a within-ceiling large message in
+            // flight legitimately fills the bounded queue and sheds interleaved frames as
+            // would_block; tearing the session down on it would drop a live connection mid
+            // transfer. Only a genuine channel break drives the transport-drop reconnect.
+            if(e == io_error::would_block)
+                return;
             if(m_on_drop && !m_torn_down && !m_closed_for_protocol_error)
                 m_on_drop();
         });

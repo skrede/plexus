@@ -642,6 +642,23 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         ${CMAKE_CURRENT_SOURCE_DIR}/..)
     catch_discover_tests(test_udp_large_payload TEST_PREFIX "udp.")
 
+    # The out-of-box message-ceiling regression guard: an 8 MiB message (the shipped default
+    # per-message ceiling) round-trips byte-identically over tcp / unix / udpr at FULL SHIPPED
+    # DEFAULTS — no write-queue / back-pressure / ceiling / budget bump — proving the local
+    # back-pressure caps can never silently strangle the shipped ceiling. The TLS leg is added
+    # inside the crypto gate below (it needs the secure backend + OpenSSL). Looped in-body;
+    # re-run >=3 process runs. tests/ is on the include path for shared headers.
+    add_executable(test_outofbox_message_ceiling test_outofbox_message_ceiling.cpp)
+    target_link_libraries(test_outofbox_message_ceiling PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    target_include_directories(test_outofbox_message_ceiling PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_outofbox_message_ceiling TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+
     # The DIALED AF_UNIX transport oracle over a real local socket: the transport's
     # listen + async-connect dial stand up two peer_sessions (no hand-dial) that
     # handshake to completion, mint non-zero epochs, and flow a real published
@@ -814,6 +831,14 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         target_include_directories(test_aead_fragment PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/..)
         catch_discover_tests(test_aead_fragment TEST_PREFIX "integration.")
+
+        # The out-of-box ceiling guard gains its mutual-TLS leg when the secure backend is on:
+        # the same 8 MiB shipped-ceiling round-trip over a live mutual-TLS loopback pair at full
+        # defaults. Linking crypto + the crypto objects and defining PLEXUS_HAVE_TLS_OUTOFBOX
+        # compiles in the guarded TLS test case (the cert fixture needs OpenSSL).
+        target_sources(test_outofbox_message_ceiling PRIVATE $<TARGET_OBJECTS:plexus-crypto>)
+        target_link_libraries(test_outofbox_message_ceiling PRIVATE plexus::crypto)
+        target_compile_definitions(test_outofbox_message_ceiling PRIVATE PLEXUS_HAVE_TLS_OUTOFBOX)
     endif()
 
     # The minimal-composition proof: the core multiplexer instantiated DIRECTLY over a
