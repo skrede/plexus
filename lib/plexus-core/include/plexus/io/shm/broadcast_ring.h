@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_SHM_BROADCAST_RING_H
 
 #include "plexus/io/shm/ring_layout.h"
+#include "plexus/io/shm/cpu_relax.h"
 #include "plexus/io/shm/loan_status.h"
 
 #include "plexus/io/congestion.h"
@@ -82,6 +83,15 @@ public:
     // cursor does not hold back reclamation until it reads its first slot.
     static constexpr std::uint64_t k_cursor_idle = UINT64_MAX;
 
+    // Bound on the reliable pin-clear spin: a reliable claim whose target cell is
+    // still pinned by a live take() relaxes the core this many iterations before it
+    // returns congested rather than burning the core indefinitely on a legitimately
+    // slow consumer. The take pin is transient (the read releases it), so the budget
+    // only ever fires when a consumer holds an outstanding read past it -- the same
+    // back-to-back window the consumer empty-retry budget covers, so it shares that
+    // swept knee (shm-spin-budget-sweep-2026-06-14).
+    static constexpr std::uint32_t k_pin_clear_spin_budget = 256;
+
     // Result of a successful claim: the cell position (carries the lap) and a
     // writable, 8-aligned slab span the caller fills before committing.
     struct claim_result
@@ -126,6 +136,7 @@ public:
         header->slot_capacity = slot_capacity;
         header->mask          = cell_count - 1;
         header->notify_generation.store(0, std::memory_order_relaxed);
+        header->park_state.store(k_park_empty, std::memory_order_relaxed);
         for(std::size_t i = 0; i < k_max_consumers; ++i)
         {
             header->cursors[i].position.store(k_cursor_idle, std::memory_order_relaxed);
@@ -331,6 +342,16 @@ public:
         return m_header->notify_generation;
     }
 
+    // The parked-waiter 3-state word in this ring's control header (in mapped
+    // shared memory). A consumer's notifier park boundary toggles it
+    // EMPTY/PARKED/NOTIFIED across processes; the producer's gated wake reads it to
+    // skip the FUTEX_WAKE syscall when no waiter is parked. Mirrors
+    // notify_generation()'s cross-process word accessor.
+    std::atomic<std::uint32_t> &park_state() noexcept
+    {
+        return m_header->park_state;
+    }
+
     std::uint64_t cell_count() const noexcept { return m_cell_count; }
     std::uint64_t slot_capacity() const noexcept { return m_slot_capacity; }
 
@@ -432,9 +453,16 @@ private:
             // The position is now ours and contiguous. A consumer may still hold a
             // pin on the prior occupant's aliased read; announce the claim and spin
             // until the pin clears (Disruptor gate -- reliable keeps FIFO contiguity,
-            // and the pin is transient).
-            while(!announce_and_check_pin(pos))
-                ; // wait out the aliased read before overwriting its bytes
+            // and the pin is transient). The first iteration with no live pin returns
+            // ok immediately (the byte-identical happy path); a pin that outlasts the
+            // budget surfaces as congested so the producer never burns the core on a
+            // legitimately slow consumer (the publisher does the bounded backoff).
+            for(std::uint32_t spun = 0; !announce_and_check_pin(pos); ++spun)
+            {
+                if(spun >= k_pin_clear_spin_budget)
+                    return loan_status::congested;
+                cpu_relax();
+            }
             out.position = pos;
             out.slab     = slot_span(pos);
             return loan_status::ok;

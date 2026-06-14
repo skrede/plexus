@@ -2,14 +2,11 @@
 #define HPP_GUARD_PLEXUS_IO_SHM_SLOT_SUBSCRIBER_H
 
 #include "plexus/io/shm/broadcast_ring.h"
+#include "plexus/io/shm/cpu_relax.h"
 #include "plexus/io/shm/loan_status.h"
 #include "plexus/io/shm/taken_message.h"
 
 #include <cstdint>
-
-#if defined(__x86_64__) || defined(__i386__)
-#include <immintrin.h>
-#endif
 
 namespace plexus::io::shm {
 
@@ -135,18 +132,6 @@ private:
     {
         ++m_cursor;
         m_ring.publish_cursor(m_cursor_index, m_cursor);
-    }
-
-    // A spin-loop pause hint: lowers the spin's contention + power cost on the empty
-    // retry (PAUSE on x86, YIELD on aarch64), a no-op fallback elsewhere. NOT a scheduler
-    // yield — the spin stays on-core to catch a back-to-back arrival at low latency.
-    static void cpu_relax() noexcept
-    {
-#if defined(__x86_64__) || defined(__i386__)
-        _mm_pause();
-#elif defined(__aarch64__)
-        __asm__ __volatile__("yield" ::: "memory");
-#endif
     }
 
     broadcast_ring &m_ring;
