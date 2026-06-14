@@ -250,9 +250,18 @@ public:
     // bumped). The hook calls this to gate the SHM-vs-AF_UNIX choice at dial time -- the
     // runtime ring-acquire success the positional order cannot express. If the hook
     // declines this member after a successful probe, abandon() drops the held bump.
+    //
+    // A wire_fallback topic declines OUTRIGHT (no acquire, no bump): the recorded session
+    // channel for it MUST be the wire, so a message too large for the capped ring always
+    // has a reliable channel to fall back to (the fail-safe the mode depends on). Routing
+    // a wire_fallback subscriber onto the ring as its sole channel would strand an over-cap
+    // message on a ring it cannot fit. The capped ring stays the small-message fast path a
+    // per-message companion route consults; the per-peer dial channel is the wire.
     [[nodiscard]] bool can_acquire(const endpoint &ep)
     {
         const resolved_geometry g = resolve(ep.address, ring_direction::request);
+        if(g.mode == ring_geometry_mode::wire_fallback)
+            return false;
         return m_registry.acquire(ep.address, ring_direction::request, g.max_payload, g.mode,
                                   g.consumer_capacity) != acquire_result::failed;
     }
