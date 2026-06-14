@@ -4,6 +4,7 @@
 #include "plexus/shm/futex_notifier_primitive.h"
 
 #include "plexus/io/shm/notifier_concept.h"
+#include "plexus/io/shm/ring_layout.h"
 
 #include "plexus/policy.h"
 #include "plexus/detail/compat.h"
@@ -58,8 +59,18 @@ public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
     ring_notifier(typename Policy::executor_type executor,
+                  std::atomic<std::uint32_t> &word,
+                  std::atomic<std::uint32_t> &park) noexcept
+        : m_executor(executor), m_word(word), m_park(park)
+    {
+    }
+
+    // Back-compat construction for a single-process harness whose producer drives the
+    // always-wake one-arg signal: the gated producer never reads this consumer's park
+    // word, so it binds to an owned fallback atom rather than an in-region word.
+    ring_notifier(typename Policy::executor_type executor,
                   std::atomic<std::uint32_t> &word) noexcept
-        : m_executor(executor), m_word(word)
+        : m_executor(executor), m_word(word), m_park(m_park_fallback)
     {
     }
 
@@ -70,9 +81,10 @@ public:
     ring_notifier(ring_notifier &&) = delete;
     ring_notifier &operator=(ring_notifier &&) = delete;
 
-    // The producer wake: bump the shared generation word (release) and wake every
-    // futex waiter blocked on its address — the compiled primitive does both.
-    void signal() noexcept { ::plexus::shm::notifier_signal(m_word); }
+    // The producer wake: bump the shared generation word (release) and wake a parked
+    // consumer — the gated primitive skips the FUTEX_WAKE syscall when no waiter is
+    // parked (a spinning consumer costs the producer zero wakes).
+    void signal() noexcept { ::plexus::shm::notifier_signal(m_word, m_park); }
 
     // Register the consumer drain and begin watching the word. Brings up the
     // private io_uring, registers the CQE-doorbell eventfd onto the user's
@@ -139,6 +151,17 @@ private:
         io_uring_sqe *sqe = ::io_uring_get_sqe(&m_ring);
         if(sqe == nullptr)
             return;
+        // Announce the park BEFORE the snapshot + submit registers the waiter: the
+        // kernel registers the futex waiter on submit, so a producer that bumps the
+        // word and reads park_state after the submit observes PARKED and wakes us; a
+        // store after the submit would leave a wake-skip window. The gated producer's
+        // acquire-exchange pairs with this release store. The snapshot is taken AFTER
+        // the park store so the value the kernel compares is consistent with the
+        // window the producer's bump must move off: if a publish raced and already
+        // advanced the word past the snapshot, io_uring's FUTEX_WAIT completes the CQE
+        // immediately (the kernel value-compares *word != cur on registration), so the
+        // reactor turn re-drains and re-submits -- no lost wake, no blocked-on-stale.
+        m_park.store(::plexus::io::shm::k_park_parked, std::memory_order_release);
         const std::uint32_t cur = m_word.load(std::memory_order_acquire);
         ::io_uring_prep_futex_wait(sqe, reinterpret_cast<std::uint32_t *>(&m_word), cur,
                                    FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
@@ -164,6 +187,10 @@ private:
         std::uint64_t drained = 0;
         (void)::read(m_evfd, &drained, sizeof(drained));
         reap_cqe();
+        // The wake was delivered: clear the park before re-arming so a producer that
+        // bumps the word while the drain is in flight is not gated off a stale PARKED
+        // (submit_futex_wait re-stores PARKED right before it re-registers the waiter).
+        m_park.store(::plexus::io::shm::k_park_empty, std::memory_order_release);
         Policy::post(m_executor, drain_post());
         submit_futex_wait();
         watch_doorbell();
@@ -186,8 +213,11 @@ private:
         return [this] { if(m_drain) m_drain(); };
     }
 
+    std::atomic<std::uint32_t>     m_park_fallback{::plexus::io::shm::k_park_empty};
+
     typename Policy::executor_type m_executor;
     std::atomic<std::uint32_t>    &m_word;
+    std::atomic<std::uint32_t>    &m_park;
     drain_fn                       m_drain;
 
     io_uring m_ring{};
@@ -212,8 +242,17 @@ public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
     ring_notifier_threaded(typename Policy::executor_type executor,
+                           std::atomic<std::uint32_t> &word,
+                           std::atomic<std::uint32_t> &park) noexcept
+        : m_executor(executor), m_word(word), m_park(park)
+    {
+    }
+
+    // Back-compat construction for a single-process harness whose producer drives the
+    // always-wake one-arg signal: it binds to an owned fallback atom (see ring_notifier).
+    ring_notifier_threaded(typename Policy::executor_type executor,
                            std::atomic<std::uint32_t> &word) noexcept
-        : m_executor(executor), m_word(word)
+        : m_executor(executor), m_word(word), m_park(m_park_fallback)
     {
     }
 
@@ -224,7 +263,7 @@ public:
     ring_notifier_threaded(ring_notifier_threaded &&) = delete;
     ring_notifier_threaded &operator=(ring_notifier_threaded &&) = delete;
 
-    void signal() noexcept { ::plexus::shm::notifier_signal(m_word); }
+    void signal() noexcept { ::plexus::shm::notifier_signal(m_word, m_park); }
 
     void arm(drain_fn drain)
     {
@@ -280,7 +319,14 @@ private:
         while(!m_stop.load(std::memory_order_acquire))
         {
             poke_doorbell();
+            // Announce the park (release) BEFORE the FUTEX_WAIT so the gated producer
+            // observes PARKED and wakes us; FUTEX_WAIT value-compares last_seen, so a
+            // publish that already moved the word returns immediately (no lost wake).
+            // Clear back to EMPTY on return: a producer bumping while the reactor
+            // drains is not gated off a stale PARKED.
+            m_park.store(::plexus::io::shm::k_park_parked, std::memory_order_release);
             ::plexus::shm::notifier_wait(m_word, last_seen);
+            m_park.store(::plexus::io::shm::k_park_empty, std::memory_order_release);
             last_seen = m_word.load(std::memory_order_acquire);
         }
     }
@@ -312,8 +358,11 @@ private:
         return [this] { if(m_drain) m_drain(); };
     }
 
+    std::atomic<std::uint32_t>     m_park_fallback{::plexus::io::shm::k_park_empty};
+
     typename Policy::executor_type m_executor;
     std::atomic<std::uint32_t>    &m_word;
+    std::atomic<std::uint32_t>    &m_park;
     drain_fn                       m_drain;
 
     std::atomic<bool> m_stop{false};

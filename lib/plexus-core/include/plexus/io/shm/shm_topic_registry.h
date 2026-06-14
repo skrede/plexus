@@ -89,6 +89,7 @@ public:
     // the io_context and emplaces the reactor bridge over (executor, word).
     using notifier_binder =
         plexus::detail::move_only_function<void(std::optional<Notifier> &,
+                                                std::atomic<std::uint32_t> &,
                                                 std::atomic<std::uint32_t> &)>;
 
     // The default binder: emplace a default-constructed notifier, ignoring the word.
@@ -97,7 +98,8 @@ public:
     // captures the executor and emplaces over (executor, word).
     [[nodiscard]] static notifier_binder default_notifier_binder() noexcept
     {
-        return [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &) { slot.emplace(); };
+        return [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &,
+                  std::atomic<std::uint32_t> &) { slot.emplace(); };
     }
 
     shm_topic_registry(Broker &broker, reliability rel, congestion cong,
@@ -139,7 +141,7 @@ public:
         // the notifier with a drain-this-channel callback. On each cross-process wake the
         // bridge posts this drain onto the user's executor; the callback borrows the pinned
         // entry by pointer.
-        m_bind_notifier(e->notify, e->ring.notify_generation());
+        m_bind_notifier(e->notify, e->ring.notify_generation(), e->ring.park_state());
         e->channel.emplace(e->ring, *e->notify, m_reliability, m_congestion);
         e->verdict  = verdict;
         e->refcount = 1;

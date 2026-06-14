@@ -1,10 +1,22 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_FUTEX_NOTIFIER_PRIMITIVE_H
 #define HPP_GUARD_PLEXUS_SHM_FUTEX_NOTIFIER_PRIMITIVE_H
 
+#include "plexus/io/shm/ring_layout.h"
+
 #include <atomic>
 #include <cstdint>
 
 namespace plexus::shm {
+
+// The wake decision for the gated overload: a FUTEX_WAKE is issued only when the
+// park-state word the consumer published was PARKED. EMPTY means the consumer is
+// spinning (no syscall needed); NOTIFIED means a wake is already pending (the
+// consumer will observe the generation move and re-drain without a second
+// syscall). Pure predicate so the gating logic is unit-assertable off the syscall.
+[[nodiscard]] inline bool should_wake(std::uint32_t prior_park_state) noexcept
+{
+    return prior_park_state == ::plexus::io::shm::k_park_parked;
+}
 
 // The irreducible cross-process wakeup primitives: the raw by-address futex
 // signal/wait pair the ring's notify_generation word rides on, plus the raw
@@ -23,6 +35,18 @@ namespace plexus::shm {
 // the cross-process wake -- host-verified broken). Called on the publish path
 // after a slot commits.
 void notifier_signal(std::atomic<std::uint32_t> &generation) noexcept;
+
+// The parked-flag-gated wake (the same generation bump as the one-arg form, then a
+// FUTEX_WAKE ONLY when a consumer was parked). It swaps the park-state word to
+// NOTIFIED and issues the syscall solely when the prior state was PARKED, so a
+// busy/spinning (EMPTY) consumer costs the producer zero wake syscalls while a
+// parked consumer is still woken. The consumer's notifier stores PARKED (release)
+// before committing to the futex wait and re-checks the generation (drain-before-
+// wait), which rules out the lost wakeup the one-arg always-wake form avoids by
+// waking unconditionally. The one-arg overload is retained UNCHANGED for the call
+// sites that have no park-state word.
+void notifier_signal(std::atomic<std::uint32_t> &generation,
+                     std::atomic<std::uint32_t> &park_state) noexcept;
 
 // Block on the generation word until it moves off `last_seen` (or a spurious
 // wake). The drain-before-wait protocol: a consumer reads the word, drains, then

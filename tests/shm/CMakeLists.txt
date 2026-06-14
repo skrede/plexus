@@ -167,6 +167,22 @@ target_link_libraries(test_shm_notifier_lostwakeup PRIVATE
 
 catch_discover_tests(test_shm_notifier_lostwakeup TEST_PREFIX "shm.")
 
+# The parked-flag-gated wake: the wake decision is gated off the prior park-state (a
+# pure predicate, so zero-wake-when-spinning is asserted off the syscall), a spinning
+# consumer leaves the gated signal NOTIFIED parking nobody, and a forked parked
+# consumer is still woken across address spaces by the two-arg gated signal (the
+# lost-wakeup guard on the gated path). Links plexus::shm for the raw SYS_futex bodies.
+add_executable(test_shm_wake_gating test_shm_wake_gating.cpp)
+
+target_include_directories(test_shm_wake_gating PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_wake_gating PRIVATE
+    plexus::shm
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_wake_gating TEST_PREFIX "shm.")
+
 # The first whole-stack cross-process proof: two processes converge on the same
 # deterministically-named regions with no exchange (the machine fingerprint + the
 # direction-discriminated region naming), one creates + publishes, the other

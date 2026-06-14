@@ -54,8 +54,9 @@ using all_backends_mux_shm = io::multiplexing_transport<shm_member, unix_transpo
                                                  ring_notifier<muxify<asio_policy>>>::notifier_binder
 make_bridge_binder(::asio::io_context &io)
 {
-    return [&io](std::optional<ring_notifier<muxify<asio_policy>>> &slot, std::atomic<std::uint32_t> &word) {
-        slot.emplace(io, word);
+    return [&io](std::optional<ring_notifier<muxify<asio_policy>>> &slot, std::atomic<std::uint32_t> &word,
+                 std::atomic<std::uint32_t> &park) {
+        slot.emplace(io, word, park);
     };
 }
 
