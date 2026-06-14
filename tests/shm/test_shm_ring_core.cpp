@@ -54,23 +54,77 @@ private:
 
 TEST_CASE("ring_sizing: ring_geometry_for trades depth for width under a ceiling", "[shm][ring_sizing]")
 {
-    // Default deep-but-narrow ring for an unset / small declaration.
+    // Default deep-but-narrow ring for an unset / small declaration -- byte-identical
+    // to the shipped default (reliable_preserving, capacity 16).
     const ring_geometry small = ring_geometry_for(std::nullopt);
     REQUIRE(small.cell_count == 256);
     REQUIRE(small.slot_capacity == 4096);
-    REQUIRE(small.cell_count >= k_max_consumers);
+    REQUIRE(small.cell_count > k_max_consumers);
 
-    // The depth steps down as the slot grows; the slab stays under the ceiling.
+    // The mid-payload tiers step depth down as the slot grows while staying under the
+    // ceiling and strictly above the declared capacity. (The deepest band's depth is
+    // capacity-derived and is exercised below, where a large declaration can exceed
+    // the ceiling on purpose -- that over-ceiling case is the caller's to detect.)
     constexpr std::uint64_t k_max_ring_slab_bytes = 16ull * 1024 * 1024;
-    for (std::uint32_t payload : {64u, 4096u, 40000u, 70000u, 200000u, 600000u, 1048576u})
+    for (std::uint32_t payload : {64u, 4096u, 40000u, 70000u, 131072u})
     {
         const ring_geometry g = ring_geometry_for(payload);
         REQUIRE(g.slot_capacity >= payload);
         REQUIRE(g.slot_capacity % 8 == 0);
         REQUIRE((g.cell_count & (g.cell_count - 1)) == 0); // power of two
-        REQUIRE(g.cell_count >= k_max_consumers);
+        REQUIRE(g.cell_count > k_max_consumers);
         REQUIRE(g.cell_count * g.slot_capacity <= k_max_ring_slab_bytes);
     }
+}
+
+TEST_CASE("ring_sizing: the deep band depth is capacity-derived per mode", "[shm][ring_sizing]")
+{
+    constexpr std::uint32_t k_deep = 200000u;
+
+    // reliable_preserving: depth is the next power of two STRICTLY above capacity
+    // (16 -> 32, 2 -> 4, 1 -> 2), never depth-17.
+    for (auto [cap, depth] : {std::pair<std::uint32_t, std::uint64_t>{16u, 32u},
+                              {2u, 4u}, {1u, 2u}})
+    {
+        const ring_geometry g =
+            ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving, cap);
+        REQUIRE(g.cell_count == depth);
+        REQUIRE(g.cell_count > cap);
+        REQUIRE(g.slot_capacity == round_up_8(k_deep));
+    }
+
+    // wire_fallback reuses the reliable derivation at this layer (the bounded ring is
+    // a reliable ring; the reroute is not a geometry concern).
+    REQUIRE(ring_geometry_for(k_deep, ring_geometry_mode::wire_fallback, 16u).cell_count ==
+            ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving, 16u).cell_count);
+
+    // best_effort_large admits depth == capacity (the low-memory deep band).
+    for (auto [cap, depth] : {std::pair<std::uint32_t, std::uint64_t>{16u, 16u},
+                              {2u, 2u}, {4u, 4u}})
+    {
+        const ring_geometry g =
+            ring_geometry_for(k_deep, ring_geometry_mode::best_effort_large, cap);
+        REQUIRE(g.cell_count == depth);
+    }
+
+    // A capacity of 0 resolves to the shipped capacity floor (k_max_consumers).
+    REQUIRE(ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving, 0u).cell_count ==
+            ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving,
+                              static_cast<std::uint32_t>(k_max_consumers)).cell_count);
+}
+
+TEST_CASE("ring_sizing: ring_memory_for is the pure byte cost of the derived ring", "[shm][ring_sizing]")
+{
+    for (std::uint32_t payload : {64u, 40000u, 131072u})
+        for (auto mode : {ring_geometry_mode::reliable_preserving,
+                          ring_geometry_mode::best_effort_large,
+                          ring_geometry_mode::wire_fallback})
+        {
+            const ring_geometry g = ring_geometry_for(payload, mode, 8u);
+            REQUIRE(ring_memory_for(payload, mode, 8u) ==
+                    control_region_bytes(g.cell_count) +
+                        slab_region_bytes(g.cell_count, g.slot_capacity));
+        }
 }
 
 TEST_CASE("ring_layout: the cross-process structs are lock-free standard-layout", "[shm][ring_sizing]")
@@ -218,4 +272,62 @@ TEST_CASE("ring_core: attach re-reads and bounds-checks the header", "[shm][ring
     broadcast_ring rejected;
     REQUIRE(broadcast_ring::attach(foreign_control.span(), slab.span(), rejected) ==
             loan_status::rejected);
+}
+
+TEST_CASE("ring_core: a per-ring consumer_capacity bounds cursor registration", "[shm][ring_core]")
+{
+    constexpr std::uint64_t k_cells = 16;
+    constexpr std::uint64_t k_slot = 64;
+    constexpr std::uint64_t k_capacity = 4;
+
+    backing_region control(control_region_bytes(k_cells));
+    backing_region slab(slab_region_bytes(k_cells, k_slot));
+
+    broadcast_ring ring;
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring, k_capacity) ==
+            loan_status::ok);
+
+    // The first C registrations succeed; the (C+1)th rejects below the absolute cap.
+    std::uint32_t idx[k_capacity] = {};
+    for (std::uint64_t i = 0; i < k_capacity; ++i)
+        REQUIRE(ring.register_cursor(idx[i]) == loan_status::ok);
+    std::uint32_t overflow = 0;
+    REQUIRE(ring.register_cursor(overflow) == loan_status::rejected);
+    REQUIRE(k_capacity < k_max_consumers);
+
+    // publish/unregister operate within the capacity with no out-of-range touch.
+    ring.publish_cursor(idx[0], ring.tail_position());
+    for (std::uint64_t i = 0; i < k_capacity; ++i)
+        ring.unregister_cursor(idx[i]);
+
+    // An attacher re-reads the stamped capacity from the header.
+    broadcast_ring attacher;
+    REQUIRE(broadcast_ring::attach(control.span(), slab.span(), attacher) == loan_status::ok);
+    std::uint32_t a_idx[k_capacity] = {};
+    for (std::uint64_t i = 0; i < k_capacity; ++i)
+        REQUIRE(attacher.register_cursor(a_idx[i]) == loan_status::ok);
+    std::uint32_t a_overflow = 0;
+    REQUIRE(attacher.register_cursor(a_overflow) == loan_status::rejected);
+}
+
+TEST_CASE("ring_core: create rejects an out-of-range consumer_capacity", "[shm][ring_core]")
+{
+    constexpr std::uint64_t k_cells = 16;
+    constexpr std::uint64_t k_slot = 64;
+
+    backing_region control(control_region_bytes(k_cells));
+    backing_region slab(slab_region_bytes(k_cells, k_slot));
+
+    broadcast_ring zero;
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, zero, 0) ==
+            loan_status::rejected);
+
+    broadcast_ring over;
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, over,
+                                   k_max_consumers + 1) == loan_status::rejected);
+
+    // The shipped default (omitted argument) resolves to the absolute cap and admits it.
+    broadcast_ring def;
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, def) ==
+            loan_status::ok);
 }
