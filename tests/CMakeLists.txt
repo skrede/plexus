@@ -25,6 +25,11 @@ if(PLEXUS_BUILD_TESTS)
     include(Catch)
     message(STATUS "plexus tests: Catch2 ${Catch2_VERSION} resolved")
 
+    # The leak gate runs as an ALL target in every configured tree (ON or OFF):
+    # the allowlisted backend dirs are excluded either way, so its result does
+    # not depend on PLEXUS_ENABLE_SHM_BACKEND.
+    include(${PROJECT_SOURCE_DIR}/cmake/shm_leak_gate.cmake)
+
     # Auto-discover each per-area unit-test fragment (excluding fuzz, gated
     # above). New test areas register by adding their own fragment.
     file(GLOB PLEXUS_TEST_FRAGMENTS CONFIGURE_DEPENDS
