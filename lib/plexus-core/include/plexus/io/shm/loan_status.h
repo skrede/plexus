@@ -14,10 +14,17 @@ namespace plexus::io::shm {
 //   loan    -> { ok, rejected (size exceeds the slot capacity),
 //                congested (no free slot under the reliable policy) }
 //   publish -> { ok }
+//   consume -> { ok, empty, congested, lagged }
 //   take    -> { ok, empty }
 //
 // `empty` is the would-block alias for take(): take() returning empty means the
 // consumer has nothing new to read for its cursor, not an error.
+//
+// `lagged` means a best-effort consumer's cursor fell a full ring behind the
+// producer (the producer lapped it): consume() carries the producer tail in the
+// out-param so the consumer can jump its cursor there in one step rather than
+// stepping a slot at a time. take() resolves it internally, so a take() caller
+// only ever sees ok/empty.
 //
 // Note: with the fixed-stride payload slab the cell -- and therefore the payload
 // slot -- is claimed at loan() time, so `congested` is a loan() return rather
@@ -29,6 +36,7 @@ enum class loan_status : std::uint8_t
     congested,
     rejected,
     empty,
+    lagged,
     unknown
 };
 
