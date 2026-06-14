@@ -102,17 +102,21 @@ public:
     }
 
 private:
-    // Bounded blocking budget for a reliable+block producer: the cap on yield turns
-    // before a still-congested loan surfaces congested rather than spinning
-    // unboundedly. A reliable producer BLOCKS on the slowest registered cursor (it
-    // must not overwrite an unconsumed value) -- so it retries the gated claim,
-    // yielding the CPU between turns, until the consumer drains. The loop allocates
-    // NOTHING (no kernel object, no heap) -- the determinism the safety/drone use
-    // needs. The bound keeps a permanently-stalled consumer (a dead or wedged peer)
-    // from hanging the producer forever: past it the send surfaces congested
-    // OBSERVABLY, never a silent block. best_effort never blocks -- it overwrites
-    // the latest and its own gate returns congested only on a full-lap-pinned ring.
-    static constexpr int k_block_spin_budget = 1 << 16;
+    // PROGRESS-gated blocking bound for a reliable+block producer: the cap on
+    // CONSECUTIVE no-progress yield turns (turns during which the slowest consumer
+    // cursor did not advance) before a still-congested loan surfaces congested. A
+    // reliable producer BLOCKS on the slowest registered cursor (it must not
+    // overwrite an unconsumed value) -- so it retries the gated claim, yielding the
+    // CPU between turns, until the consumer drains. The loop allocates NOTHING (no
+    // kernel object, no heap -- only atomic cursor loads) -- the determinism the
+    // safety/drone use needs. The bound is gated on consumer PROGRESS, NOT on a
+    // fixed turn count: every time the slowest cursor advances the consumer freed a
+    // slot, so blocking stays LOSSLESS for any live-but-lagging consumer however slow;
+    // the budget only elapses when the cursor makes NO progress across a whole window,
+    // i.e. a genuinely wedged or dead peer -- which then surfaces congested OBSERVABLY,
+    // never an infinite hang. best_effort never blocks -- it overwrites the latest and
+    // its own gate returns congested only on a full-lap-pinned ring.
+    static constexpr int k_no_progress_budget = 1 << 16;
 
     loan_status loan_blocking(std::size_t size, loaned_buffer &out) noexcept
     {
@@ -121,10 +125,18 @@ private:
            m_publisher.overflow() != congestion::block)
             return st; // best_effort / non-block: surface the status as-is (no blocking)
 
-        for(int turn = 0; st == loan_status::congested && turn < k_block_spin_budget; ++turn)
+        std::uint64_t last_seen = m_publisher.slowest_consumer_position();
+        for(int stalled = 0; st == loan_status::congested && stalled < k_no_progress_budget; ++stalled)
         {
-            std::this_thread::yield(); // bounded, allocation-free back-pressure spin
+            std::this_thread::yield(); // allocation-free back-pressure spin
             st = m_publisher.loan(size, out);
+
+            const std::uint64_t now = m_publisher.slowest_consumer_position();
+            if(now != last_seen)
+            {
+                last_seen = now; // a live consumer freed a slot: keep blocking losslessly
+                stalled    = -1; // reset the no-progress window (++ on loop returns it to 0)
+            }
         }
         return st;
     }

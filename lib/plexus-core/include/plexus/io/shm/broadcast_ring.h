@@ -83,13 +83,17 @@ public:
     // cursor does not hold back reclamation until it reads its first slot.
     static constexpr std::uint64_t k_cursor_idle = UINT64_MAX;
 
-    // Bound on the reliable pin-clear spin: a reliable claim whose target cell is
-    // still pinned by a live take() relaxes the core this many iterations before it
-    // returns congested rather than burning the core indefinitely on a legitimately
-    // slow consumer. The take pin is transient (the read releases it), so the budget
-    // only ever fires when a consumer holds an outstanding read past it -- the same
-    // back-to-back window the consumer empty-retry budget covers, so it shares that
-    // swept knee (shm-spin-budget-sweep-2026-06-14).
+    // No-progress bound on the reliable pin-clear spin: a reliable claim that has
+    // WON a position but finds it still pinned by a live take() relaxes the core,
+    // watching the slowest consumer cursor. The take pin is transient (the read
+    // releases it), and a consumer that is draining advances its cursor -- so the
+    // budget counts CONSECUTIVE relax turns during which the slowest cursor did NOT
+    // move and RESETS on every advance: a live-but-slow consumer keeps the producer
+    // blocking losslessly however slow it drains, while a genuinely wedged/dead pin
+    // holder (no cursor motion across a whole window) trips the budget. The unpinned
+    // happy path takes the budget zero times and is byte-identical. The window is the
+    // same back-to-back order the consumer empty-retry budget covers (the swept knee,
+    // shm-spin-budget-sweep-2026-06-14), here as the no-progress reset granularity.
     static constexpr std::uint32_t k_pin_clear_spin_budget = 256;
 
     // Result of a successful claim: the cell position (carries the lap) and a
@@ -344,6 +348,26 @@ public:
         return m_header->enqueue_pos.load(std::memory_order_acquire);
     }
 
+    // The slowest registered (non-idle) consumer cursor position, or k_cursor_idle
+    // when none is gating. It is the producer back-pressure progress signal: this
+    // value advances exactly when the lagging consumer that holds the reliable gate
+    // closed drains a slot, so a blocking producer can tell a live-but-slow consumer
+    // (the position moved) from a wedged/dead one (it did not).
+    std::uint64_t slowest_consumer_position() const noexcept
+    {
+        std::uint64_t slowest = k_cursor_idle;
+        const std::uint32_t scan = m_header->high_water.load(std::memory_order_acquire);
+        for(std::uint32_t i = 0; i < scan; ++i)
+        {
+            if(m_header->cursors[i].active.load(std::memory_order_acquire) == 0)
+                continue;
+            const std::uint64_t cur = m_header->cursors[i].position.load(std::memory_order_acquire);
+            if(cur != k_cursor_idle && cur < slowest)
+                slowest = cur;
+        }
+        return slowest;
+    }
+
     // The shared wakeup-generation word in this ring's control header (in mapped
     // shared memory). A producer in ANY process attached to this ring bumps it and
     // wakes a consumer blocked on it by address; the consumer's notifier
@@ -484,22 +508,43 @@ private:
                 continue;
 
             // The position is now ours and contiguous. A consumer may still hold a
-            // pin on the prior occupant's aliased read; announce the claim and spin
-            // until the pin clears (Disruptor gate -- reliable keeps FIFO contiguity,
-            // and the pin is transient). The first iteration with no live pin returns
-            // ok immediately (the byte-identical happy path); a pin that outlasts the
-            // budget surfaces as congested so the producer never burns the core on a
-            // legitimately slow consumer (the publisher does the bounded backoff).
-            for(std::uint32_t spun = 0; !announce_and_check_pin(pos); ++spun)
-            {
-                if(spun >= k_pin_clear_spin_budget)
-                    return loan_status::congested;
-                cpu_relax();
-            }
-            out.position = pos;
-            out.slab     = slot_span(pos);
-            return loan_status::ok;
+            // pin on the prior occupant's aliased read; announce the claim and wait
+            // the pin out (Disruptor gate -- reliable keeps FIFO contiguity, the pin
+            // is transient). A won position is never abandoned: it resolves to ok
+            // once the pin clears, or to a recognized skip-tombstone if the pin holder
+            // is wedged (keeping the sequence contiguous so no consumer wedges on it).
+            return clear_pin_or_skip(pos, out);
         }
+    }
+
+    // Waits out the transient take pin on a freshly-won reliable position. Returns ok
+    // the moment no live pin remains (the unpinned first turn is byte-identical to the
+    // old happy path). The no-progress budget RESETS whenever the slowest consumer
+    // cursor advances, so a live-but-slow pin holder blocks losslessly however slow;
+    // only a wedged holder (no cursor motion across the whole window) trips it, and
+    // then the position is converted to a skip-tombstone (NOT abandoned) so contiguity
+    // holds and the bail is OBSERVABLE as congested rather than a silent FIFO hole.
+    loan_status clear_pin_or_skip(std::uint64_t pos, claim_result &out) noexcept
+    {
+        std::uint64_t last_seen = slowest_consumer_position();
+        for(std::uint32_t stalled = 0; !announce_and_check_pin(pos); ++stalled)
+        {
+            const std::uint64_t now = slowest_consumer_position();
+            if(now != last_seen)
+            {
+                last_seen = now;
+                stalled   = 0; // the pin holder is alive: keep waiting losslessly
+            }
+            else if(stalled >= k_pin_clear_spin_budget)
+            {
+                stamp_skip(pos);
+                return loan_status::congested;
+            }
+            cpu_relax();
+        }
+        out.position = pos;
+        out.slab     = slot_span(pos);
+        return loan_status::ok;
     }
 
     loan_status claim_best_effort(std::uint64_t &pos, claim_result &out) noexcept
