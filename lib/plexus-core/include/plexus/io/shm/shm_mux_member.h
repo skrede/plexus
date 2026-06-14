@@ -2,7 +2,9 @@
 #define HPP_GUARD_PLEXUS_IO_SHM_SHM_MUX_MEMBER_H
 
 #include "plexus/io/shm/region_broker_concept.h"
+#include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/notifier_concept.h"
+#include "plexus/io/shm/shm_selection.h"
 #include "plexus/io/shm/same_host.h"
 #include "plexus/io/shm/shm_channel.h"
 #include "plexus/io/shm/shm_slot_owner.h"
@@ -25,11 +27,13 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <span>
 #include <string>
 #include <utility>
 #include <string_view>
+#include <unordered_map>
 
 namespace plexus::io::shm {
 
@@ -247,7 +251,9 @@ public:
     // declines this member after a successful probe, abandon() drops the held bump.
     [[nodiscard]] bool can_acquire(const endpoint &ep)
     {
-        return m_registry.acquire(ep.address, ring_direction::request, 0) != acquire_result::failed;
+        const resolved_geometry g = resolve(ep.address, ring_direction::request);
+        return m_registry.acquire(ep.address, ring_direction::request, g.max_payload, g.mode,
+                                  g.consumer_capacity) != acquire_result::failed;
     }
 
     // Drop a held probe bump the dial did not consume (the hook probed shm but chose the
@@ -256,7 +262,56 @@ public:
 
     registry_type &registry() noexcept { return m_registry; }
 
+    // The producer-side same-host provisioning channel: the declaring publisher records
+    // the effective per-message size and resolved geometry for its topic here, keyed by
+    // fqn, BEFORE the dial/listen that mints the ring. It is a LOCAL value communicated
+    // to the ring through the config block, NOT the wire — a remote peer cannot inject a
+    // geometry. An fqn with no entry (a subscriber-only attach, or an unprovisioned
+    // topic) resolves to the default ring, exactly as before.
+    void set_topic_geometry(const std::string &fqn, std::size_t effective_bytes, shm_geometry geom)
+    {
+        m_geometry.insert_or_assign(
+            fqn, provisioned{static_cast<std::uint32_t>(effective_bytes), geom.mode, geom.max_consumers});
+    }
+
+    // Apply the node-level per-ring slab ceiling to the owned registry (forwarded once
+    // by the node owner at construction).
+    void set_max_ring_slab_bytes(std::uint64_t bytes) noexcept
+    {
+        m_registry.set_max_ring_slab_bytes(bytes);
+    }
+
 private:
+    // The per-fqn provisioned geometry: the publisher's effective payload width, the
+    // declared (or node/shipped-default) mode, and the declared consumer capacity (0 =
+    // the shipped floor). All producer-side, never wire-advertised.
+    struct provisioned
+    {
+        std::uint32_t      max_payload        = 0;
+        ring_geometry_mode mode               = ring_geometry_mode::reliable_preserving;
+        std::uint32_t      consumer_capacity  = 0;
+    };
+
+    // The resolved acquire arguments for one (fqn, direction): the request direction
+    // (publisher) sizes the ring from the provisioned width; the response direction
+    // (subscriber) passes 0 and falls back to the default ring (the consumer rescues
+    // itself). upgrade_ring_max_payload is the direction authority.
+    struct resolved_geometry
+    {
+        std::uint32_t      max_payload;
+        ring_geometry_mode mode;
+        std::uint32_t      consumer_capacity;
+    };
+
+    [[nodiscard]] resolved_geometry resolve(const std::string &fqn, ring_direction direction) const
+    {
+        auto it = m_geometry.find(fqn);
+        if(it == m_geometry.end())
+            return {upgrade_ring_max_payload(direction, 0), ring_geometry_mode::reliable_preserving, 0};
+        const provisioned &p = it->second;
+        return {upgrade_ring_max_payload(direction, p.max_payload), p.mode, p.consumer_capacity};
+    }
+
     // Mint a channel over the ring for ep, acquiring it first unless a prior can_acquire
     // probe already holds it (channel_for is then already non-null -- reuse that held
     // reference, so the refcount stays at one held by the minted channel). Returns nullptr
@@ -266,7 +321,9 @@ private:
         shm_channel<Notifier> *ch = m_registry.channel_for(ep.address, ring_direction::request);
         if(ch == nullptr) // no probe held it: acquire fresh
         {
-            if(m_registry.acquire(ep.address, ring_direction::request, 0) == acquire_result::failed)
+            const resolved_geometry g = resolve(ep.address, ring_direction::request);
+            if(m_registry.acquire(ep.address, ring_direction::request, g.max_payload, g.mode,
+                                  g.consumer_capacity) == acquire_result::failed)
                 return nullptr;
             ch = m_registry.channel_for(ep.address, ring_direction::request);
         }
@@ -282,6 +339,7 @@ private:
     }
 
     registry_type m_registry;
+    std::unordered_map<std::string, provisioned> m_geometry;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)>                  m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const endpoint &, io_error)>                      m_on_dial_failed;

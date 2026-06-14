@@ -1,9 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_NODE_OPTIONS_H
 #define HPP_GUARD_PLEXUS_NODE_OPTIONS_H
 
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/security/attach_policy.h"
 #include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/ring_geometry.h"
+#include "plexus/io/shm/ring_geometry_mode.h"
 
 #include "plexus/log/logger.h"
 
@@ -75,6 +78,25 @@ struct node_options
     // The cold-path log sink, borrowed. Null resolves to shared_null_logger() once in
     // the node ctor. A null-object default pointer, never a stand-in for a real sink.
     log::logger *logger{nullptr};
+
+    // required-with-default 8 MiB: the node-level per-message size default a topic with
+    // no per-message override negotiates against (effective_max). It is the SINGLE
+    // source the RxO check and the data-path resolve against; the shipped constant is
+    // the meaningful default, not a sentinel for absence.
+    std::size_t max_message_bytes{io::global_default_max_message_bytes};
+
+    // required-with-default {0, reliable_preserving}: the node-level same-host ring
+    // geometry default a publisher with no per-topic override resolves against.
+    // max_consumers 0 = unset (resolves to the shipped capacity floor); the default
+    // mode is the safe reliable ring. A plain value (not std::optional): a zeroed
+    // default is a usable geometry, its absence is not meaningful.
+    io::shm::shm_geometry shm_geometry{};
+
+    // required-with-default 16 MiB: the node-level per-ring slab ceiling the SHM
+    // registry enforces — operator-locked, a TUNABLE knob, not a fixed compile-time
+    // literal. The shipped constant is the meaningful default the registry falls back
+    // to; a deployment raises it for a larger reliable ring.
+    std::uint64_t max_ring_slab_bytes{io::shm::k_max_ring_slab_bytes};
 };
 
 }

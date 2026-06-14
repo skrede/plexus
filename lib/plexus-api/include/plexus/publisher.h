@@ -42,6 +42,12 @@ struct typed_publisher_options
     bool                          emit_source_identity = false;
     std::size_t                   pool_depth           = 8;
     std::optional<type_identity>  type_id{};
+
+    // The producer-side same-host ring geometry override. std::optional because ABSENCE
+    // is meaningful: unset falls back to the node-level shm_geometry default, present
+    // overrides per topic — "not declared" is distinct from "declared as the default".
+    // It is producer-side same-host provisioning only, never wire-advertised, never RxO.
+    std::optional<io::shm::shm_geometry> shm_geometry{};
 };
 
 // The bytes publishing endpoint: the CONSTRUCTOR is the registration — it declares the
@@ -63,11 +69,13 @@ public:
     // node's transport pack; the captured seam carries no Policy.
     template <typename Policy, typename... NodeTs>
     publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {},
-              bool emit_source_identity = false)
+              bool emit_source_identity = false,
+              std::optional<io::shm::shm_geometry> shm_geometry = std::nullopt)
         : m_seam(n.endpoint_seam_for())
         , m_fqn(fqn)
     {
-        m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt);
+        m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt,
+                                 shm_geometry);
     }
 
     // The hot verb: one indirect call across the seam. A moved-from publisher has a null
@@ -137,7 +145,7 @@ public:
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
         m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity,
-                                 m_identity.type_id);
+                                 m_identity.type_id, opts.shm_geometry);
     }
 
     // Borrow a slot to construct a value in place (zero-copy publish). An empty loan on

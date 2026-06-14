@@ -102,10 +102,15 @@ public:
                   std::atomic<std::uint32_t> &) { slot.emplace(); };
     }
 
+    // max_ring_slab_bytes is the node-level per-ring slab ceiling enforced at
+    // registration — required-with-default the shipped k_max_ring_slab_bytes so a
+    // caller that threads no node knob keeps the shipped bound. plan 03 fails closed
+    // above it; this plan threads it so the enforced ceiling is the node value.
     shm_topic_registry(Broker &broker, reliability rel, congestion cong,
-                       notifier_binder bind_notifier = default_notifier_binder()) noexcept
+                       notifier_binder bind_notifier = default_notifier_binder(),
+                       std::uint64_t max_ring_slab_bytes = k_max_ring_slab_bytes) noexcept
         : m_broker(broker), m_reliability(rel), m_congestion(cong),
-          m_bind_notifier(std::move(bind_notifier))
+          m_bind_notifier(std::move(bind_notifier)), m_max_ring_slab_bytes(max_ring_slab_bytes)
     {
     }
 
@@ -121,7 +126,9 @@ public:
     // with. A first acquire mints (or attaches to a peer's) ring of the geometry
     // max_payload sizes (0 -> default).
     acquire_result acquire(const std::string &fqn, ring_direction direction,
-                           std::uint32_t max_payload)
+                           std::uint32_t max_payload,
+                           ring_geometry_mode mode = ring_geometry_mode::reliable_preserving,
+                           std::uint32_t consumer_capacity = 0)
     {
         const key k{fqn, direction};
         if(auto it = m_entries.find(k); it != m_entries.end())
@@ -131,7 +138,7 @@ public:
         }
 
         auto e = std::make_unique<entry>();
-        const acquire_result verdict = open_ring(*e, fqn, direction, max_payload);
+        const acquire_result verdict = open_ring(*e, fqn, direction, max_payload, mode, consumer_capacity);
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
 
@@ -197,6 +204,11 @@ public:
 
     std::size_t live_count() const noexcept { return m_entries.size(); }
 
+    // Apply the node-level per-ring slab ceiling. Called once by the node owner at
+    // construction so the enforced ceiling is the node value rather than the shipped
+    // compile-time default; it bounds the slab of every ring minted AFTER it is set.
+    void set_max_ring_slab_bytes(std::uint64_t bytes) noexcept { m_max_ring_slab_bytes = bytes; }
+
 private:
     struct key
     {
@@ -245,35 +257,40 @@ private:
     // demand-driven collision probe); unlink_stale_on_create reclaims a crashed
     // creator's orphan. The geometry comes from max_payload (0 -> default).
     acquire_result open_ring(entry &e, const std::string &fqn, ring_direction direction,
-                             std::uint32_t max_payload)
+                             std::uint32_t max_payload, ring_geometry_mode mode,
+                             std::uint32_t consumer_capacity)
     {
         const std::string ctrl_name = region_name_for(fqn, direction);
         const std::string slab_name = ctrl_name + ".s";
         const std::optional<std::uint32_t> want =
             max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{max_payload};
-        const ring_geometry geom = ring_geometry_for(want);
+        const std::uint64_t capacity = consumer_capacity == 0 ? k_max_consumers : consumer_capacity;
+        const ring_geometry geom = ring_geometry_for(want, mode, consumer_capacity);
 
         create_options opts;
         opts.unlink_stale_on_create = true;
         const region_status cs =
             m_broker.create(ctrl_name, control_region_bytes(geom.cell_count), opts, e.control);
         if(cs == region_status::ok)
-            return mint(e, slab_name, geom);
+            return mint(e, slab_name, geom, capacity);
         if(cs == region_status::already_exists)
             return join(e, ctrl_name, slab_name);
         return acquire_result::failed;
     }
 
-    // The creator path: it owns both regions, stamps a fresh ring, and unlinks on
-    // teardown.
-    acquire_result mint(entry &e, const std::string &slab_name, const ring_geometry &geom)
+    // The creator path: it owns both regions, stamps a fresh ring at the resolved
+    // consumer capacity, and unlinks on teardown.
+    acquire_result mint(entry &e, const std::string &slab_name, const ring_geometry &geom,
+                        std::uint64_t consumer_capacity)
     {
+        if(geom.cell_count * geom.slot_capacity > m_max_ring_slab_bytes)
+            return acquire_result::failed;
         if(m_broker.create(slab_name, slab_region_bytes(geom.cell_count, geom.slot_capacity),
                            create_options{.unlink_stale_on_create = true}, e.slab) !=
            region_status::ok)
             return acquire_result::failed;
         if(broadcast_ring::create(e.control.bytes(), e.slab.bytes(), geom.cell_count,
-                                  geom.slot_capacity, e.ring) != loan_status::ok)
+                                  geom.slot_capacity, e.ring, consumer_capacity) != loan_status::ok)
             return acquire_result::failed;
         e.creator = true;
         return acquire_result::created;
@@ -315,6 +332,7 @@ private:
     reliability     m_reliability;
     congestion      m_congestion;
     notifier_binder m_bind_notifier;
+    std::uint64_t   m_max_ring_slab_bytes;
 
     std::unordered_map<key, std::unique_ptr<entry>, key_hash> m_entries;
 };

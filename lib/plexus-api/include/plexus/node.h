@@ -200,10 +200,14 @@ public:
         , m_disc(disc)
         , m_logger(resolve_logger(opts))
         , m_service_name(opts.name.empty() ? io::node_name_of(id) : opts.name)
+        , m_max_message_bytes(opts.max_message_bytes)
+        , m_shm_geometry(opts.shm_geometry)
+        , m_max_ring_slab_bytes(opts.max_ring_slab_bytes)
         , m_glue(make_glue(transports...))
-        , m_engine(engine_leaf(transports...), executor, make_fsm_cfg(id, opts),
+        , m_leaf(engine_leaf(transports...))
+        , m_engine(m_leaf, executor, make_fsm_cfg(id, opts),
                    opts.handshake_timeout, opts.reconnect, opts.redial_seed,
-                   opts.dial_eagerly, resolve_logger(opts))
+                   opts.dial_eagerly, resolve_logger(opts), opts.max_message_bytes)
     {
         // The fqn-to-callback demux: install the node-shared receive route ONCE, before
         // any session is built (the route's set-before-listen contract). Every delivered
@@ -227,6 +231,10 @@ public:
         // every standing demand toward a newly noted peer (the late-join half).
         advertise_card();
         m_disc.browse([this](const discovery::service_info &peer) { note_from_card(peer); });
+        // Apply the node-level per-ring slab ceiling to the shm member once: it bounds
+        // every same-host ring this node mints. A composition without an shm member is a
+        // no-op (the capability check below fails).
+        apply_shm_slab_ceiling(m_max_ring_slab_bytes);
     }
 
     // The name-hash overload (OPT-IN): derives the node_id from the name so the SAME
@@ -387,10 +395,61 @@ private:
     // down, so retire is a no-op (no resource to reclaim, and removing it would risk a
     // gid remint). The handle drives publish directly.
     void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity,
-                                std::optional<std::uint64_t> type_id = std::nullopt)
+                                std::optional<std::uint64_t> type_id = std::nullopt,
+                                std::optional<io::shm::shm_geometry> shm_geometry = std::nullopt)
     {
         m_engine.messages().declare(fqn, qos, type_id, emit_source_identity);
+        // Resolution order per-topic ?: node-default ?: shipped: the per-topic geometry
+        // when declared, else the node-level default; the effective per-message size is
+        // the topic override when set, else the node default. The provisioning is a
+        // producer-side same-host-local value — never wire-advertised, never RxO.
+        const io::shm::shm_geometry geom = shm_geometry.value_or(m_shm_geometry);
+        const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
+        provision_same_host_ring(fqn, effective_bytes, geom);
     }
+
+    // Provision the declaring topic's same-host ring geometry on the shm member (if the
+    // composition has one): the publisher records its effective size + resolved geometry,
+    // keyed by fqn, BEFORE the dial/listen mints the ring. A composition without an shm
+    // member is a no-op. Producer-side, never wire-advertised.
+    void provision_same_host_ring(std::string_view fqn, std::size_t effective_bytes,
+                                  const io::shm::shm_geometry &geom)
+    {
+        std::string key{fqn};
+        for_each_shm_member([&](auto &m) { m.set_topic_geometry(key, effective_bytes, geom); });
+    }
+
+    void apply_shm_slab_ceiling(std::uint64_t bytes)
+    {
+        for_each_shm_member([&](auto &m) { m.set_max_ring_slab_bytes(bytes); });
+    }
+
+    // Apply fn to the shm member of the engine transport leaf, if one exists. The leaf is
+    // either the node-owned mux glue (apply fn to whichever member exposes the producer
+    // provisioning verb) or a single borrowed transport (apply fn directly if it is the
+    // shm member). The capability check is an if-constexpr on the member type, so a
+    // composition with no shm member is a compile-time no-op.
+    template <typename F>
+    void for_each_shm_member(F &&fn)
+    {
+        if constexpr(sizeof...(Transports) == 1)
+        {
+            if constexpr(has_topic_geometry<engine_transport>)
+                fn(m_leaf);
+        }
+        else
+        {
+            m_leaf.for_each_member([&](auto &m) {
+                using M = std::remove_reference_t<decltype(m)>;
+                if constexpr(has_topic_geometry<M>)
+                    fn(m);
+            });
+        }
+    }
+
+    template <typename M>
+    static constexpr bool has_topic_geometry =
+        requires(M &m) { m.set_topic_geometry(std::string{}, std::size_t{}, io::shm::shm_geometry{}); };
 
     // The caller seam: resolve the FIRST connection-order peer with a complete session
     // and route the call to it directly through the procedure forwarder (carrying the
@@ -538,8 +597,9 @@ private:
         io::endpoint_seam s{};
         s.ctx = this;
         s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos,
-                                 bool emit, std::optional<std::uint64_t> type_id)
-        { static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id); };
+                                 bool emit, std::optional<std::uint64_t> type_id,
+                                 std::optional<io::shm::shm_geometry> shm_geometry)
+        { static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry); };
         s.publish = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes)
         { static_cast<node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
         s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier,
@@ -647,7 +707,21 @@ private:
     std::string m_service_name;
     std::string m_host;
     std::vector<discovery::listening_transport> m_listens;
+
+    // The node-level size + same-host ring defaults a publisher with no per-topic
+    // override resolves against (per-topic ?: these node defaults ?: shipped constant).
+    // Held so the declare path can resolve the effective geometry and provision the
+    // same-host ring; producer-side only, never wire-advertised.
+    std::size_t m_max_message_bytes;
+    io::shm::shm_geometry m_shm_geometry;
+    std::uint64_t m_max_ring_slab_bytes;
+
     [[no_unique_address]] detail::node_mux_glue<Transports...> m_glue;
+
+    // The engine's transport leaf (the borrowed single transport, or the node-owned
+    // mux glue): held so the declare path can provision the same-host ring geometry on
+    // the shm member through it, decoupled from the member pack's order/types.
+    engine_transport &m_leaf;
 
     // The endpoint state is declared BEFORE the engine so the engine — which captures
     // &m_peer_watch through add_observer and a `this`-bound route — is destroyed FIRST,

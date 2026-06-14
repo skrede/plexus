@@ -11,6 +11,13 @@
 
 namespace plexus::io::shm {
 
+// The per-ring slab ceiling: the largest /dev/shm slab a single ring may size, so an
+// oversize payload declaration cannot map an unbounded region. It is the layout-side
+// bound (cap * floor), independent of the decode layer's upstream max_payload cap. It
+// is the SHIPPED fallback ceiling; the live ceiling is a node_options knob threaded to
+// the registry, with this constant the ultimate default.
+constexpr std::uint64_t k_max_ring_slab_bytes = 16ull * 1024 * 1024;
+
 // The depth + per-slot stride a broadcast ring is created with. cell_count is the
 // power-of-two Vyukov cell depth; slot_capacity is the per-slot byte stride
 // (always a multiple of eight so slot i at i*stride is 8-aligned).
@@ -57,11 +64,6 @@ struct ring_geometry
                                                      ring_geometry_mode mode,
                                                      std::uint32_t consumer_capacity) noexcept
 {
-    // Per-ring slab ceiling: an oversize declaration must not size an unbounded
-    // /dev/shm region. The decode layer caps max_payload upstream; this is the
-    // independent layout-side bound (cap * floor).
-    constexpr std::uint64_t k_max_ring_slab_bytes = 16ull * 1024 * 1024;
-
     const std::uint64_t capacity = consumer_capacity == 0 ? k_max_consumers : consumer_capacity;
     const std::uint64_t want = max_payload.value_or(0);
     const std::uint64_t slot = round_up_8(want);
