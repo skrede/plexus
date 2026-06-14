@@ -29,6 +29,7 @@
 #include <asio/ip/udp.hpp>
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <memory>
 #include <vector>
@@ -87,11 +88,20 @@ public:
     // cookie state into the SSL ex_data, and set accept/connect state per role. The
     // cookie_state is borrowed from the transport (one HMAC key per node); the
     // peer-addr block is this channel's own member.
+    // max_message_bytes is the per-MESSAGE size ceiling (the send-side oversize-reject AND the
+    // receive reassembler's per-message ceiling) — distinct from max_payload (the logical
+    // ceiling capping min(max_payload, record budget)). reassembly_budget is the always-on
+    // aggregate reassembly-memory cap, and reassembly_timeout the per-message reclaim window
+    // (a slow large message over best-effort DTLS needs it raised above the 5 s default).
+    // All required-WITH-default, bound to the shipped node-options constants.
     dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
                  ::asio::ip::udp::endpoint dest, const tls_credential &cred,
                  io::security::cookie_secret &cookie_state, role r,
                  std::size_t max_payload = default_max_payload,
-                 std::size_t record_mtu = default_record_mtu);
+                 std::size_t record_mtu = default_record_mtu,
+                 std::size_t max_message_bytes = io::global_default_max_message_bytes,
+                 std::size_t reassembly_budget = io::reassembly_memory_budget,
+                 std::chrono::milliseconds reassembly_timeout = reassembler_type::config{}.per_message_timeout);
 
     dtls_channel(const dtls_channel &) = delete;
     dtls_channel &operator=(const dtls_channel &) = delete;
@@ -189,6 +199,9 @@ private:
     role m_role;
     std::size_t m_max_payload;
     std::size_t m_record_mtu;
+    std::size_t m_max_message_bytes;
+    std::size_t m_reassembly_budget;
+    std::chrono::milliseconds m_reassembly_timeout;
     std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()};   // stable per-construction egress key
 
     detail::shared_ssl_ctx m_ssl_ctx;            // up_ref'd shared SSL_CTX

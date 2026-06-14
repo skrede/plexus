@@ -297,9 +297,11 @@ TEST_CASE("dtls.mtu: a frame beyond the bounded max-message size is rejected via
     pdt::identity_fixture cli("big_cli");
 
     // The oversize reject is PRESERVED for a genuinely-too-big message: a frame beyond the
-    // reassembler's bounded max-message size cannot fragment (it would exceed the receiver's
-    // hard ceiling), so it is rejected at publish via on_error(message_too_large) and nothing
-    // crosses the wire (the fail-closed bound on the fragment path).
+    // channel's per-MESSAGE size ceiling cannot fragment (it would exceed the receiver's hard
+    // ceiling), so it is rejected at publish via on_error(message_too_large) and nothing
+    // crosses the wire (the fail-closed bound on the fragment path). The bound is the
+    // configurable node default (global_default_max_message_bytes) the channel is minted with,
+    // not the old hardcoded fragmentation cap — a frame one byte past it is refused.
     constexpr int k_iterations = 30;
     int proven = 0;
     for(int i = 0; i < k_iterations; ++i)
@@ -309,7 +311,7 @@ TEST_CASE("dtls.mtu: a frame beyond the bounded max-message size is rejected via
         REQUIRE(l.client_complete);
         REQUIRE(l.server_complete);
 
-        REQUIRE_FALSE(l.send_and_deliver(pio::fragmentation_limits::max_message_size + 1));
+        REQUIRE_FALSE(l.send_and_deliver(pio::global_default_max_message_bytes + 1));
         REQUIRE(l.client_too_large);
         REQUIRE(l.server_received.empty());
         REQUIRE(l.client_records == 0);                // nothing crossed the wire

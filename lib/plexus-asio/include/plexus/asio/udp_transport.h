@@ -25,6 +25,7 @@
 
 #include <span>
 #include <array>
+#include <chrono>
 #include <random>
 #include <memory>
 #include <string>
@@ -71,6 +72,9 @@ public:
     // node options (required-WITH-default, bound to the shipped named constants). Stamped
     // into every minted channel; a per-topic override resolves through io::effective_max.
     // max_payload here remains the per-FRAGMENT MTU budget (a separate axis).
+    // backpressure_bytes is the per-channel bounded send queue for fragments awaiting ARQ
+    // window room (required-WITH-default); it must reach the largest in-flight reliable
+    // message, so a node carrying messages above the default is sized through this knob.
     explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload,
                            arq_type::schedule hs_ladder = arq_type::default_ladder,
                            io::detail::udp_arq_config arq_cfg = {},
@@ -80,7 +84,10 @@ public:
                            std::size_t so_rcvbuf = udp_server::default_so_rcvbuf,
                            std::size_t send_queue_bytes = udp_server::default_send_queue_bytes,
                            std::size_t global_default = io::global_default_max_message_bytes,
-                           std::size_t reassembly_budget = io::reassembly_memory_budget)
+                           std::size_t reassembly_budget = io::reassembly_memory_budget,
+                           std::size_t backpressure_bytes = udp_channel::default_backpressure_bytes,
+                           std::chrono::milliseconds reassembly_timeout =
+                               udp_channel::reassembler_type::config{}.per_message_timeout)
         : m_io(io)
         , m_server(io, congestion, send_queue_bytes, so_sndbuf, so_rcvbuf)
         , m_max_peers(max_peers)
@@ -88,6 +95,8 @@ public:
         , m_max_payload(max_payload)
         , m_global_default(global_default)
         , m_reassembly_budget(reassembly_budget)
+        , m_backpressure_bytes(backpressure_bytes)
+        , m_reassembly_timeout(reassembly_timeout)
         , m_hs_ladder(hs_ladder)
         , m_arq_cfg(arq_cfg)
         , m_congestion(congestion)
@@ -148,8 +157,8 @@ public:
         const auto mode = mode_of_scheme(ep.scheme);
         const std::uint16_t isn = next_isn();   // the dialer's per-session ISN, advertised in the request
         auto ch = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg,
-                                                m_congestion, udp_channel::default_backpressure_bytes, mode, isn,
-                                                m_global_default, m_reassembly_budget);
+                                                m_congestion, m_backpressure_bytes, mode, isn,
+                                                m_global_default, m_reassembly_budget, m_reassembly_timeout);
         auto *raw = ch.get();
         m_demux.insert(dest, raw);
         wire_teardown(*raw, dest);
@@ -240,9 +249,9 @@ private:
         // expect the peer's sender ISN, and the response ECHOES it (symmetric, like mode) so
         // both ends start the cumulative-ack edge from the same negotiated sequence.
         auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg,
-                                                m_congestion, udp_channel::default_backpressure_bytes,
+                                                m_congestion, m_backpressure_bytes,
                                                 hs->mode, hs->initial_seq,
-                                                m_global_default, m_reassembly_budget);
+                                                m_global_default, m_reassembly_budget, m_reassembly_timeout);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
         {
@@ -349,6 +358,8 @@ private:
     std::size_t m_max_payload;               // per-FRAGMENT MTU budget (NOT the message ceiling)
     std::size_t m_global_default;            // node-level per-MESSAGE size ceiling
     std::size_t m_reassembly_budget;         // aggregate reassembly-memory cap (always-on)
+    std::size_t m_backpressure_bytes;        // per-channel bounded send queue for windowed fragments
+    std::chrono::milliseconds m_reassembly_timeout;   // per-message reassembly reclaim window
     arq_type::schedule m_hs_ladder;
     io::detail::udp_arq_config m_arq_cfg;
     io::congestion m_congestion;

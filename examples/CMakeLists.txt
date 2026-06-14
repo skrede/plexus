@@ -19,4 +19,10 @@ if(TARGET plexus::asio AND TARGET plexus::mdnspp)
     plexus_example(typed_reqres_client plexus::plexus plexus::asio plexus::mdnspp)
 endif()
 
+# The size-envelope example needs only the asio backend (static discovery is in the
+# core), so it is guarded on asio alone rather than the asio+mDNS pair above.
+if(TARGET plexus::asio)
+    plexus_example(size_envelope_qos plexus::plexus plexus::asio)
+endif()
+
 plexus_example(typed_inproc_fastpath plexus::plexus plexus::inproc)

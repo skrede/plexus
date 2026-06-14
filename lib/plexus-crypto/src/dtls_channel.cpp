@@ -24,7 +24,8 @@ int to_int(std::size_t v) noexcept { return static_cast<int>(v); }
 dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
                            ::asio::ip::udp::endpoint dest, const tls_credential &cred,
                            io::security::cookie_secret &cookie_state, role r, std::size_t max_payload,
-                           std::size_t record_mtu)
+                           std::size_t record_mtu, std::size_t max_message_bytes,
+                           std::size_t reassembly_budget, std::chrono::milliseconds reassembly_timeout)
     : m_io(io)
     , m_server(server)
     , m_dest(std::move(dest))
@@ -32,6 +33,9 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
     , m_role(r)
     , m_max_payload(max_payload)
     , m_record_mtu(record_mtu)
+    , m_max_message_bytes(max_message_bytes)
+    , m_reassembly_budget(reassembly_budget)
+    , m_reassembly_timeout(reassembly_timeout)
     , m_ssl_ctx(detail::share_dtls_context(cred))
     , m_retransmit(io)
     , m_gate([this](std::span<const std::byte> bytes) { secure_send(bytes); })
@@ -142,7 +146,7 @@ std::size_t dtls_channel::record_budget() const noexcept
 
 void dtls_channel::send_large(std::span<const std::byte> bytes)
 {
-    if(bytes.size() > io::fragmentation_limits::max_message_size)
+    if(bytes.size() > m_max_message_bytes)
     {
         if(m_on_error)
             m_on_error(io::io_error::message_too_large);
@@ -366,7 +370,12 @@ void dtls_channel::ensure_reassembler()
     // Sans-IO block: an assembled message POSTS on_data (the channel owns the post). The
     // reassembler's per-message timeout reclaims a stalled best-effort partial (DTLS app
     // records are unreliable, like UDP best_effort — a lost fragment drops the whole message).
-    m_reassembler = std::make_unique<reassembler_type>(m_io);
+    // The per-message ceiling, the aggregate budget, and the reclaim window are the threaded
+    // node-options knobs, so a large message clears the receive bounds it must reach.
+    m_reassembler = std::make_unique<reassembler_type>(
+        m_io, reassembler_type::config{.max_message_size = m_max_message_bytes,
+                                       .total_memory_cap = m_reassembly_budget,
+                                       .per_message_timeout = m_reassembly_timeout});
     m_reassembler->on_deliver([this](std::span<const std::byte> msg) { post_on_data(msg); });
 }
 

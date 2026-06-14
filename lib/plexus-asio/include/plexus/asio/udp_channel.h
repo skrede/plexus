@@ -26,6 +26,7 @@
 #include <asio/ip/udp.hpp>
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <vector>
 #include <memory>
@@ -105,13 +106,15 @@ public:
                 io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort,
                 std::uint16_t initial_seq = 0,
                 std::size_t max_message_bytes = io::global_default_max_message_bytes,
-                std::size_t reassembly_budget = io::reassembly_memory_budget)
+                std::size_t reassembly_budget = io::reassembly_memory_budget,
+                std::chrono::milliseconds reassembly_timeout = reassembler_type::config{}.per_message_timeout)
         : m_io(io)
         , m_server(server)
         , m_dest(std::move(dest))
         , m_max_payload(max_payload)
         , m_max_message_bytes(max_message_bytes)
         , m_reassembly_budget(reassembly_budget)
+        , m_reassembly_timeout(reassembly_timeout)
         , m_arq_cfg(arq_cfg)
         , m_congestion(congestion)
         , m_backpressure(backpressure_bytes)
@@ -388,7 +391,8 @@ private:
             return;
         m_reassembler = std::make_unique<reassembler_type>(
             m_io, reassembler_type::config{.max_message_size = m_max_message_bytes,
-                                           .total_memory_cap = m_reassembly_budget});
+                                           .total_memory_cap = m_reassembly_budget,
+                                           .per_message_timeout = m_reassembly_timeout});
         m_reassembler->on_deliver([this](wire::shared_bytes msg) { post_on_data_owned(std::move(msg)); });
         m_reassembler->on_drop([this](const io::detail::drop_event &ev) { if(m_on_drop) m_on_drop(ev); });
     }
@@ -516,6 +520,7 @@ private:
     std::size_t m_max_payload;                               // per-FRAGMENT MTU budget (NOT the message ceiling)
     std::size_t m_max_message_bytes;                         // per-MESSAGE size ceiling (send + receive)
     std::size_t m_reassembly_budget;                         // aggregate reassembly-memory cap (always-on)
+    std::chrono::milliseconds m_reassembly_timeout;          // per-message reassembly reclaim window
     io::detail::udp_arq_config m_arq_cfg;
     io::congestion m_congestion;
     io::detail::udp_backpressure_queue m_backpressure;       // bounded congestion=block queue

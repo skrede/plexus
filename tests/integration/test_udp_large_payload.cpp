@@ -17,22 +17,29 @@
 
 #include "plexus/io/fragmentation.h"
 
+#include "plexus/wire/udp_envelope.h"
+
 #include "support/loss_reorder_shim.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
 
+#include <array>
 #include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <algorithm>
 
 namespace pasio = plexus::asio;
 namespace pio = plexus::io;
+namespace pwire = plexus::wire;
 namespace ptest = plexus::testing;
 
 namespace {
@@ -296,4 +303,285 @@ TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured �
         WARN("measured loss policy [udpr reliable]: " << dropped
              << " datagram(s) dropped by the shim -> retransmit-reassembled, deliveries=" << deliveries);
     }
+}
+
+namespace {
+
+// A MODERATE ARQ window that PACES the send: only `window` fragments are outstanding at a
+// time, acked before the next batch leaves, so a multi-megabyte message never bursts past
+// the ~4 MiB loopback kernel socket buffers (a burst would drop fragments faster than the
+// ARQ could retransmit). The backpressure queue holds the not-yet-windowed remainder, so
+// the per-channel backpressure cap must reach the whole message (sized in the helper). A
+// generous retransmit budget covers the residual loopback loss/reorder at this volume.
+inline pio::detail::udp_arq_config paced_arq()
+{
+    return pio::detail::udp_arq_config{
+        .window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{200}, .max_retransmit = 80};
+}
+
+// The 4 MiB kernel-buffer ceiling this host's rmem_max/wmem_max permits — raised on both
+// ends so the paced in-flight batch is buffered rather than dropped at the socket.
+constexpr std::size_t k_socket_buf = 4u * 1024u * 1024u;
+
+// Round-trip ONE message of `payload_size` over udpr with the node per-MESSAGE ceiling
+// and the aggregate reassembly budget raised to admit it, looped in-body. Returns the
+// count of byte-equal deliveries AND the headline single-message wall time of the last
+// iteration (for the empirical throughput record — not asserted). The transport ctor
+// threads global_default (the receive ceiling) + reassembly_budget past the intermediate
+// node-options params (congestion/peer-cap/socket-buffers/send-queue keep their defaults).
+struct large_result
+{
+    int proven;
+    std::chrono::milliseconds last_wall;
+};
+
+large_result roundtrip_large(std::size_t budget, std::size_t payload_size,
+                             std::size_t global_default, std::size_t reassembly_budget,
+                             pio::detail::udp_arq_config arq, int iterations)
+{
+    // A multi-megabyte reassembly over the paced ARQ takes well past the 5 s default
+    // per-message reclaim window, which would evict the partial mid-flight; extend it so an
+    // honest slow large message completes (the reclaim still bounds a genuinely stalled one).
+    constexpr ms reassembly_timeout{60000};
+    using clock = std::chrono::steady_clock;
+    int proven = 0;
+    std::chrono::milliseconds last_wall{0};
+    for(int iter = 0; iter < iterations; ++iter)
+    {
+        // The backpressure queue holds the message's not-yet-windowed fragments, so it must
+        // reach the whole message (plus headroom); the kernel buffers are raised to the
+        // host max so the paced in-flight batch is buffered, not dropped at the socket.
+        const std::size_t backpressure = payload_size + 4u * 1024u * 1024u;
+        ::asio::io_context io;
+        pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder, arq,
+                                    pio::congestion::block, pasio::detail::udp_inbound_demux::default_max_peers,
+                                    k_socket_buf, k_socket_buf,
+                                    pasio::udp_server::default_send_queue_bytes, global_default, reassembly_budget,
+                                    backpressure, reassembly_timeout};
+        pasio::udp_transport client{io, budget, fast_hs, arq,
+                                    pio::congestion::block, pasio::detail::udp_inbound_demux::default_max_peers,
+                                    k_socket_buf, k_socket_buf,
+                                    pasio::udp_server::default_send_queue_bytes, global_default, reassembly_budget,
+                                    backpressure, reassembly_timeout};
+
+        std::unique_ptr<pasio::udp_channel> accepted, dialed;
+        std::vector<std::vector<std::byte>> got;
+        server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) {
+            accepted = std::move(ch);
+            accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
+        });
+        server.listen({"udp", "127.0.0.1:0"});
+        pump_until(io, [&] { return server.port() != 0; });
+
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
+        client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
+        pump_until(io, [&] { return dialed && accepted; });
+        REQUIRE(dialed != nullptr);
+        REQUIRE(accepted != nullptr);
+
+        auto payload = make_payload(payload_size, static_cast<std::uint8_t>(iter));
+        const auto t0 = clock::now();
+        dialed->send(payload);
+        pump_until(io, [&] { return !got.empty(); }, ms{55000});
+        last_wall = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - t0);
+
+        REQUIRE(got.size() == 1);
+        REQUIRE(equal_bytes(got.front(), payload));
+        ++proven;
+    }
+    return {proven, last_wall};
+}
+
+}
+
+TEST_CASE("udp_large_payload: a 16 MB single message round-trips byte-identically over udpr, looped",
+          "[udp_large_payload][envelope16]")
+{
+    // The lifted envelope on the datagram path: one 16 MiB message over the reliable ARQ,
+    // proven byte-equal across repeated in-body iterations (the ctest invocation is itself
+    // re-run for cross-process reproducibility — a transport claim is never made from one
+    // run). An 8 KiB fragment budget (~2048 fragments) with a paced ARQ window keeps the
+    // in-flight batch under the kernel buffers; the backpressure queue (raised through the
+    // transport ctor) holds the remainder, and the node ceiling + budget are raised to admit
+    // the message at the receiver. msg_id stays uint16: every fragment of the message shares
+    // ONE msg_id (asserted explicitly in the wrap cell below).
+    constexpr std::size_t budget = 8u * 1024u;
+    constexpr std::size_t payload = 16u * 1024u * 1024u;
+    constexpr std::size_t ceiling = 20u * 1024u * 1024u;
+    constexpr std::size_t reassembly = 48u * 1024u * 1024u;
+
+    const auto r = roundtrip_large(budget, payload, ceiling, reassembly, paced_arq(), /*iterations=*/2);
+    REQUIRE(r.proven == 2);
+    const double mbps = r.last_wall.count() > 0
+        ? (static_cast<double>(payload) / (1024.0 * 1024.0)) / (r.last_wall.count() / 1000.0)
+        : 0.0;
+    WARN("udpr 16 MB round-trip: wall=" << r.last_wall.count() << " ms, throughput~=" << mbps << " MiB/s");
+}
+
+TEST_CASE("udp_large_payload: a probe sweep records the highest single message that round-trips over udpr",
+          "[udp_large_payload][envelope16]")
+{
+    // Empirically substantiate "probe higher than 16 MB": sweep ascending sizes over udpr
+    // with the ceiling + budget + backpressure raised to admit each, and record the largest
+    // that round-trips byte-equal (recorded, not asserted past the 16 MB floor). The paced
+    // ARQ window keeps the in-flight batch under the kernel buffers at every size. A size
+    // that fails to fully reassemble within the bound stops the sweep — the last success is
+    // the recorded ceiling for this host/run.
+    constexpr std::size_t budget = 8u * 1024u;
+    const std::array<std::size_t, 2> sizes{16u * 1024u * 1024u, 24u * 1024u * 1024u};
+
+    std::size_t highest = 0;
+    for(std::size_t size : sizes)
+    {
+        const std::size_t ceiling = size + 4u * 1024u * 1024u;
+        const std::size_t reassembly = ceiling + 4u * 1024u * 1024u;
+        const auto r = roundtrip_large(budget, size, ceiling, reassembly, paced_arq(), /*iterations=*/1);
+        if(r.proven != 1)
+            break;                                   // first size that does not fully arrive caps the sweep
+        highest = size;
+    }
+    REQUIRE(highest >= 16u * 1024u * 1024u);          // the 16 MB envelope floor holds
+    WARN("udpr probe: highest round-tripping single message = " << (highest / (1024 * 1024)) << " MB");
+}
+
+namespace {
+
+// An observing relay between the udp client and server: it decodes every best-effort
+// fragment datagram's wire sub-header (msg_id / frag_idx / frag_cnt) before forwarding
+// it, so a test can assert ON THE WIRE that a large message spans many uint32 fragments
+// under ONE uint16 msg_id and that consecutive messages' msg_ids advance by exactly one
+// (never wrapping the uint16). It forwards both directions verbatim; loss is irrelevant
+// to the assertion (the observed headers carry the true counts regardless of delivery).
+struct fragment_observer
+{
+    ::asio::io_context &io;
+    ::asio::ip::udp::socket front;       // faces the client
+    ::asio::ip::udp::socket back;        // faces the server
+    ::asio::ip::udp::endpoint server_ep;
+    ::asio::ip::udp::endpoint client_ep;
+    ::asio::ip::udp::endpoint from;
+    std::array<std::byte, 70000> front_buf{};
+    std::array<std::byte, 70000> back_buf{};
+
+    std::vector<std::uint16_t> msg_ids;             // distinct msg_ids in first-seen order
+    std::uint32_t max_frag_cnt{0};
+
+    fragment_observer(::asio::io_context &ctx, std::uint16_t server_port)
+        : io(ctx)
+        , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+        , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+        , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+    {
+        recv_front();
+        recv_back();
+    }
+
+    [[nodiscard]] std::uint16_t port() const { return front.local_endpoint().port(); }
+
+    void note_fragment(std::span<const std::byte> dg)
+    {
+        auto outer = pwire::unwrap_udp(dg);
+        if(!outer || !outer->fragmented)
+            return;                                  // handshake / whole datagram: not a fragment
+        auto h = pwire::decode_udp_fragment_header(outer->frame);
+        if(!h)
+            return;
+        max_frag_cnt = std::max(max_frag_cnt, h->frag_cnt);
+        if(msg_ids.empty() || msg_ids.back() != h->msg_id)
+            if(std::find(msg_ids.begin(), msg_ids.end(), h->msg_id) == msg_ids.end())
+                msg_ids.push_back(h->msg_id);
+    }
+
+    void recv_front()
+    {
+        front.async_receive_from(::asio::buffer(front_buf), from,
+            [this](std::error_code ec, std::size_t n) {
+                if(ec)
+                    return;
+                client_ep = from;
+                std::span<const std::byte> dg{front_buf.data(), n};
+                note_fragment(dg);
+                auto copy = std::make_shared<std::vector<std::byte>>(dg.begin(), dg.end());
+                back.async_send_to(::asio::buffer(*copy), server_ep, [copy](std::error_code, std::size_t) {});
+                recv_front();
+            });
+    }
+
+    void recv_back()
+    {
+        back.async_receive_from(::asio::buffer(back_buf), from,
+            [this](std::error_code ec, std::size_t n) {
+                if(ec)
+                    return;
+                if(client_ep.port() != 0)
+                {
+                    auto copy = std::make_shared<std::vector<std::byte>>(back_buf.data(), back_buf.data() + n);
+                    front.async_send_to(::asio::buffer(*copy), client_ep, [copy](std::error_code, std::size_t) {});
+                }
+                recv_back();
+            });
+    }
+};
+
+}
+
+TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragments under ONE uint16 msg_id; consecutive messages advance the msg_id by one without wrapping",
+          "[udp_large_payload][envelope16][msgid]")
+{
+    // The EXPLICIT msg_id-wrap assertion. A single large message is split into many
+    // fragments; the fragment COUNT is a uint32 field (lifted this phase), while msg_id
+    // stays uint16 and advances per-MESSAGE, never per-fragment. At a 128-byte fragment
+    // budget a 16 MiB message is ~131072 fragments — far past the uint16 max (65535) — so a
+    // single message's fragment count CANNOT be expressed in a uint16 msg_id: the old
+    // confusion (that msg_id bounds the per-message fragment count) is closed here on the
+    // wire. Two consecutive messages are sent best-effort through an observing relay that
+    // decodes each fragment header; the assertion reads the observed headers (loss does not
+    // matter — the headers carry the true counts):
+    //   * every observed fragment of the run carries frag_cnt > 0xFFFF (a single message's
+    //     fragment count exceeds what a uint16 could ever hold), proving the uint32 widening
+    //     is load-bearing;
+    //   * exactly TWO distinct msg_ids are observed (one per message), and they differ by
+    //     exactly one — msg_id advances per-message and does not wrap/collide.
+    constexpr std::size_t budget = 128u;                 // the fragment floor -> the largest count
+    constexpr std::size_t payload = 16u * 1024u * 1024u; // ~131072 fragments per message
+    constexpr std::size_t ceiling = 20u * 1024u * 1024u;
+    constexpr std::size_t reassembly = 48u * 1024u * 1024u;
+
+    ::asio::io_context io;
+    pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder, large_arq(),
+                                pio::congestion::block, pasio::detail::udp_inbound_demux::default_max_peers,
+                                pasio::udp_server::default_so_sndbuf, pasio::udp_server::default_so_rcvbuf,
+                                pasio::udp_server::default_send_queue_bytes, ceiling, reassembly};
+    pasio::udp_transport client{io, budget, fast_hs, large_arq(),
+                                pio::congestion::block, pasio::detail::udp_inbound_demux::default_max_peers,
+                                pasio::udp_server::default_so_sndbuf, pasio::udp_server::default_so_rcvbuf,
+                                pasio::udp_server::default_send_queue_bytes, ceiling, reassembly};
+
+    std::unique_ptr<pasio::udp_channel> accepted, dialed;
+    server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) {
+        accepted = std::move(ch);
+        accepted->on_data([&](std::span<const std::byte>) {});      // delivery is incidental to this assertion
+    });
+    server.listen({"udp", "127.0.0.1:0"});
+    pump_until(io, [&] { return server.port() != 0; });
+
+    fragment_observer obs{io, server.port()};
+    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
+    client.dial({"udp", "127.0.0.1:" + std::to_string(obs.port())});   // best-effort: fragments are wire-visible
+    pump_until(io, [&] { return dialed && accepted; });
+    REQUIRE(dialed != nullptr);
+    REQUIRE(accepted != nullptr);
+
+    // Two consecutive large messages: their msg_ids must differ by exactly one.
+    auto first = make_payload(payload, 0x11);
+    auto second = make_payload(payload, 0x22);
+    dialed->send(first);
+    pump_until(io, [&] { return obs.msg_ids.size() >= 1; }, ms{4000});
+    dialed->send(second);
+    pump_until(io, [&] { return obs.msg_ids.size() >= 2; }, ms{4000});
+
+    REQUIRE(obs.max_frag_cnt > 0xFFFFu);                 // a single message's fragment count exceeds uint16
+    REQUIRE(obs.msg_ids.size() == 2);                    // exactly one msg_id per message
+    const int delta = static_cast<int>(obs.msg_ids[1]) - static_cast<int>(obs.msg_ids[0]);
+    REQUIRE(delta == 1);                                 // per-message advance, no wrap/collision
 }

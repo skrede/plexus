@@ -164,12 +164,16 @@ private:
 
     // The channel has room for a frame of this size while its queued occupancy plus the
     // frame stays within the low-water gate; a channel with no backpressure signal always
-    // admits (the short-circuit path). The gate equals the channel's write-queue cap, so a
-    // single max-message frame on an idle channel still admits (occupancy 0 + size == gate).
+    // admits (the short-circuit path). The low-water gate keeps the priority-ordered backlog
+    // in the bands (not the channel FIFO) under contention, but an IDLE channel admits a
+    // single frame of ANY size — the channel's own write-queue cap is the real per-frame
+    // bound — so a large single message (above the low-water band gate) is not stranded in
+    // the bands forever. Without the idle short-circuit a message larger than the low-water
+    // gate could never hand off, capping the message-size envelope at the gate.
     bool admits(Channel &ch, std::size_t size) const
     {
         if constexpr(can_poll())
-            return ch.backpressured() + size <= k_low_water;
+            return ch.backpressured() == 0 || ch.backpressured() + size <= k_low_water;
         else
             return true;
     }
