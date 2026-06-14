@@ -20,9 +20,11 @@ namespace plexus::io::shm {
 //   take(out)   read the next message for this cursor. ok hands back a move-only
 //               taken_message aliasing the slot bytes, the slot pinned for the
 //               handle's lifetime, and advances the cursor by one; empty when
-//               there is nothing new (the would-block case); a lap-behind or a
-//               best_effort skip-tombstone steps the cursor forward and retries
-//               within the call, so the caller only ever sees ok/empty.
+//               there is nothing new (the would-block case); a small-contention
+//               lap or a best_effort skip-tombstone steps the cursor forward, and
+//               a full-ring lap-behind jumps the cursor to the producer tail in
+//               one step (O(1)) -- all retried within the call, so the caller only
+//               ever sees ok/empty.
 //
 // The pin is Dekker-safe: take() pins via the ring's pin_if_current (the seq_cst
 // announce + recheck that rules out a best_effort overwrite stomping the read),
@@ -101,9 +103,18 @@ public:
                 cpu_relax();
                 continue;
             }
+            if(st == loan_status::lagged)
+            {
+                // The producer lapped this cursor by a full ring; jump straight to
+                // the surfaced producer tail in one step (O(1)) instead of stepping
+                // a slot at a time. The jump moves only this consumer's own cursor.
+                m_cursor = consumed.position;
+                m_ring.publish_cursor(m_cursor_index, m_cursor);
+                continue;
+            }
             if(st == loan_status::congested)
             {
-                advance(); // a lap-behind cursor or a skip tombstone: step forward
+                advance(); // a small-contention dif>0 or a skip tombstone: step forward
                 continue;
             }
 

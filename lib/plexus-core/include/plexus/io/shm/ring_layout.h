@@ -161,6 +161,16 @@ struct control_header_t
     // the bit into the generation would couple the kernel FUTEX_WAIT value-compare
     // to the park state and risk a lost wake.
     alignas(k_cache_line) std::atomic<std::uint32_t> park_state;
+
+    // Monotonic high-water of registered broadcast cursors: the largest (index + 1)
+    // any register_cursor has ever claimed. The reliable-reclaim scan bounds its
+    // loop by this instead of always k_max_consumers, so a 1-2 consumer ring touches
+    // 1-2 cursor lines per claim, not 16. It only ever grows (an unregister leaves
+    // it), so a stale registered cursor is always below the high-water it set and
+    // the scan can never miss it; the dense ascending allocation keeps it near-tight.
+    // On its OWN cache line so a register-time bump never thrashes the producer's
+    // park/generation lines.
+    alignas(k_cache_line) std::atomic<std::uint32_t> high_water;
 };
 
 // Cross-process validity gates. A non-lock-free atomic on the target would
@@ -179,13 +189,14 @@ static_assert(std::is_standard_layout_v<control_header_t>,
               "control_header_t must be standard-layout for SHM placement");
 
 // Pin the cross-process layout: enqueue_pos line + config line + cursor array +
-// notify_generation line + park_state line, each cache-line-aligned. An unintended
-// field add/reorder (which would shift every in-region offset and silently mismap
-// a peer) fails the build here. A deliberate layout change updates this size AND
-// bumps k_ring_magic so an old region fails-closed on attach.
+// notify_generation line + park_state line + high_water line, each
+// cache-line-aligned. An unintended field add/reorder (which would shift every
+// in-region offset and silently mismap a peer) fails the build here. A deliberate
+// layout change updates this size AND bumps k_ring_magic so an old region
+// fails-closed on attach.
 static_assert(sizeof(control_header_t) ==
-                  k_cache_line * 2 + k_max_consumers * sizeof(cursor_t) + k_cache_line * 2,
-              "control_header_t v2 layout drift -- update the size guard and bump k_ring_magic");
+                  k_cache_line * 2 + k_max_consumers * sizeof(cursor_t) + k_cache_line * 3,
+              "control_header_t layout drift -- update the size guard and bump k_ring_magic");
 
 // Round a byte count up to the next multiple of eight so a slot base laid out
 // at i*slot_capacity, over a page-aligned slab base, is always 8-aligned.

@@ -137,6 +137,7 @@ public:
         header->mask          = cell_count - 1;
         header->notify_generation.store(0, std::memory_order_relaxed);
         header->park_state.store(k_park_empty, std::memory_order_relaxed);
+        header->high_water.store(0, std::memory_order_relaxed);
         for(std::size_t i = 0; i < k_max_consumers; ++i)
         {
             header->cursors[i].position.store(k_cursor_idle, std::memory_order_relaxed);
@@ -245,9 +246,11 @@ public:
     }
 
     // Reads the cell at `cursor` for this consumer: sequence==cursor+1 -> ok with
-    // a read-only slab span; nothing newer -> empty; the cursor fell a full lap
-    // behind OR the slot is a skip tombstone -> congested (the caller steps its
-    // cursor forward without delivering).
+    // a read-only slab span; nothing newer -> empty; the producer lapped this
+    // cursor by at least a full ring (dif >= cell_count) -> lagged, carrying the
+    // producer tail so the caller jumps there in one step; a small dif>0 (the
+    // producer is mid-commit ahead, less than a lap) OR a skip tombstone ->
+    // congested (the caller steps its cursor forward by one without delivering).
     loan_status consume(std::uint64_t cursor, consume_result &out) noexcept
     {
         cell_t &c               = cell_at(cursor);
@@ -256,7 +259,14 @@ public:
         if(dif < 0)
             return loan_status::empty;
         if(dif > 0)
+        {
+            if(dif >= static_cast<std::int64_t>(m_cell_count))
+            {
+                out.position = tail_position();
+                return loan_status::lagged;
+            }
             return loan_status::congested;
+        }
 
         const std::uint32_t len = c.payload_len.load(std::memory_order_relaxed);
         if(len == k_skip_len)
@@ -279,6 +289,7 @@ public:
             if(m_header->cursors[i].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
             {
                 m_header->cursors[i].position.store(k_cursor_idle, std::memory_order_release);
+                raise_high_water(i + 1);
                 out_index = i;
                 return loan_status::ok;
             }
@@ -355,6 +366,13 @@ public:
     std::uint64_t cell_count() const noexcept { return m_cell_count; }
     std::uint64_t slot_capacity() const noexcept { return m_slot_capacity; }
 
+    // The monotonic high-water of registered cursors (the largest index+1 ever
+    // registered) that bounds the reliable-reclaim scan length.
+    std::uint32_t registered_high_water() const noexcept
+    {
+        return m_header->high_water.load(std::memory_order_acquire);
+    }
+
 private:
     static bool is_power_of_two(std::uint64_t v) noexcept
     {
@@ -377,6 +395,20 @@ private:
 
     cell_t &cell_at(std::uint64_t position) noexcept { return m_cells[position & m_mask]; }
 
+    // Monotonically raise the registered-consumer high-water to at least `want`.
+    // A fresh cursor joins at tail_position(), so it cannot gate a reclaimable
+    // occupant until a full ring of enqueues has elapsed -- ample release/acquire
+    // edges for this release bump to reach the producer's acquire-bounded scan
+    // before the cursor can hold back reclamation.
+    void raise_high_water(std::uint32_t want) noexcept
+    {
+        std::uint32_t hw = m_header->high_water.load(std::memory_order_relaxed);
+        while(hw < want &&
+              !m_header->high_water.compare_exchange_weak(hw, want, std::memory_order_release,
+                                                          std::memory_order_relaxed))
+            ;
+    }
+
     std::span<std::byte> slot_span(std::uint64_t position) noexcept
     {
         const std::size_t offset = static_cast<std::size_t>(position & m_mask) * m_stride;
@@ -396,7 +428,8 @@ private:
         if(position < m_cell_count)
             return true; // first lap: no prior occupant to free
         const std::uint64_t occupant = position - m_cell_count;
-        for(std::size_t i = 0; i < k_max_consumers; ++i)
+        const std::uint32_t scan = m_header->high_water.load(std::memory_order_acquire);
+        for(std::uint32_t i = 0; i < scan; ++i)
         {
             if(m_header->cursors[i].active.load(std::memory_order_acquire) == 0)
                 continue;
