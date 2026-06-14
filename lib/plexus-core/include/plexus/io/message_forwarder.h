@@ -262,8 +262,22 @@ public:
             for(const auto &sub : *subs)
                 if(any_set(reach, sub.tier))
                 {
+                    // The wire_fallback per-message size route, the ONLY place a medium
+                    // is chosen per message. m_companion_route is installed solely for a
+                    // wire_fallback subscriber that has a capped SHM companion ring; it
+                    // returns the SHM channel when this message fits the cap, else
+                    // nullptr. The recorded sub.channel STAYS the wire (the dual-delivery
+                    // fail-safe): a missing companion, an over-cap message, or a topic in
+                    // either non-wire-fallback mode all route over sub.channel with no
+                    // change. The hook is UNSET when no such companion exists, so the two
+                    // other modes (and every SHM-off build) take the byte-identical path.
+                    channel_type *route = sub.channel;
+                    if(m_companion_route)
+                        if(channel_type *companion =
+                               m_companion_route(sub.node_name, fqn, payload.size()))
+                            route = companion;
                     const detail::drop_cause cause =
-                        m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
+                        m_egress.enqueue(*route, band, qos.congestion, framed);
                     if(cause != detail::drop_cause::none)
                         shed(hash, band, cause, sub.tier);
                     emit_delivered(fqn, pub_info, framed);
@@ -503,6 +517,21 @@ public:
     void on_qos_change(plexus::detail::move_only_function<void(const qos_change_event &)> hook)
     {
         m_on_qos_change = std::move(hook);
+    }
+
+    // The wire_fallback per-message companion route, wired by the engine for a
+    // same-host topic that keeps a capped SHM ring alongside its wire channel. Given a
+    // (peer node_name, fqn, message size) it returns the companion SHM channel when the
+    // message fits the cap (route over the ring), or nullptr to keep it on the recorded
+    // wire sub.channel (a too-large message, a peer with no mapped ring, or a topic not
+    // in wire_fallback mode). Absent = the publish fan-out is byte-identical to a node
+    // with no SHM companion (the recommended fail-safe default: the wire is the standing
+    // channel, the ring an additive fast path). The hook owner consults
+    // route_message_medium against the SHM member's resolved_geometry_for(fqn).
+    void on_companion_route(
+        plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view, std::size_t)> hook)
+    {
+        m_companion_route = std::move(hook);
     }
 
     // The consumer-paced PULL reply: replay up to min(max_samples, ring.count(),
@@ -754,6 +783,11 @@ private:
     plexus::detail::move_only_function<
         void(std::string_view, const message_info &, const message_view &)> m_on_delivered;
     plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change;
+    // The wire_fallback per-message companion route (size <= cap -> the returned SHM
+    // channel, else nullptr -> the recorded wire sub.channel). Unset on every node with
+    // no SHM wire_fallback companion, so the fan-out branch is never entered there.
+    plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view, std::size_t)>
+        m_companion_route;
 };
 
 }

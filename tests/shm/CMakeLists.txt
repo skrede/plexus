@@ -492,3 +492,26 @@ target_link_libraries(test_shm_stale_reclaim PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_stale_reclaim TEST_PREFIX "shm.")
+
+# The wire_fallback per-message routing proof (xproc): a topic in wire_fallback mode
+# mints a CAPPED ring through shm_mux_member's acquire path AND routes per message at the
+# message_forwarder publish fan-out — a message that fits the cap rides the SHM ring
+# (verified byte-exact cross-process), a message over the cap rides the same-host wire.
+# The carrying medium is ASSERTED per message via a per-channel tap (proven, not assumed),
+# the over-cap cell repeats in one invocation, and a ring-less subscriber still receives
+# both over the wire (the dual-delivery rescue). Links plexus::shm (the POSIX broker + the
+# futex primitive the live ring acquires) + plexus::wire (the fqn-hash region naming + the
+# forwarder framing) + plexus::inproc (the test Policy's executor/timer substrate).
+add_executable(test_shm_wire_fallback test_shm_wire_fallback.cpp)
+
+target_include_directories(test_shm_wire_fallback PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_wire_fallback PRIVATE
+    plexus::core
+    plexus::shm
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_wire_fallback TEST_PREFIX "shm.")

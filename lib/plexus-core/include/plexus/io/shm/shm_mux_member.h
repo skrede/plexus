@@ -5,6 +5,7 @@
 #include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/notifier_concept.h"
 #include "plexus/io/shm/shm_selection.h"
+#include "plexus/io/shm/ring_geometry.h"
 #include "plexus/io/shm/same_host.h"
 #include "plexus/io/shm/shm_channel.h"
 #include "plexus/io/shm/shm_slot_owner.h"
@@ -272,6 +273,29 @@ public:
     {
         m_geometry.insert_or_assign(
             fqn, provisioned{static_cast<std::uint32_t>(effective_bytes), geom.mode, geom.max_consumers});
+    }
+
+    // The resolved mode + the capped ring's per-message slot capacity for an fqn, read
+    // by the publish fan-out's per-message route (the wire_fallback size check). The cap
+    // is the bounded ring's slot stride (round_up_8 of the provisioned payload), the same
+    // value ring_geometry_for hands the live acquire — a message at or under it fits the
+    // ring, a larger one reroutes over the wire. An unprovisioned fqn resolves to the
+    // reliable_preserving default (so the forwarder's mode gate never enters the
+    // per-message branch for it), mirroring resolve()'s default.
+    struct resolved_topic_geometry
+    {
+        ring_geometry_mode mode          = ring_geometry_mode::reliable_preserving;
+        std::uint64_t      slot_capacity = 0;
+    };
+
+    [[nodiscard]] resolved_topic_geometry resolved_geometry_for(const std::string &fqn) const
+    {
+        auto it = m_geometry.find(fqn);
+        if(it == m_geometry.end())
+            return {};
+        const provisioned &p = it->second;
+        const ring_geometry geom = ring_geometry_for(p.max_payload, p.mode, p.consumer_capacity);
+        return {p.mode, geom.slot_capacity};
     }
 
     // Apply the node-level per-ring slab ceiling to the owned registry (forwarded once
