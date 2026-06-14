@@ -11,6 +11,7 @@
 #include "plexus/io/reliability.h"
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
+#include "plexus/io/detail/scheduler_key.h"
 #include "plexus/wire/stream_inbound.h"
 #include "plexus/wire_bytes.h"
 
@@ -156,6 +157,7 @@ static_assert(shm_member::mux_prefers_shm,
 struct dummy_stream_channel
 {
     pio::endpoint ep;
+    std::uint64_t key = plexus::io::detail::next_scheduler_key();
     void send(std::span<const std::byte>) {}
     void close() {}
     [[nodiscard]] pio::endpoint remote_endpoint() const { return ep; }
@@ -164,6 +166,7 @@ struct dummy_stream_channel
     void on_error(plexus::detail::move_only_function<void(pio::io_error)>) {}
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
     [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return key; }
 };
 
 struct dummy_stream_member
