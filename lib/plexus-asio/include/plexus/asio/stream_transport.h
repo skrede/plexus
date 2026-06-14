@@ -1,17 +1,20 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_STREAM_TRANSPORT_H
 #define HPP_GUARD_PLEXUS_ASIO_STREAM_TRANSPORT_H
 
+#include "plexus/asio/stream_channel.h"
 #include "plexus/asio/detail/asio_error_map.h"
 
 #include "plexus/wire/stream_inbound.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
 
 #include <memory>
+#include <cstddef>
 #include <utility>
 #include <system_error>
 
@@ -52,7 +55,7 @@ public:
         auto target = Traits::parse(ep.address, pec);
         if(pec)
             return report_dial_fail(ep, detail::map_error(pec));
-        auto ch = std::make_unique<Channel>(m_io, m_cfg);
+        auto ch = std::make_unique<Channel>(m_io, m_cfg, m_congestion, m_write_queue_bytes, m_socket_options);
         auto &raw = *ch;
         raw.socket().async_connect(target,
             [this, ep, ch = std::move(ch)](std::error_code ec) mutable {
@@ -70,11 +73,15 @@ public:
 protected:
     template <typename... ListenerArgs>
     stream_transport(::asio::io_context &io, wire::stream_inbound_config cfg, bool no_delay,
-                     ListenerArgs &&...largs)
+                     io::congestion congestion, std::size_t write_queue_bytes,
+                     stream_socket_options socket_options, ListenerArgs &&...largs)
         : m_io(io)
         , m_listener(std::forward<ListenerArgs>(largs)...)
         , m_cfg(cfg)
         , m_no_delay(no_delay)
+        , m_congestion(congestion)
+        , m_write_queue_bytes(write_queue_bytes)
+        , m_socket_options(socket_options)
     {
         m_listener.on_accepted([this](std::unique_ptr<Channel> ch) {
             if(m_on_accepted)
@@ -100,6 +107,9 @@ private:
     Listener m_listener;
     wire::stream_inbound_config m_cfg;
     bool m_no_delay;
+    io::congestion m_congestion;
+    std::size_t m_write_queue_bytes;
+    stream_socket_options m_socket_options;
     plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;

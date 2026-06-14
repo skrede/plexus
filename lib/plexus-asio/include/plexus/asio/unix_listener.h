@@ -9,6 +9,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
 #include "plexus/io/security/peer_cred_policy.h"
 #include "plexus/detail/compat.h"
 
@@ -26,6 +27,7 @@
 #include <string>
 #include <memory>
 #include <cerrno>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <system_error>
@@ -63,12 +65,18 @@ public:
     explicit unix_listener(::asio::io_context &io, wire::stream_inbound_config cfg = {},
                            ::mode_t mode = default_socket_mode,
                            const io::security::peer_cred_policy &policy
-                               = io::security::shared_accept_any_peer_cred())
+                               = io::security::shared_accept_any_peer_cred(),
+                           io::congestion congestion = io::congestion::block,
+                           std::size_t write_queue_bytes = unix_channel::default_write_queue_bytes,
+                           stream_socket_options socket_options = {})
         : m_io(io)
         , m_acceptor(io)
         , m_cfg(cfg)
         , m_mode(mode)
         , m_peer_policy(&policy)
+        , m_congestion(congestion)
+        , m_write_queue_bytes(write_queue_bytes)
+        , m_socket_options(socket_options)
     {
     }
 
@@ -173,7 +181,8 @@ private:
                 }
                 else
                 {
-                    auto channel = std::make_unique<unix_channel>(m_io, std::move(peer), m_cfg);
+                    auto channel = std::make_unique<unix_channel>(m_io, std::move(peer), m_cfg,
+                                                                  m_congestion, m_write_queue_bytes, m_socket_options);
                     if(m_on_accepted)
                         m_on_accepted(std::move(channel));
                 }
@@ -221,6 +230,9 @@ private:
     wire::stream_inbound_config m_cfg;
     ::mode_t m_mode;
     const io::security::peer_cred_policy *m_peer_policy;   // borrowed; never owned
+    io::congestion m_congestion;
+    std::size_t m_write_queue_bytes;
+    stream_socket_options m_socket_options;
     std::string m_bound_path;
     plexus::detail::move_only_function<void(std::unique_ptr<unix_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;

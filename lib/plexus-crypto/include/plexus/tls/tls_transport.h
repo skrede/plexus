@@ -14,6 +14,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/pending_dial_registry.h"
@@ -25,6 +26,7 @@
 #include <array>
 #include <memory>
 #include <variant>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <string_view>
@@ -54,12 +56,18 @@ public:
     // default true — the latency-MW default; overridable for a Nagle use-case). Threaded to
     // the listener for the accept side and set on the dial socket post-connect below.
     tls_transport(::asio::io_context &io, const tls_credential &cred,
-                  wire::stream_inbound_config cfg = {}, bool no_delay = true)
+                  wire::stream_inbound_config cfg = {}, bool no_delay = true,
+                  io::congestion congestion = io::congestion::block,
+                  std::size_t outbox_bytes = tls_channel::default_outbox_bytes,
+                  plexus::asio::stream_socket_options socket_options = {})
         : m_io(io)
         , m_cred(cred)
-        , m_listener(io, cred, cfg, no_delay)
+        , m_listener(io, cred, cfg, no_delay, congestion, outbox_bytes, socket_options)
         , m_cfg(cfg)
         , m_no_delay(no_delay)
+        , m_congestion(congestion)
+        , m_outbox_bytes(outbox_bytes)
+        , m_socket_options(socket_options)
         , m_pending([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
     {
         m_listener.on_accepted([this](std::unique_ptr<tls_channel> ch) {
@@ -98,7 +106,7 @@ public:
         auto target = plexus::asio::detail::parse(ep.address, pec);
         if(pec)
             return report_dial_fail(ep, plexus::asio::detail::map_error(pec));
-        auto ch = std::make_unique<tls_channel>(m_io, m_cred, m_cfg);
+        auto ch = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_outbox_bytes, m_socket_options);
         auto *raw = ch.get();
         raw->socket().async_connect(target,
             [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable {
@@ -172,6 +180,9 @@ private:
     tls_listener m_listener;
     wire::stream_inbound_config m_cfg;
     bool m_no_delay;
+    io::congestion m_congestion;
+    std::size_t m_outbox_bytes;
+    plexus::asio::stream_socket_options m_socket_options;
     io::pending_dial_registry<tls_channel, std::monostate> m_pending;   // transport-owned half-open dials
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed;
