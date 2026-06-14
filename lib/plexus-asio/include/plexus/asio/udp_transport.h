@@ -66,6 +66,11 @@ public:
     using arq_type = io::detail::udp_handshake_arq<udp_policy>;
     using hs_type = io::detail::udp_hs_type;
 
+    // global_default is the node-level per-MESSAGE size ceiling and reassembly_budget the
+    // always-on aggregate reassembly-memory cap — the two operator-facing message-size
+    // node options (required-WITH-default, bound to the shipped named constants). Stamped
+    // into every minted channel; a per-topic override resolves through io::effective_max.
+    // max_payload here remains the per-FRAGMENT MTU budget (a separate axis).
     explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload,
                            arq_type::schedule hs_ladder = arq_type::default_ladder,
                            io::detail::udp_arq_config arq_cfg = {},
@@ -73,12 +78,16 @@ public:
                            std::size_t max_peers = detail::udp_inbound_demux::default_max_peers,
                            std::size_t so_sndbuf = udp_server::default_so_sndbuf,
                            std::size_t so_rcvbuf = udp_server::default_so_rcvbuf,
-                           std::size_t send_queue_bytes = udp_server::default_send_queue_bytes)
+                           std::size_t send_queue_bytes = udp_server::default_send_queue_bytes,
+                           std::size_t global_default = io::global_default_max_message_bytes,
+                           std::size_t reassembly_budget = io::reassembly_memory_budget)
         : m_io(io)
         , m_server(io, congestion, send_queue_bytes, so_sndbuf, so_rcvbuf)
         , m_max_peers(max_peers)
         , m_demux(max_peers)
         , m_max_payload(max_payload)
+        , m_global_default(global_default)
+        , m_reassembly_budget(reassembly_budget)
         , m_hs_ladder(hs_ladder)
         , m_arq_cfg(arq_cfg)
         , m_congestion(congestion)
@@ -139,7 +148,8 @@ public:
         const auto mode = mode_of_scheme(ep.scheme);
         const std::uint16_t isn = next_isn();   // the dialer's per-session ISN, advertised in the request
         auto ch = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg,
-                                                m_congestion, udp_channel::default_backpressure_bytes, mode, isn);
+                                                m_congestion, udp_channel::default_backpressure_bytes, mode, isn,
+                                                m_global_default, m_reassembly_budget);
         auto *raw = ch.get();
         m_demux.insert(dest, raw);
         wire_teardown(*raw, dest);
@@ -231,7 +241,8 @@ private:
         // both ends start the cumulative-ack edge from the same negotiated sequence.
         auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg,
                                                 m_congestion, udp_channel::default_backpressure_bytes,
-                                                hs->mode, hs->initial_seq);
+                                                hs->mode, hs->initial_seq,
+                                                m_global_default, m_reassembly_budget);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
         {
@@ -335,7 +346,9 @@ private:
     udp_server m_server;
     std::size_t m_max_peers;
     detail::udp_inbound_demux m_demux;
-    std::size_t m_max_payload;
+    std::size_t m_max_payload;               // per-FRAGMENT MTU budget (NOT the message ceiling)
+    std::size_t m_global_default;            // node-level per-MESSAGE size ceiling
+    std::size_t m_reassembly_budget;         // aggregate reassembly-memory cap (always-on)
     arq_type::schedule m_hs_ladder;
     io::detail::udp_arq_config m_arq_cfg;
     io::congestion m_congestion;

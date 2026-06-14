@@ -170,8 +170,10 @@ TEST_CASE("udp oversize: a message beyond the max-message size is rejected at pu
 
     // A payload merely past the per-datagram budget is now SPLIT across fragments (not
     // rejected) — the oversize-reject path fires ONLY for a payload beyond the bounded
-    // max-MESSAGE size, the genuinely-too-big case the reassembler cannot hold.
-    std::vector<std::byte> too_big(plexus::io::fragmentation_limits::max_message_size + 1, std::byte{0x5A});
+    // max-MESSAGE size, the genuinely-too-big case the reassembler cannot hold. The live
+    // ceiling is the channel's effective-max (the node default), not the fragment-count
+    // assert constant.
+    std::vector<std::byte> too_big(plexus::io::global_default_max_message_bytes + 1, std::byte{0x5A});
     h.dialed->send(too_big);
     h.pump_until([&] { return h.client_error.has_value(); });
 

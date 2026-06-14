@@ -58,6 +58,20 @@ struct stream_inbound_config
     std::size_t buffered_bytes_cap{k_max_reassembler_payload_bytes + header_size};
 };
 
+// Stamp the per-MESSAGE receive ceiling and the aggregate reassembly-memory cap onto a
+// channel's inbound config at mint time: max_payload_size = the subscriber's effective-max,
+// buffered_bytes_cap held at the budget (and never below the ceiling + one header). The
+// node-options surface (transport ctor) threads the resolved values in — keeping the
+// no-progress tunables a node may already have set.
+[[nodiscard]] inline stream_inbound_config with_message_limits(stream_inbound_config cfg,
+                                                               std::size_t max_payload_size,
+                                                               std::size_t reassembly_budget) noexcept
+{
+    cfg.max_payload_size = max_payload_size;
+    cfg.buffered_bytes_cap = std::max(reassembly_budget, max_payload_size + header_size);
+    return cfg;
+}
+
 // The shared byte-stream framing-hardening detection layer. It composes the
 // frame_reassembler by value, consumes the feed_error the channel discards today,
 // and owns a no-progress (slowloris) timer keyed off a SIZE-PROPORTIONAL per-frame

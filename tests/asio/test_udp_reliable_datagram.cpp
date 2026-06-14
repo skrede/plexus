@@ -277,7 +277,7 @@ TEST_CASE("udp reliable_datagram: a message beyond the max-message size is rejec
     // A payload beyond the bounded max-MESSAGE size is rejected at publish via
     // on_error(message_too_large) — the reliable class enforces the same hard ceiling as
     // best_effort. A merely-oversize-but-fragmentable payload is split, not rejected.
-    std::vector<std::byte> too_big(pio::fragmentation_limits::max_message_size + 1, std::byte{0x5A});
+    std::vector<std::byte> too_big(pio::global_default_max_message_bytes + 1, std::byte{0x5A});
     dialed->send(too_big);     // reliable-mode send dispatches to send_reliable -> oversize reject
     pump_until(io, [&] { return dialed_error.has_value(); });
 

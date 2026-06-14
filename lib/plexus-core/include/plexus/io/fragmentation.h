@@ -1,11 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_FRAGMENTATION_H
 #define HPP_GUARD_PLEXUS_IO_FRAGMENTATION_H
 
+#include "plexus/topic_qos.h"
 #include "plexus/wire/udp_envelope.h"
 
 #include "plexus/detail/compat.h"
 
 #include <span>
+#include <limits>
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
@@ -28,6 +30,37 @@ struct fragmentation_limits
     static constexpr std::size_t max_message_size = 4u * 1024u * 1024u;
     static constexpr std::size_t min_fragment_payload = 128u;
 };
+
+// THE NODE-OPTIONS MESSAGE-SIZE DEFAULTS — the operator-facing knobs the transport
+// ctors bind by default. The live per-message ceiling is no longer the implicit
+// fragmentation_limits::max_message_size (that constant survives only as the
+// fragment-count assert math + a safe fallback); it is this settable node default,
+// resolved per-topic through effective_max and threaded from the transport ctor.
+//
+// 8 MiB covers a 1080p raw RGB frame (~5.9 MiB) / RGBA (~7.9 MiB) / depth (~4 MiB)
+// plus typical point clouds — double the prior 4 MiB and half the aggregate budget;
+// a 4K raw frame (~23.7 MiB) needs an explicit per-topic override or a raised default.
+constexpr std::size_t global_default_max_message_bytes = 8u * 1024u * 1024u;
+
+// The always-on aggregate reassembly-memory backstop (the reassembler's
+// total_memory_cap): bounds attacker-controlled memory across ALL topics on a
+// connection regardless of any single message's declared size, so it is the real DoS
+// bound even when the per-topic ceiling is unlimited. Connection-shared, configurable.
+constexpr std::size_t reassembly_memory_budget = 16u * 1024u * 1024u;
+
+// The opt-in "unbounded per-message" sentinel for the node default: a topic resolving
+// to this has no per-message ceiling, so the aggregate reassembly_memory_budget is the
+// only bound. The budget always wins (it gates admit independently of the per-topic max).
+constexpr std::size_t k_unlimited_message_bytes = std::numeric_limits<std::size_t>::max();
+
+// The per-message size ceiling for a topic: its declared per-topic override when set,
+// else the node default. A pure relation over topic_qos (no I/O) — co-located with the
+// size policy, mirroring qos_rxo.h's pure-relation placement.
+[[nodiscard]] constexpr std::size_t effective_max(const topic_qos &t,
+                                                  std::size_t global_default) noexcept
+{
+    return t.max_message_bytes != 0 ? static_cast<std::size_t>(t.max_message_bytes) : global_default;
+}
 
 // The worst-case fragment count: the largest message at the smallest sane fragment. It
 // must stay inside the uint32 frag_cnt field — the same field-width discipline the ARQ

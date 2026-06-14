@@ -92,17 +92,26 @@ public:
     // The congestion mode is the per-channel QoS choice (block = the safe reliable
     // default; drop = the opt-out shed) threaded the same way; the backpressure byte
     // budget bounds the block queue.
+    // max_message_bytes is the per-MESSAGE size ceiling (send-side oversize-reject AND
+    // the receive reassembler's per-message ceiling) — the channel's effective-max,
+    // distinct from max_payload (the per-FRAGMENT MTU budget). reassembly_budget is the
+    // always-on aggregate reassembly-memory cap. Both required-WITH-default (the shipped
+    // node-options constants); a transport stamps the topic-or-node effective-max here.
     udp_channel(::asio::io_context &io, udp_server &server, ::asio::ip::udp::endpoint dest,
                 std::size_t max_payload = default_max_payload,
                 io::detail::udp_arq_config arq_cfg = {},
                 io::congestion congestion = io::congestion::block,
                 std::size_t backpressure_bytes = default_backpressure_bytes,
                 io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort,
-                std::uint16_t initial_seq = 0)
+                std::uint16_t initial_seq = 0,
+                std::size_t max_message_bytes = io::global_default_max_message_bytes,
+                std::size_t reassembly_budget = io::reassembly_memory_budget)
         : m_io(io)
         , m_server(server)
         , m_dest(std::move(dest))
         , m_max_payload(max_payload)
+        , m_max_message_bytes(max_message_bytes)
+        , m_reassembly_budget(reassembly_budget)
         , m_arq_cfg(arq_cfg)
         , m_congestion(congestion)
         , m_backpressure(backpressure_bytes)
@@ -293,7 +302,7 @@ private:
     // oversize-reject path stays for the genuinely-too-big message, not the merely-large one.
     [[nodiscard]] bool exceeds_max_message(std::size_t size) const noexcept
     {
-        return size > io::fragmentation_limits::max_message_size;
+        return size > m_max_message_bytes;
     }
 
     // best_effort split: each fragment is one FRAGMENTED-bit envelope carrying the wire
@@ -377,7 +386,9 @@ private:
     {
         if(m_reassembler)
             return;
-        m_reassembler = std::make_unique<reassembler_type>(m_io);
+        m_reassembler = std::make_unique<reassembler_type>(
+            m_io, reassembler_type::config{.max_message_size = m_max_message_bytes,
+                                           .total_memory_cap = m_reassembly_budget});
         m_reassembler->on_deliver([this](wire::shared_bytes msg) { post_on_data_owned(std::move(msg)); });
         m_reassembler->on_drop([this](const io::detail::drop_event &ev) { if(m_on_drop) m_on_drop(ev); });
     }
@@ -502,7 +513,9 @@ private:
     ::asio::io_context &m_io;
     udp_server &m_server;
     ::asio::ip::udp::endpoint m_dest;
-    std::size_t m_max_payload;
+    std::size_t m_max_payload;                               // per-FRAGMENT MTU budget (NOT the message ceiling)
+    std::size_t m_max_message_bytes;                         // per-MESSAGE size ceiling (send + receive)
+    std::size_t m_reassembly_budget;                         // aggregate reassembly-memory cap (always-on)
     io::detail::udp_arq_config m_arq_cfg;
     io::congestion m_congestion;
     io::detail::udp_backpressure_queue m_backpressure;       // bounded congestion=block queue
