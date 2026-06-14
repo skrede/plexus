@@ -13,10 +13,22 @@ namespace plexus::io::shm {
 
 // The per-ring slab ceiling: the largest /dev/shm slab a single ring may size, so an
 // oversize payload declaration cannot map an unbounded region. It is the layout-side
-// bound (cap * floor), independent of the decode layer's upstream max_payload cap. It
-// is the SHIPPED fallback ceiling; the live ceiling is a node_options knob threaded to
-// the registry, with this constant the ultimate default.
-constexpr std::uint64_t k_max_ring_slab_bytes = 16ull * 1024 * 1024;
+// bound (depth * round_up_8(payload)), independent of the decode layer's upstream
+// max_payload cap. It is the SHIPPED default for the node_options slab-ceiling knob
+// threaded to the registry; the live ceiling is the node value, with this constant the
+// ultimate default. The registration path (not this constant) fails closed above it.
+//
+// Chosen at 512 MiB, justified from the depth-32 cost-per-ring table (slab dominates;
+// control+cells adds ~3.4 KiB on a depth-32 ring): a depth-D ring at payload P costs
+// 1344 + D*64 + D*round_up_8(P) bytes. 512 MiB is the smallest power-of-two-MiB ceiling
+// that admits BOTH operator-locked rings — the 8 MiB default-config x depth-32 ring
+// (256.0032 MiB, just over a bare 256 MiB because of the control overhead) AND the
+// headline 16 MiB reliable_preserving round-trip at a typical (small) fan-out (C<=8 ->
+// depth<=16 -> <=256.0023 MiB) — while leaving the full-16-consumer depth-32 16 MiB tail
+// (512.0032 MiB, over by the control overhead) as the documented fail-closed corner. A
+// bare 256 MiB would fail the default-config ring; 512 MiB clears it with the depth-32
+// control overhead and stays generous without admitting the expensive full-fan-out tail.
+constexpr std::uint64_t k_max_ring_slab_bytes = 512ull * 1024 * 1024;
 
 // The depth + per-slot stride a broadcast ring is created with. cell_count is the
 // power-of-two Vyukov cell depth; slot_capacity is the per-slot byte stride
@@ -57,9 +69,9 @@ struct ring_geometry
 // declared capacity rather than a fixed floor. cell_count is always a power of two
 // and, under the two reliable-geometry modes (reliable_preserving, wire_fallback),
 // strictly exceeds the declared capacity; best_effort_large admits depth ==
-// capacity. The total per-ring slab is asserted under a fixed ceiling so an oversize
-// declaration cannot size an unbounded slab; the over-ceiling reliable case is left
-// for the caller to detect (the fail-closed registration path owns the diagnostic).
+// capacity. This is a pure layout query: it never bounds the slab itself. An oversize
+// declaration that would exceed the per-ring ceiling is left for the caller to detect
+// via ring_memory_for — the fail-closed registration path owns that bound + diagnostic.
 [[nodiscard]] inline ring_geometry ring_geometry_for(std::optional<std::uint32_t> max_payload,
                                                      ring_geometry_mode mode,
                                                      std::uint32_t consumer_capacity) noexcept
@@ -90,7 +102,6 @@ struct ring_geometry
     geom.slot_capacity = round_up_8(geom.slot_capacity);
     if(mode != ring_geometry_mode::best_effort_large)
         assert(geom.cell_count > capacity && "reliable ring depth not strictly above capacity");
-    assert(geom.cell_count * geom.slot_capacity <= k_max_ring_slab_bytes && "ring slab over ceiling");
     return geom;
 }
 

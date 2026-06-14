@@ -40,6 +40,34 @@ enum class acquire_result : std::uint8_t
     failed,
 };
 
+// Which bound a fail-closed acquire hit. A reliable_preserving ring that cannot be
+// provisioned NEVER silently downgrades to best_effort and NEVER silently sizes an
+// unbounded region: the registration fails closed and names the bound here so the
+// caller (and the operator log) learns WHY, not just that it failed.
+//   none         -> no failure recorded (the success default).
+//   slab_ceiling -> the ring's required bytes exceed the node-level slab ceiling.
+//   os_allocator -> the broker / OS could not map the region (too large for the
+//                   broker's region ceiling, denied, or any other mapping failure).
+enum class acquire_bound : std::uint8_t
+{
+    none,
+    slab_ceiling,
+    os_allocator,
+};
+
+// The unified fail-closed diagnostic a failed acquire records: which bound was hit,
+// the exact ask (the ring's required slab bytes), and the available limit — the
+// node-level slab ceiling for the ceiling bound, or the broker's region_status verdict
+// for the OS-allocator bound. ONE surface for "a reliable_preserving ring that could
+// not be provisioned," whether the node ceiling or the OS allocator was the wall.
+struct acquire_failure
+{
+    acquire_bound bound       = acquire_bound::none;
+    std::uint64_t ask_bytes   = 0;
+    std::uint64_t limit_bytes = 0;          // the slab ceiling (slab_ceiling bound only)
+    region_status broker      = region_status::ok; // the OS verdict (os_allocator bound only)
+};
+
 // The demand-driven lifecycle owner for the same-host shared-memory rings. It is
 // the sole owner of every live (topic, direction) ring: a first acquire MINTS the
 // ring (or ATTACHES to a peer's), each further acquire of the same key bumps a
@@ -138,6 +166,7 @@ public:
         }
 
         auto e = std::make_unique<entry>();
+        m_last_failure = acquire_failure{};
         const acquire_result verdict = open_ring(*e, fqn, direction, max_payload, mode, consumer_capacity);
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
@@ -204,6 +233,12 @@ public:
 
     std::size_t live_count() const noexcept { return m_entries.size(); }
 
+    // The diagnostic of the most recent fail-closed acquire: which bound was hit
+    // (slab ceiling vs OS allocator) plus the exact ask vs available. The mux member
+    // surfaces it on a failed dial so a publisher learns WHY the ring could not be
+    // provisioned, never a silent downgrade. bound == none after a successful acquire.
+    [[nodiscard]] const acquire_failure &last_acquire_failure() const noexcept { return m_last_failure; }
+
     // Apply the node-level per-ring slab ceiling. Called once by the node owner at
     // construction so the enforced ceiling is the node value rather than the shipped
     // compile-time default; it bounds the slab of every ring minted AFTER it is set.
@@ -267,6 +302,18 @@ private:
         const std::uint64_t capacity = consumer_capacity == 0 ? k_max_consumers : consumer_capacity;
         const ring_geometry geom = ring_geometry_for(want, mode, consumer_capacity);
 
+        // The ceiling leg of the unified fail-closed gate is a PURE query (no broker
+        // touch): reject an over-ceiling reliable ring before any region is minted, so
+        // an oversize declaration never even orphans the control region. The ask is the
+        // slab the ring would size (the slab dominates; the control region is bounded).
+        const std::uint64_t ask = slab_region_bytes(geom.cell_count, geom.slot_capacity);
+        if(ask > m_max_ring_slab_bytes)
+        {
+            m_last_failure =
+                acquire_failure{acquire_bound::slab_ceiling, ask, m_max_ring_slab_bytes, region_status::ok};
+            return acquire_result::failed;
+        }
+
         create_options opts;
         opts.unlink_stale_on_create = true;
         const region_status cs =
@@ -275,6 +322,8 @@ private:
             return mint(e, slab_name, geom, capacity);
         if(cs == region_status::already_exists)
             return join(e, ctrl_name, slab_name);
+        m_last_failure = acquire_failure{acquire_bound::os_allocator,
+                                         control_region_bytes(geom.cell_count), 0, cs};
         return acquire_result::failed;
     }
 
@@ -283,12 +332,18 @@ private:
     acquire_result mint(entry &e, const std::string &slab_name, const ring_geometry &geom,
                         std::uint64_t consumer_capacity)
     {
-        if(geom.cell_count * geom.slot_capacity > m_max_ring_slab_bytes)
+        // The OS-allocator leg of the unified fail-closed gate: the ceiling was already
+        // cleared in open_ring (a pure query), so a slab create that the broker / OS
+        // cannot map fails closed naming the OS-ALLOCATOR bound with the exact ask and
+        // the broker's verdict. NEVER an auto-downgrade and NEVER a silently-shrunk ring.
+        const std::uint64_t ask = slab_region_bytes(geom.cell_count, geom.slot_capacity);
+        if(const region_status cs =
+               m_broker.create(slab_name, ask, create_options{.unlink_stale_on_create = true}, e.slab);
+           cs != region_status::ok)
+        {
+            m_last_failure = acquire_failure{acquire_bound::os_allocator, ask, 0, cs};
             return acquire_result::failed;
-        if(m_broker.create(slab_name, slab_region_bytes(geom.cell_count, geom.slot_capacity),
-                           create_options{.unlink_stale_on_create = true}, e.slab) !=
-           region_status::ok)
-            return acquire_result::failed;
+        }
         if(broadcast_ring::create(e.control.bytes(), e.slab.bytes(), geom.cell_count,
                                   geom.slot_capacity, e.ring, consumer_capacity) != loan_status::ok)
             return acquire_result::failed;
@@ -333,6 +388,7 @@ private:
     congestion      m_congestion;
     notifier_binder m_bind_notifier;
     std::uint64_t   m_max_ring_slab_bytes;
+    acquire_failure m_last_failure;
 
     std::unordered_map<key, std::unique_ptr<entry>, key_hash> m_entries;
 };
