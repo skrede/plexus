@@ -857,9 +857,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # The hot-path allocation audit gains a type-erased polymorphic_byte_channel variant when the asio
     # backend is on: the same steady-state 0-alloc invariant must hold across the single
     # virtual hop the erasure adds. The mux headers are header-only inside plexus::asio, so
-    # the variant is compiled in (guarded by PLEXUS_HAVE_ASIO_MUX) only here.
+    # the variant is compiled in (guarded by PLEXUS_HAVE_ASIO_MUX) only here. The same gate
+    # arms the live-loopback UDP best-effort send variants (the idle fast-path and the warm
+    # pooled queued path both proven 0-alloc over a real bound udp_server).
     target_link_libraries(test_hot_path_alloc PRIVATE plexus::asio)
     target_compile_definitions(test_hot_path_alloc PRIVATE PLEXUS_HAVE_ASIO_MUX)
+
+    # The AEAD datagram lane inherits the UDP send path's 0-alloc when the crypto backend is
+    # on: datagram_authenticated_channel seals ABOVE send_to into reused scratch, so the
+    # encrypted datagram boundary adds no steady-state heap. Linked + guarded only here.
+    if(PLEXUS_ENABLE_CRYPTO_BACKEND)
+        target_sources(test_hot_path_alloc PRIVATE $<TARGET_OBJECTS:plexus-crypto>)
+        target_link_libraries(test_hot_path_alloc PRIVATE plexus::crypto)
+        target_compile_definitions(test_hot_path_alloc PRIVATE PLEXUS_HAVE_CRYPTO_DATAGRAM)
+    endif()
 
     # The locality confinement test gains its LIVE AF_UNIX/TCP legs when the asio backend
     # is on: real local + remote channels prove the same fan-out confinement over the wire.

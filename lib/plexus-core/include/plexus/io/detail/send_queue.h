@@ -67,7 +67,7 @@ public:
         if(!admits(bytes.size()))
             return false;
         m_bytes += bytes.size();
-        m_queue.push_back(node{std::vector<std::byte>(bytes.begin(), bytes.end()), dest});
+        m_queue.push_back(node{take_buffer(bytes), dest});
         if(!m_sending)
             drive();
         return true;
@@ -84,12 +84,15 @@ public:
 
     [[nodiscard]] bool sending() const noexcept { return m_sending; }
 
-    // Drop the queue; a completion firing after close is a guarded no-op.
+    // Drop the queue; a completion firing after close is a guarded no-op. close() is terminal
+    // (m_open never re-arms), so the recycled-buffer pool is released here too — it is spare
+    // capacity with no reuse left after close, and dropping it returns the memory promptly.
     void close()
     {
         m_open = false;
         m_sending = false;
         m_queue.clear();
+        m_free_buffers.clear();
         m_bytes = 0;
     }
 
@@ -109,9 +112,33 @@ private:
         return m_bytes < m_byte_cap && size <= m_byte_cap - m_bytes;
     }
 
-    // Send the front node, and on completion pop it (freeing a slot under a finite cap)
-    // and chain the next. At most one send-sink invocation is outstanding, so a node's
-    // bytes stay valid until its own completion runs.
+    // Pull a recycled buffer (reusing its heap capacity) for the bytes, or grow one when
+    // the freelist is empty. clear()+assign reuses the spilled capacity, so a burst that
+    // re-fills the queue allocates nothing once the freelist has warmed to the burst depth.
+    std::vector<std::byte> take_buffer(std::span<const std::byte> bytes)
+    {
+        std::vector<std::byte> buf;
+        if(!m_free_buffers.empty())
+        {
+            buf = std::move(m_free_buffers.back());
+            m_free_buffers.pop_back();
+        }
+        buf.assign(bytes.begin(), bytes.end());
+        return buf;
+    }
+
+    // Return a drained node's buffer to the freelist for reuse, dropping it instead when the
+    // freelist is already at its node-count bound (so the pool of spare buffers cannot grow
+    // without limit even though the byte cap bounds the LIVE queue, not the spare set).
+    void recycle_buffer(std::vector<std::byte> &&buf)
+    {
+        if(m_free_buffers.size() < k_max_free_buffers)
+            m_free_buffers.push_back(std::move(buf));
+    }
+
+    // Send the front node, and on completion pop it (freeing a slot under a finite cap),
+    // recycle its buffer, and chain the next. At most one send-sink invocation is
+    // outstanding, so a node's bytes stay valid until its own completion runs.
     void drive()
     {
         if(m_queue.empty())
@@ -127,14 +154,22 @@ private:
                 if(!m_open)
                     return;
                 m_bytes -= m_queue.front().bytes.size();
+                recycle_buffer(std::move(m_queue.front().bytes));
                 m_queue.pop_front();
                 drive();
             });
     }
 
+    // The spare-buffer pool's node-count ceiling: a small fixed bound so a momentary deep
+    // burst leaves a bounded set of warm buffers behind, never an unbounded spare pool. A
+    // burst deeper than this still works (the excess buffers free on drain); it just does not
+    // pool every one. The byte cap bounds the LIVE queue; this independently bounds the idle pool.
+    static constexpr std::size_t k_max_free_buffers = 64;
+
     send_sink m_sink;
     std::size_t m_byte_cap;
     std::deque<node> m_queue;
+    std::vector<std::vector<std::byte>> m_free_buffers;   // recycled buffer pool (capacity reused)
     std::size_t m_bytes{0};
     bool m_open{true};
     bool m_sending{false};
