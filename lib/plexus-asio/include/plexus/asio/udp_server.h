@@ -5,6 +5,7 @@
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/send_queue.h"
 #include "plexus/detail/compat.h"
 
@@ -17,6 +18,7 @@
 #include <vector>
 #include <cstddef>
 #include <utility>
+#include <algorithm>
 #include <system_error>
 
 namespace plexus::asio {
@@ -48,11 +50,17 @@ public:
     using endpoint_type = ::asio::ip::udp::endpoint;
 
     // The bounded outbound-queue BYTE budget (allocated at setup, never grown on the hot
-    // path): the shared server queue holds roughly one max-UDP datagram in flight while a
-    // saturating publisher's overrun is refused at the bound — the same shallow
-    // socket-facing budget the stream channels carry. A load-bearing knob, to be
-    // substantiated at the fan-out benchmark.
-    static constexpr std::size_t default_send_queue_bytes = 65536;
+    // path): a saturating publisher's overrun is refused at the bound, so the shared queue
+    // never grows without limit. The budget is FLOORED at one per-message ceiling because a
+    // single oversize message fragments into N synchronously-enqueued datagrams: a cap
+    // sized for one datagram refuses fragment 1 once fragment 0 fills it, and best-effort
+    // drops the refused fragment forever (the message never reassembles) while reliable
+    // throttles its window to one segment in flight. The floor admits one whole message's
+    // fragment burst — exactly the rule udp_channel applies to its per-channel back-pressure
+    // queue — keeping the cap O(one message), DoS-safe, never unbounded. A load-bearing
+    // knob, to be substantiated at the fan-out benchmark.
+    static constexpr std::size_t default_send_queue_bytes =
+        std::max<std::size_t>(65536, io::global_default_max_message_bytes);
 
     // The kernel socket send/receive buffer sizes (SO_SNDBUF/SO_RCVBUF) applied to the one
     // bound socket. The sentinel 0 means "leave the kernel default untouched" — the

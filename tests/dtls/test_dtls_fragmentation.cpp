@@ -239,30 +239,26 @@ large_run dtls_large_run(const pdt::identity_fixture &srv, const pdt::identity_f
 
 }
 
-TEST_CASE("dtls.fragment: a 1 MB / 4 MB best-effort burst loses fragments to the kernel buffer (recorded, not asserted)",
+TEST_CASE("dtls.fragment: a 1 MB / 4 MB best-effort burst reassembles byte-equal over the default send queue",
           "[dtls][fragment]")
 {
     pdt::identity_fixture srv("fragbe_srv");
     pdt::identity_fixture cli("fragbe_cli");
 
     // DTLS app data is best-effort (no DTLS-layer retransmit). A single 1 MB / 4 MB send
-    // splits into ~900 / ~3650 records emitted in one synchronous burst; the receiving UDP
-    // socket holds at most ~rmem_default/MTU datagrams, so the kernel drops the overflow and
-    // the message never reassembles. This is recorded as MEASURED best-effort behavior (a WARN,
-    // never an assert-from-one-run) — the same envelope as the best-effort UDP large-payload
-    // finding. The fragment/reassemble MECHANISM is proven byte-identical over a live DTLS
-    // session at the rmem-safe ceiling by the 24 KiB cases above; this records the transport
-    // reality at multi-megabyte scale, NOT a fragmentation defect. The reliable large-payload
-    // datagram path is udpr, whose ARQ retransmits lost fragments.
+    // splits into ~900 / ~3650 records emitted in one synchronous burst. Each record is one
+    // datagram handed to the shared udp_server send queue: the queue's byte cap is floored at
+    // one per-message ceiling, so a single fragmenting message's whole burst is admitted (a
+    // refused fragment on the best-effort path is lost forever, with no retransmit to recover
+    // it, so the floor is what keeps the message intact). The relay carries every emitted
+    // record into the peer's reassembler, which completes the message byte-for-byte.
     constexpr std::size_t k_one_mb = 1024 * 1024;
     constexpr std::size_t k_four_mb = 4 * 1024 * 1024;
     for(std::size_t size : {k_one_mb, k_four_mb})
     {
         const auto r = dtls_large_run(srv, cli, size, std::chrono::milliseconds{8000});
-        WARN("best-effort DTLS " << (size / (1024 * 1024)) << " MB: emitted-records-received="
-                                 << r.records << " reassembled-bytes=" << r.got.size()
-                                 << " (a dropped record drops the whole best-effort message)");
-        REQUIRE(r.got.size() != size);                  // the best-effort burst does NOT fully arrive
+        REQUIRE(r.records > 1);                          // the message fragmented into many records
+        REQUIRE(r.got.size() == size);                   // and every fragment arrived and reassembled
     }
 }
 
