@@ -173,7 +173,7 @@ public:
         if(frame.size() + wire::udp_envelope_overhead > m_max_payload)
             return send_best_effort_large(frame);
         wire::wrap_udp_into(m_send_scratch, wire::udp_envelope_kind::best_effort, m_out_seq++, frame);
-        m_server.send_to(m_send_scratch, m_dest);
+        m_server.send_standalone_to(m_send_scratch, m_dest);   // a whole single datagram: idle fast-path eligible
     }
 
     void close()

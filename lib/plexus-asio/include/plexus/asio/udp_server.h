@@ -101,6 +101,11 @@ public:
         m_socket.open(bind_ep.protocol(), ec);
         if(ec)
             return report(ec);
+        // The idle fast-path issues a synchronous send_to on the io thread; non-blocking
+        // mode makes a full socket buffer return would_block (the enqueue fallback) instead
+        // of stalling the thread. Best-effort like the buffer options: asio's async recv/send
+        // reactor manages descriptor readiness itself, so this is compatible with the loop.
+        (void)m_socket.non_blocking(true, ec);
         apply_socket_buffers();
         m_socket.bind(bind_ep, ec);
         if(ec)
@@ -119,6 +124,34 @@ public:
     {
         if(!m_open)
             return;
+        if(!m_send_queue.enqueue(bytes, dest))
+            on_send_queue_full();
+    }
+
+    // Send a STANDALONE single datagram (a whole small message, never one of a fragmented
+    // burst): when the outbound queue is idle a SYNCHRONOUS send_to hands the datagram to the
+    // kernel during the call (the kernel copies it out), so the caller's scratch is free on
+    // return — no owned node, no async round-trip, no per-datagram copy (the small-datagram
+    // latency win). It fires ONLY when idle, so a sync send can never reorder ahead of
+    // queued/in-flight bytes; a would_block falls through to the byte-capped async queue,
+    // after which subsequent sends enqueue in order until it drains. The sync result mirrors
+    // the async completion's error discrimination. NOT for a fragment burst (use send_to):
+    // an unpaced synchronous blast of a multi-datagram best-effort message overruns the
+    // receiver — every fragment drops with no retransmit, losing the whole message — whereas
+    // the queue's serial async drain interleaves with the receiver on the io_context.
+    void send_standalone_to(std::span<const std::byte> bytes, const endpoint_type &dest)
+    {
+        if(!m_open)
+            return;
+        if(m_send_queue.queued_bytes() == 0 && !m_send_queue.sending())
+        {
+            std::error_code ec;
+            (void)m_socket.send_to(::asio::buffer(bytes.data(), bytes.size()), dest, 0, ec);
+            if(!ec)
+                return;
+            if(ec != ::asio::error::would_block)
+                return on_sync_send_error(ec);
+        }
         if(!m_send_queue.enqueue(bytes, dest))
             on_send_queue_full();
     }
@@ -213,6 +246,22 @@ private:
                     m_send_queue.close();
                 });
         };
+    }
+
+    // The idle fast-path's synchronous send hit a non-would_block error: discriminate it
+    // exactly as the async completion does. A transient per-datagram failure (an unreachable
+    // destination, a momentary buffer-full not surfaced as would_block) is best-effort UDP
+    // loss — counted, NOT surfaced through on_error per datagram; a fatal socket error is
+    // reported once and closes the queue (so the same failure does not loop on the next send).
+    void on_sync_send_error(const std::error_code &ec)
+    {
+        if(transient_send_error(ec))
+        {
+            ++m_send_errors;
+            return;
+        }
+        report(ec);
+        m_send_queue.close();
     }
 
     // A transient send error is a per-datagram, best-effort UDP failure (an unreachable
