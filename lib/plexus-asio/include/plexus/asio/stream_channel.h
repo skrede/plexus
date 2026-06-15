@@ -199,6 +199,9 @@ public:
     [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
     // The current queued (un-drained) write-queue byte occupancy; 0 when the socket drains.
     [[nodiscard]] std::size_t backpressured() const noexcept { return m_egress.queued_bytes(); }
+    // The write-queue byte cap, read by the egress scheduler so its low-water gate tracks THIS
+    // channel's actual bound (lockstep): a deepened cap is fed deeper, a shallow one never over-fed.
+    [[nodiscard]] std::size_t write_queue_capacity() const noexcept { return m_egress.capacity(); }
 
     // Bootstrap-facing seam (the Bootstrap drives the open path through these): the gate's
     // drain target, the read loop, the open flag, and the stream the handshake runs on.
