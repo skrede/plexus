@@ -349,13 +349,13 @@ TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_b
     // the next window-full publish overflows the byte cap -> would_block.
     for(std::size_t i = 0; i < window + queued; ++i)
         ch.send(bytes_of("q-" + std::to_string(i)));
-    REQUIRE(ch.backpressured() == queued);        // the queue holds 3 frames, at its byte cap
+    REQUIRE(ch.backpressured() == byte_cap);      // the queue holds 3 frames = the full byte cap
     REQUIRE_FALSE(err.has_value());               // no stall yet — the byte cap is not exceeded
 
     ch.send(bytes_of("over"));                    // past window + byte cap -> the stall edge
     REQUIRE(err.has_value());
     REQUIRE(*err == pio::io_error::would_block);
-    REQUIRE(ch.backpressured() == queued);        // still bounded at the byte cap (never grew)
+    REQUIRE(ch.backpressured() == byte_cap);      // still bounded at the byte cap (never grew)
     REQUIRE(ch.dropped_count() == 0);             // block does not shed — it stalls
 }
 

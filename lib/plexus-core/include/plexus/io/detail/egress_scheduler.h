@@ -17,11 +17,12 @@
 
 namespace plexus::io::detail {
 
-// The low-water gate: the scheduler keeps feeding a destination only while its queued
-// byte occupancy is below this. It is the load-bearing knob — the priority-ordered
-// backlog must live in the bands, NOT in the channel's FIFO, so the gate is set to one
-// max-message so the channel holds roughly one frame in flight and the bands hold the
-// rest. The value is to be substantiated at the fan-out benchmark, not fixed by feel.
+// The low-water gate FALLBACK: the scheduler keeps feeding a destination only while its
+// queued byte occupancy is below the gate — the priority-ordered backlog must live in the
+// bands, NOT in the channel's FIFO. The gate tracks the channel's OWN write-queue byte cap
+// (see low_water_of) so the band hand-off and the channel's admission stay in lockstep; this
+// constant is only the bound for a banded channel that publishes no finite cap, sized at one
+// max-message so the channel holds roughly one frame in flight and the bands hold the rest.
 constexpr std::size_t k_low_water = io::fragmentation_limits::max_message_size;
 
 // The forwarder-owned, per-destination priority-band egress scheduler. It sits BETWEEN
@@ -173,9 +174,21 @@ private:
     bool admits(Channel &ch, std::size_t size) const
     {
         if constexpr(can_poll())
-            return ch.backpressured() == 0 || ch.backpressured() + size <= k_low_water;
+            return ch.backpressured() == 0 || ch.backpressured() + size <= low_water_of(ch);
         else
             return true;
+    }
+
+    // The low-water bound for THIS channel: its own write-queue byte cap when it publishes one
+    // (so the band hand-off and the channel's admission stay in lockstep — a deepened cap is fed
+    // deeper, a shallow one is never over-fed past what the channel will accept), else the shared
+    // fallback for a banded channel that exposes occupancy but no finite cap.
+    static std::size_t low_water_of(Channel &ch)
+    {
+        if constexpr(requires(Channel &c) { c.write_queue_capacity(); })
+            return ch.write_queue_capacity();
+        else
+            return k_low_water;
     }
 
     std::unordered_map<std::uint64_t, priority_band_queue> m_queues;

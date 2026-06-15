@@ -295,8 +295,13 @@ public:
     [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
     // The count of frames shed under congestion=drop (the future drop-observer's edge).
     [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
-    // The current backpressure-queue occupancy (congestion=block); 0 when the window drains.
-    [[nodiscard]] std::size_t backpressured() const noexcept { return m_backpressure.size(); }
+    // The current backpressure-queue BYTE occupancy (congestion=block); 0 when the window
+    // drains. Byte-valued (not the frame count) so it shares the stream channel's occupancy
+    // contract and the egress scheduler's byte-denominated low-water gate compares like with like.
+    [[nodiscard]] std::size_t backpressured() const noexcept { return m_backpressure.queued_bytes(); }
+    // The backpressure-queue byte cap, read by the egress scheduler so its low-water gate tracks
+    // THIS channel's actual bound (lockstep with the channel's own admission).
+    [[nodiscard]] std::size_t write_queue_capacity() const noexcept { return m_backpressure.capacity(); }
 
 private:
     void reject_oversize()

@@ -186,6 +186,7 @@ struct capped_channel
     void on_error(detail::move_only_function<void(io::io_error)>) {}
     void on_protocol_close(detail::move_only_function<void(wire::close_cause)>) {}
     [[nodiscard]] std::size_t backpressured() const noexcept { return m_st->queued; }
+    [[nodiscard]] std::size_t write_queue_capacity() const noexcept { return m_st->cap; }
 
     capped_state *m_st{nullptr};
 };
@@ -721,4 +722,38 @@ TEST_CASE("egress_priority: the drain leaves a frame the channel cap cannot admi
     sched.enqueue(ch, band, io::congestion::block, owned(std::vector<std::byte>(small)));   // resumes the drain
     REQUIRE(cst.sends.size() == 2);                            // the held big frame finally drained
     REQUIRE(cst.refused == 0);                                 // still never a refused hand-off
+}
+
+TEST_CASE("egress_priority: the low-water gate tracks the channel's OWN write-queue cap, not a fixed constant — a shallow channel is never over-fed",
+          "[egress_priority][forwarder]")
+{
+    // Lockstep: the scheduler's low-water gate derives from the channel's write_queue_capacity(),
+    // so a channel whose cap is far SMALLER than the default k_low_water is fed only to its own
+    // cap. With a fixed-constant gate the drain would hand this channel a second frame it cannot
+    // admit — losing it past the band drop counters; the per-channel gate refuses to over-feed.
+    capped_state cst;
+    cst.cap = 100;                                  // far below the default k_low_water
+    capped_channel ch{cst};
+    io::detail::egress_scheduler<capped_channel, capped_policy> sched{};
+
+    const std::size_t band = io::detail::band_of(io::priority::normal);
+    constexpr std::size_t unit = 60;                // two units (120) exceed the 100-byte cap
+
+    // The empty channel admits the first frame (any size). The second must stay banded:
+    // queued(60) + 60 > cap(100), so the gate (= the cap, not the larger constant) holds it.
+    REQUIRE(sched.enqueue(ch, band, io::congestion::block, owned(std::vector<std::byte>(unit))) ==
+            io::detail::drop_cause::none);
+    REQUIRE(cst.sends.size() == 1);
+    REQUIRE(cst.queued == unit);
+
+    REQUIRE(sched.enqueue(ch, band, io::congestion::block, owned(std::vector<std::byte>(unit))) ==
+            io::detail::drop_cause::none);          // banded, not dropped
+    REQUIRE(cst.sends.size() == 1);                 // the second frame stayed banded at the cap
+    REQUIRE(cst.refused == 0);                      // the gate tracked the cap — never an over-fed refusal
+
+    // Drain and resume: the held frame now fits and leaves, proving it was held, not lost.
+    cst.queued = 0;
+    sched.enqueue(ch, band, io::congestion::block, owned(std::vector<std::byte>(unit)));
+    REQUIRE(cst.sends.size() == 2);
+    REQUIRE(cst.refused == 0);
 }

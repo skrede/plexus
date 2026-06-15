@@ -51,6 +51,10 @@ public:
     [[nodiscard]] std::size_t size() const noexcept { return m_queue.size(); }
     [[nodiscard]] std::size_t queued_bytes() const noexcept { return m_bytes; }
 
+    // The configured byte cap: the bound the egress scheduler's low-water gate tracks so the
+    // band hand-off and this queue's admission stay in lockstep.
+    [[nodiscard]] std::size_t capacity() const noexcept { return m_byte_cap; }
+
     // The front parked frame (a non-owning view valid until the next pop/admit).
     [[nodiscard]] std::span<const std::byte> front() const { return std::span<const std::byte>{m_queue.front().bytes}; }
     [[nodiscard]] bool front_fragmented() const noexcept { return m_queue.front().fragmented; }

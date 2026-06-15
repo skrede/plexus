@@ -115,6 +115,10 @@ public:
     // The summed payload bytes of the queued (not-yet-drained) nodes.
     [[nodiscard]] std::size_t queued_bytes() const noexcept { return m_bytes; }
 
+    // The configured byte cap (unbounded when uncapped): the bound the egress scheduler's
+    // low-water gate tracks so the band hand-off and this queue's admission stay in lockstep.
+    [[nodiscard]] std::size_t capacity() const noexcept { return m_byte_cap; }
+
     [[nodiscard]] bool sending() const noexcept { return m_sending; }
 
     // Drop the queue; a completion firing after close is a guarded no-op. The channel's
