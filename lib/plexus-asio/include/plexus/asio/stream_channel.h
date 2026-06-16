@@ -19,8 +19,9 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
-#include "plexus/io/detail/stream_send_queue.h"
+#include "plexus/io/egress_capacity.h"
 #include "plexus/io/detail/scheduler_key.h"
+#include "plexus/io/detail/stream_send_queue.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -72,18 +73,6 @@ template <typename Stream, typename Traits, typename Bootstrap>
 class stream_channel
 {
 public:
-    // The bounded congestion=block write-queue BYTE budget (allocated at setup, never grown
-    // on the hot path): a producer that outruns the socket drain back-pressures (or sheds,
-    // under drop_newest) at a bounded cap instead of growing the userspace write deque to the
-    // OOM the unbounded queue left possible. Sized at 1x the 4 MiB max-message ceiling so this
-    // per-connection FIFO is the SHALLOW socket-facing buffer holding roughly one frame in
-    // flight: the deep, priority-ordered backlog lives in the forwarder's egress bands ABOVE
-    // this queue, so a deep channel FIFO would silently defeat banding by re-accumulating an
-    // un-prioritized backlog. A load-bearing knob — to be substantiated at the fan-out
-    // benchmark, not fixed by feel.
-    static constexpr std::size_t default_write_queue_bytes =
-        1u * io::fragmentation_limits::max_message_size;
-
     // The per-read kernel buffer (heap, sized once — never a stack array). 64 KiB clears one max
     // TLS record (~16 KiB) and dwarfs the 4 KiB that forced 16-1024 reads per large message.
     static constexpr std::size_t k_stream_read_buffer_bytes = 64u * 1024u;
@@ -96,7 +85,7 @@ public:
     // WITH-default ctor args exactly as udp_channel threads io::congestion.
     template <typename... BootstrapArgs>
     explicit stream_channel(::asio::io_context &io, wire::stream_inbound_config cfg,
-                            io::congestion congestion, std::size_t write_queue_bytes,
+                            io::congestion congestion, io::egress_capacity egress,
                             stream_socket_options socket_options, BootstrapArgs &&...bargs)
         : m_io(io)
         , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
@@ -104,7 +93,7 @@ public:
         , m_inbound(io, cfg)
         , m_congestion(congestion)
         , m_socket_options(socket_options)
-        , m_egress(make_send_sink(), write_queue_bytes)
+        , m_egress(make_send_sink(), egress.bytes)
     {
         bind_bootstrap();
         wire_inbound();
@@ -116,7 +105,7 @@ public:
     // local-stream socket for AF_UNIX).
     template <typename Connected, typename... BootstrapArgs>
     stream_channel(::asio::io_context &io, Connected connected, wire::stream_inbound_config cfg,
-                   io::congestion congestion, std::size_t write_queue_bytes,
+                   io::congestion congestion, io::egress_capacity egress,
                    stream_socket_options socket_options, BootstrapArgs &&...bargs)
         : m_io(io)
         , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
@@ -124,7 +113,7 @@ public:
         , m_inbound(io, cfg)
         , m_congestion(congestion)
         , m_socket_options(socket_options)
-        , m_egress(make_send_sink(), write_queue_bytes)
+        , m_egress(make_send_sink(), egress.bytes)
     {
         bind_bootstrap();
         wire_inbound();

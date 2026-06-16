@@ -160,7 +160,7 @@ TEST_CASE("tls channel: the bounded outbox sheds under congestion=drop and stall
         constexpr std::size_t cap = 4096;
         ptls::tls_channel server{server_io, std::move(raw_server), server_cred, {}, pio::congestion::block};
         ptls::tls_channel client{client_io, std::move(raw_client), client_cred,
-                                 wire::stream_inbound_config{}, mode, cap};
+                                 wire::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
 
         bool server_ready = false;
         bool client_ready = false;

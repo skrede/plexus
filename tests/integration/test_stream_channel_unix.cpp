@@ -215,7 +215,7 @@ TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to 
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         acc.accept(peer);                               // peer adopts but NEVER reads
 
-        pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode, cap};
+        pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
         REQUIRE(ch.congestion_mode() == mode);
 
         std::optional<pio::io_error> err;
@@ -290,8 +290,8 @@ TEST_CASE("unix stream channel: a 16 MB single frame round-trips byte-identicall
         raw_client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         acc.accept(raw_server);
 
-        pasio::unix_channel server{io, std::move(raw_server), cfg, pio::congestion::block, k_queue};
-        pasio::unix_channel client{io, std::move(raw_client), cfg, pio::congestion::block, k_queue};
+        pasio::unix_channel server{io, std::move(raw_server), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
+        pasio::unix_channel client{io, std::move(raw_client), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
 
         std::vector<std::byte> got;
         std::optional<wire::close_cause> closed;

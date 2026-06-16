@@ -156,9 +156,9 @@ TEST_CASE("tls.large: a 16 MB single frame round-trips byte-identically over a l
         // The node-options surface: raise the receive ceiling + aggregate budget + send outbox
         // for the 16 MB path. The intermediate ctor params keep their defaults.
         ptls::tls_transport server{io, server_cred, wire::stream_inbound_config{}, true,
-                                   pio::congestion::block, k_outbox, {}, k_ceiling, k_budget};
+                                   pio::congestion::block, pio::egress_capacity::of_bytes(k_outbox), {}, k_ceiling, k_budget};
         ptls::tls_transport client{io, client_cred, wire::stream_inbound_config{}, true,
-                                   pio::congestion::block, k_outbox, {}, k_ceiling, k_budget};
+                                   pio::congestion::block, pio::egress_capacity::of_bytes(k_outbox), {}, k_ceiling, k_budget};
 
         std::unique_ptr<ptls::tls_channel> accepted, dialed;
         std::vector<std::byte> got;

@@ -12,6 +12,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/egress_capacity.h"
 #include "plexus/io/pending_dial_registry.h"
 #include "plexus/detail/compat.h"
 
@@ -44,7 +45,7 @@ public:
     tls_listener(::asio::io_context &io, const tls_credential &cred,
                  wire::stream_inbound_config cfg = {}, bool no_delay = true,
                  io::congestion congestion = io::congestion::block,
-                 std::size_t outbox_bytes = tls_channel::default_outbox_bytes,
+                 io::egress_capacity egress = io::egress_capacity::bounded_default(),
                  plexus::asio::stream_socket_options socket_options = {})
         : m_io(io)
         , m_acceptor(io)
@@ -52,7 +53,7 @@ public:
         , m_cfg(cfg)
         , m_no_delay(no_delay)
         , m_congestion(congestion)
-        , m_outbox_bytes(outbox_bytes)
+        , m_egress_capacity(egress)
         , m_socket_options(socket_options)
         , m_accepting([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
     {
@@ -119,7 +120,7 @@ private:
                 }
                 run_server_handshake(
                     std::make_unique<tls_channel>(m_io, std::move(peer), m_cred, m_cfg,
-                                                  m_congestion, m_outbox_bytes, m_socket_options));
+                                                  m_congestion, m_egress_capacity, m_socket_options));
                 if(m_running)
                     do_accept();
             });
@@ -175,7 +176,7 @@ private:
     wire::stream_inbound_config m_cfg;
     bool m_no_delay;
     io::congestion m_congestion;
-    std::size_t m_outbox_bytes;
+    io::egress_capacity m_egress_capacity;
     plexus::asio::stream_socket_options m_socket_options;
     io::pending_dial_registry<tls_channel, std::monostate> m_accepting;   // accepted-table owner
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;

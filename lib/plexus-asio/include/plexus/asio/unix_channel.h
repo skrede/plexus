@@ -7,6 +7,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/egress_capacity.h"
 
 #include <asio/io_context.hpp>
 #include <asio/local/stream_protocol.hpp>
@@ -56,18 +57,18 @@ class unix_channel
 public:
     explicit unix_channel(::asio::io_context &io, wire::stream_inbound_config cfg = {},
                           io::congestion congestion = io::congestion::block,
-                          std::size_t write_queue_bytes = base::default_write_queue_bytes,
+                          io::egress_capacity egress = io::egress_capacity::bounded_default(),
                           stream_socket_options opts = {})
-        : base(io, cfg, congestion, write_queue_bytes, opts)
+        : base(io, cfg, congestion, egress, opts)
     {
     }
 
     unix_channel(::asio::io_context &io, ::asio::local::stream_protocol::socket connected,
                  wire::stream_inbound_config cfg = {},
                  io::congestion congestion = io::congestion::block,
-                 std::size_t write_queue_bytes = base::default_write_queue_bytes,
+                 io::egress_capacity egress = io::egress_capacity::bounded_default(),
                  stream_socket_options opts = {})
-        : base(io, std::move(connected), cfg, congestion, write_queue_bytes, opts)
+        : base(io, std::move(connected), cfg, congestion, egress, opts)
     {
     }
 };

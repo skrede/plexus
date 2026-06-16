@@ -10,6 +10,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/egress_capacity.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/ip/tcp.hpp>
@@ -69,16 +70,14 @@ class tls_channel
     using base = plexus::asio::stream_channel<stream_type, tls_traits, detail::tls_bootstrap<stream_type>>;
 
 public:
-    static constexpr std::size_t default_outbox_bytes = base::default_write_queue_bytes;
-
     // Dial mode: unconnected ssl::stream. The transport async_connects the lowest layer, then
     // calls start_client_handshake(host). The credential is REQUIRED (first after io).
     tls_channel(::asio::io_context &io, const tls_credential &cred,
                 wire::stream_inbound_config cfg = {},
                 io::congestion congestion = io::congestion::block,
-                std::size_t outbox_bytes = default_outbox_bytes,
+                io::egress_capacity egress = io::egress_capacity::bounded_default(),
                 plexus::asio::stream_socket_options opts = {})
-        : base(io, cfg, congestion, outbox_bytes, opts, cred)
+        : base(io, cfg, congestion, egress, opts, cred)
     {
     }
 
@@ -90,9 +89,9 @@ public:
     tls_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected,
                 const tls_credential &cred, wire::stream_inbound_config cfg = {},
                 io::congestion congestion = io::congestion::block,
-                std::size_t outbox_bytes = default_outbox_bytes,
+                io::egress_capacity egress = io::egress_capacity::bounded_default(),
                 plexus::asio::stream_socket_options opts = {})
-        : base(io, std::move(connected), cfg, congestion, outbox_bytes, opts, cred)
+        : base(io, std::move(connected), cfg, congestion, egress, opts, cred)
     {
     }
 
