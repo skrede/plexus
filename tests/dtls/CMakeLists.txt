@@ -98,3 +98,16 @@ target_link_libraries(test_dtls_mux PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_dtls_mux TEST_PREFIX "dtls.")
+
+# The transport-threading proof: dtls_transport threads its global_default per-MESSAGE
+# ceiling (and the reassembly budget) to every dtls_channel it mints at dial + accept.
+# Constructed with a LOW 4096-byte ceiling, a completed dial then rejects a 5000-byte send
+# with message_too_large — which is only possible if the low ceiling reached the minted
+# channel (at the old 8 MiB hardcoded default that message would deliver). Live; loops N>=50.
+add_executable(test_dtls_transport_ceiling test_dtls_transport_ceiling.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_dtls_transport_ceiling PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_dtls_transport_ceiling TEST_PREFIX "dtls.")

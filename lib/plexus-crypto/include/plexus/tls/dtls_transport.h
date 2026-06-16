@@ -13,6 +13,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/detail/drop_event.h"
@@ -65,13 +66,22 @@ class dtls_transport
 public:
     using endpoint_type = ::asio::ip::udp::endpoint;
 
+    // global_default is the per-MESSAGE size ceiling and reassembly_budget the aggregate
+    // reassembly-memory cap — the two node-options message-size knobs the OTHER transports
+    // already thread, brought to the encrypted best-effort lane so DTLS is tunable in lockstep
+    // (a large best-effort DTLS message fragments per record under the always-on aggregate bound).
+    // max_payload is the per-record logical budget, distinct from the message ceiling.
     explicit dtls_transport(::asio::io_context &io, const tls_credential &cred,
-                            std::size_t max_payload = dtls_channel::default_max_payload)
+                            std::size_t max_payload = dtls_channel::default_max_payload,
+                            std::size_t global_default = io::global_default_max_message_bytes,
+                            std::size_t reassembly_budget = io::reassembly_memory_budget)
         : m_io(io)
         , m_server(io)
         , m_cred(cred)
         , m_cookie(make_cookie_secret())
         , m_max_payload(max_payload)
+        , m_max_message_bytes(global_default)
+        , m_reassembly_budget(reassembly_budget)
         , m_registry(make_defer_destroy())
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { on_datagram(from, bytes); });
@@ -124,7 +134,9 @@ public:
         ensure_bound(dest.protocol());
 
         auto ch = std::make_unique<dtls_channel>(m_io, m_server, dest, m_cred, m_cookie,
-                                                 dtls_channel::role::client, m_max_payload);
+                                                 dtls_channel::role::client, m_max_payload,
+                                                 dtls_channel::default_record_mtu,
+                                                 m_max_message_bytes, m_reassembly_budget);
         auto *raw = ch.get();
         if(!m_demux.insert(dest, raw))
             return report_dial_fail(ep, io::io_error::address_in_use);
@@ -186,7 +198,9 @@ private:
     void accept_new_peer(const endpoint_type &from, std::span<const std::byte> bytes)
     {
         auto ch = std::make_unique<dtls_channel>(m_io, m_server, from, m_cred, m_cookie,
-                                                 dtls_channel::role::server, m_max_payload);
+                                                 dtls_channel::role::server, m_max_payload,
+                                                 dtls_channel::default_record_mtu,
+                                                 m_max_message_bytes, m_reassembly_budget);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
         {
@@ -272,6 +286,8 @@ private:
     const tls_credential &m_cred;
     io::security::cookie_secret m_cookie;                  // the node's single cookie secret
     std::size_t m_max_payload;
+    std::size_t m_max_message_bytes;                       // per-message ceiling threaded to each channel
+    std::size_t m_reassembly_budget;                       // always-on aggregate reassembly-memory DoS cap
     plexus::asio::detail::basic_inbound_demux<dtls_channel> m_demux;
     dial_registry m_registry;                             // the half-open dial table + the accepted table
     plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> m_on_accepted;
