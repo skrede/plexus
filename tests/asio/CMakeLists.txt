@@ -128,3 +128,13 @@ target_link_libraries(test_udp_fragmentation PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_fragmentation TEST_PREFIX "udp.")
+
+# The opt-in spin-then-park run-loop driver over a user-owned io_context: a live udp
+# round-trip carried end-to-end by spin_run_loop::poll_spin(), default-equivalence at
+# budget 0, and a breakable park. Header-only inside plexus::asio; the `asio.` ctest
+# prefix selects it.
+add_executable(test_spin_run_loop test_spin_run_loop.cpp)
+target_link_libraries(test_spin_run_loop PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_spin_run_loop TEST_PREFIX "asio.")
