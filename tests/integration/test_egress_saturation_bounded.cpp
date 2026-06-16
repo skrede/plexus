@@ -117,14 +117,14 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
             idle_client.connect(acc.local_endpoint());
             acc.accept(idle_peer);
             pasio::asio_channel idle{io, std::move(idle_client), wire::stream_inbound_config{},
-                                     pio::congestion::block, k_cap};
+                                     pio::congestion::block, pio::egress_capacity::of_bytes(k_cap)};
             idle.close();
             REQUIRE(idle.dropped_count() == 0);   // a drained/empty close bumps nothing
             io.poll();   // drain close()'s posted on_closed while idle is still alive (it captures `this`)
         }
 
         pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
-                               pio::congestion::block, k_cap};
+                               pio::congestion::block, pio::egress_capacity::of_bytes(k_cap)};
 
         // Fill past one drain turn: send 1 KiB frames until the stalled queue holds a backlog
         // (backpressured() > 0 means frames are queued, undrained, behind the stalled socket).
@@ -158,7 +158,7 @@ TEST_CASE("egress_saturation_bounded tcp: a saturating publisher stays memory-bo
         // The plaintext channel is already bounded — it pins the structural invariant the
         // unix leg must come to match.
         pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
-                               pio::congestion::block, k_cap};
+                               pio::congestion::block, pio::egress_capacity::of_bytes(k_cap)};
         saturate_and_assert_bounded(io, ch);
     }
 }
@@ -181,7 +181,7 @@ TEST_CASE("egress_saturation_bounded unix: a saturating publisher stays memory-b
         // bounded stream_send_queue holds the outbox at the shallow cap under this
         // saturation, byte-identical to the plaintext channel above.
         pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{},
-                               pio::congestion::block, k_cap};
+                               pio::congestion::block, pio::egress_capacity::of_bytes(k_cap)};
         saturate_and_assert_bounded(io, ch);
     }
 }

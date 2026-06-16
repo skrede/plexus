@@ -16,6 +16,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
+#include "plexus/io/egress_capacity.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/pending_dial_registry.h"
@@ -63,18 +64,18 @@ public:
     tls_transport(::asio::io_context &io, const tls_credential &cred,
                   wire::stream_inbound_config cfg = {}, bool no_delay = true,
                   io::congestion congestion = io::congestion::block,
-                  std::size_t outbox_bytes = tls_channel::default_outbox_bytes,
+                  io::egress_capacity egress = io::egress_capacity::bounded_default(),
                   plexus::asio::stream_socket_options socket_options = {},
                   std::size_t global_default = io::global_default_max_message_bytes,
                   std::size_t reassembly_budget = io::reassembly_memory_budget)
         : m_io(io)
         , m_cred(cred)
         , m_listener(io, cred, wire::with_message_limits(cfg, global_default, reassembly_budget),
-                     no_delay, congestion, outbox_bytes, socket_options)
+                     no_delay, congestion, egress, socket_options)
         , m_cfg(wire::with_message_limits(cfg, global_default, reassembly_budget))
         , m_no_delay(no_delay)
         , m_congestion(congestion)
-        , m_outbox_bytes(outbox_bytes)
+        , m_egress_capacity(egress)
         , m_socket_options(socket_options)
         , m_pending([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
     {
@@ -114,7 +115,7 @@ public:
         auto target = plexus::asio::detail::parse(ep.address, pec);
         if(pec)
             return report_dial_fail(ep, plexus::asio::detail::map_error(pec));
-        auto ch = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_outbox_bytes, m_socket_options);
+        auto ch = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
         raw->socket().async_connect(target,
             [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable {
@@ -189,7 +190,7 @@ private:
     wire::stream_inbound_config m_cfg;
     bool m_no_delay;
     io::congestion m_congestion;
-    std::size_t m_outbox_bytes;
+    io::egress_capacity m_egress_capacity;
     plexus::asio::stream_socket_options m_socket_options;
     io::pending_dial_registry<tls_channel, std::monostate> m_pending;   // transport-owned half-open dials
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;

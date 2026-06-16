@@ -170,7 +170,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
         opts.so_rcvbuf = static_cast<std::size_t>(default_rcv) / 2;
         opts.keepalive = true;
         pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
-                               pio::congestion::block, pasio::asio_channel::default_write_queue_bytes,
+                               pio::congestion::block, pio::egress_capacity::bounded_default(),
                                opts};
 
         ::asio::socket_base::send_buffer_size snd;
@@ -367,7 +367,7 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
 
         constexpr std::size_t cap = 4096;
         // Adopt the connected client end into an accept-mode channel with the small cap.
-        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode, cap};
+        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
 
         std::optional<pio::io_error> err;
         ch.on_error([&](pio::io_error e) { err = e; });
@@ -431,9 +431,9 @@ TEST_CASE("asio stream channel: a sustained multi-frame burst gathers into coale
         // without the cap shedding; congestion=block surfaces nothing while the peer reads.
         constexpr std::size_t cap = 64u * 1024u * 1024u;
         pasio::asio_channel server{io, std::move(raw_server), wire::stream_inbound_config{},
-                                   pio::congestion::block, cap};
+                                   pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
         pasio::asio_channel client{io, std::move(raw_client), wire::stream_inbound_config{},
-                                   pio::congestion::block, cap};
+                                   pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
 
         std::vector<std::vector<std::byte>> received;
         server.on_data([&](std::span<const std::byte> d) { received.emplace_back(d.begin(), d.end()); });
@@ -524,8 +524,8 @@ TEST_CASE("asio stream channel: a 16 MB single frame round-trips byte-identicall
         raw_client.connect(acc.local_endpoint());
         acc.accept(raw_server);
 
-        pasio::asio_channel server{io, std::move(raw_server), cfg, pio::congestion::block, k_queue};
-        pasio::asio_channel client{io, std::move(raw_client), cfg, pio::congestion::block, k_queue};
+        pasio::asio_channel server{io, std::move(raw_server), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
+        pasio::asio_channel client{io, std::move(raw_client), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
 
         std::vector<std::byte> got;
         std::optional<wire::close_cause> closed;

@@ -116,7 +116,7 @@ int main()
     auto make_transport = [&] {
         return pasio::asio_transport{
             io, cfg, /*no_delay=*/true, pio::congestion::block,
-            pasio::asio_channel::default_write_queue_bytes,
+            pio::egress_capacity::bounded_default(),
             /*socket_options=*/{}, k_node_ceiling, k_reassembly_budget};
     };
     auto pub_transport = make_transport();

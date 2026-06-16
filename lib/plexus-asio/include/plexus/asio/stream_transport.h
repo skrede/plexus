@@ -9,6 +9,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/egress_capacity.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -55,7 +56,7 @@ public:
         auto target = Traits::parse(ep.address, pec);
         if(pec)
             return report_dial_fail(ep, detail::map_error(pec));
-        auto ch = std::make_unique<Channel>(m_io, m_cfg, m_congestion, m_write_queue_bytes, m_socket_options);
+        auto ch = std::make_unique<Channel>(m_io, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
         auto &raw = *ch;
         raw.socket().async_connect(target,
             [this, ep, ch = std::move(ch)](std::error_code ec) mutable {
@@ -73,14 +74,14 @@ public:
 protected:
     template <typename... ListenerArgs>
     stream_transport(::asio::io_context &io, wire::stream_inbound_config cfg, bool no_delay,
-                     io::congestion congestion, std::size_t write_queue_bytes,
+                     io::congestion congestion, io::egress_capacity egress,
                      stream_socket_options socket_options, ListenerArgs &&...largs)
         : m_io(io)
         , m_listener(std::forward<ListenerArgs>(largs)...)
         , m_cfg(cfg)
         , m_no_delay(no_delay)
         , m_congestion(congestion)
-        , m_write_queue_bytes(write_queue_bytes)
+        , m_egress_capacity(egress)
         , m_socket_options(socket_options)
     {
         m_listener.on_accepted([this](std::unique_ptr<Channel> ch) {
@@ -108,7 +109,7 @@ private:
     wire::stream_inbound_config m_cfg;
     bool m_no_delay;
     io::congestion m_congestion;
-    std::size_t m_write_queue_bytes;
+    io::egress_capacity m_egress_capacity;
     stream_socket_options m_socket_options;
     plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> m_on_dialed;
