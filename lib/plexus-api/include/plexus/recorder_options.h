@@ -1,10 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_API_RECORDER_OPTIONS_H
 #define HPP_GUARD_PLEXUS_API_RECORDER_OPTIONS_H
 
+#include "plexus/type_schema.h"
+
 #include "plexus/io/recording/record_envelope.h"
 
 #include "plexus/detail/compat.h"
 
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -61,6 +64,13 @@ struct recorder_options
     // std::optional: the FDR anomaly predicate (pre_buffer mode). Absence is meaningful —
     // a recorder with no predicate freezes only on a manual trigger().
     std::optional<anomaly_predicate> on_anomaly{};
+
+    // required-with-default empty: the per-type self-descriptions the recorder lays into the
+    // stream preamble so an offline projector resolves a codec/schema by a sample's type_id.
+    // Empty is the meaningful default — a recorder that declares nothing still writes a valid
+    // opaque stream (the MCU floor). The aliased schema bytes must outlive make_recorder
+    // (they are copied into the preamble synchronously in the recorder ctor).
+    std::vector<type_schema> schemas{};
 };
 
 }

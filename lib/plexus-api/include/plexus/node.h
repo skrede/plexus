@@ -213,6 +213,7 @@ public:
         , m_max_message_bytes(opts.max_message_bytes)
         , m_shm_geometry(opts.shm_geometry)
         , m_max_ring_slab_bytes(opts.max_ring_slab_bytes)
+        , m_wire_crypto_position(opts.wire.position)
         , m_glue(make_glue(transports...))
         , m_leaf(engine_leaf(transports...))
         , m_engine(m_leaf, executor, make_fsm_cfg(id, opts),
@@ -402,7 +403,8 @@ public:
     [[nodiscard]] recorder<engine_type, Policy>
     make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
     {
-        return recorder<engine_type, Policy>{m_engine, m_executor, m_id, sink, std::move(opts)};
+        return recorder<engine_type, Policy>{m_engine, m_executor, m_id, sink, std::move(opts),
+                                             m_wire_crypto_position};
     }
     // --------------------------------------------------------------------------------
 
@@ -838,6 +840,11 @@ private:
     std::size_t m_max_message_bytes;
     io::shm::shm_geometry m_shm_geometry;
     std::uint64_t m_max_ring_slab_bytes;
+
+    // The node's per-transport wire-capture crypto position, retained from node_options.wire
+    // so make_recorder can stamp it into the recorder's stream preamble (a recording-only
+    // fact, never on the live wire).
+    wire_crypto_position m_wire_crypto_position;
 
     // [[no_unique_address]] dropped to dodge a GCC 16.1.1 bug: guaranteed copy-elision is
     // not applied into a [[no_unique_address]] member, so the by-value make_glue() prvalue

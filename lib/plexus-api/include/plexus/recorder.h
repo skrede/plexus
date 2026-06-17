@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_API_RECORDER_H
 
 #include "plexus/recorder_options.h"
+#include "plexus/wire_capture_qos.h"
 
 #include "plexus/io/observer.h"
 #include "plexus/io/capture_policy.h"
@@ -9,19 +10,24 @@
 #include "plexus/io/recording/flat_recorder.h"
 #include "plexus/io/recording/recording_sink.h"
 #include "plexus/io/recording/record_envelope.h"
+#include "plexus/io/recording/record_stream_writer.h"
 #include "plexus/io/recording/pre_buffer_controller.h"
 
+#include "plexus/wire/varint.h"
 #include "plexus/wire/frame_codec.h"
 
 #include "plexus/detail/compat.h"
 #include "plexus/node_id.h"
 
 #include <span>
+#include <vector>
 #include <memory>
 #include <variant>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <utility>
+#include <algorithm>
 
 namespace plexus {
 
@@ -59,20 +65,22 @@ class recorder
             std::variant<io::recording::flat_recorder, io::recording::pre_buffer_controller>;
 
         block(io::recording::byte_sink &sink, const recorder_options &opts,
-              io::recording::flat_recorder::clock_fn clock)
-            : machinery(make_machinery(sink, opts, std::move(clock)))
+              io::recording::flat_recorder::clock_fn clock, std::size_t scratch_bytes)
+            : machinery(make_machinery(sink, opts, std::move(clock), scratch_bytes))
         {
         }
 
         static mode_variant make_machinery(io::recording::byte_sink &sink,
                                             const recorder_options &opts,
-                                            io::recording::flat_recorder::clock_fn clock)
+                                            io::recording::flat_recorder::clock_fn clock,
+                                            std::size_t scratch_bytes)
         {
             if(opts.mode == recording_mode::pre_buffer)
                 return mode_variant{std::in_place_type<io::recording::pre_buffer_controller>,
                                     sink, opts.ring_bytes, std::move(clock), opts.drain_batch_bytes};
             return mode_variant{std::in_place_type<io::recording::flat_recorder>,
-                                sink, opts.ring_bytes, std::move(clock), opts.drain_batch_bytes};
+                                sink, opts.ring_bytes, std::move(clock), opts.drain_batch_bytes,
+                                scratch_bytes};
         }
 
         bool pump()
@@ -101,19 +109,29 @@ public:
     using anomaly_predicate = recorder_options::anomaly_predicate;
 
     // Constructed only by node.make_recorder. The engine + executor are borrowed (never
-    // owned); the consumer's byte_sink is borrowed too and MUST outlive the recorder.
+    // owned); the consumer's byte_sink is borrowed too and MUST outlive the recorder. The
+    // crypto position is the node's per-transport wire-capture position, threaded through so
+    // the stream preamble records which tap the wire capture used (a recording-only fact).
     recorder(Engine &engine, typename Engine::executor_type executor,
-             const node_id &id, io::recording::byte_sink &sink, recorder_options opts)
+             const node_id &id, io::recording::byte_sink &sink, recorder_options opts,
+             wire_crypto_position crypto)
         : m_engine(&engine)
         , m_executor(executor)
         , m_block(std::make_shared<block>(sink, opts,
-                  io::recording::flat_recorder::clock_fn{[] { return wire::now_timestamp_ns(); }}))
+                  io::recording::flat_recorder::clock_fn{[] { return wire::now_timestamp_ns(); }},
+                  preamble_scratch_bytes(opts.schemas)))
         , m_sink(make_sink())
     {
         if(opts.mode == recording_mode::pre_buffer && opts.on_anomaly)
             pre().on_anomaly(std::move(*opts.on_anomaly));
         if(opts.mode == recording_mode::continuous)
-            flat().open(id, m_engine->capture().default_rule());
+        {
+            const auto rows = schema_rows(opts.schemas);
+            // The on-disk ordinals of capture_crypto_position are pinned to the public
+            // wire_crypto_position (cleartext=0, ciphertext=1), so the cast is a forward.
+            flat().open(id, m_engine->capture().default_rule(), rows,
+                        static_cast<io::recording::capture_crypto_position>(crypto));
+        }
         m_block->draining = true;
         m_block->rearm = [blk = std::weak_ptr<block>(m_block), exec = &m_executor] {
             if(auto live = blk.lock())
@@ -193,13 +211,50 @@ private:
 
     // The observer forwards each edge to whichever discipline the variant holds, stamping
     // each sample with the topic's capture_policy-resolved fidelity (no longer hard-coded
-    // payload) — a wire-resolved tier on an inproc producer degrades to the bare bytes too.
+    // payload) and its registered producer type_id (so an offline projector keys the sample
+    // to the declared schema) — a wire-resolved tier on an inproc producer degrades to the
+    // bare bytes too.
     std::unique_ptr<io::observer> make_sink()
     {
         return std::make_unique<variant_sink>(
-            *m_block, [engine = m_engine](std::uint64_t hash) {
+            *m_block,
+            [engine = m_engine](std::uint64_t hash) {
                 return engine->capture().rule_for(hash).fidelity;
+            },
+            [engine = m_engine](std::uint64_t hash) {
+                return engine->messages().producer_type_id(hash);
             });
+    }
+
+    // Translate the public schemas into the core preamble rows (field-for-field; the views
+    // alias opts.schemas, which the caller keeps alive across this ctor — the open() below
+    // copies the bytes into the stream synchronously).
+    static std::vector<io::recording::type_schema_entry>
+    schema_rows(const std::vector<type_schema> &schemas)
+    {
+        std::vector<io::recording::type_schema_entry> rows;
+        rows.reserve(schemas.size());
+        for(const type_schema &s : schemas)
+            rows.push_back({s.type_id, {}, s.message_encoding, s.schema_name,
+                            s.schema_encoding, s.schema_data});
+        return rows;
+    }
+
+    // The worst-case Definitions-preamble byte size for the declared schemas — used ONCE to
+    // size the writer's bounds-check-free scratch so a multi-KiB schema blob cannot overrun
+    // it (wire::writer is a raw memcpy). Sums each entry's worst-case varint-prefixed blobs
+    // (type_name is always empty here) plus a fixed header margin, and floors at the default.
+    static std::size_t preamble_scratch_bytes(const std::vector<type_schema> &schemas)
+    {
+        constexpr std::size_t k_default_scratch = 64u * 1024u;
+        constexpr std::size_t k_header_margin   = 256u;
+        auto blob = [](std::size_t n) { return wire::varint_size(n) + n; };
+        std::size_t need = k_header_margin + wire::varint_size(schemas.size());
+        for(const type_schema &s : schemas)
+            need += wire::varint_size(s.type_id) + blob(0)
+                  + blob(s.message_encoding.size()) + blob(s.schema_name.size())
+                  + blob(s.schema_encoding.size()) + blob(s.schema_data.size());
+        return std::max(k_default_scratch, need);
     }
 
     // Post one cooperative drain turn. It re-posts ITSELF only while the ring still holds
@@ -235,12 +290,19 @@ private:
     class variant_sink : public io::observer
     {
     public:
+        using type_id_resolver =
+            plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)>;
+
         // The fidelity resolver maps a topic hash to its capture_policy-resolved tier so a
-        // recorded sample is stamped with its true fidelity; unset falls back to payload.
+        // recorded sample is stamped with its true fidelity (unset falls back to payload);
+        // the type_id resolver maps it to its registered producer type_id so the sample keys
+        // to the declared schema (absent => 0/not-present, a valid opaque sample).
         variant_sink(block &blk,
-                     plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> resolver)
+                     plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> fidelity,
+                     type_id_resolver type_id)
             : m_block(blk)
-            , m_fidelity_resolver(std::move(resolver))
+            , m_fidelity_resolver(std::move(fidelity))
+            , m_type_id_resolver(std::move(type_id))
         {
         }
 
@@ -287,7 +349,11 @@ private:
             const std::span<const std::byte> bytes = v;
             const io::capture_fidelity fidelity =
                 m_fidelity_resolver ? m_fidelity_resolver(hash) : io::capture_fidelity::payload;
-            record([&](auto &m) { m.record_sample(hash, info, 0u, false, fidelity, bytes); });
+            const std::optional<std::uint64_t> id =
+                m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
+            record([&](auto &m) {
+                m.record_sample(hash, info, id.value_or(0), id.has_value(), fidelity, bytes);
+            });
         }
 
         // Encode the edge into whichever discipline the variant holds, then re-arm the
@@ -302,6 +368,7 @@ private:
         block             &m_block;
         const io::message_info m_empty_info{};
         plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> m_fidelity_resolver;
+        type_id_resolver m_type_id_resolver;
     };
 
     Engine                       *m_engine;

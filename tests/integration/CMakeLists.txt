@@ -85,6 +85,20 @@ target_include_directories(test_payload_fidelity_capture PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_payload_fidelity_capture TEST_PREFIX "integration.")
 
+# The self-describing capture oracle: a declared type_schema + crypto position + producer
+# type_id round-trip through the version-2 preamble, an empty-schema recorder still recovers,
+# and a schema blob larger than the writer's default scratch round-trips. Links the facade
+# for the typed endpoints; tests/ is on the include path for in_memory_byte_sink.h. Not gated
+# on mcap — it links plexus + inproc only.
+add_executable(test_self_describing_capture test_self_describing_capture.cpp)
+target_link_libraries(test_self_describing_capture PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_self_describing_capture PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_self_describing_capture TEST_PREFIX "integration.")
+
 # The inproc stamp-demand behavioral gate: a 3-arg subscriber sees populated message_info
 # timestamps; a 3-arg subscriber that opts out through subscriber_qos sees a documented 0;
 # the per-topic latch OR-reduces over local subscriber demand. Links the facade for the

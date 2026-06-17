@@ -37,9 +37,15 @@ class flat_recorder
 public:
     using clock_fn = plexus::detail::move_only_function<std::uint64_t()>;
 
+    // scratch_bytes sizes the writer's grown-once encode buffer. The default holds every
+    // record category; a caller raises it when the Definitions preamble (the declared schema
+    // blobs) would exceed it, since wire::writer is bounds-check-free (a raw memcpy). It is a
+    // one-time sizing at open time, never on the hot path.
     flat_recorder(byte_sink &sink, std::size_t ring_bytes, clock_fn clock,
-                  std::size_t drain_batch_bytes = 64u * 1024u)
+                  std::size_t drain_batch_bytes = 64u * 1024u,
+                  std::size_t scratch_bytes = 64u * 1024u)
         : m_sink(sink)
+        , m_writer(scratch_bytes)
         , m_ring(ring_bytes)
         , m_clock(std::move(clock))
         , m_drain_batch(drain_batch_bytes)
