@@ -46,16 +46,29 @@ cmake --build build --target mcap_transcode   # needs -DPLEXUS_BUILD_MCAP_TRANSC
 ./build/tools/mcap_transcode/mcap_transcode recording_example_capture.plxr out.mcap
 ```
 
-End-to-end MCAP example — captures a session and converts it to MCAP in one run (built only
-with `-DPLEXUS_BUILD_MCAP_TRANSCODE=ON`). It writes `mcap_example_capture.plxr` +
-`mcap_example_capture.mcap` and prints the transcode summary; the file header documents how to
-open the output in Foxglove (https://studio.foxglove.dev) or inspect it with the `mcap` CLI
-(`mcap info <file>`):
+Two end-to-end MCAP examples — each captures a session and converts it to MCAP in one run
+(built only with `-DPLEXUS_BUILD_MCAP_TRANSCODE=ON`). Each writes a `.plxr` + a `.mcap` and
+prints the transcode summary; the file headers document how to open the output in Foxglove
+(https://studio.foxglove.dev) or inspect it with the `mcap` CLI (`mcap info <file>`).
+
+`mcap_basic_foxglove` — the codec emits a small JSON object per sample and the recorder
+declares a matching jsonschema in the stream preamble, so the data channels decode and plot in
+Foxglove out of the box:
 
 ```sh
 cmake -B build -DPLEXUS_BUILD_EXAMPLES=ON -DPLEXUS_BUILD_MCAP_TRANSCODE=ON
-cmake --build build -j4 --target mcap_example
-./build/examples/mcap_example
+cmake --build build -j4 --target mcap_basic_foxglove
+./build/examples/mcap_basic_foxglove
+```
+
+`mcap_opaque_supplied_schema` — the payload is opaque to plexus's store (a finished byte blob)
+and the producer SUPPLIES a truthful encoding + schema the bytes actually satisfy. It shows the
+explicit supplied-schema mechanism; the header states the honesty caveat (never declare an
+encoding the bytes do not satisfy — the transcode validates nothing):
+
+```sh
+cmake --build build -j4 --target mcap_opaque_supplied_schema
+./build/examples/mcap_opaque_supplied_schema
 ```
 
 Each two-terminal example below runs the first binary in one shell and the second in

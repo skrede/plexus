@@ -39,9 +39,13 @@ if(TARGET mcap_transcode_lib)
     target_compile_definitions(recording_example PRIVATE PLEXUS_WITH_MCAP_TRANSCODE)
 endif()
 
-# The MCAP example is the analysis path (capture -> flat stream -> MCAP for Foxglove). It needs
-# the transcode, so it is built only when PLEXUS_BUILD_MCAP_TRANSCODE is on.
+# The MCAP examples are the analysis path (capture -> flat stream -> MCAP for Foxglove). They
+# need the transcode, so they are built only when PLEXUS_BUILD_MCAP_TRANSCODE is on. The basic
+# example produces JSON payloads with a declared jsonschema (decodes out of the box); the
+# opaque example hands plexus a finished blob and supplies a matching schema separately.
 if(TARGET mcap_transcode_lib)
-    plexus_example(mcap_example plexus::plexus plexus::inproc)
-    target_link_libraries(mcap_example PRIVATE mcap_transcode_lib)
+    plexus_example(mcap_basic_foxglove plexus::plexus plexus::inproc)
+    target_link_libraries(mcap_basic_foxglove PRIVATE mcap_transcode_lib)
+    plexus_example(mcap_opaque_supplied_schema plexus::plexus plexus::inproc)
+    target_link_libraries(mcap_opaque_supplied_schema PRIVATE mcap_transcode_lib)
 endif()
