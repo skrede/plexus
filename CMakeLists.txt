@@ -13,6 +13,7 @@ option(PLEXUS_ENABLE_SHM_BACKEND "Build the gated POSIX shared-memory backend (l
 option(PLEXUS_BUILD_TESTS "Build the test suite" OFF)
 option(PLEXUS_BUILD_FUZZ_TESTS "Build the libFuzzer harnesses" OFF)
 option(PLEXUS_BUILD_EXAMPLES "Build the examples" OFF)
+option(PLEXUS_BUILD_MCAP_TRANSCODE "Build the host-side flat-stream to MCAP transcode tool" OFF)
 option(PLEXUS_WARNINGS_AS_ERRORS "Promote warnings to errors (the enforced gate)" ON)
 
 # Warn broadly on every compiled translation unit the build owns (the gated backends
@@ -72,4 +73,10 @@ endif()
 
 if(PLEXUS_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+# The flat-stream to MCAP transcode is a host-only tool that links the optional
+# mcap dependency; the core and the MCU build never see it. Gated OFF by default.
+if(PLEXUS_BUILD_MCAP_TRANSCODE)
+    add_subdirectory(tools)
 endif()

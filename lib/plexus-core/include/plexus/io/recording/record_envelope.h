@@ -14,11 +14,9 @@ namespace plexus::io::recording {
 // persisted stream keeps its meaning across versions, so a new kind takes the next
 // free ordinal and an existing one is NEVER renumbered or removed.
 //
-// wire_frame is RESERVED now and unpopulated: the wire-fidelity tier carries the raw
-// on-the-wire frame bytes (the encrypted/framed transport form), a later source the
-// format reserves a slot for today so adding it changes only the byte SOURCE, with no
-// format change and no version bump. Until that source lands a wire-fidelity request
-// degrades to a sample record.
+// wire_frame carries the raw on-the-wire frame bytes (the encrypted/framed transport
+// form). It is produced when a recording_channel decorator is active on the transport;
+// a node without the wire opt-in mints bare channels and writes none.
 enum class record_category : std::uint8_t
 {
     sample        = 0,
