@@ -8,11 +8,14 @@
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/recording/byte_ring.h"
 #include "plexus/io/recording/byte_sink.h"
+#include "plexus/io/recording/wire_record.h"
 #include "plexus/io/recording/record_envelope.h"
 #include "plexus/io/recording/record_stream_writer.h"
 
 #include "plexus/wire/cursor.h"
 #include "plexus/wire/varint.h"
+
+#include "plexus/node_id.h"
 
 #include "plexus/detail/compat.h"
 
@@ -98,6 +101,14 @@ public:
     {
         const std::uint64_t ts = m_clock();
         admit(m_writer.security(ts, e), ts, {record_category::security, ts, 0, io::detail::drop_cause::none, 0});
+    }
+
+    void record_wire(wire_direction dir, std::uint64_t seq, const node_id &peer,
+                     std::span<const std::byte> bytes)
+    {
+        const std::uint64_t ts = m_clock();
+        admit(m_writer.wire_frame(ts, dir, seq, peer, bytes), ts,
+              {record_category::wire_frame, ts, 0, io::detail::drop_cause::none, 0});
     }
 
     // Freeze a snapshot: capture {tail, head} (two index reads — NO buffer copy, no

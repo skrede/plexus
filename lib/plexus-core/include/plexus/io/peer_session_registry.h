@@ -24,6 +24,7 @@
 #include <string>
 #include <cstdint>
 #include <optional>
+#include <type_traits>
 
 namespace plexus::io {
 
@@ -101,7 +102,8 @@ public:
     // slot is inserted into the map BEFORE the session is built and started, so any
     // wiring that looks the slot up by id finds it. No driver re-dials an accepted
     // slot — the dialer owns the redial.
-    node_id accept_session(std::unique_ptr<channel_type> channel)
+    template <typename PreBuild = std::nullptr_t>
+    node_id accept_session(std::unique_ptr<channel_type> channel, PreBuild &&pre_build = nullptr)
     {
         const node_id inbound_id = next_inbound_id();
         auto slot = std::make_unique<slot_block>(m_transport, m_build, inbound_id,
@@ -112,8 +114,24 @@ public:
             m_build.logger.warn("plexus: inbound id collision — accept dropped");
             return inbound_id;
         }
+        if constexpr(!std::is_null_pointer_v<std::decay_t<PreBuild>>)
+            pre_build(*channel, inbound_id);
         build_into(*it->second, std::move(channel), true);
         return inbound_id;
+    }
+
+    // The peer node_id of the slot that dialed this endpoint, or absence if none claims it.
+    // The dial-success tail correlates a freshly minted channel to its slot by the endpoint
+    // it dialed; this surfaces that same correlation at the channel-mint point so a per-
+    // channel capture can carry the right join key. A reverse scan over the slot map (the
+    // map is small — one entry per known peer — and this is the cold mint path, not a hot
+    // per-frame lookup).
+    std::optional<node_id> id_for_endpoint(const endpoint &ep) const
+    {
+        for(const auto &[id, slot] : m_slots)
+            if(slot->record.dial_endpoint == ep)
+                return id;
+        return std::nullopt;
     }
 
     bool has_session(const node_id &id) const

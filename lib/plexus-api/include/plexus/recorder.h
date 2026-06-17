@@ -263,6 +263,10 @@ private:
         {
             record([&](auto &m) { m.record_security(e); });
         }
+        void on_wire(const io::recording::wire_record &rec) override
+        {
+            record([&](auto &m) { m.record_wire(rec.dir, rec.seq, rec.peer, rec.bytes); });
+        }
 
     private:
         void sample(std::string_view fqn, const io::message_info &info, const io::message_view &v)

@@ -15,7 +15,10 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
 #include "plexus/io/recording/byte_sink.h"
+#include "plexus/io/recording/wire_record.h"
 #include "plexus/io/recording/flat_recorder.h"
+
+#include "plexus/node_id.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -25,9 +28,11 @@
 #include <cstdint>
 #include <algorithm>
 
+using plexus::node_id;
 using plexus::io::message_info;
 using plexus::io::capture_fidelity;
 using plexus::io::recording::byte_sink;
+using plexus::io::recording::wire_direction;
 using plexus::io::recording::flat_recorder;
 
 namespace {
@@ -96,6 +101,45 @@ TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after
         const auto after = plexus::testing::alloc_count();
 
         REQUIRE(after - before == 0); // grown-once: the saturating producer + drain touched no heap
+    }
+}
+
+TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after attach", "[integration]")
+{
+    // The wire tier rides the SAME grown-once ring + reused encoder scratch as every other
+    // record, so a warmed saturating record_wire -> ring -> drain loop touches no heap. The
+    // decorator's only inherent every-packet cost is the owner-carry copy of the frame into the
+    // posted turn, which lives in the engine's post_wire (not measured here); this gate isolates
+    // the recorder's own write/drain path with the frame bytes already in hand (the fidelity is
+    // capture_fidelity::wire, so an overflow would shed at the wire tier). Mirrors the
+    // recorder-attached sample gate exactly. Loops >=3x (medians).
+    constexpr int      warm = 256;
+    constexpr int      K    = 8192;
+    const std::size_t  ring = 1u << 20;
+
+    const std::vector<std::byte> frame(128, std::byte{0xC7});
+    const node_id                peer{};
+
+    for(int run = 0; run < 3; ++run)
+    {
+        fixed_capacity_sink sink{1u << 20};
+        flat_recorder       rec{sink, ring, [] { return monotonic_clock(); }};
+
+        auto push = [&](std::uint64_t seq) {
+            rec.record_wire(wire_direction::out, seq, peer, frame);
+            rec.pump();
+        };
+
+        for(int i = 0; i < warm; ++i)
+            push(static_cast<std::uint64_t>(i));
+
+        plexus::testing::reset_alloc_count();
+        const auto before = plexus::testing::alloc_count();
+        for(int i = 0; i < K; ++i)
+            push(0xF0000000ull + static_cast<std::uint64_t>(i));
+        const auto after = plexus::testing::alloc_count();
+
+        REQUIRE(after - before == 0); // grown-once: the saturating wire producer + drain touched no heap
     }
 }
 

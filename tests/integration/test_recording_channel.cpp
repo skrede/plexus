@@ -24,6 +24,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <tuple>
 #include <vector>
 #include <memory>
 #include <cstddef>
@@ -122,9 +123,9 @@ TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame
     auto *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
-    std::vector<std::pair<wire_direction, std::vector<std::byte>>> taps;
-    ch.on_wire([&](wire_direction dir, std::span<const std::byte> b) {
-        taps.emplace_back(dir, std::vector<std::byte>(b.begin(), b.end()));
+    std::vector<std::tuple<wire_direction, std::uint64_t, std::vector<std::byte>>> taps;
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) {
+        taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end()));
     });
 
     const auto frame = blob(0x10, 64);
@@ -132,10 +133,11 @@ TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame
 
     // Lossless: the bytes the lower channel saw equal the input exactly.
     REQUIRE(raw->m_sent == frame);
-    // The OUT tap fired once with the verbatim frame.
+    // The OUT tap fired once with the verbatim frame at the first OUT sequence.
     REQUIRE(taps.size() == 1);
-    REQUIRE(taps[0].first == wire_direction::out);
-    REQUIRE(taps[0].second == frame);
+    REQUIRE(std::get<0>(taps[0]) == wire_direction::out);
+    REQUIRE(std::get<1>(taps[0]) == 0u);
+    REQUIRE(std::get<2>(taps[0]) == frame);
 }
 
 TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN frame", "[recording_channel][wire]")
@@ -143,9 +145,9 @@ TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN fra
     auto *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
-    std::vector<std::pair<wire_direction, std::vector<std::byte>>> taps;
-    ch.on_wire([&](wire_direction dir, std::span<const std::byte> b) {
-        taps.emplace_back(dir, std::vector<std::byte>(b.begin(), b.end()));
+    std::vector<std::tuple<wire_direction, std::uint64_t, std::vector<std::byte>>> taps;
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) {
+        taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end()));
     });
 
     std::vector<std::byte> upward;
@@ -156,10 +158,11 @@ TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN fra
 
     // The bytes re-emitted upward equal the inbound frame exactly (lossless).
     REQUIRE(upward == frame);
-    // The IN tap fired once with the verbatim frame.
+    // The IN tap fired once with the verbatim frame at the first IN sequence.
     REQUIRE(taps.size() == 1);
-    REQUIRE(taps[0].first == wire_direction::in);
-    REQUIRE(taps[0].second == frame);
+    REQUIRE(std::get<0>(taps[0]) == wire_direction::in);
+    REQUIRE(std::get<1>(taps[0]) == 0u);
+    REQUIRE(std::get<2>(taps[0]) == frame);
 }
 
 TEST_CASE("recording_channel with no tap installed never fires the edge", "[recording_channel][wire]")
@@ -179,6 +182,29 @@ TEST_CASE("recording_channel with no tap installed never fires the edge", "[reco
     REQUIRE(upward == frame);
 }
 
+TEST_CASE("recording_channel stamps strictly monotonic independent per-direction sequences", "[recording_channel][wire]")
+{
+    auto *raw = new test_lower;
+    recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
+
+    std::vector<std::uint64_t> out_seq;
+    std::vector<std::uint64_t> in_seq;
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte>) {
+        (dir == wire_direction::out ? out_seq : in_seq).push_back(seq);
+    });
+    // A self-loop: this channel's send feeds its own lower on_data, so each send produces
+    // BOTH an OUT tap (the send counter) and an IN tap (the recv counter). The two counters
+    // are independent, so each run is contiguous 0,1,2,... on its own axis.
+    raw->m_sink = [raw](std::span<const std::byte> b) { raw->m_on_data(b); };
+
+    for(int i = 0; i < 5; ++i)
+        ch.send(std::span<const std::byte>{blob(static_cast<std::uint8_t>(i), 8)});
+
+    const std::vector<std::uint64_t> expected{0, 1, 2, 3, 4};
+    REQUIRE(out_seq == expected);   // the OUT run is contiguous (no gaps)
+    REQUIRE(in_seq == expected);    // the IN run is contiguous and independent
+}
+
 TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_frame", "[recording_channel][wire][recorder]")
 {
     in_memory_byte_sink sink;
@@ -194,8 +220,8 @@ TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_f
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     const node_id peer = make_node(9);
-    ch.on_wire([&](wire_direction dir, std::span<const std::byte> b) {
-        const wire_record rec{dir, 7u, peer, 0u, b};
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) {
+        const wire_record rec{dir, seq, peer, 0u, b};
         tap.on_wire(rec);
     });
 
@@ -218,7 +244,7 @@ TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_f
         {
             saw_wire = true;
             REQUIRE(rec.wire_dir == wire_direction::out);
-            REQUIRE(rec.wire_seq == 7u);
+            REQUIRE(rec.wire_seq == 0u);
             REQUIRE(rec.peer == peer);
             REQUIRE(std::vector<std::byte>(rec.payload.begin(), rec.payload.end()) == frame);
         }

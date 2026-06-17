@@ -11,6 +11,7 @@
 #include "plexus/log/logger.h"
 
 #include "plexus/recording_qos.h"
+#include "plexus/wire_capture_qos.h"
 
 #include <string>
 #include <chrono>
@@ -106,6 +107,15 @@ struct node_options
     // the gate stays fully inert. A plain value (not std::optional): the off default is
     // a usable declaration, its absence is not meaningful.
     recording_qos capture{};
+
+    // required-with-default disabled: the construction-time per-transport wire-capture
+    // declaration. The decorated-vs-bare channel TYPE is fixed by the policy/transport the
+    // node is composed over (a node built over the wire_capturing policy mints the
+    // recording_channel decorator; a default node mints bare channels — structural absence,
+    // not a runtime branch), so this field DECLARES the consumer's intent and the crypto
+    // position. Disabled is the meaningful default: a node that does not opt in ships no wire
+    // capture. A plain value (not std::optional): its absence is not meaningful.
+    wire_capture_qos wire{};
 };
 
 }

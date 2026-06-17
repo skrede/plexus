@@ -113,7 +113,7 @@ TEST_CASE("crypto.wire_crypto_position cleartext-above captures the plaintext fr
     recording_channel<plaintext_lower> dec{std::unique_ptr<plaintext_lower>(raw)};
 
     std::vector<std::byte> captured;
-    dec.on_wire([&](wire_direction dir, std::span<const std::byte> b) {
+    dec.on_wire([&](wire_direction dir, std::uint64_t, std::span<const std::byte> b) {
         if(dir == wire_direction::out)
             captured.assign(b.begin(), b.end());
     });
@@ -141,7 +141,7 @@ TEST_CASE("crypto.wire_crypto_position ciphertext-below captures the sealed byte
         dec, aead_cipher_id::chacha20_poly1305, keys};
 
     std::vector<std::byte> captured;
-    dec.on_wire([&](wire_direction dir, std::span<const std::byte> b) {
+    dec.on_wire([&](wire_direction dir, std::uint64_t, std::span<const std::byte> b) {
         if(dir == wire_direction::out)
             captured.assign(b.begin(), b.end());
     });

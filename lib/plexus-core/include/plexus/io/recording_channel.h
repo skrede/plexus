@@ -11,6 +11,7 @@
 #include <memory>
 #include <utility>
 #include <cstddef>
+#include <cstdint>
 
 namespace plexus::io {
 
@@ -35,7 +36,7 @@ template <typename Lower>
 class recording_channel
 {
 public:
-    using wire_tap = plexus::detail::move_only_function<void(recording::wire_direction, std::span<const std::byte>)>;
+    using wire_tap = plexus::detail::move_only_function<void(recording::wire_direction, std::uint64_t, std::span<const std::byte>)>;
 
     explicit recording_channel(std::unique_ptr<Lower> lower) : m_lower(std::move(lower))
     {
@@ -47,10 +48,18 @@ public:
     recording_channel(recording_channel &&) = delete;
     recording_channel &operator=(recording_channel &&) = delete;
 
+    // The per-direction sequence is decorator-LOCAL: a strictly monotonic counter the
+    // capture stamps on every frame regardless of transport. It is the transport-uniform,
+    // clock-skew-immune cross-node loss-join key (a frame present in one node's out run and
+    // absent from the peer's in run is a structural drop, found by sequence arithmetic over
+    // the two recorded runs with no reference to either node's clock). The datagram AEAD seq
+    // and the udp_envelope seq carry the same information at the transport layer, but the
+    // cleartext stream wire has no per-direction publication sequence, so this counter is the
+    // single key spanning every transport — never a new field on the actual wire.
     void send(std::span<const std::byte> data)
     {
         if(m_on_wire)
-            m_on_wire(recording::wire_direction::out, data);
+            m_on_wire(recording::wire_direction::out, m_send_seq++, data);
         m_lower->send(data);
     }
 
@@ -63,12 +72,18 @@ public:
     void on_error(plexus::detail::move_only_function<void(io_error)> cb) { m_lower->on_error(std::move(cb)); }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_lower->on_protocol_close(std::move(cb)); }
 
-    [[nodiscard]] std::size_t backpressured() const { return m_lower->backpressured(); }
-
     // The optional occupancy/scheduler/drop edges the erased multi-transport channel and the
     // egress scheduler reach for: forwarded only when the Lower has them, so the decorated
     // bare concrete channel still satisfies everything the registry calls without forcing an
-    // edge onto a Lower that lacks one (the channel_adapter optional-edge discipline).
+    // edge onto a Lower that lacks one (the channel_adapter optional-edge discipline). The
+    // egress scheduler's can_poll() gate reads backpressured() behind its own requires-clause,
+    // so guarding it here keeps a decorated Lower that has no occupancy signal correctly off
+    // the poll path rather than forcing the call onto a Lower that lacks it.
+    [[nodiscard]] std::size_t backpressured() const
+        requires requires(const Lower &l) { l.backpressured(); }
+    {
+        return m_lower->backpressured();
+    }
     [[nodiscard]] std::uint64_t scheduler_key() const
         requires requires(const Lower &l) { l.scheduler_key(); }
     {
@@ -90,7 +105,7 @@ private:
     {
         m_lower->on_data([this](std::span<const std::byte> bytes) {
             if(m_on_wire)
-                m_on_wire(recording::wire_direction::in, bytes);
+                m_on_wire(recording::wire_direction::in, m_recv_seq++, bytes);
             if(m_on_data)
                 m_on_data(bytes);
         });
@@ -99,6 +114,8 @@ private:
     std::unique_ptr<Lower>                                       m_lower;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     wire_tap                                                     m_on_wire;
+    std::uint64_t                                                m_send_seq{0};
+    std::uint64_t                                                m_recv_seq{0};
 };
 
 // A compile-time witness of structural presence: false for any bare channel type, true
