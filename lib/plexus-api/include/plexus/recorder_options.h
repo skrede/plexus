@@ -21,10 +21,10 @@ enum class recording_mode
     pre_buffer = 1,
 };
 
-// The construction-time options for node.make_recorder. The byte-budget is the host
-// default substantiated by the recorded sweep (recall = min(1, ring_bytes / backlog), so
-// the budget sizes the bytes of transient producer burst the always-on black box absorbs
-// at full recall); a deployment overrides it. The cooperative drain rides the node's
+// The construction-time options for node.make_recorder. The byte-budget is a conservative
+// host default (recall = min(1, ring_bytes / backlog), so the budget sizes the bytes of
+// transient producer backlog the always-on black box absorbs at full recall); a deployment
+// raises it for a firehose. The cooperative drain rides the node's
 // run-loop by default (a self-re-posting drain task — no plexus thread); a dedicated drain
 // thread is an explicit consumer opt-in, never the default. For the pre_buffer mode an
 // optional anomaly predicate auto-freezes the window when it matches a built
@@ -37,10 +37,16 @@ struct recorder_options
 
     recording_mode mode{recording_mode::continuous};
 
-    // The ring byte-budget. The host default holds full recall at every measured payload
-    // size for a multi-thousand-message transient (recorder_sweep / test_recorder_defaults_sweep
-    // record the recall-vs-budget curve and guard this floor); the MCU re-tunes it down.
-    std::size_t ring_bytes{16u * 1024u * 1024u};
+    // The ring byte-budget. Conservative by design: recording resources are spent
+    // sparingly (an overflow is observable while recording, unlike a silent data-plane
+    // drop), so the default holds the common small-payload case rather than a firehose. The
+    // ring drains cooperatively — it holds only the undrained backlog between executor
+    // turns, not a whole session — so 1 MiB absorbs ~1,900 records of a ~512 B backlog, full
+    // recall for the typical small-payload traffic and shedding only under a genuine
+    // saturating burst (itself observable while recording). A large-payload / firehose
+    // capture raises this explicitly; per-topic budgeting composes one recorder per
+    // topic-group.
+    std::size_t ring_bytes{1u << 20};
 
     // required-with-default: a bounded batch the cooperative drain ships per turn before
     // yielding, so a drain never monopolizes one executor turn. Recall is drain-cadence-
