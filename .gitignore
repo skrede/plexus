@@ -69,3 +69,7 @@ GEMINI.md
 tests/fuzz/corpus/
 
 **/*vcpkg_installed/
+
+# Recording/logging example output (the capture/transcode artifacts the host examples write)
+*.plxr
+*.mcap
