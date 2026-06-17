@@ -11,6 +11,7 @@
 #include "plexus/typed_codec.h"
 #include "plexus/topic_qos.h"
 #include "plexus/wire_bytes.h"
+#include "plexus/recording_qos.h"
 
 #include "plexus/detail/compat.h"
 
@@ -48,6 +49,11 @@ struct typed_publisher_options
     // overrides per topic — "not declared" is distinct from "declared as the default".
     // It is producer-side same-host provisioning only, never wire-advertised, never RxO.
     std::optional<io::shm::shm_geometry> shm_geometry{};
+
+    // The per-topic recording-QoS override. std::optional because ABSENCE is meaningful:
+    // unset falls back to the node-level recording_qos default, present overrides the
+    // recording fidelity for this topic alone (the shm_geometry precedent).
+    std::optional<recording_qos> capture{};
 };
 
 // The bytes publishing endpoint: the CONSTRUCTOR is the registration — it declares the
@@ -75,7 +81,7 @@ public:
         , m_fqn(fqn)
     {
         m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt,
-                                 shm_geometry);
+                                 shm_geometry, std::nullopt);
     }
 
     // The hot verb: one indirect call across the seam. A moved-from publisher has a null
@@ -154,7 +160,8 @@ public:
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
         m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity,
-                                 m_identity.type_id, opts.shm_geometry);
+                                 m_identity.type_id, opts.shm_geometry,
+                                 opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
     }
 
     // Borrow a slot to construct a value in place (zero-copy publish). An empty loan on

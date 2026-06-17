@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_ENDPOINT_SEAM_H
 
 #include "plexus/io/message_info.h"
+#include "plexus/io/capture_policy.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/shm/ring_geometry_mode.h"
@@ -91,7 +92,8 @@ struct endpoint_seam
 
     void (*declare_publisher)(void *ctx, std::string_view fqn, const topic_qos &qos,
                               bool emit_source_identity, std::optional<std::uint64_t> type_id,
-                              std::optional<shm::shm_geometry> shm_geometry);
+                              std::optional<shm::shm_geometry> shm_geometry,
+                              std::optional<topic_capture_rule> capture);
     void (*publish)(void *ctx, std::string_view fqn, std::span<const std::byte> bytes);
     void (*publish_object)(void *ctx, std::string_view fqn, const object_carrier &carrier,
                            encode_thunk encode);
@@ -99,7 +101,8 @@ struct endpoint_seam
     std::uint64_t (*register_subscriber)(void *ctx, std::string_view fqn,
                                          const subscriber_qos &qos, bytes_cb cb,
                                          std::optional<std::uint64_t> type_id,
-                                         const void *native_key, object_dispatch dispatch);
+                                         const void *native_key, object_dispatch dispatch,
+                                         std::optional<topic_capture_rule> capture);
     void (*retire_subscriber)(void *ctx, std::uint64_t rid);
     void (*retire_publisher)(void *ctx, std::string_view fqn);
 

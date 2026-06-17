@@ -238,6 +238,10 @@ public:
         // every same-host ring this node mints. A composition without an shm member is a
         // no-op (the capability check below fails).
         apply_shm_slab_ceiling(m_max_ring_slab_bytes);
+        // Read the node-level recording-QoS default into the engine's capture policy once
+        // (cold path, like apply_shm_slab_ceiling). The off default selects nothing, so a
+        // node that declares no recording QoS leaves the gate fully inert.
+        m_engine.capture().set_default(opts.capture.to_rule());
         // Surface the node's own declaration-lifecycle create edge (posted, like every
         // other observer edge). The matching destroy edge is posted from ~node below.
         m_engine.post_participant({io::participant_edge::created, m_id});
@@ -387,11 +391,14 @@ private:
         std::string_view fqn, const io::subscriber_qos &qos,
         plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb,
         std::optional<std::uint64_t> type_id = std::nullopt,
-        object_entry obj = {})
+        object_entry obj = {},
+        std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
         const registration_id rid = m_next_registration++;
         m_subscriptions.push_back(
             {rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
+        if(capture)
+            m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered,
                                      wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
@@ -427,9 +434,12 @@ private:
     // drives publish directly.
     void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity,
                                 std::optional<std::uint64_t> type_id = std::nullopt,
-                                std::optional<io::shm::shm_geometry> shm_geometry = std::nullopt)
+                                std::optional<io::shm::shm_geometry> shm_geometry = std::nullopt,
+                                std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
         m_engine.messages().declare(fqn, qos, type_id, emit_source_identity);
+        if(capture)
+            m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_declared,
                                      wire::fqn_topic_hash(fqn), type_id});
         // Resolution order per-topic ?: node-default ?: shipped: the per-topic geometry
@@ -640,8 +650,9 @@ private:
         s.ctx = this;
         s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos,
                                  bool emit, std::optional<std::uint64_t> type_id,
-                                 std::optional<io::shm::shm_geometry> shm_geometry)
-        { static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry); };
+                                 std::optional<io::shm::shm_geometry> shm_geometry,
+                                 std::optional<io::topic_capture_rule> capture)
+        { static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry, capture); };
         s.publish = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes)
         { static_cast<node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
         s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier,
@@ -652,11 +663,12 @@ private:
         };
         s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos,
                                    io::bytes_cb cb, std::optional<std::uint64_t> type_id,
-                                   const void *native_key, io::object_dispatch dispatch) -> registration_id
+                                   const void *native_key, io::object_dispatch dispatch,
+                                   std::optional<io::topic_capture_rule> capture) -> registration_id
         {
             return static_cast<node *>(ctx)->register_subscriber_seam(
                 fqn, qos, std::move(cb), type_id,
-                object_entry{native_key, std::move(dispatch)});
+                object_entry{native_key, std::move(dispatch)}, capture);
         };
         s.retire_subscriber = [](void *ctx, registration_id rid)
         { static_cast<node *>(ctx)->retire_subscriber_seam(rid); };

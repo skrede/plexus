@@ -10,6 +10,8 @@
 
 #include "plexus/log/logger.h"
 
+#include "plexus/recording_qos.h"
+
 #include <string>
 #include <chrono>
 #include <cstdint>
@@ -97,6 +99,13 @@ struct node_options
     // literal. The shipped constant is the meaningful default the registry falls back
     // to; a deployment raises it for a larger reliable ring.
     std::uint64_t max_ring_slab_bytes{io::shm::k_max_ring_slab_bytes};
+
+    // required-with-default off: the node-level recording fidelity a topic with no
+    // per-topic override falls back to. fidelity off is the meaningful default — it
+    // SELECTS NOTHING, so a node that declares no recording QoS ships zero capture and
+    // the gate stays fully inert. A plain value (not std::optional): the off default is
+    // a usable declaration, its absence is not meaningful.
+    recording_qos capture{};
 };
 
 }
