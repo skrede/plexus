@@ -1157,6 +1157,31 @@ if(PLEXUS_BUILD_MCAP_TRANSCODE)
     catch_discover_tests(test_mcap_transcode TEST_PREFIX "integration.")
 endif()
 
+# The host-side flat-stream to pcapng transcode round-trip: a live wire-capturing inproc
+# session captured into an in-memory flat stream, transcoded to a pcapng file, parsed back
+# in-test (no external dependency), and the block structure asserted (SHB byte-order magic +
+# crypto-position comment, IDB DLT_USER0, one EPB per wire frame with direction flags, ns
+# timestamps, verbatim packet bytes). Registered ONLY when the pcap tool is enabled; the
+# default suite never builds it. The test also writes the captured flat stream to a
+# deterministic build-dir path (PLEXUS_QA_CAPTURE_PATH) as the fixture the dependent QA gate
+# consumes. pcapng is hand-rolled, so the test links pcap_transcode_lib and pulls no third party.
+if(PLEXUS_BUILD_PCAP_TRANSCODE)
+    add_executable(test_pcap_transcode test_pcap_transcode.cpp)
+    target_link_libraries(test_pcap_transcode PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::inproc
+        pcap_transcode_lib
+        Catch2::Catch2WithMain)
+    target_include_directories(test_pcap_transcode PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(test_pcap_transcode PRIVATE
+        PLEXUS_QA_CAPTURE_PATH="${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture.plxr")
+    catch_discover_tests(test_pcap_transcode TEST_PREFIX "integration.")
+endif()
+
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
 if(PLEXUS_ENABLE_ASIO_BACKEND AND PLEXUS_ENABLE_MDNSPP_DISCOVERY)
     add_executable(test_shared_executor test_shared_executor.cpp)

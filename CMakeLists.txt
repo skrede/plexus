@@ -14,6 +14,7 @@ option(PLEXUS_BUILD_TESTS "Build the test suite" OFF)
 option(PLEXUS_BUILD_FUZZ_TESTS "Build the libFuzzer harnesses" OFF)
 option(PLEXUS_BUILD_EXAMPLES "Build the examples" OFF)
 option(PLEXUS_BUILD_MCAP_TRANSCODE "Build the host-side flat-stream to MCAP transcode tool" OFF)
+option(PLEXUS_BUILD_PCAP_TRANSCODE "Build the host-side flat-stream to pcapng transcode tool" OFF)
 option(PLEXUS_WARNINGS_AS_ERRORS "Promote warnings to errors (the enforced gate)" ON)
 
 # Warn broadly on every compiled translation unit the build owns (the gated backends
@@ -71,11 +72,11 @@ if(PLEXUS_BUILD_TESTS OR PLEXUS_BUILD_FUZZ_TESTS)
     add_subdirectory(tests)
 endif()
 
-# The flat-stream to MCAP transcode is a host-only tool that links the optional
-# mcap dependency; the core and the MCU build never see it. Gated OFF by default.
-# Added before the examples so the recording example can wire its optional MCAP step
-# against mcap_transcode_lib when the tool is built.
-if(PLEXUS_BUILD_MCAP_TRANSCODE)
+# The host-side transcode tools (flat-stream to MCAP, flat-stream to pcapng) are host-only
+# and never seen by the core or the MCU build. Each self-gates inside tools/; this directory
+# is added when at least one tool is enabled. Added before the examples so the recording
+# example can wire its optional MCAP step against mcap_transcode_lib when that tool is built.
+if(PLEXUS_BUILD_MCAP_TRANSCODE OR PLEXUS_BUILD_PCAP_TRANSCODE)
     add_subdirectory(tools)
 endif()
 
