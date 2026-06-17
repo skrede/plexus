@@ -9,6 +9,7 @@
 #include "plexus/io/endpoint_seam.h"
 
 #include "plexus/typed_codec.h"
+#include "plexus/recording_qos.h"
 
 #include "plexus/detail/compat.h"
 
@@ -43,6 +44,11 @@ struct typed_subscriber_options
         io::attach_posture::lenient;
     std::optional<type_identity>                                                  type_id{};
     std::optional<std::function<void(std::span<const std::byte>, std::error_code)>> on_decode_failure{};
+
+    // The per-topic recording-QoS override. std::optional because ABSENCE is meaningful:
+    // unset falls back to the node-level recording_qos default, present overrides the
+    // recording fidelity for this topic alone (the shm_geometry/publisher precedent).
+    std::optional<recording_qos>                                                  capture{};
 };
 
 // The bytes subscribing endpoint: the CONSTRUCTOR is the registration — it installs a
@@ -80,7 +86,8 @@ public:
             std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>;
         io::endpoint_seam seam = n.endpoint_seam_for();
         const auto rid = seam.register_subscriber(seam.ctx, fqn, local_qos, adapt(std::move(cb)),
-                                                  std::nullopt, nullptr, io::object_dispatch{});
+                                                  std::nullopt, nullptr, io::object_dispatch{},
+                                                  std::nullopt);
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
@@ -177,7 +184,8 @@ public:
         io::endpoint_seam seam = n.endpoint_seam_for();
         const auto rid = seam.register_subscriber(
             seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id,
-            &io::detail::type_key<value_type>, std::move(dispatch));
+            &io::detail::type_key<value_type>, std::move(dispatch),
+            opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 

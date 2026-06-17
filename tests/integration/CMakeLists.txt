@@ -31,6 +31,19 @@ target_include_directories(test_typed_inproc_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_typed_inproc_alloc TEST_PREFIX "integration.")
 
+# The public recording-QoS declaration gate: drive the capture decision through the node
+# facade alone (node_options.capture + typed_publisher_options.capture), a counting codec
+# witnessing the per-publish encode decision. Links the facade for the typed endpoints;
+# tests/ is on the include path (unused here, kept for the area convention).
+add_executable(test_recording_qos_api test_recording_qos_api.cpp)
+target_link_libraries(test_recording_qos_api PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_recording_qos_api PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_recording_qos_api TEST_PREFIX "integration.")
+
 # The inproc stamp-demand behavioral gate: a 3-arg subscriber sees populated message_info
 # timestamps; a 3-arg subscriber that opts out through subscriber_qos sees a documented 0;
 # the per-topic latch OR-reduces over local subscriber demand. Links the facade for the
