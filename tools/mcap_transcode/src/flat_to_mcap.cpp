@@ -2,7 +2,7 @@
 
 #include "plexus/io/recording/record_decode.h"
 #include "plexus/io/recording/record_envelope.h"
-#include "plexus/io/recording/record_stream_reader.h"
+#include "plexus/io/recording/record_projection.h"
 
 // The compression-disable macros arrive from plexus_mcap_dep; this is the single
 // TU that pulls in the mcap implementation (writer for the transcode, reader so a
@@ -134,8 +134,8 @@ build_topic_names(const rec::stream_definitions          &defs,
                   const std::vector<rec::decoded_record> &records)
 {
     std::unordered_map<std::uint64_t, std::string> by_type_id;
-    for(const auto &[id, name] : defs.schema)
-        by_type_id.emplace(id, name);
+    for(const auto &entry : defs.schema)
+        by_type_id.emplace(entry.type_id, entry.type_name);
 
     std::unordered_map<std::uint64_t, std::string> by_topic;
     for(const auto &r : records)
@@ -298,19 +298,15 @@ transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
 {
     transcode_result out;
 
-    rec::record_stream_reader reader{flat_stream};
-    rec::stream_definitions   defs;
-    if(!reader.read_definitions(defs))
+    auto input = rec::read_projection_input(flat_stream);
+    if(!input)
     {
         out.error = "not a plexus flat record-stream (bad header/preamble)";
         return out;
     }
-
-    std::vector<rec::decoded_record> records;
-    const rec::recovery_result       rr = reader.recover(records);
-    out.recovered                = rr.recovered;
-    out.trailing_partial_dropped = rr.trailing_partial_dropped;
-    out.corruption_skipped       = rr.corruption_skipped;
+    out.recovered                = input->recovery.recovered;
+    out.trailing_partial_dropped = input->recovery.trailing_partial_dropped;
+    out.corruption_skipped       = input->recovery.corruption_skipped;
 
     mcap::McapWriterOptions wopts{"plexus"};
     wopts.noChunking  = true;
@@ -323,9 +319,9 @@ transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
         return out;
     }
 
-    const auto   topic_names = build_topic_names(defs, records);
+    const auto   topic_names = build_topic_names(input->defs, input->records);
     mcap_emitter emitter{writer, out, topic_names};
-    for(const auto &r : records)
+    for(const auto &r : input->records)
         emit_record(emitter, r);
 
     writer.close();
