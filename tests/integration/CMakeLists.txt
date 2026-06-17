@@ -535,6 +535,23 @@ target_include_directories(test_record_stream PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_record_stream TEST_PREFIX "integration.")
 
+# The projector-seam lifetime oracle: read_projection_input decodes the shared
+# (definitions, records, recovery) every host projector consumes and OWNS its payloads —
+# the drop-input-first case frees + overwrites the source bytes before reading a recovered
+# payload and asserts byte-identity (a borrowed span would be a use-after-free the mcap
+# round-trip cannot catch), plus a non-flat buffer returns nullopt. Deterministic header-only
+# core (no backend); not gated on mcap. tests/ + the current dir for in_memory_byte_sink.h.
+add_executable(test_record_projection test_record_projection.cpp)
+target_link_libraries(test_record_projection PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_record_projection PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_record_projection TEST_PREFIX "integration.")
+
 # The lossless recording_channel decorator oracle: send/recv byte-fidelity (forwarded ==
 # input on both directions), the OUT/IN taps fire once each with verbatim bytes, the inert
 # (no-tap) edge, and a captured frame reaching the recorder as a wire_frame record through
