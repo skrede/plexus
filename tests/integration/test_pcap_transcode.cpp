@@ -122,7 +122,9 @@ plexus::node_options base_opts()
 
 // Drive a wire-capturing producer + a plain consumer over inproc, publish a run of typed
 // readings, drain the recorder, and return the accumulated flat capture bytes.
-std::vector<std::byte> capture_session(int count)
+std::vector<std::byte> capture_session(int count,
+                                       plexus::wire_crypto_position position =
+                                           plexus::wire_crypto_position::cleartext)
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};
@@ -134,8 +136,7 @@ std::vector<std::byte> capture_session(int count)
 
     plexus::node_options consumer_opts = base_opts();
     plexus::node_options producer_opts = base_opts();
-    producer_opts.wire = plexus::wire_capture_qos{.enabled = true,
-                                                  .position = plexus::wire_crypto_position::cleartext};
+    producer_opts.wire = plexus::wire_capture_qos{.enabled = true, .position = position};
 
     bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, consumer_opts};
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};
@@ -351,6 +352,15 @@ TEST_CASE("pcap transcode round-trips a captured session through a parsed pcapng
     if(fixture)
         fixture.write(reinterpret_cast<const char *>(flat.data()),
                       static_cast<std::streamsize>(flat.size()));
+
+    // The same session recorded with the ciphertext tap position: byte-identical wire frames,
+    // but the projector stamps crypto_position=ciphertext into the SHB and every frame comment.
+    // The QA gate reads that carried token to exercise the dissector's sealed-blob branch.
+    const auto cipher = capture_session(count, plexus::wire_crypto_position::ciphertext);
+    std::ofstream cipher_fixture{std::filesystem::path{PLEXUS_QA_CIPHER_CAPTURE_PATH}, std::ios::binary};
+    if(cipher_fixture)
+        cipher_fixture.write(reinterpret_cast<const char *>(cipher.data()),
+                             static_cast<std::streamsize>(cipher.size()));
 
     std::filesystem::remove(out);
 }
