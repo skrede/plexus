@@ -30,8 +30,10 @@ enum class decimation_mode : std::uint8_t
 // A per-topic capture declaration. The default mode is time_window because pinning output
 // Hz is the right host behavior under a bursty publisher (count_n leaks a burst's full
 // spike through); count_n is the consumer's explicit clock-free opt-out. The numeric
-// decimation/window_ns values are PLACEHOLDERS — the tuned values come from a later
-// empirical sweep, not from this header.
+// defaults are the KEEP-ALL posture (decimation 1 keeps every record, window_ns 0 never
+// elides): the recorded sweep substantiates that the gate decimates exactly 1/N (count_n)
+// and pins output Hz precisely (time_window) once a consumer sets it, so keeping nothing
+// dropped by default is the validated consumer-sovereign choice, not an untuned guess.
 struct topic_capture_rule
 {
     capture_fidelity fidelity{capture_fidelity::off};

@@ -21,14 +21,15 @@ enum class recording_mode
     pre_buffer = 1,
 };
 
-// The construction-time options for node.make_recorder. The byte-budget is a DOCUMENTED
-// PLACEHOLDER (no empirically tuned value — the sweep is a later milestone); a deployment
-// overrides it. The cooperative drain rides the node's run-loop by default (a self-
-// re-posting drain task — no plexus thread); a dedicated drain thread is an explicit
-// consumer opt-in, never the default. For the pre_buffer mode an optional anomaly
-// predicate auto-freezes the window when it matches a built record_envelope (absence is
-// meaningful — no predicate means manual trigger() only), typed fully-qualified to mirror
-// the core seam.
+// The construction-time options for node.make_recorder. The byte-budget is the host
+// default substantiated by the recorded sweep (recall = min(1, ring_bytes / backlog), so
+// the budget sizes the bytes of transient producer burst the always-on black box absorbs
+// at full recall); a deployment overrides it. The cooperative drain rides the node's
+// run-loop by default (a self-re-posting drain task — no plexus thread); a dedicated drain
+// thread is an explicit consumer opt-in, never the default. For the pre_buffer mode an
+// optional anomaly predicate auto-freezes the window when it matches a built
+// record_envelope (absence is meaningful — no predicate means manual trigger() only),
+// typed fully-qualified to mirror the core seam.
 struct recorder_options
 {
     using anomaly_predicate =
@@ -36,11 +37,15 @@ struct recorder_options
 
     recording_mode mode{recording_mode::continuous};
 
-    // required-with-default placeholder: the ring byte-budget. NOT a tuned value.
-    std::size_t ring_bytes{1u << 20};
+    // The ring byte-budget. The host default holds full recall at every measured payload
+    // size for a multi-thousand-message transient (recorder_sweep / test_recorder_defaults_sweep
+    // record the recall-vs-budget curve and guard this floor); the MCU re-tunes it down.
+    std::size_t ring_bytes{16u * 1024u * 1024u};
 
     // required-with-default: a bounded batch the cooperative drain ships per turn before
-    // yielding, so a drain never monopolizes one executor turn.
+    // yielding, so a drain never monopolizes one executor turn. Recall is drain-cadence-
+    // independent (the sweep moves it with ring_bytes, not this batch), so this governs
+    // per-turn executor fairness rather than steady-state recall.
     std::size_t drain_batch_bytes{64u * 1024u};
 
     // required-with-default false: the drain rides the node's executor turns. A consumer

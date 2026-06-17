@@ -44,6 +44,21 @@ target_include_directories(test_value_logger PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_value_logger TEST_PREFIX "integration.")
 
+# The recorder numeric-defaults chosen-cell assertion: the recorded-sweep precedent
+# (tests/crypto/test_rekey_threshold_sweep) pinned for the recorder ring budget. Drives a
+# saturating burst at the SHIPPED ring_bytes default and asserts full recall at every
+# measured payload (a regression below the knee fails), plus the keep-all + exact-1/N
+# decimation guarantees on the typed object lane. Links the facade for the typed endpoints;
+# tests/ is on the include path for in_memory_byte_sink.h.
+add_executable(test_recorder_defaults_sweep test_recorder_defaults_sweep.cpp)
+target_link_libraries(test_recorder_defaults_sweep PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_recorder_defaults_sweep PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_recorder_defaults_sweep TEST_PREFIX "integration.")
+
 # The public recording-QoS declaration gate: drive the capture decision through the node
 # facade alone (node_options.capture + typed_publisher_options.capture), a counting codec
 # witnessing the per-publish encode decision. Links the facade for the typed endpoints;

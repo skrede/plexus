@@ -71,12 +71,14 @@ if(PLEXUS_BUILD_TESTS OR PLEXUS_BUILD_FUZZ_TESTS)
     add_subdirectory(tests)
 endif()
 
-if(PLEXUS_BUILD_EXAMPLES)
-    add_subdirectory(examples)
-endif()
-
 # The flat-stream to MCAP transcode is a host-only tool that links the optional
 # mcap dependency; the core and the MCU build never see it. Gated OFF by default.
+# Added before the examples so the recording example can wire its optional MCAP step
+# against mcap_transcode_lib when the tool is built.
 if(PLEXUS_BUILD_MCAP_TRANSCODE)
     add_subdirectory(tools)
+endif()
+
+if(PLEXUS_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()

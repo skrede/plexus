@@ -17,3 +17,10 @@ target_link_libraries(inproc_upper_layer_rig PRIVATE
     plexus::inproc)
 target_include_directories(inproc_upper_layer_rig PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+add_executable(recorder_sweep recorder_sweep.cpp)
+target_link_libraries(recorder_sweep PRIVATE
+    plexus::plexus
+    plexus::inproc)
+target_include_directories(recorder_sweep PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
