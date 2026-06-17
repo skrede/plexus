@@ -463,6 +463,23 @@ target_include_directories(test_byte_ring PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_byte_ring TEST_PREFIX "integration.")
 
+# The flat record-stream format oracle: the canonical encoding round-trips through the
+# reader (mixed categories, a payload sample byte-identical with no codec in the path),
+# the envelope union reserves the wire-record variant, a mid-write truncation recovers
+# every complete record and loses only the trailing partial, and the recording_sink ->
+# flat_recorder -> byte_ring -> byte_sink chain captures synthetic observer edges that
+# decode offline. Deterministic header-only core (no backend). tests/ is on the include
+# path and the current dir for in_memory_byte_sink.h.
+add_executable(test_record_stream test_record_stream.cpp)
+target_link_libraries(test_record_stream PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+target_include_directories(test_record_stream PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_record_stream TEST_PREFIX "integration.")
+
 # The host-identity accessor oracle: the authenticated peer's host identity is
 # read from the security step (SPKI-derived for TLS, attach-bound for PSK), never a
 # self-asserted TXT/wire claim. Pure free-function legs + a bridge accessor leg — always
