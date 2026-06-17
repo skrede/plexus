@@ -1178,8 +1178,24 @@ if(PLEXUS_BUILD_PCAP_TRANSCODE)
         ${CMAKE_CURRENT_SOURCE_DIR}/..
         ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(test_pcap_transcode PRIVATE
-        PLEXUS_QA_CAPTURE_PATH="${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture.plxr")
+        PLEXUS_QA_CAPTURE_PATH="${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture.plxr"
+        PLEXUS_QA_CIPHER_CAPTURE_PATH="${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture_ciphertext.plxr")
     catch_discover_tests(test_pcap_transcode TEST_PREFIX "integration.")
+
+    # The tshark QA gate: load the projector's pcapng under the Lua dissector and assert a
+    # decoded field VALUE matches a known fixture input (a big-endian byte-order guard) plus a
+    # sealed-blob branch for the ciphertext capture. It consumes the deterministic build-dir
+    # fixtures the C++ test above produces, so it is ordered after it. Skips gracefully where
+    # tshark is absent.
+    add_test(NAME integration.pcap_dissector_qa
+             COMMAND ${CMAKE_COMMAND} -E env sh
+                     ${CMAKE_CURRENT_SOURCE_DIR}/test_pcap_dissector_qa.sh
+                     $<TARGET_FILE:pcap_transcode>
+                     ${PROJECT_SOURCE_DIR}
+                     ${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture.plxr
+                     ${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture_ciphertext.plxr)
+    set_tests_properties(integration.pcap_dissector_qa PROPERTIES
+        DEPENDS "integration.pcap transcode round-trips a captured session through a parsed pcapng")
 endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
