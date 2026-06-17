@@ -26,3 +26,15 @@ if(TARGET plexus::asio)
 endif()
 
 plexus_example(typed_inproc_fastpath plexus::plexus plexus::inproc)
+
+# The logging example projects a typed topic to CSV on stdout via node.log<Codec, Projection>.
+plexus_example(logging_example plexus::plexus plexus::inproc)
+
+# The recording example captures a session to a flat stream over the public byte_sink seam.
+# Its capture leg builds + runs unconditionally; the optional flat->MCAP step links the
+# transcode lib and compiles its branch in only when PLEXUS_BUILD_MCAP_TRANSCODE is on.
+plexus_example(recording_example plexus::plexus plexus::inproc)
+if(TARGET mcap_transcode_lib)
+    target_link_libraries(recording_example PRIVATE mcap_transcode_lib)
+    target_compile_definitions(recording_example PRIVATE PLEXUS_WITH_MCAP_TRANSCODE)
+endif()
