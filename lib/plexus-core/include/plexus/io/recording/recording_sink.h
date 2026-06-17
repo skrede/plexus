@@ -52,6 +52,11 @@ public:
     void on_endpoint(std::string_view fqn, const endpoint_event &e) override { m_recorder.record_endpoint(fqn, e); }
     void on_security(const security_event &e) override { m_recorder.record_security(e); }
 
+    void on_wire(const wire_record &rec) override
+    {
+        m_recorder.record_wire(rec.dir, rec.seq, rec.peer, rec.bytes);
+    }
+
 private:
     void record_message(std::string_view fqn, const message_info &info, const message_view &v)
     {
