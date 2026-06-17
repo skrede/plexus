@@ -173,6 +173,35 @@ struct channel_schema
     std::string_view data;
 };
 
+// The label a declared data type resolves to: how the recorded bytes are framed
+// (message_encoding) and the schema to attach. Built once from the preamble per type_id.
+// The transcode validates NOTHING about whether the bytes match — the preamble is the
+// self-describing source, the honesty is the consumer's contract (serializer-agnostic).
+struct declared_label
+{
+    std::string message_encoding;
+    std::string schema_name;
+    std::string schema_encoding;
+    std::string schema_data;
+};
+
+std::unordered_map<std::uint64_t, declared_label>
+build_declared_labels(const rec::stream_definitions &defs)
+{
+    std::unordered_map<std::uint64_t, declared_label> by_type_id;
+    for(const auto &e : defs.schema)
+    {
+        if(e.message_encoding.empty())
+            continue;
+        by_type_id.emplace(
+            e.type_id,
+            declared_label{e.message_encoding, e.schema_name, e.schema_encoding,
+                           std::string{reinterpret_cast<const char *>(e.schema_data.data()),
+                                       e.schema_data.size()}});
+    }
+    return by_type_id;
+}
+
 // Lazily creates one channel per sample topic, one per control-plane category, and the
 // wire/wire-meta pair, then writes each decoded record onto its channel. Every payload is
 // copied out of the reader-aliasing span before write (the span borrows the flat stream).
@@ -180,8 +209,9 @@ class mcap_emitter
 {
 public:
     mcap_emitter(mcap::McapWriter &writer, transcode_result &result,
-                 const std::unordered_map<std::uint64_t, std::string> &names)
-        : m_writer(writer), m_result(result), m_names(names) {}
+                 const std::unordered_map<std::uint64_t, std::string>        &names,
+                 const std::unordered_map<std::uint64_t, declared_label>     &labels)
+        : m_writer(writer), m_result(result), m_names(names), m_labels(labels) {}
 
     void emit_sample(const rec::decoded_record &r)
     {
@@ -191,7 +221,7 @@ public:
             const auto        n  = m_names.find(r.topic_hash);
             const std::string nm = n == m_names.end() ? std::string{} : n->second;
             const std::string topic = topic_for_hash(r.topic_hash, nm);
-            const auto        cid   = open_channel(topic, k_payload_encoding, {});
+            const auto        cid   = open_sample_channel(topic, r);
             it = m_sample_channels.emplace(r.topic_hash, cid).first;
         }
         write(it->second, static_cast<std::uint32_t>(r.publication_sequence),
@@ -231,6 +261,24 @@ public:
     }
 
 private:
+    // Resolve the sample's type_id against the preamble labels: a declared type opens its
+    // channel with the declared message_encoding + schema; an undeclared (or schema-less)
+    // type falls back to the opaque path (plexus/opaque, schemaId 0).
+    mcap::ChannelId open_sample_channel(std::string_view topic, const rec::decoded_record &r)
+    {
+        if(r.type_id)
+        {
+            const auto it = m_labels.find(*r.type_id);
+            if(it != m_labels.end())
+            {
+                const declared_label &d = it->second;
+                return open_channel(topic, d.message_encoding,
+                                    {d.schema_name, d.schema_encoding, d.schema_data});
+            }
+        }
+        return open_channel(topic, k_payload_encoding, {});
+    }
+
     mcap::ChannelId open_channel(std::string_view topic, std::string_view encoding,
                                  const channel_schema &schema)
     {
@@ -265,7 +313,8 @@ private:
 
     mcap::McapWriter &m_writer;
     transcode_result &m_result;
-    const std::unordered_map<std::uint64_t, std::string> &m_names;
+    const std::unordered_map<std::uint64_t, std::string>    &m_names;
+    const std::unordered_map<std::uint64_t, declared_label> &m_labels;
 
     std::unordered_map<std::uint64_t, mcap::ChannelId> m_sample_channels;
     std::map<rec::record_category, mcap::ChannelId>    m_event_channels;
@@ -319,8 +368,9 @@ transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
         return out;
     }
 
-    const auto   topic_names = build_topic_names(input->defs, input->records);
-    mcap_emitter emitter{writer, out, topic_names};
+    const auto   topic_names     = build_topic_names(input->defs, input->records);
+    const auto   declared_labels = build_declared_labels(input->defs);
+    mcap_emitter emitter{writer, out, topic_names, declared_labels};
     for(const auto &r : input->records)
         emit_record(emitter, r);
 

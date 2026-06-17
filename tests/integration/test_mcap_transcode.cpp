@@ -18,8 +18,14 @@
 #include "plexus/wire_bytes.h"
 #include "plexus/subscriber.h"
 #include "plexus/typed_codec.h"
+#include "plexus/type_schema.h"
 #include "plexus/node_options.h"
+#include "plexus/recording_qos.h"
+#include "plexus/recorder_options.h"
 #include "plexus/wire_capture_qos.h"
+
+#include "plexus/io/capture_policy.h"
+#include "plexus/wire/topic_hash.h"
 
 #include "plexus/io/recording_channel.h"
 #include "plexus/io/wire_capturing_transport.h"
@@ -289,6 +295,152 @@ TEST_CASE("mcap transcode round-trips a captured session through the mcap reader
         }
     }
     REQUIRE(saw_jsonschema);
+
+    std::filesystem::remove(out);
+}
+
+namespace {
+
+// A codec whose recorded bytes are bare JSON ({"value":N}) so a declared json/jsonschema
+// preamble entry is truthful: the payload-fidelity tier stores the codec output verbatim,
+// and the transcode labels the channel from the preamble (it validates nothing — the
+// honesty is the producer's contract).
+struct json_reading
+{
+    std::uint32_t value{};
+};
+
+struct json_reading_codec
+{
+    using value_type = json_reading;
+
+    plexus::wire_bytes<> encode(const json_reading &v) const
+    {
+        auto owner = std::make_shared<std::string>("{\"value\":" + std::to_string(v.value) + "}");
+        std::span<const std::byte> view = std::as_bytes(std::span{owner->data(), owner->size()});
+        return plexus::wire_bytes<>{view, std::move(owner)};
+    }
+
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte>, json_reading &) const
+    {
+        return {};
+    }
+
+    plexus::type_identity type_info() const { return {0x70110001u, "json_reading"}; }
+};
+
+static_assert(plexus::typed_codec<json_reading_codec>);
+
+constexpr std::string_view k_reading_jsonschema =
+    R"({"type":"object","title":"json_reading","properties":{"value":{"type":"integer"}}})";
+
+// Drive a single producer that captures a DECLARED json topic and an UNDECLARED topic, both
+// at payload fidelity, and return the flat capture. The declared topic's preamble entry
+// labels its channel; the undeclared topic resolves no entry and stays opaque.
+std::vector<std::byte> capture_declared_and_opaque(int count)
+{
+    inproc_bus<>      bus;
+    inproc_executor<> ex{bus};
+    static_discovery  disc{{}};
+
+    inproc_transport<> consumer_tp{ex, bus};
+    inproc_transport<> producer_tp{ex, bus};
+
+    bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, base_opts()};
+    bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
+
+    in_memory_byte_sink sink;
+
+    plexus::recorder_options ropts;
+    const auto schema_bytes = std::as_bytes(std::span{k_reading_jsonschema.data(),
+                                                      k_reading_jsonschema.size()});
+    ropts.schemas.push_back(plexus::type_schema{.type_id          = 0x70110001u,
+                                                .message_encoding = "json",
+                                                .schema_name      = "json_reading",
+                                                .schema_encoding  = "jsonschema",
+                                                .schema_data      = schema_bytes});
+    auto recorder = producer.make_recorder(sink, std::move(ropts));
+
+    consumer.listen({"inproc", "host-a:5000"});
+    producer.listen({"inproc", "host-b:6000"});
+    ex.drain();
+
+    using declared_publisher = plexus::publisher<json_reading_codec>;
+    using declared_subscriber = plexus::subscriber<json_reading_codec>;
+    using opaque_publisher = typed_publisher;
+    using opaque_subscriber = typed_subscriber;
+
+    declared_subscriber d_sub{consumer, "declared.telemetry", [](const json_reading &) {}};
+    opaque_subscriber   o_sub{consumer, "opaque.telemetry", [](const reading &) {}};
+
+    plexus::typed_publisher_options decl_opts;
+    decl_opts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
+    plexus::typed_publisher_options opaque_opts;
+    opaque_opts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
+
+    declared_publisher d_pub{producer, "declared.telemetry", decl_opts, json_reading_codec{}};
+    opaque_publisher   o_pub{producer, "opaque.telemetry", opaque_opts, reading_codec{}};
+    ex.drain();
+
+    for(int i = 0; i < count; ++i)
+    {
+        auto d_loan = d_pub.borrow();
+        REQUIRE(d_loan);
+        d_loan->value = static_cast<std::uint32_t>(i);
+        d_pub.publish(std::move(d_loan));
+
+        auto o_loan = o_pub.borrow();
+        REQUIRE(o_loan);
+        o_loan->value = static_cast<std::uint32_t>(i);
+        o_pub.publish(std::move(o_loan));
+        ex.drain();
+    }
+    while(recorder.pump())
+        ;
+    recorder.flush();
+
+    const auto span = sink.bytes();
+    return std::vector<std::byte>(span.begin(), span.end());
+}
+
+}
+
+TEST_CASE("mcap transcode labels a declared data channel from the preamble; undeclared stays opaque",
+          "[mcap_transcode][mcap]")
+{
+    const int  count = 4;
+    const auto flat  = capture_declared_and_opaque(count);
+    REQUIRE(!flat.empty());
+
+    const auto out = std::filesystem::temp_directory_path() /
+                     std::filesystem::path{"plexus_transcode_declared.mcap"};
+    std::filesystem::remove(out);
+
+    const auto result = plexus::tools::flat_to_mcap(flat, out);
+    REQUIRE(result.ok);
+
+    const auto rb = read_mcap(out);
+    REQUIRE(rb.topics.count("declared.telemetry") == 1);
+    REQUIRE(rb.topics.count("opaque.telemetry") == 1);
+
+    // The declared topic's channel carries the preamble's message_encoding + jsonschema.
+    const auto declared = rb.channel_encodings.at("declared.telemetry");
+    REQUIRE(declared.first == "json");
+    REQUIRE(declared.second == "jsonschema");
+
+    // The undeclared topic resolves no preamble entry and stays opaque (schemaId 0).
+    const auto opaque = rb.channel_encodings.at("opaque.telemetry");
+    REQUIRE(opaque.first == "plexus/opaque");
+    REQUIRE(opaque.second.empty());
+
+    // The json-channel legality rule (the Foxglove doctor rule) still holds for every json
+    // channel — including the now-declared data channel.
+    for(const auto &[topic, enc] : rb.channel_encodings)
+    {
+        const auto &[msg_enc, schema_enc] = enc;
+        if(msg_enc == "json")
+            REQUIRE((schema_enc.empty() || schema_enc == "jsonschema"));
+    }
 
     std::filesystem::remove(out);
 }
