@@ -1056,6 +1056,16 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_mux_minimal_composition TEST_PREFIX "integration.")
 
+    # The companion node-level proof: the variadic node ctor that builds the mux itself from
+    # the borrowed leaves (the consumer-facing node<Policy, T1, T2, ...> shape). Links the
+    # node facade; the unix+tcp pack still pulls in no secure member.
+    add_executable(test_mux_node_composition test_mux_node_composition.cpp)
+    target_link_libraries(test_mux_node_composition PRIVATE
+        plexus::plexus
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_mux_node_composition TEST_PREFIX "integration.")
+
     # The hot-path allocation audit gains a type-erased polymorphic_byte_channel variant when the asio
     # backend is on: the same steady-state 0-alloc invariant must hold across the single
     # virtual hop the erasure adds. The mux headers are header-only inside plexus::asio, so
