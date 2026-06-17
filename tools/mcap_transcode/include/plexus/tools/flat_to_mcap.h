@@ -25,11 +25,12 @@ struct transcode_result
 
 // Read a flat plexus capture stream and write an MCAP container to out_mcap.
 //
-// Sample records become Messages on per-topic Channels; the control-plane event
-// records ride synthetic per-category channels; wire-frame records ride their own
-// channel. The raw payload bytes are laid into each Message verbatim and the
-// encoding is named in the Schema — no plexus codec runs (serializer-agnostic).
-// flat_stream must stay alive for the duration of the call (the reader borrows it).
+// Sample records become Messages on per-topic Channels (opaque plexus bytes, no schema);
+// the control-plane event records ride synthetic per-category channels carrying a
+// transcode-synthesized JSON object with a real jsonschema, so Foxglove decodes them;
+// wire-frame records ride their own channel. Sample payload bytes are laid into each
+// Message verbatim — no plexus codec runs (serializer-agnostic). flat_stream must stay
+// alive for the duration of the call (the reader borrows it).
 transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
                               const std::filesystem::path &out_mcap);
 
