@@ -445,6 +445,24 @@ target_include_directories(test_downgrade_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_downgrade_inproc TEST_PREFIX "integration.")
 
+# The recorder write-path spine oracle: the bounded grown-once SPSC byte-ring's
+# hard invariants — backing store allocated once (the alloc counter delta is zero
+# across a saturating push loop), never-block + drop-newest on a full ring, the
+# exact dropout accounting (sum(dropout.count)+drained==produced, looped), the
+# byte-budget residency bound, the no-thread cooperative drain into the in-memory
+# byte_sink, and the drop-oldest overwrite discipline. Deterministic header-only
+# core (no backend). tests/ is on the include path for support/alloc_counter.h and
+# the current dir for in_memory_byte_sink.h.
+add_executable(test_byte_ring test_byte_ring.cpp)
+target_link_libraries(test_byte_ring PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+target_include_directories(test_byte_ring PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_byte_ring TEST_PREFIX "integration.")
+
 # The host-identity accessor oracle: the authenticated peer's host identity is
 # read from the security step (SPKI-derived for TLS, attach-bound for PSK), never a
 # self-asserted TXT/wire claim. Pure free-function legs + a bridge accessor leg — always

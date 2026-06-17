@@ -8,7 +8,8 @@ set(PLEXUS_WIRE_TESTS
     test_length_prefixed_helper
     test_subscribe_qos_codec
     test_fetch_latched_codec
-    test_heartbeat_codec)
+    test_heartbeat_codec
+    test_crc32c)
 
 foreach(test ${PLEXUS_WIRE_TESTS})
     add_executable(${test} ${test}.cpp)
