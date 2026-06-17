@@ -266,12 +266,15 @@ public:
     // after the node returns; this is the same posted-edge teardown contract every edge
     // obeys (firing inline would breach the observer DoS-guard). The teardown variant
     // captures an observer snapshot rather than the engine, since the engine is destroyed
-    // before the executor drains this closure. A dtor must not throw — the post is wrapped
-    // so no exception escapes (a throwing dtor is UB).
+    // before the executor drains this closure. The node's own peer watcher is deregistered
+    // FIRST so the snapshot holds only externally-owned observers, which outlive the drain
+    // by the teardown contract (m_peer_watch is a member and dies with the node). A dtor
+    // must not throw — the post is wrapped so no exception escapes (a throwing dtor is UB).
     ~node()
     {
         try
         {
+            m_engine.remove_observer(m_peer_watch);
             m_engine.post_participant_teardown({io::participant_edge::destroyed, m_id});
         }
         catch(...)
