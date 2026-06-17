@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <utility>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace plexus::io::recording {
@@ -47,6 +48,14 @@ public:
         m_fidelity_resolver = std::move(resolver);
     }
 
+    // Wire the per-topic producer type_id (registry.producer_type_id(hash)) so a recorded
+    // sample keys to the declared schema; unset records no type_id (a valid opaque sample).
+    void set_type_id_resolver(
+        plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)> resolver)
+    {
+        m_type_id_resolver = std::move(resolver);
+    }
+
     void on_message_published(std::string_view fqn, const message_view &v) override
     {
         record_message(fqn, m_empty_info, v);
@@ -75,12 +84,15 @@ private:
         const std::span<const std::byte> bytes = v;
         const capture_fidelity fidelity =
             m_fidelity_resolver ? m_fidelity_resolver(hash) : capture_fidelity::payload;
-        m_recorder.record_sample(hash, info, 0u, false, fidelity, bytes);
+        const std::optional<std::uint64_t> id =
+            m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
+        m_recorder.record_sample(hash, info, id.value_or(0), id.has_value(), fidelity, bytes);
     }
 
     Recorder          &m_recorder;
     const message_info m_empty_info{};
     plexus::detail::move_only_function<capture_fidelity(std::uint64_t)> m_fidelity_resolver;
+    plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)> m_type_id_resolver;
 };
 
 template <typename Recorder>

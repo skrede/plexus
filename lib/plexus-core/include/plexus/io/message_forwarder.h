@@ -577,6 +577,13 @@ public:
         return m_endpoint.registry().fqn_for(topic_hash);
     }
 
+    // The topic's publisher-declared producer type_id, absent for an undeclared topic — the
+    // recorder keys a captured sample to its declared schema by this id.
+    [[nodiscard]] std::optional<std::uint64_t> producer_type_id(std::uint64_t topic_hash) const
+    {
+        return m_endpoint.registry().producer_type_id(topic_hash);
+    }
+
     // The per-(topic, band, cause) drop tally; 0 for an unknown topic or out-of-range band.
     [[nodiscard]] std::size_t dropped(std::string_view fqn, std::size_t band, detail::drop_cause cause) const
     {
