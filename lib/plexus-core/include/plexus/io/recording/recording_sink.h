@@ -10,8 +10,12 @@
 
 #include "plexus/wire/topic_hash.h"
 
+#include "plexus/detail/compat.h"
+
 #include <span>
 #include <cstddef>
+#include <utility>
+#include <cstdint>
 #include <string_view>
 
 namespace plexus::io::recording {
@@ -35,6 +39,13 @@ public:
     explicit recording_sink(Recorder &recorder) noexcept : m_recorder(recorder) {}
 
     bool observes_data_path() const override { return true; }
+
+    // Wire the per-topic resolved fidelity (capture_policy.rule_for(hash).fidelity) so a
+    // recorded sample is stamped with its true tier; unset falls back to payload.
+    void set_fidelity_resolver(plexus::detail::move_only_function<capture_fidelity(std::uint64_t)> resolver)
+    {
+        m_fidelity_resolver = std::move(resolver);
+    }
 
     void on_message_published(std::string_view fqn, const message_view &v) override
     {
@@ -60,13 +71,16 @@ public:
 private:
     void record_message(std::string_view fqn, const message_info &info, const message_view &v)
     {
+        const std::uint64_t hash = wire::fqn_topic_hash(fqn);
         const std::span<const std::byte> bytes = v;
-        m_recorder.record_sample(wire::fqn_topic_hash(fqn), info, 0u, false,
-                                 capture_fidelity::payload, bytes);
+        const capture_fidelity fidelity =
+            m_fidelity_resolver ? m_fidelity_resolver(hash) : capture_fidelity::payload;
+        m_recorder.record_sample(hash, info, 0u, false, fidelity, bytes);
     }
 
     Recorder          &m_recorder;
     const message_info m_empty_info{};
+    plexus::detail::move_only_function<capture_fidelity(std::uint64_t)> m_fidelity_resolver;
 };
 
 template <typename Recorder>

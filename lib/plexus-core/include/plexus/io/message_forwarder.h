@@ -245,10 +245,15 @@ public:
         // queue with no further copy.
         const wire_bytes<> framed = frame_owned(fhdr, uhdr, payload, counter);
 
+        // The taps see the BARE codec bytes (the framed buffer minus the frame prefix),
+        // an aliasing subspan sharing the framed owner — the prefix size is known here at
+        // the framing site, so the offline projector never re-parses framing to strip it.
+        const message_view bare = bare_of(framed, counter);
+
         // The published tap fires ONCE after framing, borrowing the framed owner (an
         // addref of the single per-publish buffer, never a copy); the delivered tap fires
         // ONCE per fanned destination below. Both stay posted through the engine sink.
-        emit_published(hash, fqn, framed);
+        emit_published(hash, fqn, bare);
 
         const message_info pub_info{.publication_sequence = uhdr.sequence,
                                     .source_timestamp = fhdr.timestamp_ns};
@@ -280,7 +285,7 @@ public:
                         m_egress.enqueue(*route, band, qos.congestion, framed);
                     if(cause != detail::drop_cause::none)
                         shed(hash, band, cause, sub.tier);
-                    emit_delivered(hash, fqn, pub_info, framed);
+                    emit_delivered(hash, fqn, pub_info, bare);
                 }
 
         retain_if_latched(hash, qos, framed);
@@ -319,6 +324,9 @@ public:
         // ring (frame-once-fan-to-N).
         wire_bytes<> framed;
         bool encoded = false;
+        const std::optional<std::uint64_t> counter =
+            topic != nullptr && topic->emit_source_identity ? topic->endpoint_counter
+                                                            : std::nullopt;
         const auto encode_once = [&] {
             if(encoded)
                 return;
@@ -329,9 +337,6 @@ public:
                     .sequence   = carrier.sequence,
                     .topic_hash = hash
             };
-            const std::optional<std::uint64_t> counter =
-                topic != nullptr && topic->emit_source_identity ? topic->endpoint_counter
-                                                                : std::nullopt;
             wire::frame_header fhdr{
                     .type         = wire::msg_type::unidirectional,
                     .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
@@ -354,7 +359,11 @@ public:
                                     .source_timestamp = carrier.source_timestamp};
         if(capture_payload)
             encode_once();
-        emit_published(hash, fqn, capture_payload ? framed : message_view{});
+        // The bare codec bytes (the framed buffer minus the frame prefix), an aliasing
+        // subspan sharing the framed owner — built only when the encode fired, so an
+        // unselected topic stays envelope-only (message_view{}) and pays no encode.
+        const message_view bare = capture_payload ? bare_of(framed, counter) : message_view{};
+        emit_published(hash, fqn, bare);
 
         const std::size_t band = detail::band_of(qos.priority);
         if(subs != nullptr)
@@ -370,7 +379,7 @@ public:
                     if(eligible_for_object(sub, carrier))
                     {
                         sub.channel->send_object(carrier);
-                        emit_delivered(hash, fqn, obj_info, capture_payload ? framed : message_view{});
+                        emit_delivered(hash, fqn, obj_info, bare);
                         continue;
                     }
                 }
@@ -379,7 +388,7 @@ public:
                     m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
                 if(cause != detail::drop_cause::none)
                     shed(hash, band, cause, sub.tier);
-                emit_delivered(hash, fqn, obj_info, capture_payload ? framed : message_view{});
+                emit_delivered(hash, fqn, obj_info, bare);
             }
 
         // Force one encode even when every live subscriber fast-pathed, so a late bytes
@@ -600,6 +609,18 @@ private:
         wire::encode_unidirectional_frame_into(*buf, fhdr, uhdr, payload, counter);
         std::span<const std::byte> view{*buf};
         return wire_bytes<>{view, std::shared_ptr<const void>{std::move(buf)}};
+    }
+
+    // The bare codec bytes of a just-framed buffer: an aliasing subspan past the frame
+    // prefix [frame_header][unidirectional_header][counter?], sharing the framed owner
+    // (an addref, no copy). The prefix size is the framing layout the producer just wrote
+    // (data_frame.h), so a payload-fidelity tap records bytes byte-identical to encode().
+    static message_view bare_of(const wire_bytes<> &framed, std::optional<std::uint64_t> counter)
+    {
+        const std::size_t prefix = wire::header_size + wire::unidirectional_header_size
+                                   + (counter ? wire::varint_size(*counter) : 0);
+        const std::span<const std::byte> view = static_cast<std::span<const std::byte>>(framed);
+        return message_view{view.subspan(prefix), framed.owner()};
     }
 
     // Push the just-framed frame into the per-topic KEEP_LAST-N history ring, sized once

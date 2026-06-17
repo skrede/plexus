@@ -191,10 +191,15 @@ private:
     io::recording::flat_recorder         &flat() { return std::get<io::recording::flat_recorder>(m_block->machinery); }
     io::recording::pre_buffer_controller &pre()  { return std::get<io::recording::pre_buffer_controller>(m_block->machinery); }
 
-    // The observer forwards each edge to whichever discipline the variant holds.
+    // The observer forwards each edge to whichever discipline the variant holds, stamping
+    // each sample with the topic's capture_policy-resolved fidelity (no longer hard-coded
+    // payload) — a wire-resolved tier on an inproc producer degrades to the bare bytes too.
     std::unique_ptr<io::observer> make_sink()
     {
-        return std::make_unique<variant_sink>(*m_block);
+        return std::make_unique<variant_sink>(
+            *m_block, [engine = m_engine](std::uint64_t hash) {
+                return engine->capture().rule_for(hash).fidelity;
+            });
     }
 
     // Post one cooperative drain turn. It re-posts ITSELF only while the ring still holds
@@ -230,7 +235,14 @@ private:
     class variant_sink : public io::observer
     {
     public:
-        explicit variant_sink(block &blk) noexcept : m_block(blk) {}
+        // The fidelity resolver maps a topic hash to its capture_policy-resolved tier so a
+        // recorded sample is stamped with its true fidelity; unset falls back to payload.
+        variant_sink(block &blk,
+                     plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> resolver)
+            : m_block(blk)
+            , m_fidelity_resolver(std::move(resolver))
+        {
+        }
 
         bool observes_data_path() const override { return true; }
 
@@ -271,11 +283,11 @@ private:
     private:
         void sample(std::string_view fqn, const io::message_info &info, const io::message_view &v)
         {
+            const std::uint64_t hash = wire::fqn_topic_hash(fqn);
             const std::span<const std::byte> bytes = v;
-            record([&](auto &m) {
-                m.record_sample(wire::fqn_topic_hash(fqn), info, 0u, false,
-                                io::capture_fidelity::payload, bytes);
-            });
+            const io::capture_fidelity fidelity =
+                m_fidelity_resolver ? m_fidelity_resolver(hash) : io::capture_fidelity::payload;
+            record([&](auto &m) { m.record_sample(hash, info, 0u, false, fidelity, bytes); });
         }
 
         // Encode the edge into whichever discipline the variant holds, then re-arm the
@@ -289,6 +301,7 @@ private:
 
         block             &m_block;
         const io::message_info m_empty_info{};
+        plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> m_fidelity_resolver;
     };
 
     Engine                       *m_engine;
