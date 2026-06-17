@@ -26,11 +26,31 @@ namespace {
 namespace rec = plexus::io::recording;
 
 // The MCAP message/channel encoding names: the transcode never decodes a sample,
-// so the payload is opaque plexus bytes. The control-plane and wire channels carry
-// a small fixed JSON shape this tool encodes from the decoded scalar fields.
+// so the payload is opaque plexus bytes. The control-plane and wire-meta channels
+// carry a small fixed JSON shape this tool encodes from the decoded scalar fields.
 constexpr const char *k_payload_encoding = "plexus/opaque";
 constexpr const char *k_events_encoding  = "json";
 constexpr const char *k_wire_encoding    = "plexus/wire-frame";
+
+// MCAP rule (the one Foxglove enforces): a "json" message channel must reference a
+// schema encoded as "jsonschema" (a JSON Schema document) or no schema at all — never
+// a schema whose own encoding is "json". The two synthesized-JSON channels below carry
+// a real jsonschema describing the fixed object shapes events_json()/wire_json() emit.
+constexpr const char *k_jsonschema_encoding = "jsonschema";
+
+constexpr const char *k_event_schema_name = "plexus.event";
+constexpr const char *k_event_schema =
+    R"({"type":"object","title":"plexus.event","properties":{)"
+    R"("category":{"type":"integer"},"capture_ts":{"type":"integer"},)"
+    R"("topic_hash":{"type":"integer"},"edge":{"type":"integer"},)"
+    R"("verdict":{"type":"integer"},"count":{"type":"integer"},)"
+    R"("peer":{"type":"string"},"fqn":{"type":"string"},"type_id":{"type":"integer"}}})";
+
+constexpr const char *k_wire_meta_schema_name = "plexus.wire.meta";
+constexpr const char *k_wire_meta_schema =
+    R"({"type":"object","title":"plexus.wire.meta","properties":{)"
+    R"("capture_ts":{"type":"integer"},"direction":{"type":"integer"},)"
+    R"("wire_seq":{"type":"integer"},"peer":{"type":"string"}}})";
 
 std::string hex16(std::uint64_t v)
 {
@@ -144,6 +164,15 @@ std::span<const std::byte> as_bytes(const std::string &s)
     return std::as_bytes(std::span{s.data(), s.size()});
 }
 
+// The schema to attach to a channel, or an empty encoding to attach none (schemaId 0 —
+// the serializer-agnostic opaque path Foxglove leaves undecoded).
+struct channel_schema
+{
+    std::string_view name;
+    std::string_view encoding;
+    std::string_view data;
+};
+
 // Lazily creates one channel per sample topic, one per control-plane category, and the
 // wire/wire-meta pair, then writes each decoded record onto its channel. Every payload is
 // copied out of the reader-aliasing span before write (the span borrows the flat stream).
@@ -162,7 +191,7 @@ public:
             const auto        n  = m_names.find(r.topic_hash);
             const std::string nm = n == m_names.end() ? std::string{} : n->second;
             const std::string topic = topic_for_hash(r.topic_hash, nm);
-            const auto        cid   = open_channel(topic, k_payload_encoding);
+            const auto        cid   = open_channel(topic, k_payload_encoding, {});
             it = m_sample_channels.emplace(r.topic_hash, cid).first;
         }
         write(it->second, static_cast<std::uint32_t>(r.publication_sequence),
@@ -173,8 +202,10 @@ public:
     {
         if(!m_wire_open)
         {
-            m_wire_channel      = open_channel("plexus/wire", k_wire_encoding);
-            m_wire_meta_channel = open_channel("plexus/wire/meta", k_events_encoding);
+            m_wire_channel      = open_channel("plexus/wire", k_wire_encoding, {});
+            m_wire_meta_channel = open_channel("plexus/wire/meta", k_events_encoding,
+                                               {k_wire_meta_schema_name, k_jsonschema_encoding,
+                                                k_wire_meta_schema});
             m_wire_open         = true;
         }
         // The framed bytes are the message data (the fidelity capture); the join keys
@@ -191,19 +222,27 @@ public:
         auto it = m_event_channels.find(r.category);
         if(it == m_event_channels.end())
         {
-            const auto cid = open_channel(events_topic_for(r.category), k_events_encoding);
+            const auto cid = open_channel(events_topic_for(r.category), k_events_encoding,
+                                          {k_event_schema_name, k_jsonschema_encoding,
+                                           k_event_schema});
             it = m_event_channels.emplace(r.category, cid).first;
         }
         write(it->second, 0, r.capture_ts, r.capture_ts, as_bytes(events_json(r)));
     }
 
 private:
-    mcap::ChannelId open_channel(std::string_view topic, std::string_view encoding)
+    mcap::ChannelId open_channel(std::string_view topic, std::string_view encoding,
+                                 const channel_schema &schema)
     {
-        mcap::Schema schema{topic, encoding, std::string_view{}};
-        m_writer.addSchema(schema);
-        ++m_result.schemas;
-        mcap::Channel channel{topic, encoding, schema.id};
+        mcap::SchemaId schema_id = 0;
+        if(!schema.encoding.empty())
+        {
+            mcap::Schema s{schema.name, schema.encoding, schema.data};
+            m_writer.addSchema(s);
+            ++m_result.schemas;
+            schema_id = s.id;
+        }
+        mcap::Channel channel{topic, encoding, schema_id};
         m_writer.addChannel(channel);
         ++m_result.channels;
         return channel.id;

@@ -39,10 +39,12 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <utility>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace {
@@ -177,6 +179,10 @@ struct read_back
     // tail, so recovering them proves the raw bytes rode through the transcode byte-
     // identical (the transcode never decodes — it lays the framed bytes in verbatim).
     std::unordered_set<std::uint32_t> wire_tail_values;
+    // topic -> (channel messageEncoding, referenced schema encoding or "" for schemaId 0).
+    // The mcap-doctor rule Foxglove enforces: a "json" message channel may only reference a
+    // schema encoded "jsonschema" (or none) — never one whose own encoding is "json".
+    std::unordered_map<std::string, std::pair<std::string, std::string>> channel_encodings;
 };
 
 read_back read_mcap(const std::filesystem::path &path)
@@ -191,6 +197,10 @@ read_back read_mcap(const std::filesystem::path &path)
         ++rb.total_messages;
         const std::string topic = view.channel->topic;
         rb.topics.insert(topic);
+        if(rb.channel_encodings.find(topic) == rb.channel_encodings.end())
+            rb.channel_encodings.emplace(
+                topic, std::pair{view.channel->messageEncoding,
+                                 view.schema ? view.schema->encoding : std::string{}});
         if(topic == "plexus/wire/meta")
             ++rb.wire_meta_messages;
         else if(topic == "plexus/wire")
@@ -263,6 +273,22 @@ TEST_CASE("mcap transcode round-trips a captured session through the mcap reader
     // through the transcode with no decode in the path.
     for(std::uint32_t v = 0; v < static_cast<std::uint32_t>(count); ++v)
         REQUIRE(rb.wire_tail_values.count(v) == 1);
+
+    // Every "json" message channel references a legal schema encoding ("jsonschema" or
+    // none) — the exact rule Foxglove rejected when the transcode emitted "json" as the
+    // schema encoding. The synthesized event + wire-meta channels carry a real jsonschema.
+    bool saw_jsonschema = false;
+    for(const auto &[topic, enc] : rb.channel_encodings)
+    {
+        const auto &[msg_enc, schema_enc] = enc;
+        if(msg_enc == "json")
+        {
+            REQUIRE((schema_enc.empty() || schema_enc == "jsonschema"));
+            if(schema_enc == "jsonschema")
+                saw_jsonschema = true;
+        }
+    }
+    REQUIRE(saw_jsonschema);
 
     std::filesystem::remove(out);
 }
