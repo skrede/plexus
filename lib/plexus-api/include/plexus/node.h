@@ -130,12 +130,17 @@ inline node_id node_id_from_name(std::string_view name) noexcept
 }
 
 struct typed_publisher_options;
+struct value_logger_options;
+struct no_projection;
 
 template <typename Codec = void>
 class publisher;
 
 template <typename Codec = void>
 class subscriber;
+
+template <typename Codec, typename Projection = no_projection>
+class value_logger;
 
 template <typename T> struct no_codec;
 
@@ -183,6 +188,7 @@ class node
     // friends, so there is no public node.publish / node.subscribe / declare_* factory.
     template <typename C> friend class publisher;
     template <typename C> friend class subscriber;
+    template <typename C, typename Pr> friend class value_logger;
     template <typename S, template <typename> class Cq, template <typename> class Cs>
     friend class caller;
     template <typename S, template <typename> class Cq, template <typename> class Cs>
@@ -373,6 +379,19 @@ public:
     auto advertise(std::string_view topic, const typed_publisher_options &opts = {}, Codec codec = {})
     {
         return publisher<Codec>{*this, topic, opts, std::move(codec)};
+    }
+
+    // Log a typed topic: decode one topic's samples with the codec and project each
+    // decoded value to a printable record (CSV / JSON-Lines / text per opts.format) on
+    // opts.out. The codec is spelled explicitly; an opt-in projection (column names +
+    // field emit) is supplied as a sibling argument, defaulting to the operator<< text
+    // floor. The codec and projection live only in the returned handle — never the tap.
+    template <typename Codec, typename Projection = no_projection>
+    [[nodiscard]] auto log(std::string_view topic, const value_logger_options &opts,
+                           Codec codec = {}, Projection projection = {})
+    {
+        return value_logger<Codec, Projection>(*this, topic, opts, std::move(codec),
+                                               std::move(projection));
     }
 
     // Attach a recorder draining to `sink`, the first-class consumer-sovereign capture
