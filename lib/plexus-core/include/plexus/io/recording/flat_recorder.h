@@ -49,9 +49,10 @@ public:
     // Emit the stream header + Definitions preamble straight to the sink (the head is
     // never subject to ring overflow). Call once before any record_* call.
     void open(const node_id &node, topic_capture_rule rule,
-              std::span<const type_schema_entry> schema = {})
+              std::span<const type_schema_entry> schema = {},
+              capture_crypto_position crypto = capture_crypto_position::cleartext)
     {
-        const auto head = m_writer.begin_stream(m_clock(), node, rule, schema);
+        const auto head = m_writer.begin_stream(m_clock(), node, rule, schema, crypto);
         m_sink.write(head);
     }
 
