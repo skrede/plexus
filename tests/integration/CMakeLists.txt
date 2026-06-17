@@ -31,6 +31,19 @@ target_include_directories(test_typed_inproc_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_typed_inproc_alloc TEST_PREFIX "integration.")
 
+# The typed value_logger: the codec decodes one topic at the handle, a projection (or the
+# operator<< floor) formats CSV/JSON-Lines/text into a reused buffer. The alloc-gate
+# section needs the replaceable new/delete, so tests/ is on the include path for
+# support/alloc_counter.h (the test_typed_inproc_alloc precedent).
+add_executable(test_value_logger test_value_logger.cpp)
+target_link_libraries(test_value_logger PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_value_logger PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_value_logger TEST_PREFIX "integration.")
+
 # The public recording-QoS declaration gate: drive the capture decision through the node
 # facade alone (node_options.capture + typed_publisher_options.capture), a counting codec
 # witnessing the per-publish encode decision. Links the facade for the typed endpoints;
