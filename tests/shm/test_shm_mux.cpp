@@ -7,10 +7,12 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/locality.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/wire/stream_inbound.h"
 #include "plexus/wire_bytes.h"
@@ -258,4 +260,48 @@ TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring a
         ++fell_back;
     }
     REQUIRE(fell_back == k_iterations);
+}
+
+TEST_CASE("shm.mux a congestion-blocked send drives on_drop with cause=blocked transport=local",
+          "[shm][mux][drop]")
+{
+    // The same-host SHM tier is not a dark drop tier: a send into a full ring (the reliable
+    // gate finds no recyclable slot with no consumer draining) surfaces the verdict off
+    // send() AND posts a drop_event{blocked, locality::local} through the channel's on_drop —
+    // the edge the engine binds to its posted drop_sink at dial/accept. Loop so a single-run
+    // fluke cannot pass.
+    constexpr int k_iterations = 4;
+    int saw_blocked = 0;
+    for(int iter = 0; iter < k_iterations; ++iter)
+    {
+        region_store store;
+        stub_broker  broker{store};
+        shm_member   shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+
+        std::unique_ptr<shm_member::channel_type> ch;
+        shm.on_dialed([&](std::unique_ptr<shm_member::channel_type> c, const pio::endpoint &) {
+            ch = std::move(c);
+        });
+        shm.dial({"shm", "topic.blocked"});
+        REQUIRE(ch);
+
+        std::vector<plexus::io::detail::drop_event> drops;
+        ch->on_drop([&drops](const plexus::io::detail::drop_event &ev) { drops.push_back(ev); });
+
+        // No consumer cursor is registered, so the reliable ring fills and a send past its
+        // depth finds no free slot — the congestion verdict fires emit_drop. Flood well past
+        // any default depth.
+        const std::vector<std::byte> payload(64, std::byte{0x5A});
+        for(int i = 0; i < 4096 && drops.empty(); ++i)
+            ch->send(std::span<const std::byte>{payload});
+
+        REQUIRE_FALSE(drops.empty());
+        for(const auto &ev : drops)
+        {
+            REQUIRE(ev.cause == plexus::io::detail::drop_cause::blocked);
+            REQUIRE(ev.transport == plexus::io::locality::local);
+        }
+        ++saw_blocked;
+    }
+    REQUIRE(saw_blocked == k_iterations);
 }

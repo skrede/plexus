@@ -269,6 +269,22 @@ target_include_directories(test_obs_tap_points PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_obs_tap_points TEST_PREFIX "integration.")
 
+# The declaration-lifecycle timeline oracle: a custom observer reconstructs a node's
+# create/destroy + endpoint declare/drop/register/retire over a single-node inproc
+# composition, witnessing the posted edges by pumping the fixture-owned executor. Uses the
+# node facade (plexus::plexus); the shared recording_observer.h resolves via the integration
+# include dir.
+add_executable(test_spine_lifecycle_inproc test_spine_lifecycle_inproc.cpp)
+target_link_libraries(test_spine_lifecycle_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_spine_lifecycle_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_spine_lifecycle_inproc TEST_PREFIX "integration.")
+
 # The read-buffer partial-read oracle: one framed wire message fed to the frame_reassembler
 # in many small sub-header and mid-payload chunks still produces exactly one byte-identical
 # complete_frame — the accumulation behavior any later read-buffer resize must preserve.

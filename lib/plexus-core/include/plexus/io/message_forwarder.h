@@ -399,6 +399,8 @@ public:
         forget_remote_topic(p.node_name, fqn);
         auto req = wire::encode_unsubscribe_request({.topic_hash = hash});
         send_control(p.channel, wire::msg_type::unsubscribe, req);
+        emit_qos_change(qos_edge::unsubscribed, hash, subscriber_qos{}, rxo_verdict::compatible,
+                        std::nullopt);
         return true;
     }
 

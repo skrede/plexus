@@ -101,6 +101,7 @@ struct endpoint_seam
                                          std::optional<std::uint64_t> type_id,
                                          const void *native_key, object_dispatch dispatch);
     void (*retire_subscriber)(void *ctx, std::uint64_t rid);
+    void (*retire_publisher)(void *ctx, std::string_view fqn);
 
     void (*serve_procedure)(void *ctx, std::string_view fqn, handler_fn handler);
     void (*retire_procedure)(void *ctx, std::string_view fqn);

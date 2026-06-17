@@ -7,6 +7,8 @@
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/observation_events.h"
 
+#include "plexus/wire/topic_hash.h"
+
 #include "plexus/node_id.h"
 
 #include <map>
@@ -50,8 +52,19 @@ public:
         int                         rpc_call{0};
         int                         rpc_serve{0};
         int                         rpc_reply{0};
+        int                         publisher_declared{0};
+        int                         publisher_dropped{0};
+        int                         subscriber_registered{0};
+        int                         subscriber_retired{0};
+        int                         unsubscribed{0};
         std::shared_ptr<const void> last_view_owner{};
         long                        last_view_use_count{0};
+    };
+
+    struct participant_counts
+    {
+        int created{0};
+        int destroyed{0};
     };
 
     void on_peer_connected(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
@@ -125,6 +138,33 @@ public:
         ++m_topics[std::string{fqn}].rpc_reply;
     }
 
+    void on_participant(const plexus::io::participant_event &ev) override
+    {
+        auto &c = m_participants[ev.self];
+        if(ev.edge == plexus::io::participant_edge::created)
+            ++c.created;
+        else
+            ++c.destroyed;
+    }
+
+    void on_endpoint(std::string_view fqn, const plexus::io::endpoint_event &ev) override
+    {
+        auto &t = m_topics[std::string{fqn}];
+        switch(ev.edge)
+        {
+            case plexus::io::endpoint_edge::publisher_declared:    ++t.publisher_declared; break;
+            case plexus::io::endpoint_edge::publisher_dropped:     ++t.publisher_dropped; break;
+            case plexus::io::endpoint_edge::subscriber_registered: ++t.subscriber_registered; break;
+            case plexus::io::endpoint_edge::subscriber_retired:    ++t.subscriber_retired; break;
+        }
+    }
+
+    void on_qos_change(const plexus::io::qos_change_event &ev) override
+    {
+        if(ev.edge == plexus::io::qos_edge::unsubscribed)
+            ++m_unsubscribed_by_hash[ev.topic_hash];
+    }
+
     // Opt into the data-path taps: this observer counts the message/rpc edges, so the
     // engine must fan them here (a lifecycle-only observer leaves the default false and
     // pays nothing on the hot path).
@@ -154,12 +194,30 @@ public:
         return m_peers.empty() ? m_empty : m_peers.begin()->second;
     }
 
+    // Per-participant accessor: an unseen node_id reads as all-zero, mirroring for_peer.
+    const participant_counts &for_participant(const plexus::node_id &id) const
+    {
+        auto it = m_participants.find(id);
+        return it == m_participants.end() ? m_empty_participant : it->second;
+    }
+
+    // The unsubscribe edge rides on_qos_change keyed by topic_hash alone (the POD carries
+    // no fqn), so the accessor rehashes the fqn to read its tally.
+    int unsubscribed_for(std::string_view fqn) const
+    {
+        auto it = m_unsubscribed_by_hash.find(plexus::wire::fqn_topic_hash(fqn));
+        return it == m_unsubscribed_by_hash.end() ? 0 : it->second;
+    }
+
     std::size_t recorded_peers() const { return m_peers.size(); }
 
 private:
     std::map<plexus::node_id, counts> m_peers;
+    std::map<plexus::node_id, participant_counts> m_participants;
     std::map<std::string, topic_counts> m_topics;
+    std::map<std::uint64_t, int> m_unsubscribed_by_hash;
     counts m_empty{};
+    participant_counts m_empty_participant{};
     topic_counts m_empty_topic{};
 };
 

@@ -57,6 +57,13 @@ public:
     virtual void on_rpc_reply(std::string_view, const rpc_reply_view &) {}
     virtual void on_qos_change(const qos_change_event &) {}
 
+    // The declaration-lifecycle edges: a node's own create/destroy and a topic endpoint's
+    // declare/drop/register/retire. They fire once per node or endpoint, not per message —
+    // cold edges, so they are NOT gated by observes_data_path and post regardless of the
+    // data-tap opt-in. fqn rides as a borrowed view valid for the call.
+    virtual void on_participant(const participant_event &) {}
+    virtual void on_endpoint(std::string_view, const endpoint_event &) {}
+
     // The data-path opt-in: the message/rpc/qos taps fire once per publish/destination/call,
     // so their posted fan-out is a HOT cost (an fqn copy + a posted closure per emit). The
     // engine fans them only while at least one registered observer declares interest here, so

@@ -102,10 +102,19 @@ public:
     publisher(const publisher &) = delete;
     publisher &operator=(const publisher &) = delete;
 
-    // The declaration persists for the node's life so the endpoint counter stays stable
-    // and is never reused: a dropped publisher simply stops publishing. There
-    // is no per-publisher resource to reclaim, so the destructor is trivial.
-    ~publisher() = default;
+    // The producer DECLARATION persists for the node's life so the endpoint identity stays
+    // stable for subscriber correlation (declaration lifetime); the HANDLE's lifetime is a
+    // distinct concept — its drop posts a handle-lifetime edge through retire_publisher.
+    // The dtor gates on the moved-from sentinel (m_seam.ctx == nullptr) ALONE; the seam
+    // ALWAYS wires retire_publisher at construction, so there is no defensive null check on
+    // it. A dtor must not throw, so the posted edge is wrapped to swallow any exception (a
+    // throwing dtor is UB) — the shared posted-edge-from-dtor safety pattern, also used by
+    // ~node.
+    ~publisher() noexcept
+    {
+        if(m_seam.ctx != nullptr)
+            try { m_seam.retire_publisher(m_seam.ctx, m_fqn); } catch(...) {}
+    }
 
 private:
     io::endpoint_seam m_seam{};
@@ -205,7 +214,13 @@ public:
     publisher &operator=(const publisher &) = delete;
     publisher &operator=(publisher &&) = delete;
 
-    ~publisher() = default;
+    // Handle-lifetime drop edge via the same posted-edge-from-dtor safety pattern as the
+    // bytes publisher<void>: gate on the moved-from sentinel alone, swallow any exception.
+    ~publisher() noexcept
+    {
+        if(m_seam.ctx != nullptr)
+            try { m_seam.retire_publisher(m_seam.ctx, m_fqn); } catch(...) {}
+    }
 
 private:
     std::span<const std::byte> encode_to_span(const value_type &value)

@@ -277,6 +277,41 @@ struct stall_policy
 
 static_assert(plexus::Policy<stall_policy>);
 
+// The same stalling channel reporting the "inproc" scheme: the forwarder classifies its
+// subscriber's delivery tier from the channel scheme, so an inproc subscriber whose egress
+// band saturates sheds with transport=locality::process — the same egress trio the stream
+// tier emits, proving the inproc tier is not a dark drop tier (the egress scheduler governs
+// the band ABOVE the channel, transport-agnostically).
+struct inproc_stall_channel
+{
+    explicit inproc_stall_channel(std::size_t &reported) : m_reported(&reported) {}
+    inproc_stall_channel(stall_executor &) {}
+    inproc_stall_channel(stall_executor &, std::error_code &) {}
+
+    void send(std::span<const std::byte>) {}
+    void close() {}
+    [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"inproc", "node-x"}; }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
+    void on_closed(plexus::detail::move_only_function<void()>) {}
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
+    [[nodiscard]] std::size_t backpressured() const noexcept { return *m_reported; }
+
+    std::size_t *m_reported{nullptr};
+};
+
+struct inproc_stall_policy
+{
+    using executor_type = stall_executor &;
+    using byte_channel_type = inproc_stall_channel;
+    using timer_type = stall_timer;
+    using byte_owner = std::shared_ptr<const void>;
+
+    static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
+};
+
+static_assert(plexus::Policy<inproc_stall_policy>);
+
 }
 
 TEST_CASE("integration.drop_coverage replay / too_old / tamper post through the engine hook with their counters",
@@ -495,5 +530,42 @@ TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter A
         // The egress shed bumps the always-on counter AND routes through the forwarder's
         // on_drop seam to the installed observer: the observer sees every shed.
         REQUIRE(observer.count(cause::drop_cause::drop_newest) >= shed);
+    }
+}
+
+TEST_CASE("integration.drop_coverage an inproc subscriber's egress shed reaches the observer with transport=process",
+          "[integration][drop_coverage][inproc]")
+{
+    using forwarder = plexus::io::message_forwarder<inproc_stall_policy>;
+
+    // The inproc tier is not a dark drop tier: the egress scheduler bands an inproc
+    // subscriber ABOVE the channel and sheds transport-agnostically, so the drop reaches
+    // the observer carrying transport=locality::process (the inproc scheme's tier). Loop so
+    // a single-run fluke cannot pass.
+    for(int loop = 0; loop < 4; ++loop)
+    {
+        std::size_t reported = 0;
+        inproc_stall_channel ch{reported};
+        forwarder fwd{};
+        std::vector<cause::drop_event> drops;
+
+        fwd.on_drop([&drops](const cause::drop_event &ev) { drops.push_back(ev); });
+        fwd.declare("inproc-shed", plexus::topic_qos{.congestion = plexus::io::congestion::drop_newest});
+        REQUIRE(fwd.attach_for_fanout(forwarder::peer{ch, "node-x"}, "inproc-shed"));
+
+        reported = plexus::io::detail::k_low_water + 1;
+        const int flood = static_cast<int>(plexus::io::detail::k_band_depth) + 16;
+        const auto payload = filler(64);
+        for(int i = 0; i < flood; ++i)
+            fwd.publish("inproc-shed", std::span<const std::byte>{payload});
+
+        std::size_t shed_to_observer = 0;
+        for(const auto &ev : drops)
+            if(ev.cause == cause::drop_cause::drop_newest)
+            {
+                REQUIRE(ev.transport == plexus::io::locality::process);
+                ++shed_to_observer;
+            }
+        REQUIRE(shed_to_observer > 0);
     }
 }

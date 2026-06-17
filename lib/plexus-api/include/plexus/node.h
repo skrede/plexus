@@ -238,6 +238,9 @@ public:
         // every same-host ring this node mints. A composition without an shm member is a
         // no-op (the capability check below fails).
         apply_shm_slab_ceiling(m_max_ring_slab_bytes);
+        // Surface the node's own declaration-lifecycle create edge (posted, like every
+        // other observer edge). The matching destroy edge is posted from ~node below.
+        m_engine.post_participant({io::participant_edge::created, m_id});
     }
 
     // The name-hash overload (OPT-IN): derives the node_id from the name so the SAME
@@ -253,6 +256,24 @@ public:
     node &operator=(const node &) = delete;
     node(node &&) = delete;
     node &operator=(node &&) = delete;
+
+    // The destroy edge is POSTED before member teardown (the engine, declared last, is
+    // still alive — m_executor too), so it surfaces only if the owner pumps the executor
+    // after the node returns; this is the same posted-edge teardown contract every edge
+    // obeys (firing inline would breach the observer DoS-guard). The teardown variant
+    // captures an observer snapshot rather than the engine, since the engine is destroyed
+    // before the executor drains this closure. A dtor must not throw — the post is wrapped
+    // so no exception escapes (a throwing dtor is UB).
+    ~node()
+    {
+        try
+        {
+            m_engine.post_participant_teardown({io::participant_edge::destroyed, m_id});
+        }
+        catch(...)
+        {
+        }
+    }
 
     // Forward the bind to the engine, then append this transport's {scheme, port} to
     // the live contact card and re-advertise. PRECONDITION: an advertised listen requires
@@ -371,6 +392,8 @@ private:
         const registration_id rid = m_next_registration++;
         m_subscriptions.push_back(
             {rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
+        m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered,
+                                     wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
             m_engine.subscribe(peer, fqn, qos, io::locality::any,
                                io::reliability_requirement::any, type_id);
@@ -388,20 +411,27 @@ private:
         const std::string fqn = it->second.fqn;
         m_subscriptions.erase(it);
         if(!any_subscriber_for(fqn))
+        {
+            m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired,
+                                         wire::fqn_topic_hash(fqn), std::nullopt});
             for(const auto &peer : m_known_peers)
                 m_engine.unsubscribe(peer, fqn);
+        }
     }
 
-    // Declare a publisher's topic and mint its gid. The producer-side declaration
-    // persists for the node's life so the endpoint counter stays stable and is NEVER
-    // reused — a dropped publisher stops publishing, but its declaration is not torn
-    // down, so retire is a no-op (no resource to reclaim, and removing it would risk a
-    // gid remint). The handle drives publish directly.
+    // Declare a publisher's topic and mint its gid. The producer-side DECLARATION
+    // deliberately persists for the node's life so the endpoint identity stays stable for
+    // subscriber correlation (a gid-stability protocol choice). The publisher HANDLE's
+    // lifetime is a distinct concept, surfaced separately: this declares the topic and
+    // posts the declared edge; retire_publisher_seam posts the handle-drop edge. The handle
+    // drives publish directly.
     void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity,
                                 std::optional<std::uint64_t> type_id = std::nullopt,
                                 std::optional<io::shm::shm_geometry> shm_geometry = std::nullopt)
     {
         m_engine.messages().declare(fqn, qos, type_id, emit_source_identity);
+        m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_declared,
+                                     wire::fqn_topic_hash(fqn), type_id});
         // Resolution order per-topic ?: node-default ?: shipped: the per-topic geometry
         // when declared, else the node-level default; the effective per-message size is
         // the topic override when set, else the node default. The provisioning is a
@@ -409,6 +439,15 @@ private:
         const io::shm::shm_geometry geom = shm_geometry.value_or(m_shm_geometry);
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
         provision_same_host_ring(fqn, effective_bytes, geom);
+    }
+
+    // Post the publisher HANDLE's drop edge. It does NOT tear down the persistent
+    // declaration (that lives for the node's life by design) — it surfaces the handle's
+    // observable lifetime only, posted like every other edge.
+    void retire_publisher_seam(std::string_view fqn)
+    {
+        m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_dropped,
+                                     wire::fqn_topic_hash(fqn), std::nullopt});
     }
 
     // Provision the declaring topic's same-host ring geometry on the shm member (if the
@@ -621,6 +660,8 @@ private:
         };
         s.retire_subscriber = [](void *ctx, registration_id rid)
         { static_cast<node *>(ctx)->retire_subscriber_seam(rid); };
+        s.retire_publisher = [](void *ctx, std::string_view fqn)
+        { static_cast<node *>(ctx)->retire_publisher_seam(fqn); };
         s.serve_procedure = [](void *ctx, std::string_view fqn, io::handler_fn handler)
         { static_cast<node *>(ctx)->serve_procedure_seam(fqn, std::move(handler)); };
         s.retire_procedure = [](void *ctx, std::string_view fqn)
