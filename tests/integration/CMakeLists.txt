@@ -496,6 +496,40 @@ target_include_directories(test_recording_channel PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_recording_channel TEST_PREFIX "integration.")
 
+# The two-node cross-node loss-join oracle: a sender's recording_channel stamps a per-direction
+# OUT sequence and a receiver's an IN sequence; a relay drops one frame in transit, and decoding
+# both recorded streams offline identifies the lost packet by sequence arithmetic alone (present
+# in the sender OUT run, absent in the receiver IN run) with no cross-node clock — proven over
+# several runs on deliberately skewed recorder clocks. Deterministic header-only core (no
+# backend). tests/ is on the include path and the current dir for in_memory_byte_sink.h.
+add_executable(test_wire_loss_join test_wire_loss_join.cpp)
+target_link_libraries(test_wire_loss_join PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+target_include_directories(test_wire_loss_join PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_wire_loss_join TEST_PREFIX "integration.")
+
+# The construction-time per-transport wire-capture public-API oracle: a node composed over the
+# wire-capturing policy + transport (node_options.wire opted in) mints the recording_channel
+# decorator and a make_recorder attach captures wire_frame records; a default node mints bare
+# channels and records none (the structural-absence witness holds). Public node facade only.
+# Links the facade for the typed endpoints + recorder; tests/ + the current dir on the include
+# path for in_memory_byte_sink.h.
+add_executable(test_wire_public_api test_wire_public_api.cpp)
+target_link_libraries(test_wire_public_api PRIVATE
+    plexus::plexus
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_wire_public_api PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_wire_public_api TEST_PREFIX "integration.")
+
 # The structural-absence symbol guard: a default (non-wire) build artifact must contain NO
 # recording_channel template instantiation symbol. test_routing_engine_inproc composes a full
 # inproc node WITHOUT wire capture, so its binary is the witness — nm must find no

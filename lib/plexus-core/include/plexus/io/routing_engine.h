@@ -169,13 +169,14 @@ public:
     // capturing, engine-posted callable shaped like drop_sink, so the decorator stays
     // recorder-agnostic (it knows nothing of the recorder or the ring). Each captured frame
     // posts to the observer fan-out via post_wire — the io→executor crossing that keeps the
-    // ring single-writer. The per-direction sequence + peer identity are the offline cross-
-    // node loss-join keys threaded through here in a later step; this seam establishes the
-    // posted edge with the join keys defaulted.
-    [[nodiscard]] plexus::detail::move_only_function<void(recording::wire_direction, std::span<const std::byte>)> wire_sink()
+    // ring single-writer. The decorator stamps the per-direction sequence; the peer identity
+    // is bound at the channel-mint point (the slot the channel belongs to), so the wire_record
+    // carries both offline cross-node loss-join keys.
+    [[nodiscard]] plexus::detail::move_only_function<
+        void(recording::wire_direction, std::uint64_t, std::span<const std::byte>)> wire_sink(const node_id &peer)
     {
-        return [this](recording::wire_direction dir, std::span<const std::byte> bytes) {
-            post_wire(dir, 0u, node_id{}, bytes);
+        return [this, peer](recording::wire_direction dir, std::uint64_t seq, std::span<const std::byte> bytes) {
+            post_wire(dir, seq, peer, bytes);
         };
     }
 
@@ -511,15 +512,23 @@ private:
     void on_dialed(std::unique_ptr<channel_type> channel, const endpoint &dialed)
     {
         wire_channel_drop(*channel);
-        wire_channel_capture(*channel);
+        // The slot the dial targets already exists (reach() created it before dialing), so
+        // the dialed endpoint resolves to the peer node_id this channel belongs to — the
+        // wire-capture join key. An unresolved endpoint binds the default id (capture still
+        // records, attribution is then the synthetic identity build_session supplies).
+        wire_channel_capture(*channel, m_registry.id_for_endpoint(dialed).value_or(node_id{}));
         m_registry.build_session_for_endpoint(dialed, std::move(channel));
     }
 
     void on_accepted(std::unique_ptr<channel_type> channel)
     {
         wire_channel_drop(*channel);
-        wire_channel_capture(*channel);
-        m_registry.accept_session(std::move(channel));
+        // An accepted channel's slot is keyed by the synthetic inbound identity the registry
+        // mints at accept (the peer's real id arrives only in the handshake), so the capture
+        // install is threaded through accept_session, which binds that identity before the
+        // session is built.
+        m_registry.accept_session(std::move(channel),
+            [this](channel_type &ch, const node_id &peer) { wire_channel_capture(ch, peer); });
     }
 
     // Install the posted drop_sink onto a freshly minted channel that carries the
@@ -541,11 +550,12 @@ private:
     // the SAME compile-time capability gate wire_channel_drop uses. A bare channel_type that
     // never composed the recording_channel decorator has no on_wire edge, so this is a no-op
     // the compiler elides: the wire tier is STRUCTURALLY absent, not a runtime branch. The
-    // decorated-vs-bare channel TYPE is fixed where the transport mints the channel.
-    void wire_channel_capture(channel_type &channel)
+    // decorated-vs-bare channel TYPE is fixed where the transport mints the channel. peer is
+    // the slot identity the channel belongs to — the wire_record's cross-node join key.
+    void wire_channel_capture(channel_type &channel, const node_id &peer)
     {
-        if constexpr(requires { channel.on_wire(wire_sink()); })
-            channel.on_wire(wire_sink());
+        if constexpr(requires { channel.on_wire(wire_sink(peer)); })
+            channel.on_wire(wire_sink(peer));
     }
 
     // The session→observer fan-out. Every edge is delivered POSTED on the executor,
