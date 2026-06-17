@@ -839,7 +839,12 @@ private:
     io::shm::shm_geometry m_shm_geometry;
     std::uint64_t m_max_ring_slab_bytes;
 
-    [[no_unique_address]] detail::node_mux_glue<Transports...> m_glue;
+    // [[no_unique_address]] dropped to dodge a GCC 16.1.1 bug: guaranteed copy-elision is
+    // not applied into a [[no_unique_address]] member, so the by-value make_glue() prvalue
+    // demands the non-movable mux's deleted copy ctor (clang accepts the same code). Costs
+    // the single-transport node the empty-glue size overlap (<= 1 byte) until make_glue is
+    // reworked to construct the mux in place.
+    detail::node_mux_glue<Transports...> m_glue;
 
     // The engine's transport leaf (the borrowed single transport, or the node-owned
     // mux glue): held so the declare path can provision the same-host ring geometry on
