@@ -43,9 +43,10 @@ struct rpc_reply_view
 // keeps its meaning.
 enum class qos_edge : std::uint8_t
 {
-    accepted = 0,
-    degraded = 1,
-    refused  = 2,
+    accepted     = 0,
+    degraded     = 1,
+    refused      = 2,
+    unsubscribed = 3,
 };
 
 // A plain serializable QoS-change record in the drop_event spirit: scalars and a
@@ -59,6 +60,41 @@ struct qos_change_event
     node_id                      peer{};
     subscriber_qos               requested{};
     rxo_verdict                  verdict{rxo_verdict::compatible};
+    std::optional<std::uint64_t> type_id{};
+};
+
+// The node-declaration lifecycle edges, distinct from the per-peer connection liveness:
+// a node's own create/destroy. Append-only, in the drop_event spirit (a flat scalar +
+// node_id aggregate, no closure) so the record timestamps and serializes onto the spine.
+enum class participant_edge : std::uint8_t
+{
+    created   = 0,
+    destroyed = 1,
+};
+
+struct participant_event
+{
+    participant_edge edge{participant_edge::created};
+    node_id          self{};
+};
+
+// A topic-endpoint declaration lifecycle edge: a publisher's declaration and its handle
+// drop, a subscriber's registration and its retire. The fqn rides as a borrowed view
+// parameter on on_endpoint (matching the data-tap shape), not in the POD, so the record
+// stays a flat scalar aggregate. type_id is engaged only when declared (absence is a
+// distinct third state). Append-only.
+enum class endpoint_edge : std::uint8_t
+{
+    publisher_declared    = 0,
+    publisher_dropped     = 1,
+    subscriber_registered = 2,
+    subscriber_retired    = 3,
+};
+
+struct endpoint_event
+{
+    endpoint_edge                edge{endpoint_edge::publisher_declared};
+    std::uint64_t                topic_hash{};
     std::optional<std::uint64_t> type_id{};
 };
 

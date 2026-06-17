@@ -397,6 +397,40 @@ public:
     procedure_forwarder<Policy> &procedures() noexcept { return m_procedures; }
     registry_type &registry() noexcept { return m_registry; }
 
+    // POST a node-declaration lifecycle edge on the borrowed executor over the observer
+    // snapshot, capturing the flat POD by value — never inline from the node ctor/seams
+    // (the same posted DoS-guard the drop/security edges use). The snapshot is taken at
+    // DRAIN time (fan_out), so an observer registered after the node ctor still sees the
+    // created/declared edges posted before its registration. on_endpoint copies the fqn
+    // into the turn (the fire-site view does not outlive the deferred fan-out).
+    void post_participant(const participant_event &ev)
+    {
+        Policy::post(m_executor, [this, ev] {
+            fan_out([&](observer &o) { o.on_participant(ev); });
+        });
+    }
+
+    void post_endpoint(std::string_view fqn, const endpoint_event &ev)
+    {
+        Policy::post(m_executor, [this, fqn = std::string{fqn}, ev] {
+            fan_out([&](observer &o) { o.on_endpoint(fqn, ev); });
+        });
+    }
+
+    // POST the node's destroy edge from ~node. UNLIKE the in-life edges above, this is
+    // posted as the engine is being torn down: the engine is destroyed immediately after
+    // ~node returns, BEFORE the executor drains, so the closure must NOT dereference the
+    // engine. It captures an observer SNAPSHOT by value (the pointers are externally owned
+    // and outlive the drain by the teardown contract — the owner pumps the executor after
+    // the node returns) and the flat POD, fanning directly with no engine touch.
+    void post_participant_teardown(const participant_event &ev)
+    {
+        Policy::post(m_executor, [snapshot = m_observers, ev] {
+            for(auto *o : snapshot)
+                o->on_participant(ev);
+        });
+    }
+
 private:
     // The build-context observer the registry routes each session's security edge into:
     // it forwards into the engine's posted fan-out, so the install is by reference (the
