@@ -248,7 +248,7 @@ public:
         // The published tap fires ONCE after framing, borrowing the framed owner (an
         // addref of the single per-publish buffer, never a copy); the delivered tap fires
         // ONCE per fanned destination below. Both stay posted through the engine sink.
-        emit_published(fqn, framed);
+        emit_published(hash, fqn, framed);
 
         const message_info pub_info{.publication_sequence = uhdr.sequence,
                                     .source_timestamp = fhdr.timestamp_ns};
@@ -280,7 +280,7 @@ public:
                         m_egress.enqueue(*route, band, qos.congestion, framed);
                     if(cause != detail::drop_cause::none)
                         shed(hash, band, cause, sub.tier);
-                    emit_delivered(fqn, pub_info, framed);
+                    emit_delivered(hash, fqn, pub_info, framed);
                 }
 
         retain_if_latched(hash, qos, framed);
@@ -344,11 +344,17 @@ public:
 
         // The typed loan path carries NO payload, so its observation view is ENVELOPE-ONLY
         // by default (the carrier's metadata, no payload encode): recording payload on the
-        // zero-serialization lane is a sovereign opt-in, never silently imposed. The
-        // published tap fires once, the delivered tap once per fanned destination below.
+        // zero-serialization lane is a sovereign opt-in, never silently imposed. The capture
+        // gate decides BEFORE the encode — only a selected, non-decimated, payload-fidelity
+        // topic forces the lazy encode and hands the taps real bytes; everything else stays
+        // envelope-only and pays no encode. The published tap fires once, the delivered tap
+        // once per fanned destination below.
+        const bool capture_payload = m_capture_wants_payload && m_capture_wants_payload(hash);
         const message_info obj_info{.publication_sequence = carrier.sequence,
                                     .source_timestamp = carrier.source_timestamp};
-        emit_published(fqn, message_view{});
+        if(capture_payload)
+            encode_once();
+        emit_published(hash, fqn, capture_payload ? framed : message_view{});
 
         const std::size_t band = detail::band_of(qos.priority);
         if(subs != nullptr)
@@ -364,7 +370,7 @@ public:
                     if(eligible_for_object(sub, carrier))
                     {
                         sub.channel->send_object(carrier);
-                        emit_delivered(fqn, obj_info, message_view{});
+                        emit_delivered(hash, fqn, obj_info, capture_payload ? framed : message_view{});
                         continue;
                     }
                 }
@@ -373,7 +379,7 @@ public:
                     m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
                 if(cause != detail::drop_cause::none)
                     shed(hash, band, cause, sub.tier);
-                emit_delivered(fqn, obj_info, message_view{});
+                emit_delivered(hash, fqn, obj_info, capture_payload ? framed : message_view{});
             }
 
         // Force one encode even when every live subscriber fast-pathed, so a late bytes
@@ -505,13 +511,14 @@ public:
     // fires the qos-change sink. Each sink posts, so a per-publish/per-destination fan never
     // touches an observer inline. Absent = one predictable branch (the forwarder stays
     // observer-agnostic when unwired).
-    void on_published(plexus::detail::move_only_function<void(std::string_view, const message_view &)> hook)
+    void on_published(plexus::detail::move_only_function<
+                      void(std::uint64_t, std::string_view, const message_view &)> hook)
     {
         m_on_published = std::move(hook);
     }
 
     void on_delivered(plexus::detail::move_only_function<
-                      void(std::string_view, const message_info &, const message_view &)> hook)
+                      void(std::uint64_t, std::string_view, const message_info &, const message_view &)> hook)
     {
         m_on_delivered = std::move(hook);
     }
@@ -519,6 +526,11 @@ public:
     void on_qos_change(plexus::detail::move_only_function<void(const qos_change_event &)> hook)
     {
         m_on_qos_change = std::move(hook);
+    }
+
+    void set_capture_wants_payload(plexus::detail::move_only_function<bool(std::uint64_t)> hook)
+    {
+        m_capture_wants_payload = std::move(hook);
     }
 
     // The wire_fallback per-message companion route, wired by the engine for a
@@ -743,16 +755,17 @@ private:
     // observer fan-out); absent = one branch. The view borrows the framed owner — the posted
     // closure on the engine side captures it by value (a shared addref), so the buffer
     // outlives the deferred turn (the owner-lifetime guarantee).
-    void emit_published(std::string_view fqn, const message_view &view)
+    void emit_published(std::uint64_t hash, std::string_view fqn, const message_view &view)
     {
         if(m_on_published)
-            m_on_published(fqn, view);
+            m_on_published(hash, fqn, view);
     }
 
-    void emit_delivered(std::string_view fqn, const message_info &info, const message_view &view)
+    void emit_delivered(std::uint64_t hash, std::string_view fqn, const message_info &info,
+                        const message_view &view)
     {
         if(m_on_delivered)
-            m_on_delivered(fqn, info, view);
+            m_on_delivered(hash, fqn, info, view);
     }
 
     // Hand a resolved attach/detach QoS verdict to the engine sink. The subscriber struct
@@ -781,10 +794,15 @@ private:
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop;
-    plexus::detail::move_only_function<void(std::string_view, const message_view &)> m_on_published;
+    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_view &)> m_on_published;
     plexus::detail::move_only_function<
-        void(std::string_view, const message_info &, const message_view &)> m_on_delivered;
+        void(std::uint64_t, std::string_view, const message_info &, const message_view &)> m_on_delivered;
     plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change;
+    // The loan-path encode trigger: returns true when the topic wants a payload encode for
+    // this record (selected at payload fidelity AND admitted by decimation this tick). Unset
+    // on a node with no capture policy, so the typed fast path is one null-check and never
+    // encodes.
+    plexus::detail::move_only_function<bool(std::uint64_t)> m_capture_wants_payload;
     // The wire_fallback per-message companion route (size <= cap -> the returned SHM
     // channel, else nullptr -> the recorded wire sub.channel). Unset on every node with
     // no SHM wire_fallback companion, so the fan-out branch is never entered there.

@@ -7,6 +7,7 @@
 #include "plexus/io/reliability_requirement.h"
 #include "plexus/io/observer.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/capture_policy.h"
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/reconnect_config.h"
@@ -18,6 +19,7 @@
 #include "plexus/io/session_build_context.h"
 
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/frame_codec.h"
 
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
@@ -104,6 +106,12 @@ public:
         m_messages.on_published(publish_sink());
         m_messages.on_delivered(deliver_sink());
         m_messages.on_qos_change(qos_change_sink());
+        // The loan-path encode trigger: the forwarder's typed fast path forces its lazy
+        // encode ONLY for a topic the policy selects at payload fidelity and admits this
+        // tick, passing the publish path's own now_ns so the time-window mechanism reads no
+        // extra clock. An unset hook (no capture) keeps the fast path zero-encode.
+        m_messages.set_capture_wants_payload(
+            [this](std::uint64_t hash) { return m_capture.wants_payload(hash, wire::now_timestamp_ns()); });
         m_procedures.on_rpc_call(rpc_call_sink());
         m_procedures.on_rpc_serve(rpc_serve_sink());
         m_procedures.on_rpc_reply(rpc_reply_sink());
@@ -135,13 +143,13 @@ public:
     {
         m_observers.push_back(&o);
         if(o.observes_data_path())
-            ++m_data_observers;
+            m_capture.add_observer();
     }
     void remove_observer(observer &o)
     {
         const auto erased = std::erase(m_observers, &o);
         if(erased != 0 && o.observes_data_path())
-            --m_data_observers;
+            m_capture.remove_observer();
     }
 
     // The seam a drop site posts a coalesced event into. It is a value-capturing,
@@ -162,15 +170,17 @@ public:
     // from the per-publish/per-RPC site. The fqn is copied into the turn since the
     // forwarder's borrowed view outlives only the synchronous call.
     // The fqn-string copy + the posted closure are a per-publish heap cost, so each sink
-    // SHORT-CIRCUITS when no registered observer opted into the data path (m_data_observers):
-    // an unobserved node (or one watching only lifecycle edges) pays one predictable branch
-    // and allocates nothing (the typed fast path stays zero-alloc). The post still rides the
-    // BORROWED executor — never inline from the per-publish/per-RPC site — when a data-path
-    // observer is registered.
-    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const message_view &)> publish_sink()
+    // SHORT-CIRCUITS through the single capture gate (m_capture): the payload sinks consult
+    // should_emit(hash), which folds selection AND data-path observer presence behind one
+    // branch; the event-record sinks read observers_present() directly (an event is wholesale,
+    // never policy-selected this phase). An unobserved, unselected node pays one predictable
+    // branch and allocates nothing (the typed fast path stays zero-alloc). The post still rides
+    // the BORROWED executor — never inline from the per-publish/per-RPC site.
+    [[nodiscard]] plexus::detail::move_only_function<
+        void(std::uint64_t, std::string_view, const message_view &)> publish_sink()
     {
-        return [this](std::string_view fqn, const message_view &v) {
-            if(m_data_observers == 0)
+        return [this](std::uint64_t hash, std::string_view fqn, const message_view &v) {
+            if(!m_capture.should_emit(hash))
                 return;
             Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
                 fan_out([&](observer &o) { o.on_message_published(fqn, v); });
@@ -179,10 +189,10 @@ public:
     }
 
     [[nodiscard]] plexus::detail::move_only_function<
-        void(std::string_view, const message_info &, const message_view &)> deliver_sink()
+        void(std::uint64_t, std::string_view, const message_info &, const message_view &)> deliver_sink()
     {
-        return [this](std::string_view fqn, const message_info &info, const message_view &v) {
-            if(m_data_observers == 0)
+        return [this](std::uint64_t hash, std::string_view fqn, const message_info &info, const message_view &v) {
+            if(!m_capture.should_emit(hash))
                 return;
             Policy::post(m_executor, [this, fqn = std::string{fqn}, info, v] {
                 fan_out([&](observer &o) { o.on_message_delivered(fqn, info, v); });
@@ -193,7 +203,7 @@ public:
     [[nodiscard]] plexus::detail::move_only_function<void(const qos_change_event &)> qos_change_sink()
     {
         return [this](const qos_change_event &ev) {
-            if(m_data_observers == 0)
+            if(m_capture.observers_present() == 0)
                 return;
             Policy::post(m_executor, [this, ev] {
                 fan_out([&](observer &o) { o.on_qos_change(ev); });
@@ -204,7 +214,7 @@ public:
     [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> rpc_call_sink()
     {
         return [this](std::string_view fqn, const rpc_view &v) {
-            if(m_data_observers == 0)
+            if(m_capture.observers_present() == 0)
                 return;
             Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
                 fan_out([&](observer &o) { o.on_rpc_call(fqn, v); });
@@ -215,7 +225,7 @@ public:
     [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> rpc_serve_sink()
     {
         return [this](std::string_view fqn, const rpc_view &v) {
-            if(m_data_observers == 0)
+            if(m_capture.observers_present() == 0)
                 return;
             Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
                 fan_out([&](observer &o) { o.on_rpc_serve(fqn, v); });
@@ -227,7 +237,7 @@ public:
         void(std::string_view, const rpc_reply_view &)> rpc_reply_sink()
     {
         return [this](std::string_view fqn, const rpc_reply_view &v) {
-            if(m_data_observers == 0)
+            if(m_capture.observers_present() == 0)
                 return;
             Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
                 fan_out([&](observer &o) { o.on_rpc_reply(fqn, v); });
@@ -396,6 +406,7 @@ public:
     message_forwarder<Policy> &messages() noexcept { return m_messages; }
     procedure_forwarder<Policy> &procedures() noexcept { return m_procedures; }
     registry_type &registry() noexcept { return m_registry; }
+    capture_policy &capture() noexcept { return m_capture; }
 
     // POST a node-declaration lifecycle edge on the borrowed executor over the observer
     // snapshot, capturing the flat POD by value — never inline from the node ctor/seams
@@ -615,10 +626,11 @@ private:
     registry_type m_registry;
     known_peers m_known;
     std::vector<observer *> m_observers;
-    // The count of registered observers that opted into the data-path taps (observes_data_path).
-    // The hot publish/deliver/rpc sinks gate on it being nonzero, so a node's always-on
-    // lifecycle observer leaves the data path one predictable branch with no posted closure.
-    std::size_t m_data_observers{0};
+    // The single capture-decision point: it owns the per-topic selection rules AND the
+    // data-path observer-presence count, so the hot sink heads consult one gate
+    // (should_emit/observers_present) instead of a separate boolean. add_observer/
+    // remove_observer feed it the observes_data_path()-guarded count.
+    capture_policy m_capture;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
     bool m_dial_eagerly;
 };

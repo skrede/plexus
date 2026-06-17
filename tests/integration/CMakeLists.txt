@@ -285,6 +285,23 @@ target_include_directories(test_spine_lifecycle_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_spine_lifecycle_inproc TEST_PREFIX "integration.")
 
+# The per-topic capture-gate oracle: a counting encode thunk witnesses the gate's pre-encode
+# decision over a connected inproc node pair (publish_object), proving metadata-only forces no
+# encode, payload forces one, wire degrades to payload, both decimation mechanisms drop the
+# expected fraction, the folded gate matches the observer x selected matrix, and a lifecycle-only
+# observer never admits a payload post. The shared recording_observer.h resolves via the
+# integration include dir.
+add_executable(test_capture_gate test_capture_gate.cpp)
+target_link_libraries(test_capture_gate PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_capture_gate PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_capture_gate TEST_PREFIX "integration.")
+
 # The read-buffer partial-read oracle: one framed wire message fed to the frame_reassembler
 # in many small sub-header and mid-payload chunks still produces exactly one byte-identical
 # complete_frame — the accumulation behavior any later read-buffer resize must preserve.
