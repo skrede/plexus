@@ -480,6 +480,24 @@ target_include_directories(test_record_stream PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_record_stream TEST_PREFIX "integration.")
 
+# The pre-buffer / FDR mode oracle: the same byte_ring run drop-oldest continuous-
+# overwrite holds "the last N bytes" (byte-bounded under a saturating producer), a freeze
+# snapshots two indices with zero allocation (no buffer copy), the frozen window drains to
+# the in-memory byte_sink with no thread, all three trigger sources fire (manual, an armed
+# anomaly predicate on a drop edge, a deadline-miss edge), and captured_span equals
+# newest_ts - oldest_ts under the manual clock. Deterministic header-only core (no backend).
+# tests/ is on the include path for support/alloc_counter.h and the current dir for
+# in_memory_byte_sink.h.
+add_executable(test_recorder_capture test_recorder_capture.cpp)
+target_link_libraries(test_recorder_capture PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+target_include_directories(test_recorder_capture PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_recorder_capture TEST_PREFIX "integration.")
+
 # The host-identity accessor oracle: the authenticated peer's host identity is
 # read from the security step (SPKI-derived for TLS, attach-bound for PSK), never a
 # self-asserted TXT/wire claim. Pure free-function legs + a bridge accessor leg — always

@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_RECORDING_RECORD_ENVELOPE_H
 #define HPP_GUARD_PLEXUS_IO_RECORDING_RECORD_ENVELOPE_H
 
+#include "plexus/io/detail/drop_event.h"
+
 #include <cstdint>
 
 namespace plexus::io::recording {
@@ -31,6 +33,21 @@ enum class record_category : std::uint8_t
     peer_liveness = 9,
     dropout       = 10,
     wire_frame    = 11,
+};
+
+// A non-owning view of a record at the moment it is built, the shape a freeze
+// predicate keys on (the "trigger on anomaly" black-box semantic). It carries only
+// the scalar facts a predicate matches — the category, the capture instant, the topic
+// identity, and the drop cause / qos verdict an anomaly edge surfaces — so evaluating
+// it on the record-build turn copies nothing and allocates nothing. The raw payload is
+// never exposed here: a freeze fires on an edge's shape, not its bytes.
+struct record_envelope
+{
+    record_category   category{record_category::sample};
+    std::uint64_t     capture_ts{};
+    std::uint64_t     topic_hash{};
+    io::detail::drop_cause cause{io::detail::drop_cause::none};
+    std::uint8_t      verdict{};
 };
 
 }
