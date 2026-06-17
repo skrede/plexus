@@ -54,7 +54,9 @@ using plexus::io::recording::record_category;
 using plexus::io::recording::decoded_record;
 using plexus::io::recording::recovery_result;
 using plexus::io::recording::stream_definitions;
+using plexus::io::recording::schema_definition;
 using plexus::io::recording::type_schema_entry;
+using plexus::io::recording::capture_crypto_position;
 using plexus::io::recording::record_stream_reader;
 using plexus::io::recording::record_stream_writer;
 
@@ -124,12 +126,13 @@ TEST_CASE("record stream reserves the wire-record variant", "[record_stream]")
     REQUIRE(record_category::wire_frame != record_category::dropout);
 }
 
-TEST_CASE("record stream populates the wire variant with no format bump", "[record_stream][wire]")
+TEST_CASE("record stream populates the wire variant with no ordinal reorder", "[record_stream][wire]")
 {
-    // The wire tier reuses ordinal 11 and the version stays 1 — populating the slot adds
-    // only the byte source, never a version bump or an ordinal reorder.
+    // The wire tier reuses ordinal 11 — populating the slot adds only the byte source, never
+    // an ordinal reorder. The format version reflects the self-describing preamble layout, not
+    // the wire-record category, which the reserved slot folded in without a bump.
     STATIC_REQUIRE(static_cast<std::uint8_t>(record_category::wire_frame) == 11);
-    STATIC_REQUIRE(plexus::io::recording::k_format_version == 1u);
+    STATIC_REQUIRE(plexus::io::recording::k_format_version == 2u);
 }
 
 TEST_CASE("record stream round-trips a wire frame byte-identically offline", "[record_stream][wire]")
@@ -421,4 +424,73 @@ TEST_CASE("recording_sink captures synthetic edges through the recorder to a byt
     const std::string got{reinterpret_cast<const char *>(out[2].payload.data()),
                           out[2].payload.size()};
     REQUIRE(got == body);
+}
+
+TEST_CASE("record stream round-trips the opaque schema table and crypto position offline", "[record_stream]")
+{
+    record_stream_writer w;
+    in_memory_byte_sink  sink;
+
+    const std::array<std::byte, 4> blob_a{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04}};
+    const std::array<std::byte, 2> blob_b{std::byte{0xFE}, std::byte{0xED}};
+
+    const std::array<type_schema_entry, 2> rows{
+        type_schema_entry{0xC0DEu, "vendor.Imu", "enc/a", "Imu.schema", "schema/a", blob_a},
+        type_schema_entry{0xBEEFu, "vendor.Gps", "enc/b", "Gps.schema", "schema/b", blob_b}};
+
+    sink.write(w.begin_stream(99u, make_node(7), topic_capture_rule{},
+                              std::span<const type_schema_entry>{rows},
+                              capture_crypto_position::ciphertext));
+
+    record_stream_reader r{sink.bytes()};
+    stream_definitions   defs;
+    REQUIRE(r.read_definitions(defs));
+    REQUIRE(defs.clock_epoch == 99u);
+    REQUIRE(defs.node == make_node(7));
+    REQUIRE(defs.crypto_position == capture_crypto_position::ciphertext);
+    REQUIRE(defs.schema.size() == 2);
+
+    for(std::size_t i = 0; i < rows.size(); ++i)
+    {
+        const schema_definition &got = defs.schema[i];
+        const type_schema_entry &src = rows[i];
+        REQUIRE(got.type_id == src.type_id);
+        REQUIRE(got.type_name == src.type_name);
+        REQUIRE(got.message_encoding == src.message_encoding);
+        REQUIRE(got.schema_name == src.schema_name);
+        REQUIRE(got.schema_encoding == src.schema_encoding);
+        REQUIRE(got.schema_data == std::vector<std::byte>(src.schema_data.begin(), src.schema_data.end()));
+    }
+}
+
+TEST_CASE("record stream recovers an empty schema table with a default crypto position", "[record_stream]")
+{
+    record_stream_writer w;
+    in_memory_byte_sink  sink;
+
+    sink.write(w.begin_stream(3u, make_node(8), topic_capture_rule{}, {}));
+
+    record_stream_reader r{sink.bytes()};
+    stream_definitions   defs;
+    REQUIRE(r.read_definitions(defs));
+    REQUIRE(defs.clock_epoch == 3u);
+    REQUIRE(defs.schema.empty());
+    REQUIRE(defs.crypto_position == capture_crypto_position::cleartext);
+}
+
+TEST_CASE("record stream rejects a preamble written at the prior format version", "[record_stream]")
+{
+    record_stream_writer w;
+    in_memory_byte_sink  sink;
+    sink.write(w.begin_stream(1u, make_node(1), topic_capture_rule{}, {}));
+
+    // Rewrite the version field (the u16 right after the u32 magic) to the prior version; the
+    // reader must reject it — there is no cross-version compatibility shim.
+    std::vector<std::byte> stream{sink.bytes().begin(), sink.bytes().end()};
+    stream[sizeof(std::uint32_t)]     = std::byte{0x00};
+    stream[sizeof(std::uint32_t) + 1] = std::byte{0x01};
+
+    record_stream_reader r{stream};
+    stream_definitions   defs;
+    REQUIRE_FALSE(r.read_definitions(defs));
 }

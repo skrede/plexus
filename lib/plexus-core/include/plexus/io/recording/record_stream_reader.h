@@ -21,15 +21,28 @@
 
 namespace plexus::io::recording {
 
+// One decoded schema entry: a type id, its human name, and the four opaque self-description
+// fields a host projector reads. Owned — the preamble is parsed once, offline.
+struct schema_definition
+{
+    std::uint64_t          type_id{};
+    std::string            type_name;
+    std::string            message_encoding;
+    std::string            schema_name;
+    std::string            schema_encoding;
+    std::vector<std::byte> schema_data;
+};
+
 // The Definitions preamble decoded from a stream head: the node identity, the
-// recording-QoS default in force, and the type_id->type_name table the host decoder
-// resolves codecs from. Owned strings — the preamble is parsed once, offline.
+// recording-QoS default in force, the opaque schema table a host projector resolves
+// codecs from, and the crypto tap position the capture used. Owned — parsed once, offline.
 struct stream_definitions
 {
-    std::uint64_t      clock_epoch{};
-    node_id            node{};
-    topic_capture_rule rule{};
-    std::vector<std::pair<std::uint64_t, std::string>> schema;
+    std::uint64_t                  clock_epoch{};
+    node_id                        node{};
+    topic_capture_rule             rule{};
+    std::vector<schema_definition> schema;
+    capture_crypto_position        crypto_position{capture_crypto_position::cleartext};
 };
 
 // The outcome of a recovery scan over a possibly-truncated/corrupt stream.
@@ -73,11 +86,16 @@ public:
         out.schema.clear();
         for(std::uint64_t i = 0; i < entries && r.ok(); ++i)
         {
-            const std::uint64_t id  = r.varint().value_or(0);
-            const std::uint64_t len = r.varint().value_or(0);
-            const auto          nm  = r.bytes(static_cast<std::size_t>(len));
-            out.schema.emplace_back(id, std::string{reinterpret_cast<const char *>(nm.data()), nm.size()});
+            schema_definition e;
+            e.type_id          = r.varint().value_or(0);
+            e.type_name        = read_string(r);
+            e.message_encoding = read_string(r);
+            e.schema_name      = read_string(r);
+            e.schema_encoding  = read_string(r);
+            e.schema_data      = read_bytes(r);
+            out.schema.push_back(std::move(e));
         }
+        out.crypto_position = static_cast<capture_crypto_position>(r.u8());
         if(!r.ok())
             return false;
         m_cursor = r.consumed();
@@ -129,6 +147,20 @@ public:
     }
 
 private:
+    static std::vector<std::byte> read_bytes(wire::reader &r)
+    {
+        const std::uint64_t len = r.varint().value_or(0);
+        const auto          b   = r.bytes(static_cast<std::size_t>(len));
+        return {b.begin(), b.end()};
+    }
+
+    static std::string read_string(wire::reader &r)
+    {
+        const std::uint64_t len = r.varint().value_or(0);
+        const auto          b   = r.bytes(static_cast<std::size_t>(len));
+        return {reinterpret_cast<const char *>(b.data()), b.size()};
+    }
+
     static bool is_sync(std::span<const std::byte> payload) noexcept
     {
         if(payload.size() != sizeof(std::uint32_t))

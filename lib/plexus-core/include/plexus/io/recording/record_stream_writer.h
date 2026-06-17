@@ -24,13 +24,18 @@
 
 namespace plexus::io::recording {
 
-// One entry of the Definitions preamble's offline-decode key: a topic/type id mapped
-// to its human type name. A host decoder reads this table to resolve the codec for the
-// raw bytes a sample carries — the stream itself never holds a codec.
+// One entry of the Definitions preamble's offline-decode key: a topic/type id mapped to a
+// human type name and four opaque self-description fields a host projector reads to resolve
+// a codec/schema for the raw bytes a sample carries. Core never interprets the fields — they
+// are bytes laid down verbatim, the same posture as type_name — so the stream holds no codec.
 struct type_schema_entry
 {
-    std::uint64_t    type_id{};
-    std::string_view type_name{};
+    std::uint64_t              type_id{};
+    std::string_view           type_name{};
+    std::string_view           message_encoding{};
+    std::string_view           schema_name{};
+    std::string_view           schema_encoding{};
+    std::span<const std::byte> schema_data{};
 };
 
 // Encodes the flat append-only record stream into a caller-supplied scratch and returns
@@ -55,7 +60,8 @@ public:
     std::span<const std::byte> begin_stream(std::uint64_t clock_epoch,
                                             const node_id &node,
                                             topic_capture_rule rule,
-                                            std::span<const type_schema_entry> schema)
+                                            std::span<const type_schema_entry> schema,
+                                            capture_crypto_position crypto = capture_crypto_position::cleartext)
     {
         wire::writer w{m_scratch};
         w.u32(k_stream_magic);
@@ -71,9 +77,13 @@ public:
         for(const type_schema_entry &e : schema)
         {
             w.varint(e.type_id);
-            w.varint(e.type_name.size());
-            w.bytes(as_bytes(e.type_name));
+            blob(w, as_bytes(e.type_name));
+            blob(w, as_bytes(e.message_encoding));
+            blob(w, as_bytes(e.schema_name));
+            blob(w, as_bytes(e.schema_encoding));
+            blob(w, e.schema_data);
         }
+        w.u8(static_cast<std::uint8_t>(crypto));
         return {m_scratch.data(), w.offset()};
     }
 
@@ -214,6 +224,12 @@ private:
     static std::span<const std::byte> as_bytes(std::string_view s) noexcept
     {
         return {reinterpret_cast<const std::byte *>(s.data()), s.size()};
+    }
+
+    static void blob(wire::writer &w, std::span<const std::byte> b) noexcept
+    {
+        w.varint(b.size());
+        w.bytes(b);
     }
 
     // Append the CRC-32C over the [category][fields] already written at the record scratch
