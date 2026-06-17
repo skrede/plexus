@@ -1065,6 +1065,29 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     target_compile_definitions(test_locality_confinement PRIVATE PLEXUS_HAVE_ASIO_MUX)
 endif()
 
+# The host-side flat-stream to MCAP transcode round-trip: a live wire-capturing inproc
+# session captured into an in-memory flat stream, transcoded to an MCAP file, read back with
+# the mcap reader, and the channel/schema/message mapping asserted (per-topic sample channel,
+# synthetic plexus-events channels, the wire channel). Registered ONLY when the transcode tool
+# is enabled (it links mcap_transcode_lib, which pulls in the host-only mcap dependency); the
+# default suite never builds or registers it. tests/ + the current dir on the include path for
+# in_memory_byte_sink.h, and mcap_transcode_lib carries the transcode + mcap include paths.
+if(PLEXUS_BUILD_MCAP_TRANSCODE)
+    add_executable(test_mcap_transcode test_mcap_transcode.cpp)
+    target_link_libraries(test_mcap_transcode PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::inproc
+        mcap_transcode_lib
+        plexus_mcap_dep
+        Catch2::Catch2WithMain)
+    target_include_directories(test_mcap_transcode PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    catch_discover_tests(test_mcap_transcode TEST_PREFIX "integration.")
+endif()
+
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
 if(PLEXUS_ENABLE_ASIO_BACKEND AND PLEXUS_ENABLE_MDNSPP_DISCOVERY)
     add_executable(test_shared_executor test_shared_executor.cpp)
