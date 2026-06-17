@@ -46,6 +46,18 @@ cmake --build build --target mcap_transcode   # needs -DPLEXUS_BUILD_MCAP_TRANSC
 ./build/tools/mcap_transcode/mcap_transcode recording_example_capture.plxr out.mcap
 ```
 
+End-to-end MCAP example — captures a session and converts it to MCAP in one run (built only
+with `-DPLEXUS_BUILD_MCAP_TRANSCODE=ON`). It writes `mcap_example_capture.plxr` +
+`mcap_example_capture.mcap` and prints the transcode summary; the file header documents how to
+open the output in Foxglove (https://studio.foxglove.dev) or inspect it with the `mcap` CLI
+(`mcap info <file>`):
+
+```sh
+cmake -B build -DPLEXUS_BUILD_EXAMPLES=ON -DPLEXUS_BUILD_MCAP_TRANSCODE=ON
+cmake --build build -j4 --target mcap_example
+./build/examples/mcap_example
+```
+
 Each two-terminal example below runs the first binary in one shell and the second in
 another. Discovery over mDNS takes a few seconds to converge.
 

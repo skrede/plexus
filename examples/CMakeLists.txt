@@ -38,3 +38,10 @@ if(TARGET mcap_transcode_lib)
     target_link_libraries(recording_example PRIVATE mcap_transcode_lib)
     target_compile_definitions(recording_example PRIVATE PLEXUS_WITH_MCAP_TRANSCODE)
 endif()
+
+# The MCAP example is the analysis path (capture -> flat stream -> MCAP for Foxglove). It needs
+# the transcode, so it is built only when PLEXUS_BUILD_MCAP_TRANSCODE is on.
+if(TARGET mcap_transcode_lib)
+    plexus_example(mcap_example plexus::plexus plexus::inproc)
+    target_link_libraries(mcap_example PRIVATE mcap_transcode_lib)
+endif()
