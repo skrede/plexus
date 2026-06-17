@@ -3,6 +3,7 @@
 
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
+#include "plexus/io/security_event.h"
 #include "plexus/io/observation_events.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/recording/byte_ring.h"
@@ -91,6 +92,12 @@ public:
         const std::uint64_t ts = m_clock();
         admit(m_writer.endpoint(ts, fqn, e), ts,
               {record_category::endpoint, ts, e.topic_hash, io::detail::drop_cause::none, 0});
+    }
+
+    void record_security(const security_event &e)
+    {
+        const std::uint64_t ts = m_clock();
+        admit(m_writer.security(ts, e), ts, {record_category::security, ts, 0, io::detail::drop_cause::none, 0});
     }
 
     // Freeze a snapshot: capture {tail, head} (two index reads — NO buffer copy, no

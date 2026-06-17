@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_NODE_H
 #define HPP_GUARD_PLEXUS_NODE_H
 
+#include "plexus/recorder.h"
 #include "plexus/node_options.h"
 
 #include "plexus/io/endpoint.h"
@@ -372,6 +373,17 @@ public:
     auto advertise(std::string_view topic, const typed_publisher_options &opts = {}, Codec codec = {})
     {
         return publisher<Codec>{*this, topic, opts, std::move(codec)};
+    }
+
+    // Attach a recorder draining to `sink`, the first-class consumer-sovereign capture
+    // verb (NOT the router() escape hatch). It returns an RAII recorder handle that
+    // registers its tap on the engine here (auto-feeding the always-on metadata floor) and
+    // deregisters it before teardown; the bytes land in the consumer's byte_sink, which
+    // MUST outlive the handle. The drain rides this node's executor turns — no thread.
+    [[nodiscard]] recorder<engine_type, Policy>
+    make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
+    {
+        return recorder<engine_type, Policy>{m_engine, m_executor, m_id, sink, std::move(opts)};
     }
     // --------------------------------------------------------------------------------
 

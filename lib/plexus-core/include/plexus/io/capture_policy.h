@@ -50,6 +50,8 @@ class capture_policy
 public:
     void set_default(topic_capture_rule rule) { m_default = rule; }
 
+    topic_capture_rule default_rule() const noexcept { return m_default; }
+
     void set_topic(std::uint64_t hash, topic_capture_rule rule) { m_rules[hash] = rule; }
 
     topic_capture_rule rule_for(std::uint64_t hash) const noexcept

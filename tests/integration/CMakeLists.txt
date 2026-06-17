@@ -480,23 +480,39 @@ target_include_directories(test_record_stream PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_record_stream TEST_PREFIX "integration.")
 
-# The pre-buffer / FDR mode oracle: the same byte_ring run drop-oldest continuous-
-# overwrite holds "the last N bytes" (byte-bounded under a saturating producer), a freeze
-# snapshots two indices with zero allocation (no buffer copy), the frozen window drains to
-# the in-memory byte_sink with no thread, all three trigger sources fire (manual, an armed
-# anomaly predicate on a drop edge, a deadline-miss edge), and captured_span equals
-# newest_ts - oldest_ts under the manual clock. Deterministic header-only core (no backend).
-# tests/ is on the include path for support/alloc_counter.h and the current dir for
-# in_memory_byte_sink.h.
+# The recorder oracle, in two halves: the pre-buffer / FDR mode (drop-oldest, freeze =
+# two indices with zero allocation, three trigger sources, captured_span) AND the public-
+# API end-to-end capture (node.make_recorder attach + the RAII handle over a live multi-
+# endpoint inproc session, offline recovery, dropout accounting closed, a post-dtor-pump
+# teardown section). Links the public facade + inproc for the end-to-end half. tests/ is on
+# the include path for support/alloc_counter.h and the current dir for in_memory_byte_sink.h.
 add_executable(test_recorder_capture test_recorder_capture.cpp)
 target_link_libraries(test_recorder_capture PRIVATE
+    plexus::plexus
     plexus::core
     plexus::wire
+    plexus::inproc
     Catch2::Catch2WithMain)
 target_include_directories(test_recorder_capture PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_recorder_capture TEST_PREFIX "integration.")
+
+# The recorder-attached alloc gate: with a recorder draining, the steady-state push ->
+# encode -> ring -> drain path allocates ZERO after attach (grown-once ring + reused encode
+# scratch, a pre-grown fixed-capacity drain target isolating the recorder's own path). A
+# contrast cell shows the inert baseline is itself zero on the same loop. The replaceable
+# global new/delete constrains it to its own TU. tests/ is on the include path for
+# support/alloc_counter.h.
+add_executable(test_recorder_attached_alloc test_recorder_attached_alloc.cpp)
+target_link_libraries(test_recorder_attached_alloc PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+target_include_directories(test_recorder_attached_alloc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_recorder_attached_alloc TEST_PREFIX "integration.")
 
 # The host-identity accessor oracle: the authenticated peer's host identity is
 # read from the security step (SPKI-derived for TLS, attach-bound for PSK), never a
