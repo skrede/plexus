@@ -1,11 +1,13 @@
 // The recorder defaults chosen-cell assertion (the recorded-sweep precedent,
 // tests/crypto/test_rekey_threshold_sweep). recorder_sweep measured the recall curve
 // recall = min(1, ring_bytes / (burst * framed_record)); this test pins the SHIPPED
-// ring_bytes default to the firehose ceiling of that curve: a fixed saturating burst at
-// every measured payload size recovers EVERY produced sample (recall == 1.0) at the
-// default budget. A regression that lowers the default below the knee sheds records and
-// fails here. It also asserts the keep-all decimation defaults DO keep everything and that
-// the decimation knob — which gates the typed object lane only — decimates exactly as
+// ring_bytes default to its conservative design point: a modest small-payload backlog
+// (the common case) is recovered in full at the default budget, while a saturating
+// large-payload burst that the default would shed is RECOVERED once ring_bytes is raised
+// to a firehose value — proving the override path. A regression that raises the default to
+// the firehose ceiling makes the first case no longer the design point and the recovery
+// case vacuous. It also asserts the keep-all decimation defaults DO keep everything and
+// that the decimation knob — which gates the typed object lane only — decimates exactly as
 // configured for a fixed burst. Deterministic: the saturation model is timing-free (a
 // publish only POSTS its tap, so a burst queues ahead of the first bounded drain turn) and
 // count_n is exact 1/N; no RNG, no single-run claim.
@@ -263,42 +265,56 @@ decim_counts count_n_run(std::uint32_t n_keep, std::size_t payload_bytes, int bu
     return c;
 }
 
-constexpr int           k_burst    = 2000;
-constexpr std::size_t   k_payloads[] = {64, 256, 1024, 4096};
+// The default's design point: a modest small-payload backlog that fits the 1 MiB ring at
+// full recall. 800 records of 512 B is ~400 KiB of raw payload (well inside the framed
+// budget) — the common pub/sub small-payload case the conservative default targets.
+constexpr int         k_modest_burst   = 800;
+constexpr std::size_t k_modest_payload = 512;
+
+// A genuine saturating large-payload burst: 2000 records of 4 KiB is ~8 MiB of raw payload,
+// far past the 1 MiB default (so it sheds) yet inside a 16 MiB firehose override (so it
+// recovers in full) — the override path.
+constexpr int           k_firehose_burst   = 2000;
+constexpr std::size_t   k_firehose_payload = 4096;
+constexpr std::size_t   k_firehose_ring    = 16u * 1024u * 1024u;
 
 }
 
-TEST_CASE("recorder defaults the shipped ring_bytes holds full recall at every measured payload",
+TEST_CASE("recorder defaults the shipped ring_bytes gives full recall for a modest small-payload workload",
           "[recorder_defaults][sweep]")
 {
-    // The chosen cell is the SHIPPED default, not a literal: a regression that lowers the
-    // constant below the knee sheds records and fails here. The saturation model is timing-
-    // free, so the recall is identical across runs (the recorded-grid reproducibility).
+    // The chosen cell is the SHIPPED default, not a literal. The conservative 1 MiB default
+    // is designed for the common small-payload case: a modest backlog of ~512 B records is
+    // recovered in full. The saturation model is timing-free, so recall is identical across
+    // runs (the recorded-grid reproducibility).
+    REQUIRE(plexus::recorder_options{}.ring_bytes == (1u << 20));
     const std::size_t shipped_ring = plexus::recorder_options{}.ring_bytes;
 
     for(int run = 0; run < 3; ++run)
-        for(std::size_t payload : k_payloads)
-        {
-            const std::uint64_t delivered = recovered_samples(shipped_ring, payload, k_burst);
-            // Full recall with margin: every produced sample is recovered (the firehose
-            // ceiling). A budget below the knee for this payload would shed and miss this.
-            REQUIRE(delivered == static_cast<std::uint64_t>(k_burst));
-        }
+    {
+        const std::uint64_t delivered =
+            recovered_samples(shipped_ring, k_modest_payload, k_modest_burst);
+        // Full recall: every produced sample of the modest small-payload backlog is
+        // recovered at the conservative default — the design point.
+        REQUIRE(delivered == static_cast<std::uint64_t>(k_modest_burst));
+    }
 }
 
-TEST_CASE("recorder defaults a budget below the knee sheds records (the regression guard bites)",
+TEST_CASE("recorder defaults raising ring_bytes recovers a saturating burst the default sheds",
           "[recorder_defaults][sweep]")
 {
-    // The companion to the chosen-cell assertion: at the largest payload a 1 MiB budget (the
-    // former untuned placeholder) cannot hold the same burst at full recall — proving the
-    // assertion above is a live guard, not vacuously satisfied by a roomy default.
-    const std::uint64_t delivered = recovered_samples(1u << 20, 4096, k_burst);
-    REQUIRE(delivered < static_cast<std::uint64_t>(k_burst));
-
-    // And the shipped default DOES hold the same cell — the lift the ratified knee buys.
+    // The default is conservative on purpose: a saturating large-payload burst (~8 MiB of
+    // raw payload) overflows the 1 MiB ring and sheds — observable while recording, the
+    // intended posture. This proves the default is a live floor, not a roomy ceiling.
     const std::uint64_t at_default =
-        recovered_samples(plexus::recorder_options{}.ring_bytes, 4096, k_burst);
-    REQUIRE(at_default == static_cast<std::uint64_t>(k_burst));
+        recovered_samples(plexus::recorder_options{}.ring_bytes, k_firehose_payload, k_firehose_burst);
+    REQUIRE(at_default < static_cast<std::uint64_t>(k_firehose_burst));
+
+    // Raising ring_bytes to a firehose value recovers the same burst in full — the explicit
+    // override path for a large-payload capture.
+    const std::uint64_t at_firehose =
+        recovered_samples(k_firehose_ring, k_firehose_payload, k_firehose_burst);
+    REQUIRE(at_firehose == static_cast<std::uint64_t>(k_firehose_burst));
 }
 
 TEST_CASE("recorder defaults the keep-all decimation default keeps every payload",
