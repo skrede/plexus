@@ -26,9 +26,11 @@
 
 #include "plexus/log/logger.h"
 
+#include <span>
 #include <chrono>
 #include <memory>
 #include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <algorithm>
@@ -161,6 +163,20 @@ public:
     [[nodiscard]] plexus::detail::move_only_function<void(const detail::drop_event &)> drop_sink()
     {
         return [this](const detail::drop_event &ev) { post_drop(ev); };
+    }
+
+    // The capture seam the recording_channel decorator's on_wire tap binds to: a value-
+    // capturing, engine-posted callable shaped like drop_sink, so the decorator stays
+    // recorder-agnostic (it knows nothing of the recorder or the ring). Each captured frame
+    // posts to the observer fan-out via post_wire — the io→executor crossing that keeps the
+    // ring single-writer. The per-direction sequence + peer identity are the offline cross-
+    // node loss-join keys threaded through here in a later step; this seam establishes the
+    // posted edge with the join keys defaulted.
+    [[nodiscard]] plexus::detail::move_only_function<void(recording::wire_direction, std::span<const std::byte>)> wire_sink()
+    {
+        return [this](recording::wire_direction dir, std::span<const std::byte> bytes) {
+            post_wire(dir, 0u, node_id{}, bytes);
+        };
     }
 
     // The data-path observation sinks, shaped exactly like drop_sink: value-capturing,
@@ -495,12 +511,14 @@ private:
     void on_dialed(std::unique_ptr<channel_type> channel, const endpoint &dialed)
     {
         wire_channel_drop(*channel);
+        wire_channel_capture(*channel);
         m_registry.build_session_for_endpoint(dialed, std::move(channel));
     }
 
     void on_accepted(std::unique_ptr<channel_type> channel)
     {
         wire_channel_drop(*channel);
+        wire_channel_capture(*channel);
         m_registry.accept_session(std::move(channel));
     }
 
@@ -517,6 +535,17 @@ private:
     {
         if constexpr(requires { channel.on_drop(drop_sink()); })
             channel.on_drop(drop_sink());
+    }
+
+    // Install the posted wire-capture sink onto a channel that carries the on_wire edge —
+    // the SAME compile-time capability gate wire_channel_drop uses. A bare channel_type that
+    // never composed the recording_channel decorator has no on_wire edge, so this is a no-op
+    // the compiler elides: the wire tier is STRUCTURALLY absent, not a runtime branch. The
+    // decorated-vs-bare channel TYPE is fixed where the transport mints the channel.
+    void wire_channel_capture(channel_type &channel)
+    {
+        if constexpr(requires { channel.on_wire(wire_sink()); })
+            channel.on_wire(wire_sink());
     }
 
     // The session→observer fan-out. Every edge is delivered POSTED on the executor,
@@ -612,6 +641,22 @@ private:
     {
         Policy::post(m_executor, [this, ev] {
             fan_out([&](observer &o) { o.on_security(ev); });
+        });
+    }
+
+    // POST a captured wire frame to the observer fan-out, keeping the single-writer ring
+    // discipline (the recorder pushes only on the executor turn, never the io thread). The
+    // wire_record carries a span into io-thread-owned bytes that does NOT survive the post,
+    // so the frame is COPIED into an owned buffer captured BY MOVE into the turn (the owner-
+    // carry idiom) and the span is rebuilt over the owned buffer inside the turn before the
+    // fan-out. This one copy-into-turn is the inherent every-packet cost of wire capture.
+    void post_wire(recording::wire_direction dir, std::uint64_t seq, const node_id &peer,
+                   std::span<const std::byte> bytes)
+    {
+        std::vector<std::byte> owned(bytes.begin(), bytes.end());
+        Policy::post(m_executor, [this, dir, seq, peer, owned = std::move(owned)] {
+            const recording::wire_record rec{dir, seq, peer, 0u, std::span<const std::byte>{owned}};
+            fan_out([&](observer &o) { o.on_wire(rec); });
         });
     }
 

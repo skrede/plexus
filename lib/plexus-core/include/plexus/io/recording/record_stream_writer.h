@@ -9,6 +9,7 @@
 #include "plexus/io/recording/record_format.h"
 #include "plexus/io/recording/dropout_record.h"
 #include "plexus/io/recording/record_envelope.h"
+#include "plexus/io/recording/wire_record.h"
 
 #include "plexus/wire/cursor.h"
 #include "plexus/wire/crc32c.h"
@@ -173,6 +174,28 @@ public:
         w.u8(static_cast<std::uint8_t>(e.cause));
         for(std::byte b : e.peer)
             w.u8(std::to_integer<std::uint8_t>(b));
+        return seal(w.offset());
+    }
+
+    // The wire-fidelity tier: the full framed transport bytes captured verbatim on one
+    // direction, plus the per-direction sequence and the peer identity the offline cross-
+    // node loss-join keys on. The bytes are opaque — the encoder never frames or transforms
+    // them (lossless capture), it lays them down behind a varint length exactly as sample()
+    // lays down its payload. Uses the SHARED m_scratch + seal() like sample() (m_aux stays
+    // reserved for the sync_marker / dropout records the recorder emits around it mid-admit).
+    std::span<const std::byte> wire_frame(std::uint64_t capture_ts, wire_direction dir,
+                                          std::uint64_t seq, const node_id &peer,
+                                          std::span<const std::byte> bytes)
+    {
+        wire::writer w{m_scratch};
+        w.u8(static_cast<std::uint8_t>(record_category::wire_frame));
+        w.u64(capture_ts);
+        w.u8(static_cast<std::uint8_t>(dir));
+        w.u64(seq);
+        for(std::byte b : peer)
+            w.u8(std::to_integer<std::uint8_t>(b));
+        w.varint(bytes.size());
+        w.bytes(bytes);
         return seal(w.offset());
     }
 

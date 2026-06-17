@@ -58,3 +58,16 @@ target_link_libraries(test_anti_replay_window_sweep PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_anti_replay_window_sweep TEST_PREFIX "crypto.")
+
+# The wire-capture crypto-position proof: the cleartext-above default (live over the plaintext
+# path) vs the ciphertext-below opt-in (unit against the authenticated_channel directly). Links
+# the header-only recording_channel from plexus::core; drives the auth channel directly (the
+# secured node stack is NOT wired here).
+add_executable(test_wire_crypto_position test_wire_crypto_position.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_wire_crypto_position PRIVATE
+    plexus::core
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_wire_crypto_position TEST_PREFIX "crypto.")

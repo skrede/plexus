@@ -480,6 +480,31 @@ target_include_directories(test_record_stream PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_record_stream TEST_PREFIX "integration.")
 
+# The lossless recording_channel decorator oracle: send/recv byte-fidelity (forwarded ==
+# input on both directions), the OUT/IN taps fire once each with verbatim bytes, the inert
+# (no-tap) edge, and a captured frame reaching the recorder as a wire_frame record through
+# recording_sink. Deterministic header-only core (no backend). tests/ is on the include path
+# and the current dir for in_memory_byte_sink.h.
+add_executable(test_recording_channel test_recording_channel.cpp)
+target_link_libraries(test_recording_channel PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_recording_channel PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_recording_channel TEST_PREFIX "integration.")
+
+# The structural-absence symbol guard: a default (non-wire) build artifact must contain NO
+# recording_channel template instantiation symbol. test_routing_engine_inproc composes a full
+# inproc node WITHOUT wire capture, so its binary is the witness — nm must find no
+# recording_channel symbol. A ctest-runnable guard over the known default-build artifact.
+add_test(NAME integration.wire_inert_no_decorator_symbol
+    COMMAND ${CMAKE_COMMAND}
+        -DBINARY=$<TARGET_FILE:test_routing_engine_inproc>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/wire_inert_symbol_guard.cmake)
+
 # The recorder oracle, in two halves: the pre-buffer / FDR mode (drop-oldest, freeze =
 # two indices with zero allocation, three trigger sources, captured_span) AND the public-
 # API end-to-end capture (node.make_recorder attach + the RAII handle over a live multi-

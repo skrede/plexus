@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_RECORDING_RECORD_DECODE_H
 
 #include "plexus/io/capture_policy.h"
+#include "plexus/io/recording/wire_record.h"
 #include "plexus/io/recording/record_envelope.h"
 
 #include "plexus/wire/cursor.h"
@@ -36,6 +37,11 @@ struct decoded_record
     node_id                      peer{};
     std::string                  fqn;
     std::span<const std::byte>   payload{};
+    // The wire-frame join keys, distinct from a sample's publication_sequence so a
+    // packet-level loss join never collides with message identity. wire_seq is the
+    // decorator's own per-direction monotonic counter; payload carries the framed bytes.
+    wire_direction               wire_dir{wire_direction::out};
+    std::uint64_t                wire_seq{};
 };
 
 namespace detail {
@@ -118,6 +124,20 @@ inline void decode_dropout(wire::reader &r, decoded_record &rec)
     rec.fidelity = static_cast<capture_fidelity>(r.u8());
 }
 
+// Read the fields in the exact order wire_frame() wrote them: capture_ts, direction,
+// the per-direction sequence, the peer node_id bytes, then the varint-prefixed framed
+// bytes (surfaced through payload, the same opaque-bytes slot a sample uses).
+inline void decode_wire(wire::reader &r, decoded_record &rec)
+{
+    rec.capture_ts = r.u64();
+    rec.wire_dir   = static_cast<wire_direction>(r.u8());
+    rec.wire_seq   = r.u64();
+    for(std::byte &b : rec.peer)
+        b = static_cast<std::byte>(r.u8());
+    const std::uint64_t len = r.varint().value_or(0);
+    rec.payload             = r.bytes(static_cast<std::size_t>(len));
+}
+
 }
 
 // Decode one record body ([category][fields], CRC already stripped/validated) into rec.
@@ -135,6 +155,7 @@ inline bool decode_record_body(std::span<const std::byte> body, decoded_record &
         case record_category::endpoint:    detail::decode_endpoint(r, rec); break;
         case record_category::security:    detail::decode_security(r, rec); break;
         case record_category::dropout:     detail::decode_dropout(r, rec); break;
+        case record_category::wire_frame:  detail::decode_wire(r, rec); break;
         default:                           break;
     }
     return r.ok();

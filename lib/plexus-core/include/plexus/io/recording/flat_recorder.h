@@ -9,6 +9,7 @@
 #include "plexus/io/recording/byte_ring.h"
 #include "plexus/io/recording/byte_sink.h"
 #include "plexus/io/recording/record_format.h"
+#include "plexus/io/recording/wire_record.h"
 #include "plexus/io/recording/dropout_record.h"
 #include "plexus/io/recording/record_stream_writer.h"
 
@@ -67,6 +68,16 @@ public:
     void record_participant(const participant_event &e) { admit(m_writer.participant(m_clock(), e)); }
     void record_endpoint(std::string_view fqn, const endpoint_event &e) { admit(m_writer.endpoint(m_clock(), fqn, e)); }
     void record_security(const security_event &e) { admit(m_writer.security(m_clock(), e)); }
+
+    // The wire tier shares the SAME bounded ring + dropout accounting as every other
+    // record; passing capture_fidelity::wire means an overflow sheds at the wire tier and
+    // the surfaced dropout_record bounds the gap at wire. The bytes are sized by the frame.
+    void record_wire(wire_direction dir, std::uint64_t seq, const node_id &peer,
+                     std::span<const std::byte> bytes)
+    {
+        admit(m_writer.wire_frame(m_clock(), dir, seq, peer, bytes),
+              bytes.size(), capture_fidelity::wire);
+    }
 
     // Pop a bounded batch of framed records from the ring into the sink; returns true
     // while the ring still holds unread records (the cooperative yield). No thread.

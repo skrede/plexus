@@ -7,6 +7,7 @@
 #include "plexus/io/security_event.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/observation_events.h"
+#include "plexus/io/recording/wire_record.h"
 
 #include "plexus/node_id.h"
 
@@ -63,6 +64,14 @@ public:
     // data-tap opt-in. fqn rides as a borrowed view valid for the call.
     virtual void on_participant(const participant_event &) {}
     virtual void on_endpoint(std::string_view, const endpoint_event &) {}
+
+    // The wire-fidelity tap: one captured framed packet, posted on the executor. Unlike the
+    // message edges it is NOT gated by observes_data_path — it gates STRUCTURALLY: a node
+    // that did not compose the recording_channel decorator for a transport never produces a
+    // captured frame, so the edge simply never fires (no per-frame runtime opt-in branch).
+    // The carried wire_record's bytes are owned for the posted turn (the engine pins them
+    // across the post). Default-empty like every other cold edge.
+    virtual void on_wire(const recording::wire_record &) {}
 
     // The data-path opt-in: the message/rpc/qos taps fire once per publish/destination/call,
     // so their posted fan-out is a HOT cost (an fqn copy + a posted closure per emit). The
