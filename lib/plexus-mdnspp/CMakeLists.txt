@@ -20,21 +20,24 @@ endif()
 # single asio include tree (no ODR clash).
 include(${PROJECT_SOURCE_DIR}/cmake/plexus-deps.cmake)
 
-# Consume mdnspp from its on-disk source with the asio policy ON and encryption
-# OFF (no libsodium/OpenSSL in the slice). FetchContent over the local path keeps
-# the version vetted/reproducible — the same source this host's mdnspp build uses.
+# Consume mdnspp with the asio policy ON and encryption OFF (no libsodium/OpenSSL
+# in the slice). The default fetches the develop branch from GitHub; setting
+# PLEXUS_MDNSPP_SOURCE_DIR overrides that with an on-disk source tree (the path a
+# local mdnspp checkout lives at), which keeps the version vetted/reproducible
+# and lets an offline host build against a working copy.
 set(MDNSPP_ENABLE_ASIO_POLICY ON CACHE BOOL "" FORCE)
 set(MDNSPP_ENABLE_ENCRYPT OFF CACHE BOOL "" FORCE)
 set(MDNSPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(MDNSPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-if(NOT DEFINED PLEXUS_MDNSPP_SOURCE_DIR)
-    set(PLEXUS_MDNSPP_SOURCE_DIR "$ENV{HOME}/Workspace/mdnspp"
-        CACHE PATH "On-disk mdnspp source consumed by the discovery adapter")
-endif()
-
 include(FetchContent)
-FetchContent_Declare(mdnspp SOURCE_DIR ${PLEXUS_MDNSPP_SOURCE_DIR})
+if(PLEXUS_MDNSPP_SOURCE_DIR)
+    FetchContent_Declare(mdnspp SOURCE_DIR ${PLEXUS_MDNSPP_SOURCE_DIR})
+else()
+    FetchContent_Declare(mdnspp
+        GIT_REPOSITORY git@github.com:skrede/mdnspp.git
+        GIT_TAG develop)
+endif()
 FetchContent_MakeAvailable(mdnspp)
 
 add_library(plexus-mdnspp STATIC src/mdnspp_discovery.cpp)
