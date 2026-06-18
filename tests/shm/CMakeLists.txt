@@ -7,6 +7,22 @@ if(NOT PLEXUS_ENABLE_SHM_BACKEND)
     return()
 endif()
 
+# The liburing usage-requirement proof: links ONLY plexus::asio::shm (+ plexus::asio for the
+# policy header path) and NO manual liburing, then drives ring_notifier's io_uring calls. A
+# green link proves plexus::asio::shm carries liburing transitively — the symptom a real
+# consumer hit (undefined reference to io_uring_*). Built only when the shm backend exposes
+# its bridge target.
+if(TARGET plexus::asio::shm)
+    add_executable(test_shm_liburing_link test_shm_liburing_link.cpp)
+
+    target_link_libraries(test_shm_liburing_link PRIVATE
+        plexus::asio::shm
+        plexus::asio
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_liburing_link TEST_PREFIX "shm.")
+endif()
+
 # The scaffold oracle: forks a child, round-trips a value through an anonymous
 # MAP_SHARED page, and asserts equality looped N>=100 — proving fork +
 # MAP_SHARED actually crosses the process boundary on this host. The later waves
@@ -364,7 +380,6 @@ if(LIBURING_FOUND)
         plexus::asio::shm
         plexus::shm
         plexus::wire
-        PkgConfig::LIBURING
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_notifier_bridge TEST_PREFIX "shm.")
@@ -384,7 +399,6 @@ if(LIBURING_FOUND)
         plexus::asio::shm
         plexus::shm
         plexus::wire
-        PkgConfig::LIBURING
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_teardown_race TEST_PREFIX "shm.")
@@ -404,7 +418,6 @@ if(LIBURING_FOUND)
         plexus::asio::shm
         plexus::shm
         plexus::wire
-        PkgConfig::LIBURING
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_dual_delivery TEST_PREFIX "shm.")
@@ -425,7 +438,6 @@ if(LIBURING_FOUND)
             plexus::asio::shm
             plexus::shm
             plexus::crypto
-            PkgConfig::LIBURING
             Catch2::Catch2WithMain)
 
         catch_discover_tests(test_shm_mux_composition TEST_PREFIX "shm.")
@@ -449,7 +461,6 @@ if(LIBURING_FOUND)
         plexus::asio
         plexus::asio::shm
         plexus::shm
-        PkgConfig::LIBURING
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_node_composition TEST_PREFIX "shm.")
@@ -469,7 +480,6 @@ if(LIBURING_FOUND)
         plexus::asio
         plexus::asio::shm
         plexus::shm
-        PkgConfig::LIBURING
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_transport_set TEST_PREFIX "shm.")
@@ -489,7 +499,6 @@ if(LIBURING_FOUND)
         plexus::asio
         plexus::asio::shm
         plexus::shm
-        PkgConfig::LIBURING
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_same_host_transports TEST_PREFIX "shm.")

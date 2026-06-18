@@ -56,9 +56,16 @@ if(PLEXUS_ENABLE_SHM_BACKEND)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/shm-include>
         $<INSTALL_INTERFACE:shm-include>)
 
+    # The shm-include/ headers (ring_notifier) call io_uring_* directly, so the shm
+    # target carries liburing as a usage requirement — a consumer linking plexus::asio::shm
+    # resolves io_uring transitively, never by rediscovering liburing itself.
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
+
     target_link_libraries(plexus-asio-shm INTERFACE
         plexus::asio
-        plexus::shm)
+        plexus::shm
+        PkgConfig::LIBURING)
 
     target_compile_features(plexus-asio-shm INTERFACE cxx_std_20)
 
