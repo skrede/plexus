@@ -66,8 +66,18 @@ using node_engine_policy =
 
 // The single-transport node carries no composition glue. An empty member under
 // [[no_unique_address]] keeps it zero-overhead; the multi-transport node holds the
-// node-owned multiplexing_transport built from the borrowed leaves.
-struct no_mux_glue {};
+// node-owned multiplexing_transport built from the borrowed leaves. The variadic ctor
+// lets the node's member-init use ONE in-place construction expression for both glue
+// kinds (this empty type ignores the leaves; the mux consumes them) — so the mux is
+// never materialized as a prvalue that copy-elision would have to thread into the member.
+struct no_mux_glue
+{
+    no_mux_glue() = default;
+    template <typename... Ignored>
+    explicit no_mux_glue(Ignored &&...) noexcept
+    {
+    }
+};
 
 template <bool Single, typename... Transports>
 struct mux_selection
@@ -214,7 +224,7 @@ public:
         , m_shm_geometry(opts.shm_geometry)
         , m_max_ring_slab_bytes(opts.max_ring_slab_bytes)
         , m_wire_crypto_position(opts.wire.position)
-        , m_glue(make_glue(transports...))
+        , m_glue(transports..., io::transport_selector{}, resolve_hook(transports...))
         , m_leaf(engine_leaf(transports...))
         , m_engine(m_leaf, executor, make_fsm_cfg(id, opts),
                    opts.handshake_timeout, opts.reconnect, opts.redial_seed,
@@ -748,24 +758,23 @@ private:
 
     static constexpr bool any_shm_member = (has_can_acquire<Transports> || ...);
 
-    // The single-transport node has no glue (an empty member); the multi-transport node
-    // constructs the multiplexing_transport from the borrowed leaves. When the pack
-    // carries a shared-memory member, the node installs the same-host preference hook
-    // (prefer shm when the ring acquires, else AF_UNIX) so the local tier's >1 candidate
-    // resolves by the runtime acquire rather than positional order. The hook is
-    // can_acquire-gated, which is mode-aware: a wire_fallback topic declines the ring so
-    // its same-host channel is the wire (the fail-safe — a too-large message always has a
-    // reliable channel), while the two reliable-ring modes prefer shm. A composition with
-    // no shm member keeps the default first-candidate hook.
-    static detail::node_mux_glue<Transports...> make_glue(Transports &...transports)
+    // The multiplexing_transport member-init consumes the borrowed leaves plus a selector
+    // and this resolved hook directly (in place — never a returned prvalue, so the
+    // non-movable mux needs no copy/move). When the pack carries a shared-memory member,
+    // the node installs the same-host preference hook (prefer shm when the ring acquires,
+    // else AF_UNIX) so the local tier's >1 candidate resolves by the runtime acquire rather
+    // than positional order. The hook is can_acquire-gated, which is mode-aware: a
+    // wire_fallback topic declines the ring so its same-host channel is the wire (the
+    // fail-safe — a too-large message always has a reliable channel), while the two
+    // reliable-ring modes prefer shm. The if constexpr is load-bearing: shm_preference_hook
+    // only instantiates for an shm-bearing pack; a composition with no shm member resolves
+    // to the default first-candidate hook.
+    static io::selection_hook resolve_hook(Transports &...transports)
     {
-        if constexpr(sizeof...(Transports) == 1)
-            return detail::no_mux_glue{};
-        else if constexpr(any_shm_member)
-            return io::multiplexing_transport<Transports...>{
-                transports..., io::transport_selector{}, shm_preference_hook(transports...)};
+        if constexpr(any_shm_member)
+            return shm_preference_hook(transports...);
         else
-            return io::multiplexing_transport<Transports...>{transports...};
+            return io::first_candidate{};
     }
 
     // Build the same-host preference hook over whichever borrowed member exposes the ring
@@ -846,12 +855,10 @@ private:
     // fact, never on the live wire).
     wire_crypto_position m_wire_crypto_position;
 
-    // [[no_unique_address]] dropped to dodge a GCC 16.1.1 bug: guaranteed copy-elision is
-    // not applied into a [[no_unique_address]] member, so the by-value make_glue() prvalue
-    // demands the non-movable mux's deleted copy ctor (clang accepts the same code). Costs
-    // the single-transport node the empty-glue size overlap (<= 1 byte) until make_glue is
-    // reworked to construct the mux in place.
-    detail::node_mux_glue<Transports...> m_glue;
+    // Constructed in place from the borrowed leaves (the member-init passes the leaves +
+    // selector + resolved hook directly): the non-movable mux is never a prvalue, so the
+    // empty single-transport glue keeps its zero-size overlap under [[no_unique_address]].
+    [[no_unique_address]] detail::node_mux_glue<Transports...> m_glue;
 
     // The engine's transport leaf (the borrowed single transport, or the node-owned
     // mux glue): held so the declare path can provision the same-host ring geometry on
