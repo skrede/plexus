@@ -458,6 +458,26 @@ if(LIBURING_FOUND)
 
     catch_discover_tests(test_transport_set TEST_PREFIX "shm.")
 
+    # The portable same-host composition: one consumer surface on every platform that resolves
+    # to shm + AF_UNIX + TCP on Linux. Proves the portable type stands up a live node AND that
+    # two independent per-instance brokers (the model the type owns) share an shm ring by name.
+    add_executable(test_same_host_transports test_same_host_transports.cpp)
+
+    target_include_directories(test_same_host_transports PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_same_host_transports PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::asio::shm
+        plexus::shm
+        PkgConfig::LIBURING
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_same_host_transports TEST_PREFIX "shm.")
+
     message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found — io_uring futex spike + reactor bridge enabled")
 else()
     message(STATUS "plexus shm tests: liburing absent — io_uring futex spike + reactor bridge skipped (non-gating)")
