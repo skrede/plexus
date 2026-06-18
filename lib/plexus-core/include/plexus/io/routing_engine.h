@@ -420,6 +420,7 @@ public:
     session_type *session_for(const node_id &id) { return m_registry.session_for(id); }
 
     const known_peers &known() const noexcept { return m_known; }
+    shm::host_fingerprint local_fingerprint() const noexcept { return m_build.fsm_cfg.local_fingerprint; }
     message_forwarder<Policy> &messages() noexcept { return m_messages; }
     procedure_forwarder<Policy> &procedures() noexcept { return m_procedures; }
     registry_type &registry() noexcept { return m_registry; }
