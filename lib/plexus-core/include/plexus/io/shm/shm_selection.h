@@ -129,6 +129,11 @@ public:
         return m_refcount.holds(node_name, fqn);
     }
 
+    // Drop every pair held for a peer in one step (the peer-dead teardown): the caller
+    // issues the per-ring gate release for each held fqn first, then forgets the peer's
+    // refcount entries here.
+    void forget(std::string_view node_name) { m_refcount.forget(node_name); }
+
 private:
     detail::keyed_refcount m_refcount;
 };

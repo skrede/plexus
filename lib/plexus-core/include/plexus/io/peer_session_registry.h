@@ -155,6 +155,17 @@ public:
         return &*it->second->session;
     }
 
+    // The same-host verdict for a peer keyed by the forwarder node_name (the
+    // coordinator's verdict-read on a demand edge). Fail-closed: an unknown name, or a
+    // slot whose session is not yet built, is NOT same-host (no ring acquire).
+    [[nodiscard]] bool same_host_for(std::string_view node_name) const
+    {
+        for(const auto &[id, slot] : m_slots)
+            if(slot->record.node_name == node_name)
+                return slot->session.has_value() && slot->session->same_host();
+        return false;
+    }
+
     // Iterate every CONNECTED peer (a slot with a complete session), calling
     // fn(id, session). It iterates the LIVE slot map only and skips an
     // incomplete/torn-down slot, so a tick-driven emit (the keepalive heartbeat) never

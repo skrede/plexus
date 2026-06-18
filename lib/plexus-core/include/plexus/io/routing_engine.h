@@ -17,6 +17,7 @@
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/peer_session_registry.h"
 #include "plexus/io/session_build_context.h"
+#include "plexus/io/shm/medium_coordinator.h"
 
 #include "plexus/wire/topic_hash.h"
 #include "plexus/wire/frame_codec.h"
@@ -89,6 +90,7 @@ public:
         , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures,
                   redial, redial_seed, logger, {}, {}, {}, {}, m_security_fanout, {}, {}}
         , m_registry(transport, m_build)
+        , m_coordinator(m_registry)
         , m_dial_eagerly(dial_eagerly)
     {
         m_transport.on_dialed([this](std::unique_ptr<channel_type> ch, const endpoint &ep) { on_dialed(std::move(ch), ep); });
@@ -108,6 +110,12 @@ public:
         m_messages.on_published(publish_sink());
         m_messages.on_delivered(deliver_sink());
         m_messages.on_qos_change(qos_change_sink());
+        // The same-host upgrade seam: the forwarder's per-(peer, fqn) demand transition
+        // drives the coordinator, which reads same_host, runs the upgrade policy, and
+        // acquires/releases the additive ring through the injected gate.
+        m_messages.on_demand_transition([this](std::string_view node_name, std::string_view fqn,
+                                               demand_transition dir)
+        { m_coordinator.on_edge(node_name, fqn, dir); });
         // The loan-path encode trigger: the forwarder's typed fast path forces its lazy
         // encode ONLY for a topic the policy selects at payload fidelity and admits this
         // tick, passing the publish path's own now_ns so the time-window mechanism reads no
@@ -424,6 +432,22 @@ public:
     message_forwarder<Policy> &messages() noexcept { return m_messages; }
     procedure_forwarder<Policy> &procedures() noexcept { return m_procedures; }
     registry_type &registry() noexcept { return m_registry; }
+    shm::medium_coordinator<registry_type> &coordinator() noexcept { return m_coordinator; }
+
+    // The node passes the consumer-sovereign upgrade-policy hook through to the
+    // coordinator once at construction (default-when-unset = attempt_shm_upgrade).
+    void on_upgrade_policy(plexus::detail::move_only_function<bool(bool, shm::dispatch_hint)> policy)
+    {
+        m_coordinator.on_policy(std::move(policy));
+    }
+
+    // The node installs the same-host ring-acquire gate (its shm member's can_acquire /
+    // abandon) into the coordinator — only when the composition carries an shm member.
+    void on_upgrade_gate(plexus::detail::move_only_function<bool(std::string_view)> acquire,
+                         plexus::detail::move_only_function<void(std::string_view)> release)
+    {
+        m_coordinator.on_gate(std::move(acquire), std::move(release));
+    }
     capture_policy &capture() noexcept { return m_capture; }
 
     // POST a node-declaration lifecycle edge on the borrowed executor over the observer
@@ -577,7 +601,13 @@ private:
         if(ev.edge == lifecycle_edge::ready)
             register_endpoint(ev.id, ev.node_name);
         else if(ev.edge == lifecycle_edge::disconnected || ev.edge == lifecycle_edge::dead)
+        {
             m_monitor.deregister_endpoint(ev.id);
+            // Release every same-host ring the peer held: a torn-down peer can no longer
+            // map the ring, so the additive lane is dropped (the wire path, if it survives
+            // a reconnect, re-drives the demand edge).
+            m_coordinator.on_peer_dead(ev.node_name);
+        }
 
         switch(ev.edge)
         {
@@ -680,6 +710,7 @@ private:
     security_fanout m_security_fanout;
     session_build_context<Policy> m_build;
     registry_type m_registry;
+    shm::medium_coordinator<registry_type> m_coordinator;
     known_peers m_known;
     std::vector<observer *> m_observers;
     // The single capture-decision point: it owns the per-topic selection rules AND the

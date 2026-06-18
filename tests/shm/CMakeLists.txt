@@ -544,6 +544,22 @@ target_link_libraries(test_shm_mux PRIVATE
 
 catch_discover_tests(test_shm_mux TEST_PREFIX "shm.")
 
+# The medium-coordinator oracle (header-only core + inproc): the engine-owned coordinator
+# consumes the forwarder's demand transition, reads same_host, runs the upgrade policy, and
+# acquires/releases the per-topic ring THROUGH the injected gate (the can_acquire/prefer_shm_hook
+# path), never a direct registry acquire — with refcount 0->1/1->0 gating, last-unsubscribe and
+# peer-dead teardown, the bilateral-OR hint, and dual delivery (the wire never suppressed). It also
+# drives the forwarder's real on_demand_transition emit seam (boundary-only fire, no-op when unset).
+add_executable(test_medium_coordinator test_medium_coordinator.cpp)
+
+target_link_libraries(test_medium_coordinator PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_medium_coordinator TEST_PREFIX "shm.")
+
 # The bilateral, consumer-sovereign upgrade via demand-driven convergence (xproc):
 # two real processes each decide INDEPENDENTLY whether to attempt the shared-memory
 # acquire from their OWN dispatch hint (no hint on the wire), converge on the same
