@@ -438,6 +438,26 @@ if(LIBURING_FOUND)
 
     catch_discover_tests(test_shm_node_composition TEST_PREFIX "shm.")
 
+    # The owning composition bundle: a transport_set names the leaves once and mints a node
+    # that borrows them — covering both the shm-bearing {io, broker} form and the lean no-shm
+    # {io} form in one TU. Same dependency surface as the node-composition proof.
+    add_executable(test_transport_set test_transport_set.cpp)
+
+    target_include_directories(test_transport_set PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_transport_set PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::asio::shm
+        plexus::shm
+        PkgConfig::LIBURING
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_transport_set TEST_PREFIX "shm.")
+
     message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found — io_uring futex spike + reactor bridge enabled")
 else()
     message(STATUS "plexus shm tests: liburing absent — io_uring futex spike + reactor bridge skipped (non-gating)")
