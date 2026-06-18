@@ -228,6 +228,32 @@ read_back read_mcap(const std::filesystem::path &path)
     return rb;
 }
 
+// The Summary section the transcode must emit so Foxglove does not warn "this file is
+// unindexed". NoFallbackScan parses ONLY the Summary section (no sequential rescan), so it
+// fails closed when the writer wrote an unindexed file — the regression guard for a relapse
+// to noChunking. A real Summary carries chunk indexes and statistics, asserted non-empty.
+struct summary_check
+{
+    bool          summary_ok{false};
+    std::size_t   chunk_indexes{0};
+    std::uint64_t message_count{0};
+};
+
+summary_check read_summary(const std::filesystem::path &path)
+{
+    summary_check sc;
+    mcap::McapReader reader;
+    REQUIRE(reader.open(path.string()).ok());
+
+    const auto status = reader.readSummary(mcap::ReadSummaryMethod::NoFallbackScan);
+    sc.summary_ok    = status.ok();
+    sc.chunk_indexes = reader.chunkIndexes().size();
+    if(const auto &stats = reader.statistics())
+        sc.message_count = stats->messageCount;
+    reader.close();
+    return sc;
+}
+
 bool has_prefix(const std::unordered_set<std::string> &topics, std::string_view prefix)
 {
     for(const auto &t : topics)
@@ -295,6 +321,14 @@ TEST_CASE("mcap transcode round-trips a captured session through the mcap reader
         }
     }
     REQUIRE(saw_jsonschema);
+
+    // The output is INDEXED: the Summary section parses on its own (no fallback rescan), and
+    // carries chunk indexes + statistics. A relapse to an unindexed (noChunking) write — the
+    // state Foxglove warns about — fails this guard.
+    const auto sc = read_summary(out);
+    REQUIRE(sc.summary_ok);
+    REQUIRE(sc.chunk_indexes > 0);
+    REQUIRE(sc.message_count > 0);
 
     std::filesystem::remove(out);
 }
