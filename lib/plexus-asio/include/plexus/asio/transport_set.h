@@ -9,6 +9,7 @@
 
 #include <asio/io_context.hpp>
 
+#include <string>
 #include <utility>
 #include <concepts>
 #include <type_traits>
@@ -100,12 +101,15 @@ public:
     {
     }
 
-    // The shm-bearing ctor: the shm leaf builds from {io, broker}, every other from {io}. Gated
-    // on a pack that actually carries an shm member, so a no-shm pack cannot pass a stray broker.
+    // The shm-bearing ctor: the shm leaf builds from {io, broker, region_ns}, every other from
+    // {io}. Gated on a pack that actually carries an shm member, so a no-shm pack cannot pass a
+    // stray broker. region_ns is the static shm-region namespace forwarded to the shm leaf:
+    // empty (the default) shares rings by topic, a distinct namespace isolates this set's
+    // same-host shm from unrelated co-host apps.
     template <typename Broker>
-    transport_set(::asio::io_context &io, Broker &broker)
+    transport_set(::asio::io_context &io, Broker &broker, std::string region_ns = {})
         requires(has_shm_member)
-        : m_io(io), m_storage(broker_factory<Broker>{io, broker})
+        : m_io(io), m_storage(broker_factory<Broker>{io, broker, std::move(region_ns)})
     {
     }
 
@@ -141,11 +145,12 @@ private:
     {
         ::asio::io_context &io;
         Broker &broker;
+        std::string region_ns;
         template <typename T>
         T make()
         {
             if constexpr(detail::has_can_acquire<T>)
-                return plexus_make_set_leaf(std::type_identity<T>{}, io, broker);
+                return plexus_make_set_leaf(std::type_identity<T>{}, io, broker, region_ns);
             else
                 return T{io};
         }

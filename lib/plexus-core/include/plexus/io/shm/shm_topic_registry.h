@@ -136,9 +136,11 @@ public:
     // above it; this plan threads it so the enforced ceiling is the node value.
     shm_topic_registry(Broker &broker, reliability rel, congestion cong,
                        notifier_binder bind_notifier = default_notifier_binder(),
-                       std::uint64_t max_ring_slab_bytes = k_max_ring_slab_bytes) noexcept
+                       std::uint64_t max_ring_slab_bytes = k_max_ring_slab_bytes,
+                       std::string region_ns = {}) noexcept
         : m_broker(broker), m_reliability(rel), m_congestion(cong),
-          m_bind_notifier(std::move(bind_notifier)), m_max_ring_slab_bytes(max_ring_slab_bytes)
+          m_bind_notifier(std::move(bind_notifier)), m_max_ring_slab_bytes(max_ring_slab_bytes),
+          m_region_ns(std::move(region_ns))
     {
     }
 
@@ -295,7 +297,7 @@ private:
                              std::uint32_t max_payload, ring_geometry_mode mode,
                              std::uint32_t consumer_capacity)
     {
-        const std::string ctrl_name = region_name_for(fqn, direction);
+        const std::string ctrl_name = region_name_for(fqn, direction, m_region_ns);
         const std::string slab_name = ctrl_name + ".s";
         const std::optional<std::uint32_t> want =
             max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{max_payload};
@@ -388,6 +390,7 @@ private:
     congestion      m_congestion;
     notifier_binder m_bind_notifier;
     std::uint64_t   m_max_ring_slab_bytes;
+    std::string     m_region_ns;
     acquire_failure m_last_failure;
 
     std::unordered_map<key, std::unique_ptr<entry>, key_hash> m_entries;

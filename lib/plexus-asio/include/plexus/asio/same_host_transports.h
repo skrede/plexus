@@ -30,6 +30,7 @@
 #include <asio/io_context.hpp>
 
 #include <utility>
+#include <string>
 #include <string_view>
 
 namespace plexus::asio {
@@ -47,11 +48,18 @@ namespace plexus::asio {
 //   auto node = ts.make_node(disc, id, plexus::node_options{});
 //
 // The Policy is fixed to plexus::asio::asio_policy internally — the production reactor for the
-// composed leaves. The ctor takes a region name on every platform for a uniform surface; only
-// the Linux branch carries shared memory, and the default lets two same-host peers share out of
-// the box. Same-host shm region identity is derived from the topic name (the demand-driven
-// region naming both peers converge on with no exchange), so two peers — same process or two
+// composed leaves. The ctor takes a `region` on every platform for a uniform surface; only the
+// Linux branch carries shared memory, where `region` is the shm-region NAMESPACE. Same-host shm
+// region identity is derived from the topic name (the demand-driven region naming both peers
+// converge on with no exchange), so by DEFAULT (an empty region) two peers — same process or two
 // processes — share an shm ring by topic; the broker holds no cross-peer state.
+//
+// Set a DISTINCT region per application to ISOLATE its same-host shm from unrelated co-host apps:
+// the namespace is folded deterministically into the region name, so two apps that pick different
+// regions compute different region names for the same topic and never collide on a shared ring.
+// It is static local config both peers of one application set identically, so isolation costs no
+// wire exchange (convergence stays demand-driven). An empty region yields byte-identical region
+// names to the namespace-less naming, so it shares by topic out of the box.
 //
 // LIFETIME: the set OWNS the leaves (and, on Linux, the shm region broker) and BORROWS the
 // io_context. make_node returns a node that BORROWS those leaves, so this object MUST OUTLIVE
@@ -64,16 +72,15 @@ public:
 #if PLEXUS_SAME_HOST_SHM
     using set_type = transport_set<shm::shm_member, unix_transport, asio_transport>;
 
-    explicit same_host_transports(::asio::io_context &io,
-                                  [[maybe_unused]] std::string_view region = "plexus")
-        : m_broker(), m_set(io, m_broker)
+    explicit same_host_transports(::asio::io_context &io, std::string_view region = "")
+        : m_broker(), m_set(io, m_broker, std::string{region})
     {
     }
 #else
     using set_type = transport_set<unix_transport, asio_transport>;
 
     explicit same_host_transports(::asio::io_context &io,
-                                  [[maybe_unused]] std::string_view region = "plexus")
+                                  [[maybe_unused]] std::string_view region = "")
         : m_set(io)
     {
     }

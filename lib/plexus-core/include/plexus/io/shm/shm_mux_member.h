@@ -207,9 +207,15 @@ public:
     // (a reactor bridge captures the executor; the default emplaces a default-built
     // notifier, the stub/unit seam). Required-with-default: a node wiring the reactor
     // bridge supplies one, a default-constructible notifier needs none.
+    //
+    // region_ns is the static shm-region namespace forwarded to the registry: an EMPTY
+    // namespace (the default) shares rings by topic, a distinct namespace isolates this
+    // application's same-host shm from unrelated apps that pick a different one.
     shm_mux_member(Broker &broker, reliability rel, congestion cong,
-                   notifier_binder bind_notifier = registry_type::default_notifier_binder()) noexcept
-        : m_registry(broker, rel, cong, std::move(bind_notifier))
+                   notifier_binder bind_notifier = registry_type::default_notifier_binder(),
+                   std::string region_ns = {}) noexcept
+        : m_registry(broker, rel, cong, std::move(bind_notifier), k_max_ring_slab_bytes,
+                     std::move(region_ns))
     {
     }
 

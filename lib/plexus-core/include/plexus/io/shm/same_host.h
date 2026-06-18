@@ -80,17 +80,34 @@ enum class ring_direction : std::uint8_t
 // hash BEFORE rendering, so request and response name distinct rings off one fqn
 // (a req/res pair never collides its two flows onto one ring). The unit separator
 // (0x1f) cannot occur in an fqn, so the discriminator never aliases a real topic.
-[[nodiscard]] inline std::string region_name_for(std::string_view fqn, ring_direction direction)
+//
+// region_ns is a static shm-region NAMESPACE both peers set identically (it is local
+// config, never wire-advertised, so convergence stays exchange-free): a NON-empty
+// namespace is folded into the hashed key BEFORE the fqn (separated by the same 0x1f
+// unit separator) so two UNRELATED applications that pick distinct namespaces compute
+// DISTINCT region names for the same topic and never collide on a shared region. An
+// EMPTY namespace is the no-fold default — byte-identical to the namespace-less name
+// — so two peers share by topic out of the box and every existing region name is
+// unchanged.
+[[nodiscard]] inline std::string region_name_for(std::string_view fqn, ring_direction direction,
+                                                 std::string_view region_ns = "")
 {
-    std::uint64_t h = plexus::wire::fqn_topic_hash(fqn);
+    if(region_ns.empty() && direction == ring_direction::request)
+        return bare_hex(plexus::wire::fqn_topic_hash(fqn));
+
+    std::string keyed;
+    if(!region_ns.empty())
+    {
+        keyed += region_ns;
+        keyed.push_back('\x1f');
+    }
+    keyed += fqn;
     if(direction == ring_direction::response)
     {
-        std::string keyed{fqn};
         keyed.push_back('\x1f');
         keyed += "response";
-        h = plexus::wire::fqn_topic_hash(keyed);
     }
-    return bare_hex(h);
+    return bare_hex(plexus::wire::fqn_topic_hash(keyed));
 }
 
 }
