@@ -1132,6 +1132,25 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # is on: real local + remote channels prove the same fan-out confinement over the wire.
     target_link_libraries(test_locality_confinement PRIVATE plexus::asio)
     target_compile_definitions(test_locality_confinement PRIVATE PLEXUS_HAVE_ASIO_MUX)
+
+    # The whole-stack co-host shared-memory proof through the public facade: two forked
+    # same_host_transports nodes rendezvous over static_discovery and auto-engage a /dev/shm
+    # ring, the parent asserting the MEDIUM (the region maps iff co-host) plus byte-exact
+    # delivery over >=2 runs and the forced-distinct-fingerprint wire fallback. Gated to the
+    # Linux shared-memory node composition (the /dev/shm region naming + the shm member are
+    # Linux-only); the broker + the region naming come from plexus::shm/plexus::asio::shm.
+    if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::asio::shm)
+        add_executable(test_node_xproc_shm test_node_xproc_shm.cpp)
+        target_link_libraries(test_node_xproc_shm PRIVATE
+            plexus::plexus
+            plexus::core
+            plexus::wire
+            plexus::asio
+            plexus::asio::shm
+            plexus::shm
+            Catch2::Catch2WithMain)
+        catch_discover_tests(test_node_xproc_shm TEST_PREFIX "integration.")
+    endif()
 endif()
 
 # The host-side flat-stream to MCAP transcode round-trip: a live wire-capturing inproc
