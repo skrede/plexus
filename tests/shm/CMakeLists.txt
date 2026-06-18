@@ -503,6 +503,26 @@ if(LIBURING_FOUND)
 
     catch_discover_tests(test_same_host_transports TEST_PREFIX "shm.")
 
+    # The node-level same-host fingerprint fix: make_node default-fills the node's local
+    # fingerprint from the real machine read when the caller left it null, and respects a
+    # caller-supplied value. Reads the effective fingerprint off the minted node's engine.
+    # Same dependency surface as the portable-composition proof.
+    add_executable(test_same_host_fingerprint_node test_same_host_fingerprint_node.cpp)
+
+    target_include_directories(test_same_host_fingerprint_node PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_same_host_fingerprint_node PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::asio::shm
+        plexus::shm
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_same_host_fingerprint_node TEST_PREFIX "shm.")
+
     message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found — io_uring futex spike + reactor bridge enabled")
 else()
     message(STATUS "plexus shm tests: liburing absent — io_uring futex spike + reactor bridge skipped (non-gating)")

@@ -24,6 +24,7 @@
 #if PLEXUS_SAME_HOST_SHM
 #include "plexus/asio/shm/linux/shm_member.h"
 
+#include "plexus/shm/machine_fingerprint.h"
 #include "plexus/shm/posix_shm_region_broker.h"
 #endif
 
@@ -91,11 +92,25 @@ public:
     same_host_transports(same_host_transports &&) = delete;
     same_host_transports &operator=(same_host_transports &&) = delete;
 
+#if PLEXUS_SAME_HOST_SHM
+    // opts is taken BY VALUE: the default-fill is local to this call and never mutates the
+    // caller's aggregate. A null (zero) local_fingerprint is the fillable "no same-host signal"
+    // default (same_host.h null-guard); a caller-supplied value is respected, never clobbered,
+    // so the explicit-override path stays intact.
+    [[nodiscard]] auto make_node(discovery::discovery &disc, const plexus::node_id &id,
+                                 node_options opts)
+    {
+        if(opts.handshake.local_fingerprint.is_null())
+            opts.handshake.local_fingerprint = ::plexus::shm::read_machine_fingerprint();
+        return m_set.template make_node<asio_policy>(disc, id, opts);
+    }
+#else
     [[nodiscard]] auto make_node(discovery::discovery &disc, const plexus::node_id &id,
                                  const node_options &opts)
     {
         return m_set.template make_node<asio_policy>(disc, id, opts);
     }
+#endif
 
 private:
 #if PLEXUS_SAME_HOST_SHM
