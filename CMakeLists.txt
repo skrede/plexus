@@ -15,6 +15,7 @@ option(PLEXUS_BUILD_FUZZ_TESTS "Build the libFuzzer harnesses" OFF)
 option(PLEXUS_BUILD_EXAMPLES "Build the examples" OFF)
 option(PLEXUS_BUILD_MCAP_TRANSCODE "Build the host-side flat-stream to MCAP transcode tool" OFF)
 option(PLEXUS_BUILD_PCAP_TRANSCODE "Build the host-side flat-stream to pcapng transcode tool" OFF)
+option(PLEXUS_BUILD_BENCHMARKS "Build the standalone scalability benchmarks" OFF)
 option(PLEXUS_WARNINGS_AS_ERRORS "Promote warnings to errors (the enforced gate)" ON)
 
 # Warn broadly on every compiled translation unit the build owns (the gated backends
@@ -82,4 +83,10 @@ endif()
 
 if(PLEXUS_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+# Standalone scalability benchmarks: host-only probe binaries that link only the public
+# core + the header-only in-process backend. Self-gated here; the default tree stays inert.
+if(PLEXUS_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()
