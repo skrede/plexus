@@ -135,7 +135,10 @@ run_result one_run(const std::string &fqn, const std::string &payload, bool same
     // Compute the shared identity (ports, ids, names) in the PARENT before the fork so both
     // halves agree: the child inherits these via the forked address space (a post-fork
     // ::getpid() would differ between parent and child and de-sync the rendezvous).
-    const std::uint16_t sub_port = 41000 + static_cast<std::uint16_t>(::getpid() % 2000);
+    // Each process claims an even-aligned 2-port slot: concurrent ctest workers get
+    // near-consecutive pids, and a non-aligned adjacent pair would overlap a neighbor's
+    // pub_port and stall the rendezvous on a bind collision.
+    const std::uint16_t sub_port = static_cast<std::uint16_t>(41000 + 2 * (::getpid() % 9000));
     const std::uint16_t pub_port = sub_port + 1;
     const plexus::node_id sub_id = make_id(0x51);
     const plexus::node_id pub_id = make_id(0x52);
