@@ -52,8 +52,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET plexus::asio::shm)
     if(LIBURING_FOUND)
         plexus_example(shm_local_node plexus::plexus plexus::asio plexus::asio::shm plexus::shm)
         target_link_libraries(shm_local_node PRIVATE PkgConfig::LIBURING)
+
+        # The portable same-host node: one consumer surface, no platform conditional. On Linux
+        # the header resolves to the shm + AF_UNIX + TCP set, so it needs the same shm bridge
+        # deps as shm_local_node; elsewhere it would build against AF_UNIX + TCP alone.
+        plexus_example(same_host_node plexus::plexus plexus::asio plexus::asio::shm plexus::shm)
+        target_link_libraries(same_host_node PRIVATE PkgConfig::LIBURING)
     else()
-        message(STATUS "plexus examples: liburing absent — shm_local_node skipped")
+        message(STATUS "plexus examples: liburing absent — shm_local_node + same_host_node skipped")
     endif()
 endif()
 

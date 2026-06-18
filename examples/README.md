@@ -71,7 +71,21 @@ cmake --build build -j4 --target mcap_opaque_supplied_schema
 ./build/examples/mcap_opaque_supplied_schema
 ```
 
-A live node bringing up shared memory as a same-host transport leaf (Linux-only; needs
+The portable same-host node: ONE consumer surface that works on every platform with no
+platform conditional in the consumer's code. `plexus::asio::same_host_transports` resolves,
+behind its header, to the most accelerated same-host substrate the host offers — shm +
+AF_UNIX + TCP on Linux, AF_UNIX + TCP elsewhere — and mints a node held via `auto` and driven
+through the identical node public API. Build it as below (on Linux the accelerated leaf needs
+`-DPLEXUS_ENABLE_SHM_BACKEND=ON` and liburing); it stands up a same-host listener and exits
+rc=0. The same-host SHM delivery data path is proven by the `shm.` test suite:
+
+```sh
+cmake -B build -DPLEXUS_BUILD_EXAMPLES=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON
+cmake --build build -j4 --target same_host_node
+./build/examples/same_host_node
+```
+
+A live node naming shared memory as a same-host transport leaf EXPLICITLY (Linux-only; needs
 `-DPLEXUS_ENABLE_SHM_BACKEND=ON` and liburing). It names shm + AF_UNIX + plain TCP in a
 `transport_set`, which owns the leaves and mints the node (`ts.make_node<asio_policy>(...)`),
 brings up a same-host listener, and exits rc=0. The file header documents the alternatives —
