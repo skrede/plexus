@@ -39,6 +39,24 @@ if(TARGET mcap_transcode_lib)
     target_compile_definitions(recording_example PRIVATE PLEXUS_WITH_MCAP_TRANSCODE)
 endif()
 
+# The shared-memory local node example: a live node composing shm + AF_UNIX + plain TCP as
+# variadic leaves. It is Linux-only (the shm bridge headers live under shm/linux/) and needs
+# the shm backend target (plexus::asio::shm, present only when PLEXUS_ENABLE_SHM_BACKEND is
+# on) plus liburing (the io_uring-futex reactor bridge ring_notifier composes over). Crypto-
+# free: the example pulls in no TLS/DTLS/UDP, so it builds with the crypto backend disabled.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET plexus::asio::shm)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBURING QUIET IMPORTED_TARGET liburing)
+    endif()
+    if(LIBURING_FOUND)
+        plexus_example(shm_local_node plexus::plexus plexus::asio plexus::asio::shm plexus::shm)
+        target_link_libraries(shm_local_node PRIVATE PkgConfig::LIBURING)
+    else()
+        message(STATUS "plexus examples: liburing absent — shm_local_node skipped")
+    endif()
+endif()
+
 # The MCAP examples are the analysis path (capture -> flat stream -> MCAP for Foxglove). They
 # need the transcode, so they are built only when PLEXUS_BUILD_MCAP_TRANSCODE is on. The basic
 # example produces JSON payloads with a declared jsonschema (decodes out of the box); the
