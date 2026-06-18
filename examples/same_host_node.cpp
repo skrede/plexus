@@ -7,8 +7,13 @@
 //
 //   asio::io_context io;
 //   plexus::discovery::static_discovery disc{...};
-//   plexus::asio::same_host_transports ts{io};          // region name optional, has a default
+//   plexus::asio::same_host_transports ts{io};           // empty region: peers share by topic
+//   // plexus::asio::same_host_transports ts{io, "my-app"};  // a region isolates same-host shm
 //   auto node = ts.make_node(disc, id, plexus::node_options{});
+//
+// The optional `region` is the shm-region NAMESPACE: empty (the default) lets two peers share an
+// shm ring by topic; a DISTINCT region per application isolates its same-host shm so two unrelated
+// co-host apps using the same topic names never collide on a shared region.
 //
 // The Policy is fixed to plexus::asio::asio_policy inside same_host_transports. The set OWNS
 // its leaves (and, on Linux, the shm region broker) and MUST OUTLIVE every node it mints; the

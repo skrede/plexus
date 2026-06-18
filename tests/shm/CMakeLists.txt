@@ -201,6 +201,22 @@ target_link_libraries(test_shm_same_host_roundtrip PRIVATE
 
 catch_discover_tests(test_shm_same_host_roundtrip TEST_PREFIX "shm.")
 
+# The shm-region namespace cross-process proof: a producer mints regions under one
+# namespace; a consumer with the SAME namespace receives the value (convergence), a
+# consumer with a DIFFERENT namespace cannot attach the producer's region and sees
+# nothing (isolation — two unrelated co-host apps never collide on a shared region).
+add_executable(test_shm_region_namespace test_shm_region_namespace.cpp)
+
+target_include_directories(test_shm_region_namespace PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_region_namespace PRIVATE
+    plexus::shm
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_region_namespace TEST_PREFIX "shm.")
+
 # The core pub/sub endpoints (header-only, asio/POSIX-free): the shm_channel
 # send -> drain round-trip over an anonymous mapped span (loan -> one memcpy ->
 # publish -> signal), the notifier signaling exactly once per successful send via

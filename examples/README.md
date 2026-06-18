@@ -75,9 +75,12 @@ The portable same-host node: ONE consumer surface that works on every platform w
 platform conditional in the consumer's code. `plexus::asio::same_host_transports` resolves,
 behind its header, to the most accelerated same-host substrate the host offers — shm +
 AF_UNIX + TCP on Linux, AF_UNIX + TCP elsewhere — and mints a node held via `auto` and driven
-through the identical node public API. Build it as below (on Linux the accelerated leaf needs
-`-DPLEXUS_ENABLE_SHM_BACKEND=ON` and liburing); it stands up a same-host listener and exits
-rc=0. The same-host SHM delivery data path is proven by the `shm.` test suite:
+through the identical node public API. Its optional `region` argument is the shm-region
+namespace: empty (the default) lets two peers share an shm ring by topic, while a distinct
+`region` per application isolates its same-host shared memory so two unrelated co-host apps
+using the same topic names never collide on a shared region. Build it as below (on Linux the
+accelerated leaf needs `-DPLEXUS_ENABLE_SHM_BACKEND=ON` and liburing); it stands up a same-host
+listener and exits rc=0. The same-host SHM delivery data path is proven by the `shm.` test suite:
 
 ```sh
 cmake -B build -DPLEXUS_BUILD_EXAMPLES=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON

@@ -12,6 +12,7 @@
 #include "plexus/muxify.h"
 
 #include <atomic>
+#include <string>
 #include <cstdint>
 #include <optional>
 #include <type_traits>
@@ -42,12 +43,16 @@ make_bridge_binder(::asio::io_context &io)
 // Construct the shm member over the POSIX broker + the reactor bridge bound to `io`. The
 // broker is borrowed (it must outlive the member); the binder captures `io` so each ring's
 // notifier wakes on that reactor. The member is then composed as the first local candidate.
+//
+// region_ns is the static shm-region namespace: empty (the default) shares rings by topic,
+// a distinct namespace isolates this application's same-host shm from unrelated co-host apps.
 [[nodiscard]] inline shm_member make_shm_member(::asio::io_context &io,
                                                 ::plexus::shm::posix_shm_region_broker &broker,
                                                 io::reliability rel = io::reliability::reliable,
-                                                io::congestion cong = io::congestion::block)
+                                                io::congestion cong = io::congestion::block,
+                                                std::string region_ns = {})
 {
-    return shm_member{broker, rel, cong, make_bridge_binder(io)};
+    return shm_member{broker, rel, cong, make_bridge_binder(io), std::move(region_ns)};
 }
 
 }
@@ -57,11 +62,15 @@ namespace plexus::shm {
 // The per-leaf factory transport_set finds by ADL on the broker argument: it lets the
 // shm-agnostic transport_set.h build an shm leaf from {io, broker} WITHOUT including this
 // shm-only header. A non-shm transport_set never names it, so it pulls in no shm/crypto.
+// region_ns is forwarded so the set can isolate this application's same-host shm regions
+// (empty shares rings by topic, the default).
 [[nodiscard]] inline ::plexus::asio::shm::shm_member
 plexus_make_set_leaf(std::type_identity<::plexus::asio::shm::shm_member>,
-                     ::asio::io_context &io, posix_shm_region_broker &broker)
+                     ::asio::io_context &io, posix_shm_region_broker &broker,
+                     std::string region_ns = {})
 {
-    return ::plexus::asio::shm::make_shm_member(io, broker);
+    return ::plexus::asio::shm::make_shm_member(io, broker, io::reliability::reliable,
+                                                io::congestion::block, std::move(region_ns));
 }
 
 }
