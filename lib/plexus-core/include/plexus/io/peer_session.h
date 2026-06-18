@@ -334,6 +334,7 @@ public:
     }
 
     bool is_complete() const noexcept { return m_forwarders_installed; }
+    [[nodiscard]] bool same_host() const noexcept { return m_ctx.same_host; }
     std::uint64_t session_id() const noexcept { return m_session_id; }
     std::uint64_t peer_session_id() const noexcept { return m_peer_session_id; }
     const typename message_forwarder<Policy>::peer &msg_peer() const noexcept { return m_msg_peer; }

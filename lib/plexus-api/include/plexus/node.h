@@ -256,6 +256,11 @@ public:
         // every same-host ring this node mints. A composition without an shm member is a
         // no-op (the capability check below fails).
         apply_shm_slab_ceiling(m_max_ring_slab_bytes);
+        // Wire the same-host upgrade coordinator: pass the consumer's upgrade policy
+        // through and, when the composition carries an shm member, install its ring-
+        // acquire gate (can_acquire/abandon). A composition with no shm member installs
+        // no gate, so the coordinator stays inert.
+        install_upgrade_coordinator(opts.upgrade_policy);
         // Read the node-level recording-QoS default into the engine's capture policy once
         // (cold path, like apply_shm_slab_ceiling). The off default selects nothing, so a
         // node that declares no recording QoS leaves the gate fully inert.
@@ -445,6 +450,12 @@ private:
             {rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
+        // Thread the subscriber's own hint (the bilateral OR — a hint on EITHER end
+        // upgrades the pair) and close the publisher/subscriber geometry asymmetry: a
+        // co-host subscriber-only upgrade attaches the default-geometry ring through the
+        // SAME for_each_shm_member path the publisher provisions through.
+        m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
+        provision_same_host_ring(fqn, subscriber_effective_bytes(qos), m_shm_geometry);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered,
                                      wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
@@ -495,6 +506,7 @@ private:
         const io::shm::shm_geometry geom = shm_geometry.value_or(m_shm_geometry);
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
         provision_same_host_ring(fqn, effective_bytes, geom);
+        m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
     }
 
     // Post the publisher HANDLE's drop edge. It does NOT tear down the persistent
@@ -517,9 +529,32 @@ private:
         for_each_shm_member([&](auto &m) { m.set_topic_geometry(key, effective_bytes, geom); });
     }
 
+    // A subscriber-only ring sizes to the subscriber's requested per-message max when it
+    // set one, else the node default — the consumer-rescues-itself default-geometry ring.
+    [[nodiscard]] std::size_t subscriber_effective_bytes(const io::subscriber_qos &qos) const noexcept
+    {
+        return qos.requested_max_message_bytes != 0
+                   ? static_cast<std::size_t>(qos.requested_max_message_bytes)
+                   : m_max_message_bytes;
+    }
+
     void apply_shm_slab_ceiling(std::uint64_t bytes)
     {
         for_each_shm_member([&](auto &m) { m.set_max_ring_slab_bytes(bytes); });
+    }
+
+    // Pass the consumer's upgrade policy to the engine coordinator and, when an shm member
+    // exists, install its can_acquire/abandon as the coordinator's ring gate. The probes
+    // capture the member by reference (it outlives the node-owned glue), exactly as
+    // prefer_shm_hook does. A composition with no shm member installs no gate (inert).
+    void install_upgrade_coordinator(upgrade_policy_fn policy)
+    {
+        m_engine.on_upgrade_policy(policy);
+        for_each_shm_member([this](auto &m) {
+            m_engine.on_upgrade_gate(
+                [&m](std::string_view fqn) { return m.can_acquire(io::endpoint{"shm", std::string{fqn}}); },
+                [&m](std::string_view fqn) { m.abandon(io::endpoint{"shm", std::string{fqn}}); });
+        });
     }
 
     // Apply fn to the shm member of the engine transport leaf, if one exists. The leaf is

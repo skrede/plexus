@@ -5,6 +5,8 @@
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/security/attach_policy.h"
 #include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/shm/shm_selection.h"
 #include "plexus/io/shm/ring_geometry.h"
 #include "plexus/io/shm/ring_geometry_mode.h"
 
@@ -18,6 +20,19 @@
 #include <cstdint>
 
 namespace plexus {
+
+// The same-host upgrade decision: given THIS end's same_host verdict and the topic's
+// own dispatch hint, whether to attempt the shared-memory ring acquire. A plain
+// function pointer keeps node_options trivially copyable + designated-initializer-
+// friendly (the injected-predicate style, not an allocating policy registry). It can
+// only DECLINE the upgrade — the same_host gate inside the default still holds.
+using upgrade_policy_fn = bool (*)(bool same_host, io::shm::dispatch_hint own_hint);
+
+// The shipped default: the bilateral, consumer-sovereign same-host auto-upgrade.
+[[nodiscard]] inline bool default_upgrade_policy(bool same_host, io::shm::dispatch_hint own_hint) noexcept
+{
+    return io::shm::attempt_shm_upgrade(same_host, own_hint);
+}
 
 // The version pair a node advertises and the minimum it accepts. All four fields
 // are required-with-default {1,0,1,0}: a zeroed default is a usable advertisement
@@ -107,6 +122,13 @@ struct node_options
     // the gate stays fully inert. A plain value (not std::optional): the off default is
     // a usable declaration, its absence is not meaningful.
     recording_qos capture{};
+
+    // required-with-default the same-host auto-upgrade: the consumer-sovereign policy
+    // the medium coordinator consults on a co-host demand edge. The default engages the
+    // upgrade out of the box (D-06); a deployment supplies a stricter predicate (e.g. one
+    // returning false) to disable it. A plain function pointer, never a stand-in for
+    // absence — its value is always meaningful.
+    upgrade_policy_fn upgrade_policy{&default_upgrade_policy};
 
     // required-with-default disabled: the construction-time per-transport wire-capture
     // declaration. The decorated-vs-bare channel TYPE is fixed by the policy/transport the
