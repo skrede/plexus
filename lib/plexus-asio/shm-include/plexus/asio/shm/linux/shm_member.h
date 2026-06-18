@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cstdint>
 #include <optional>
+#include <type_traits>
 
 namespace plexus::asio::shm {
 
@@ -47,6 +48,20 @@ make_bridge_binder(::asio::io_context &io)
                                                 io::congestion cong = io::congestion::block)
 {
     return shm_member{broker, rel, cong, make_bridge_binder(io)};
+}
+
+}
+
+namespace plexus::shm {
+
+// The per-leaf factory transport_set finds by ADL on the broker argument: it lets the
+// shm-agnostic transport_set.h build an shm leaf from {io, broker} WITHOUT including this
+// shm-only header. A non-shm transport_set never names it, so it pulls in no shm/crypto.
+[[nodiscard]] inline ::plexus::asio::shm::shm_member
+plexus_make_set_leaf(std::type_identity<::plexus::asio::shm::shm_member>,
+                     ::asio::io_context &io, posix_shm_region_broker &broker)
+{
+    return ::plexus::asio::shm::make_shm_member(io, broker);
 }
 
 }

@@ -72,10 +72,11 @@ cmake --build build -j4 --target mcap_opaque_supplied_schema
 ```
 
 A live node bringing up shared memory as a same-host transport leaf (Linux-only; needs
-`-DPLEXUS_ENABLE_SHM_BACKEND=ON` and liburing). It composes shm + AF_UNIX + plain TCP as
-variadic leaves, constructs the node, brings up a same-host listener, and exits rc=0. The
-file header documents the `make_shm_member` recipe and the lean crypto-free `local_shm_mux`
-alias; the same-host SHM delivery data path is proven by the `shm.` test suite:
+`-DPLEXUS_ENABLE_SHM_BACKEND=ON` and liburing). It names shm + AF_UNIX + plain TCP in a
+`transport_set`, which owns the leaves and mints the node (`ts.make_node<asio_policy>(...)`),
+brings up a same-host listener, and exits rc=0. The file header documents the alternatives —
+the hand-built leaf pack, the `make_shm_member` recipe, and the lean crypto-free
+`local_shm_mux` alias; the same-host SHM delivery data path is proven by the `shm.` test suite:
 
 ```sh
 cmake -B build -DPLEXUS_BUILD_EXAMPLES=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON
