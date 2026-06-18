@@ -415,6 +415,29 @@ if(LIBURING_FOUND)
         catch_discover_tests(test_shm_mux_composition TEST_PREFIX "shm.")
     endif()
 
+    # The variadic-leaf shm node composition: a live node<asio_policy, shm_member,
+    # unix_transport, asio_transport> constructs + brings up a same-host listener, and the
+    # lean crypto-free local_shm_mux alias satisfies transport_backend. This is the consumer's
+    # composition path (the node builds its own mux from the borrowed leaves). It needs the
+    # node/api surface (plexus::plexus) + the shm bridge (liburing) but NOT crypto — the lean
+    # alias deliberately omits the secure members, so it builds with the crypto backend off.
+    add_executable(test_shm_node_composition test_shm_node_composition.cpp)
+
+    target_include_directories(test_shm_node_composition PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_node_composition PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::asio::shm
+        plexus::shm
+        PkgConfig::LIBURING
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_node_composition TEST_PREFIX "shm.")
+
     message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found — io_uring futex spike + reactor bridge enabled")
 else()
     message(STATUS "plexus shm tests: liburing absent — io_uring futex spike + reactor bridge skipped (non-gating)")

@@ -777,6 +777,18 @@ private:
             return io::first_candidate{};
     }
 
+    // Bind the same-host preference hook over ONE leaf if it exposes the ring acquire probe,
+    // else leave the hook untouched. The if constexpr is load-bearing: prefer_shm_hook only
+    // INSTANTIATES for a leaf that has can_acquire, so a non-shm leaf in the pack (AF_UNIX,
+    // TCP) never forces a prefer_shm_hook<that-leaf> instantiation (which would fail to
+    // compile — no can_acquire). The fold over these per-leaf binds is the type-safe seam.
+    template <typename M>
+    static void bind_shm_hook(io::selection_hook &hook, M &member)
+    {
+        if constexpr(has_can_acquire<M>)
+            hook = io::shm::prefer_shm_hook(member);
+    }
+
     // Build the same-host preference hook over whichever borrowed member exposes the ring
     // acquire probe. The fold visits each leaf and captures the shm member by reference
     // (it outlives the node-owned glue); prefer_shm_hook reads can_acquire per same-host
@@ -784,9 +796,7 @@ private:
     static io::selection_hook shm_preference_hook(Transports &...transports)
     {
         io::selection_hook hook = io::first_candidate{};
-        (void)((has_can_acquire<Transports>
-                    ? (hook = io::shm::prefer_shm_hook(transports), true)
-                    : false) || ...);
+        (bind_shm_hook(hook, transports), ...);
         return hook;
     }
 
