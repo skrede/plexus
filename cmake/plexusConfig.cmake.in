@@ -37,6 +37,15 @@ macro(_plexus_load_component comp)
                 _plexus_resolve_asio_leaf()
                 find_dependency(OpenSSL)
                 _plexus_load_component(asio)
+            elseif("${comp}" STREQUAL "asio-shm")
+                # The shm-include headers call io_uring_* directly; the exported targets
+                # file references PkgConfig::LIBURING (and plexus::asio / plexus::shm), so
+                # an installed consumer recreates that imported target here.
+                _plexus_resolve_asio_leaf()
+                _plexus_load_component(asio)
+                _plexus_load_component(shm)
+                find_dependency(PkgConfig)
+                pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
             endif()
             include("${_plexus_comp_file}")
             set(plexus_${comp}_FOUND TRUE)

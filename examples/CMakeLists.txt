@@ -42,25 +42,16 @@ endif()
 # The shared-memory local node example: a live node composing shm + AF_UNIX + plain TCP as
 # variadic leaves. It is Linux-only (the shm bridge headers live under shm/linux/) and needs
 # the shm backend target (plexus::asio::shm, present only when PLEXUS_ENABLE_SHM_BACKEND is
-# on) plus liburing (the io_uring-futex reactor bridge ring_notifier composes over). Crypto-
-# free: the example pulls in no TLS/DTLS/UDP, so it builds with the crypto backend disabled.
+# on); plexus::asio::shm carries liburing as a usage requirement, so the example links no
+# liburing of its own. Crypto-free: the example pulls in no TLS/DTLS/UDP, so it builds with
+# the crypto backend disabled.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET plexus::asio::shm)
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(LIBURING QUIET IMPORTED_TARGET liburing)
-    endif()
-    if(LIBURING_FOUND)
-        plexus_example(shm_local_node plexus::plexus plexus::asio plexus::asio::shm plexus::shm)
-        target_link_libraries(shm_local_node PRIVATE PkgConfig::LIBURING)
+    plexus_example(shm_local_node plexus::plexus plexus::asio plexus::asio::shm plexus::shm)
 
-        # The portable same-host node: one consumer surface, no platform conditional. On Linux
-        # the header resolves to the shm + AF_UNIX + TCP set, so it needs the same shm bridge
-        # deps as shm_local_node; elsewhere it would build against AF_UNIX + TCP alone.
-        plexus_example(same_host_node plexus::plexus plexus::asio plexus::asio::shm plexus::shm)
-        target_link_libraries(same_host_node PRIVATE PkgConfig::LIBURING)
-    else()
-        message(STATUS "plexus examples: liburing absent — shm_local_node + same_host_node skipped")
-    endif()
+    # The portable same-host node: one consumer surface, no platform conditional. On Linux
+    # the header resolves to the shm + AF_UNIX + TCP set, so it needs the same shm bridge
+    # deps as shm_local_node; elsewhere it would build against AF_UNIX + TCP alone.
+    plexus_example(same_host_node plexus::plexus plexus::asio plexus::asio::shm plexus::shm)
 endif()
 
 # The MCAP examples are the analysis path (capture -> flat stream -> MCAP for Foxglove). They
