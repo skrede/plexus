@@ -357,8 +357,10 @@ transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
     out.trailing_partial_dropped = input->recovery.trailing_partial_dropped;
     out.corruption_skipped       = input->recovery.corruption_skipped;
 
+    // Chunked output (the mcap default) builds the Summary section + indexes that Foxglove
+    // needs to avoid an "unindexed file" warning; compression stays None so the chunked
+    // writer pulls in no compression-library dependency.
     mcap::McapWriterOptions wopts{"plexus"};
-    wopts.noChunking  = true;
     wopts.compression = mcap::Compression::None;
 
     mcap::McapWriter writer;
