@@ -276,6 +276,19 @@ public:
     // stream fallback for a co-tier reason). Keeps the refcount honest.
     void abandon(const endpoint &ep) { m_registry.release(ep.address, ring_direction::request); }
 
+    // Mint a per-topic COMPANION ring channel for the same-host upgrade coordinator: the
+    // additive same-host fast path a co-host (peer, topic) pair runs ALONGSIDE its wire
+    // session. Unlike can_acquire (which declines wire_fallback so the per-peer DIAL stays
+    // the wire), this mints the request-direction ring for ANY provisioned mode — the
+    // companion is a SEPARATE lane the publish fan routes fitting messages over (the wire
+    // remains the recorded fail-safe). It acquires + minds the ring through the SAME open()
+    // path dial/listen use (so its refcount is held by the returned channel and released on
+    // its destruction). nullptr on a broker failure: the coordinator then keeps the wire.
+    [[nodiscard]] std::unique_ptr<channel_type> mint_companion(const std::string &fqn)
+    {
+        return open(endpoint{"shm", fqn});
+    }
+
     registry_type &registry() noexcept { return m_registry; }
 
     // The producer-side same-host provisioning channel: the declaring publisher records

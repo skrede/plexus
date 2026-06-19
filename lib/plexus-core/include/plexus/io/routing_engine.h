@@ -116,6 +116,14 @@ public:
         m_messages.on_demand_transition([this](std::string_view node_name, std::string_view fqn,
                                                demand_transition dir)
         { m_coordinator.on_edge(node_name, fqn, dir); });
+        // The publish fan's per-message companion route: a fitting message for a co-host
+        // (peer, topic) the coordinator minted a companion ring for rides that ring (zero-
+        // copy same-host), an over-cap / off-host / un-minted message keeps the recorded
+        // wire sub.channel (the dual-delivery fail-safe). Inert until the coordinator holds
+        // a companion (the node installs the mint gate only for an shm-bearing composition).
+        m_messages.on_companion_route([this](std::string_view node_name, std::string_view fqn,
+                                             std::size_t bytes) -> channel_type *
+        { return m_coordinator.companion_for(node_name, fqn, bytes); });
         // The loan-path encode trigger: the forwarder's typed fast path forces its lazy
         // encode ONLY for a topic the policy selects at payload fidelity and admits this
         // tick, passing the publish path's own now_ns so the time-window mechanism reads no
@@ -432,7 +440,7 @@ public:
     message_forwarder<Policy> &messages() noexcept { return m_messages; }
     procedure_forwarder<Policy> &procedures() noexcept { return m_procedures; }
     registry_type &registry() noexcept { return m_registry; }
-    shm::medium_coordinator<registry_type> &coordinator() noexcept { return m_coordinator; }
+    shm::medium_coordinator<registry_type, channel_type> &coordinator() noexcept { return m_coordinator; }
 
     // The node passes the consumer-sovereign upgrade-policy hook through to the
     // coordinator once at construction (default-when-unset = attempt_shm_upgrade).
@@ -441,12 +449,13 @@ public:
         m_coordinator.on_policy(std::move(policy));
     }
 
-    // The node installs the same-host ring-acquire gate (its shm member's can_acquire /
-    // abandon) into the coordinator — only when the composition carries an shm member.
-    void on_upgrade_gate(plexus::detail::move_only_function<bool(std::string_view)> acquire,
-                         plexus::detail::move_only_function<void(std::string_view)> release)
+    // The node installs the same-host companion-ring MINT gate (over its shm member's
+    // mint_companion) into the coordinator — only when the composition carries an shm
+    // member. The mint returns the live companion channel + its per-message route inputs.
+    void on_upgrade_gate(
+        plexus::detail::move_only_function<shm::companion_mint<channel_type>(std::string_view)> mint)
     {
-        m_coordinator.on_gate(std::move(acquire), std::move(release));
+        m_coordinator.on_gate(std::move(mint));
     }
     capture_policy &capture() noexcept { return m_capture; }
 
@@ -710,7 +719,7 @@ private:
     security_fanout m_security_fanout;
     session_build_context<Policy> m_build;
     registry_type m_registry;
-    shm::medium_coordinator<registry_type> m_coordinator;
+    shm::medium_coordinator<registry_type, channel_type> m_coordinator;
     known_peers m_known;
     std::vector<observer *> m_observers;
     // The single capture-decision point: it owns the per-topic selection rules AND the

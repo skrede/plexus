@@ -4,7 +4,6 @@
 #include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/dispatch_hint.h"
 #include "plexus/io/shm/same_host.h"
-#include "plexus/io/detail/keyed_refcount.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -32,8 +31,8 @@ enum class same_host_medium : std::uint8_t
 // the OR of whatever this side declared with whatever the peer declared (passed in
 // already combined by the caller); EITHER end's hint upgrades BOTH ends, and both
 // independently converge on region_name_for(fqn) with NO wire exchange. The hint
-// only gates whether each side ATTEMPTS the acquire; the actual ring acquire (and
-// the broker-failure fallback) is the registry's job in a later wave.
+// only gates whether each side ATTEMPTS the acquire; the medium_coordinator mints
+// the companion ring through the shm member (the broker-failure fallback keeps the wire).
 [[nodiscard]] inline same_host_medium select_same_host_medium(host_fingerprint peer,
                                                               host_fingerprint local,
                                                               dispatch_hint combined_hint) noexcept
@@ -94,49 +93,6 @@ enum class same_host_medium : std::uint8_t
 {
     return direction == ring_direction::request ? publisher_max_payload : 0u;
 }
-
-// The per-forwarder acquired-ring bookkeeping: the set of (node_name, fqn) pairs
-// this forwarder currently holds a same-host ring for, plus the per-pair refcount
-// that gates the 0->1 acquire and the 1->0 release. This is borrowed BY REFERENCE
-// by the selection caller (no singleton — each forwarder owns its own set, the
-// vagus discipline), and it keys on the plexus (node_name, fqn) identity mirroring
-// subscriber_registry. It holds only the bookkeeping; the registry.acquire call
-// that maps the actual ring wires in later.
-class acquired_ring_set
-{
-public:
-    static constexpr std::uint32_t k_no_entry = detail::keyed_refcount::k_no_entry;
-
-    // Record one demand for a same-host ring; returns the post-increment count. The
-    // 0->1 result is the gate the forwarder issues registry.acquire on (this wave
-    // only books the demand; the acquire wires in a later wave).
-    std::uint32_t acquire(std::string_view node_name, std::string_view fqn)
-    {
-        return m_refcount.bump(node_name, fqn);
-    }
-
-    // Drop one demand; returns the post-decrement count. The 1->0 result is the
-    // gate the forwarder issues registry.release on. Returns the sentinel when the
-    // pair is unknown so the caller treats it as "no transition".
-    std::uint32_t release(std::string_view node_name, std::string_view fqn)
-    {
-        return m_refcount.drop(node_name, fqn);
-    }
-
-    // Whether this forwarder currently holds a same-host ring for the pair.
-    [[nodiscard]] bool holds(std::string_view node_name, std::string_view fqn) const
-    {
-        return m_refcount.holds(node_name, fqn);
-    }
-
-    // Drop every pair held for a peer in one step (the peer-dead teardown): the caller
-    // issues the per-ring gate release for each held fqn first, then forgets the peer's
-    // refcount entries here.
-    void forget(std::string_view node_name) { m_refcount.forget(node_name); }
-
-private:
-    detail::keyed_refcount m_refcount;
-};
 
 }
 
