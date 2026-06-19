@@ -13,6 +13,8 @@
 
 #include "plexus/wire/handshake.h"
 
+#include "plexus/io/detail/attach_resolve.h"
+
 #include "plexus/detail/compat.h"
 
 #include <array>
@@ -105,24 +107,10 @@ public:
                   const node_id &self_id, bool policy_engaged)
     {
         pending_attach out;
-        out.engaged                   = policy_engaged && seam_engaged();
-        out.negotiation.key_id        = frame.key_id;
-        out.negotiation.role          = local_role;
-        out.negotiation.chosen_cipher = frame.chosen_cipher;
-        out.negotiation.initiator_nonce =
-                local_role == security::attach_role::initiator ? m_own_nonce : frame.own_nonce;
-        out.negotiation.responder_nonce =
-                local_role == security::attach_role::initiator ? frame.own_nonce : m_own_nonce;
-        out.facts.key_id       = frame.key_id;
-        out.facts.initiator_id = local_role == security::attach_role::initiator ? self_id : peer_id;
-        out.facts.responder_id = local_role == security::attach_role::initiator ? peer_id : self_id;
-        out.facts.peer_nonce   = frame.own_nonce;
-        out.facts.own_nonce    = m_own_nonce;
-        out.facts.role         = local_role;
-        if(out.engaged)
-            compute_transcript(out, frame);
-        out.negotiation.transcript_digest = out.facts.transcript_digest;
-        m_pending_attach                  = out;
+        detail::assemble_pending(out, m_own_nonce, m_install_security_seam,
+                                 policy_engaged && seam_engaged(), frame, local_role, peer_id,
+                                 self_id);
+        m_pending_attach = out;
     }
 
     // Latch the wire proof into a stable member buffer (a span into the transient decoded frame
@@ -149,14 +137,7 @@ public:
     // the shared PSK. A disengaged prover returns a zero proof (the accept-any path).
     std::array<std::byte, wire::k_handshake_proof_len> response_proof() const
     {
-        std::array<std::byte, wire::k_handshake_proof_len> proof{};
-        if(!m_prover.engaged())
-            return proof;
-        security::attach_facts dialer_view = m_pending_attach.facts;
-        dialer_view.role                   = security::attach_role::initiator;
-        std::swap(dialer_view.peer_nonce, dialer_view.own_nonce);
-        (void)m_prover.prove(dialer_view, proof);
-        return proof;
+        return detail::response_proof(m_prover, m_pending_attach.facts);
     }
 
     // Latch the authenticated host identity from the VERIFIED facts (never a wire claim) and
@@ -181,26 +162,6 @@ public:
     bool engaged() const noexcept { return m_pending_attach.engaged; }
 
 private:
-    // Fold the transcript (cipher_offer ‖ chosen ‖ protocol_version ‖ both nonces, fixed order)
-    // into the digest. A stripped/forced offer changes the digest, so the recomputed proof — and
-    // the derived keys — differ (downgrade refusal).
-    template<typename Frame>
-    void compute_transcript(pending_attach &out, const Frame &frame) const
-    {
-        std::array<std::byte, 1 + 1 + 1 + 16 + 16> transcript{};
-        std::size_t                                n = 0;
-        transcript[n++]                              = static_cast<std::byte>(frame.cipher_offer);
-        transcript[n++]                              = static_cast<std::byte>(frame.chosen_cipher);
-        transcript[n++] = static_cast<std::byte>(wire::k_protocol_version);
-        for(auto b : out.negotiation.initiator_nonce)
-            transcript[n++] = b;
-        for(auto b : out.negotiation.responder_nonce)
-            transcript[n++] = b;
-        std::array<std::byte, 32> digest{};
-        if(m_install_security_seam->compute(transcript, digest))
-            out.facts.transcript_digest = digest;
-    }
-
     plexus::detail::move_only_function<void(const security_negotiation &)> m_install_security;
     const security_seam   *m_install_security_seam{nullptr};
     pending_attach         m_pending_attach;

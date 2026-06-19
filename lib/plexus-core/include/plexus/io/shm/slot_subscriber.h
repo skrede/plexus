@@ -103,35 +103,9 @@ public:
                 cpu_relax();
                 continue;
             }
-            if(st == loan_status::lagged)
-            {
-                // The producer lapped this cursor by a full ring; jump straight to
-                // the surfaced producer tail in one step (O(1)) instead of stepping
-                // a slot at a time. The jump moves only this consumer's own cursor.
-                m_cursor = consumed.position;
-                m_ring.publish_cursor(m_cursor_index, m_cursor);
-                continue;
-            }
-            if(st == loan_status::congested)
-            {
-                advance(); // a small-contention dif>0 or a skip tombstone: step forward
-                continue;
-            }
-
-            // ok: a deliverable slot. Pin it Dekker-safe BEFORE advancing. If the
-            // pin lost the overwrite race (a best_effort producer recycled the slot
-            // between consume and pin), step forward and retry rather than alias a
-            // torn read.
-            if(!m_ring.pin_if_current(m_cursor))
-            {
-                advance();
-                continue;
-            }
-
-            out = taken_message(taken_message::adopt_pin, consumed.slab.data(),
-                                consumed.slab.size(), &m_ring.refcount_at(m_cursor));
-            advance();
-            return loan_status::ok;
+            loan_status settled;
+            if(resolve(st, consumed, out, settled))
+                return settled;
         }
     }
 
@@ -139,6 +113,31 @@ public:
     std::uint64_t cursor() const noexcept { return m_cursor; }
 
 private:
+    // Resolve a non-empty consume: lagged jumps the cursor to the surfaced producer tail in one
+    // O(1) step; congested (small-contention dif>0 or a skip tombstone) steps forward; ok pins the
+    // slot Dekker-safe before advancing, retrying on a lost overwrite race rather than aliasing a
+    // torn read. Returns true (settled = ok) only on a delivered slot; false means retry the loop.
+    bool resolve(loan_status st, const broadcast_ring::consume_result &consumed, taken_message &out,
+                 loan_status &settled) noexcept
+    {
+        if(st == loan_status::lagged)
+        {
+            m_cursor = consumed.position;
+            m_ring.publish_cursor(m_cursor_index, m_cursor);
+            return false;
+        }
+        if(st == loan_status::congested || !m_ring.pin_if_current(m_cursor))
+        {
+            advance();
+            return false;
+        }
+        out = taken_message(taken_message::adopt_pin, consumed.slab.data(), consumed.slab.size(),
+                            &m_ring.refcount_at(m_cursor));
+        advance();
+        settled = loan_status::ok;
+        return true;
+    }
+
     void advance() noexcept
     {
         ++m_cursor;

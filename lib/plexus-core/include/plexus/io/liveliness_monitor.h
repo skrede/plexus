@@ -3,6 +3,7 @@
 
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/detail/endpoint_liveness.h"
+#include "plexus/io/detail/liveliness_scan.h"
 
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
@@ -52,7 +53,7 @@ class liveliness_monitor
 public:
     using executor_type = typename Policy::executor_type;
     using timer_type    = typename Policy::timer_type;
-    using deadline_key  = std::pair<node_id, std::uint64_t>;
+    using deadline_key  = detail::deadline_key;
 
     explicit liveliness_monitor(executor_type executor)
             : m_executor(executor)
@@ -156,53 +157,11 @@ private:
     // runs on this same tick before the one re-arm.
     void on_tick()
     {
-        const std::uint64_t now = now_ns();
-        for(auto &[key, state] : m_deadlines)
-            if(auto ev = check_deadline(key, state, now))
-                fire(*ev);
-        for(auto &[id, state] : m_leases)
-            if(auto ev = check_lease(id, state, now))
-                fire(*ev);
+        detail::scan_liveness(m_deadlines, m_leases, now_ns(),
+                              [this](const liveness_event &ev) { fire(ev); });
         if(m_on_tick_action)
             m_on_tick_action();
         arm_tick();
-    }
-
-    // Edge-latched deadline check: fire once when the data gap first exceeds the
-    // period; clear the latch when the gap falls back under it.
-    std::optional<liveness_event> check_deadline(const deadline_key        &key,
-                                                 detail::endpoint_liveness &s, std::uint64_t now)
-    {
-        if(s.deadline_period_ns == 0)
-            return std::nullopt;
-        const bool lapsed = now - s.last_data_seen_ns > s.deadline_period_ns;
-        if(lapsed && !s.deadline_violated)
-        {
-            s.deadline_violated = true;
-            return liveness_event{liveness_kind::missed_deadline, key.first, key.second,
-                                  s.deadline_period_ns};
-        }
-        if(!lapsed)
-            s.deadline_violated = false;
-        return std::nullopt;
-    }
-
-    // Edge-latched lease check: fire once when the presence gap first exceeds the
-    // lease; clear the latch when presence resumes.
-    std::optional<liveness_event> check_lease(const node_id &id, detail::endpoint_liveness &s,
-                                              std::uint64_t now)
-    {
-        if(s.lease_ns == 0)
-            return std::nullopt;
-        const bool lapsed = now - s.last_seen_ns > s.lease_ns;
-        if(lapsed && !s.lease_expired)
-        {
-            s.lease_expired = true;
-            return liveness_event{liveness_kind::lease_expired, id, 0, s.lease_ns};
-        }
-        if(!lapsed)
-            s.lease_expired = false;
-        return std::nullopt;
     }
 
     void fire(const liveness_event &ev)

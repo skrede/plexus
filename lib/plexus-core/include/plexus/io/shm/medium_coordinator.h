@@ -4,16 +4,16 @@
 #include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/shm_selection.h"
 #include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/shm/detail/coordinator_rings.h"
 #include "plexus/io/demand_transition.h"
 
 #include "plexus/detail/compat.h"
 
 #include <memory>
 #include <string>
-#include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <algorithm>
 #include <string_view>
 #include <unordered_map>
 
@@ -110,33 +110,19 @@ public:
     [[nodiscard]] Channel *companion_for(std::string_view node_name, std::string_view fqn,
                                          std::size_t bytes)
     {
-        const ring *r = find_ring(node_name, fqn);
-        if(r == nullptr)
-            return nullptr;
-        return route_message_medium(r->mode, bytes, r->slot_capacity) == same_host_medium::shm
-                ? r->channel.get()
-                : nullptr;
+        return detail::route_companion(m_held, node_name, fqn, bytes);
     }
 
     // Peer-dead teardown: dropping the held channels runs their destructors (releasing the ring).
     void on_peer_dead(std::string_view node_name) { m_held.erase(std::string{node_name}); }
 
 private:
-    // Exactly one lane is engaged per (peer, fqn) — the up-edge role decides — and both
-    // lanes are keyed identically, so find_ring/on_down treat them uniformly.
-    struct ring
-    {
-        std::string              fqn;
-        std::unique_ptr<Channel> channel; // publisher lane
-        ring_geometry_mode       mode          = ring_geometry_mode::reliable_preserving;
-        std::uint64_t            slot_capacity = 0;
-        companion_receive        receive; // subscriber lane
-    };
+    using ring      = detail::coordinator_ring<Channel, companion_receive>;
     using ring_list = std::vector<ring>;
 
     void on_up(std::string_view node_name, std::string_view fqn, demand_role role)
     {
-        if(find_ring(node_name, fqn) != nullptr)
+        if(detail::find_ring(m_held, node_name, fqn) != nullptr)
             return;
         if(!run_policy(m_registry.same_host_for(node_name), hint_for(fqn)))
             return;
@@ -178,15 +164,10 @@ private:
 
     void on_down(std::string_view node_name, std::string_view fqn)
     {
-        auto it = m_held.find(std::string{node_name});
-        if(it == m_held.end())
-            return;
-        std::erase_if(it->second, [&](const ring &r) { return r.fqn == fqn; });
-        if(it->second.empty())
-            m_held.erase(it);
+        detail::erase_ring(m_held, node_name, fqn);
         // Last demand for the fqn gone: drop its hint so a churn of distinct topic names
         // cannot grow m_hints without bound (a re-subscribe re-records it from the declare path).
-        if(!any_holder(fqn))
+        if(!detail::any_holder(m_held, fqn))
             m_hints.erase(std::string{fqn});
     }
 
@@ -199,26 +180,6 @@ private:
     {
         auto it = m_hints.find(std::string{fqn});
         return it == m_hints.end() ? dispatch_hint::none : it->second;
-    }
-
-    [[nodiscard]] const ring *find_ring(std::string_view node_name, std::string_view fqn) const
-    {
-        auto it = m_held.find(std::string{node_name});
-        if(it == m_held.end())
-            return nullptr;
-        for(const ring &r : it->second)
-            if(r.fqn == fqn)
-                return &r;
-        return nullptr;
-    }
-
-    [[nodiscard]] bool any_holder(std::string_view fqn) const
-    {
-        for(const auto &[name, rings] : m_held)
-            for(const ring &r : rings)
-                if(r.fqn == fqn)
-                    return true;
-        return false;
     }
 
     Registry                                                                     &m_registry;
