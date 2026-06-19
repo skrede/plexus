@@ -1,10 +1,16 @@
 # Derived from the project's CLion code style (.idea/codeStyles/Project.xml),
 # refined so a format run reproduces the codebase's authored shape (indented,
-# column-aligned single-line case statements; aligned struct members).
+# column-aligned single-line case statements; aligned struct members). The
+# AlignConsecutive* settings keep those aligned constructs intact at a fixed
+# ColumnLimit (calibrated 100): the de-facto modern C++/LLVM base width, wide
+# enough that the documented aligned case statements and struct members are not
+# reflowed apart.
 # Requires clang-format 17+ (AlignConsecutiveShortCaseStatements).
 # SortIncludes is off because the project's include order (grouped by origin and
 # folder, sorted by line length then alphabetically) is not expressible here;
-# see CONVENTIONS.md.
+# see CONVENTIONS.md. SortUsingDeclarations is off for the same reason: the
+# project authors declaration order deliberately and the formatter must not
+# reorder tokens (the tree-wide reflow is whitespace-only).
 ---
 Language: Cpp
 BasedOnStyle: LLVM
@@ -43,7 +49,7 @@ BraceWrapping:
 BreakBeforeBraces: Custom
 BreakConstructorInitializers: BeforeComma
 FixNamespaceComments: false
-ColumnLimit: 0
+ColumnLimit: 100
 ConstructorInitializerIndentWidth: 8
 ContinuationIndentWidth: 8
 IndentCaseBlocks: true
@@ -58,6 +64,7 @@ MacroBlockEnd: ''
 PointerAlignment: Right
 ReferenceAlignment: Pointer
 SortIncludes: Never
+SortUsingDeclarations: Never
 SpaceAfterTemplateKeyword: false
 SpaceBeforeCtorInitializerColon: false
 SpaceBeforeParens: Never
