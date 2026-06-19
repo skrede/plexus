@@ -7,6 +7,7 @@
 #include "plexus/io/endpoint_seam.h"
 
 #include "plexus/detail/loan_pool.h"
+#include "plexus/detail/publisher_publish.h"
 
 #include "plexus/typed_codec.h"
 #include "plexus/topic_qos.h"
@@ -49,9 +50,8 @@ struct typed_publisher_options
     std::optional<recording_qos> capture{};
 };
 
-// The bytes publishing endpoint: the CONSTRUCTOR is the registration (declare the topic, mint
-// the gid). publish is a DIRECT forwarder call — the hot path carries no type erasure; only
-// the cold retire is erased.
+// The bytes publishing endpoint: the ctor is the registration (declare the topic, mint the gid);
+// publish is a direct forwarder call carrying no type erasure (only the cold retire is erased).
 //
 // LIFETIME: a publisher must NOT outlive its node (member-init aggregation, node ref first, so
 // reverse destruction retires the handle before the node). A moved-from handle is inert.
@@ -94,34 +94,17 @@ public:
     publisher(const publisher &)            = delete;
     publisher &operator=(const publisher &) = delete;
 
-    // The DECLARATION persists for the node's life (stable identity for subscriber
-    // correlation); the HANDLE's drop posts a distinct handle-lifetime edge. Gate on the
-    // moved-from sentinel alone (the seam ALWAYS wires retire_publisher). A dtor must not
-    // throw, so the posted edge swallows any exception (the posted-edge-from-dtor pattern, also
-    // in ~node).
-    ~publisher() noexcept
-    {
-        if(m_seam.ctx != nullptr)
-            try
-            {
-                m_seam.retire_publisher(m_seam.ctx, m_fqn);
-            }
-            catch(...)
-            {
-            }
-    }
+    ~publisher() noexcept { detail::retire_publisher_quiet(m_seam, m_fqn); }
 
 private:
     io::endpoint_seam m_seam{};
     std::string       m_fqn;
 };
 
-// The typed publishing endpoint: the CONSTRUCTOR declares the topic WITH its resolved type
-// identity (the gate a strict subscriber matches) and owns a fixed loan pool. publish(loan&&)
-// is true zero-copy (the in-place object rides the process-tier lane by address, encode never
-// invoked in-process); publish(const T&) copies one T into a slot then delegates. On pool
-// exhaustion BOTH take the serialize path and bump loan_exhausted() — never blocks, never
-// allocates. LIFETIME as publisher<void>.
+// The typed publishing endpoint: the ctor declares the topic with its resolved type identity (the
+// gate a strict subscriber matches) and owns a fixed loan pool. On pool exhaustion publish takes
+// the serialize path and bumps loan_exhausted() — never blocks, never allocates. Lifetime as
+// publisher<void>.
 template<typename Codec>
 class publisher
 {
@@ -148,37 +131,15 @@ public:
     }
 
     // Borrow a slot to construct a value in place (zero-copy publish); an empty loan signals
-    // pool exhaustion. The caller checks valid() only to react to exhaustion itself.
+    // pool exhaustion, which the caller checks via valid() only to react to itself.
     template<typename... Args>
     detail::loan<value_type> borrow(Args &&...args)
     {
         return m_pool.try_borrow(std::forward<Args>(args)...);
     }
 
-    // A valid loan rides the fast path by address; an empty loan is a no-op. The encode lambda
-    // holds its wire_bytes for the synchronous verb's duration (the egress copies first).
-    void publish(detail::loan<value_type> &&held)
-    {
-        if(!held)
-            return;
-        auto carrier = detail::loan_pool<value_type>::carrier_for(held, m_identity.type_id);
-        const value_type &value  = *static_cast<const value_type *>(carrier.slot->object);
-        auto              encode = [&] { return encode_to_span(value); };
-        m_seam.publish_object(m_seam.ctx, m_fqn, carrier, io::make_encode_thunk(encode));
-    }
-
-    // On exhaustion, serialize directly and publish bytes — a counted graceful degradation.
-    void publish(const value_type &value)
-    {
-        auto held = m_pool.try_borrow(value);
-        if(held)
-        {
-            publish(std::move(held));
-            return;
-        }
-        ++m_loan_exhausted;
-        m_seam.publish(m_seam.ctx, m_fqn, encode_to_span(value));
-    }
+    void publish(detail::loan<value_type> &&held) { detail::publish_loan(*this, std::move(held)); }
+    void publish(const value_type &value) { detail::publish_value(*this, value); }
 
     // The readable exhaustion signal: publishes that degraded to the serialize path.
     [[nodiscard]] std::size_t loan_exhausted() const noexcept { return m_loan_exhausted; }
@@ -197,25 +158,15 @@ public:
     publisher &operator=(const publisher &) = delete;
     publisher &operator=(publisher &&)      = delete;
 
-    // Handle-lifetime drop edge, as publisher<void>: gate on the sentinel, swallow any exception.
-    ~publisher() noexcept
-    {
-        if(m_seam.ctx != nullptr)
-            try
-            {
-                m_seam.retire_publisher(m_seam.ctx, m_fqn);
-            }
-            catch(...)
-            {
-            }
-    }
+    ~publisher() noexcept { detail::retire_publisher_quiet(m_seam, m_fqn); }
 
 private:
-    std::span<const std::byte> encode_to_span(const value_type &value)
-    {
-        m_scratch = m_codec.encode(value);
-        return static_cast<std::span<const std::byte>>(m_scratch);
-    }
+    template<typename P, typename V>
+    friend std::span<const std::byte> detail::encode_to_span(P &, const V &);
+    template<typename P, typename V>
+    friend void detail::publish_loan(P &, detail::loan<V> &&);
+    template<typename P, typename V>
+    friend void detail::publish_value(P &, const V &);
 
     io::endpoint_seam             m_seam{};
     std::string                   m_fqn;

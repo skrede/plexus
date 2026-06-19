@@ -6,95 +6,30 @@
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/keyed_refcount.h"
 #include "plexus/io/detail/priority_band_queue.h"
+#include "plexus/io/detail/subscriber_dispatch.h"
 #include "plexus/topic_qos.h"
 
-#include <array>
 #include <string>
-#include <vector>
 #include <cstdint>
 #include <utility>
 #include <optional>
-#include <algorithm>
 #include <string_view>
 #include <unordered_map>
 
 namespace plexus::io {
 
-// The passive per-fqn subscriber state the forwarder owns directly: no topic-
-// listener indirection, no framed-byte cache. It holds, per fqn (keyed by the
-// topic_hash and carrying the fqn string), the set of subscribed peers — each a
-// byte_channel reference plus the node-name key it was attached under — and the
-// per-(peer, fqn) refcount that gates attach/detach. Every structure is grown at
-// attach (setup); the fan-out loop only reads, never inserts.
-//
-// Channel is the Policy's byte_channel_type. A subscriber is stored as a bare
-// channel pointer plus a node-name key for fast identity comparison; the public
-// forwarder API stays const&-only — the pointer is an internal storage detail,
-// never surfaced.
+// The passive per-fqn subscriber state the forwarder owns directly: no topic-listener
+// indirection, no framed-byte cache. It holds, per fqn (keyed by the topic_hash), the subscribed
+// peers (registry_subscriber) and the per-(peer, fqn) refcount that gates attach/detach. Every
+// structure is grown at attach (setup); the fan-out loop only reads, never inserts. Channel is the
+// Policy's byte_channel_type.
 template<typename Channel>
 class subscriber_registry
 {
 public:
-    struct subscriber
-    {
-        Channel    *channel;
-        std::string node_name;
-        locality    tier; // the delivery tier, classified ONCE at attach (never per fan-out hop)
-        // The subscriber's QoS choice, stored ONCE at attach alongside the tier and
-        // read at replay — never mutated on the hot path. An absent wire region
-        // lands here as the friendly default (a real choice, not a sentinel).
-        subscriber_qos qos{};
-        // The subscriber-declared type identity, stored ONCE at attach. std::nullopt is
-        // a distinct "undeclared type" state (NOT a zero type_id) so an untyped
-        // subscriber is never matched as if it had claimed type 0 — it gates the typed
-        // fast-path eligibility, mirroring producer_type_id's absence discipline.
-        std::optional<std::uint64_t> type_id;
-    };
-
-    // One band's per-cause drop tallies on the per-topic record: fixed cardinality,
-    // bumped at the fan-out drop site, read on demand (the replay_count occupancy precedent
-    // — no atomics on the single-threaded egress path, no map, no per-drop allocation).
-    struct band_drop_counters
-    {
-        std::size_t dropped_oldest{0};
-        std::size_t dropped_newest{0};
-        std::size_t blocked{0};
-    };
-
-    struct topic_entry
-    {
-        std::string             fqn;
-        std::vector<subscriber> subscribers;
-        topic_qos               qos{};
-        // The per-band drop tallies for this topic (fixed k_egress_bands array — no map, no
-        // alloc at drop). The operator's per-topic-per-band statistics ask; read on demand.
-        std::array<band_drop_counters, detail::k_egress_bands> drops{};
-        // The producer-declared type identity for this topic. std::nullopt is a
-        // distinct "undeclared type" state (NOT a zero type_id) so an unknown
-        // producer type never false-refuses a subscriber — matching applies only
-        // when BOTH sides declare a type. The type_name (a future graph-layer
-        // concern) is intentionally not recorded here; matching authority is the
-        // type_id alone.
-        std::optional<std::uint64_t> producer_type_id;
-        // Producer-declared source-identity carriage (Option 2: producer-offered).
-        // When emit_source_identity is set, this topic's publishes carry the gid flag
-        // + a varint endpoint_counter; the receiver reconstructs publisher_gid as
-        // session.node_id ‖ endpoint_counter. The counter is minted ONCE at the first
-        // such declare (std::nullopt until then) and is STABLE thereafter — it does
-        // NOT change on re-declare or across reconnect (the registry record persists),
-        // so an endpoint's gid is stable per IDENT-02.
-        bool                         emit_source_identity{false};
-        std::optional<std::uint64_t> endpoint_counter;
-        // The per-topic stamp-demand latch: true iff ANY attached subscriber wants
-        // message_info (the OR-reduce over subscribers' qos.wants_message_info). The hot
-        // publish reads this one bool to gate the source-stamp clock read; it is recomputed
-        // at attach/retire (cold path), never on the fan-out loop. Default true on an empty
-        // topic is the safe always-on stamping. NOTE: wants_message_info is local-only and
-        // never crosses the subscribe wire, so a producer-side fan-out entry built from a
-        // remote subscribe always reads back the default true — the elision only fires for a
-        // genuinely local (same-node) demander whose real arity is visible here.
-        bool any_subscriber_wants_info{true};
-    };
+    using subscriber         = detail::registry_subscriber<Channel>;
+    using band_drop_counters = detail::band_drop_counters;
+    using topic_entry        = detail::registry_topic_entry<Channel>;
 
     // Bump the (peer, fqn) refcount; returns the post-increment count. The 0->1
     // result is the gate the forwarder emits a subscribe on.
@@ -111,36 +46,15 @@ public:
         return m_refcount.drop(node_name, fqn);
     }
 
-    // Register a peer's fan-out entry for an fqn (idempotent on a re-add of the
-    // same channel). Records the topic_hash -> fqn resolution the receive tail
-    // reads. Called at attach only. The qos has two distinct sources sharing this
-    // store: the SUBSCRIBE side passes the subscriber's OWN requested choice (the
-    // local monitor reads it back via qos_for_subscriber to arm the deadline/lease),
-    // and the producer-side attach_for_fanout passes the subscriber's request it
-    // learned off the wire for fan-out — the same slot, two callers.
     void add_subscriber(std::uint64_t topic_hash, std::string_view fqn, Channel &channel,
                         std::string_view node_name, const subscriber_qos &qos = subscriber_qos{},
                         std::optional<std::uint64_t> type_id = std::nullopt)
     {
-        auto &entry = m_topics[topic_hash];
-        if(entry.fqn.empty())
-            entry.fqn = std::string{fqn};
-        for(const auto &sub : entry.subscribers)
-            if(sub.channel == &channel)
-                return; // idempotent re-add keeps the first qos
-        // Classify the delivery tier ONCE here from the channel's OWN endpoint scheme
-        // (the transport that minted it, never peer-supplied data). remote_endpoint() is
-        // a syscall on a real socket channel, so it is read at attach and cached — the
-        // fan-out loop only reads the stored tier. The qos is stored the same way: once.
-        const locality tier = tier_of(channel.remote_endpoint().scheme);
-        entry.subscribers.push_back(
-                subscriber{&channel, std::string{node_name}, tier, qos, type_id});
-        recompute_wants_info(entry);
+        detail::add_topic_subscriber(m_topics, topic_hash, fqn, channel, node_name, qos, type_id);
     }
 
-    // The subscriber's stored QoS for a (topic_hash, channel) pair, or the friendly
-    // subscriber_qos default when the pair is unknown — absence is the default choice
-    // (a subscriber that carried no region genuinely chose the default), not a refusal.
+    // The subscriber's stored QoS for a (topic_hash, channel) pair, or the friendly default when
+    // the pair is unknown — absence is the default choice (not a refusal).
     subscriber_qos qos_for_subscriber(std::uint64_t topic_hash, const Channel &channel) const
     {
         auto it = m_topics.find(topic_hash);
@@ -167,10 +81,8 @@ public:
         entry.qos                  = qos;
         entry.producer_type_id     = producer_type_id;
         entry.emit_source_identity = emit_source_identity;
-        // Mint the endpoint counter ONCE, the first time this topic declares source
-        // identity. A re-declare keeps the existing counter so the endpoint's gid is
-        // stable (IDENT-02); the monotonic allocator lives here (a node-level member of
-        // the forwarder-owned registry — no static singleton, no hot-path RNG).
+        // Mint the endpoint counter ONCE; a re-declare keeps it so the endpoint's gid is stable.
+        // The monotonic allocator is a registry member — no static singleton, no hot-path RNG.
         if(emit_source_identity && !entry.endpoint_counter)
             entry.endpoint_counter = m_next_endpoint_counter++;
     }
@@ -182,21 +94,16 @@ public:
         return it == m_topics.end() ? topic_qos{} : it->second.qos;
     }
 
-    // The producer-declared type_id for a topic, or std::nullopt when the topic
-    // declared no type (undeclared producer type). Absence is a distinct state from
-    // a zero type_id — a subscriber type_id is never refused against an undeclared
-    // producer type.
+    // The producer-declared type_id for a topic, or std::nullopt when the topic declared no type
+    // (a distinct state from a zero type_id — never refused against an undeclared producer type).
     std::optional<std::uint64_t> producer_type_id(std::uint64_t topic_hash) const
     {
         auto it = m_topics.find(topic_hash);
         return it == m_topics.end() ? std::nullopt : it->second.producer_type_id;
     }
 
-    // The producer-declared source-identity OFFER as a first-class bool — the
-    // request-vs-offered source_identity relation reads it to decide whether a
-    // subscriber that requires source identity may attach. This is the capability
-    // advertisement, true iff the topic declared emit_source_identity (distinct from
-    // the per-frame endpoint counter publish reads off the topic record directly).
+    // The producer-declared source-identity OFFER (the capability advertisement the
+    // request-vs-offered relation reads), true iff the topic declared emit_source_identity.
     bool offers_source_identity(std::uint64_t topic_hash) const
     {
         auto it = m_topics.find(topic_hash);
@@ -206,23 +113,13 @@ public:
     // Drop one peer's fan-out entry for an fqn.
     void remove_subscriber(std::uint64_t topic_hash, const Channel &channel)
     {
-        auto it = m_topics.find(topic_hash);
-        if(it == m_topics.end())
-            return;
-        std::erase_if(it->second.subscribers,
-                      [&](const subscriber &s) { return s.channel == &channel; });
-        recompute_wants_info(it->second);
+        detail::remove_topic_subscriber(m_topics, topic_hash, channel);
     }
 
     // Drop every fan-out entry and refcount for one peer (peer-death path).
     void remove_peer(std::string_view node_name, const Channel &channel)
     {
-        for(auto &[hash, entry] : m_topics)
-        {
-            std::erase_if(entry.subscribers,
-                          [&](const subscriber &s) { return s.channel == &channel; });
-            recompute_wants_info(entry);
-        }
+        detail::remove_peer_subscribers(m_topics, channel);
         m_refcount.forget(node_name);
     }
 
@@ -236,22 +133,17 @@ public:
         return it == m_topics.end() ? nullptr : &it->second;
     }
 
-    // The per-topic stamp-demand latch as a query (read-only). True for an unknown topic
-    // (the safe always-on default — an undeclared/unattached topic stamps). The hot publish
-    // reads topic_entry::any_subscriber_wants_info directly; this accessor is for the
-    // off-hot-path inspection of the pure no-demander case.
+    // The per-topic stamp-demand latch as a read-only query (the hot publish reads the
+    // topic_entry field directly). True for an unknown topic — the safe always-on default.
     bool any_subscriber_wants_info(std::uint64_t topic_hash) const
     {
         auto it = m_topics.find(topic_hash);
         return it == m_topics.end() ? true : it->second.any_subscriber_wants_info;
     }
 
-    // Bump the per-(topic, band) drop counter for a cause. Called at the fan-out
-    // drop site with the band already in hand and the topic record already resolved — a
-    // fixed-array index, no map find past the lookup, no allocation. A `none` cause (an
-    // admitted frame) is a no-op. The lookup is find-only: a drop for an undeclared topic
-    // is counted nowhere meaningful, and minting an empty-fqn entry here would let fqn_for
-    // memoize an empty string as a "resolved" view, conflating unknown with known-unnamed.
+    // Bump the per-(topic, band) drop counter for a cause; a `none` cause is a no-op. The lookup
+    // is find-only: minting an empty-fqn entry here would let fqn_for memoize an empty string as a
+    // "resolved" view, conflating unknown with known-unnamed.
     void record_drop(std::uint64_t topic_hash, std::size_t band, detail::drop_cause cause)
     {
         if(cause == detail::drop_cause::none || band >= detail::k_egress_bands)
@@ -259,16 +151,7 @@ public:
         auto it = m_topics.find(topic_hash);
         if(it == m_topics.end())
             return;
-        auto &c = it->second.drops[band];
-        switch(cause)
-        {
-            case detail::drop_cause::drop_oldest: ++c.dropped_oldest; return;
-            case detail::drop_cause::drop_newest: ++c.dropped_newest; return;
-            case detail::drop_cause::blocked:     ++c.blocked; return;
-            // The receive-side datagram causes carry their own occupancy counters at the
-            // datagram sites — this per-(topic,band) egress table holds the overflow trio only.
-            default: return;
-        }
+        detail::bump_band_drop(it->second.drops[band], cause);
     }
 
     // The per-(topic, band, cause) drop tally, read on demand (occupancy style). Returns 0
@@ -278,26 +161,14 @@ public:
         auto it = m_topics.find(topic_hash);
         if(it == m_topics.end() || band >= detail::k_egress_bands)
             return 0;
-        const auto &c = it->second.drops[band];
-        switch(cause)
-        {
-            case detail::drop_cause::drop_oldest: return c.dropped_oldest;
-            case detail::drop_cause::drop_newest: return c.dropped_newest;
-            case detail::drop_cause::blocked:     return c.blocked;
-            default:                              return 0;
-        }
+        return detail::read_band_drop(it->second.drops[band], cause);
     }
 
-    // Resolve a wire topic_hash back to its fqn (the receive tail). Empty when
-    // the hash names no attached topic. Served from the SAME per-topic record the
-    // publish verbs read (add_subscriber and declare both mint it with a non-empty
-    // fqn), so the registry keeps one hash-keyed map, not a parallel hash->fqn copy.
-    // The last resolution is memoized: receive flows repeat the same topic, and the
-    // per-delivery hash find was measurable on the in-process delivery loop. The
-    // cached pointer is safe because m_topics entries are NEVER erased (peer/sub
-    // removal empties an entry's subscriber list, never the record) and the node-
-    // based map keeps value addresses stable — an erase added to this registry
-    // would have to reset the memo.
+    // Resolve a wire topic_hash back to its fqn (the receive tail); empty when the hash names no
+    // attached topic. The last resolution is memoized (the per-delivery hash find was measurable on
+    // the in-process loop). The cached pointer is safe ONLY because m_topics entries are NEVER
+    // erased (peer/sub removal empties the subscriber list, never the record) and the node-based
+    // map keeps value addresses stable — an erase added here would have to reset the memo.
     std::string_view fqn_for(std::uint64_t topic_hash) const
     {
         if(m_last_fqn != nullptr && topic_hash == m_last_fqn_hash)
@@ -311,21 +182,6 @@ public:
     }
 
 private:
-    // OR-reduce the per-topic stamp-demand latch over the entry's subscribers. An empty
-    // subscriber set latches true (the safe always-on default). Cold path: called at
-    // attach/retire only, never on the fan-out loop.
-    static void recompute_wants_info(topic_entry &entry)
-    {
-        if(entry.subscribers.empty())
-        {
-            entry.any_subscriber_wants_info = true;
-            return;
-        }
-        entry.any_subscriber_wants_info =
-                std::any_of(entry.subscribers.begin(), entry.subscribers.end(),
-                            [](const subscriber &s) { return s.qos.wants_message_info; });
-    }
-
     std::unordered_map<std::uint64_t, topic_entry> m_topics;
     mutable std::uint64_t                          m_last_fqn_hash{0};
     mutable const std::string                     *m_last_fqn{nullptr};

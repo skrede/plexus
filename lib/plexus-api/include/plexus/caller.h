@@ -15,6 +15,7 @@
 #include "plexus/publisher_gid.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/caller_call.h"
 
 #include <span>
 #include <chrono>
@@ -27,27 +28,6 @@
 #include <string_view>
 
 namespace plexus {
-
-// The wire+local attribution split for a reply, mirroring io::message_info. Populated
-// honestly: a field the response leg does not surface stays in its documented absent state
-// rather than a fabricated value. Only provider_identity (the resolved provider node_id) and
-// reception_timestamp (receiver-stamped) are genuine; the rest are not echoed on the
-// rpc_response wire / on_response seam, so they stay absent (0 / false).
-struct reply_info
-{
-    std::optional<publisher_gid> provider_identity{};
-    std::uint64_t                source_timestamp{};
-    std::uint64_t                reception_timestamp{};
-    bool                         from_intra_process{};
-};
-
-// A VIEW into the response frame's return bytes (valid for the completion invocation only,
-// never retained) plus the reply_info attribution.
-struct reply
-{
-    std::span<const std::byte> bytes;
-    reply_info                 info;
-};
 
 // deadline is optional because ABSENCE is meaningful: absent = use the forwarder's
 // construction-time default, distinct from any concrete override.
@@ -118,28 +98,8 @@ private:
     void dispatch(std::span<const std::byte> param, Completion &&completion,
                   std::optional<std::chrono::nanoseconds> deadline)
     {
-        m_seam.call(
-                m_seam.ctx, m_fqn, param,
-                [completion = std::forward<Completion>(completion)](
-                        std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
-                        const std::optional<publisher_gid> &provider) mutable
-                {
-                    if(!status)
-                    {
-                        completion(expected<reply, std::error_code>{
-                                unexpect, make_error_code(call_errc::no_provider)});
-                        return;
-                    }
-                    if(*status == wire::rpc_status::success)
-                    {
-                        reply r{bytes, reply_info{provider, 0, wire::now_timestamp_ns(), false}};
-                        completion(expected<reply, std::error_code>{std::move(r)});
-                        return;
-                    }
-                    completion(expected<reply, std::error_code>{
-                            unexpect, make_error_code(from_rpc_status(*status))});
-                },
-                deadline);
+        detail::dispatch_bytes_call(m_seam, m_fqn, param, std::forward<Completion>(completion),
+                                    deadline);
     }
 
     io::endpoint_seam m_seam{};
@@ -199,47 +159,9 @@ private:
                   std::optional<std::chrono::nanoseconds> deadline)
     {
         const wire_bytes<> encoded = m_req_codec.encode(request);
-        // The codec is copied so the completion stays self-contained: a mid-flight move of
-        // this handle must not dangle a captured this/member reference.
-        m_seam.call(
-                m_seam.ctx, m_fqn, static_cast<std::span<const std::byte>>(encoded),
-                [completion = std::forward<Completion>(completion), res_codec = m_res_codec](
-                        std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
-                        const std::optional<publisher_gid> &) mutable
-                {
-                    if(!status)
-                    {
-                        completion(expected<Res, std::error_code>{
-                                unexpect, make_error_code(call_errc::no_provider)});
-                        return;
-                    }
-                    if(*status == wire::rpc_status::success)
-                    {
-                        Res value{};
-                        if(res_codec.decode(bytes, value))
-                            completion(expected<Res, std::error_code>{std::move(value)});
-                        else
-                            completion(expected<Res, std::error_code>{
-                                    unexpect, make_error_code(call_errc::deserialize_failed)});
-                        return;
-                    }
-                    if(*status == wire::rpc_status::error)
-                    {
-                        std::size_t consumed = 0;
-                        if(const auto provider_value = wire::read_varint(bytes, consumed);
-                           provider_value && consumed == bytes.size())
-                        {
-                            completion(expected<Res, std::error_code>{
-                                    unexpect,
-                                    std::error_code{static_cast<int>(*provider_value),
-                                                    provider_category()}});
-                            return;
-                        }
-                    }
-                    completion(expected<Res, std::error_code>{
-                            unexpect, make_error_code(from_rpc_status(*status))});
-                },
-                deadline);
+        detail::dispatch_typed_call<Res>(
+                m_seam, m_fqn, static_cast<std::span<const std::byte>>(encoded), m_res_codec,
+                std::forward<Completion>(completion), deadline);
     }
 
     io::endpoint_seam m_seam{};
