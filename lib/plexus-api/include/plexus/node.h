@@ -571,6 +571,29 @@ private:
                     const auto g = m.resolved_geometry_for(key);
                     return {wrap_companion(std::move(ch)), g.mode, g.slot_capacity};
                 });
+            // The SUBSCRIBER-side receive gate: attach the co-host ring as a consumer and
+            // route each drained framed message into the matching peer session's receive
+            // path (the engine resolves the session by node_name). The drain is posted on
+            // this node's executor by the notifier bridge, so inject runs on an executor
+            // turn — no drain thread. The returned owner is type-erased into a closure that
+            // holds the concrete RAII handle by move (never called — it exists to own); the
+            // coordinator drops it on 1->0/peer-dead, running the handle dtor (clear sink,
+            // release ring). The closure captures the engine by reference — it outlives the
+            // coordinator that owns the sink, so the receive route stays valid for the lane's
+            // life. A null handle (broker failure) declines: the subscriber keeps the wire.
+            m_engine.on_upgrade_receive_gate(
+                [&m, this](std::string_view node_name,
+                           std::string_view fqn) -> io::shm::companion_receive {
+                    const std::string key{fqn};
+                    const std::string peer{node_name};
+                    auto handle = m.mint_receive_companion(
+                        key, [this, peer](std::span<const std::byte> frame) {
+                            m_engine.inject_companion_receive(peer, frame);
+                        });
+                    if(!handle)
+                        return {};
+                    return {[h = std::move(handle)]() mutable { (void)h; }};
+                });
         });
     }
 

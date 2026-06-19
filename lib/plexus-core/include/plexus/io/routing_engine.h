@@ -114,8 +114,8 @@ public:
         // drives the coordinator, which reads same_host, runs the upgrade policy, and
         // acquires/releases the additive ring through the injected gate.
         m_messages.on_demand_transition([this](std::string_view node_name, std::string_view fqn,
-                                               demand_transition dir)
-        { m_coordinator.on_edge(node_name, fqn, dir); });
+                                               demand_transition dir, demand_role role)
+        { m_coordinator.on_edge(node_name, fqn, dir, role); });
         // The publish fan's per-message companion route: a fitting message for a co-host
         // (peer, topic) the coordinator minted a companion ring for rides that ring (zero-
         // copy same-host), an over-cap / off-host / un-minted message keeps the recorded
@@ -456,6 +456,29 @@ public:
         plexus::detail::move_only_function<shm::companion_mint<channel_type>(std::string_view)> mint)
     {
         m_coordinator.on_gate(std::move(mint));
+    }
+
+    // The node installs the same-host RECEIVE-companion gate (over its shm member's
+    // mint_receive_companion) into the coordinator — only when the composition carries an
+    // shm member. The gate attaches the co-host ring as a consumer and routes drained framed
+    // messages through inject_companion_receive to the matching peer session's receive path.
+    void on_upgrade_receive_gate(
+        plexus::detail::move_only_function<shm::companion_receive(std::string_view, std::string_view)> mint)
+    {
+        m_coordinator.on_receive_gate(std::move(mint));
+    }
+
+    // Route a framed message drained off a co-host companion ring into the receive path of
+    // the peer session named by node_name — the SAME entry the wire feeds (on_receive: header
+    // decode, staleness gate, router, deliver, user callback). Called POSTED on the executor
+    // (the notifier->executor bridge posts the drain), so it never fires inline from a wake.
+    // A vanished peer (no session) drops the frame. This is the receive lane the same-host
+    // companion model needs: a fitting message reaches the user callback over SHM, never the
+    // wire — exactly once (the send side put it on this lane alone).
+    void inject_companion_receive(std::string_view node_name, std::span<const std::byte> frame)
+    {
+        if(session_type *s = m_registry.session_for_name(node_name))
+            s->inject_receive(frame);
     }
     capture_policy &capture() noexcept { return m_capture; }
 

@@ -40,17 +40,24 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 
-// The whole-stack proof through the PUBLIC facade that published data actually FLOWS over
-// the same-host shared-memory ring: two same_host_transports nodes, forked onto one host and
-// rendezvousing over static_discovery, auto-engage a co-host companion ring with NO platform
-// conditional in the consumer code, and the publisher's publish fan routes a fitting message
-// OVER THE SHM RING (not the wire). The medium is asserted at the BYTES level, not the region
-// presence: a forked raw consumer attaches the /dev/shm ring directly and observes the exact
-// fitting payload appear on the ring, while the subscriber node's TCP receive path carries the
-// over-cap message ONLY (the fitting message never crosses the wire — the dual-delivery medium
-// split). A forced-distinct-fingerprint variant proves the cross-host fail-closed path: no
-// region, delivery over the wire. The medium assertion holds across >=2 independent runs with
-// distinct per-run payloads (no success from a single run).
+// The whole-stack proof through the PUBLIC facade that published data flows END-TO-END over
+// the same-host shared-memory ring — both LANES of the wire_fallback companion model: two
+// same_host_transports nodes, forked onto one host and rendezvousing over static_discovery,
+// auto-engage a co-host companion ring with NO platform conditional in the consumer code. The
+// publisher's publish fan routes a fitting message OVER THE SHM RING and an over-cap message
+// over the wire; the subscriber node DRAINS the companion ring into its OWN receive path, so
+// its user callback receives BOTH messages byte-exact — the fitting one over SHM, the over-cap
+// one over the wire.
+//
+// The PRIMARY proof is the real subscriber node's user callback: it receives the fitting
+// payload that the publisher routed to SHM ONLY (the publish fan never put the fitting on the
+// subscriber's TCP socket — companion_for replaces sub.channel for it), so a fitting payload
+// arriving at the callback can ONLY have crossed shared memory. A forked raw consumer attaches
+// the /dev/shm ring directly and observes the exact fitting payload on the ring as independent
+// corroboration that the fitting genuinely transited SHM (the medium, byte-observable across
+// the process boundary). A forced-distinct-fingerprint variant proves the cross-host fail-
+// closed path: no region, every message over the wire. The assertions hold across >=2
+// independent runs with distinct per-run payloads (no success from a single run).
 
 namespace pasio = plexus::asio;
 namespace pio = plexus::io::shm;
@@ -150,7 +157,7 @@ bool contains(std::span<const std::byte> hay, std::span<const std::byte> needle)
 struct coord
 {
     std::atomic<std::uint32_t> ring_ready{0};   // the publisher minted the companion ring
-    std::atomic<std::uint32_t> shm_seen{0};     // the consumer saw the fitting payload on the ring
+    std::atomic<std::uint32_t> shm_seen{0};     // the raw consumer saw the fitting payload on the ring
     std::atomic<std::uint32_t> consumer_done{0};
 };
 
@@ -237,10 +244,10 @@ std::optional<pio::shm_geometry> companion_geometry()
 
 struct medium_result
 {
-    bool small_over_shm = false; // the fitting payload appeared on the SHM ring
-    bool large_over_wire = false; // the over-cap payload arrived at the subscriber over TCP
-    bool small_off_wire = true;   // the fitting payload did NOT arrive over TCP
-    bool region_observed = false;
+    bool small_at_callback = false; // the subscriber's user callback received the fitting payload
+    bool large_at_callback = false; // the subscriber's user callback received the over-cap payload
+    bool small_over_shm    = false; // the raw consumer saw the fitting payload on the SHM ring
+    bool region_observed   = false;
 };
 
 // Fork two facade nodes over static_discovery and prove the per-message MEDIUM. The child
@@ -294,9 +301,18 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
                                      same_host ? dial_opts(true)
                                                : distinct_fingerprint_opts(true, 0xA1A1A1A1u));
 
-            // The subscriber's wire callback: a payload reaching HERE crossed the TCP wire.
-            // Tag which one so the parent can prove the fitting payload did NOT (it rode SHM).
-            plexus::subscriber<> sub{node, fqn,
+            // The subscriber declares its OWN qualifying same-host hint: the upgrade is
+            // bilateral-LOCAL (each side decides from its own hint with no wire exchange), so
+            // the subscriber must opt in for its receive companion to attach the co-host ring.
+            plexus::io::subscriber_qos sub_qos;
+            sub_qos.dispatch = pio::dispatch_hint::frequent;
+
+            // The subscriber's REAL user callback — the end of the delivery pipeline. It fires
+            // for BOTH lanes: the fitting payload drained off the SHM companion ring AND the
+            // over-cap payload off the TCP wire. Tag which arrived so the parent proves the
+            // subscriber received the fitting one (it can ONLY have crossed SHM — the publisher
+            // never routed it to this node's socket) and the over-cap one (over the wire).
+            plexus::subscriber<> sub{node, fqn, sub_qos,
                                      [&](std::span<const std::byte> b) {
                                          const std::string got(reinterpret_cast<const char *>(b.data()),
                                                                b.size());
@@ -375,9 +391,9 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
             while(::read(pipe_fd[0], &tag, 1) == 1)
             {
                 if(tag == 'S')
-                    result.small_off_wire = false; // the fitting payload crossed the wire (violation)
+                    result.small_at_callback = true; // the fitting payload reached the callback (via SHM)
                 else if(tag == 'L')
-                    result.large_over_wire = true;  // the over-cap payload rode the wire (expected)
+                    result.large_at_callback = true; // the over-cap payload reached the callback (via wire)
             }
             consumer_done = c->consumer_done.load(std::memory_order_acquire) != 0;
         }
@@ -391,9 +407,9 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
     while(::read(pipe_fd[0], &tag, 1) == 1)
     {
         if(tag == 'S')
-            result.small_off_wire = false;
+            result.small_at_callback = true;
         else if(tag == 'L')
-            result.large_over_wire = true;
+            result.large_at_callback = true;
     }
     ::close(pipe_fd[0]);
     result.small_over_shm = c->shm_seen.load(std::memory_order_acquire) == 1u;
@@ -404,13 +420,15 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
 
 }
 
-TEST_CASE("node_xproc_shm a fitting message FLOWS over the co-host shared-memory ring, the medium asserted, looped",
+TEST_CASE("node_xproc_shm the subscriber callback receives the fitting message over SHM and the over-cap over wire, looped",
           "[integration][shm][node_xproc_shm]")
 {
-    // The MEDIUM proven at the bytes level over >=2 independent runs with DISTINCT payloads
-    // so a stale region cannot pass: each run forks fresh and pid+run-scopes the fqn. The
-    // fitting payload appears on the /dev/shm ring (the publisher facade routed it over SHM)
-    // and does NOT reach the subscriber's TCP callback; the over-cap payload rides the wire.
+    // The END-TO-END medium proof over >=2 independent runs with DISTINCT payloads so a stale
+    // region cannot pass: each run forks fresh and pid+run-scopes the fqn. The REAL subscriber
+    // node's user callback receives the fitting payload (drained off the co-host SHM ring — the
+    // publisher routed it to SHM only, so it could not have crossed the wire) AND the over-cap
+    // payload (over the wire). The raw /dev/shm consumer corroborates the fitting genuinely
+    // transited the ring.
     for(int run = 0; run < 2; ++run)
     {
         const std::string fqn =
@@ -422,9 +440,9 @@ TEST_CASE("node_xproc_shm a fitting message FLOWS over the co-host shared-memory
         const medium_result r = one_run(fqn, small, large, /*same_host=*/true);
 
         REQUIRE(r.region_observed);        // the /dev/shm companion ring mapped while live
-        REQUIRE(r.small_over_shm);         // the fitting payload was observed on the SHM ring
-        REQUIRE(r.small_off_wire);         // and it never crossed the TCP wire (the medium split)
-        REQUIRE(r.large_over_wire);        // the over-cap payload rode the wire (dual-delivery fail-safe)
+        REQUIRE(r.small_at_callback);      // the subscriber callback received the fitting payload (over SHM)
+        REQUIRE(r.small_over_shm);         // corroborated: the fitting payload was on the SHM ring
+        REQUIRE(r.large_at_callback);      // the subscriber callback received the over-cap payload (over wire)
         REQUIRE_FALSE(region_maps(fqn));   // the ring is gone once both nodes tore down (no leak)
     }
 }
@@ -443,7 +461,7 @@ TEST_CASE("node_xproc_shm a forced-distinct-fingerprint pair delivers over the w
 
     REQUIRE_FALSE(r.region_observed);     // no co-host ring was engaged
     REQUIRE_FALSE(r.small_over_shm);      // nothing rode SHM
-    REQUIRE_FALSE(r.small_off_wire);      // the fitting payload DID cross the wire (no companion)
-    REQUIRE(r.large_over_wire);           // the over-cap payload crossed the wire too
+    REQUIRE(r.small_at_callback);         // the fitting payload reached the callback over the WIRE (no companion)
+    REQUIRE(r.large_at_callback);         // the over-cap payload reached the callback over the wire too
     REQUIRE_FALSE(region_maps(fqn));
 }

@@ -34,6 +34,7 @@
 
 using namespace plexus::io::shm;
 using plexus::io::demand_transition;
+using plexus::io::demand_role;
 
 namespace {
 
@@ -93,6 +94,47 @@ void install_gate(coordinator &c, gate_recorder &gate)
     c.on_gate([&gate](std::string_view fqn) { return gate.mint(fqn); });
 }
 
+// The injected RECEIVE gate the node would build over its shm member's
+// mint_receive_companion: it records every attach as (node_name, fqn) and returns a live
+// companion_receive whose erased owner increments/decrements a live count (modeling the
+// RAII handle that releases the ring on drop), or a declined (empty) owner when accept is
+// false (the broker-failure / no-shm path).
+struct receive_recorder
+{
+    std::vector<std::pair<std::string, std::string>> attached;
+    bool accept = true;
+    int  live   = 0;
+
+    // The RAII stand-in for the concrete shm_companion_consumer: ++live on construction,
+    // --live on destruction. The owner closure captures one by move and is NEVER called —
+    // dropping the owner (the coordinator's 1->0/peer-dead teardown) runs ~handle, exactly
+    // as the production owner drops the real ring-releasing handle.
+    struct handle
+    {
+        int *live;
+        explicit handle(int *l) : live(l) { ++*live; }
+        handle(const handle &) = delete;
+        handle(handle &&o) noexcept : live(o.live) { o.live = nullptr; }
+        ~handle() { if(live) --*live; }
+    };
+
+    companion_receive mint(std::string_view node_name, std::string_view fqn)
+    {
+        if(!accept)
+            return {};
+        attached.emplace_back(std::string{node_name}, std::string{fqn});
+        return {[h = handle{&live}]() mutable { (void)h; }};
+    }
+
+    [[nodiscard]] std::size_t attaches() const { return attached.size(); }
+};
+
+void install_receive_gate(coordinator &c, receive_recorder &gate)
+{
+    c.on_receive_gate([&gate](std::string_view node_name, std::string_view fqn)
+                      { return gate.mint(node_name, fqn); });
+}
+
 }
 
 TEST_CASE("shm.coordinator a co-host qualifying 0->1 mints THROUGH the gate, never a direct registry acquire",
@@ -105,7 +147,7 @@ TEST_CASE("shm.coordinator a co-host qualifying 0->1 mints THROUGH the gate, nev
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
-    c.on_edge("node-a", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
 
     REQUIRE(gate.mints() == 1);   // exactly one mint, routed through the gate
     REQUIRE(gate.live == 1);      // the companion is retained by the coordinator
@@ -120,7 +162,7 @@ TEST_CASE("shm.coordinator an off-host 0->1 mints NOTHING and keeps the wire", "
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
-    c.on_edge("node-a", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
 
     REQUIRE(gate.mints() == 0); // attempt_shm_upgrade false: no mint, the wire stays
 }
@@ -134,7 +176,7 @@ TEST_CASE("shm.coordinator a hint-less co-host 0->1 mints NOTHING", "[shm][coord
     install_gate(c, gate);
     // no set_topic_hint -> dispatch_hint::none -> shm_eligible false
 
-    c.on_edge("node-a", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
 
     REQUIRE(gate.mints() == 0);
 }
@@ -150,7 +192,7 @@ TEST_CASE("shm.coordinator a gate decline (broker failure) falls back to the wir
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::large);
 
-    c.on_edge("node-a", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
     // The policy returned true, but the mint declined — the coordinator holds nothing and
     // the pair falls back to the wire. The companion route returns nullptr for it.
     REQUIRE(gate.mints() == 0);
@@ -169,7 +211,7 @@ TEST_CASE("shm.coordinator the per-message companion route: a fitting message ri
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
-    c.on_edge("node-a", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
     REQUIRE(gate.mints() == 1);
 
     // A message at or under the cap routes to the companion ring; an over-cap message keeps
@@ -192,7 +234,7 @@ TEST_CASE("shm.coordinator a reliable_preserving companion carries every fitting
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
-    c.on_edge("node-a", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
     REQUIRE(c.companion_for("node-a", "alpha", 1) != nullptr);
     REQUIRE(c.companion_for("node-a", "alpha", 1u << 20) != nullptr);
 }
@@ -207,12 +249,12 @@ TEST_CASE("shm.coordinator the 1->0 edge drops the companion; intermediate edges
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::priority);
 
-    c.on_edge("node-a", "alpha", demand_transition::up);   // 0->1: mint
-    c.on_edge("node-a", "alpha", demand_transition::up);   // 1->2: no-op (already held)
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);   // 0->1: mint
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);   // 1->2: no-op (already held)
     REQUIRE(gate.mints() == 1);
     REQUIRE(gate.live == 1);
 
-    c.on_edge("node-a", "alpha", demand_transition::down); // 1->0: drop (the forwarder gates the count)
+    c.on_edge("node-a", "alpha", demand_transition::down, demand_role::publisher); // 1->0: drop (the forwarder gates the count)
     REQUIRE(gate.live == 0);                                // the companion ring released
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
@@ -227,12 +269,82 @@ TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that
     c.set_topic_hint("alpha", dispatch_hint::frequent);
     c.set_topic_hint("beta", dispatch_hint::large);
 
-    c.on_edge("node-a", "alpha", demand_transition::up);
-    c.on_edge("node-a", "beta", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
+    c.on_edge("node-a", "beta", demand_transition::up, demand_role::publisher);
     REQUIRE(gate.live == 2);
 
     c.on_peer_dead("node-a");
     REQUIRE(gate.live == 0); // both companion rings dropped on peer-dead
+    REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
+}
+
+TEST_CASE("shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive companion, not a send mint",
+          "[shm][coordinator]")
+{
+    // The receive lane (gap-closure): a subscriber-role edge routes THROUGH the receive gate
+    // (attach the co-host ring as a consumer) and NOT the send mint gate — a subscriber node
+    // never publishes the topic, so no send companion is minted. The companion route stays
+    // nullptr for it (it has no send channel); the wire send path is irrelevant on this side.
+    stub_registry reg;
+    reg.verdicts["node-a"] = true;
+    gate_recorder gate;
+    receive_recorder rgate;
+    coordinator c{reg};
+    install_gate(c, gate);
+    install_receive_gate(c, rgate);
+    c.set_topic_hint("alpha", dispatch_hint::frequent);
+
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber);
+
+    REQUIRE(rgate.attaches() == 1);                    // the receive companion attached
+    REQUIRE(rgate.live == 1);                          // and is retained by the coordinator
+    REQUIRE(gate.mints() == 0);                        // NO send companion on the subscriber side
+    REQUIRE(rgate.attached[0].first == "node-a");      // keyed by the peer node_name
+    REQUIRE(rgate.attached[0].second == "alpha");
+    REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr); // no send channel for a receive ring
+}
+
+TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and on peer-dead",
+          "[shm][coordinator]")
+{
+    // The receive lane mirrors the send lane's refcounted teardown: the 1->0 demand edge AND
+    // a peer-dead both drop the receive owner, running the handle dtor (clear sink, release
+    // ring). No leak, no double-free, no dangling drain registration.
+    stub_registry reg;
+    reg.verdicts["node-a"] = true;
+    receive_recorder rgate;
+    coordinator c{reg};
+    install_receive_gate(c, rgate);
+    c.set_topic_hint("alpha", dispatch_hint::frequent);
+    c.set_topic_hint("beta", dispatch_hint::large);
+
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber); // 1->2: no-op
+    REQUIRE(rgate.attaches() == 1);
+    REQUIRE(rgate.live == 1);
+
+    c.on_edge("node-a", "alpha", demand_transition::down, demand_role::subscriber); // 1->0: detach
+    REQUIRE(rgate.live == 0);
+
+    // A second topic, then peer-dead drops it too.
+    c.on_edge("node-a", "beta", demand_transition::up, demand_role::subscriber);
+    REQUIRE(rgate.live == 1);
+    c.on_peer_dead("node-a");
+    REQUIRE(rgate.live == 0);
+}
+
+TEST_CASE("shm.coordinator a subscriber edge with no receive gate keeps only the wire (no crash)",
+          "[shm][coordinator]")
+{
+    // A composition with no shm member installs no receive gate: a co-host subscriber edge is
+    // a no-op (the wire receive path stays), exactly as a no-mint-gate publisher edge is.
+    stub_registry reg;
+    reg.verdicts["node-a"] = true;
+    coordinator c{reg};
+    c.set_topic_hint("alpha", dispatch_hint::frequent);
+
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber);
+    c.on_edge("node-a", "alpha", demand_transition::down, demand_role::subscriber);
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
 
@@ -248,7 +360,7 @@ TEST_CASE("shm.coordinator the default policy auto-engages; an override can disa
         coordinator c{reg};
         install_gate(c, gate);
         c.set_topic_hint("alpha", dispatch_hint::frequent);
-        c.on_edge("node-a", "alpha", demand_transition::up);
+        c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
         REQUIRE(gate.mints() == 1);
     }
     // An override returning false disables the upgrade (the consumer-sovereign disable).
@@ -258,7 +370,7 @@ TEST_CASE("shm.coordinator the default policy auto-engages; an override can disa
         install_gate(c, gate);
         c.on_policy([](bool, dispatch_hint) { return false; });
         c.set_topic_hint("alpha", dispatch_hint::frequent);
-        c.on_edge("node-a", "alpha", demand_transition::up);
+        c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
         REQUIRE(gate.mints() == 0);
     }
 }
@@ -274,7 +386,7 @@ TEST_CASE("shm.coordinator the bilateral OR: a subscriber-side hint upgrades a h
     c.set_topic_hint("alpha", dispatch_hint::none);     // publisher: no hint
     c.set_topic_hint("alpha", dispatch_hint::frequent); // subscriber: a qualifying hint
 
-    c.on_edge("node-a", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
     REQUIRE(gate.mints() == 1); // the OR upgrades the pair
 }
 
@@ -293,21 +405,21 @@ TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the top
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
-    c.on_edge("node-a", "alpha", demand_transition::up);
-    c.on_edge("node-b", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
+    c.on_edge("node-b", "alpha", demand_transition::up, demand_role::publisher);
     REQUIRE(gate.mints() == 2);
 
     // node-a drops; node-b still holds alpha, so the hint must survive (a re-mint for a new
     // node-a 0->1 still upgrades).
-    c.on_edge("node-a", "alpha", demand_transition::down);
-    c.on_edge("node-a", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::down, demand_role::publisher);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
     REQUIRE(gate.mints() == 3); // the surviving hint re-upgraded the re-subscribe
 
     // Both drop: the last holder gone prunes the hint, so a later bare 0->1 (with no
     // re-record) does NOT upgrade — proving the prune fired.
-    c.on_edge("node-a", "alpha", demand_transition::down);
-    c.on_edge("node-b", "alpha", demand_transition::down);
-    c.on_edge("node-a", "alpha", demand_transition::up);
+    c.on_edge("node-a", "alpha", demand_transition::down, demand_role::publisher);
+    c.on_edge("node-b", "alpha", demand_transition::down, demand_role::publisher);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
     REQUIRE(gate.mints() == 3); // the pruned hint resolves to none: no upgrade
 }
 
@@ -327,13 +439,15 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
     ch.connect_to(sink.local_endpoint());
     forwarder::peer peer{ch, "node-a"};
 
-    std::vector<std::pair<std::string, demand_transition>> edges;
+    struct edge { std::string fqn; demand_transition dir; demand_role role; };
+    std::vector<edge> edges;
 
-    SECTION("with a hook installed, only the boundary crossings fire")
+    SECTION("with a hook installed, only the boundary crossings fire, carrying the subscriber role")
     {
         forwarder fwd{};
-        fwd.on_demand_transition([&edges](std::string_view, std::string_view fqn, demand_transition d) {
-            edges.emplace_back(std::string{fqn}, d);
+        fwd.on_demand_transition([&edges](std::string_view, std::string_view fqn, demand_transition d,
+                                          demand_role r) {
+            edges.push_back({std::string{fqn}, d, r});
         });
 
         REQUIRE(fwd.attach(peer, "alpha"));       // 0->1: up
@@ -343,8 +457,11 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
         ex.drain();
 
         REQUIRE(edges.size() == 2);
-        REQUIRE(edges[0].second == demand_transition::up);
-        REQUIRE(edges[1].second == demand_transition::down);
+        REQUIRE(edges[0].dir == demand_transition::up);
+        REQUIRE(edges[1].dir == demand_transition::down);
+        // attach/detach are the SUBSCRIBER side of the pair (the local node subscribed).
+        REQUIRE(edges[0].role == demand_role::subscriber);
+        REQUIRE(edges[1].role == demand_role::subscriber);
     }
 
     SECTION("with NO hook installed, both edges are a no-op (no crash, no emit)")

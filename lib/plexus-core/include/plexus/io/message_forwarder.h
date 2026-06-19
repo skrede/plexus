@@ -106,7 +106,9 @@ public:
         record_remote_topic(p.node_name, fqn, qos, type_id);
         send_subscribe(p.channel, fqn, hash, type_id, qos);
         emit_qos_change(qos_edge::accepted, hash, qos, rxo_verdict::compatible, type_id);
-        emit_demand_transition(p.node_name, fqn, demand_transition::up);
+        // The local node issued the subscribe: it is the SUBSCRIBER for this pair, so a
+        // co-host same-host upgrade DRAINS the companion ring into the receive path.
+        emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::subscriber);
         return true;
     }
 
@@ -169,7 +171,9 @@ public:
                                                .status = wire::subscribe_status::subscribed});
         send_control(p.channel, wire::msg_type::subscribe_response, resp);
         replay_if_latched(p, hash);
-        emit_demand_transition(p.node_name, fqn, demand_transition::up);
+        // A remote subscribe arrived: the local node is the PUBLISHER for this pair, so a
+        // co-host same-host upgrade mints the send companion the publish fan routes over.
+        emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::publisher);
         return true;
     }
 
@@ -419,7 +423,9 @@ public:
         send_control(p.channel, wire::msg_type::unsubscribe, req);
         emit_qos_change(qos_edge::unsubscribed, hash, subscriber_qos{}, rxo_verdict::compatible,
                         std::nullopt);
-        emit_demand_transition(p.node_name, fqn, demand_transition::down);
+        // The mirror of attach (subscriber role); the down-edge drops whichever lane the
+        // pair held — the coordinator keys teardown by (peer, fqn), not by role.
+        emit_demand_transition(p.node_name, fqn, demand_transition::down, demand_role::subscriber);
         return true;
     }
 
@@ -566,7 +572,8 @@ public:
     // already knows from its refcount gate — it gains no same_host, no acquire, no
     // transport. Absent = one predictable branch (no allocating observer list).
     void on_demand_transition(
-        plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition)> hook)
+        plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition,
+                                               demand_role)> hook)
     {
         m_on_demand_transition = std::move(hook);
     }
@@ -803,10 +810,11 @@ private:
             m_on_published(hash, fqn, view);
     }
 
-    void emit_demand_transition(std::string_view node_name, std::string_view fqn, demand_transition dir)
+    void emit_demand_transition(std::string_view node_name, std::string_view fqn,
+                                demand_transition dir, demand_role role)
     {
         if(m_on_demand_transition)
-            m_on_demand_transition(node_name, fqn, dir);
+            m_on_demand_transition(node_name, fqn, dir, role);
     }
 
     void emit_delivered(std::uint64_t hash, std::string_view fqn, const message_info &info,
@@ -858,7 +866,8 @@ private:
         m_companion_route;
     // The demand-transition emit slot (the coordinator's on_edge). Unset on a node with no
     // same-host upgrade coordinator, so the attach/detach gate fires one predictable branch.
-    plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition)>
+    plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition,
+                                           demand_role)>
         m_on_demand_transition;
 };
 

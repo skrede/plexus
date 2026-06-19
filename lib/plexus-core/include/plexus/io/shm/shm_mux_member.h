@@ -173,6 +173,40 @@ private:
     plexus::detail::move_only_function<void(wire::close_cause)>              m_on_protocol_close;
 };
 
+// The RAII receive lane over a co-host companion ring: it holds ONE request-direction
+// ring refcount and installs a consumer sink the registry's armed notifier drains framed
+// messages into (posted on the node executor — NO drain thread). It mirrors the send-side
+// shm_byte_channel lifecycle: construction acquires + bumps the ring, destruction clears
+// the sink BEFORE dropping the ring refcount (the disarm-before-destroy order), so a wake
+// in flight never delivers onto a torn-down sink and a release at 1->0 unmaps the ring.
+// Single-owner (the coordinator holds it by unique_ptr); non-copy/non-move (the captured
+// registry reference + the installed sink pin its address).
+template <typename Broker, typename Notifier>
+    requires region_broker<Broker> && notifier<Notifier>
+class shm_companion_consumer
+{
+public:
+    using registry_type = shm_topic_registry<Broker, Notifier>;
+
+    shm_companion_consumer(registry_type &registry, std::string fqn) noexcept
+        : m_registry(registry), m_fqn(std::move(fqn))
+    {
+    }
+
+    shm_companion_consumer(const shm_companion_consumer &) = delete;
+    shm_companion_consumer &operator=(const shm_companion_consumer &) = delete;
+
+    ~shm_companion_consumer()
+    {
+        m_registry.clear_consumer_sink(m_fqn, ring_direction::request);
+        m_registry.release(m_fqn, ring_direction::request);
+    }
+
+private:
+    registry_type &m_registry;
+    std::string    m_fqn;
+};
+
 // The shared-memory mux member: the SECOND same-host (local-tier) transport, joining
 // AF_UNIX through the multiplexer's multi-member-per-tier seam. It satisfies mux_member
 // -- channel_type + the "shm" scheme + the local tier -- so the core multiplexer routes
@@ -286,7 +320,38 @@ public:
     // its destruction). nullptr on a broker failure: the coordinator then keeps the wire.
     [[nodiscard]] std::unique_ptr<channel_type> mint_companion(const std::string &fqn)
     {
-        return open(endpoint{"shm", fqn});
+        // join_live, not reclaim_stale: the co-host subscriber may have minted this same
+        // companion ring first (its receive lane), so a clobbering unlink would split the
+        // pair onto two rings. Attach-first when it exists, mint when it does not.
+        return open(endpoint{"shm", fqn}, acquire_mode::join_live);
+    }
+
+    // The receive half of the companion model: attach the request-direction ring as a
+    // CONSUMER for a co-host subscriber and route every drained framed message to on_frame.
+    // It acquires + bumps the ring through the SAME registry path the send companion uses
+    // (so a co-host pair shares ONE ring — the publisher writes, this drains), then installs
+    // on_frame as the entry's consumer sink (the armed notifier delivers to it posted on the
+    // node executor; any already-published message is delivered immediately so nothing is
+    // lost on a late attach). Returns an RAII handle whose destruction clears the sink and
+    // releases the ring (1->0 unmaps). nullptr on a broker failure: the coordinator then has
+    // only the wire receive path (the fail-safe). The framed bytes are header-on (the wire
+    // frame the publisher's send wrote), so the caller feeds them into the SAME receive entry
+    // the wire session feeds.
+    [[nodiscard]] std::unique_ptr<shm_companion_consumer<Broker, Notifier>>
+    mint_receive_companion(const std::string &fqn,
+                           plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame)
+    {
+        const resolved_geometry g = resolve(fqn, ring_direction::request);
+        if(m_registry.acquire(fqn, ring_direction::request, g.max_payload, g.mode,
+                              g.consumer_capacity, acquire_mode::join_live) == acquire_result::failed)
+            return nullptr;
+        auto handle = std::make_unique<shm_companion_consumer<Broker, Notifier>>(m_registry, fqn);
+        m_registry.set_consumer_sink(
+            fqn, ring_direction::request,
+            [cb = std::move(on_frame)](::plexus::wire_bytes<shm_slot_owner> wb) mutable {
+                cb(std::span<const std::byte>{wb.data(), wb.size()});
+            });
+        return handle;
     }
 
     registry_type &registry() noexcept { return m_registry; }
@@ -368,14 +433,15 @@ private:
     // probe already holds it (channel_for is then already non-null -- reuse that held
     // reference, so the refcount stays at one held by the minted channel). Returns nullptr
     // on a broker failure. ep.address is the fqn the deterministic region name derives from.
-    std::unique_ptr<channel_type> open(const endpoint &ep)
+    std::unique_ptr<channel_type> open(const endpoint &ep,
+                                       acquire_mode amode = acquire_mode::reclaim_stale)
     {
         shm_channel<Notifier> *ch = m_registry.channel_for(ep.address, ring_direction::request);
         if(ch == nullptr) // no probe held it: acquire fresh
         {
             const resolved_geometry g = resolve(ep.address, ring_direction::request);
             if(m_registry.acquire(ep.address, ring_direction::request, g.max_payload, g.mode,
-                                  g.consumer_capacity) == acquire_result::failed)
+                                  g.consumer_capacity, amode) == acquire_result::failed)
                 return nullptr;
             ch = m_registry.channel_for(ep.address, ring_direction::request);
         }

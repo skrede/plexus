@@ -33,6 +33,20 @@ struct companion_mint
     std::uint64_t            slot_capacity = 0;
 };
 
+// What the node's receive gate hands back for a co-host SUBSCRIBER (peer, topic): a type-
+// erased OWNER of the live receive companion. The owner is never called — it exists solely
+// to hold the concrete shm_companion_consumer RAII handle by move, so dropping it (on
+// 1->0 / peer-dead) runs the handle's destructor (clear the consumer sink, release the
+// ring). An empty owner signals the gate DECLINED (a broker failure, or no shm member) — the
+// pair then has only the wire receive path. This keeps the coordinator decoupled from the
+// concrete member's handle type (the same erasure discipline companion_mint uses for send).
+struct companion_receive
+{
+    plexus::detail::move_only_function<void()> owner;
+
+    [[nodiscard]] bool engaged() const noexcept { return static_cast<bool>(owner); }
+};
+
 // The per-(peer, topic) medium-selection coordinator: the JOIN of three layers no
 // existing type sees — peer locality (the session's same_host verdict), the per-(peer,
 // fqn) demand 0->1/1->0 transition (the forwarder), and medium provisioning (the
@@ -70,6 +84,20 @@ public:
         m_mint = std::move(mint);
     }
 
+    // The receive-companion gate the SUBSCRIBER role routes THROUGH — installed by the node
+    // only when the composition carries an shm member (else the subscriber keeps only the
+    // wire receive path). It attaches the co-host request-direction ring as a consumer and
+    // routes drained framed messages into the receive path for (node_name, fqn), returning
+    // a type-erased owner of the live receive companion (empty = declined). The coordinator
+    // RETAINS the owner; dropping it (on 1->0 / peer-dead) tears the receive lane down. The
+    // node_name rides the mint so the node wires the drained frames into the matching peer
+    // session's receive entry (the same one the wire feeds).
+    void on_receive_gate(
+        plexus::detail::move_only_function<companion_receive(std::string_view, std::string_view)> mint)
+    {
+        m_receive_mint = std::move(mint);
+    }
+
     // The required-with-default upgrade-policy hook: when unset the default IS
     // attempt_shm_upgrade(same_host, own_hint). An operator-supplied hook overrides it
     // (it can only DECLINE — attempt_shm_upgrade still gates on same_host inside it).
@@ -88,11 +116,16 @@ public:
             it->second = it->second | hint;
     }
 
-    // The consume body installed into the forwarder's on_demand_transition.
-    void on_edge(std::string_view node_name, std::string_view fqn, demand_transition dir)
+    // The consume body installed into the forwarder's on_demand_transition. The role
+    // decides which lane the up-edge engages: a SUBSCRIBER edge attaches the receive
+    // companion (drain the co-host ring into the receive path), a PUBLISHER edge mints the
+    // send companion (the publish fan routes fitting messages over it). The down-edge drops
+    // whichever lane this (peer, fqn) held — both teardown paths are keyed the same way.
+    void on_edge(std::string_view node_name, std::string_view fqn, demand_transition dir,
+                 demand_role role)
     {
         if(dir == demand_transition::up)
-            on_up(node_name, fqn);
+            on_up(node_name, fqn, role);
         else
             on_down(node_name, fqn);
     }
@@ -121,26 +154,65 @@ public:
     }
 
 private:
+    // One held same-host lane for a (peer, fqn). A PUBLISHER edge fills `channel` (the send
+    // companion the publish fan routes over) + its {mode, slot_capacity}; a SUBSCRIBER edge
+    // fills `receive` (the type-erased owner of the live receive companion). Exactly one is
+    // engaged per record — the role at the up-edge decides — and dropping the record tears
+    // down whichever it holds (the send channel dtor / the receive owner dtor releases the
+    // ring). The two lanes are keyed identically, so find_ring/on_down treat them uniformly.
     struct ring
     {
         std::string              fqn;
-        std::unique_ptr<Channel> channel;
-        ring_geometry_mode       mode;
-        std::uint64_t            slot_capacity;
+        std::unique_ptr<Channel> channel;       // the send companion (publisher role)
+        ring_geometry_mode       mode          = ring_geometry_mode::reliable_preserving;
+        std::uint64_t            slot_capacity = 0;
+        companion_receive        receive;        // the receive companion owner (subscriber role)
     };
     using ring_list = std::vector<ring>;
 
-    void on_up(std::string_view node_name, std::string_view fqn)
+    void on_up(std::string_view node_name, std::string_view fqn, demand_role role)
     {
-        if(!m_mint || find_ring(node_name, fqn) != nullptr)
+        if(find_ring(node_name, fqn) != nullptr)
             return;
         if(!run_policy(m_registry.same_host_for(node_name), hint_for(fqn)))
+            return;
+        if(role == demand_role::subscriber)
+            attach_receive(node_name, fqn);
+        else
+            mint_send(node_name, fqn);
+    }
+
+    // The subscriber lane: attach the co-host ring as a consumer (drain into the receive
+    // path) through the receive gate. A declined gate (broker failure, or no shm member)
+    // keeps the wire receive path — nothing is retained.
+    void attach_receive(std::string_view node_name, std::string_view fqn)
+    {
+        if(!m_receive_mint)
+            return;
+        companion_receive received = m_receive_mint(node_name, fqn);
+        if(!received.engaged())
+            return;
+        ring r;
+        r.fqn     = std::string{fqn};
+        r.receive = std::move(received);
+        m_held[std::string{node_name}].push_back(std::move(r));
+    }
+
+    // The publisher lane: mint the send companion through the mint gate (the publish fan's
+    // per-message route consults it). A declined gate keeps the wire send path.
+    void mint_send(std::string_view node_name, std::string_view fqn)
+    {
+        if(!m_mint)
             return;
         companion_mint<Channel> minted = m_mint(fqn);
         if(!minted.channel)
             return; // gate declined (broker failure): the wire stays
-        m_held[std::string{node_name}].push_back(
-            ring{std::string{fqn}, std::move(minted.channel), minted.mode, minted.slot_capacity});
+        ring r;
+        r.fqn           = std::string{fqn};
+        r.channel       = std::move(minted.channel);
+        r.mode          = minted.mode;
+        r.slot_capacity = minted.slot_capacity;
+        m_held[std::string{node_name}].push_back(std::move(r));
     }
 
     void on_down(std::string_view node_name, std::string_view fqn)
@@ -193,6 +265,7 @@ private:
     std::unordered_map<std::string, ring_list> m_held;
     std::unordered_map<std::string, dispatch_hint> m_hints;
     plexus::detail::move_only_function<companion_mint<Channel>(std::string_view)> m_mint;
+    plexus::detail::move_only_function<companion_receive(std::string_view, std::string_view)> m_receive_mint;
     plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
 };
 
