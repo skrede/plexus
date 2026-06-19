@@ -1,4 +1,6 @@
-// The security attach-gate bridge oracle: two peer_sessions over the inproc backend
+// over-limit: one cohesive attach-gate matrix; the policy/posture/install-hook cells all drive the
+// one shared two-peer_session bridge + security-event harness, so splitting them scatters that
+// shared fixture The security attach-gate bridge oracle: two peer_sessions over the inproc backend
 // drive the end-to-end attach surface this wave wires — the dedicated security_event,
 // the lifecycle rejected edge, the AEAD install hook on a successful attach, the
 // stream-tamper teardown, and the auth-only+datagram posture refusal. No OpenSSL: the

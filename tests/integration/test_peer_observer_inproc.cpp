@@ -1,7 +1,9 @@
-// The deterministic peer-observer behavior oracle on the manual virtual clock. A
-// recording observer (shared header) is registered on a real routing_engine and the
-// full lifecycle + readiness matrix is forced over the inproc backend, looped where
-// behavioral with the established proven == k_iterations idiom. Every edge is POSTED
+// over-limit: one cohesive observer lifecycle+readiness matrix; the edge cells all assert against
+// the one shared recording-observer + routing_engine harness on the single manual clock, so
+// splitting them scatters that shared fixture The deterministic peer-observer behavior oracle on
+// the manual virtual clock. A recording observer (shared header) is registered on a real
+// routing_engine and the full lifecycle + readiness matrix is forced over the inproc backend,
+// looped where behavioral with the established proven == k_iterations idiom. Every edge is POSTED
 // on the executor, so each assertion is made AFTER a drain. The suite forces the
 // named failure modes: connected-vs-reconnected discrimination across a drop+redial,
 // disconnected only on an established drop, dead on driver surrender, rejected with

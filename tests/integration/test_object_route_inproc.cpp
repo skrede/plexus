@@ -1,11 +1,13 @@
-// The process-tier object-route oracle on the manual virtual clock. An object
-// published on one engine's forwarder (publish_object) reaches the peer engine's
-// object route in the SAME process with zero serialization: the route observes the
-// SAME slot object pointer the publisher handed off (the address-identity witness at
-// the engine seam). The route is the node-shared on_object_route threaded through the
-// session_build_context, so a forced reconnect rebuild preserves it with no
-// re-install. Every delivered reference is released, so slot refs return to zero.
-// Deterministic inproc Policy on the manual clock — no backend, no socket.
+// over-limit: one cohesive process-tier object-route matrix; the zero-serialization,
+// unresolved-hash, and reconnect-survival cells share the one two-engine object-route harness, so
+// splitting them scatters that shared fixture The process-tier object-route oracle on the manual
+// virtual clock. An object published on one engine's forwarder (publish_object) reaches the peer
+// engine's object route in the SAME process with zero serialization: the route observes the SAME
+// slot object pointer the publisher handed off (the address-identity witness at the engine seam).
+// The route is the node-shared on_object_route threaded through the session_build_context, so a
+// forced reconnect rebuild preserves it with no re-install. Every delivered reference is released,
+// so slot refs return to zero. Deterministic inproc Policy on the manual clock — no backend, no
+// socket.
 
 #include "plexus/io/known_peers.h"
 #include "plexus/io/routing_engine.h"

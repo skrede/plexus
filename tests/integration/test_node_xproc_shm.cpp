@@ -1,3 +1,6 @@
+// over-limit: one cohesive cross-process shared-memory proof; the forked same_host_transports
+// rendezvous + medium assertion is one end-to-end pipeline over a shared /dev/shm region, so it
+// cannot split without scattering that cross-process state
 #include "plexus/asio/same_host_transports.h"
 
 #include "plexus/node.h"

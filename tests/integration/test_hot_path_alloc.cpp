@@ -1,3 +1,6 @@
+// over-limit: one cohesive zero-alloc hot-path matrix; every cell snapshots the one TU-local global
+// new/delete counter (replaceable at most once per binary) around a shared steady-state loop, so
+// the cells cannot split across TUs without scattering that single allocation-counter contract.
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/message_info.h"
 

@@ -1,10 +1,12 @@
-// The downgrade + posture-mismatch refusal oracle: two peer_sessions
-// over the inproc backend prove a forced cipher/version downgrade is refused with the
-// distinguishing downgrade_refused event in BOTH directions, and a secured-vs-plain
-// posture mismatch is refused with posture_mismatch in BOTH directions — fail-closed,
-// no silent plaintext fallback. No OpenSSL: a transcript-aware test attach_policy stands
-// in for the transcript-bound proof recompute (a tampered offer changes the digest, so
-// the policy refuses), keeping the bridge logic in the plexus::plexus-only core.
+// over-limit: one cohesive downgrade/posture-mismatch refusal matrix; the both-ways refusal cells
+// share the one transcript-bound two-peer_session fail-closed harness, so splitting them scatters
+// that shared fixture The downgrade + posture-mismatch refusal oracle: two peer_sessions over the
+// inproc backend prove a forced cipher/version downgrade is refused with the distinguishing
+// downgrade_refused event in BOTH directions, and a secured-vs-plain posture mismatch is refused
+// with posture_mismatch in BOTH directions — fail-closed, no silent plaintext fallback. No OpenSSL:
+// a transcript-aware test attach_policy stands in for the transcript-bound proof recompute (a
+// tampered offer changes the digest, so the policy refuses), keeping the bridge logic in the
+// plexus::plexus-only core.
 
 #include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"

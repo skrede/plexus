@@ -1,8 +1,10 @@
-// The per-fragment AEAD composition proof: the per-fragment seal composes with the
-// fragmenter (io::split) and the reassembler END TO END, in the shape the code already
-// has — fragment FIRST, then seal each fragment as its own datagram (per-fragment auth;
-// per-message and hybrid are rejected, never re-layered here). A large (>= 1 MiB) message
-// fragments into sealed datagrams that round-trip byte-identically through
+// over-limit: one cohesive AEAD-over-fragment composition matrix; the in-order, reorder, and
+// forged-tag cells share the one seal+split+reassembler harness on the inproc test clock, so
+// splitting them scatters that shared fixture The per-fragment AEAD composition proof: the
+// per-fragment seal composes with the fragmenter (io::split) and the reassembler END TO END, in the
+// shape the code already has — fragment FIRST, then seal each fragment as its own datagram
+// (per-fragment auth; per-message and hybrid are rejected, never re-layered here). A large (>= 1
+// MiB) message fragments into sealed datagrams that round-trip byte-identically through
 // datagram_authenticated_channel + reassembler under no loss AND under fragment-scale
 // reorder (the deterministic loss/reorder scheduler), the swept anti-replay window
 // (k_anti_replay_window_bits) admitting the reordered fragments. A single forged/tampered

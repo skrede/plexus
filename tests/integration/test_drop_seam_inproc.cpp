@@ -1,6 +1,8 @@
-// The deterministic inproc drop+surrender oracle on the manual virtual clock: it
-// lifts the established-session transport-drop detection out of the harness and
-// into the production receive path, and exercises the surrender->dead query the
+// over-limit: one cohesive inproc drop+surrender matrix; the drop-cause scenarios all drive the one
+// shared two-node link/observer harness on the single manual virtual clock, so splitting them
+// scatters that shared fixture and clock state The deterministic inproc drop+surrender oracle on
+// the manual virtual clock: it lifts the established-session transport-drop detection out of the
+// harness and into the production receive path, and exercises the surrender->dead query the
 // registry now exposes. Two (and, for the surrender leg, three) engines over one
 // inproc bus, each owning its forwarders, its peer-session registry, its known-
 // peers table and the dial-trigger hook. Every drop is induced by a REAL channel

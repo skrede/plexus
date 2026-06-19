@@ -1,6 +1,8 @@
-// The deterministic N>=3-peer concurrent-drop oracle on the manual virtual clock:
-// one dialer engine A holding N established peer sessions (B,C,D,...), each peer its
-// own engine over the shared inproc bus, all on a fixed seed. It widens the per-slot
+// over-limit: one cohesive N-peer concurrent-drop matrix; the survivor-isolation and surrender
+// cells drive the one shared multi-peer dialer harness on the single manual clock, so splitting
+// them scatters that shared fixture The deterministic N>=3-peer concurrent-drop oracle on the
+// manual virtual clock: one dialer engine A holding N established peer sessions (B,C,D,...), each
+// peer its own engine over the shared inproc bus, all on a fixed seed. It widens the per-slot
 // isolation proof to the SET: several established sessions drop AT ONCE (every remote
 // accepted end is closed before the backoff fires — a single-FIFO bus makes that a
 // matter of enqueueing all the closes, THEN draining once), and the registry must

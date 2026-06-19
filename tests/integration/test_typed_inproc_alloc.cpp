@@ -1,7 +1,10 @@
-// The standing alloc-free gate for the typed in-process fast path: a warmed steady-state
-// loop of borrow -> publish(loan&&) -> drain -> typed callback must allocate ZERO bytes.
-// The fast path is the zero-serialization lane (the loan pool produces a slot, the object
-// rides the bus by reference, the codec's encode is never invoked), so the only heap the
+// over-limit: one cohesive typed zero-alloc matrix; every cell snapshots the one TU-local global
+// new/delete counter (replaceable at most once per binary) around a shared warmed
+// borrow->publish->drain loop, so the cells cannot split across TUs without scattering that single
+// allocation-counter contract. The standing alloc-free gate for the typed in-process fast path: a
+// warmed steady-state loop of borrow -> publish(loan&&) -> drain -> typed callback must allocate
+// ZERO bytes. The fast path is the zero-serialization lane (the loan pool produces a slot, the
+// object rides the bus by reference, the codec's encode is never invoked), so the only heap the
 // steady loop could touch is the bus queue or the demux — both of which must be alloc-free
 // after warm-up for the determinism invariant to hold. A forced-fallback variant documents
 // (does NOT gate to zero) the serialize path's allocation behavior for contrast.
