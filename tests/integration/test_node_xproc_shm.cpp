@@ -202,6 +202,8 @@ bool ring_carries(const std::string &fqn, std::span<const std::byte> needle,
         }
         else if(st == pio::loan_status::congested)
             ++cursor;
+        else if(st == pio::loan_status::lagged)
+            cursor = out.position; // lapped past a full ring: O(1) re-sync to the oldest valid slot
     }
     return false;
 }
