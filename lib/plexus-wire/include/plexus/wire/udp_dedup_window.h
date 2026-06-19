@@ -50,28 +50,17 @@ public:
 
     [[nodiscard]] outcome admit(seq_t seq) noexcept
     {
-        // Forward distance mod 2^16: in (0, half_space) -> seq is AHEAD (newer,
-        // transparently including a 65535 -> 0 wrap, a forward step of 1); in
-        // [half_space, 2^16) -> seq is BEHIND (older). The (1<<16) >= 4*depth_max
-        // invariant guarantees an in-window old datagram (delta < depth <= 32)
-        // can never be mistaken for a forward jump (which needs distance <
-        // half_space), so the wrap needs no reset.
+        // Forward distance mod 2^16: in (0, half_space) -> seq is AHEAD (newer, transparently
+        // including a 65535 -> 0 wrap); in [half_space, 2^16) -> seq is BEHIND. The
+        // (1<<16) >= 4*depth_max invariant guarantees an in-window old datagram can never be
+        // mistaken for a forward jump, so the wrap needs no reset.
         auto adv = static_cast<seq_t>(seq - m_high_water);
         if(adv != 0u && adv < half_space)
-        {
-            if(adv >= 64u)
-                m_bitmap = 0u;
-            else
-                m_bitmap <<= adv;
-            m_bitmap |= 1ull;
-            m_high_water = seq;
-            return outcome::fresh;
-        }
+            return advance_to(seq, adv);
 
         auto delta = static_cast<std::size_t>(static_cast<seq_t>(m_high_water - seq));
         if(delta >= m_depth)
             return outcome::too_old;
-
         auto mask = 1ull << delta;
         if(m_bitmap & mask)
             return outcome::duplicate;
@@ -79,6 +68,18 @@ public:
         return outcome::fresh;
     }
 
+private:
+    // Shift the seen-bitmap by the forward advance (clearing it on a jump past the bitmap width),
+    // set the just-seen bit, and re-anchor the high-water mark. The newest datagram is fresh.
+    [[nodiscard]] outcome advance_to(seq_t seq, seq_t adv) noexcept
+    {
+        m_bitmap = adv >= 64u ? 0u : (m_bitmap << adv);
+        m_bitmap |= 1ull;
+        m_high_water = seq;
+        return outcome::fresh;
+    }
+
+public:
     void reset() noexcept
     {
         m_high_water = 0;

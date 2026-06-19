@@ -46,6 +46,19 @@ shm_error sanitize_region_name(std::string_view logical, std::string &out_canoni
     return shm_error::ok;
 }
 
+// Open the region O_CREAT|O_EXCL, reclaiming a stale name once when the caller opted in (the
+// single-owner ring reclaims a crashed creator's orphan). Returns the fd, or -1 with errno set.
+int open_create_excl(const char *canonical, mode_t perms, bool unlink_stale)
+{
+    int fd = ::shm_open(canonical, O_CREAT | O_EXCL | O_RDWR, perms);
+    if(fd < 0 && errno == EEXIST && unlink_stale)
+    {
+        ::shm_unlink(canonical);
+        fd = ::shm_open(canonical, O_CREAT | O_EXCL | O_RDWR, perms);
+    }
+    return fd;
+}
+
 shm_error map_errno(int e)
 {
     switch(e)
@@ -88,6 +101,49 @@ plexus::io::shm::region_status to_status(shm_error e)
 
 }
 
+plexus::io::shm::region_status posix_shm_region_broker::finish_create(int fd, std::size_t length,
+                                                                      std::string    canonical,
+                                                                      region_handle &out)
+{
+    if(::ftruncate(fd, static_cast<off_t>(length)) != 0)
+    {
+        const int e = errno;
+        ::close(fd);
+        ::shm_unlink(canonical.c_str());
+        return to_status(map_errno(e));
+    }
+    void *base = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if(base == MAP_FAILED)
+    {
+        ::close(fd);
+        ::shm_unlink(canonical.c_str());
+        return to_status(shm_error::map_failed);
+    }
+    out = region_handle{fd, base, length, std::move(canonical), true};
+    return plexus::io::shm::region_status::ok;
+}
+
+plexus::io::shm::region_status posix_shm_region_broker::finish_attach(int fd, std::string canonical,
+                                                                      region_handle &out)
+{
+    struct stat st{};
+    if(::fstat(fd, &st) != 0)
+    {
+        const int e = errno;
+        ::close(fd);
+        return to_status(map_errno(e));
+    }
+    const auto length = static_cast<std::size_t>(st.st_size);
+    void      *base   = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if(base == MAP_FAILED)
+    {
+        ::close(fd);
+        return to_status(shm_error::map_failed);
+    }
+    out = region_handle{fd, base, length, std::move(canonical), false};
+    return plexus::io::shm::region_status::ok;
+}
+
 plexus::io::shm::region_status
 posix_shm_region_broker::create(std::string_view name, std::size_t bytes,
                                 const plexus::io::shm::create_options &opts, region_handle &out)
@@ -106,36 +162,11 @@ posix_shm_region_broker::create(std::string_view name, std::size_t bytes,
     if(const auto status = sanitize_region_name(name, canonical); status != shm_error::ok)
         return to_status(status);
 
-    int fd = ::shm_open(canonical.c_str(), O_CREAT | O_EXCL | O_RDWR,
-                        static_cast<mode_t>(opts.perms));
-    if(fd < 0 && errno == EEXIST && opts.unlink_stale_on_create)
-    {
-        ::shm_unlink(canonical.c_str());
-        fd = ::shm_open(canonical.c_str(), O_CREAT | O_EXCL | O_RDWR,
-                        static_cast<mode_t>(opts.perms));
-    }
+    const int fd = open_create_excl(canonical.c_str(), static_cast<mode_t>(opts.perms),
+                                    opts.unlink_stale_on_create);
     if(fd < 0)
         return to_status(map_errno(errno));
-
-    const std::size_t length = page_round_up(bytes);
-    if(::ftruncate(fd, static_cast<off_t>(length)) != 0)
-    {
-        const int e = errno;
-        ::close(fd);
-        ::shm_unlink(canonical.c_str());
-        return to_status(map_errno(e));
-    }
-
-    void *base = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if(base == MAP_FAILED)
-    {
-        ::close(fd);
-        ::shm_unlink(canonical.c_str());
-        return to_status(shm_error::map_failed);
-    }
-
-    out = region_handle{fd, base, length, std::move(canonical), true};
-    return plexus::io::shm::region_status::ok;
+    return finish_create(fd, page_round_up(bytes), std::move(canonical), out);
 }
 
 plexus::io::shm::region_status posix_shm_region_broker::attach(std::string_view name,
@@ -153,25 +184,7 @@ plexus::io::shm::region_status posix_shm_region_broker::attach(std::string_view 
     const int fd = ::shm_open(canonical.c_str(), O_RDWR, 0);
     if(fd < 0)
         return to_status(map_errno(errno));
-
-    struct stat st{};
-    if(::fstat(fd, &st) != 0)
-    {
-        const int e = errno;
-        ::close(fd);
-        return to_status(map_errno(e));
-    }
-
-    const auto length = static_cast<std::size_t>(st.st_size);
-    void      *base   = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if(base == MAP_FAILED)
-    {
-        ::close(fd);
-        return to_status(shm_error::map_failed);
-    }
-
-    out = region_handle{fd, base, length, std::move(canonical), false};
-    return plexus::io::shm::region_status::ok;
+    return finish_attach(fd, std::move(canonical), out);
 }
 
 void posix_shm_region_broker::set_attach_policy(

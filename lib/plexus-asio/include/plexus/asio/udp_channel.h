@@ -19,6 +19,7 @@
 #include "plexus/io/detail/udp_reliable_arq.h"
 #include "plexus/io/detail/udp_handshake_frame.h"
 #include "plexus/io/detail/udp_backpressure_queue.h"
+#include "plexus/asio/detail/udp_channel_io.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -37,33 +38,18 @@
 
 namespace plexus::asio {
 
-// The connectionless UDP byte_channel: plexus's first NON-STREAM channel. Unlike
-// every stream channel (one kernel socket per connection) a udp_channel owns NO
-// socket — it is a per-peer facade over the ONE router-owned udp_server, storing the
-// destination endpoint plus the per-peer envelope/dedup state. send() wraps the
-// frame in a udp_envelope (seq++, kind=best_effort) and calls server.send_to(dest);
-// inbound is PUSHED in by the transport demux (deliver_inbound), not pulled by a
-// self-run recv loop. The seven byte_channel verbs hold without reshaping the
-// concept (the static_assert at file bottom is the load-bearing D2 proof).
+// over-limit: one cohesive UDP byte_channel; the public verbs + the per-peer envelope/dedup/ARQ/
+// reassembly/backpressure state are one whole (the byte_channel concept proof at file bottom
+// binds the surface together), so splitting the public face scatters that shared state — the
+// send/recv path + ARQ glue is already extracted to detail/udp_channel_io.h.
 //
-// DIVERGENCE from the stream channels: no stream_inbound / frame_reassembler /
-// slowloris timer (a datagram is a complete message — nothing to reassemble, no
-// partial-frame stall to detect). The channel owns NO write queue (a datagram send is
-// one-shot at the channel face); the shared udp_server owns the serial outbound queue
-// that keeps each in-flight datagram's bytes alive across its async_send_to, so the
-// channel hands send_to a scratch buffer it may reuse immediately on return.
-// on_protocol_close is STORED and NEVER fired: the byte_channel concept
-// licenses this for a non-stream channel ("no partial frame is expressible without a
-// byte stream", byte_channel.h:43-46) — a malformed datagram is simply dropped.
-//
-// Oversize: a frame whose enveloped size exceeds max_payload is FRAGMENTED across
-// numbered datagrams and reassembled by the peer; only a frame beyond the bounded
-// max-message size is REJECTED at publish through on_error(message_too_large), never
-// silently dropped — the channel stays open and the publisher learns it will not send.
-//
-// The reliable_arq kind is a recv-side hook only (the data ARQ is a later
-// block); a kind=1 datagram is handed to m_on_reliable, which the transport leaves
-// unset here so such datagrams are dropped until the ARQ engine is wired.
+// The connectionless UDP byte_channel: plexus's first NON-STREAM channel. A udp_channel owns NO
+// socket — it is a per-peer facade over the ONE router-owned udp_server, storing the destination
+// endpoint plus the per-peer envelope/dedup state. send() wraps the frame in a udp_envelope and
+// calls server.send_to(dest); inbound is PUSHED in by the transport demux (deliver_inbound). A
+// frame past max_payload is FRAGMENTED across numbered datagrams; only a frame past the bounded
+// max-message size is REJECTED at publish. on_protocol_close is STORED and NEVER fired (the
+// byte_channel concept licenses this for a non-stream channel — a malformed datagram is dropped).
 class udp_channel
 {
 public:
@@ -172,7 +158,7 @@ public:
         if(!m_open)
             return;
         if(frame.size() + wire::udp_envelope_overhead > m_max_payload)
-            return send_best_effort_large(frame);
+            return detail::send_best_effort_large(*this, frame);
         wire::wrap_udp_into(m_send_scratch, wire::udp_envelope_kind::best_effort, m_out_seq++,
                             frame);
         m_server.send_standalone_to(m_send_scratch,
@@ -263,12 +249,12 @@ public:
         if(!m_open)
             return submit_result::window_full;
         if(payload.size() + wire::udp_envelope_overhead + 1 > m_max_payload)
-            return send_reliable_large(payload);
-        ensure_arq();
+            return detail::send_reliable_large(*this, payload);
+        detail::ensure_arq(*this);
         const auto r = m_arq->submit(payload);
         if(r == submit_result::admitted)
             return r;
-        return on_window_full(payload, /*fragmented=*/false); // block: enqueue/drain; drop: shed
+        return detail::on_window_full(*this, payload, /*fragmented=*/false);
     }
 
     // The reliable-ARQ recv hook (kind=1). The data ARQ is wired here: a kind=1 datagram
@@ -284,30 +270,11 @@ public:
     // Called BY the transport demux on each datagram for this peer — NOT a self-run
     // recv loop (the channel owns no socket). Strip the envelope, dedup best_effort,
     // post the inner frame. A malformed datagram is dropped (no on_protocol_close).
+    // Called BY the transport demux on each datagram for this peer (the channel owns no socket).
+    // The strip/dedup/route body is relocated to detail::deliver_inbound.
     void deliver_inbound(std::span<const std::byte> datagram)
     {
-        auto dec = wire::unwrap_udp(datagram);
-        if(!dec)
-            return; // malformed: drop, never on_protocol_close
-        if(dec->kind == wire::udp_envelope_kind::best_effort)
-        {
-            if(m_dedup.admit(dec->seq) != wire::udp_dedup_window::outcome::fresh)
-                return; // duplicate / too_old: drop
-            if(dec->fragmented)
-                return feed_fragment(dec->frame); // best_effort fragment -> reassembler
-            post_on_data(dec->frame);
-        }
-        else if(m_mode == io::detail::udp_channel_mode::reliable_datagram)
-        {
-            // The FRAGMENTED bit rides the ARQ segment into the reorder buffer slot and is
-            // released with the in-order payload — bound to acceptance, so a forged or
-            // out-of-window segment that the buffer rejects leaves no per-seq residue.
-            deliver_reliable(dec->seq, dec->fragmented, dec->frame);
-        }
-        // else: a kind=1 datagram on a best_effort channel is not expected — DROP it.
-        // The source endpoint is not trusted as identity, so routing it to the reliable
-        // path would let a spoofed datagram spin up an unsolicited ARQ engine on a
-        // fire-and-forget channel. Mode, not envelope kind alone, gates the engine.
+        detail::deliver_inbound(*this, datagram);
     }
 
     // The stable per-construction id the egress scheduler keys its band map on (read via a
@@ -335,254 +302,41 @@ public:
     }
 
 private:
-    void reject_oversize()
-    {
-        if(m_on_error)
-            m_on_error(io::io_error::message_too_large);
-    }
-
-    // A payload past the per-datagram budget is SPLIT across numbered datagrams rather
-    // than rejected — fragmentation carries the large message. A payload beyond the
-    // bounded max-MESSAGE size is still rejected (the reassembler's hard ceiling), so the
-    // oversize-reject path stays for the genuinely-too-big message, not the merely-large one.
-    [[nodiscard]] bool exceeds_max_message(std::size_t size) const noexcept
-    {
-        return size > m_max_message_bytes;
-    }
-
-    // best_effort split: each fragment is one FRAGMENTED-bit envelope carrying the wire
-    // sub-header + slice, sent fire-and-forget. Any lost fragment leaves the message
-    // incomplete; the peer's per-message reassembly timeout drops the WHOLE message.
-    void send_best_effort_large(std::span<const std::byte> frame)
-    {
-        if(exceeds_max_message(frame.size()))
-            return reject_oversize();
-        const std::uint16_t msg_id = m_out_msg_id++;
-        io::fragment_sink   sink   = [this, msg_id](std::uint32_t idx, std::uint32_t cnt,
-                                                    std::span<const std::byte> slice)
-        {
-            wire::wrap_udp_fragment_into(m_frag_scratch, wire::udp_envelope_kind::best_effort,
-                                         m_out_seq++, msg_id, idx, cnt, slice);
-            m_server.send_to(m_frag_scratch, m_dest);
-        };
-        io::split(frame, m_max_payload, msg_id, sink);
-    }
-
-    // reliable split: each fragment is submitted as one send_reliable segment ABOVE the
-    // ARQ, so a lost fragment is selectively retransmitted and the message completes. The
-    // fragment's msg_id/index/count ride INSIDE the segment payload; the FRAGMENTED envelope
-    // bit (set via the submit flag) tells the peer to route the in-order payload to the
-    // reassembler. The window-vs-fragment-count flow-control interaction is a separate
-    // throughput concern recorded outside the code; correctness holds via the block queue.
-    submit_result send_reliable_large(std::span<const std::byte> payload)
-    {
-        if(exceeds_max_message(payload.size()))
-        {
-            reject_oversize();
-            return submit_result::window_full;
-        }
-        ensure_arq();
-        const std::uint16_t msg_id = m_out_msg_id++;
-        submit_result       last   = submit_result::admitted;
-        io::fragment_sink   sink   = [this, msg_id, &last](std::uint32_t idx, std::uint32_t cnt,
-                                                           std::span<const std::byte> slice)
-        { last = submit_reliable_fragment(msg_id, idx, cnt, slice); };
-        io::split(payload, m_max_payload, msg_id, sink);
-        return last;
-    }
-
-    // Encode one reliable fragment as [msg_id:2][idx:4][cnt:4][slice] and submit it to the
-    // ARQ with the fragmented flag set; a full window backpressures through the bounded queue.
-    submit_result submit_reliable_fragment(std::uint16_t msg_id, std::uint32_t idx,
-                                           std::uint32_t cnt, std::span<const std::byte> slice)
-    {
-        wire::encode_udp_fragment_payload_into(m_frag_scratch, msg_id, idx, cnt, slice);
-        const auto r = m_arq->submit(m_frag_scratch, /*fragmented=*/true);
-        if(r == submit_result::admitted)
-            return r;
-        return on_window_full(m_frag_scratch, /*fragmented=*/true);
-    }
-
-    // A best_effort inbound fragment: decode its wire sub-header (fail-closed) and feed
-    // the bounded reassembler; a completed message posts on_data via on_deliver.
-    void feed_fragment(std::span<const std::byte> frame)
-    {
-        ensure_reassembler();
-        auto h = wire::decode_udp_fragment_header(frame);
-        if(!h)
-            return; // malformed sub-header: drop
-        m_reassembler->feed(h->msg_id, h->frag_idx, h->frag_cnt, h->payload);
-    }
-
-    // A reliable in-order payload: if its ARQ seq was flagged FRAGMENTED on the wire, the
-    // payload is [msg_id:2][idx:4][cnt:4][slice] — decode and feed the reassembler; else it
-    // is a whole reliable message delivered byte-identically to the unfragmented path.
-    void deliver_reliable_inorder(bool fragmented, std::span<const std::byte> payload)
-    {
-        if(!fragmented)
-            return post_on_data(payload); // whole reliable message: unchanged path
-        ensure_reassembler();
-        auto h = wire::decode_udp_fragment_header(payload);
-        if(!h)
-            return; // malformed: drop the fragment
-        m_reassembler->feed(h->msg_id, h->frag_idx, h->frag_cnt, h->payload);
-    }
-
-    // Build the bounded reassembler on first inbound fragment and wire its completion sink:
-    // an assembled message POSTS on_data (the block is sans-IO; the channel owns the post).
-    void ensure_reassembler()
-    {
-        if(m_reassembler)
-            return;
-        m_reassembler = std::make_unique<reassembler_type>(
-                m_io,
-                reassembler_type::config{.max_message_size    = m_max_message_bytes,
-                                         .total_memory_cap    = m_reassembly_budget,
-                                         .per_message_timeout = m_reassembly_timeout});
-        m_reassembler->on_deliver([this](wire::shared_bytes msg)
-                                  { post_on_data_owned(std::move(msg)); });
-        m_reassembler->on_drop(
-                [this](const io::detail::drop_event &ev)
-                {
-                    if(m_on_drop)
-                        m_on_drop(ev);
-                });
-    }
-
-    // Build the selective-repeat ARQ on first reliable use and wire its actions: a
-    // (re)transmit wraps a kind=1 data segment, an ack wraps a kind=1 ack frame, an
-    // in-order payload posts on_data, and exhaustion surfaces a connection-fatal error.
-    void ensure_arq()
-    {
-        if(m_arq)
-            return;
-        m_arq = std::make_unique<arq_type>(m_io, m_arq_cfg, m_initial_seq);
-        m_arq->on_transmit(
-                [this](std::uint16_t seq, std::span<const std::byte> payload, bool fragmented)
-                {
-                    wire::encode_udp_segment_into(m_arq_inner, payload);
-                    if(fragmented)
-                        wire::wrap_udp_into_fragmented(m_send_scratch,
-                                                       wire::udp_envelope_kind::reliable_arq, seq,
-                                                       m_arq_inner);
-                    else
-                        wire::wrap_udp_into(m_send_scratch, wire::udp_envelope_kind::reliable_arq,
-                                            seq, m_arq_inner);
-                    m_server.send_to(m_send_scratch, m_dest);
-                });
-        m_arq->on_send_ack(
-                [this](const wire::udp_ack &ack)
-                {
-                    wire::encode_udp_ack_into(m_arq_inner, ack);
-                    wire::wrap_udp_into(m_ack_scratch, wire::udp_envelope_kind::reliable_arq, 0,
-                                        m_arq_inner);
-                    m_server.send_to(m_ack_scratch, m_dest);
-                });
-        m_arq->on_deliver_seq(
-                [this](std::uint16_t, bool fragmented, std::span<const std::byte> payload)
-                { deliver_reliable_inorder(fragmented, payload); });
-        m_arq->on_exhausted(
-                [this]
-                {
-                    if(m_on_error)
-                        m_on_error(io::io_error::timed_out);
-                });
-        // congestion=block: when an ack frees window slots, drain the backpressure queue
-        // by re-submitting the admissible queued frames (the window-drain re-arm idiom,
-        // mirroring unix_channel::do_write — never a blocking wait in the ack handler).
-        m_arq->on_window_advance([this] { drain_backpressure(); });
-    }
-
-    // The per-connection congestion safety net (it guards the direct-send bypass paths, at
-    // a granularity distinct from the forwarder's per-band overflow). congestion=block
-    // enqueues a window-full reliable frame into the bounded queue (the ack handler drains
-    // it); a queue at its cap surfaces would_block (the stall signal — bounded, never
-    // unbounded growth). congestion=drop_newest sheds the frame at the publisher (the
-    // documented opt-out of the reliable guarantee). Either way publish() stays
-    // non-blocking and the io_context is never blocked.
-    submit_result on_window_full(std::span<const std::byte> payload, bool fragmented)
-    {
-        if(m_congestion == io::congestion::drop_newest)
-        {
-            ++m_dropped; // shed at the publisher (occupancy counter)
-            if(m_on_drop)
-                m_on_drop(io::detail::drop_event{.cause     = io::detail::drop_cause::arq_shed,
-                                                 .transport = io::locality::remote});
-            return submit_result::window_full;
-        }
-        if(!m_backpressure.admit(payload, fragmented))
-        {
-            if(m_on_error)
-                m_on_error(io::io_error::would_block); // queue at cap: the stall edge
-            return submit_result::window_full;
-        }
-        return submit_result::admitted; // accepted into the queue; will send on the next ack
-    }
-
-    // Re-submit queued frames while the send window has room: each admit pops one. A
-    // submit that returns window_full (a fresh fill between acks) stops the drain — the
-    // remainder waits for the next on_window_advance. Bounded by the queue size; no
-    // hot-path allocation beyond the at-setup queue storage.
-    void drain_backpressure()
-    {
-        while(!m_backpressure.empty() && m_arq && m_arq->window_has_room())
-        {
-            if(m_arq->submit(m_backpressure.front(), m_backpressure.front_fragmented()) !=
-               submit_result::admitted)
-                break;
-            m_backpressure.pop_front();
-        }
-    }
-
-    // Fan a kind=1 inner frame to the ARQ on the ONE inbound demux path: a data segment
-    // drives on_segment (in-order delivery + ack), an ack drives on_ack (window slide).
-    // A test-installed raw observer (m_on_reliable) sees the segment too. A frame whose
-    // marker is neither (a handshake byte, already split off upstream) is dropped.
-    void deliver_reliable(std::uint16_t seq, bool fragmented, std::span<const std::byte> inner)
-    {
-        auto kind = wire::peek_udp_arq_kind(inner);
-        if(!kind)
-            return;
-        if(*kind == wire::udp_arq_kind::ack)
-        {
-            if(auto ack = wire::decode_udp_ack(inner); ack && m_arq)
-                m_arq->on_ack(*ack);
-            return;
-        }
-        auto payload = wire::decode_udp_segment(inner);
-        if(!payload)
-            return;
-        if(m_on_reliable)
-            m_on_reliable(seq, *payload);
-        ensure_arq();
-        m_arq->on_segment(seq, fragmented, *payload);
-    }
-
-    // on_data is ALWAYS posted (the byte_channel contract). The owning vector keeps
-    // the bytes alive across the post (the demux's recv buffer is reused immediately).
-    void post_on_data(std::span<const std::byte> frame)
-    {
-        auto owned = std::make_shared<std::vector<std::byte>>(frame.begin(), frame.end());
-        ::asio::post(m_io,
-                     [this, owned]
-                     {
-                         if(m_on_data)
-                             m_on_data(std::span<const std::byte>{*owned});
-                     });
-    }
-
-    // A reassembled message already owns its bytes once: carry the owner straight into the
-    // posted closure (no second copy) and hand its span up. The owner pins the bytes across
-    // the post exactly as the copied vector does above.
-    void post_on_data_owned(wire::shared_bytes owned)
-    {
-        ::asio::post(m_io,
-                     [this, owned = std::move(owned)]
-                     {
-                         if(m_on_data)
-                             m_on_data(static_cast<std::span<const std::byte>>(owned));
-                     });
-    }
+    // The send/recv path + reliable-ARQ glue is relocated to detail/udp_channel_io.h (relocation
+    // by friendship): each helper reaches the members below through the channel reference.
+    template<typename Ch>
+    friend void detail::reject_oversize(Ch &);
+    template<typename Ch>
+    friend bool detail::exceeds_max_message(const Ch &, std::size_t) noexcept;
+    template<typename Ch>
+    friend void detail::send_best_effort_large(Ch &, std::span<const std::byte>);
+    template<typename Ch>
+    friend void detail::post_on_data(Ch &, std::span<const std::byte>);
+    template<typename Ch>
+    friend void detail::post_on_data_owned(Ch &, wire::shared_bytes);
+    template<typename Ch>
+    friend void detail::ensure_reassembler(Ch &);
+    template<typename Ch>
+    friend void detail::feed_fragment(Ch &, std::span<const std::byte>);
+    template<typename Ch>
+    friend void detail::deliver_reliable_inorder(Ch &, bool, std::span<const std::byte>);
+    template<typename Ch>
+    friend typename Ch::submit_result detail::on_window_full(Ch &, std::span<const std::byte>,
+                                                             bool);
+    template<typename Ch>
+    friend typename Ch::submit_result detail::submit_reliable_fragment(Ch &, std::uint16_t,
+                                                                       std::uint32_t, std::uint32_t,
+                                                                       std::span<const std::byte>);
+    template<typename Ch>
+    friend typename Ch::submit_result detail::send_reliable_large(Ch &, std::span<const std::byte>);
+    template<typename Ch>
+    friend void detail::drain_backpressure(Ch &);
+    template<typename Ch>
+    friend void detail::ensure_arq(Ch &);
+    template<typename Ch>
+    friend void detail::deliver_reliable(Ch &, std::uint16_t, bool, std::span<const std::byte>);
+    template<typename Ch>
+    friend void detail::deliver_inbound(Ch &, std::span<const std::byte>);
 
     ::asio::io_context        &m_io;
     udp_server                &m_server;

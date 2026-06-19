@@ -25,6 +25,10 @@
 
 namespace plexus::tls {
 
+// over-limit: one cohesive OpenSSL credential-load unit; the cert/key/chain parse, validate,
+// and assemble steps share the EVP/X509/BIO handle set and its throw-on-unwind cleanup, so
+// splitting them scatters the cert/key/chain state across files with no readability gain.
+
 namespace {
 
 // Function-pointer-deleter handle aliases for the OpenSSL types consumed during

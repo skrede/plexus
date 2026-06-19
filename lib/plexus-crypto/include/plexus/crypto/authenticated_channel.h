@@ -4,6 +4,7 @@
 #include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
 #include "plexus/crypto/aead_epoch.h"
+#include "plexus/crypto/detail/aead_path.h"
 
 #include "plexus/wire/stream_inbound.h"
 #include "plexus/wire/frame_codec.h"
@@ -70,29 +71,7 @@ public:
     authenticated_channel(authenticated_channel &&)                 = delete;
     authenticated_channel &operator=(authenticated_channel &&)      = delete;
 
-    void send(std::span<const std::byte> data)
-    {
-        if(data.size() < wire::header_size)
-            return;
-        const auto header  = data.first(wire::header_size);
-        const auto payload = data.subspan(wire::header_size);
-
-        if(m_send_seq >= m_rekey_threshold)
-            rekey_send();
-
-        // The nonce epoch field is the 8-bit wire epoch byte (only 8 bits of epoch
-        // ride the wire), so seal masks to that domain to match the receiver's open.
-        const auto nonce = make_nonce(m_send_epoch & 0xffu, m_send_seq++);
-        if(!seal(m_cipher, m_send_key, nonce, header, payload, m_seal_scratch))
-            return;
-
-        m_send_frame.resize(1 + wire::header_size + m_seal_scratch.size());
-        m_send_frame[0] = static_cast<std::byte>(m_send_epoch & 0xffu);
-        std::copy(header.begin(), header.end(), m_send_frame.begin() + 1);
-        std::copy(m_seal_scratch.begin(), m_seal_scratch.end(),
-                  m_send_frame.begin() + 1 + wire::header_size);
-        m_lower.send(m_send_frame);
-    }
+    void send(std::span<const std::byte> data) { detail::stream_aead_send(*this, data); }
 
     void close() { m_lower.close(); }
 
@@ -120,75 +99,21 @@ public:
     [[nodiscard]] std::size_t   backpressured() const { return m_lower.backpressured(); }
 
 private:
+    template<typename C>
+    friend void detail::rekey_send(C &);
+    template<typename C>
+    friend void detail::handle_protocol_close(C &, wire::close_cause);
+    template<typename C>
+    friend void detail::stream_aead_send(C &, std::span<const std::byte>);
+    template<typename C>
+    friend const aead_key *detail::select_recv_key(C &, std::uint8_t);
+    template<typename C>
+    friend void detail::stream_aead_on_lower_data(C &, std::span<const std::byte>);
+
     void wire_lower()
     {
-        m_lower.on_data([this](std::span<const std::byte> bytes) { on_lower_data(bytes); });
-    }
-
-    void on_lower_data(std::span<const std::byte> bytes)
-    {
-        if(bytes.size() < 1 + wire::header_size + k_aead_tag_len)
-            return handle_protocol_close(wire::close_cause::buffer_overflow);
-
-        const auto epoch_byte = static_cast<std::uint8_t>(bytes[0]);
-        const auto header     = bytes.subspan(1, wire::header_size);
-        const auto sealed     = bytes.subspan(1 + wire::header_size);
-
-        const aead_key *key = select_recv_key(epoch_byte);
-        if(!key)
-            return handle_protocol_close(wire::close_cause::invalid_magic);
-
-        const auto nonce = make_nonce(epoch_byte, m_recv_seq);
-        if(!open(m_cipher, *key, nonce, header, sealed, m_open_scratch))
-            return handle_protocol_close(wire::close_cause::invalid_magic);
-        ++m_recv_seq;
-
-        m_recv_frame.resize(wire::header_size + m_open_scratch.size());
-        std::copy(header.begin(), header.end(), m_recv_frame.begin());
-        std::copy(m_open_scratch.begin(), m_open_scratch.end(),
-                  m_recv_frame.begin() + wire::header_size);
-        if(m_on_data)
-            m_on_data(std::span<const std::byte>{m_recv_frame});
-    }
-
-    // The peer advances its send epoch one step at a time; the receiver derives its
-    // recv key forward through the identical chain when it first sees the new epoch.
-    // A frame naming the current epoch resolves directly; the next epoch advances;
-    // anything else is unrecognized.
-    const aead_key *select_recv_key(std::uint8_t epoch_byte)
-    {
-        const auto current_low = static_cast<std::uint8_t>(m_recv_epoch & 0xffu);
-        if(epoch_byte == current_low)
-            return &m_recv_key;
-        const auto next_low = static_cast<std::uint8_t>((m_recv_epoch + 1) & 0xffu);
-        if(epoch_byte == next_low)
-        {
-            aead_key next{};
-            if(!derive_forward(m_recv_key, next))
-                return nullptr;
-            m_recv_key = next;
-            ++m_recv_epoch;
-            m_recv_seq = 0;
-            return &m_recv_key;
-        }
-        return nullptr;
-    }
-
-    void rekey_send()
-    {
-        aead_key next{};
-        if(!derive_forward(m_send_key, next))
-            return;
-        m_send_key = next;
-        ++m_send_epoch;
-        m_send_seq = 0;
-    }
-
-    void handle_protocol_close(wire::close_cause cause)
-    {
-        if(m_on_protocol_close)
-            m_on_protocol_close(cause);
-        close();
+        m_lower.on_data([this](std::span<const std::byte> bytes)
+                        { detail::stream_aead_on_lower_data(*this, bytes); });
     }
 
     Lower                                                               &m_lower;

@@ -19,6 +19,12 @@
 
 namespace plexus::io {
 
+// over-limit: one cohesive variadic multiplexer; the mux_member contract + the candidate
+// descriptor + the routing class (listen/dial/close over the borrowed member pack, resolved by the
+// selector + hook) are one whole — splitting the contract types from the class that drives them
+// scatters the composition surface (the per-scheme select + sink-wiring glue is extracted to
+// detail/mux_dispatch.h).
+//
 // A member transport composed into a multiplexer: it presents the typed completion
 // setters against its OWN concrete channel (M::channel_type — NOT the erased
 // polymorphic_byte_channel; each member's byte_channel_type is its concrete channel,
@@ -45,15 +51,10 @@ concept mux_member = requires(
     { M::mux_tier } -> std::convertible_to<transport_kind>;
 };
 
-// A per-candidate eligibility descriptor: the value the selection hook reads to pick
-// one member when a tier resolves to N candidates. It carries the candidate's member
-// index plus a small static eligibility flag — whether this candidate is a same-host
-// fast-path (shared-memory) member. The flag is a COMPILE-TIME property of the member
-// type (mux_prefers_shm below), NOT a runtime acquire result: a preference hook reads
-// it to know WHICH candidate is the fast path, then decides at acquire time whether to
-// take it. The descriptor is a small VALUE — the hook receives a span of these, never
-// the members tuple, so the erased signature stays decoupled from the concrete member
-// types (the seed constraint).
+// A per-candidate eligibility descriptor the selection hook reads to pick one member when a tier
+// resolves to N candidates: the member index + a compile-time flag (mux_prefers_shm) for whether
+// this candidate is the same-host fast-path (shared-memory) member. NOT a runtime acquire result —
+// the hook reads it to know WHICH candidate is the fast path, then decides at acquire time.
 struct mux_candidate
 {
     std::size_t index        = 0;
@@ -74,15 +75,10 @@ struct member_prefers_shm<M, std::void_t<decltype(M::mux_prefers_shm)>>
 {
 };
 
-// The selection hook's erased type: when a tier resolves to N candidate members, the
-// hook picks one by index. It is a cold-path call (dial/listen, never the steady-state
-// message loop), so the type erasure costs an indirection that never touches the hot
-// path; the default below is empty, so it stays in SBO with no allocation. The hook
-// receives the endpoint and a span of per-candidate eligibility descriptors (the index
-// plus the same-host fast-path flag) — NOT the members tuple, so it stays erasable and
-// decoupled from the concrete member types. A same-host-preference hook reads the
-// shm_eligible flag to find the fast-path candidate and decides at acquire time whether
-// to take it or fall back; the default below ignores the flag.
+// The selection hook's erased type: when a tier resolves to N candidate members, the hook picks
+// one by index (a cold-path dial/listen call, never the hot loop; the default is empty so it stays
+// in SBO). It receives the endpoint + a span of per-candidate descriptors (index + the same-host
+// fast-path flag) — NOT the members tuple, so it stays decoupled from the concrete member types.
 using selection_hook = plexus::detail::move_only_function<std::size_t(
         const endpoint &, std::span<const mux_candidate>)>;
 
@@ -97,30 +93,40 @@ struct first_candidate
     }
 };
 
-// The variadic multiplexing transport_backend: it BORROWS a pack of member transports
-// (held by reference) plus a transport_selector and a selection hook, and presents the
-// single erased transport_backend surface (the polymorphic_byte_channel completions)
-// the engine drives unchanged. The ctor installs this-capturing completion callbacks on
-// each member that wrap<C> the member's concrete channel and re-emit it with the SAME
-// endpoint. On dial/listen it resolves ONE member by scheme over the pack — locality
-// wins first, so an encrypted remote member never serves a same-host-confined peer.
-//
-// LIFETIME: the ctor installs this-capturing completion callbacks into the borrowed
-// members. The borrowed members MUST outlive this object — the owner sequences teardown
-// so the multiplexer is destroyed before any member fires a late completion; no shared
-// lifetime handle is taken. The multiplexer only BORROWS the members; it does not mint or
-// own any credential the secure members carry.
+}
+
+// The per-scheme select + sink-wiring glue (relocation of the mux's candidate-collection and
+// wire_member helpers). Included here — after mux_candidate / member_prefers_shm are defined and
+// before the class that befriends and calls it — to avoid a circular include.
+#include "plexus/io/detail/mux_dispatch.h"
+
+namespace plexus::io {
+
+// The variadic multiplexing transport_backend: it BORROWS a pack of member transports + a
+// transport_selector + a selection hook, and presents the single erased transport_backend surface
+// (the polymorphic_byte_channel completions) the engine drives unchanged. The ctor installs
+// completion callbacks on each member that wrap the member's concrete channel and re-emit it; on
+// dial/listen it resolves ONE member by scheme over the pack (locality wins first, so an encrypted
+// remote member never serves a same-host-confined peer). The borrowed members MUST outlive this
+// object (the owner sequences teardown); the multiplexer only borrows them, owning no credential.
 template<mux_member... Members>
 class multiplexing_transport
 {
 public:
+    // The per-index member type + its compile-time shm-preference, surfaced so the relocated
+    // candidate-collection glue (detail/mux_dispatch.h) can name them.
+    template<std::size_t I>
+    using member_type = std::remove_reference_t<std::tuple_element_t<I, std::tuple<Members...>>>;
+    template<typename M>
+    static constexpr bool member_prefers_shm_v = member_prefers_shm<M>::value;
+
     explicit multiplexing_transport(Members &...members, transport_selector selector = {},
                                     selection_hook hook = first_candidate{})
             : m_members(members...)
             , m_selector(selector)
             , m_hook(std::move(hook))
     {
-        std::apply([this](auto &...m) { (wire_member(m), ...); }, m_members);
+        std::apply([this](auto &...m) { (detail::wire_member(*this, m), ...); }, m_members);
     }
 
     multiplexing_transport(const multiplexing_transport &)            = delete;
@@ -171,42 +177,11 @@ public:
     }
 
 private:
-    template<typename C>
-    static std::unique_ptr<polymorphic_byte_channel> wrap(std::unique_ptr<C> ch)
-    {
-        return std::make_unique<polymorphic_byte_channel>(
-                std::make_unique<channel_adapter<C>>(std::move(ch)));
-    }
-
-    template<typename M>
-    void wire_member(M &m)
-    {
-        using C = typename M::channel_type;
-        m.on_accepted(
-                [this](std::unique_ptr<C> ch)
-                {
-                    if(m_on_accepted)
-                        m_on_accepted(wrap(std::move(ch)));
-                });
-        m.on_dialed(
-                [this](std::unique_ptr<C> ch, const endpoint &ep)
-                {
-                    if(m_on_dialed)
-                        m_on_dialed(wrap(std::move(ch)), ep);
-                });
-        m.on_dial_failed(
-                [this](const endpoint &ep, io_error e)
-                {
-                    if(m_on_dial_failed)
-                        m_on_dial_failed(ep, e);
-                });
-        m.on_error(
-                [this](io_error e)
-                {
-                    if(m_on_error)
-                        m_on_error(e);
-                });
-    }
+    template<typename Mux, typename M>
+    friend void detail::wire_member(Mux &, M &);
+    template<typename Mux, std::size_t I, typename Candidates>
+    friend void detail::mux_consider(const Mux &, const endpoint &, transport_kind, Candidates &,
+                                     std::size_t &);
 
     // The resolved member tier for an endpoint: locality wins first (same-host -> the
     // local member), so a remote member — including the encrypted ones — never serves a
@@ -220,43 +195,19 @@ private:
         return m_selector.select(ep, m_selector.reliability_of_scheme(ep.scheme));
     }
 
-    // Search the pack for the members serving ep.scheme within its tier, then let the
-    // selection hook pick one. A scheme no member advertises in its tier resolves to no
-    // candidate; the dispatch is then a no-op (the caller cannot form that path for a
-    // composition that omits the member).
+    // Search the pack for the members serving ep.scheme within its tier, then let the selection
+    // hook pick one. A scheme no member advertises in its tier resolves to no candidate (the
+    // dispatch is then a no-op). The per-scheme eligibility filter is in detail/mux_dispatch.h.
     [[nodiscard]] std::size_t route_of(const endpoint &ep) noexcept
     {
         const transport_kind                          tier = tier_of(ep);
         std::array<mux_candidate, sizeof...(Members)> candidates{};
         std::size_t                                   count = 0;
-        collect_candidates(ep, tier, candidates, count, std::index_sequence_for<Members...>{});
+        detail::mux_collect_candidates(*this, ep, tier, candidates, count,
+                                       std::index_sequence_for<Members...>{});
         if(count == 0)
             return sizeof...(Members);
         return m_hook(ep, {candidates.data(), count});
-    }
-
-    template<std::size_t... I>
-    void collect_candidates(const endpoint &ep, transport_kind tier,
-                            std::array<mux_candidate, sizeof...(Members)> &out, std::size_t &count,
-                            std::index_sequence<I...>) const noexcept
-    {
-        (consider<I>(ep, tier, out, count), ...);
-    }
-
-    template<std::size_t I>
-    void consider(const endpoint &ep, transport_kind tier,
-                  std::array<mux_candidate, sizeof...(Members)> &out,
-                  std::size_t                                   &count) const noexcept
-    {
-        using M = std::remove_reference_t<std::tuple_element_t<I, std::tuple<Members...>>>;
-        if(M::mux_tier != tier)
-            return;
-        for(std::string_view scheme : M::mux_schemes)
-            if(scheme == ep.scheme)
-            {
-                out[count++] = mux_candidate{I, member_prefers_shm<M>::value};
-                return;
-            }
     }
 
     template<typename F>

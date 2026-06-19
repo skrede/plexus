@@ -94,13 +94,8 @@ public:
             const loan_status              st = m_ring.consume(m_cursor, consumed);
             if(st == loan_status::empty)
             {
-                // Adaptive spin-then-park: a back-to-back message may land within the
-                // budget — spin (relaxing the core) and retry rather than reporting empty
-                // immediately and letting the notifier park. Past the budget report empty
-                // so the backend futex park takes over (idle -> ~0% CPU).
-                if(spun++ >= m_spin_budget)
+                if(spin_or_give_up(spun))
                     return loan_status::empty;
-                cpu_relax();
                 continue;
             }
             loan_status settled;
@@ -113,6 +108,17 @@ public:
     std::uint64_t cursor() const noexcept { return m_cursor; }
 
 private:
+    // Adaptive spin-then-park: a back-to-back message may land within the budget, so spin
+    // (relaxing the core) and retry rather than reporting empty immediately. Returns true past
+    // the budget so the caller reports empty and the backend futex park takes over (~0% CPU idle).
+    [[nodiscard]] bool spin_or_give_up(std::uint32_t &spun) noexcept
+    {
+        if(spun++ >= m_spin_budget)
+            return true;
+        cpu_relax();
+        return false;
+    }
+
     // Resolve a non-empty consume: lagged jumps the cursor to the surfaced producer tail in one
     // O(1) step; congested (small-contention dif>0 or a skip tombstone) steps forward; ok pins the
     // slot Dekker-safe before advancing, retrying on a lost overwrite race rather than aliasing a

@@ -50,6 +50,27 @@ namespace plexus::wire {
 //     and the helper applies the overflow / bounds checks against
 //     length * element_size. element_size = 0 short-circuits to the
 //     length-only check and is treated as a no-payload variant.
+namespace detail {
+
+// Width-dispatched big-endian prefix read at `at` (the byte_order readers are little-only on the
+// wire side). The width is resolved at compile time per UIntT.
+template<typename UIntT>
+[[nodiscard]] inline UIntT read_length_value(const std::byte *at) noexcept
+{
+    if constexpr(sizeof(UIntT) == 1)
+        return read_u8(at);
+    else if constexpr(sizeof(UIntT) == 2)
+        return read_u16(at);
+    else if constexpr(sizeof(UIntT) == 4)
+        return read_u32(at);
+    else if constexpr(sizeof(UIntT) == 8)
+        return read_u64(at);
+    else
+        static_assert(sizeof(UIntT) == 0, "read_length_prefixed: unsupported UIntT width");
+}
+
+}
+
 template<typename UIntT>
 [[nodiscard]] std::optional<std::span<const std::byte>>
 read_length_prefixed(std::span<const std::byte> data, std::size_t &consumed,
@@ -63,19 +84,8 @@ read_length_prefixed(std::span<const std::byte> data, std::size_t &consumed,
     if(remaining_after_consumed < sizeof(UIntT))
         return std::nullopt;
 
-    UIntT length{};
-    if constexpr(sizeof(UIntT) == 1)
-        length = detail::read_u8(data.data() + consumed);
-    else if constexpr(sizeof(UIntT) == 2)
-        length = detail::read_u16(data.data() + consumed);
-    else if constexpr(sizeof(UIntT) == 4)
-        length = detail::read_u32(data.data() + consumed);
-    else if constexpr(sizeof(UIntT) == 8)
-        length = detail::read_u64(data.data() + consumed);
-    else
-        static_assert(sizeof(UIntT) == 0, "read_length_prefixed: unsupported UIntT width");
-
-    const auto length_sz = static_cast<std::size_t>(length);
+    const UIntT length    = detail::read_length_value<UIntT>(data.data() + consumed);
+    const auto  length_sz = static_cast<std::size_t>(length);
     if(element_size != 0 && length_sz > std::numeric_limits<std::size_t>::max() / element_size)
         return std::nullopt;
     const auto payload_bytes = length_sz * element_size;

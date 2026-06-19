@@ -11,6 +11,7 @@
 #include "plexus/typed_codec.h"
 #include "plexus/value_projection.h"
 #include "plexus/value_logger_options.h"
+#include "plexus/detail/value_logger_project.h"
 
 #include "plexus/detail/compat.h"
 
@@ -131,8 +132,9 @@ private:
         {
         }
 
-        // Decode into the reused slot. Success formats the record into the reused buffer
-        // and writes it; failure increments the counter and drops — never a partial line.
+        // Decode into the reused slot. Success formats the record into the reused buffer and
+        // writes it; failure increments the counter and drops — never a partial line. The
+        // CSV/jsonl/text projection lives in detail/value_logger_project.h (relocation).
         void on_bytes(std::span<const std::byte> bytes, const io::message_info &info)
         {
             auto decoded = codec.decode(bytes, slot);
@@ -141,94 +143,18 @@ private:
                 ++decode_failed;
                 return;
             }
-            format_record(info);
+            detail::vl_format_record<has_projection>(*this, info);
             out << buffer;
         }
 
-        // The object leg: the demux has native-key-matched, so recover the concrete T from
-        // the carrier (no decode) into the reused slot and format it — the SAME projection
-        // path the bytes leg uses. A view-type value_type would alias the carrier slot for
-        // the format duration only, which is exactly this call's scope.
+        // The object leg: the demux native-key-matched, so recover the concrete T from the carrier
+        // (no decode) into the reused slot and format it — the SAME projection path. A view-type
+        // value_type aliases the carrier slot for the format duration only (this call's scope).
         void on_object(const io::object_carrier &carrier, const io::message_info &info)
         {
             slot = *static_cast<const value_type *>(carrier.slot->object);
-            format_record(info);
+            detail::vl_format_record<has_projection>(*this, info);
             out << buffer;
-        }
-
-        void format_record(const io::message_info &info)
-        {
-            switch(format)
-            {
-                case log_format::csv:   format_csv(info); break;
-                case log_format::jsonl: format_json(); break;
-                case log_format::text:  format_text(info); break;
-            }
-        }
-
-        void format_csv(const io::message_info &info)
-        {
-            if(!header_written)
-            {
-                buffer.clear();
-                buffer += "publication_sequence";
-                emit_column_names();
-                buffer += '\n';
-                out << buffer;
-                header_written = true;
-            }
-            buffer.clear();
-            buffer += std::to_string(info.publication_sequence);
-            buffer += ',';
-            emit_csv_fields();
-            buffer += '\n';
-        }
-
-        void emit_column_names()
-        {
-            if constexpr(has_projection)
-                for(std::string_view name : projection.columns())
-                {
-                    buffer += ',';
-                    buffer += name;
-                }
-            else
-                buffer += ",value";
-        }
-
-        void emit_csv_fields()
-        {
-            if constexpr(has_projection)
-                projection.emit_fields(slot, buffer, ',');
-            else
-                stream_to(slot, buffer);
-        }
-
-        void format_json()
-        {
-            buffer.clear();
-            buffer += '{';
-            if constexpr(has_projection)
-                projection.emit_json(slot, buffer);
-            else
-            {
-                buffer += "\"value\":\"";
-                stream_to(slot, buffer);
-                buffer += '"';
-            }
-            buffer += "}\n";
-        }
-
-        void format_text(const io::message_info &info)
-        {
-            buffer.clear();
-            buffer += std::to_string(info.publication_sequence);
-            buffer += ' ';
-            if constexpr(has_projection)
-                projection.emit_fields(slot, buffer, ' ');
-            else
-                stream_to(slot, buffer);
-            buffer += '\n';
         }
     };
 

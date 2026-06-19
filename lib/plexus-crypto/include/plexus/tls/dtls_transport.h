@@ -5,6 +5,7 @@
 #include "plexus/tls/dtls_channel.h"
 #include "plexus/tls/dtls_cookie.h"
 #include "plexus/tls/tls_credential.h"
+#include "plexus/tls/detail/dtls_transport_accept.h"
 
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/detail/asio_error_map.h"
@@ -36,31 +37,20 @@
 
 namespace plexus::tls {
 
-// The secure-best_effort DTLS transport_backend: owns the ONE bound udp_server, the
-// inbound demux (sender host:port -> dtls_channel), the node's single cookie secret,
-// the transport-owned pending-dial table, and every minted dtls_channel. It mints
-// logical secure channels over the shared socket — there is NO acceptor and NO
-// per-peer accept socket. DTLS records ride RAW (no plexus udp_envelope, no dedup,
-// no ARQ — DTLS owns RFC-6347 anti-replay + handshake retransmit, D-03).
+// over-limit: one cohesive secure DTLS transport_backend; the listen/dial/close verbs + the
+// config the ctor binds all drive the shared m_server/m_demux/m_registry/m_cookie state (the
+// transport_backend concept proof at file bottom binds the surface), so splitting the public face
+// scatters that shared state — the listener/accept/cookie-exchange glue is extracted to
+// detail/dtls_transport_accept.h.
 //
-//   listen(ep): bind the shared server, arm the recv loop. Each datagram is
-//     demuxed by sender: a HIT routes to deliver_inbound; a MISS from a never-seen
-//     source mints a server-side channel behind the cookie gate (OpenSSL replies
-//     HelloVerifyRequest and allocates no full state until a valid cookie echoes),
-//     feeds the triggering datagram, and fires on_accepted on completion.
-//   dial(ep): mint a client channel into the transport-owned pending-dial registry,
-//     kick the client handshake, and fire on_dialed ON external_complete (the crypto
-//     handshake IS the plexus handshake — no wire round-trip). A verify /
-//     retransmit-timeout failure fires on_dial_failed and fails the pending entry
-//     (deferred-destroy off the channel's own stack).
-//   close(): clear the registry (both tables), reset the demux, close the socket —
-//     io_context teardown then destroys every in-flight channel cleanly (the leak
-//     the self-owning-channel cycle had; transport-owned dials close it).
-//
-// Single-owner: the registry holds unique_ptr<dtls_channel> (transport-owned) keyed by
-// raw pointer. There is NO self-owning channel cycle (the release_pending pattern is the
-// hazard this transport AVOIDS). The registry bakes the copy-before-erase + deferred-
-// destroy lifetime contracts the hand-inlined maps used to carry inline.
+// The secure-best_effort DTLS transport_backend: owns the ONE bound udp_server, the inbound demux
+// (sender -> dtls_channel), the node's single cookie secret, the transport-owned pending-dial
+// table, and every minted dtls_channel. DTLS records ride RAW (DTLS owns RFC-6347 anti-replay +
+// handshake retransmit, D-03). listen(ep) arms the recv loop (a MISS mints a server channel behind
+// the cookie gate — OpenSSL replies HelloVerifyRequest, no full state until a valid cookie echoes).
+// dial(ep) kicks the client handshake, firing on_dialed ON external_complete (the crypto handshake
+// IS the plexus handshake). Single-owner: the registry holds unique_ptr<dtls_channel> keyed by raw
+// pointer, baking the copy-before-erase + deferred-destroy lifetime contracts.
 class dtls_transport
 {
 public:
@@ -85,7 +75,7 @@ public:
             , m_registry(make_defer_destroy())
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes)
-                             { on_datagram(from, bytes); });
+                             { detail::on_datagram(*this, from, bytes); });
         m_server.on_error(
                 [this](io::io_error e)
                 {
@@ -141,7 +131,7 @@ public:
         std::error_code pec;
         auto            bind_ep = plexus::asio::detail::parse_udp(ep.address, pec);
         if(pec)
-            return report_error(plexus::asio::detail::map_error(pec));
+            return detail::report_error(*this, plexus::asio::detail::map_error(pec));
         m_server.start(bind_ep);
     }
 
@@ -153,20 +143,20 @@ public:
         std::error_code pec;
         auto            dest = plexus::asio::detail::parse_udp(ep.address, pec);
         if(pec)
-            return report_dial_fail(ep, plexus::asio::detail::map_error(pec));
+            return detail::report_dial_fail(*this, ep, plexus::asio::detail::map_error(pec));
 
-        ensure_bound(dest.protocol());
+        detail::ensure_bound(*this, dest.protocol());
 
         auto ch = std::make_unique<dtls_channel>(
                 m_io, m_server, dest, m_cred, m_cookie, dtls_channel::role::client, m_max_payload,
                 dtls_channel::default_record_mtu, m_max_message_bytes, m_reassembly_budget);
         auto *raw = ch.get();
         if(!m_demux.insert(dest, raw))
-            return report_dial_fail(ep, io::io_error::address_in_use);
-        wire_teardown(*raw, dest);
+            return detail::report_dial_fail(*this, ep, io::io_error::address_in_use);
+        detail::wire_teardown(*this, *raw, dest);
 
-        raw->on_external_complete([this, ep, raw] { resolve_dial(ep, raw); });
-        raw->on_error([this, ep, raw](io::io_error e) { fail_dial(ep, raw, e); });
+        raw->on_external_complete([this, ep, raw] { detail::resolve_dial(*this, ep, raw); });
+        raw->on_error([this, ep, raw](io::io_error e) { detail::fail_dial(*this, ep, raw, e); });
 
         m_registry.insert(raw, std::move(ch));
         raw->start_handshake();
@@ -198,116 +188,31 @@ private:
         { ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); }); };
     }
 
-    void ensure_bound(const ::asio::ip::udp &proto)
-    {
-        if(!m_server.is_open())
-            m_server.start(endpoint_type(proto, 0));
-    }
-
-    void on_datagram(const endpoint_type &from, std::span<const std::byte> bytes)
-    {
-        if(auto *ch = m_demux.lookup(from))
-            return ch->deliver_inbound(bytes);
-        accept_new_peer(from, bytes);
-    }
-
-    // A never-seen source: mint a server-side channel behind the cookie gate. The
-    // demux cap bounds the spoof-flood (drop the flood past the cap). OpenSSL drives
-    // HelloVerifyRequest inside the accept state — no full handshake state until the
-    // source echoes a valid cookie. The triggering datagram is fed AFTER minting
-    // (OQ4). on_external_complete fires on_accepted (post mutual-verify, fail-closed).
-    void accept_new_peer(const endpoint_type &from, std::span<const std::byte> bytes)
-    {
-        auto ch = std::make_unique<dtls_channel>(
-                m_io, m_server, from, m_cred, m_cookie, dtls_channel::role::server, m_max_payload,
-                dtls_channel::default_record_mtu, m_max_message_bytes, m_reassembly_budget);
-        auto *raw = ch.get();
-        if(!m_demux.insert(from, raw))
-        {
-            if(m_on_drop)
-                m_on_drop(io::detail::drop_event{.cause     = io::detail::drop_cause::demux_refused,
-                                                 .transport = io::locality::remote});
-            return; // peer cap reached: drop the flood
-        }
-        wire_teardown(*raw, from);
-        m_registry.insert_accepted(raw, std::move(ch));
-        raw->on_external_complete([this, raw] { resolve_accept(raw); });
-        raw->on_error([this, raw](io::io_error) { drop_accept(raw); });
-        raw->start_handshake();
-        raw->deliver_inbound(bytes); // feed the triggering ClientHello
-    }
-
-    void resolve_dial(const io::endpoint &ep, dtls_channel *raw)
-    {
-        // COPY ep before resolve erases the entry: ep is bound to the pending entry's
-        // closure capture, which the erase destroys — re-emitting the freed reference is
-        // a use-after-free (an on_dialed consumer that copies the endpoint reads it).
-        const io::endpoint dialed = ep;
-        auto               ch     = m_registry.resolve(raw);
-        if(!ch)
-            return;
-        if(m_on_dialed)
-            m_on_dialed(std::move(ch), dialed);
-    }
-
-    void fail_dial(const io::endpoint &ep, dtls_channel *raw, io::io_error e)
-    {
-        // COPY ep AND erase the demux ref before fail() moves the channel out: fail()
-        // fired this from INSIDE raw's own deliver_inbound/drain_inbound stack, so the
-        // registry routes the freed channel through the deferred-destroy sink (never a
-        // synchronous destruction mid-unwind). Detach the demux ref now (no more inbound
-        // routes here), then fail() the entry.
-        const io::endpoint failed = ep;
-        m_demux.erase(raw->dest());
-        m_registry.fail(raw);
-        // Thread the channel's actual error through (a verify/pin failure surfaces as
-        // connection_refused, a broken pipe as broken_pipe, a retransmit-exhaustion
-        // timeout as timed_out) so the consumer can distinguish "peer never answered"
-        // from "peer presented an unpinned cert" — diagnostics + retry-policy material.
-        report_dial_fail(failed, e);
-    }
-
-    // Close the borrow-vs-own footgun: the engine owns the handed-out channel but the
-    // demux keeps a non-owning ref, so when the engine destroys the channel the demux
-    // must drop its ref or the next datagram dereferences freed memory. The channel's
-    // dtor fires this seam (distinct from the consumer on_closed/on_error the engine
-    // overwrites); the identity-guarded erase leaves a same-endpoint re-dial untouched.
-    void wire_teardown(dtls_channel &ch, const endpoint_type &key)
-    {
-        ch.on_teardown([this, key, raw = &ch] { m_demux.erase_if_matches(key, raw); });
-    }
-
-    // An accepted server channel completed its mutual handshake: hand it to
-    // on_accepted while the demux raw ref keeps routing inbound datagrams to it.
-    void resolve_accept(dtls_channel *raw)
-    {
-        auto ch = m_registry.adopt_accepted(raw);
-        if(!ch)
-            return;
-        if(m_on_accepted)
-            m_on_accepted(std::move(ch));
-    }
-
-    // A handshake/verify failure on an accept-side channel: drop it (the source never
-    // proved a pinned identity — fail-closed, no accepted channel surfaces). Same
-    // self-destruction hazard as fail_dial — fail_accepted routes the freed channel
-    // through the deferred-destroy sink; detach the demux ref now.
-    void drop_accept(dtls_channel *raw)
-    {
-        m_demux.erase(raw->dest());
-        m_registry.fail_accepted(raw);
-    }
-
-    void report_dial_fail(const io::endpoint &ep, io::io_error e)
-    {
-        if(m_on_dial_failed)
-            m_on_dial_failed(ep, e);
-    }
-    void report_error(io::io_error e)
-    {
-        if(m_on_error)
-            m_on_error(e);
-    }
+    // The listener/accept/cookie-exchange + dial-resolution glue is relocated to
+    // detail/dtls_transport_accept.h (relocation by friendship): each helper reaches the
+    // server/demux/dial-table members below through the transport reference.
+    template<typename U>
+    friend void detail::report_dial_fail(U &, const io::endpoint &, io::io_error);
+    template<typename U>
+    friend void detail::report_error(U &, io::io_error);
+    template<typename U>
+    friend void detail::ensure_bound(U &, const ::asio::ip::udp &);
+    template<typename U>
+    friend void detail::wire_teardown(U &, dtls_channel &, const typename U::endpoint_type &);
+    template<typename U>
+    friend void detail::resolve_accept(U &, dtls_channel *);
+    template<typename U>
+    friend void detail::drop_accept(U &, dtls_channel *);
+    template<typename U>
+    friend void detail::accept_new_peer(U &, const typename U::endpoint_type &,
+                                        std::span<const std::byte>);
+    template<typename U>
+    friend void detail::on_datagram(U &, const typename U::endpoint_type &,
+                                    std::span<const std::byte>);
+    template<typename U>
+    friend void detail::resolve_dial(U &, const io::endpoint &, dtls_channel *);
+    template<typename U>
+    friend void detail::fail_dial(U &, const io::endpoint &, dtls_channel *, io::io_error);
 
     ::asio::io_context         &m_io;
     plexus::asio::udp_server    m_server;

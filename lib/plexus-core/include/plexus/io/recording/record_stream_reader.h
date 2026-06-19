@@ -5,6 +5,7 @@
 #include "plexus/io/recording/record_decode.h"
 #include "plexus/io/recording/record_format.h"
 #include "plexus/io/recording/record_envelope.h"
+#include "plexus/io/recording/detail/record_scan.h"
 
 #include "plexus/wire/cursor.h"
 #include "plexus/wire/crc32c.h"
@@ -91,11 +92,11 @@ public:
         {
             schema_definition e;
             e.type_id          = r.varint().value_or(0);
-            e.type_name        = read_string(r);
-            e.message_encoding = read_string(r);
-            e.schema_name      = read_string(r);
-            e.schema_encoding  = read_string(r);
-            e.schema_data      = read_bytes(r);
+            e.type_name        = detail::read_string(r);
+            e.message_encoding = detail::read_string(r);
+            e.schema_name      = detail::read_string(r);
+            e.schema_encoding  = detail::read_string(r);
+            e.schema_data      = detail::read_bytes(r);
             out.schema.push_back(std::move(e));
         }
         out.crypto_position = static_cast<capture_crypto_position>(r.u8());
@@ -129,18 +130,18 @@ public:
             }
             const std::span<const std::byte> payload =
                     m_stream.subspan(len_off, static_cast<std::size_t>(*len));
-            if(is_sync(payload))
+            if(detail::is_sync(payload))
             {
                 at = payload_end;
                 continue;
             }
             decoded_record rec;
-            if(!validate_and_decode(payload, rec))
+            if(!detail::validate_and_decode(payload, rec))
             {
                 // The length varint may itself be corrupt, so do NOT trust payload_end:
                 // resync by scanning forward for the next sync marker (byte-granular).
                 res.corruption_skipped = true;
-                at                     = resync_from(at + 1);
+                at                     = detail::resync_from(m_stream, at + 1);
                 continue;
             }
             at = payload_end;
@@ -151,57 +152,6 @@ public:
     }
 
 private:
-    static std::vector<std::byte> read_bytes(wire::reader &r)
-    {
-        const std::uint64_t len = r.varint().value_or(0);
-        const auto          b   = r.bytes(static_cast<std::size_t>(len));
-        return {b.begin(), b.end()};
-    }
-
-    static std::string read_string(wire::reader &r)
-    {
-        const std::uint64_t len = r.varint().value_or(0);
-        const auto          b   = r.bytes(static_cast<std::size_t>(len));
-        return {reinterpret_cast<const char *>(b.data()), b.size()};
-    }
-
-    static bool is_sync(std::span<const std::byte> payload) noexcept
-    {
-        if(payload.size() != sizeof(std::uint32_t))
-            return false;
-        wire::reader r{payload};
-        return r.u32() == k_sync_marker;
-    }
-
-    // Scan forward from `from` for the next on-disk sync record ([varint len][marker]) and
-    // return the offset at which it begins; returns the stream end if none remains. The
-    // main loop then re-reads that offset as a sync record and resumes past it.
-    [[nodiscard]] std::size_t resync_from(std::size_t from) const noexcept
-    {
-        for(std::size_t at = from; at < m_stream.size(); ++at)
-        {
-            std::size_t off = at;
-            const auto  len = wire::read_varint(m_stream, off);
-            if(!len || off + static_cast<std::size_t>(*len) > m_stream.size())
-                continue;
-            if(is_sync(m_stream.subspan(off, static_cast<std::size_t>(*len))))
-                return at;
-        }
-        return m_stream.size();
-    }
-
-    static bool validate_and_decode(std::span<const std::byte> payload, decoded_record &rec)
-    {
-        if(payload.size() < sizeof(std::uint32_t))
-            return false;
-        const std::size_t   body_len = payload.size() - sizeof(std::uint32_t);
-        wire::reader        cr{payload.subspan(body_len)};
-        const std::uint32_t stored = cr.u32();
-        if(wire::crc32c(payload.first(body_len)) != stored)
-            return false;
-        return decode_record_body(payload.first(body_len), rec);
-    }
-
     std::span<const std::byte> m_stream;
     std::size_t                m_cursor{0};
 };

@@ -21,6 +21,10 @@
 
 namespace plexus::io::detail {
 
+// over-limit: one reassembly window; the fragment-insert, hole-track, and complete-and-deliver
+// steps all operate over the one partial-message buffer, so splitting them scatters the
+// offset/hole state.
+
 // The bounded receiver half of the fragment/reassemble block: a partial-message table keyed by
 // msg_id (a bounded sorted-vector flat map, alloc-free in steady state) holding out-of-order
 // fragments until a message completes, then handing the assembled bytes to an owner-installed sink

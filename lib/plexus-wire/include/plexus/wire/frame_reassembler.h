@@ -15,6 +15,10 @@
 
 namespace plexus::wire {
 
+// over-limit: one frame-reassembly window; the partial-frame accumulate, the hole/offset track,
+// and the complete-and-emit steps share the one assembly buffer, so splitting them scatters the
+// hole/offset state (cohesive with detail/reassembler.h's reason).
+
 // Owning, shareable wire-payload buffer. A complete_frame's bytes are held
 // behind a shared_ptr so the receive seam can hand a zero-copy owning handle to
 // the consumer: this is the Policy-selected byte-owner seam in concrete form,

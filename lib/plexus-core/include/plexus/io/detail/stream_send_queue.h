@@ -14,45 +14,27 @@
 
 namespace plexus::io::detail {
 
-// The STREAM sibling of send_queue: the same sans-IO serial outbound discipline a
-// reliable byte stream needs, hoisted out of the asio socket / ssl::stream so the
-// plaintext TCP channel and the TLS channel reuse ONE block instead of each
-// hand-rolling a near-identical bounded byte-FIFO write loop. The only structural
-// difference from send_queue is the absence of an Endpoint: a stream is already
-// point-to-point, so the send-sink is async_write(socket/stream, buffers) with no
-// destination.
+// The STREAM sibling of send_queue: the sans-IO serial outbound discipline a reliable byte stream
+// needs, hoisted out of the asio socket / ssl::stream so the plaintext TCP and TLS channels reuse
+// ONE block (no Endpoint — a stream is point-to-point, so the send-sink is async_write with no
+// destination).
 //
-// A drain turn issues ONE async_write over a buffer SEQUENCE gathering the front-N
-// queued nodes (asio lowers a ConstBufferSequence to a single writev/WSASend in the
-// composer, never per-frame), so N queued frames cost one syscall instead of N. Each
-// node holds a wire_bytes OWNER handle: enqueue(span) copies the caller's bytes into a
-// node-owned buffer (the async write is a non-owning view, so a reused caller scratch
-// would corrupt an in-flight frame), while enqueue(wire_bytes) holds the supplied owner
-// and passes its view with NO copy (the zero-copy plaintext path). Either way the
-// gathered owners stay resident in the in-flight set until the SINGLE completion fires —
-// the kernel reads all N buffers in the one writev, so releasing any owner before the
-// completion would be a read-after-free. close() drops the queue and a completion firing
-// after close is a guarded no-op.
+// A drain turn issues ONE async_write over a buffer SEQUENCE gathering the front-N queued nodes
+// (asio lowers a ConstBufferSequence to one writev/WSASend), so N frames cost one syscall. Each
+// node holds a wire_bytes OWNER: enqueue(span) copies (the async write is a non-owning view, so a
+// reused caller scratch would corrupt an in-flight frame); enqueue(wire_bytes) holds the supplied
+// owner with NO copy (zero-copy plaintext). The gathered owners stay resident until the SINGLE
+// completion (the kernel reads all N in the one writev — an early release is read-after-free).
 //
-// Capacity is a required-WITH-default knob (default = unbounded, a no-cap sentinel):
-// under the default the block is byte-identical to an unbounded socket write queue
-// and the at-capacity signal is inert. With a finite capacity the cap bounds ADDITIONAL
-// queued BACKLOG, not the size of a single message: an EMPTY queue always admits one
-// frame of ANY size (the negotiated per-message ceiling, enforced upstream at publish,
-// is the SOLE authority over message size; this local cap only governs how much extra
-// backlog may pile up behind an in-flight message). Past the first frame a finite cap
-// refuses to admit beyond the bound (returns false; full() observes the state) so a
-// capped channel can shed (congestion=drop) or stall (congestion=block) on the backlog;
-// admission resumes once a drain frees room. The cap accounts the SUMMED PAYLOAD BYTES,
-// not the entry count, with a compare-BEFORE-add admission so a crafted large frame
-// cannot wrap the running total past the cap and re-admit.
+// Capacity is required-WITH-default unbounded; a finite cap bounds ADDITIONAL queued BACKLOG, not
+// a single message (an EMPTY queue admits one frame of ANY size — the per-message ceiling enforced
+// upstream is the sole message-size authority). Past the first frame a finite cap refuses beyond
+// the bound (compare-before-add over SUMMED PAYLOAD BYTES, no wrap), so a capped channel sheds or
+// stalls on the backlog and admission resumes once a drain frees room.
 //
-// The fail-on-error edge (Pitfall 4): a stream channel FAILS the channel on a socket
-// error. The composer's send-sink reports the error and then closes the block; the
-// completion's open-guard makes the post-close chaining a no-op, so the next queued
-// frames are never written through the failed socket. The error is surfaced to the
-// composer, never swallowed by the block. Single-owner, bare `this`, no shared
-// lifetime — the owner closes the block before it dies.
+// On a socket error the composer's send-sink reports it then closes the block; the completion's
+// open-guard makes post-close chaining a no-op, so the next frames are never written through the
+// failed socket. Single-owner, bare `this`; the owner closes the block before it dies.
 class stream_send_queue
 {
 public:
@@ -164,12 +146,10 @@ private:
         return true;
     }
 
-    // Gather the front-N nodes (N bounded by the gather limit) into one buffer sequence
-    // and issue a SINGLE async_write; on completion pop exactly those N (freeing slots
-    // under a finite cap) and chain the next turn. The gathered nodes stay RESIDENT in
-    // m_queue across the in-flight write — the kernel reads all N owners in the one
-    // writev, so an owner freed before the completion would be read-after-free. The
-    // open-guard stops the chain after the composer fails (and closes) the block.
+    // Gather the front-N nodes into one buffer sequence and issue a SINGLE async_write; on
+    // completion pop exactly those N and chain the next turn (they stay RESIDENT across the write —
+    // an early free is read-after-free). The open-guard stops the chain after a failed-and-closed
+    // block.
     void drive()
     {
         if(m_queue.empty())
