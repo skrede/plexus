@@ -31,7 +31,7 @@
 #include <filesystem>
 
 namespace ptls = plexus::tls;
-namespace pio = plexus::io;
+namespace pio  = plexus::io;
 
 // The full 32-byte SHA-256 SPKI digest — the core cert_facts::spki_sha256 field type.
 using spki_digest = std::array<std::byte, 32>;
@@ -49,20 +49,20 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest digest{};
+    spki_digest           digest{};
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path()
-            / ("plexus_tls_trust_" + tag + "_" + std::to_string(::getpid())
-               + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() /
+                ("plexus_tls_trust_" + tag + "_" + std::to_string(::getpid()) + "_" +
+                 std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
-        key_path = dir / "key.pem";
+        key_path  = dir / "key.pem";
         generate();
     }
 
-    identity_fixture(const identity_fixture &) = delete;
+    identity_fixture(const identity_fixture &)            = delete;
     identity_fixture &operator=(const identity_fixture &) = delete;
 
     ~identity_fixture()
@@ -73,8 +73,8 @@ struct identity_fixture
 
     void generate()
     {
-        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(
-            EVP_EC_gen("P-256"), &EVP_PKEY_free);
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"),
+                                                                 &EVP_PKEY_free);
         REQUIRE(pkey);
 
         std::unique_ptr<X509, decltype(&X509_free)> cert(X509_new(), &X509_free);
@@ -86,14 +86,15 @@ struct identity_fixture
 
         X509_NAME *name = X509_get_subject_name(cert.get());
         X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-            reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1, 0);
+                                   reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1,
+                                   0);
         X509_set_issuer_name(cert.get(), name);
         REQUIRE(X509_sign(cert.get(), pkey.get(), EVP_sha256()) != 0);
 
         write_pem(cert.get(), pkey.get());
-        std::filesystem::permissions(key_path,
-            std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-            std::filesystem::perm_options::replace);
+        std::filesystem::permissions(
+                key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+                std::filesystem::perm_options::replace);
 
         auto d = ptls::spki_fingerprint(*cert.get());
         REQUIRE(d.has_value());
@@ -118,7 +119,7 @@ struct identity_fixture
 ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &peer_pin)
 {
     auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-        std::vector<spki_digest>{peer_pin});
+            std::vector<spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -126,8 +127,8 @@ ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &pe
 // allowlist) — fail-closed: it rejects every peer.
 ptls::tls_credential pin_none(const identity_fixture &self)
 {
-    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-        std::vector<spki_digest>{});
+    auto policy =
+            std::make_shared<const pio::security::spki_pin_policy>(std::vector<spki_digest>{});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -138,44 +139,45 @@ ptls::tls_credential pin_none(const identity_fixture &self)
 // verify reject on EITHER side leaves the corresponding end empty (fail-closed).
 struct trust_link
 {
-    ::asio::io_context io;
+    ::asio::io_context   io;
     ptls::tls_credential accepter_cred;
     ptls::tls_credential dialer_cred;
-    ptls::tls_transport accepter;
-    ptls::tls_transport dialer;
+    ptls::tls_transport  accepter;
+    ptls::tls_transport  dialer;
 
     std::unique_ptr<ptls::tls_channel> accepted;
     std::unique_ptr<ptls::tls_channel> dialed;
-    bool dial_failed{false};
-    bool dialed_errored{false};
+    bool                               dial_failed{false};
+    bool                               dialed_errored{false};
 
     std::vector<std::vector<std::byte>> accepter_received;
 
     trust_link(ptls::tls_credential a, ptls::tls_credential d)
-        : accepter_cred(std::move(a))
-        , dialer_cred(std::move(d))
-        , accepter(io, accepter_cred)
-        , dialer(io, dialer_cred)
+            : accepter_cred(std::move(a))
+            , dialer_cred(std::move(d))
+            , accepter(io, accepter_cred)
+            , dialer(io, dialer_cred)
     {
-        accepter.on_accepted([this](std::unique_ptr<ptls::tls_channel> ch) {
-            accepted = std::move(ch);
-            accepted->on_data([this](std::span<const std::byte> d) {
-                accepter_received.emplace_back(d.begin(), d.end());
-            });
-        });
-        dialer.on_dialed([this](std::unique_ptr<ptls::tls_channel> ch, const pio::endpoint &) {
-            dialed = std::move(ch);
-            dialed->on_error([this](pio::io_error) { dialed_errored = true; });
-        });
-        dialer.on_dial_failed([this](const pio::endpoint &, pio::io_error) {
-            dial_failed = true;
-        });
+        accepter.on_accepted(
+                [this](std::unique_ptr<ptls::tls_channel> ch)
+                {
+                    accepted = std::move(ch);
+                    accepted->on_data([this](std::span<const std::byte> d)
+                                      { accepter_received.emplace_back(d.begin(), d.end()); });
+                });
+        dialer.on_dialed(
+                [this](std::unique_ptr<ptls::tls_channel> ch, const pio::endpoint &)
+                {
+                    dialed = std::move(ch);
+                    dialed->on_error([this](pio::io_error) { dialed_errored = true; });
+                });
+        dialer.on_dial_failed([this](const pio::endpoint &, pio::io_error) { dial_failed = true; });
 
         accepter.listen({"tls", "127.0.0.1:0"});
         dialer.dial({"tls", "127.0.0.1:" + std::to_string(accepter.port())});
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -206,10 +208,12 @@ struct trust_link
 
 std::vector<std::byte> make_frame(const std::string &payload)
 {
-    plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::unidirectional,
-                                   .flags = 0, .session_id = 1,
-                                   .timestamp_ns = 0, .payload_len = 0};
-    auto bytes = reinterpret_cast<const std::byte *>(payload.data());
+    plexus::wire::frame_header hdr{.type         = plexus::wire::msg_type::unidirectional,
+                                   .flags        = 0,
+                                   .session_id   = 1,
+                                   .timestamp_ns = 0,
+                                   .payload_len  = 0};
+    auto                       bytes = reinterpret_cast<const std::byte *>(payload.data());
     return plexus::wire::encode_frame(hdr, std::span<const std::byte>{bytes, payload.size()});
 }
 
@@ -217,14 +221,15 @@ constexpr int k_iterations = 100;
 
 }
 
-TEST_CASE("tls trust: mutual cross-pinning lands both ends live and delivers byte-identical, looped",
-          "[tls][trust][failclosed]")
+TEST_CASE(
+        "tls trust: mutual cross-pinning lands both ends live and delivers byte-identical, looped",
+        "[tls][trust][failclosed]")
 {
     identity_fixture acc("acc");
     identity_fixture dia("dia");
 
     const std::string payload = "mutual-pin-accepts-and-the-frame-survives";
-    const auto frame = make_frame(payload);
+    const auto        frame   = make_frame(payload);
 
     int completed = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
@@ -234,7 +239,7 @@ TEST_CASE("tls trust: mutual cross-pinning lands both ends live and delivers byt
 
         REQUIRE_FALSE(l.dial_failed);
         REQUIRE(l.accepted != nullptr);
-        REQUIRE(l.dialed != nullptr);   // delivered POST-handshake only
+        REQUIRE(l.dialed != nullptr); // delivered POST-handshake only
 
         l.dialed->send(std::span<const std::byte>{frame});
         l.pump_until([&] { return !l.accepter_received.empty(); });
@@ -245,12 +250,13 @@ TEST_CASE("tls trust: mutual cross-pinning lands both ends live and delivers byt
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("tls trust: the accepter not pinning the dialer fails closed — no accepted channel, no data, looped",
+TEST_CASE("tls trust: the accepter not pinning the dialer fails closed — no accepted channel, no "
+          "data, looped",
           "[tls][trust][failclosed]")
 {
     identity_fixture acc("acc");
     identity_fixture dia("dia");
-    const auto frame = make_frame("a-rejected-dialer-must-never-reach-the-accepter");
+    const auto       frame = make_frame("a-rejected-dialer-must-never-reach-the-accepter");
 
     int rejected = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
@@ -266,20 +272,21 @@ TEST_CASE("tls trust: the accepter not pinning the dialer fails closed — no ac
         // yields NO channel, the dialer's transient channel errors out, and NO
         // application byte ever crosses to the accepter.
         identity_fixture other("oth");
-        trust_link l(pin_one(acc, other.digest), pin_one(dia, acc.digest));
+        trust_link       l(pin_one(acc, other.digest), pin_one(dia, acc.digest));
         l.pump_until([&] { return l.accepted || l.dialed || l.dial_failed; });
         l.try_send_then_settle(std::span<const std::byte>{frame});
 
-        REQUIRE(l.accepted == nullptr);             // accepter-side reject: no accepted channel
-        REQUIRE(l.accepter_received.empty());       // and NO data crosses to the accepter
+        REQUIRE(l.accepted == nullptr);       // accepter-side reject: no accepted channel
+        REQUIRE(l.accepter_received.empty()); // and NO data crosses to the accepter
         if(l.dialed)
-            REQUIRE(l.dialed_errored);              // the dialer's transient channel is dead-on-arrival
+            REQUIRE(l.dialed_errored); // the dialer's transient channel is dead-on-arrival
         ++rejected;
     }
     REQUIRE(rejected == k_iterations);
 }
 
-TEST_CASE("tls trust: the dialer not pinning the accepter fails closed — on_dialed never fires, looped",
+TEST_CASE("tls trust: the dialer not pinning the accepter fails closed — on_dialed never fires, "
+          "looped",
           "[tls][trust][failclosed]")
 {
     identity_fixture acc("acc");
@@ -292,11 +299,11 @@ TEST_CASE("tls trust: the dialer not pinning the accepter fails closed — on_di
         // identity's digest instead of the accepter's — proving the DIALER
         // verifies the server too (not just the server verifying the client).
         identity_fixture other("oth");
-        trust_link l(pin_one(acc, dia.digest), pin_one(dia, other.digest));
+        trust_link       l(pin_one(acc, dia.digest), pin_one(dia, other.digest));
         l.pump_until([&] { return l.accepted || l.dialed || l.dial_failed; });
         l.settle();
 
-        REQUIRE(l.dialed == nullptr);   // the dialer NEVER reaches on_dialed (it verifies)
+        REQUIRE(l.dialed == nullptr); // the dialer NEVER reaches on_dialed (it verifies)
         ++rejected;
     }
     REQUIRE(rejected == k_iterations);
@@ -317,7 +324,7 @@ TEST_CASE("tls trust: a mismatched (wrong-digest) pin rejects — no channel, lo
         // reject is in-handshake for the client), so on_dialed never fires; the
         // accepter rejects too, so no accepted channel either.
         identity_fixture wrong("wrg");
-        trust_link l(pin_one(acc, wrong.digest), pin_one(dia, wrong.digest));
+        trust_link       l(pin_one(acc, wrong.digest), pin_one(dia, wrong.digest));
         l.pump_until([&] { return l.accepted || l.dialed || l.dial_failed; });
         l.settle();
 
@@ -333,7 +340,7 @@ TEST_CASE("tls trust: a credential with an empty (no-pin) policy rejects every p
 {
     identity_fixture acc("acc");
     identity_fixture dia("dia");
-    const auto frame = make_frame("an-empty-pin-policy-authorizes-no-one");
+    const auto       frame = make_frame("an-empty-pin-policy-authorizes-no-one");
 
     int rejected = 0;
     for(int iter = 0; iter < k_iterations; ++iter)

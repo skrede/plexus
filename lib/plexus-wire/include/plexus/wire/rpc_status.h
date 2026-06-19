@@ -20,14 +20,14 @@ namespace plexus::wire {
 // later is additive, not an enum renumbering.
 enum class rpc_status : std::uint8_t
 {
-    success            = 0,
-    error              = 1,
-    timeout            = 2,
-    cancelled          = 3,
-    no_handler         = 4,
-    deserialize_failed = 5,
-    topic_not_found    = 8,
-    peer_disconnected  = 18,
+    success             = 0,
+    error               = 1,
+    timeout             = 2,
+    cancelled           = 3,
+    no_handler          = 4,
+    deserialize_failed  = 5,
+    topic_not_found     = 8,
+    peer_disconnected   = 18,
     rpc_response_orphan = 20,
 };
 

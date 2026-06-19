@@ -43,10 +43,10 @@ using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 
-using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using inproc_caller = plexus::caller<>;
+using inproc_node      = plexus::node<inproc_policy, inproc_transport<>>;
+using inproc_caller    = plexus::caller<>;
 using inproc_procedure = plexus::procedure<>;
-using reply_t = plexus::reply;
+using reply_t          = plexus::reply;
 
 plexus::node_id make_id(std::uint8_t seed)
 {
@@ -58,10 +58,10 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0xCA11Eu;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0xCA11Eu;
     opts.dial_eagerly = eager;
     return opts;
 }
@@ -81,11 +81,11 @@ std::string to_string(std::span<const std::byte> b)
 // accepts A's dial as the single inbound session the round-trip rides bidirectionally.
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -109,28 +109,29 @@ struct net
 TEST_CASE("call family: round-trip is byte-identical, looped", "[node][call]")
 {
     constexpr int k_iterations = 5;
-    net n;
+    net           n;
     n.connect();
 
     // The provider echoes "reply:<param>".
-    inproc_procedure proc{
-        n.b, "rpc",
-        [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply) {
-            const std::string out = "reply:" + to_string(param);
-            reply(plexus::wire::rpc_status::success, as_bytes(out));
-        }};
-    inproc_caller call{n.a, "rpc"};
+    inproc_procedure proc{n.b, "rpc",
+                          [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply)
+                          {
+                              const std::string out = "reply:" + to_string(param);
+                              reply(plexus::wire::rpc_status::success, as_bytes(out));
+                          }};
+    inproc_caller    call{n.a, "rpc"};
     n.drive();
 
     int delivered = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
-        const std::string req = "req-" + std::to_string(i);
-        std::optional<std::string> got;
+        const std::string              req = "req-" + std::to_string(i);
+        std::optional<std::string>     got;
         std::optional<plexus::node_id> provider;
-        bool reception_stamped = false;
+        bool                           reception_stamped = false;
         call.call(as_bytes(req),
-                  [&](plexus::expected<reply_t, std::error_code> r) {
+                  [&](plexus::expected<reply_t, std::error_code> r)
+                  {
                       REQUIRE(static_cast<bool>(r));
                       got = to_string(r.value().bytes);
                       if(r.value().info.provider_identity)
@@ -148,32 +149,33 @@ TEST_CASE("call family: round-trip is byte-identical, looped", "[node][call]")
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("call family: a second local serve on one fqn throws and leaves the first serving", "[node][call]")
+TEST_CASE("call family: a second local serve on one fqn throws and leaves the first serving",
+          "[node][call]")
 {
     net n;
     n.connect();
 
-    int first_calls = 0;
+    int              first_calls = 0;
     inproc_procedure proc{
-        n.b, "rpc",
-        [&](std::span<const std::byte>, inproc_procedure::reply_fn &reply) {
-            ++first_calls;
-            reply(plexus::wire::rpc_status::success, as_bytes(std::string{"first"}));
-        }};
+            n.b, "rpc", [&](std::span<const std::byte>, inproc_procedure::reply_fn &reply)
+            {
+                ++first_calls;
+                reply(plexus::wire::rpc_status::success, as_bytes(std::string{"first"}));
+            }};
 
     REQUIRE_THROWS_AS(
-        (inproc_procedure{n.b, "rpc",
-                          [](std::span<const std::byte>, inproc_procedure::reply_fn &reply) {
-                              reply(plexus::wire::rpc_status::success, {});
-                          }}),
-        std::logic_error);
+            (inproc_procedure{n.b, "rpc",
+                              [](std::span<const std::byte>, inproc_procedure::reply_fn &reply)
+                              { reply(plexus::wire::rpc_status::success, {}); }}),
+            std::logic_error);
 
     // The refused ctor left no side effect: the FIRST handler still answers.
     inproc_caller call{n.a, "rpc"};
     n.drive();
     std::optional<std::string> got;
     call.call(as_bytes(std::string{"x"}),
-              [&](plexus::expected<reply_t, std::error_code> r) {
+              [&](plexus::expected<reply_t, std::error_code> r)
+              {
                   REQUIRE(static_cast<bool>(r));
                   got = to_string(r.value().bytes);
               });
@@ -189,16 +191,15 @@ TEST_CASE("call family: dropping the procedure retires it to no_handler", "[node
 
     {
         inproc_procedure proc{
-            n.b, "rpc",
-            [](std::span<const std::byte>, inproc_procedure::reply_fn &reply) {
-                reply(plexus::wire::rpc_status::success, as_bytes(std::string{"served"}));
-            }};
+                n.b, "rpc", [](std::span<const std::byte>, inproc_procedure::reply_fn &reply)
+                { reply(plexus::wire::rpc_status::success, as_bytes(std::string{"served"})); }};
         n.drive();
 
-        inproc_caller call{n.a, "rpc"};
+        inproc_caller              call{n.a, "rpc"};
         std::optional<std::string> got;
         call.call(as_bytes(std::string{"q"}),
-                  [&](plexus::expected<reply_t, std::error_code> r) {
+                  [&](plexus::expected<reply_t, std::error_code> r)
+                  {
                       REQUIRE(static_cast<bool>(r));
                       got = to_string(r.value().bytes);
                   });
@@ -207,12 +208,13 @@ TEST_CASE("call family: dropping the procedure retires it to no_handler", "[node
     }
     // proc dropped here — its handler is retired.
 
-    inproc_caller call{n.a, "rpc"};
+    inproc_caller                  call{n.a, "rpc"};
     std::optional<std::error_code> err;
-    plexus::call_options opts;
+    plexus::call_options           opts;
     opts.deadline = std::chrono::milliseconds(50);
     call.call(as_bytes(std::string{"q"}), opts,
-              [&](plexus::expected<reply_t, std::error_code> r) {
+              [&](plexus::expected<reply_t, std::error_code> r)
+              {
                   REQUIRE_FALSE(static_cast<bool>(r));
                   err = r.error();
               });
@@ -234,7 +236,7 @@ struct u32_value
     std::uint32_t value{};
 };
 
-template <typename T>
+template<typename T>
 struct echo_codec
 {
     using value_type = T;
@@ -252,7 +254,7 @@ struct echo_codec
     {
         if(b.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(b[i])) << (8 * i);
@@ -271,7 +273,7 @@ static_assert(__is_same(plexus::caller<u32_value(u32_value), echo_codec>,
 // The asymmetric form binds two DIFFERENT families for request and response, request-first:
 // the response half is alt_codec while the request half stays echo_codec, so the endpoint
 // differs from the symmetric echo_codec spelling. A second codec family witnesses it.
-template <typename T>
+template<typename T>
 struct alt_codec
 {
     using value_type = T;
@@ -283,8 +285,7 @@ struct alt_codec
     }
 };
 
-using asymmetric_procedure =
-    plexus::procedure<u32_value(u32_value), echo_codec, alt_codec>;
+using asymmetric_procedure = plexus::procedure<u32_value(u32_value), echo_codec, alt_codec>;
 static_assert(__is_same(asymmetric_procedure,
                         plexus::procedure<u32_value(u32_value), echo_codec, alt_codec>));
 static_assert(!__is_same(asymmetric_procedure,
@@ -293,7 +294,7 @@ static_assert(!__is_same(asymmetric_procedure,
 // The one-off concrete-codec lift idiom: an alias template lifts a finished codec into the
 // family slot (the P0522 template-template-argument path). It must bind and name the same
 // endpoint as the direct family spelling.
-template <typename>
+template<typename>
 using lifted_echo = echo_codec<u32_value>;
 static_assert(__is_same(plexus::procedure<u32_value(u32_value), lifted_echo>,
                         plexus::procedure<u32_value(u32_value), lifted_echo, lifted_echo>));
@@ -312,17 +313,16 @@ TEST_CASE("call family: the family-form spelling names the same caller/procedure
     net n;
     n.connect();
 
-    family_procedure proc{
-        n.b, "rpc",
-        [](const u32_value &req) -> plexus::expected<u32_value, std::error_code> {
-            return u32_value{req.value + 1};
-        }};
-    family_caller call{n.a, "rpc"};
+    family_procedure proc{n.b, "rpc",
+                          [](const u32_value &req) -> plexus::expected<u32_value, std::error_code>
+                          { return u32_value{req.value + 1}; }};
+    family_caller    call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::uint32_t> got;
     call.call(u32_value{41},
-              [&](plexus::expected<u32_value, std::error_code> r) {
+              [&](plexus::expected<u32_value, std::error_code> r)
+              {
                   REQUIRE(static_cast<bool>(r));
                   got = r.value().value;
               });

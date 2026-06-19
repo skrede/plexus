@@ -81,7 +81,7 @@ struct acquire_failure
 {
     acquire_bound bound       = acquire_bound::none;
     std::uint64_t ask_bytes   = 0;
-    std::uint64_t limit_bytes = 0;          // the slab ceiling (slab_ceiling bound only)
+    std::uint64_t limit_bytes = 0;                 // the slab ceiling (slab_ceiling bound only)
     region_status broker      = region_status::ok; // the OS verdict (os_allocator bound only)
 };
 
@@ -117,12 +117,13 @@ struct acquire_failure
 // Borrows the broker BY REFERENCE; non-copy/non-move owning service (the sole
 // lifecycle owner). Templated on the broker + notifier seams so core pulls no
 // POSIX/asio header.
-template <typename Broker, typename Notifier>
+template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_topic_registry
 {
 public:
-    using deliver_fn = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
+    using deliver_fn =
+            plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
     // The notifier-binder: constructs each entry's notifier in place over the ring's
     // in-region generation word once the ring is bound. A notifier that wakes on a
@@ -132,10 +133,8 @@ public:
     // to a concrete notifier's ctor: the default emplaces a default-constructed notifier
     // (the recording/stub seam), and the asio composition injects a binder that captures
     // the io_context and emplaces the reactor bridge over (executor, word).
-    using notifier_binder =
-        plexus::detail::move_only_function<void(std::optional<Notifier> &,
-                                                std::atomic<std::uint32_t> &,
-                                                std::atomic<std::uint32_t> &)>;
+    using notifier_binder = plexus::detail::move_only_function<void(
+            std::optional<Notifier> &, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &)>;
 
     // The default binder: emplace a default-constructed notifier, ignoring the word.
     // The stub/recording notifier the unit oracles use is default-constructible and
@@ -152,19 +151,22 @@ public:
     // caller that threads no node knob keeps the shipped bound. plan 03 fails closed
     // above it; this plan threads it so the enforced ceiling is the node value.
     shm_topic_registry(Broker &broker, reliability rel, congestion cong,
-                       notifier_binder bind_notifier = default_notifier_binder(),
-                       std::uint64_t max_ring_slab_bytes = k_max_ring_slab_bytes,
-                       std::string region_ns = {}) noexcept
-        : m_broker(broker), m_reliability(rel), m_congestion(cong),
-          m_bind_notifier(std::move(bind_notifier)), m_max_ring_slab_bytes(max_ring_slab_bytes),
-          m_region_ns(std::move(region_ns))
+                       notifier_binder bind_notifier       = default_notifier_binder(),
+                       std::uint64_t   max_ring_slab_bytes = k_max_ring_slab_bytes,
+                       std::string     region_ns           = {}) noexcept
+            : m_broker(broker)
+            , m_reliability(rel)
+            , m_congestion(cong)
+            , m_bind_notifier(std::move(bind_notifier))
+            , m_max_ring_slab_bytes(max_ring_slab_bytes)
+            , m_region_ns(std::move(region_ns))
     {
     }
 
-    shm_topic_registry(const shm_topic_registry &) = delete;
+    shm_topic_registry(const shm_topic_registry &)            = delete;
     shm_topic_registry &operator=(const shm_topic_registry &) = delete;
-    shm_topic_registry(shm_topic_registry &&) = delete;
-    shm_topic_registry &operator=(shm_topic_registry &&) = delete;
+    shm_topic_registry(shm_topic_registry &&)                 = delete;
+    shm_topic_registry &operator=(shm_topic_registry &&)      = delete;
 
     ~shm_topic_registry() { teardown_all(); }
 
@@ -173,10 +175,10 @@ public:
     // with. A first acquire mints (or attaches to a peer's) ring of the geometry
     // max_payload sizes (0 -> default).
     acquire_result acquire(const std::string &fqn, ring_direction direction,
-                           std::uint32_t max_payload,
+                           std::uint32_t      max_payload,
                            ring_geometry_mode mode = ring_geometry_mode::reliable_preserving,
-                           std::uint32_t consumer_capacity = 0,
-                           acquire_mode amode = acquire_mode::reclaim_stale)
+                           std::uint32_t      consumer_capacity = 0,
+                           acquire_mode       amode             = acquire_mode::reclaim_stale)
     {
         const key k{fqn, direction};
         if(auto it = m_entries.find(k); it != m_entries.end())
@@ -185,10 +187,10 @@ public:
             return it->second->verdict;
         }
 
-        auto e = std::make_unique<entry>();
+        auto e         = std::make_unique<entry>();
         m_last_failure = acquire_failure{};
         const acquire_result verdict =
-            open_ring(*e, fqn, direction, max_payload, mode, consumer_capacity, amode);
+                open_ring(*e, fqn, direction, max_payload, mode, consumer_capacity, amode);
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
 
@@ -222,7 +224,7 @@ public:
     void release(const std::string &fqn, ring_direction direction)
     {
         const key k{fqn, direction};
-        auto it = m_entries.find(k);
+        auto      it = m_entries.find(k);
         if(it == m_entries.end())
             return;
         if(--it->second->refcount > 0)
@@ -287,7 +289,10 @@ public:
     // (slab ceiling vs OS allocator) plus the exact ask vs available. The mux member
     // surfaces it on a failed dial so a publisher learns WHY the ring could not be
     // provisioned, never a silent downgrade. bound == none after a successful acquire.
-    [[nodiscard]] const acquire_failure &last_acquire_failure() const noexcept { return m_last_failure; }
+    [[nodiscard]] const acquire_failure &last_acquire_failure() const noexcept
+    {
+        return m_last_failure;
+    }
 
     // Apply the node-level per-ring slab ceiling. Called once by the node owner at
     // construction so the enforced ceiling is the node value rather than the shipped
@@ -311,7 +316,7 @@ private:
         std::size_t operator()(const key &k) const noexcept
         {
             return std::hash<std::string>{}(k.fqn) ^
-                   static_cast<std::size_t>(k.direction) * 0x9e3779b9u;
+                    static_cast<std::size_t>(k.direction) * 0x9e3779b9u;
         }
     };
 
@@ -327,18 +332,18 @@ private:
     {
         entry() = default;
 
-        typename Broker::region_handle  control;
-        typename Broker::region_handle  slab;
-        broadcast_ring                  ring;
-        std::optional<Notifier>         notify;
+        typename Broker::region_handle       control;
+        typename Broker::region_handle       slab;
+        broadcast_ring                       ring;
+        std::optional<Notifier>              notify;
         std::optional<shm_channel<Notifier>> channel;
-        acquire_result                  verdict  = acquire_result::failed;
-        int                             refcount = 0;
-        bool                            creator  = false;
+        acquire_result                       verdict  = acquire_result::failed;
+        int                                  refcount = 0;
+        bool                                 creator  = false;
         // The consumer delivery sink. Unset = the wake-drain discards (the send-only
         // default). Set by set_consumer_sink when a same-host receive companion attaches;
         // destroyed with the entry at teardown, so no wake can deliver onto a freed sink.
-        deliver_fn                      sink;
+        deliver_fn sink;
 
         // Drain every pending message off the single consumer cursor into the sink (or
         // discard when no sink is set). The ONE place the cursor is taken, so the armed
@@ -372,12 +377,12 @@ private:
                              std::uint32_t max_payload, ring_geometry_mode mode,
                              std::uint32_t consumer_capacity, acquire_mode amode)
     {
-        const std::string ctrl_name = region_name_for(fqn, direction, m_region_ns);
-        const std::string slab_name = ctrl_name + ".s";
+        const std::string                  ctrl_name = region_name_for(fqn, direction, m_region_ns);
+        const std::string                  slab_name = ctrl_name + ".s";
         const std::optional<std::uint32_t> want =
-            max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{max_payload};
+                max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{max_payload};
         const std::uint64_t capacity = consumer_capacity == 0 ? k_max_consumers : consumer_capacity;
-        const ring_geometry geom = ring_geometry_for(want, mode, consumer_capacity);
+        const ring_geometry geom     = ring_geometry_for(want, mode, consumer_capacity);
 
         // The ceiling leg of the unified fail-closed gate is a PURE query (no broker
         // touch): reject an over-ceiling reliable ring before any region is minted, so
@@ -386,8 +391,8 @@ private:
         const std::uint64_t ask = slab_region_bytes(geom.cell_count, geom.slot_capacity);
         if(ask > m_max_ring_slab_bytes)
         {
-            m_last_failure =
-                acquire_failure{acquire_bound::slab_ceiling, ask, m_max_ring_slab_bytes, region_status::ok};
+            m_last_failure = acquire_failure{acquire_bound::slab_ceiling, ask,
+                                             m_max_ring_slab_bytes, region_status::ok};
             return acquire_result::failed;
         }
 
@@ -400,7 +405,7 @@ private:
         create_options opts;
         opts.unlink_stale_on_create = amode == acquire_mode::reclaim_stale;
         const region_status cs =
-            m_broker.create(ctrl_name, control_region_bytes(geom.cell_count), opts, e.control);
+                m_broker.create(ctrl_name, control_region_bytes(geom.cell_count), opts, e.control);
         if(cs == region_status::ok)
             return mint(e, slab_name, geom, capacity);
         if(cs == region_status::already_exists)
@@ -429,8 +434,8 @@ private:
         // cannot map fails closed naming the OS-ALLOCATOR bound with the exact ask and
         // the broker's verdict. NEVER an auto-downgrade and NEVER a silently-shrunk ring.
         const std::uint64_t ask = slab_region_bytes(geom.cell_count, geom.slot_capacity);
-        if(const region_status cs =
-               m_broker.create(slab_name, ask, create_options{.unlink_stale_on_create = true}, e.slab);
+        if(const region_status cs = m_broker.create(
+                   slab_name, ask, create_options{.unlink_stale_on_create = true}, e.slab);
            cs != region_status::ok)
         {
             m_last_failure = acquire_failure{acquire_bound::os_allocator, ask, 0, cs};

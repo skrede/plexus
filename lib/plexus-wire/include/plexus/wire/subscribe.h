@@ -17,21 +17,21 @@ namespace plexus::wire {
 
 enum class subscribe_status : uint8_t
 {
-    subscribed                   = 0x01,
-    created                      = 0x02,
-    type_mismatch                = 0x03,
-    already_subscribed           = 0x04,
+    subscribed         = 0x01,
+    created            = 0x02,
+    type_mismatch      = 0x03,
+    already_subscribed = 0x04,
     // A soft request-vs-offered field failed under a strict subscriber.
-    incompatible_qos             = 0x05,
+    incompatible_qos = 0x05,
     // The always-hard requires_source_identity field was unmet (any mode).
     source_identity_incompatible = 0x06,
     // A permissive accept whose trailing degraded_flags byte names the soft fields
     // that went unsatisfied.
-    subscribed_degraded          = 0x07,
+    subscribed_degraded = 0x07,
     // A strict-posture subscriber attached to a producer that declared no type. Only
     // ever emitted to a subscriber that requested the strict attach posture, so an old
     // peer (which never sets that bit) never receives it (append-safe).
-    type_undeclared              = 0x08
+    type_undeclared = 0x08
 };
 
 enum class unsubscribe_status : uint8_t
@@ -54,41 +54,41 @@ enum class subscribe_notification : uint8_t
 // io::subscriber_qos at the decode site, packing/unpacking requested_flags.
 struct subscribe_qos_region
 {
-    uint8_t  durability;        // {0=none, 1=latest, 2=all}
-    uint8_t  delivery_mode;     // {0=push, 1=pull}
-    uint32_t replay_depth;      // 0 => use the ring depth
-    uint8_t  requested_flags;   // bit0=requires_source_identity, bit1=requested_reliability_reliable
-    uint64_t requested_deadline_ns; // 0 = unset
-    uint64_t requested_lease_ns;    // 0 = unset
-    uint8_t  requested_priority;    // carry-only; default band 0
+    uint8_t  durability;      // {0=none, 1=latest, 2=all}
+    uint8_t  delivery_mode;   // {0=push, 1=pull}
+    uint32_t replay_depth;    // 0 => use the ring depth
+    uint8_t  requested_flags; // bit0=requires_source_identity, bit1=requested_reliability_reliable
+    uint64_t requested_deadline_ns;       // 0 = unset
+    uint64_t requested_lease_ns;          // 0 = unset
+    uint8_t  requested_priority;          // carry-only; default band 0
     uint32_t requested_max_message_bytes; // 0 = unset = always compatible
 };
 
 struct subscribe_request
 {
-    std::string fqn;
-    std::string type_name;
-    uint64_t topic_hash;
-    uint64_t type_hash;
+    std::string          fqn;
+    std::string          type_name;
+    uint64_t             topic_hash;
+    uint64_t             type_hash;
     endpoint_source_type source;
     // The flag-gated, trailing QoS region. has_qos=false (the default) encodes
     // NO trailing bytes, so the frame is byte-identical to the pre-region layout
     // a v3 producer would write; the decoder maps an absent region to the qos
     // defaults. has_qos=true appends the fixed 30-byte region after type_name.
-    bool has_qos = false;
+    bool                 has_qos = false;
     subscribe_qos_region qos{};
 };
 
 struct subscribe_response
 {
-    uint64_t topic_hash;
+    uint64_t         topic_hash;
     subscribe_status status;
     // The optional trailing degraded-field surface (gated like subscribe_request's
     // has_qos region). has_degraded=false (the default) encodes NO trailing byte, so
     // every refusal and every clean `subscribed` stays byte-identical to the pre-extension
     // 9-byte layout a v4 peer wrote. has_degraded=true (a permissive subscribed_degraded
     // accept) appends one byte carrying the unsatisfied soft-field bitmask.
-    bool has_degraded = false;
+    bool         has_degraded   = false;
     std::uint8_t degraded_flags = 0;
 };
 
@@ -107,7 +107,7 @@ struct unsubscribe_request
 
 struct unsubscribe_response
 {
-    uint64_t topic_hash;
+    uint64_t           topic_hash;
     unsubscribe_status status;
 };
 
@@ -119,9 +119,9 @@ namespace detail {
 // Minimum = 8 + 8 + 1 + 2 + 2 = 21 bytes
 
 constexpr std::size_t subscribe_request_fixed_prefix = 17; // 8 + 8 + 1
-constexpr std::size_t subscribe_request_min_size = 21;     // + 2 + 2
-constexpr std::size_t unsubscribe_request_size = 8;
-constexpr std::size_t unsubscribe_response_size = 9; // 8 + 1
+constexpr std::size_t subscribe_request_min_size     = 21; // + 2 + 2
+constexpr std::size_t unsubscribe_request_size       = 8;
+constexpr std::size_t unsubscribe_response_size      = 9; // 8 + 1
 
 // Per-decoder policy bounds on the two uint16_t-prefixed string fields of
 // subscribe_request. Both are attacker-controlled across an unauthenticated
@@ -141,23 +141,23 @@ constexpr std::size_t k_max_type_name = 512;
 //   durability            u8  @ 0   {0=none, 1=latest, 2=all}
 //   delivery_mode         u8  @ 1   {0=push, 1=pull}
 //   replay_depth          u32 @ 2   (0 => use the ring depth)
-//   requested_flags       u8  @ 6   bit0=requires_source_identity, bit1=requested_reliability_reliable
-//   requested_deadline_ns u64 @ 7   (0 = unset)
+//   requested_flags       u8  @ 6   bit0=requires_source_identity,
+//   bit1=requested_reliability_reliable requested_deadline_ns u64 @ 7   (0 = unset)
 //   requested_lease_ns    u64 @ 15  (0 = unset)
 //   requested_priority    u8  @ 23  (carry-only)
 //   requested_max_message_bytes u32 @ 24 (0 = unset = always compatible)
 //   reserved              u8[2] @ 28 (=0; future wire needs ride here)
 // Byte-sum = 1+1+4+1+8+8+1+4+2 = 30 bytes, fixed.
-constexpr std::size_t k_qos_durability_off    = 0;
-constexpr std::size_t k_qos_delivery_off      = 1;
-constexpr std::size_t k_qos_replay_depth_off  = 2;
-constexpr std::size_t k_qos_flags_off         = 6;
-constexpr std::size_t k_qos_deadline_ns_off   = 7;
-constexpr std::size_t k_qos_lease_ns_off       = 15;
-constexpr std::size_t k_qos_priority_off       = 23;
-constexpr std::size_t k_qos_max_message_off    = 24;
-constexpr std::size_t k_qos_reserved_off       = 28;
-constexpr std::size_t k_qos_reserved_size      = 2;
+constexpr std::size_t k_qos_durability_off   = 0;
+constexpr std::size_t k_qos_delivery_off     = 1;
+constexpr std::size_t k_qos_replay_depth_off = 2;
+constexpr std::size_t k_qos_flags_off        = 6;
+constexpr std::size_t k_qos_deadline_ns_off  = 7;
+constexpr std::size_t k_qos_lease_ns_off     = 15;
+constexpr std::size_t k_qos_priority_off     = 23;
+constexpr std::size_t k_qos_max_message_off  = 24;
+constexpr std::size_t k_qos_reserved_off     = 28;
+constexpr std::size_t k_qos_reserved_size    = 2;
 
 constexpr std::size_t k_qos_region_size = k_qos_reserved_off + k_qos_reserved_size;
 static_assert(k_qos_region_size == 1 + 1 + 4 + 1 + 8 + 8 + 1 + 4 + 2,
@@ -174,11 +174,11 @@ constexpr std::uint8_t k_qos_flag_requires_source_identity = 0x01;
 constexpr std::uint8_t k_qos_flag_requested_reliable       = 0x02;
 // The subscriber's strict/permissive RxO choice rides the next free reserved bit;
 // clear = permissive (the friendly default), set = strict.
-constexpr std::uint8_t k_qos_flag_rxo_strict               = 0x04;
+constexpr std::uint8_t k_qos_flag_rxo_strict = 0x04;
 // The subscriber's strict TYPED attach posture rides the next free reserved bit;
 // clear = lenient (the friendly default, attaches to an untyped producer), set =
 // strict (refuses an untyped producer with subscribe_status::type_undeclared).
-constexpr std::uint8_t k_qos_flag_typed_strict             = 0x08;
+constexpr std::uint8_t k_qos_flag_typed_strict = 0x08;
 
 }
 
@@ -199,11 +199,12 @@ inline void write_qos_region(std::byte *p, const subscribe_qos_region &qos)
 
 inline std::vector<std::byte> encode_subscribe_request(const subscribe_request &req)
 {
-    auto total = detail::subscribe_request_fixed_prefix + 2 + req.fqn.size() + 2 + req.type_name.size();
+    auto total =
+            detail::subscribe_request_fixed_prefix + 2 + req.fqn.size() + 2 + req.type_name.size();
     if(req.has_qos)
-        total += 2 + detail::k_qos_region_size;   // uint16_t length prefix + the fixed region
+        total += 2 + detail::k_qos_region_size; // uint16_t length prefix + the fixed region
     std::vector<std::byte> buf(total);
-    auto *p = buf.data();
+    auto                  *p = buf.data();
 
     wire::detail::write_u64(p, req.topic_hash);
     p += 8;
@@ -244,7 +245,7 @@ inline std::optional<subscribe_request> decode_subscribe_request(std::span<const
         return std::nullopt;
 
     subscribe_request req{};
-    auto *p = payload.data();
+    auto             *p = payload.data();
 
     req.topic_hash = wire::detail::read_u64(p);
     p += 8;
@@ -261,14 +262,15 @@ inline std::optional<subscribe_request> decode_subscribe_request(std::span<const
         return std::nullopt;
     if(fqn_span->size() > detail::k_max_fqn)
         return std::nullopt;
-    req.fqn.assign(reinterpret_cast<const char*>(fqn_span->data()), fqn_span->size());
+    req.fqn.assign(reinterpret_cast<const char *>(fqn_span->data()), fqn_span->size());
 
     auto type_name_span = read_length_prefixed<uint16_t>(payload, consumed);
     if(!type_name_span)
         return std::nullopt;
     if(type_name_span->size() > detail::k_max_type_name)
         return std::nullopt;
-    req.type_name.assign(reinterpret_cast<const char*>(type_name_span->data()), type_name_span->size());
+    req.type_name.assign(reinterpret_cast<const char *>(type_name_span->data()),
+                         type_name_span->size());
 
     // The trailing, flag-gated QoS region (a NEW untrusted-input surface). No
     // trailing bytes => the region is absent and req.qos stays defaulted (a v3
@@ -281,10 +283,9 @@ inline std::optional<subscribe_request> decode_subscribe_request(std::span<const
         auto region = read_length_prefixed<uint16_t>(payload, consumed);
         if(!region)
             return std::nullopt;
-        if(region->size() != detail::k_qos_region_size
-           || region->size() > detail::k_max_qos_region)
+        if(region->size() != detail::k_qos_region_size || region->size() > detail::k_max_qos_region)
             return std::nullopt;
-        const auto *q = region->data();
+        const auto *q                 = region->data();
         req.qos.durability            = wire::detail::read_u8(q + detail::k_qos_durability_off);
         req.qos.delivery_mode         = wire::detail::read_u8(q + detail::k_qos_delivery_off);
         req.qos.replay_depth          = wire::detail::read_u32(q + detail::k_qos_replay_depth_off);
@@ -292,8 +293,8 @@ inline std::optional<subscribe_request> decode_subscribe_request(std::span<const
         req.qos.requested_deadline_ns = wire::detail::read_u64(q + detail::k_qos_deadline_ns_off);
         req.qos.requested_lease_ns    = wire::detail::read_u64(q + detail::k_qos_lease_ns_off);
         req.qos.requested_priority    = wire::detail::read_u8(q + detail::k_qos_priority_off);
-        req.qos.requested_max_message_bytes
-            = wire::detail::read_u32(q + detail::k_qos_max_message_off);
+        req.qos.requested_max_message_bytes =
+                wire::detail::read_u32(q + detail::k_qos_max_message_off);
         req.has_qos = true;
     }
     return req;
@@ -303,7 +304,8 @@ inline std::vector<std::byte> encode_subscribe_response(const subscribe_response
 {
     // A permissive degraded-accept appends the trailing degraded_flags byte; every
     // other response is the byte-identical 9-byte layout.
-    std::vector<std::byte> buf(resp.has_degraded ? subscribe_response_size + 1 : subscribe_response_size);
+    std::vector<std::byte> buf(resp.has_degraded ? subscribe_response_size + 1
+                                                 : subscribe_response_size);
     wire::detail::write_u64(buf.data(), resp.topic_hash);
     wire::detail::write_u8(buf.data() + 8, static_cast<uint8_t>(resp.status));
     if(resp.has_degraded)
@@ -311,15 +313,15 @@ inline std::vector<std::byte> encode_subscribe_response(const subscribe_response
     return buf;
 }
 
-inline std::optional<subscribe_response> decode_subscribe_response(std::span<const std::byte> payload)
+inline std::optional<subscribe_response>
+decode_subscribe_response(std::span<const std::byte> payload)
 {
     if(payload.size() < subscribe_response_size)
         return std::nullopt;
 
     subscribe_response resp{
             .topic_hash = wire::detail::read_u64(payload.data()),
-            .status     = static_cast<subscribe_status>(wire::detail::read_u8(payload.data() + 8))
-    };
+            .status     = static_cast<subscribe_status>(wire::detail::read_u8(payload.data() + 8))};
     // The optional trailing degraded byte: present iff the response carried more than
     // the 9-byte floor (a permissive degraded-accept). A bare 9-byte response from a
     // v4 peer maps to "no degradation" — fully back-compatible.
@@ -338,7 +340,8 @@ inline std::vector<std::byte> encode_unsubscribe_request(const unsubscribe_reque
     return buf;
 }
 
-inline std::optional<unsubscribe_request> decode_unsubscribe_request(std::span<const std::byte> payload)
+inline std::optional<unsubscribe_request>
+decode_unsubscribe_request(std::span<const std::byte> payload)
 {
     if(payload.size() < detail::unsubscribe_request_size)
         return std::nullopt;
@@ -354,15 +357,15 @@ inline std::vector<std::byte> encode_unsubscribe_response(const unsubscribe_resp
     return buf;
 }
 
-inline std::optional<unsubscribe_response> decode_unsubscribe_response(std::span<const std::byte> payload)
+inline std::optional<unsubscribe_response>
+decode_unsubscribe_response(std::span<const std::byte> payload)
 {
     if(payload.size() < detail::unsubscribe_response_size)
         return std::nullopt;
 
     return unsubscribe_response{
             .topic_hash = wire::detail::read_u64(payload.data()),
-            .status     = static_cast<unsubscribe_status>(wire::detail::read_u8(payload.data() + 8))
-    };
+            .status = static_cast<unsubscribe_status>(wire::detail::read_u8(payload.data() + 8))};
 }
 
 }

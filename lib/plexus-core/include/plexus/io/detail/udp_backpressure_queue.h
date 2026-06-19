@@ -31,7 +31,7 @@ class udp_backpressure_queue
 {
 public:
     explicit udp_backpressure_queue(std::size_t byte_cap) noexcept
-        : m_byte_cap(byte_cap == 0 ? std::size_t{1} : byte_cap)
+            : m_byte_cap(byte_cap == 0 ? std::size_t{1} : byte_cap)
     {
     }
 
@@ -47,7 +47,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool empty() const noexcept { return m_queue.empty(); }
+    [[nodiscard]] bool        empty() const noexcept { return m_queue.empty(); }
     [[nodiscard]] std::size_t size() const noexcept { return m_queue.size(); }
     [[nodiscard]] std::size_t queued_bytes() const noexcept { return m_bytes; }
 
@@ -56,9 +56,12 @@ public:
     [[nodiscard]] std::size_t capacity() const noexcept { return m_byte_cap; }
 
     // The front parked frame (a non-owning view valid until the next pop/admit).
-    [[nodiscard]] std::span<const std::byte> front() const { return std::span<const std::byte>{m_queue.front().bytes}; }
+    [[nodiscard]] std::span<const std::byte> front() const
+    {
+        return std::span<const std::byte>{m_queue.front().bytes};
+    }
     [[nodiscard]] bool front_fragmented() const noexcept { return m_queue.front().fragmented; }
-    void pop_front()
+    void               pop_front()
     {
         m_bytes -= m_queue.front().bytes.size();
         m_queue.pop_front();
@@ -68,7 +71,7 @@ private:
     struct entry
     {
         std::vector<std::byte> bytes;
-        bool fragmented;
+        bool                   fragmented;
     };
 
     // Compare-before-add: a frame fits only when the cap is not already met AND its size
@@ -79,8 +82,8 @@ private:
         return m_bytes < m_byte_cap && size <= m_byte_cap - m_bytes;
     }
 
-    std::size_t m_byte_cap;
-    std::size_t m_bytes{0};
+    std::size_t       m_byte_cap;
+    std::size_t       m_bytes{0};
     std::deque<entry> m_queue;
 };
 

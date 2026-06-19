@@ -53,16 +53,17 @@ namespace plexus::asio::shm {
 // Borrows the executor + word BY REFERENCE; non-copy/non-move (the io_uring +
 // the registered eventfd + the asio descriptor hold stable addresses, and the
 // in-flight completion handler captures `this`).
-template <typename Policy>
+template<typename Policy>
 class ring_notifier
 {
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
-    ring_notifier(typename Policy::executor_type executor,
-                  std::atomic<std::uint32_t> &word,
+    ring_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word,
                   std::atomic<std::uint32_t> &park) noexcept
-        : m_executor(executor), m_word(word), m_park(park)
+            : m_executor(executor)
+            , m_word(word)
+            , m_park(park)
     {
     }
 
@@ -70,17 +71,19 @@ public:
     // always-wake one-arg signal: the gated producer never reads this consumer's park
     // word, so it binds to an owned fallback atom rather than an in-region word.
     ring_notifier(typename Policy::executor_type executor,
-                  std::atomic<std::uint32_t> &word) noexcept
-        : m_executor(executor), m_word(word), m_park(m_park_fallback)
+                  std::atomic<std::uint32_t>    &word) noexcept
+            : m_executor(executor)
+            , m_word(word)
+            , m_park(m_park_fallback)
     {
     }
 
     ~ring_notifier() { disarm(); }
 
-    ring_notifier(const ring_notifier &) = delete;
+    ring_notifier(const ring_notifier &)            = delete;
     ring_notifier &operator=(const ring_notifier &) = delete;
-    ring_notifier(ring_notifier &&) = delete;
-    ring_notifier &operator=(ring_notifier &&) = delete;
+    ring_notifier(ring_notifier &&)                 = delete;
+    ring_notifier &operator=(ring_notifier &&)      = delete;
 
     // The producer wake: bump the shared generation word (release) and wake a parked
     // consumer — the gated primitive skips the FUTEX_WAKE syscall when no waiter is
@@ -223,10 +226,14 @@ private:
     // (the entry remains the single owner; the owner sequences teardown).
     drain_fn drain_post() noexcept
     {
-        return [this, alive = m_alive] { if(alive->load(std::memory_order_acquire) && m_drain) m_drain(); };
+        return [this, alive = m_alive]
+        {
+            if(alive->load(std::memory_order_acquire) && m_drain)
+                m_drain();
+        };
     }
 
-    std::atomic<std::uint32_t>     m_park_fallback{::plexus::io::shm::k_park_empty};
+    std::atomic<std::uint32_t>         m_park_fallback{::plexus::io::shm::k_park_empty};
     std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
 
     typename Policy::executor_type m_executor;
@@ -234,9 +241,9 @@ private:
     std::atomic<std::uint32_t>    &m_park;
     drain_fn                       m_drain;
 
-    io_uring m_ring{};
-    bool     m_ring_live = false;
-    int      m_evfd      = -1;
+    io_uring                                        m_ring{};
+    bool                                            m_ring_live = false;
+    int                                             m_evfd      = -1;
     std::optional<::asio::posix::stream_descriptor> m_doorbell;
 };
 
@@ -249,33 +256,37 @@ private:
 // registry templates on either path unchanged. Teardown is the mandated ordering:
 // stop -> wake the parked thread -> join -> close fd, so no thread or posted drain
 // ever touches freed state.
-template <typename Policy>
+template<typename Policy>
 class ring_notifier_threaded
 {
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
     ring_notifier_threaded(typename Policy::executor_type executor,
-                           std::atomic<std::uint32_t> &word,
-                           std::atomic<std::uint32_t> &park) noexcept
-        : m_executor(executor), m_word(word), m_park(park)
+                           std::atomic<std::uint32_t>    &word,
+                           std::atomic<std::uint32_t>    &park) noexcept
+            : m_executor(executor)
+            , m_word(word)
+            , m_park(park)
     {
     }
 
     // Back-compat construction for a single-process harness whose producer drives the
     // always-wake one-arg signal: it binds to an owned fallback atom (see ring_notifier).
     ring_notifier_threaded(typename Policy::executor_type executor,
-                           std::atomic<std::uint32_t> &word) noexcept
-        : m_executor(executor), m_word(word), m_park(m_park_fallback)
+                           std::atomic<std::uint32_t>    &word) noexcept
+            : m_executor(executor)
+            , m_word(word)
+            , m_park(m_park_fallback)
     {
     }
 
     ~ring_notifier_threaded() { disarm(); }
 
-    ring_notifier_threaded(const ring_notifier_threaded &) = delete;
+    ring_notifier_threaded(const ring_notifier_threaded &)            = delete;
     ring_notifier_threaded &operator=(const ring_notifier_threaded &) = delete;
-    ring_notifier_threaded(ring_notifier_threaded &&) = delete;
-    ring_notifier_threaded &operator=(ring_notifier_threaded &&) = delete;
+    ring_notifier_threaded(ring_notifier_threaded &&)                 = delete;
+    ring_notifier_threaded &operator=(ring_notifier_threaded &&)      = delete;
 
     void signal() noexcept { ::plexus::shm::notifier_signal(m_word, m_park); }
 
@@ -374,10 +385,14 @@ private:
 
     drain_fn drain_post() noexcept
     {
-        return [this, alive = m_alive] { if(alive->load(std::memory_order_acquire) && m_drain) m_drain(); };
+        return [this, alive = m_alive]
+        {
+            if(alive->load(std::memory_order_acquire) && m_drain)
+                m_drain();
+        };
     }
 
-    std::atomic<std::uint32_t>     m_park_fallback{::plexus::io::shm::k_park_empty};
+    std::atomic<std::uint32_t>         m_park_fallback{::plexus::io::shm::k_park_empty};
     std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
 
     typename Policy::executor_type m_executor;
@@ -385,9 +400,9 @@ private:
     std::atomic<std::uint32_t>    &m_park;
     drain_fn                       m_drain;
 
-    std::atomic<bool> m_stop{false};
-    std::thread       m_waiter;
-    int               m_evfd = -1;
+    std::atomic<bool>                               m_stop{false};
+    std::thread                                     m_waiter;
+    int                                             m_evfd = -1;
     std::optional<::asio::posix::stream_descriptor> m_doorbell;
 };
 

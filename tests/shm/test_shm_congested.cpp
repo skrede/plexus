@@ -47,7 +47,7 @@ static_assert(notifier<null_notifier>, "null_notifier must satisfy the notifier 
 struct backing_region
 {
     explicit backing_region(std::size_t bytes)
-        : m_storage(bytes + k_cache_line)
+            : m_storage(bytes + k_cache_line)
     {
         auto base    = reinterpret_cast<std::uintptr_t>(m_storage.data());
         auto aligned = (base + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
@@ -62,7 +62,7 @@ private:
     std::size_t            m_size{0};
 };
 
-template <std::uint64_t Cells, std::uint64_t Slot>
+template<std::uint64_t Cells, std::uint64_t Slot>
 struct ring_fixture
 {
     backing_region control{control_region_bytes(Cells)};
@@ -103,8 +103,9 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
     for(std::uint64_t i = 0; i < 16; ++i)
     {
         broadcast_ring::claim_result claim;
-        REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort,
-                                         plexus::io::congestion::drop_newest, claim) == loan_status::ok);
+        REQUIRE(f.ring.claim_with_policy(
+                        sizeof(std::uint32_t), plexus::io::reliability::best_effort,
+                        plexus::io::congestion::drop_newest, claim) == loan_status::ok);
         const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
         std::memcpy(claim.slab.data(), &v, sizeof(v));
         REQUIRE(f.ring.commit(claim.position, sizeof(v)) == loan_status::ok);
@@ -129,8 +130,8 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
 TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging consumer",
           "[shm][backpressure]")
 {
-    constexpr std::uint64_t k_cells   = 16;
-    constexpr int           k_total   = 4000; // many laps so the producer must block repeatedly
+    constexpr std::uint64_t   k_cells = 16;
+    constexpr int             k_total = 4000; // many laps so the producer must block repeatedly
     ring_fixture<k_cells, 64> f;
 
     // The producer blocks (reliable + block) on the slowest registered cursor: it
@@ -149,16 +150,18 @@ TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging c
     // vector below (a test bookkeeping concern, not the channel path).
     std::vector<std::uint32_t> seen;
     seen.reserve(k_total);
-    std::thread reader([&] {
-        shm_channel<null_notifier>::deliver_fn deliver =
-            [&](plexus::wire_bytes<shm_slot_owner> wb) { seen.push_back(as_u32(wb)); };
-        while(seen.size() < static_cast<std::size_t>(k_total))
-        {
-            channel.drain(deliver);
-            if(seen.size() < static_cast<std::size_t>(k_total))
-                std::this_thread::yield();
-        }
-    });
+    std::thread reader(
+            [&]
+            {
+                shm_channel<null_notifier>::deliver_fn deliver =
+                        [&](plexus::wire_bytes<shm_slot_owner> wb) { seen.push_back(as_u32(wb)); };
+                while(seen.size() < static_cast<std::size_t>(k_total))
+                {
+                    channel.drain(deliver);
+                    if(seen.size() < static_cast<std::size_t>(k_total))
+                        std::this_thread::yield();
+                }
+            });
 
     // Producer thread (this thread): N blocking reliable sends. Each blocks on the
     // lagging reader and resumes once a slot frees -- proving the gate holds without
@@ -168,8 +171,7 @@ TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging c
         const std::uint32_t v = static_cast<std::uint32_t>(i);
         std::byte           bytes[sizeof(v)];
         std::memcpy(bytes, &v, sizeof(v));
-        REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) ==
-                loan_status::ok);
+        REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) == loan_status::ok);
     }
     producer_done.store(true);
     reader.join();
@@ -182,8 +184,8 @@ TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging c
 
 TEST_CASE("shm.backpressure the reliable blocking spin allocates nothing", "[shm][backpressure]")
 {
-    constexpr std::uint64_t k_cells = 16;
-    constexpr int           k_total = 2000;
+    constexpr std::uint64_t   k_cells = 16;
+    constexpr int             k_total = 2000;
     ring_fixture<k_cells, 64> f;
 
     shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable,
@@ -192,24 +194,26 @@ TEST_CASE("shm.backpressure the reliable blocking spin allocates nothing", "[shm
     // The deliver callback counts drained messages into an atomic (NO heap in its
     // body). It is constructed BEFORE the snapshot, so the one-time
     // move_only_function construction never falls inside the measured window.
-    std::atomic<int> drained{0};
-    shm_channel<null_notifier>::deliver_fn deliver =
-        [&](plexus::wire_bytes<shm_slot_owner>) { drained.fetch_add(1, std::memory_order_release); };
+    std::atomic<int>                       drained{0};
+    shm_channel<null_notifier>::deliver_fn deliver = [&](plexus::wire_bytes<shm_slot_owner>)
+    { drained.fetch_add(1, std::memory_order_release); };
 
     // Bring the consumer thread fully up (its stack + any one-time allocation lands)
     // and barrier on a flag BEFORE snapshotting the allocation counter, so only the
     // steady-state send/drain loops fall inside the measured window.
     std::atomic<bool> go{false};
-    std::thread reader([&] {
-        while(!go.load(std::memory_order_acquire))
-            std::this_thread::yield();
-        while(drained.load(std::memory_order_acquire) < k_total)
-        {
-            channel.drain(deliver);
-            if(drained.load(std::memory_order_acquire) < k_total)
-                std::this_thread::yield();
-        }
-    });
+    std::thread       reader(
+            [&]
+            {
+                while(!go.load(std::memory_order_acquire))
+                    std::this_thread::yield();
+                while(drained.load(std::memory_order_acquire) < k_total)
+                {
+                    channel.drain(deliver);
+                    if(drained.load(std::memory_order_acquire) < k_total)
+                        std::this_thread::yield();
+                }
+            });
 
     const std::size_t before = plexus::testing::alloc_count();
     go.store(true, std::memory_order_release);
@@ -219,8 +223,7 @@ TEST_CASE("shm.backpressure the reliable blocking spin allocates nothing", "[shm
         const std::uint32_t v = static_cast<std::uint32_t>(i);
         std::byte           bytes[sizeof(v)];
         std::memcpy(bytes, &v, sizeof(v));
-        REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) ==
-                loan_status::ok);
+        REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) == loan_status::ok);
     }
     reader.join();
     const std::size_t after = plexus::testing::alloc_count();
@@ -240,8 +243,8 @@ TEST_CASE("shm.congested a reliable claim on a pinned cell returns congested pas
     // surface it, never pin 100% core). We pin the cell the next contiguous claim
     // lands on, then assert the reliable claim returns congested within a bounded
     // wall-clock rather than hanging.
-    constexpr std::uint64_t k_cells = 16;
-    constexpr std::uint64_t k_slot  = 64;
+    constexpr std::uint64_t       k_cells = 16;
+    constexpr std::uint64_t       k_slot  = 64;
     ring_fixture<k_cells, k_slot> f;
 
     // Fill a full lap so the next claim position (k_cells) has a committed prior
@@ -264,12 +267,12 @@ TEST_CASE("shm.congested a reliable claim on a pinned cell returns congested pas
     // the reliable claim must spin out its budget and surface congested.
     f.ring.refcount_at(0).fetch_add(1, std::memory_order_seq_cst);
 
-    const auto before = plexus::testing::alloc_count();
-    const auto start  = std::chrono::steady_clock::now();
+    const auto                   before = plexus::testing::alloc_count();
+    const auto                   start  = std::chrono::steady_clock::now();
     broadcast_ring::claim_result claim;
-    const loan_status st =
-        f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable,
-                                 plexus::io::congestion::block, claim);
+    const loan_status            st =
+            f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable,
+                                     plexus::io::congestion::block, claim);
     const auto elapsed = std::chrono::steady_clock::now() - start;
     const auto after   = plexus::testing::alloc_count();
 

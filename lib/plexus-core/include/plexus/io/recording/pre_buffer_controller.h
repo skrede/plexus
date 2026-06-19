@@ -45,15 +45,15 @@ namespace plexus::io::recording {
 class pre_buffer_controller
 {
 public:
-    using clock_fn   = plexus::detail::move_only_function<std::uint64_t()>;
+    using clock_fn    = plexus::detail::move_only_function<std::uint64_t()>;
     using freeze_when = plexus::detail::move_only_function<bool(const record_envelope &)>;
 
     pre_buffer_controller(byte_sink &sink, std::size_t ring_bytes, clock_fn clock,
                           std::size_t drain_batch_bytes = 64u * 1024u)
-        : m_sink(sink)
-        , m_ring(ring_bytes, ring_policy::drop_oldest)
-        , m_clock(std::move(clock))
-        , m_drain_batch(drain_batch_bytes)
+            : m_sink(sink)
+            , m_ring(ring_bytes, ring_policy::drop_oldest)
+            , m_clock(std::move(clock))
+            , m_drain_batch(drain_batch_bytes)
     {
     }
 
@@ -61,13 +61,13 @@ public:
     // true the freeze fires automatically (the same effect as a manual trigger()).
     void on_anomaly(freeze_when pred) { m_pred = std::move(pred); }
 
-    void record_sample(std::uint64_t topic_hash, const message_info &info,
-                       std::uint64_t type_id, bool type_id_present,
-                       capture_fidelity fidelity, std::span<const std::byte> payload)
+    void record_sample(std::uint64_t topic_hash, const message_info &info, std::uint64_t type_id,
+                       bool type_id_present, capture_fidelity fidelity,
+                       std::span<const std::byte> payload)
     {
         const std::uint64_t ts = m_clock();
-        admit(m_writer.sample(ts, topic_hash, info, type_id, type_id_present, fidelity, payload), ts,
-              {record_category::sample, ts, topic_hash, io::detail::drop_cause::none, 0});
+        admit(m_writer.sample(ts, topic_hash, info, type_id, type_id_present, fidelity, payload),
+              ts, {record_category::sample, ts, topic_hash, io::detail::drop_cause::none, 0});
     }
 
     void record_drop(const io::detail::drop_event &e)
@@ -87,7 +87,8 @@ public:
     void record_participant(const participant_event &e)
     {
         const std::uint64_t ts = m_clock();
-        admit(m_writer.participant(ts, e), ts, {record_category::participant, ts, 0, io::detail::drop_cause::none, 0});
+        admit(m_writer.participant(ts, e), ts,
+              {record_category::participant, ts, 0, io::detail::drop_cause::none, 0});
     }
 
     void record_endpoint(std::string_view fqn, const endpoint_event &e)
@@ -100,7 +101,8 @@ public:
     void record_security(const security_event &e)
     {
         const std::uint64_t ts = m_clock();
-        admit(m_writer.security(ts, e), ts, {record_category::security, ts, 0, io::detail::drop_cause::none, 0});
+        admit(m_writer.security(ts, e), ts,
+              {record_category::security, ts, 0, io::detail::drop_cause::none, 0});
     }
 
     void record_wire(wire_direction dir, std::uint64_t seq, const node_id &peer,
@@ -163,7 +165,8 @@ private:
         if(from >= to)
             return m_newest_ts;
         std::array<std::byte, 24> head{};
-        const std::size_t n = std::min<std::size_t>(head.size(), static_cast<std::size_t>(to - from));
+        const std::size_t         n =
+                std::min<std::size_t>(head.size(), static_cast<std::size_t>(to - from));
         for(std::size_t i = 0; i < n; ++i)
             head[i] = m_ring.at(from + i);
         std::size_t off = 0;

@@ -62,7 +62,7 @@ struct region_store
 
     std::shared_ptr<region> make(const std::string &name, std::size_t bytes)
     {
-        auto r        = std::make_shared<region>();
+        auto r = std::make_shared<region>();
         r->storage.assign(bytes + k_cache_line, std::byte{});
         auto raw      = reinterpret_cast<std::uintptr_t>(r->storage.data());
         auto algn     = (raw + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
@@ -78,11 +78,14 @@ class stub_handle
 {
 public:
     stub_handle() = default;
-    stub_handle(std::shared_ptr<region_store::region> region) noexcept : m_region(std::move(region)) {}
-    stub_handle(const stub_handle &) = delete;
+    stub_handle(std::shared_ptr<region_store::region> region) noexcept
+            : m_region(std::move(region))
+    {
+    }
+    stub_handle(const stub_handle &)            = delete;
     stub_handle &operator=(const stub_handle &) = delete;
-    stub_handle(stub_handle &&) = default;
-    stub_handle &operator=(stub_handle &&) = default;
+    stub_handle(stub_handle &&)                 = default;
+    stub_handle &operator=(stub_handle &&)      = default;
 
     std::span<std::byte> bytes() const { return {m_region->base, m_region->size}; }
 
@@ -95,7 +98,10 @@ class stub_broker
 public:
     using region_handle = stub_handle;
 
-    explicit stub_broker(region_store &store) noexcept : m_store(store) {}
+    explicit stub_broker(region_store &store) noexcept
+            : m_store(store)
+    {
+    }
 
     void fail(bool on) noexcept { m_fail = on; }
 
@@ -158,16 +164,16 @@ static_assert(shm_member::mux_prefers_shm,
 // case the hook decides). It records whether the mux routed the dial to it.
 struct dummy_stream_channel
 {
-    pio::endpoint ep;
-    std::uint64_t key = plexus::io::detail::next_scheduler_key();
-    void send(std::span<const std::byte>) {}
-    void close() {}
+    pio::endpoint               ep;
+    std::uint64_t               key = plexus::io::detail::next_scheduler_key();
+    void                        send(std::span<const std::byte>) {}
+    void                        close() {}
     [[nodiscard]] pio::endpoint remote_endpoint() const { return ep; }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(plexus::detail::move_only_function<void()>) {}
     void on_error(plexus::detail::move_only_function<void(pio::io_error)>) {}
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
-    [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+    [[nodiscard]] std::size_t   backpressured() const noexcept { return 0; }
     [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return key; }
 };
 
@@ -175,16 +181,25 @@ struct dummy_stream_member
 {
     using channel_type = dummy_stream_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
-    static constexpr pio::transport_kind mux_tier = pio::transport_kind::local;
+    static constexpr pio::transport_kind             mux_tier = pio::transport_kind::local;
 
     bool dialed = false;
 
     void listen(const pio::endpoint &) {}
     void dial(const pio::endpoint &) { dialed = true; }
     void close() {}
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>)>) {}
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>, const pio::endpoint &)>) {}
-    void on_dial_failed(plexus::detail::move_only_function<void(const pio::endpoint &, pio::io_error)>) {}
+    void
+    on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>)>)
+    {
+    }
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>,
+                                                           const pio::endpoint &)>)
+    {
+    }
+    void
+    on_dial_failed(plexus::detail::move_only_function<void(const pio::endpoint &, pio::io_error)>)
+    {
+    }
     void on_error(plexus::detail::move_only_function<void(pio::io_error)>) {}
 };
 
@@ -198,8 +213,8 @@ using mux_t = pio::multiplexing_transport<shm_member, dummy_stream_member>;
 TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member when it acquires",
           "[shm][mux]")
 {
-    constexpr int k_iterations = 100;
-    int routed_to_shm = 0;
+    constexpr int k_iterations  = 100;
+    int           routed_to_shm = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         region_store store;
@@ -207,15 +222,14 @@ TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member
         shm_member   shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
-        mux_t mux{shm, stream, {}, prefer_shm_hook(shm)};
+        mux_t               mux{shm, stream, {}, prefer_shm_hook(shm)};
 
         // The mux wraps each member's dialed channel into a polymorphic_byte_channel and
         // re-emits it; the dialed channel's scheme survives the erasure, so a "shm"-scheme
         // channel arriving here proves the SHM member served the dial.
         std::string dialed_scheme;
-        mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &) {
-            dialed_scheme = ch->remote_endpoint().scheme;
-        });
+        mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &)
+                      { dialed_scheme = ch->remote_endpoint().scheme; });
 
         mux.dial({"shm", "topic.same_host"});
 
@@ -233,7 +247,7 @@ TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring a
           "[shm][mux]")
 {
     constexpr int k_iterations = 100;
-    int fell_back = 0;
+    int           fell_back    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         region_store store;
@@ -243,12 +257,11 @@ TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring a
         shm_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
-        mux_t mux{shm, stream, {}, prefer_shm_hook(shm)};
+        mux_t               mux{shm, stream, {}, prefer_shm_hook(shm)};
 
         std::string dialed_scheme;
-        mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &) {
-            dialed_scheme = ch->remote_endpoint().scheme;
-        });
+        mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &)
+                      { dialed_scheme = ch->remote_endpoint().scheme; });
 
         mux.dial({"shm", "topic.same_host"});
 
@@ -271,7 +284,7 @@ TEST_CASE("shm.mux a congestion-blocked send drives on_drop with cause=blocked t
     // the edge the engine binds to its posted drop_sink at dial/accept. Loop so a single-run
     // fluke cannot pass.
     constexpr int k_iterations = 4;
-    int saw_blocked = 0;
+    int           saw_blocked  = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         region_store store;
@@ -279,9 +292,8 @@ TEST_CASE("shm.mux a congestion-blocked send drives on_drop with cause=blocked t
         shm_member   shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         std::unique_ptr<shm_member::channel_type> ch;
-        shm.on_dialed([&](std::unique_ptr<shm_member::channel_type> c, const pio::endpoint &) {
-            ch = std::move(c);
-        });
+        shm.on_dialed([&](std::unique_ptr<shm_member::channel_type> c, const pio::endpoint &)
+                      { ch = std::move(c); });
         shm.dial({"shm", "topic.blocked"});
         REQUIRE(ch);
 

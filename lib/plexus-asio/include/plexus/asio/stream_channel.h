@@ -49,12 +49,12 @@ namespace plexus::asio {
 // see tcp_traits); on a backend with no TCP keepalive (AF_UNIX) the whole struct is a no-op.
 struct stream_socket_options
 {
-    std::size_t   so_sndbuf = 0;
-    std::size_t   so_rcvbuf = 0;
-    bool          keepalive = false;
-    std::uint32_t keepalive_idle_secs = 0;
+    std::size_t   so_sndbuf               = 0;
+    std::size_t   so_rcvbuf               = 0;
+    bool          keepalive               = false;
+    std::uint32_t keepalive_idle_secs     = 0;
     std::uint32_t keepalive_interval_secs = 0;
-    std::uint32_t keepalive_count = 0;
+    std::uint32_t keepalive_count         = 0;
 };
 
 // A byte_channel over an asio stream type (a bare socket, or an ssl::stream). Inbound bytes
@@ -69,7 +69,7 @@ struct stream_socket_options
 // channel, never an unarmed one. The Bootstrap expresses the open path: plaintext sends
 // reach the egress directly; a TLS bootstrap routes them through an open-before-data gate so
 // no plaintext is written before the handshake completes.
-template <typename Stream, typename Traits, typename Bootstrap>
+template<typename Stream, typename Traits, typename Bootstrap>
 class stream_channel
 {
 public:
@@ -83,17 +83,17 @@ public:
     // congestion mode + byte budget are the per-channel QoS choice (block = the safe reliable
     // default that back-pressures; drop_newest = the opt-out shed), threaded as required-
     // WITH-default ctor args exactly as udp_channel threads io::congestion.
-    template <typename... BootstrapArgs>
+    template<typename... BootstrapArgs>
     explicit stream_channel(::asio::io_context &io, wire::stream_inbound_config cfg,
                             io::congestion congestion, io::egress_capacity egress,
                             stream_socket_options socket_options, BootstrapArgs &&...bargs)
-        : m_io(io)
-        , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
-        , m_stream(m_bootstrap.make_stream(io))
-        , m_inbound(io, cfg)
-        , m_congestion(congestion)
-        , m_socket_options(socket_options)
-        , m_egress(make_send_sink(), egress.bytes)
+            : m_io(io)
+            , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
+            , m_stream(m_bootstrap.make_stream(io))
+            , m_inbound(io, cfg)
+            , m_congestion(congestion)
+            , m_socket_options(socket_options)
+            , m_egress(make_send_sink(), egress.bytes)
     {
         bind_bootstrap();
         wire_inbound();
@@ -103,32 +103,38 @@ public:
     // TLS defers the read loop to its server handshake (arm_on_accept). Connected is the bare
     // socket the Bootstrap wraps into the stream (a tcp::socket for both TCP and TLS, a
     // local-stream socket for AF_UNIX).
-    template <typename Connected, typename... BootstrapArgs>
+    template<typename Connected, typename... BootstrapArgs>
     stream_channel(::asio::io_context &io, Connected connected, wire::stream_inbound_config cfg,
                    io::congestion congestion, io::egress_capacity egress,
                    stream_socket_options socket_options, BootstrapArgs &&...bargs)
-        : m_io(io)
-        , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
-        , m_stream(m_bootstrap.make_stream(io, std::move(connected)))
-        , m_inbound(io, cfg)
-        , m_congestion(congestion)
-        , m_socket_options(socket_options)
-        , m_egress(make_send_sink(), egress.bytes)
+            : m_io(io)
+            , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
+            , m_stream(m_bootstrap.make_stream(io, std::move(connected)))
+            , m_inbound(io, cfg)
+            , m_congestion(congestion)
+            , m_socket_options(socket_options)
+            , m_egress(make_send_sink(), egress.bytes)
     {
         bind_bootstrap();
         wire_inbound();
         m_bootstrap.arm_on_accept(*this);
-        apply_socket_options();   // a plaintext accept is already open; a TLS accept defers (is_open guard)
+        apply_socket_options(); // a plaintext accept is already open; a TLS accept defers (is_open
+                                // guard)
     }
 
     // The dtor only tears the stream/timer down — it never posts on_closed (a this-capturing
     // post could outlive the channel). close() posts on_closed.
-    ~stream_channel() { m_inbound.shutdown(); shutdown_socket(); m_bootstrap.reset(); }
+    ~stream_channel()
+    {
+        m_inbound.shutdown();
+        shutdown_socket();
+        m_bootstrap.reset();
+    }
 
-    stream_channel(const stream_channel &) = delete;
+    stream_channel(const stream_channel &)            = delete;
     stream_channel &operator=(const stream_channel &) = delete;
-    stream_channel(stream_channel &&) = delete;
-    stream_channel &operator=(stream_channel &&) = delete;
+    stream_channel(stream_channel &&)                 = delete;
+    stream_channel &operator=(stream_channel &&)      = delete;
 
     // Hand the bytes to the Bootstrap's open path: plaintext enqueues straight to the serial
     // async_write egress; TLS submits through its open-before-data gate (buffered pre-
@@ -163,20 +169,39 @@ public:
         // bypass the TLS layer; a graceful async drain-with-deadline is a separate feature), so
         // the residual is never silently dropped — it lands on the same edge a shed frame does.
         m_dropped += m_egress.close_and_drain();
-        shutdown_socket();   // an aborted in-flight write must not chain onto the closed socket
-        ::asio::post(m_io, [this] { if(m_on_closed) m_on_closed(); });   // posted, never synchronous
+        shutdown_socket(); // an aborted in-flight write must not chain onto the closed socket
+        ::asio::post(m_io,
+                     [this]
+                     {
+                         if(m_on_closed)
+                             m_on_closed();
+                     }); // posted, never synchronous
     }
 
     [[nodiscard]] io::endpoint remote_endpoint() const { return Traits::format_endpoint(m_stream); }
 
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
-    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
 
     [[nodiscard]] decltype(auto) socket() noexcept { return Traits::lowest_layer(m_stream); }
     [[nodiscard]] decltype(auto) socket() const noexcept { return Traits::lowest_layer(m_stream); }
-    void start_read() { m_open = true; apply_socket_options(); do_read(); }
+    void                         start_read()
+    {
+        m_open = true;
+        apply_socket_options();
+        do_read();
+    }
 
     // The stable per-construction id the egress scheduler keys its band map on (read via a
     // capability probe): unique per object, so a reconnect at a reused heap address cannot
@@ -189,7 +214,8 @@ public:
     // The current queued (un-drained) write-queue byte occupancy; 0 when the socket drains.
     [[nodiscard]] std::size_t backpressured() const noexcept { return m_egress.queued_bytes(); }
     // The write-queue byte cap, read by the egress scheduler so its low-water gate tracks THIS
-    // channel's actual bound (lockstep): a deepened cap is fed deeper, a shallow one never over-fed.
+    // channel's actual bound (lockstep): a deepened cap is fed deeper, a shallow one never
+    // over-fed.
     [[nodiscard]] std::size_t write_queue_capacity() const noexcept { return m_egress.capacity(); }
 
     // Bootstrap-facing seam (the Bootstrap drives the open path through these): the gate's
@@ -207,10 +233,10 @@ public:
         if(!m_egress.enqueue(std::move(bytes)))
             on_write_queue_full();
     }
-    void start_read_loop() { do_read(); }
-    void mark_open() noexcept { m_open = true; }
+    void                  start_read_loop() { do_read(); }
+    void                  mark_open() noexcept { m_open = true; }
     [[nodiscard]] Stream &stream() noexcept { return m_stream; }
-    void fail(const std::error_code &ec) { fail_impl(ec); }
+    void                  fail(const std::error_code &ec) { fail_impl(ec); }
 
 protected:
     [[nodiscard]] Bootstrap &bootstrap() noexcept { return m_bootstrap; }
@@ -280,14 +306,15 @@ private:
     void do_read()
     {
         m_stream.async_read_some(::asio::buffer(m_read_buf),
-            [this](std::error_code ec, std::size_t n)
-            {
-                if(ec)
-                    return fail_impl(ec);
-                m_inbound.feed(std::span<const std::byte>{m_read_buf.data(), n});
-                if(m_open)   // a protocol-close may have torn the socket down
-                    do_read();
-            });
+                                 [this](std::error_code ec, std::size_t n)
+                                 {
+                                     if(ec)
+                                         return fail_impl(ec);
+                                     m_inbound.feed(
+                                             std::span<const std::byte>{m_read_buf.data(), n});
+                                     if(m_open) // a protocol-close may have torn the socket down
+                                         do_read();
+                                 });
     }
 
     // The stream_inbound on_frame target: the reassembler already materialized the full
@@ -296,11 +323,12 @@ private:
     void post_frame(const wire::complete_frame &frame)
     {
         wire_bytes<> owned{frame.payload};
-        ::asio::post(m_io, [this, owned = std::move(owned)]
-        {
-            if(m_on_data)
-                m_on_data(static_cast<std::span<const std::byte>>(owned));
-        });
+        ::asio::post(m_io,
+                     [this, owned = std::move(owned)]
+                     {
+                         if(m_on_data)
+                             m_on_data(static_cast<std::span<const std::byte>>(owned));
+                     });
     }
 
     // The irreducible asio send-sink the stream_send_queue block drives: gather the block-
@@ -313,19 +341,20 @@ private:
     io::detail::stream_send_queue::send_sink make_send_sink()
     {
         return [this](io::detail::stream_send_queue::buffer_sequence views,
-                      io::detail::stream_send_queue::completion done)
+                      io::detail::stream_send_queue::completion      done)
         {
             m_gather.clear();
             m_gather.reserve(views.size());
             for(const auto &v : views)
                 m_gather.emplace_back(v.data(), v.size());
-            ::asio::async_write(m_stream, m_gather,
-                [this, done = std::move(done)](std::error_code ec, std::size_t) mutable
-                {
-                    if(ec)
-                        fail_impl(ec);
-                    done(!ec);
-                });
+            ::asio::async_write(
+                    m_stream, m_gather,
+                    [this, done = std::move(done)](std::error_code ec, std::size_t) mutable
+                    {
+                        if(ec)
+                            fail_impl(ec);
+                        done(!ec);
+                    });
         };
     }
 
@@ -334,7 +363,7 @@ private:
         if(ec == ::asio::error::operation_aborted || !m_open)
             return;
         m_open = false;
-        m_egress.close();   // stop the serial drain so the failed write does not chain
+        m_egress.close(); // stop the serial drain so the failed write does not chain
         m_inbound.shutdown();
         auto mapped = detail::map_error(ec);
         if(m_on_error)
@@ -343,22 +372,23 @@ private:
             m_on_closed();
     }
 
-    ::asio::io_context &m_io;
-    Bootstrap m_bootstrap;
-    Stream m_stream;
+    ::asio::io_context                                    &m_io;
+    Bootstrap                                              m_bootstrap;
+    Stream                                                 m_stream;
     wire::stream_inbound<asio_timer, ::asio::io_context &> m_inbound;
-    std::vector<::asio::const_buffer> m_gather;           // reused gather-write iovec (grows once)
+    std::vector<::asio::const_buffer> m_gather; // reused gather-write iovec (grows once)
     std::vector<std::byte> m_read_buf = std::vector<std::byte>(k_stream_read_buffer_bytes);
-    io::congestion m_congestion;
-    stream_socket_options m_socket_options;
-    std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()};   // stable per-construction egress key
-    std::size_t m_dropped{0};                             // congestion=drop shed count
-    io::detail::stream_send_queue m_egress;               // bounded byte-budgeted serial write block
+    io::congestion         m_congestion;
+    stream_socket_options  m_socket_options;
+    std::uint64_t          m_scheduler_key{
+            io::detail::next_scheduler_key()};  // stable per-construction egress key
+    std::size_t                   m_dropped{0}; // congestion=drop shed count
+    io::detail::stream_send_queue m_egress;     // bounded byte-budgeted serial write block
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()> m_on_closed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
-    bool m_open{false};
+    plexus::detail::move_only_function<void()>                           m_on_closed;
+    plexus::detail::move_only_function<void(io::io_error)>               m_on_error;
+    plexus::detail::move_only_function<void(wire::close_cause)>          m_on_protocol_close;
+    bool                                                                 m_open{false};
 };
 
 }

@@ -76,30 +76,30 @@ struct subscriber_qos
     delivery      delivery_mode   = delivery::push;
     std::uint32_t replay_depth    = 0;
 
-    bool          requires_source_identity        = false;
-    bool          requested_reliability_reliable   = false;
-    std::uint64_t requested_deadline_ns            = 0;
-    std::uint64_t requested_lease_ns               = 0;
-    std::uint8_t  requested_priority               = 0;
+    bool          requires_source_identity       = false;
+    bool          requested_reliability_reliable = false;
+    std::uint64_t requested_deadline_ns          = 0;
+    std::uint64_t requested_lease_ns             = 0;
+    std::uint8_t  requested_priority             = 0;
 
     // The subscriber's requested per-MESSAGE size ceiling: the largest message it will
     // accept. 0 = unset = always compatible (a genuine "not requested" state, the same
     // 0-sentinel semantics as the deadline/lease fields — never a std::optional). It rides
     // the subscribe wire region and gates the RxO max-message-bytes relation: a publisher
     // whose effective-max exceeds this is refused (strict) or degraded (permissive).
-    std::uint32_t requested_max_message_bytes      = 0;
+    std::uint32_t requested_max_message_bytes = 0;
 
     // The subscriber-chosen handling of a soft RxO incompatibility. `permissive`
     // (the friendly default) connects-but-surfaces the degraded set; `strict`
     // refuses with a reason. It rides a reserved subscribe-request flag bit, so a
     // permissive default keeps the wire encoding byte-identical (the bit is clear).
-    rxo_mode      rxo                              = rxo_mode::permissive;
+    rxo_mode rxo = rxo_mode::permissive;
 
     // The subscriber-chosen typed attach posture. `lenient` (the friendly default)
     // attaches to an untyped producer; `strict` refuses it with type_undeclared. It
     // rides a reserved subscribe-request flag bit, so the lenient default keeps the wire
     // encoding byte-identical (the bit is clear).
-    attach_posture posture                          = attach_posture::lenient;
+    attach_posture posture = attach_posture::lenient;
 
     // The local-only inproc stamp demand: true (default) means this subscriber consumes
     // message_info timestamps; false elides the receive-side clock read and delivers a
@@ -107,14 +107,14 @@ struct subscriber_qos
     // no info) and overridable on a 3-arg subscriber. NEVER crosses a socket: an inproc
     // subscriber is local by definition, so this field is not encoded into the subscribe
     // wire region (a cross-process demand leak is forbidden).
-    bool          wants_message_info               = true;
+    bool wants_message_info = true;
 
     // The subscriber's own shared-memory eligibility hint: a same-host subscriber with
     // any bit set rescues itself from a hint-less publisher (the bilateral OR — EITHER
     // end's hint upgrades the pair). none = 0 is the absence (stay on the local stream).
     // Local-only, never encoded into the subscribe wire region (the upgrade converges on
     // local state with no wire exchange).
-    shm::dispatch_hint dispatch                     = shm::dispatch_hint::none;
+    shm::dispatch_hint dispatch = shm::dispatch_hint::none;
 
     // A defaulted value-equality so a caller can ask "does this differ from the
     // friendly default?" before paying the wire region — the subscribe-out path

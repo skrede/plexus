@@ -10,7 +10,11 @@ namespace plexus::tls::detail {
 
 namespace {
 
-void free_ssl_ctx(ssl_ctx_st *c) { if(c) SSL_CTX_free(c); }
+void free_ssl_ctx(ssl_ctx_st *c)
+{
+    if(c)
+        SSL_CTX_free(c);
+}
 
 }
 

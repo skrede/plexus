@@ -51,13 +51,13 @@ struct region_store
 
     std::shared_ptr<region> make(const std::string &name, std::size_t bytes)
     {
-        auto r     = std::make_shared<region>();
+        auto r = std::make_shared<region>();
         r->storage.assign(bytes + k_cache_line, std::byte{});
-        auto raw   = reinterpret_cast<std::uintptr_t>(r->storage.data());
-        auto algn  = (raw + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
-        r->base    = reinterpret_cast<std::byte *>(algn);
-        r->size    = bytes;
-        r->live    = true;
+        auto raw      = reinterpret_cast<std::uintptr_t>(r->storage.data());
+        auto algn     = (raw + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
+        r->base       = reinterpret_cast<std::byte *>(algn);
+        r->size       = bytes;
+        r->live       = true;
         regions[name] = r;
         return r;
     }
@@ -70,20 +70,25 @@ class stub_handle
 public:
     stub_handle() = default;
 
-    stub_handle(region_store *store, std::string name,
-                std::shared_ptr<region_store::region> region, bool owns_name) noexcept
-        : m_store(store), m_name(std::move(name)), m_region(std::move(region)), m_owns(owns_name)
+    stub_handle(region_store *store, std::string name, std::shared_ptr<region_store::region> region,
+                bool owns_name) noexcept
+            : m_store(store)
+            , m_name(std::move(name))
+            , m_region(std::move(region))
+            , m_owns(owns_name)
     {
     }
 
     ~stub_handle() { reclaim(); }
 
-    stub_handle(const stub_handle &) = delete;
+    stub_handle(const stub_handle &)            = delete;
     stub_handle &operator=(const stub_handle &) = delete;
 
     stub_handle(stub_handle &&o) noexcept
-        : m_store(o.m_store), m_name(std::move(o.m_name)), m_region(std::move(o.m_region)),
-          m_owns(o.m_owns)
+            : m_store(o.m_store)
+            , m_name(std::move(o.m_name))
+            , m_region(std::move(o.m_region))
+            , m_owns(o.m_owns)
     {
         o.m_store = nullptr;
         o.m_owns  = false;
@@ -134,7 +139,10 @@ class stub_broker
 public:
     using region_handle = stub_handle;
 
-    explicit stub_broker(region_store &store) noexcept : m_store(store) {}
+    explicit stub_broker(region_store &store) noexcept
+            : m_store(store)
+    {
+    }
 
     region_status create(std::string_view name, std::size_t bytes, const create_options &,
                          region_handle &out)
@@ -149,7 +157,7 @@ public:
     region_status attach(std::string_view name, region_handle &out)
     {
         const std::string key{name};
-        auto it = m_store.regions.find(key);
+        auto              it = m_store.regions.find(key);
         if(it == m_store.regions.end() || !it->second->live)
             return region_status::not_found;
         out = stub_handle(&m_store, key, it->second, /*owns=*/false);
@@ -178,11 +186,11 @@ struct recording_notifier
 {
     bool armed = false;
 
-    recording_notifier() = default;
-    recording_notifier(const recording_notifier &) = delete;
+    recording_notifier()                                      = default;
+    recording_notifier(const recording_notifier &)            = delete;
     recording_notifier &operator=(const recording_notifier &) = delete;
-    recording_notifier(recording_notifier &&) = default;
-    recording_notifier &operator=(recording_notifier &&) = default;
+    recording_notifier(recording_notifier &&)                 = default;
+    recording_notifier &operator=(recording_notifier &&)      = default;
 
     ~recording_notifier()
     {
@@ -207,8 +215,8 @@ using test_registry = shm_topic_registry<stub_broker, recording_notifier>;
 
 TEST_CASE("shm.registry demand-drives the ring lifecycle by refcount", "[shm][registry]")
 {
-    region_store store;
-    stub_broker  creator_broker{store};
+    region_store  store;
+    stub_broker   creator_broker{store};
     test_registry registry(creator_broker, plexus::io::reliability::reliable,
                            plexus::io::congestion::block);
 
@@ -269,12 +277,12 @@ TEST_CASE("shm.registry a peer collision attaches and a subscriber-only acquire 
     const std::uint32_t value = 0x1234ABCDu;
     std::byte           payload[sizeof(value)];
     std::memcpy(payload, &value, sizeof(value));
-    REQUIRE(send_ch->send(std::span<const std::byte>(payload, sizeof(payload))) ==
-            loan_status::ok);
+    REQUIRE(send_ch->send(std::span<const std::byte>(payload, sizeof(payload))) == loan_status::ok);
 
-    std::uint32_t got   = 0;
-    int           count = 0;
-    test_registry::deliver_fn deliver = [&](plexus::wire_bytes<shm_slot_owner> wb) {
+    std::uint32_t             got     = 0;
+    int                       count   = 0;
+    test_registry::deliver_fn deliver = [&](plexus::wire_bytes<shm_slot_owner> wb)
+    {
         std::memcpy(&got, wb.data(), sizeof(got));
         ++count;
     };
@@ -298,8 +306,7 @@ TEST_CASE("shm.registry disarms the notifier before the subscriber teardown", "[
 
     test_registry registry(broker, plexus::io::reliability::reliable,
                            plexus::io::congestion::block);
-    REQUIRE(registry.acquire("topic.order", ring_direction::request, 0) ==
-            acquire_result::created);
+    REQUIRE(registry.acquire("topic.order", ring_direction::request, 0) == acquire_result::created);
 
     // The release tears the entry down: disarm() fires (logging "disarm") BEFORE the
     // entry is erased, and the entry destructs the channel (its subscriber) before

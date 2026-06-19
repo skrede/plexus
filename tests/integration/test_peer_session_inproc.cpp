@@ -38,7 +38,7 @@ using plexus::inproc::inproc_transport;
 using plexus::inproc::inproc_policy;
 using plexus::io::handshake_fsm_config;
 using plexus::wire::rpc_status;
-using session = plexus::io::peer_session<inproc_policy>;
+using session       = plexus::io::peer_session<inproc_policy>;
 using msg_forwarder = plexus::io::message_forwarder<inproc_policy>;
 using rpc_forwarder = plexus::io::procedure_forwarder<inproc_policy>;
 
@@ -60,8 +60,11 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 // A two-node inproc link stood up through the transport's listen/dial rendezvous
@@ -77,8 +80,8 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // live channels.
 struct link
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> transport{ex, bus};
 
     msg_forwarder req_messages{};
@@ -86,41 +89,44 @@ struct link
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
-    plexus::io::peer_context<inproc_policy> req_ctx;   // the dialer slot's per-peer record
-    plexus::io::peer_context<inproc_policy> resp_ctx;  // the accepted slot's per-peer record
-    std::optional<session> requester;
-    std::optional<session> responder;
+    plexus::io::peer_context<inproc_policy> req_ctx;  // the dialer slot's per-peer record
+    plexus::io::peer_context<inproc_policy> resp_ctx; // the accepted slot's per-peer record
+    std::optional<session>                  requester;
+    std::optional<session>                  responder;
 
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;
 
     explicit link(std::chrono::nanoseconds timeout = k_long_timeout)
     {
-        transport.on_accepted([this, timeout](std::unique_ptr<inproc_channel<>> ch) {
-            resp_ctx.channel = std::move(ch);
-            resp_ctx.node_name = "requester-node";
-            // The reconciled peer identity (the registry sets this from the slot key; on a
-            // real accepter it is the post-inbound-reconciliation value). Pinned here so the
-            // source-identity gid reconstructs against the true peer node_id.
-            resp_ctx.peer_id = make_cfg(0x02).self_id;   // the requester's node_id
-            responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout,
-                              resp_messages, resp_procedures, true);
-            responder->on_message([this](std::string_view, std::span<const std::byte> d) {
-                resp_received.emplace_back(to_string(d));
-            });
-            responder->start();
-        });
-        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &) {
-            req_ctx.channel = std::move(ch);
-            req_ctx.node_name = "responder-node";
-            req_ctx.peer_id = make_cfg(0x01).self_id;   // the responder's node_id (the dialed peer)
-            requester.emplace(req_ctx, ex, make_cfg(0x02), timeout,
-                              req_messages, req_procedures, false);
-            requester->on_message([this](std::string_view, std::span<const std::byte> d) {
-                req_received.emplace_back(to_string(d));
-            });
-            requester->start();
-        });
+        transport.on_accepted(
+                [this, timeout](std::unique_ptr<inproc_channel<>> ch)
+                {
+                    resp_ctx.channel   = std::move(ch);
+                    resp_ctx.node_name = "requester-node";
+                    // The reconciled peer identity (the registry sets this from the slot key; on a
+                    // real accepter it is the post-inbound-reconciliation value). Pinned here so
+                    // the source-identity gid reconstructs against the true peer node_id.
+                    resp_ctx.peer_id = make_cfg(0x02).self_id; // the requester's node_id
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages,
+                                      resp_procedures, true);
+                    responder->on_message([this](std::string_view, std::span<const std::byte> d)
+                                          { resp_received.emplace_back(to_string(d)); });
+                    responder->start();
+                });
+        transport.on_dialed(
+                [this, timeout](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &)
+                {
+                    req_ctx.channel   = std::move(ch);
+                    req_ctx.node_name = "responder-node";
+                    req_ctx.peer_id =
+                            make_cfg(0x01).self_id; // the responder's node_id (the dialed peer)
+                    requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages,
+                                      req_procedures, false);
+                    requester->on_message([this](std::string_view, std::span<const std::byte> d)
+                                          { req_received.emplace_back(to_string(d)); });
+                    requester->start();
+                });
 
         transport.listen({"inproc", "svc"});
         transport.dial({"inproc", "svc"});
@@ -135,7 +141,7 @@ TEST_CASE("inproc peer_session pair completes the handshake, mints epochs, insta
           "[integration][peer_session][inproc]")
 {
     constexpr int k_iterations = 100;
-    int completed = 0;
+    int           completed    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -155,16 +161,18 @@ TEST_CASE("inproc peer_session pair completes the handshake, mints epochs, insta
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("inproc peer_session: a dialed (one-directional) connection completes BOTH sides — the accepted bootstrap responder answers, the dialer mints off the response, and gated data flows both ways, looped",
+TEST_CASE("inproc peer_session: a dialed (one-directional) connection completes BOTH sides — the "
+          "accepted bootstrap responder answers, the dialer mints off the response, and gated data "
+          "flows both ways, looped",
           "[integration][peer_session][inproc]")
 {
-    constexpr int k_iterations = 100;
-    const std::string downward = "dialer-to-responder";
-    const std::string upward = "responder-to-dialer";
-    int proven = 0;
+    constexpr int     k_iterations = 100;
+    const std::string downward     = "dialer-to-responder";
+    const std::string upward       = "responder-to-dialer";
+    int               proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l;   // the dial rendezvous: only the dialer dials, the accepted end bootstraps
+        link l; // the dial rendezvous: only the dialer dials, the accepted end bootstraps
         l.drive();
 
         // Both complete WITHOUT a simultaneous connect: the accepted bootstrap responder
@@ -199,12 +207,13 @@ TEST_CASE("inproc peer_session: a dialed (one-directional) connection completes 
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("inproc peer_session: a real published message flows post-handshake and latches the epoch, looped",
+TEST_CASE("inproc peer_session: a real published message flows post-handshake and latches the "
+          "epoch, looped",
           "[integration][peer_session][inproc]")
 {
-    constexpr int k_iterations = 100;
-    const std::string payload = "real-published-bytes";
-    int delivered = 0;
+    constexpr int     k_iterations = 100;
+    const std::string payload      = "real-published-bytes";
+    int               delivered    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -227,12 +236,13 @@ TEST_CASE("inproc peer_session: a real published message flows post-handshake an
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("inproc peer_session: the opt-in 3-arg callback delivers a message_info with intra-process locality, looped",
+TEST_CASE("inproc peer_session: the opt-in 3-arg callback delivers a message_info with "
+          "intra-process locality, looped",
           "[integration][peer_session][inproc][message_info]")
 {
-    constexpr int k_iterations = 100;
-    const std::string payload = "info-bearing-bytes";
-    int delivered = 0;
+    constexpr int     k_iterations = 100;
+    const std::string payload      = "info-bearing-bytes";
+    int               delivered    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -241,13 +251,15 @@ TEST_CASE("inproc peer_session: the opt-in 3-arg callback delivers a message_inf
         // The 3-arg callback takes precedence over the 2-arg one set by the link ctor:
         // register it on the responder so the published frame's metadata reaches it.
         plexus::io::message_info got{};
-        bool got_one = false;
+        bool                     got_one = false;
         l.responder->on_message_with_info(
-            [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi) {
-                got = mi;
-                got_one = true;
-                l.resp_received.emplace_back(to_string(d));
-            });
+                [&](std::string_view, std::span<const std::byte> d,
+                    const plexus::io::message_info &mi)
+                {
+                    got     = mi;
+                    got_one = true;
+                    l.resp_received.emplace_back(to_string(d));
+                });
 
         REQUIRE(l.resp_messages.attach(l.responder->msg_peer(), "topic"));
         REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "topic"));
@@ -271,34 +283,38 @@ TEST_CASE("inproc peer_session: the opt-in 3-arg callback delivers a message_inf
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("inproc peer_session: a source-identity publish populates message_info.source_identity end-to-end, looped",
+TEST_CASE("inproc peer_session: a source-identity publish populates message_info.source_identity "
+          "end-to-end, looped",
           "[integration][peer_session][inproc][message_info][gid]")
 {
     // End-to-end through the real session deliver path: deliver_data reads the gid flag
     // from the live frame_header and reconstructs publisher_gid{ m_ctx.peer_id, counter }.
     // The DIALER (requester) receives — the canonical demand flow (a subscriber dials the
     // publisher), where peer_id is the true dialed peer id. The responder is the producer.
-    constexpr int k_iterations = 100;
-    const std::string payload = "attributed-bytes";
-    const auto producer_id = make_cfg(0x01).self_id;   // the responder's node_id
-    int delivered = 0;
+    constexpr int     k_iterations = 100;
+    const std::string payload      = "attributed-bytes";
+    const auto        producer_id  = make_cfg(0x01).self_id; // the responder's node_id
+    int               delivered    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
         l.drive();
 
         plexus::io::message_info got{};
-        bool got_one = false;
+        bool                     got_one = false;
         l.requester->on_message_with_info(
-            [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi) {
-                got = mi;
-                got_one = true;
-                l.req_received.emplace_back(to_string(d));
-            });
+                [&](std::string_view, std::span<const std::byte> d,
+                    const plexus::io::message_info &mi)
+                {
+                    got     = mi;
+                    got_one = true;
+                    l.req_received.emplace_back(to_string(d));
+                });
 
         // The responder is the producer: it declares source identity for the topic, fans
         // it toward the requester, and the requester subscribes.
-        l.resp_messages.declare("topic", plexus::topic_qos{}, std::nullopt, /*emit_source_identity=*/true);
+        l.resp_messages.declare("topic", plexus::topic_qos{}, std::nullopt,
+                                /*emit_source_identity=*/true);
         REQUIRE(l.req_messages.attach(l.requester->msg_peer(), "topic"));
         REQUIRE(l.resp_messages.attach_for_fanout(l.responder->msg_peer(), "topic"));
         l.drive();
@@ -318,27 +334,36 @@ TEST_CASE("inproc peer_session: a source-identity publish populates message_info
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("inproc peer_session: a real RPC round-trips post-handshake matched by correlation, looped",
-          "[integration][peer_session][inproc]")
+TEST_CASE(
+        "inproc peer_session: a real RPC round-trips post-handshake matched by correlation, looped",
+        "[integration][peer_session][inproc]")
 {
-    constexpr int k_iterations = 100;
-    const std::string param = "rpc-param";
-    int answered = 0;
+    constexpr int     k_iterations = 100;
+    const std::string param        = "rpc-param";
+    int               answered     = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
         l.drive();
 
-        l.resp_procedures.serve("svc", [](std::span<const std::byte> p, rpc_forwarder::reply_fn &reply) {
-            reply(rpc_status::success, p);   // echo the param back
-        });
+        l.resp_procedures.serve("svc",
+                                [](std::span<const std::byte> p, rpc_forwarder::reply_fn &reply)
+                                {
+                                    reply(rpc_status::success, p); // echo the param back
+                                });
 
-        int fired = 0;
-        rpc_status got = rpc_status::error;
+        int         fired = 0;
+        rpc_status  got   = rpc_status::error;
         std::string ret;
-        l.req_procedures.call(l.requester->rpc_peer(), "svc", as_bytes(param),
-            [&](rpc_status s, std::span<const std::byte> r) { ++fired; got = s; ret = to_string(r); },
-            std::nullopt, l.requester->session_id());
+        l.req_procedures.call(
+                l.requester->rpc_peer(), "svc", as_bytes(param),
+                [&](rpc_status s, std::span<const std::byte> r)
+                {
+                    ++fired;
+                    got = s;
+                    ret = to_string(r);
+                },
+                std::nullopt, l.requester->session_id());
         l.drive();
 
         REQUIRE(fired == 1);
@@ -356,11 +381,11 @@ namespace {
 // exercises the production staleness gate, not a hand-strip.
 std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    msg_forwarder framer{};
-    inproc_channel<> capture(ex);
-    inproc_channel<> tx(ex);
+    msg_forwarder     framer{};
+    inproc_channel<>  capture(ex);
+    inproc_channel<>  tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
     capture.on_data([&](std::span<const std::byte> f) { captured.assign(f.begin(), f.end()); });
@@ -374,13 +399,14 @@ std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t
 
 }
 
-TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatched epoch is dropped, the latched epoch delivered, looped",
+TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatched epoch is "
+          "dropped, the latched epoch delivered, looped",
           "[integration][peer_session][inproc]")
 {
-    constexpr int k_iterations = 100;
-    const std::string good = "latched-epoch-bytes";
-    const std::string stale = "stale-session-bytes";
-    int proven = 0;
+    constexpr int     k_iterations = 100;
+    const std::string good         = "latched-epoch-bytes";
+    const std::string stale        = "stale-session-bytes";
+    int               proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -399,10 +425,10 @@ TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatc
         // A frame for the SAME topic carrying a DIFFERENT non-zero epoch is dropped:
         // the sink does not grow.
         const std::uint8_t stale_epoch = static_cast<std::uint8_t>(latched == 200 ? 199 : 200);
-        auto stale_frame = make_data_frame(stale, stale_epoch);
+        auto               stale_frame = make_data_frame(stale, stale_epoch);
         l.responder->on_receive(stale_frame);
         l.drive();
-        REQUIRE(l.resp_received.size() == 1);   // DROPPED, not delivered
+        REQUIRE(l.resp_received.size() == 1); // DROPPED, not delivered
 
         // A frame carrying the latched epoch IS delivered.
         auto fresh_frame = make_data_frame(good, latched);
@@ -415,17 +441,18 @@ TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatc
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("inproc peer_session: the staleness gate distinguishes epochs beyond the u8 range — the 255-wrap collision is gone, looped",
+TEST_CASE("inproc peer_session: the staleness gate distinguishes epochs beyond the u8 range — the "
+          "255-wrap collision is gone, looped",
           "[integration][peer_session][inproc]")
 {
     // Two epochs that ALIAS under a u8 epoch well — 257 ≡ 1 (mod 256) — are distinct
     // u64 values. The gate must latch one and drop the other. Under the retired u8
     // width these collided, so a dead incarnation's straggler (epoch 1) was wrongly
     // accepted against a live epoch-257 session. The u64 width makes them distinct.
-    constexpr int k_iterations = 100;
-    constexpr std::uint64_t latched_epoch  = 257;   // the live session's epoch
-    constexpr std::uint64_t aliasing_epoch = 1;     // would alias 257 under u8
-    int proven = 0;
+    constexpr int           k_iterations   = 100;
+    constexpr std::uint64_t latched_epoch  = 257; // the live session's epoch
+    constexpr std::uint64_t aliasing_epoch = 1;   // would alias 257 under u8
+    int                     proven         = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -443,7 +470,7 @@ TEST_CASE("inproc peer_session: the staleness gate distinguishes epochs beyond t
         // A straggler carrying the aliasing epoch (1) is a DIFFERENT session: dropped.
         l.responder->on_receive(make_data_frame("aliasing", aliasing_epoch));
         l.drive();
-        REQUIRE(l.resp_received.size() == 1);   // DROPPED — no u8 collision
+        REQUIRE(l.resp_received.size() == 1); // DROPPED — no u8 collision
 
         // The latched epoch still delivers.
         l.responder->on_receive(make_data_frame("same", latched_epoch));
@@ -459,53 +486,57 @@ namespace {
 
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 struct manual_policy
 {
-    using executor_type = inproc_executor<manual_clock> &;
+    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
-    using timer_type = plexus::inproc::inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = plexus::inproc::inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using manual_session = plexus::io::peer_session<manual_policy>;
-using manual_msg = plexus::io::message_forwarder<manual_policy>;
-using manual_rpc = plexus::io::procedure_forwarder<manual_policy>;
+using manual_msg     = plexus::io::message_forwarder<manual_policy>;
+using manual_rpc     = plexus::io::procedure_forwarder<manual_policy>;
 
 // A lone requester on the manual clock with no responder ever answering: the
 // handshake never completes, so the armed handshake timer is what resolves it.
 struct timeout_harness
 {
-    inproc_bus<manual_clock> bus;
+    inproc_bus<manual_clock>      bus;
     inproc_executor<manual_clock> ex{bus};
-    inproc_channel<manual_clock> peer_ch{ex};   // a silent peer that never responds
+    inproc_channel<manual_clock>  peer_ch{ex}; // a silent peer that never responds
 
     manual_msg messages{};
     manual_rpc procedures{ex, std::chrono::hours(1)};
 
-    plexus::io::peer_context<manual_policy> ctx;   // the record owns the dialer channel
-    manual_session requester;
+    plexus::io::peer_context<manual_policy> ctx; // the record owns the dialer channel
+    manual_session                          requester;
 
     explicit timeout_harness(std::chrono::nanoseconds timeout)
-        : ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}
-        , requester(ctx, ex, make_cfg(0x02), timeout, messages, procedures, false)
+            : ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}
+            , requester(ctx, ex, make_cfg(0x02), timeout, messages, procedures, false)
     {
-        ctx.channel->connect_to(peer_ch.local_endpoint());   // sends land on a peer that never replies
+        ctx.channel->connect_to(
+                peer_ch.local_endpoint()); // sends land on a peer that never replies
         requester.start();
     }
 
@@ -514,13 +545,14 @@ struct timeout_harness
 
 }
 
-TEST_CASE("inproc peer_session: a handshake that never completes aborts once the timeout passes (virtual clock), looped",
+TEST_CASE("inproc peer_session: a handshake that never completes aborts once the timeout passes "
+          "(virtual clock), looped",
           "[integration][peer_session][inproc]")
 {
     for(int iter = 0; iter < 100; ++iter)
     {
         manual_clock::reset();
-        const auto deadline = std::chrono::milliseconds(50);
+        const auto      deadline = std::chrono::milliseconds(50);
         timeout_harness h(deadline);
 
         // Before the deadline: the request was sent but no response arrived — no abort.
@@ -531,7 +563,7 @@ TEST_CASE("inproc peer_session: a handshake that never completes aborts once the
         manual_clock::advance(deadline + std::chrono::milliseconds(1));
         h.drive();
         REQUIRE(!h.requester.is_complete());
-        REQUIRE(h.requester.peer_session_id() == 0);   // epoch latch reset by teardown
+        REQUIRE(h.requester.peer_session_id() == 0); // epoch latch reset by teardown
     }
 }
 
@@ -542,8 +574,8 @@ namespace {
 // timer is cancelled on completion (no later abort fires).
 struct manual_link
 {
-    inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
+    inproc_bus<manual_clock>       bus;
+    inproc_executor<manual_clock>  ex{bus};
     inproc_transport<manual_clock> transport{ex, bus};
 
     manual_msg req_messages{};
@@ -551,27 +583,32 @@ struct manual_link
     manual_rpc req_procedures{ex, std::chrono::hours(1)};
     manual_rpc resp_procedures{ex, std::chrono::hours(1)};
 
-    plexus::io::peer_context<manual_policy> req_ctx;   // the dialer slot's per-peer record
-    plexus::io::peer_context<manual_policy> resp_ctx;  // the accepted slot's per-peer record
-    std::optional<manual_session> requester;
-    std::optional<manual_session> responder;
+    plexus::io::peer_context<manual_policy> req_ctx;  // the dialer slot's per-peer record
+    plexus::io::peer_context<manual_policy> resp_ctx; // the accepted slot's per-peer record
+    std::optional<manual_session>           requester;
+    std::optional<manual_session>           responder;
 
     explicit manual_link(std::chrono::nanoseconds timeout)
     {
-        transport.on_accepted([this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch) {
-            resp_ctx.channel = std::move(ch);
-            resp_ctx.node_name = "requester-node";
-            responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout,
-                              resp_messages, resp_procedures, true);
-            responder->start();
-        });
-        transport.on_dialed([this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch, const plexus::io::endpoint &) {
-            req_ctx.channel = std::move(ch);
-            req_ctx.node_name = "responder-node";
-            requester.emplace(req_ctx, ex, make_cfg(0x02), timeout,
-                              req_messages, req_procedures, false);
-            requester->start();
-        });
+        transport.on_accepted(
+                [this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch)
+                {
+                    resp_ctx.channel   = std::move(ch);
+                    resp_ctx.node_name = "requester-node";
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages,
+                                      resp_procedures, true);
+                    responder->start();
+                });
+        transport.on_dialed(
+                [this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch,
+                                const plexus::io::endpoint &)
+                {
+                    req_ctx.channel   = std::move(ch);
+                    req_ctx.node_name = "responder-node";
+                    requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages,
+                                      req_procedures, false);
+                    requester->start();
+                });
         transport.listen({"inproc", "svc"});
         transport.dial({"inproc", "svc"});
     }
@@ -581,13 +618,14 @@ struct manual_link
 
 }
 
-TEST_CASE("inproc peer_session: completing before the deadline cancels the timer — no later abort, looped",
+TEST_CASE("inproc peer_session: completing before the deadline cancels the timer — no later abort, "
+          "looped",
           "[integration][peer_session][inproc]")
 {
     for(int iter = 0; iter < 100; ++iter)
     {
         manual_clock::reset();
-        const auto deadline = std::chrono::milliseconds(50);
+        const auto  deadline = std::chrono::milliseconds(50);
         manual_link l(deadline);
 
         l.drive();

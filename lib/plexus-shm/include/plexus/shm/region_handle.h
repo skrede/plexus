@@ -25,7 +25,7 @@ public:
     region_handle() = default;
     ~region_handle();
 
-    region_handle(const region_handle &) = delete;
+    region_handle(const region_handle &)            = delete;
     region_handle &operator=(const region_handle &) = delete;
 
     region_handle(region_handle &&other) noexcept;
@@ -44,18 +44,19 @@ public:
 private:
     friend class posix_shm_region_broker;
 
-    region_handle(int fd, void *base, std::size_t length, std::string name, bool owns_name) noexcept;
+    region_handle(int fd, void *base, std::size_t length, std::string name,
+                  bool owns_name) noexcept;
 
     // Always munmaps, closes the fd, and unlinks the name only when this handle
     // owns it. noexcept + idempotent: nulls the members so a second invocation
     // (the move-assign path) does nothing.
     void reclaim() noexcept;
 
-    int m_fd{-1};
-    void *m_base{nullptr};
+    int         m_fd{-1};
+    void       *m_base{nullptr};
     std::size_t m_length{0};
     std::string m_name;
-    bool m_owns_name{false};
+    bool        m_owns_name{false};
 };
 
 }

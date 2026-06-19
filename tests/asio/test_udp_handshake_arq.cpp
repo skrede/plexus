@@ -38,7 +38,7 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 namespace {
 
@@ -54,23 +54,23 @@ constexpr pasio::udp_transport::arq_type::schedule fast_ladder{ms{20}, ms{40}, m
 // loss-injection fixture (a wrapping forwarder).
 struct lossy_relay
 {
-    ::asio::io_context &io;
-    ::asio::ip::udp::socket front;     // faces the client
-    ::asio::ip::udp::socket back;      // faces the server
-    ::asio::ip::udp::endpoint server_ep;
-    ::asio::ip::udp::endpoint client_ep;        // learned from the first client datagram
-    ::asio::ip::udp::endpoint from;             // scratch for the active recv
+    ::asio::io_context         &io;
+    ::asio::ip::udp::socket     front; // faces the client
+    ::asio::ip::udp::socket     back;  // faces the server
+    ::asio::ip::udp::endpoint   server_ep;
+    ::asio::ip::udp::endpoint   client_ep; // learned from the first client datagram
+    ::asio::ip::udp::endpoint   from;      // scratch for the active recv
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
-    int drop_count;
-    int dropped{0};
+    int                         drop_count;
+    int                         dropped{0};
 
     lossy_relay(::asio::io_context &ctx, std::uint16_t server_port, int drops)
-        : io(ctx)
-        , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
-        , drop_count(drops)
+            : io(ctx)
+            , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            , drop_count(drops)
     {
         recv_front();
         recv_back();
@@ -81,28 +81,30 @@ struct lossy_relay
     void recv_front()
     {
         front.async_receive_from(::asio::buffer(front_buf), from,
-            [this](std::error_code ec, std::size_t n)
-            {
-                if(ec)
-                    return;
-                client_ep = from;
-                if(!maybe_drop())
-                    back.send_to(::asio::buffer(front_buf.data(), n), server_ep);
-                recv_front();
-            });
+                                 [this](std::error_code ec, std::size_t n)
+                                 {
+                                     if(ec)
+                                         return;
+                                     client_ep = from;
+                                     if(!maybe_drop())
+                                         back.send_to(::asio::buffer(front_buf.data(), n),
+                                                      server_ep);
+                                     recv_front();
+                                 });
     }
 
     void recv_back()
     {
         back.async_receive_from(::asio::buffer(back_buf), from,
-            [this](std::error_code ec, std::size_t n)
-            {
-                if(ec)
-                    return;
-                if(!maybe_drop() && client_ep.port() != 0)
-                    front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
-                recv_back();
-            });
+                                [this](std::error_code ec, std::size_t n)
+                                {
+                                    if(ec)
+                                        return;
+                                    if(!maybe_drop() && client_ep.port() != 0)
+                                        front.send_to(::asio::buffer(back_buf.data(), n),
+                                                      client_ep);
+                                    recv_back();
+                                });
     }
 
     bool maybe_drop()
@@ -116,7 +118,7 @@ struct lossy_relay
     }
 };
 
-template <typename Pred>
+template<typename Pred>
 void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{4000})
 {
     auto bound = std::chrono::steady_clock::now() + timeout;
@@ -130,18 +132,19 @@ void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{4000})
 
 }
 
-TEST_CASE("udp handshake_arq: the session establishes under injected loss via retransmit", "[udp][handshake]")
+TEST_CASE("udp handshake_arq: the session establishes under injected loss via retransmit",
+          "[udp][handshake]")
 {
     constexpr int k_iterations = 30;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context io;
+        ::asio::io_context   io;
         pasio::udp_transport server{io};
         pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_ladder};
 
         bool accepted = false;
-        bool dialed = false;
+        bool dialed   = false;
         server.on_accepted([&](std::unique_ptr<pasio::udp_channel>) { accepted = true; });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
@@ -150,37 +153,41 @@ TEST_CASE("udp handshake_arq: the session establishes under injected loss via re
         // first hs_response) is lost, so the ARQ must retransmit to establish.
         lossy_relay relay{io, server.port(), /*drops=*/1};
 
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel>, const plexus::io::endpoint &) { dialed = true; });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel>, const plexus::io::endpoint &)
+                         { dialed = true; });
         client.dial({"udp", "127.0.0.1:" + std::to_string(relay.port())});
 
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed);
         REQUIRE(accepted);
-        REQUIRE(relay.dropped >= 1);     // a datagram WAS dropped — the path was genuinely lossy
+        REQUIRE(relay.dropped >= 1); // a datagram WAS dropped — the path was genuinely lossy
         ++proven;
     }
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp handshake_arq: dropping every datagram surfaces a handshake-timeout abort", "[udp][handshake]")
+TEST_CASE("udp handshake_arq: dropping every datagram surfaces a handshake-timeout abort",
+          "[udp][handshake]")
 {
     constexpr int k_iterations = 10;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context io;
+        ::asio::io_context   io;
         pasio::udp_transport server{io};
         pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_ladder};
 
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
-        lossy_relay relay{io, server.port(), /*drops=*/10000};   // drop everything
+        lossy_relay relay{io, server.port(), /*drops=*/10000}; // drop everything
 
         std::optional<plexus::io::io_error> dial_fail;
-        bool dialed = false;
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel>, const plexus::io::endpoint &) { dialed = true; });
-        client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e) { dial_fail = e; });
+        bool                                dialed = false;
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel>, const plexus::io::endpoint &)
+                         { dialed = true; });
+        client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e)
+                              { dial_fail = e; });
         client.dial({"udp", "127.0.0.1:" + std::to_string(relay.port())});
 
         pump_until(io, [&] { return dial_fail.has_value(); });
@@ -192,41 +199,42 @@ TEST_CASE("udp handshake_arq: dropping every datagram surfaces a handshake-timeo
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired frame cancels it", "[udp][handshake]")
+TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired frame cancels it",
+          "[udp][handshake]")
 {
     using arq_t = pio::detail::udp_handshake_arq<pasio::udp_policy>;
 
     SECTION("a paired frame mid-ladder establishes and stops further transmits")
     {
         ::asio::io_context io;
-        arq_t arq{io, fast_ladder};
+        arq_t              arq{io, fast_ladder};
 
-        int transmits = 0;
+        int  transmits   = 0;
         bool established = false;
-        bool timed_out = false;
+        bool timed_out   = false;
         arq.on_transmit([&] { ++transmits; });
         arq.on_established([&] { established = true; });
         arq.on_timeout([&] { timed_out = true; });
 
-        arq.start();                                     // transmit #1 fires immediately
+        arq.start(); // transmit #1 fires immediately
         REQUIRE(transmits == 1);
-        pump_until(io, [&] { return transmits >= 2; });  // the 20ms timer fires transmit #2
+        pump_until(io, [&] { return transmits >= 2; }); // the 20ms timer fires transmit #2
         REQUIRE(transmits >= 2);
 
-        arq.on_paired_frame();                           // the response arrives
+        arq.on_paired_frame(); // the response arrives
         REQUIRE(established);
         int at_pairing = transmits;
-        pump_until(io, [&] { return false; }, ms{120});  // let the would-be ladder elapse
-        REQUIRE(transmits == at_pairing);                // no further transmit after resolution
+        pump_until(io, [&] { return false; }, ms{120}); // let the would-be ladder elapse
+        REQUIRE(transmits == at_pairing);               // no further transmit after resolution
         REQUIRE_FALSE(timed_out);
     }
 
     SECTION("exhausting the ladder surfaces a timeout abort")
     {
         ::asio::io_context io;
-        arq_t arq{io, fast_ladder};
+        arq_t              arq{io, fast_ladder};
 
-        int transmits = 0;
+        int  transmits = 0;
         bool timed_out = false;
         arq.on_transmit([&] { ++transmits; });
         arq.on_timeout([&] { timed_out = true; });
@@ -234,7 +242,7 @@ TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired fram
         arq.start();
         pump_until(io, [&] { return timed_out; });
         REQUIRE(timed_out);
-        REQUIRE(transmits == 3);                         // the three ladder attempts, then surrender
+        REQUIRE(transmits == 3); // the three ladder attempts, then surrender
     }
 
     SECTION("single-owner teardown cancels a pending timer cleanly")
@@ -243,11 +251,11 @@ TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired fram
         {
             arq_t arq{io, fast_ladder};
             arq.on_transmit([] {});
-            arq.start();                                 // a timer is pending
-            arq.cancel();                                // the owner tears it down
+            arq.start();  // a timer is pending
+            arq.cancel(); // the owner tears it down
             REQUIRE(arq.resolved());
         }
-        io.poll();                                       // a cancelled timer must not fire on a dead ARQ
+        io.poll(); // a cancelled timer must not fire on a dead ARQ
         SUCCEED();
     }
 }

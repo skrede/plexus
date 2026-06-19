@@ -15,30 +15,43 @@ namespace plexus::asio::detail {
 // buffering; arm_on_accept starts the read loop directly. The TLS bootstrap is the same
 // shape with an open-before-data gate spliced between submit and the egress and the read loop
 // armed by the handshake instead of at accept.
-template <typename Stream>
+template<typename Stream>
 class plaintext_bootstrap
 {
 public:
-    template <typename Io>
-    [[nodiscard]] static Stream make_stream(Io &io) { return Stream{io}; }
+    template<typename Io>
+    [[nodiscard]] static Stream make_stream(Io &io)
+    {
+        return Stream{io};
+    }
 
-    template <typename Io, typename Socket>
+    template<typename Io, typename Socket>
     [[nodiscard]] static Stream make_stream(Io &io, Socket connected)
     {
         (void)io;
         return Stream{std::move(connected)};
     }
 
-    template <typename Channel>
-    void submit(Channel &c, std::span<const std::byte> data) { c.enqueue_egress(data); }
+    template<typename Channel>
+    void submit(Channel &c, std::span<const std::byte> data)
+    {
+        c.enqueue_egress(data);
+    }
 
     // No pre-data handshake to gate on, so the owner rides straight to the serial egress
     // with no copy (the plaintext zero-copy send path).
-    template <typename Channel>
-    void submit(Channel &c, plexus::wire_bytes<> data) { c.enqueue_egress_owned(std::move(data)); }
+    template<typename Channel>
+    void submit(Channel &c, plexus::wire_bytes<> data)
+    {
+        c.enqueue_egress_owned(std::move(data));
+    }
 
-    template <typename Channel>
-    void arm_on_accept(Channel &c) { c.mark_open(); c.start_read_loop(); }
+    template<typename Channel>
+    void arm_on_accept(Channel &c)
+    {
+        c.mark_open();
+        c.start_read_loop();
+    }
 
     void reset() noexcept {}
 };

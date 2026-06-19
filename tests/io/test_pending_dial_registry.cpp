@@ -24,15 +24,17 @@ namespace {
 struct fake_channel
 {
     int *destroyed;
-    int id;
+    int  id;
 
-    explicit fake_channel(int *counter, int identity) : destroyed(counter), id(identity)
+    explicit fake_channel(int *counter, int identity)
+            : destroyed(counter)
+            , id(identity)
     {
     }
 
     ~fake_channel() { ++*destroyed; }
 
-    fake_channel(const fake_channel &) = delete;
+    fake_channel(const fake_channel &)            = delete;
     fake_channel &operator=(const fake_channel &) = delete;
 };
 
@@ -55,53 +57,59 @@ struct deferred_sink
 
 }
 
-TEST_CASE("pending_dial_registry insert+resolve returns the same owned channel and erases the entry", "[io][pending_dial_registry]")
+TEST_CASE(
+        "pending_dial_registry insert+resolve returns the same owned channel and erases the entry",
+        "[io][pending_dial_registry]")
 {
-    int destroyed = 0;
+    int           destroyed = 0;
     deferred_sink sink;
-    registry reg{sink.callback()};
+    registry      reg{sink.callback()};
 
-    auto ch = std::make_unique<fake_channel>(&destroyed, 42);
+    auto  ch  = std::make_unique<fake_channel>(&destroyed, 42);
     auto *raw = ch.get();
     reg.insert(raw, std::move(ch));
     REQUIRE(reg.pending_size() == 1);
 
     auto resolved = reg.resolve(raw);
-    REQUIRE(resolved.get() == raw);            // the SAME owned channel handed back
+    REQUIRE(resolved.get() == raw); // the SAME owned channel handed back
     REQUIRE(resolved->id == 42);
-    REQUIRE(reg.pending_size() == 0);          // the entry was erased
+    REQUIRE(reg.pending_size() == 0); // the entry was erased
 
-    REQUIRE(reg.resolve(raw) == nullptr);      // a second resolve misses
+    REQUIRE(reg.resolve(raw) == nullptr); // a second resolve misses
 }
 
-TEST_CASE("pending_dial_registry resolve honors copy-before-erase (a copied-out value survives the erase)", "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry resolve honors copy-before-erase (a copied-out value survives the "
+          "erase)",
+          "[io][pending_dial_registry]")
 {
-    int destroyed = 0;
-    deferred_sink sink;
+    int                                                          destroyed = 0;
+    deferred_sink                                                sink;
     plexus::io::pending_dial_registry<fake_channel, std::string> reg{
-        [](std::unique_ptr<fake_channel>) {}};
+            [](std::unique_ptr<fake_channel>) {}};
 
-    auto ch = std::make_unique<fake_channel>(&destroyed, 7);
+    auto  ch  = std::make_unique<fake_channel>(&destroyed, 7);
     auto *raw = ch.get();
     reg.insert(raw, std::move(ch), std::string{"203.0.113.5:9000"});
 
     // Copy the entry-bound value OUT before resolve erases the entry; under asan a
     // post-erase read of the entry would corrupt this copy.
     const std::string endpoint_copy = *reg.payload_of(raw);
-    auto resolved = reg.resolve(raw);
+    auto              resolved      = reg.resolve(raw);
 
     REQUIRE(resolved.get() == raw);
     REQUIRE(endpoint_copy == "203.0.113.5:9000");
-    REQUIRE(reg.payload_of(raw) == nullptr);   // the entry (and its payload) are gone
+    REQUIRE(reg.payload_of(raw) == nullptr); // the entry (and its payload) are gone
 }
 
-TEST_CASE("pending_dial_registry fail routes the freed channel through the deferred-destroy callback", "[io][pending_dial_registry]")
+TEST_CASE(
+        "pending_dial_registry fail routes the freed channel through the deferred-destroy callback",
+        "[io][pending_dial_registry]")
 {
-    int destroyed = 0;
+    int           destroyed = 0;
     deferred_sink sink;
-    registry reg{sink.callback()};
+    registry      reg{sink.callback()};
 
-    auto ch = std::make_unique<fake_channel>(&destroyed, 99);
+    auto  ch  = std::make_unique<fake_channel>(&destroyed, 99);
     auto *raw = ch.get();
     reg.insert(raw, std::move(ch));
 
@@ -118,13 +126,14 @@ TEST_CASE("pending_dial_registry fail routes the freed channel through the defer
     REQUIRE(destroyed == 1);
 }
 
-TEST_CASE("pending_dial_registry insert_accepted+adopt_accepted transfers ownership out", "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry insert_accepted+adopt_accepted transfers ownership out",
+          "[io][pending_dial_registry]")
 {
-    int destroyed = 0;
+    int           destroyed = 0;
     deferred_sink sink;
-    registry reg{sink.callback()};
+    registry      reg{sink.callback()};
 
-    auto ch = std::make_unique<fake_channel>(&destroyed, 5);
+    auto  ch  = std::make_unique<fake_channel>(&destroyed, 5);
     auto *raw = ch.get();
     reg.insert_accepted(raw, std::move(ch));
     REQUIRE(reg.accepted_size() == 1);
@@ -135,13 +144,15 @@ TEST_CASE("pending_dial_registry insert_accepted+adopt_accepted transfers owners
     REQUIRE(reg.adopt_accepted(raw) == nullptr);
 }
 
-TEST_CASE("pending_dial_registry fail_accepted routes the freed accepted channel through the deferred-destroy callback", "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry fail_accepted routes the freed accepted channel through the "
+          "deferred-destroy callback",
+          "[io][pending_dial_registry]")
 {
-    int destroyed = 0;
+    int           destroyed = 0;
     deferred_sink sink;
-    registry reg{sink.callback()};
+    registry      reg{sink.callback()};
 
-    auto ch = std::make_unique<fake_channel>(&destroyed, 77);
+    auto  ch  = std::make_unique<fake_channel>(&destroyed, 77);
     auto *raw = ch.get();
     reg.insert_accepted(raw, std::move(ch));
     REQUIRE(reg.accepted_size() == 1);
@@ -162,26 +173,26 @@ TEST_CASE("pending_dial_registry fail_accepted routes the freed accepted channel
 
 TEST_CASE("pending_dial_registry fail_accepted on a miss is a no-op", "[io][pending_dial_registry]")
 {
-    int destroyed = 0;
+    int           destroyed = 0;
     deferred_sink sink;
-    registry reg{sink.callback()};
+    registry      reg{sink.callback()};
 
     fake_channel never_inserted{&destroyed, 0};
     reg.fail_accepted(&never_inserted);
 
     REQUIRE(reg.accepted_size() == 0);
     REQUIRE(sink.parked.empty());
-    REQUIRE(destroyed == 0);                    // nothing freed, no defer fired
+    REQUIRE(destroyed == 0); // nothing freed, no defer fired
 }
 
 TEST_CASE("pending_dial_registry clear empties both tables", "[io][pending_dial_registry]")
 {
-    int destroyed = 0;
+    int           destroyed = 0;
     deferred_sink sink;
-    registry reg{sink.callback()};
+    registry      reg{sink.callback()};
 
-    auto a = std::make_unique<fake_channel>(&destroyed, 1);
-    auto b = std::make_unique<fake_channel>(&destroyed, 2);
+    auto  a     = std::make_unique<fake_channel>(&destroyed, 1);
+    auto  b     = std::make_unique<fake_channel>(&destroyed, 2);
     auto *raw_a = a.get();
     auto *raw_b = b.get();
     reg.insert(raw_a, std::move(a));
@@ -192,16 +203,16 @@ TEST_CASE("pending_dial_registry clear empties both tables", "[io][pending_dial_
     reg.clear();
     REQUIRE(reg.pending_size() == 0);
     REQUIRE(reg.accepted_size() == 0);
-    REQUIRE(destroyed == 2);                    // both held channels destroyed on clear
+    REQUIRE(destroyed == 2); // both held channels destroyed on clear
 }
 
-TEST_CASE("pending_dial_registry threads a non-monostate Payload through payload_of", "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry threads a non-monostate Payload through payload_of",
+          "[io][pending_dial_registry]")
 {
-    int destroyed = 0;
-    plexus::io::pending_dial_registry<fake_channel, int> reg{
-        [](std::unique_ptr<fake_channel>) {}};
+    int                                                  destroyed = 0;
+    plexus::io::pending_dial_registry<fake_channel, int> reg{[](std::unique_ptr<fake_channel>) {}};
 
-    auto ch = std::make_unique<fake_channel>(&destroyed, 3);
+    auto  ch  = std::make_unique<fake_channel>(&destroyed, 3);
     auto *raw = ch.get();
     reg.insert(raw, std::move(ch), 1234);
 

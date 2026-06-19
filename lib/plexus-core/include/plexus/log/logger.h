@@ -23,9 +23,7 @@ public:
 class null_logger final : public logger
 {
 public:
-    void warn(std::string_view) override
-    {
-    }
+    void warn(std::string_view) override {}
 };
 
 }

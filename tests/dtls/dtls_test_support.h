@@ -42,7 +42,7 @@
 namespace plexus::dtls_test {
 
 namespace ptls = plexus::tls;
-namespace pio = plexus::io;
+namespace pio  = plexus::io;
 
 // The full 32-byte SHA-256 SPKI digest — the core cert_facts::spki_sha256 field type
 // the spki_fingerprint extraction yields and the pin policy compares against.
@@ -59,21 +59,21 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest digest{};
-    std::string subject;
+    spki_digest           digest{};
+    std::string           subject;
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path()
-            / ("plexus_dtls_" + tag + "_" + std::to_string(::getpid())
-               + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() /
+                ("plexus_dtls_" + tag + "_" + std::to_string(::getpid()) + "_" +
+                 std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
-        key_path = dir / "key.pem";
+        key_path  = dir / "key.pem";
         generate(tag);
     }
 
-    identity_fixture(const identity_fixture &) = delete;
+    identity_fixture(const identity_fixture &)            = delete;
     identity_fixture &operator=(const identity_fixture &) = delete;
 
     ~identity_fixture()
@@ -84,8 +84,8 @@ struct identity_fixture
 
     void generate(const std::string &tag)
     {
-        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(
-            EVP_EC_gen("P-256"), &EVP_PKEY_free);
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"),
+                                                                 &EVP_PKEY_free);
         REQUIRE(pkey);
 
         std::unique_ptr<X509, decltype(&X509_free)> cert(X509_new(), &X509_free);
@@ -95,17 +95,18 @@ struct identity_fixture
         X509_gmtime_adj(X509_getm_notAfter(cert.get()), 3600);
         X509_set_pubkey(cert.get(), pkey.get());
 
-        subject = "plexus-dtls-" + tag;
+        subject         = "plexus-dtls-" + tag;
         X509_NAME *name = X509_get_subject_name(cert.get());
         X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-            reinterpret_cast<const unsigned char *>(subject.c_str()), -1, -1, 0);
+                                   reinterpret_cast<const unsigned char *>(subject.c_str()), -1, -1,
+                                   0);
         X509_set_issuer_name(cert.get(), name);
         REQUIRE(X509_sign(cert.get(), pkey.get(), EVP_sha256()) != 0);
 
         write_pem(cert.get(), pkey.get());
-        std::filesystem::permissions(key_path,
-            std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-            std::filesystem::perm_options::replace);
+        std::filesystem::permissions(
+                key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+                std::filesystem::perm_options::replace);
 
         auto d = ptls::spki_fingerprint(*cert.get());
         REQUIRE(d.has_value());
@@ -130,7 +131,7 @@ struct identity_fixture
 inline ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &peer_pin)
 {
     auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-        std::vector<spki_digest>{peer_pin});
+            std::vector<spki_digest>{peer_pin});
     return ptls::load_dtls_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -138,7 +139,8 @@ inline ptls::tls_credential pin_one(const identity_fixture &self, const spki_dig
 // no-policy/accept-nothing fail-closed case).
 inline ptls::tls_credential pin_none(const identity_fixture &self)
 {
-    auto policy = std::make_shared<const pio::security::spki_pin_policy>(std::vector<spki_digest>{});
+    auto policy =
+            std::make_shared<const pio::security::spki_pin_policy>(std::vector<spki_digest>{});
     return ptls::load_dtls_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -147,7 +149,13 @@ inline ptls::tls_credential pin_none(const identity_fixture &self)
 // What the relay does to one client->server datagram. The relay always passes
 // server->client datagrams (the dialer must hear HelloVerifyRequest / the server
 // flights); only the client->server direction is scripted.
-enum class action { pass, drop, duplicate, hold };
+enum class action
+{
+    pass,
+    drop,
+    duplicate,
+    hold
+};
 
 // A programmable relay between a dialing client and a real server, forwarding RAW
 // DTLS records both ways. For client->server datagrams it consults a scripted
@@ -156,24 +164,24 @@ enum class action { pass, drop, duplicate, hold };
 // bytes, so EVERY client->server datagram is scripted in order.
 struct relay
 {
-    ::asio::io_context &io;
-    ::asio::ip::udp::socket front;       // faces the client
-    ::asio::ip::udp::socket back;        // faces the server
-    ::asio::ip::udp::endpoint server_ep;
-    ::asio::ip::udp::endpoint client_ep;
-    ::asio::ip::udp::endpoint from;
+    ::asio::io_context         &io;
+    ::asio::ip::udp::socket     front; // faces the client
+    ::asio::ip::udp::socket     back;  // faces the server
+    ::asio::ip::udp::endpoint   server_ep;
+    ::asio::ip::udp::endpoint   client_ep;
+    ::asio::ip::udp::endpoint   from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
 
-    std::deque<action> script;                            // consumed per client->server datagram
-    std::vector<std::vector<std::byte>> held;             // held datagrams to release out of order
-    int seen{0};
+    std::deque<action>                  script; // consumed per client->server datagram
+    std::vector<std::vector<std::byte>> held;   // held datagrams to release out of order
+    int                                 seen{0};
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
-        : io(ctx)
-        , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            : io(ctx)
+            , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
     {
         recv_front();
         recv_back();
@@ -185,20 +193,20 @@ struct relay
     {
         auto copy = std::make_shared<std::vector<std::byte>>(dg.begin(), dg.end());
         back.async_send_to(::asio::buffer(*copy), server_ep,
-            [copy](std::error_code, std::size_t) {});
+                           [copy](std::error_code, std::size_t) {});
     }
 
     void recv_front()
     {
         front.async_receive_from(::asio::buffer(front_buf), from,
-            [this](std::error_code ec, std::size_t n)
-            {
-                if(ec)
-                    return;
-                client_ep = from;
-                handle_client(std::span<const std::byte>{front_buf.data(), n});
-                recv_front();
-            });
+                                 [this](std::error_code ec, std::size_t n)
+                                 {
+                                     if(ec)
+                                         return;
+                                     client_ep = from;
+                                     handle_client(std::span<const std::byte>{front_buf.data(), n});
+                                     recv_front();
+                                 });
     }
 
     void handle_client(std::span<const std::byte> dg)
@@ -212,10 +220,13 @@ struct relay
         }
         switch(a)
         {
-        case action::pass:      send_to_server(dg); break;
-        case action::drop:      break;                                  // lost: OpenSSL retransmits
-        case action::duplicate: send_to_server(dg); send_to_server(dg); break;
-        case action::hold:      held.emplace_back(dg.begin(), dg.end()); break;
+            case action::pass: send_to_server(dg); break;
+            case action::drop: break; // lost: OpenSSL retransmits
+            case action::duplicate:
+                send_to_server(dg);
+                send_to_server(dg);
+                break;
+            case action::hold: held.emplace_back(dg.begin(), dg.end()); break;
         }
     }
 
@@ -230,26 +241,27 @@ struct relay
 
     void recv_back()
     {
-        back.async_receive_from(::asio::buffer(back_buf), from,
-            [this](std::error_code ec, std::size_t n)
-            {
-                if(ec)
-                    return;
-                if(client_ep.port() != 0)            // server->client always passes
+        back.async_receive_from(
+                ::asio::buffer(back_buf), from,
+                [this](std::error_code ec, std::size_t n)
                 {
-                    auto copy = std::make_shared<std::vector<std::byte>>(
-                        back_buf.data(), back_buf.data() + n);
-                    front.async_send_to(::asio::buffer(*copy), client_ep,
-                        [copy](std::error_code, std::size_t) {});
-                }
-                recv_back();
-            });
+                    if(ec)
+                        return;
+                    if(client_ep.port() != 0) // server->client always passes
+                    {
+                        auto copy = std::make_shared<std::vector<std::byte>>(back_buf.data(),
+                                                                             back_buf.data() + n);
+                        front.async_send_to(::asio::buffer(*copy), client_ep,
+                                            [copy](std::error_code, std::size_t) {});
+                    }
+                    recv_back();
+                });
     }
 };
 
 // ---- io_context pumps ------------------------------------------------------
 
-template <typename Pred>
+template<typename Pred>
 void pump_until(::asio::io_context &io, Pred pred,
                 std::chrono::milliseconds timeout = std::chrono::milliseconds{6000})
 {
@@ -262,7 +274,8 @@ void pump_until(::asio::io_context &io, Pred pred,
     }
 }
 
-inline void settle(::asio::io_context &io, std::chrono::milliseconds window = std::chrono::milliseconds{40})
+inline void settle(::asio::io_context       &io,
+                   std::chrono::milliseconds window = std::chrono::milliseconds{40})
 {
     auto bound = std::chrono::steady_clock::now() + window;
     while(std::chrono::steady_clock::now() < bound)

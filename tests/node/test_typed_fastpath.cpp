@@ -44,7 +44,7 @@ using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 using plexus::io::message_info;
 
-using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
+using inproc_node      = plexus::node<inproc_policy, inproc_transport<>>;
 using bytes_subscriber = plexus::subscriber<>;
 
 struct sample
@@ -68,11 +68,12 @@ struct counting_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, sample &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   sample                    &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -85,7 +86,7 @@ struct counting_codec
 
 static_assert(plexus::typed_codec<counting_codec>);
 
-using typed_publisher = plexus::publisher<counting_codec>;
+using typed_publisher  = plexus::publisher<counting_codec>;
 using typed_subscriber = plexus::subscriber<counting_codec>;
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -98,21 +99,21 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0xF11Du;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0xF11Du;
     opts.dial_eagerly = eager;
     return opts;
 }
 
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -133,38 +134,40 @@ struct net
 
 }
 
-TEST_CASE("typed fast path cell 6: the identity witness — same address, zero encodes, intra-process", "[node][typed][fastpath]")
+TEST_CASE(
+        "typed fast path cell 6: the identity witness — same address, zero encodes, intra-process",
+        "[node][typed][fastpath]")
 {
     net n;
     n.connect();
 
     std::vector<const sample *> seen_addr;
-    std::vector<std::uint32_t> seen_value;
-    std::vector<message_info> infos;
-    typed_subscriber s{n.a, "topic",
-                       [&](const sample &v, const message_info &info) {
+    std::vector<std::uint32_t>  seen_value;
+    std::vector<message_info>   infos;
+    typed_subscriber            s{n.a, "topic", [&](const sample &v, const message_info &info)
+                                  {
                            seen_addr.push_back(&v);
                            seen_value.push_back(v.value);
                            infos.push_back(info);
-                       }};
-    counting_codec codec;
-    auto encodes = codec.encodes;
-    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
+                                  }};
+    counting_codec              codec;
+    auto                        encodes = codec.encodes;
+    typed_publisher             p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     auto loan = p.borrow();
     REQUIRE(loan);
-    loan->value = 0xABCDu;
+    loan->value                  = 0xABCDu;
     const sample *published_addr = &*loan;
     p.publish(std::move(loan));
     n.drive();
 
     REQUIRE(seen_value.size() == 1);
     REQUIRE(seen_value.front() == 0xABCDu);
-    REQUIRE(seen_addr.front() == published_addr);   // the SAME object, by address
-    REQUIRE(encodes->load() == 0);                  // the codec's encode was never invoked
+    REQUIRE(seen_addr.front() == published_addr); // the SAME object, by address
+    REQUIRE(encodes->load() == 0);                // the codec's encode was never invoked
     REQUIRE(infos.front().from_intra_process);
-    REQUIRE(infos.front().publication_sequence == 0);   // the first publish on the topic
+    REQUIRE(infos.front().publication_sequence == 0); // the first publish on the topic
     REQUIRE(infos.front().reception_timestamp != 0);
     REQUIRE(infos.front().source_timestamp != 0);
     REQUIRE_FALSE(infos.front().source_identity.has_value());
@@ -177,11 +180,13 @@ TEST_CASE("typed fast path cell 6: the identity witness — same address, zero e
 // subscriber — which fast-paths a borrow — and an ineligible (bytes) subscriber — which
 // forces the byte path even for a borrowed loan; it also fires a pool-exhaustion burst that
 // makes some publishes within one iteration fall back mid-stream.
-TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every message's path witnessed", "[node][typed][fastpath]")
+TEST_CASE(
+        "typed fast path cell 7: the fast/fallback flip is looped, every message's path witnessed",
+        "[node][typed][fastpath]")
 {
-    constexpr int k_iterations = 8;
+    constexpr int         k_iterations = 8;
     constexpr std::size_t k_pool_depth = 4;
-    int proven = 0;
+    int                   proven       = 0;
 
     for(int iter = 0; iter < k_iterations; ++iter)
     {
@@ -192,10 +197,10 @@ TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every messa
 
         // The witnesses the subscriber records, regardless of which kind it is.
         std::vector<std::uint32_t> values;
-        std::vector<const void *> addrs;   // the delivered object address (fast path) or null
+        std::vector<const void *>  addrs; // the delivered object address (fast path) or null
 
-        counting_codec codec;
-        auto encodes = codec.encodes;
+        counting_codec                  codec;
+        auto                            encodes = codec.encodes;
         plexus::typed_publisher_options popts;
         popts.pool_depth = k_pool_depth;
         typed_publisher p{n.b, "topic", popts, codec};
@@ -207,27 +212,35 @@ TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every messa
         std::optional<bytes_subscriber> bs;
         if(eligible)
             ts.emplace(n.a, "topic",
-                       [&](const sample &v) { values.push_back(v.value); addrs.push_back(&v); });
+                       [&](const sample &v)
+                       {
+                           values.push_back(v.value);
+                           addrs.push_back(&v);
+                       });
         else
-            bs.emplace(n.a, "topic", [&](std::span<const std::byte> b) {
-                std::uint32_t v = 0;
-                for(int i = 0; i < 4 && i < static_cast<int>(b.size()); ++i)
-                    v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(b[i])) << (8 * i);
-                values.push_back(v);
-                addrs.push_back(nullptr);
-            });
+            bs.emplace(n.a, "topic",
+                       [&](std::span<const std::byte> b)
+                       {
+                           std::uint32_t v = 0;
+                           for(int i = 0; i < 4 && i < static_cast<int>(b.size()); ++i)
+                               v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(b[i]))
+                                       << (8 * i);
+                           values.push_back(v);
+                           addrs.push_back(nullptr);
+                       });
         n.drive();
 
         // A borrow-and-publish whose path is decided by the live subscriber kind. Returns
         // the borrowed object address (or null when the pool was exhausted and it serialized).
-        auto borrow_publish = [&](std::uint32_t value) -> const void * {
+        auto borrow_publish = [&](std::uint32_t value) -> const void *
+        {
             auto loan = p.borrow();
             if(!loan)
             {
-                p.publish(sample{value});   // exhausted -> serialize path
+                p.publish(sample{value}); // exhausted -> serialize path
                 return nullptr;
             }
-            loan->value = value;
+            loan->value      = value;
             const void *addr = &*loan;
             p.publish(std::move(loan));
             return addr;
@@ -235,25 +248,25 @@ TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every messa
 
         // One in-flight borrow per drive keeps the pool from exhausting, so the path is
         // purely the subscriber-kind flip (eligible typed = fast, ineligible bytes = byte).
-        std::vector<const void *> expected_addr;
+        std::vector<const void *>  expected_addr;
         std::vector<std::uint32_t> expected_value;
         for(int i = 0; i < 3; ++i)
         {
-            const std::uint32_t value = 0x1000u + static_cast<std::uint32_t>(i);
-            const int before = encodes->load();
-            const void *addr = borrow_publish(value);
-            n.drive();   // delivers + releases the slot before the next borrow
+            const std::uint32_t value  = 0x1000u + static_cast<std::uint32_t>(i);
+            const int           before = encodes->load();
+            const void         *addr   = borrow_publish(value);
+            n.drive(); // delivers + releases the slot before the next borrow
             const int delta = encodes->load() - before;
 
             expected_value.push_back(value);
             if(eligible)
             {
-                REQUIRE(delta == 0);                  // fast path: no encode
-                expected_addr.push_back(addr);        // delivered by the borrowed address
+                REQUIRE(delta == 0);           // fast path: no encode
+                expected_addr.push_back(addr); // delivered by the borrowed address
             }
             else
             {
-                REQUIRE(delta == 1);                  // byte path: exactly one encode
+                REQUIRE(delta == 1); // byte path: exactly one encode
                 expected_addr.push_back(nullptr);
             }
         }
@@ -265,15 +278,15 @@ TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every messa
         // byte-paths every message, so the burst would add nothing to witness.)
         if(eligible)
         {
-            const std::size_t burst = k_pool_depth + 3;
-            std::vector<const void *> burst_addr;
+            const std::size_t          burst = k_pool_depth + 3;
+            std::vector<const void *>  burst_addr;
             std::vector<std::uint32_t> burst_value;
-            const int before = encodes->load();
+            const int                  before = encodes->load();
             for(std::size_t i = 0; i < burst; ++i)
             {
                 const std::uint32_t value = 0x2000u + static_cast<std::uint32_t>(i);
                 burst_value.push_back(value);
-                burst_addr.push_back(borrow_publish(value));   // no drive between -> pool drains down
+                burst_addr.push_back(borrow_publish(value)); // no drive between -> pool drains down
             }
             n.drive();
             const int delta = encodes->load() - before;
@@ -299,7 +312,7 @@ TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every messa
         REQUIRE(addrs.size() == expected_addr.size());
         for(std::size_t i = 0; i < addrs.size(); ++i)
             if(expected_addr[i] != nullptr)
-                REQUIRE(addrs[i] == expected_addr[i]);   // fast: the borrowed address
+                REQUIRE(addrs[i] == expected_addr[i]); // fast: the borrowed address
 
         ++proven;
     }

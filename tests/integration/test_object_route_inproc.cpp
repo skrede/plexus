@@ -47,43 +47,49 @@ namespace {
 
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 struct manual_policy
 {
-    using executor_type = inproc_executor<manual_clock> &;
+    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
-    using timer_type = inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using transport_t = inproc_transport<manual_clock>;
-using engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
+using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;
-constexpr std::uint64_t k_tag = 0x5151;
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr std::uint64_t k_tag          = 0x5151;
 
 handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -104,17 +110,18 @@ reconnect_config forever_cfg()
 struct counted_payload
 {
     std::string value;
-    int release_calls{0};
-    loan_slot slot{};
+    int         release_calls{0};
+    loan_slot   slot{};
 };
 
 object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
 {
-    p.slot.object = &p.value;
-    p.slot.refs = 1;   // publish_object's caller owns one reference on entry
-    p.slot.release = [](loan_slot *s) {
-        auto *owner = reinterpret_cast<counted_payload *>(
-            reinterpret_cast<std::byte *>(s) - offsetof(counted_payload, slot));
+    p.slot.object  = &p.value;
+    p.slot.refs    = 1; // publish_object's caller owns one reference on entry
+    p.slot.release = [](loan_slot *s)
+    {
+        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) -
+                                                          offsetof(counted_payload, slot));
         ++owner->release_calls;
     };
     return object_carrier{0, tag, &p.value, 0, 0, &p.slot};
@@ -130,21 +137,23 @@ std::span<const std::byte> encode_value(const std::string &v)
 // destruction unwinds the engines' channels before the bus.
 struct object_net
 {
-    inproc_bus<manual_clock> bus;
+    inproc_bus<manual_clock>      bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
-    transport_t transport_b{ex, bus};
+    transport_t                   transport_a{ex, bus};
+    transport_t                   transport_b{ex, bus};
 
     engine a;
     engine b;
 
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint ep_a{"inproc", "node-a"};
-    endpoint ep_b{"inproc", "node-b"};
+    endpoint        ep_a{"inproc", "node-a"};
+    endpoint        ep_b{"inproc", "node-b"};
 
     object_net()
-        : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, /*eager=*/true)
-        , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, /*eager=*/true)
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed,
+                /*eager=*/true)
+            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed,
+                /*eager=*/true)
     {
         a.listen(ep_a);
         b.listen(ep_b);
@@ -155,10 +164,9 @@ struct object_net
     plexus::io::peer_session<manual_policy> *b_live_inbound()
     {
         plexus::io::peer_session<manual_policy> *found = nullptr;
-        b.registry().for_each_connected([&](const plexus::node_id &,
-                                            plexus::io::peer_session<manual_policy> &s) {
-            found = &s;
-        });
+        b.registry().for_each_connected(
+                [&](const plexus::node_id &, plexus::io::peer_session<manual_policy> &s)
+                { found = &s; });
         return found;
     }
 
@@ -188,43 +196,46 @@ struct object_net
     {
         auto *b_inbound = b_live_inbound();
         REQUIRE(b_inbound != nullptr);
-        b.messages().publish_object(topic, make_carrier(p, k_tag),
-                                    [&] { return encode_value(p.value); },
-                                    b_inbound->session_id());
+        b.messages().publish_object(
+                topic, make_carrier(p, k_tag), [&] { return encode_value(p.value); },
+                b_inbound->session_id());
         drive();
     }
 };
 
 }
 
-TEST_CASE("object route: an object published on B reaches A's object route with the same slot address",
+TEST_CASE("object route: an object published on B reaches A's object route with the same slot "
+          "address",
           "[integration][routing][object][inproc]")
 {
-    constexpr int k_iterations = 50;
-    const std::string topic = "topic";
-    int delivered = 0;
+    constexpr int     k_iterations = 50;
+    const std::string topic        = "topic";
+    int               delivered    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
         object_net net;
 
-        std::vector<std::string> fqns;
-        std::vector<const void *> object_addrs;
+        std::vector<std::string>   fqns;
+        std::vector<const void *>  object_addrs;
         std::vector<std::uint64_t> tags;
         std::vector<std::uint64_t> seqs;
-        net.a.on_object_route([&](std::string_view fqn, const object_carrier &c) {
-            fqns.emplace_back(fqn);
-            object_addrs.push_back(c.slot->object);
-            tags.push_back(c.type_tag);
-            seqs.push_back(c.sequence);
-            // The route is a read-only delivery (like on_message_route): the carrier is
-            // valid for the callback duration; the session owns the single release.
-        });
+        net.a.on_object_route(
+                [&](std::string_view fqn, const object_carrier &c)
+                {
+                    fqns.emplace_back(fqn);
+                    object_addrs.push_back(c.slot->object);
+                    tags.push_back(c.type_tag);
+                    seqs.push_back(c.sequence);
+                    // The route is a read-only delivery (like on_message_route): the carrier is
+                    // valid for the callback duration; the session owns the single release.
+                });
 
         net.connect_and_wire(topic);
 
         counted_payload p;
-        p.value = "zero-copy-object";
+        p.value                = "zero-copy-object";
         const void *handed_off = &p.value;
         net.publish_object(topic, p);
 
@@ -249,9 +260,7 @@ TEST_CASE("object route: an unresolvable topic_hash releases and never delivers"
     object_net net;
 
     int fires = 0;
-    net.a.on_object_route([&](std::string_view, const object_carrier &) {
-        ++fires;
-    });
+    net.a.on_object_route([&](std::string_view, const object_carrier &) { ++fires; });
 
     net.connect_and_wire("topic");
 
@@ -261,11 +270,11 @@ TEST_CASE("object route: an unresolvable topic_hash releases and never delivers"
     auto *b_inbound = net.b_live_inbound();
     REQUIRE(b_inbound != nullptr);
     counted_payload p;
-    p.value = "unresolved";
-    object_carrier c = make_carrier(p, k_tag);   // caller owns one reference (refs == 1)
-    c.topic_hash = 0xDEADBEEFu;                   // a hash A has no fqn mapping for
+    p.value          = "unresolved";
+    object_carrier c = make_carrier(p, k_tag);    // caller owns one reference (refs == 1)
+    c.topic_hash     = 0xDEADBEEFu;               // a hash A has no fqn mapping for
     b_inbound->msg_peer().channel.send_object(c); // the bus addrefs; the delivery releases it again
-    plexus::io::release(c);       // release the caller's own reference (as publish_object would)
+    plexus::io::release(c); // release the caller's own reference (as publish_object would)
     net.drive();
 
     REQUIRE(fires == 0);
@@ -276,16 +285,15 @@ TEST_CASE("object route: an unresolvable topic_hash releases and never delivers"
 TEST_CASE("object route: the route survives a forced reconnect rebuild without re-install (looped)",
           "[integration][routing][object][inproc]")
 {
-    constexpr int k_reconnects = 6;
-    const std::string topic = "topic";
+    constexpr int     k_reconnects = 6;
+    const std::string topic        = "topic";
     manual_clock::reset();
     object_net net;
 
     // Install the shared object route ONCE, before any session exists.
     std::vector<const void *> addrs;
-    net.a.on_object_route([&](std::string_view, const object_carrier &c) {
-        addrs.push_back(c.slot->object);
-    });
+    net.a.on_object_route([&](std::string_view, const object_carrier &c)
+                          { addrs.push_back(c.slot->object); });
 
     net.connect_and_wire(topic);
 

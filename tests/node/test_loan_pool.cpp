@@ -19,18 +19,28 @@ using plexus::detail::loan_pool;
 // release (the in-place dtor) is witnessed without reaching into the pool internals.
 struct counted
 {
-    static inline int live = 0;
+    static inline int live        = 0;
     static inline int constructed = 0;
-    std::uint32_t value;
+    std::uint32_t     value;
 
-    explicit counted(std::uint32_t v = 0) : value(v) { ++live; ++constructed; }
-    counted(const counted &o) : value(o.value) { ++live; ++constructed; }
+    explicit counted(std::uint32_t v = 0)
+            : value(v)
+    {
+        ++live;
+        ++constructed;
+    }
+    counted(const counted &o)
+            : value(o.value)
+    {
+        ++live;
+        ++constructed;
+    }
     ~counted() { --live; }
 };
 
 void reset_counts()
 {
-    counted::live = 0;
+    counted::live        = 0;
     counted::constructed = 0;
 }
 
@@ -82,20 +92,21 @@ TEST_CASE("loan pool: a never-published loan returns its slot on destruction", "
     auto b = pool.try_borrow(2u);
     REQUIRE(a);
     REQUIRE(b);
-    REQUIRE_FALSE(pool.try_borrow(3u));   // exhausted
+    REQUIRE_FALSE(pool.try_borrow(3u)); // exhausted
 
-    a = {};   // drop a — returns its slot
+    a = {}; // drop a — returns its slot
     REQUIRE(counted::live == 1);
     auto c = pool.try_borrow(3u);
-    REQUIRE(c);                            // the returned slot is reusable
+    REQUIRE(c); // the returned slot is reusable
     REQUIRE(c->value == 3u);
 }
 
-TEST_CASE("loan pool: exhaustion returns an empty loan and recovers after a release", "[node][loan_pool]")
+TEST_CASE("loan pool: exhaustion returns an empty loan and recovers after a release",
+          "[node][loan_pool]")
 {
     reset_counts();
     constexpr std::size_t k_capacity = 3;
-    loan_pool<counted> pool{k_capacity};
+    loan_pool<counted>    pool{k_capacity};
 
     plexus::detail::loan<counted> held[k_capacity];
     for(std::size_t i = 0; i < k_capacity; ++i)
@@ -114,10 +125,11 @@ TEST_CASE("loan pool: exhaustion returns an empty loan and recovers after a rele
     auto recovered = pool.try_borrow(100u);
     REQUIRE(recovered);
     REQUIRE(recovered->value == 100u);
-    REQUIRE_FALSE(pool.try_borrow(101u));   // exhausted again
+    REQUIRE_FALSE(pool.try_borrow(101u)); // exhausted again
 }
 
-TEST_CASE("loan pool: a pool with an outstanding loan can be moved and the loan stays valid", "[node][loan_pool]")
+TEST_CASE("loan pool: a pool with an outstanding loan can be moved and the loan stays valid",
+          "[node][loan_pool]")
 {
     reset_counts();
 
@@ -125,9 +137,10 @@ TEST_CASE("loan pool: a pool with an outstanding loan can be moved and the loan 
     // holds &n->control by address (unchanged by the move) but each slot's owner is
     // re-stamped to `moved`, so the loan's eventual release routes to the LIVE pool's
     // freelist — never the moved-from one.
-    loan_pool<counted> moved = [] {
+    loan_pool<counted> moved = []
+    {
         loan_pool<counted> src{2};
-        return src;   // the move-ctor steals the slot array and re-stamps owner
+        return src; // the move-ctor steals the slot array and re-stamps owner
     }();
 
     auto held = moved.try_borrow(11u);
@@ -140,7 +153,7 @@ TEST_CASE("loan pool: a pool with an outstanding loan can be moved and the loan 
     REQUIRE(held);
     REQUIRE(held->value == 11u);
 
-    held = {};                          // release routes to `again`'s freelist
+    held = {}; // release routes to `again`'s freelist
     REQUIRE(counted::live == 0);
 
     // The released slot returns to the moved pool and re-borrows cleanly (no leak, no UAF).
@@ -149,10 +162,12 @@ TEST_CASE("loan pool: a pool with an outstanding loan can be moved and the loan 
     REQUIRE(reborrow->value == 22u);
     auto second = again.try_borrow(33u);
     REQUIRE(second);
-    REQUIRE_FALSE(again.try_borrow(44u));   // capacity-2 pool exhausted, freelist intact across the moves
+    REQUIRE_FALSE(
+            again.try_borrow(44u)); // capacity-2 pool exhausted, freelist intact across the moves
 }
 
-TEST_CASE("loan pool: move assignment re-homes outstanding loans onto the destination pool", "[node][loan_pool]")
+TEST_CASE("loan pool: move assignment re-homes outstanding loans onto the destination pool",
+          "[node][loan_pool]")
 {
     reset_counts();
     loan_pool<counted> dst{1};
@@ -162,17 +177,17 @@ TEST_CASE("loan pool: move assignment re-homes outstanding loans onto the destin
     REQUIRE(held);
     REQUIRE(counted::live == 1);
 
-    dst = std::move(src);               // dst's own slot freed; src's slots + freelist stolen, owner re-stamped
+    dst = std::move(src); // dst's own slot freed; src's slots + freelist stolen, owner re-stamped
     REQUIRE(held);
     REQUIRE(held->value == 5u);
 
-    held = {};                          // routes to dst's freelist (the re-stamped owner)
+    held = {}; // routes to dst's freelist (the re-stamped owner)
     REQUIRE(counted::live == 0);
 
     auto a = dst.try_borrow(1u);
     auto b = dst.try_borrow(2u);
     REQUIRE(a);
-    REQUIRE(b);                         // capacity-2 (the moved-in pool), not dst's original 1
+    REQUIRE(b); // capacity-2 (the moved-in pool), not dst's original 1
     REQUIRE_FALSE(dst.try_borrow(3u));
 }
 

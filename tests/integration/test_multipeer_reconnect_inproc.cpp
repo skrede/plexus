@@ -61,36 +61,39 @@ namespace {
 // Policy — identical in shape to the routing + drop-seam oracles' manual_clock.
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 struct manual_policy
 {
-    using executor_type = inproc_executor<manual_clock> &;
+    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
-    using timer_type = inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using transport_t = inproc_transport<manual_clock>;
-using engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
+using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;   // fixed seed -> reproducible backoff
-constexpr auto k_ceiling = std::chrono::milliseconds(10001);
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu; // fixed seed -> reproducible backoff
+constexpr auto          k_ceiling      = std::chrono::milliseconds(10001);
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -102,11 +105,11 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // the REAL staleness gate (mirrors the single-connection reconnect oracle).
 std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
-    inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex(bus);
+    inproc_bus<manual_clock>                     bus;
+    inproc_executor<manual_clock>                ex(bus);
     plexus::io::message_forwarder<manual_policy> framer{};
-    inproc_channel<manual_clock> capture(ex);
-    inproc_channel<manual_clock> tx(ex);
+    inproc_channel<manual_clock>                 capture(ex);
+    inproc_channel<manual_clock>                 tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
     capture.on_data([&](std::span<const std::byte> f) { captured.assign(f.begin(), f.end()); });
@@ -122,8 +125,11 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -150,7 +156,7 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
 plexus::node_id inbound_slot(std::uint8_t n)
 {
     plexus::node_id id = make_id(0x00);
-    id[15] = std::byte{n};
+    id[15]             = std::byte{n};
     return id;
 }
 
@@ -168,16 +174,16 @@ struct discovery_stub
 // engine's channels unwind before the transport.
 struct peer_node
 {
-    transport_t transport;
-    engine eng;
+    transport_t     transport;
+    engine          eng;
     plexus::node_id id;
-    endpoint ep;
+    endpoint        ep;
 
     peer_node(inproc_executor<manual_clock> &ex, inproc_bus<manual_clock> &bus, std::uint8_t seed)
-        : transport(ex, bus)
-        , eng(transport, ex, make_cfg(seed), k_long_timeout, forever_cfg(), k_seed, false)
-        , id(make_id(seed))
-        , ep{"inproc", "node-" + std::to_string(static_cast<unsigned>(seed))}
+            : transport(ex, bus)
+            , eng(transport, ex, make_cfg(seed), k_long_timeout, forever_cfg(), k_seed, false)
+            , id(make_id(seed))
+            , ep{"inproc", "node-" + std::to_string(static_cast<unsigned>(seed))}
     {
         eng.listen(ep);
     }
@@ -190,15 +196,15 @@ struct peer_node
 // surrender leg can arm a bounded dialer.
 struct multipeer_net
 {
-    inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
-    engine a;
-    discovery_stub discovery;
+    inproc_bus<manual_clock>                bus;
+    inproc_executor<manual_clock>           ex{bus};
+    transport_t                             transport_a{ex, bus};
+    engine                                  a;
+    discovery_stub                          discovery;
     std::vector<std::unique_ptr<peer_node>> peers;
 
     multipeer_net(std::size_t n, const reconnect_config &a_redial = forever_cfg())
-        : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, false)
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, false)
     {
         a.listen({"inproc", "node-a"});
         for(std::size_t i = 0; i < n; ++i)
@@ -214,7 +220,11 @@ struct multipeer_net
     }
 
     void drive() { ex.drain(); }
-    void advance(std::chrono::nanoseconds d) { manual_clock::advance(d); drive(); }
+    void advance(std::chrono::nanoseconds d)
+    {
+        manual_clock::advance(d);
+        drive();
+    }
 
     peer_node &peer(std::size_t i) { return *peers[i]; }
 
@@ -232,13 +242,14 @@ struct multipeer_net
 
 }
 
-TEST_CASE("multipeer inproc: concurrent real drops re-dial each dropped slot independently; survivors are bit-for-bit undisturbed",
+TEST_CASE("multipeer inproc: concurrent real drops re-dial each dropped slot independently; "
+          "survivors are bit-for-bit undisturbed",
           "[integration][multipeer][inproc]")
 {
-    constexpr int k_iterations = 100;
-    constexpr std::size_t k_n = 3;     // N>=3 established peers
-    constexpr std::size_t k_dropped = 2;   // K>=2 dropped concurrently; 1 survives
-    int proven = 0;
+    constexpr int         k_iterations = 100;
+    constexpr std::size_t k_n          = 3; // N>=3 established peers
+    constexpr std::size_t k_dropped    = 2; // K>=2 dropped concurrently; 1 survives
+    int                   proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -251,7 +262,7 @@ TEST_CASE("multipeer inproc: concurrent real drops re-dial each dropped slot ind
         for(std::size_t i = 0; i < k_n; ++i)
         {
             before[i] = net.a.attempt_count(net.peer(i).id);
-            epoch[i] = net.a.session_for(net.peer(i).id)->session_id();
+            epoch[i]  = net.a.session_for(net.peer(i).id)->session_id();
         }
 
         // Concurrent drop: enqueue ALL K closes on the accepted ends, THEN drain once
@@ -286,13 +297,14 @@ TEST_CASE("multipeer inproc: concurrent real drops re-dial each dropped slot ind
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("multipeer inproc: one peer crossing a surrender bound is is_dead while every live peer is untouched",
+TEST_CASE("multipeer inproc: one peer crossing a surrender bound is is_dead while every live peer "
+          "is untouched",
           "[integration][multipeer][inproc]")
 {
-    constexpr int k_iterations = 100;
-    constexpr std::size_t k_n = 3;
+    constexpr int           k_iterations   = 100;
+    constexpr std::size_t   k_n            = 3;
     constexpr std::uint32_t k_max_attempts = 3;
-    int proven = 0;
+    int                     proven         = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -335,12 +347,13 @@ TEST_CASE("multipeer inproc: one peer crossing a surrender bound is is_dead whil
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dropped; the current-epoch frame is delivered",
+TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dropped; the "
+          "current-epoch frame is delivered",
           "[integration][multipeer][inproc]")
 {
-    constexpr int k_iterations = 100;
-    constexpr std::size_t k_n = 3;
-    int proven = 0;
+    constexpr int         k_iterations = 100;
+    constexpr std::size_t k_n          = 3;
+    int                   proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -352,29 +365,35 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
         // stay up. The staleness gate on A's slot-0 latches the PEER's epoch, so the
         // dead epoch the straggler must carry is peer 0's INBOUND session_id before the
         // drop (A's own local epoch is a separate well).
-        auto &p = net.peer(0);
-        auto *a_to_p = net.a.session_for(p.id);
+        auto      &p          = net.peer(0);
+        auto      *a_to_p     = net.a.session_for(p.id);
         const auto dead_local = a_to_p->session_id();
 
         std::vector<std::string> a_received;
-        a_to_p->on_message([&](std::string_view, std::span<const std::byte> d) {
-            a_received.emplace_back(std::string{reinterpret_cast<const char *>(d.data()), d.size()});
-        });
+        a_to_p->on_message(
+                [&](std::string_view, std::span<const std::byte> d)
+                {
+                    a_received.emplace_back(
+                            std::string{reinterpret_cast<const char *>(d.data()), d.size()});
+                });
 
         net.drop_peer(0);
-        net.drive();   // process the real drop: slot 0's driver arms its backoff
+        net.drive(); // process the real drop: slot 0's driver arms its backoff
         net.advance(k_ceiling);
         REQUIRE(net.a.is_connected(p.id));
         a_to_p = net.a.session_for(p.id);
-        REQUIRE(a_to_p->session_id() != dead_local);   // A's local epoch advanced
+        REQUIRE(a_to_p->session_id() != dead_local); // A's local epoch advanced
 
         // Re-wire the sink on the reconnected slot-0 session and latch the live PEER
         // epoch with a real publish from the peer's reconnected inbound session. The
         // gate compares an incoming frame's session_id against THIS latched peer epoch.
-        a_to_p->on_message([&](std::string_view, std::span<const std::byte> d) {
-            a_received.emplace_back(std::string{reinterpret_cast<const char *>(d.data()), d.size()});
-        });
-        auto *p_inbound = p.eng.session_for(inbound_slot(2));   // the re-accept is slot 2
+        a_to_p->on_message(
+                [&](std::string_view, std::span<const std::byte> d)
+                {
+                    a_received.emplace_back(
+                            std::string{reinterpret_cast<const char *>(d.data()), d.size()});
+                });
+        auto *p_inbound = p.eng.session_for(inbound_slot(2)); // the re-accept is slot 2
         REQUIRE(p_inbound != nullptr);
         const auto live_epoch = p_inbound->session_id();
         REQUIRE(net.a.messages().attach_for_fanout(a_to_p->msg_peer(), "topic"));
@@ -390,12 +409,12 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
         // from the latched live one — is dropped by the per-peer staleness gate. It is
         // fed verbatim through A's slot-0 production receive path (on_receive runs the
         // gate before the router), with no second delivery.
-        const std::uint8_t stale_epoch = (live_epoch == 1)
-                                       ? std::uint8_t{2} : std::uint8_t(live_epoch - 1);
+        const std::uint8_t stale_epoch =
+                (live_epoch == 1) ? std::uint8_t{2} : std::uint8_t(live_epoch - 1);
         auto straggler = make_data_frame("dead-incarnation", stale_epoch);
         a_to_p->on_receive(straggler);
         net.drive();
-        REQUIRE(a_received.size() == 1);   // the previous-epoch frame is DROPPED
+        REQUIRE(a_received.size() == 1); // the previous-epoch frame is DROPPED
 
         // A frame carrying the CURRENT epoch is delivered (the gate dropped only stale).
         auto current = make_data_frame("again", live_epoch);

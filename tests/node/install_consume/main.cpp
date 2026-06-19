@@ -2,7 +2,7 @@
 #include "plexus/wire_bytes.h"
 
 #ifdef PLEXUS_CONSUME_CRYPTO
-#include "plexus/crypto/aead_cipher.h"
+    #include "plexus/crypto/aead_cipher.h"
 #endif
 
 #include <span>
@@ -18,23 +18,23 @@
 static bool crypto_roundtrip()
 {
     using namespace plexus::crypto;
-    const aead_key key{};
+    const aead_key                                key{};
     const std::array<std::byte, k_aead_nonce_len> nonce{};
-    const std::array<std::byte, 5> plaintext{
-        std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'!'}};
+    const std::array<std::byte, 5> plaintext{std::byte{'p'}, std::byte{'l'}, std::byte{'e'},
+                                             std::byte{'x'}, std::byte{'!'}};
 
     std::vector<std::byte> sealed;
-    if (!seal(aead_cipher_id::chacha20_poly1305, key, nonce, {}, plaintext, sealed))
+    if(!seal(aead_cipher_id::chacha20_poly1305, key, nonce, {}, plaintext, sealed))
         return false;
-    if (sealed.size() != plaintext.size() + k_aead_tag_len)
+    if(sealed.size() != plaintext.size() + k_aead_tag_len)
         return false;
 
     std::vector<std::byte> opened;
-    if (!open(aead_cipher_id::chacha20_poly1305, key, nonce, {}, sealed, opened))
+    if(!open(aead_cipher_id::chacha20_poly1305, key, nonce, {}, sealed, opened))
         return false;
 
-    return opened.size() == plaintext.size()
-        && std::equal(plaintext.begin(), plaintext.end(), opened.begin());
+    return opened.size() == plaintext.size() &&
+            std::equal(plaintext.begin(), plaintext.end(), opened.begin());
 }
 #endif
 
@@ -46,13 +46,13 @@ int main()
     plexus::node_id id{};
     id[0] = std::byte{0x42};
 
-    std::byte storage[4]{};
+    std::byte            storage[4]{};
     plexus::wire_bytes<> bytes{std::span<const std::byte>{storage}, nullptr};
-    if (bytes.size() != sizeof(storage))
+    if(bytes.size() != sizeof(storage))
         return 1;
 
 #ifdef PLEXUS_CONSUME_CRYPTO
-    if (!crypto_roundtrip())
+    if(!crypto_roundtrip())
         return 2;
 #endif
 

@@ -25,7 +25,7 @@ namespace plexus::io::shm {
 // gate DECLINED — the pair keeps the wire (a broker failure, or no shm member). The
 // channel's type is the engine's byte_channel (a polymorphic erasure in a multi-
 // transport node), wrapping the shm member's live shm_byte_channel.
-template <typename Channel>
+template<typename Channel>
 struct companion_mint
 {
     std::unique_ptr<Channel> channel;
@@ -66,13 +66,16 @@ struct companion_receive
 // The mint gate is injected as one predicate (the prefer_shm_hook seed constraint: the
 // coordinator stays decoupled from the concrete shm member type). A composition with no
 // shm member leaves it unset, so the coordinator is inert (one predictable branch).
-template <typename Registry, typename Channel>
+template<typename Registry, typename Channel>
 class medium_coordinator
 {
 public:
-    explicit medium_coordinator(Registry &registry) noexcept : m_registry(registry) {}
+    explicit medium_coordinator(Registry &registry) noexcept
+            : m_registry(registry)
+    {
+    }
 
-    medium_coordinator(const medium_coordinator &) = delete;
+    medium_coordinator(const medium_coordinator &)            = delete;
     medium_coordinator &operator=(const medium_coordinator &) = delete;
 
     // The mint gate the acquire routes THROUGH — installed by the node only when the
@@ -92,8 +95,9 @@ public:
     // RETAINS the owner; dropping it (on 1->0 / peer-dead) tears the receive lane down. The
     // node_name rides the mint so the node wires the drained frames into the matching peer
     // session's receive entry (the same one the wire feeds).
-    void on_receive_gate(
-        plexus::detail::move_only_function<companion_receive(std::string_view, std::string_view)> mint)
+    void on_receive_gate(plexus::detail::move_only_function<companion_receive(std::string_view,
+                                                                              std::string_view)>
+                                 mint)
     {
         m_receive_mint = std::move(mint);
     }
@@ -142,16 +146,13 @@ public:
         if(r == nullptr)
             return nullptr;
         return route_message_medium(r->mode, bytes, r->slot_capacity) == same_host_medium::shm
-                   ? r->channel.get()
-                   : nullptr;
+                ? r->channel.get()
+                : nullptr;
     }
 
     // Release every ring the peer holds (the peer-dead teardown): drop each held channel
     // (its destructor releases the ring), then forget the peer's entries.
-    void on_peer_dead(std::string_view node_name)
-    {
-        m_held.erase(std::string{node_name});
-    }
+    void on_peer_dead(std::string_view node_name) { m_held.erase(std::string{node_name}); }
 
 private:
     // One held same-host lane for a (peer, fqn). A PUBLISHER edge fills `channel` (the send
@@ -163,10 +164,10 @@ private:
     struct ring
     {
         std::string              fqn;
-        std::unique_ptr<Channel> channel;       // the send companion (publisher role)
+        std::unique_ptr<Channel> channel; // the send companion (publisher role)
         ring_geometry_mode       mode          = ring_geometry_mode::reliable_preserving;
         std::uint64_t            slot_capacity = 0;
-        companion_receive        receive;        // the receive companion owner (subscriber role)
+        companion_receive        receive; // the receive companion owner (subscriber role)
     };
     using ring_list = std::vector<ring>;
 
@@ -261,11 +262,12 @@ private:
         return false;
     }
 
-    Registry &m_registry;
-    std::unordered_map<std::string, ring_list> m_held;
-    std::unordered_map<std::string, dispatch_hint> m_hints;
+    Registry                                                                     &m_registry;
+    std::unordered_map<std::string, ring_list>                                    m_held;
+    std::unordered_map<std::string, dispatch_hint>                                m_hints;
     plexus::detail::move_only_function<companion_mint<Channel>(std::string_view)> m_mint;
-    plexus::detail::move_only_function<companion_receive(std::string_view, std::string_view)> m_receive_mint;
+    plexus::detail::move_only_function<companion_receive(std::string_view, std::string_view)>
+                                                                  m_receive_mint;
     plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
 };
 

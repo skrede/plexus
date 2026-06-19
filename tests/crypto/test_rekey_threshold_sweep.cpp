@@ -30,9 +30,8 @@ using plexus::crypto::k_rekey_message_threshold;
 
 namespace {
 
-constexpr std::uint64_t k_candidates[] = {
-    1ull << 18, 1ull << 20, 1ull << 22, 1ull << 24, 1ull << 26
-};
+constexpr std::uint64_t k_candidates[] = {1ull << 18, 1ull << 20, 1ull << 22, 1ull << 24,
+                                          1ull << 26};
 
 std::vector<std::byte> bytes_of(std::string_view s)
 {
@@ -72,7 +71,7 @@ unsigned margin_log2(std::uint64_t threshold)
 
 aead_key derive_send(std::uint8_t epoch_byte)
 {
-    const auto psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
+    const auto                psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
     std::array<std::byte, 16> in_nonce{};
     std::array<std::byte, 16> rs_nonce{};
     std::array<std::byte, 32> transcript{};

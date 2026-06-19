@@ -30,8 +30,8 @@ namespace {
 wire_bytes<> owned(const std::string &s)
 {
     auto buf = std::make_shared<std::vector<std::byte>>(
-        reinterpret_cast<const std::byte *>(s.data()),
-        reinterpret_cast<const std::byte *>(s.data()) + s.size());
+            reinterpret_cast<const std::byte *>(s.data()),
+            reinterpret_cast<const std::byte *>(s.data()) + s.size());
     std::span<const std::byte> view{*buf};
     return wire_bytes<>{view, std::shared_ptr<const void>{std::move(buf)}};
 }
@@ -43,7 +43,8 @@ std::string body(const wire_bytes<> &w)
 
 }
 
-TEST_CASE("priority_band queue: band_of maps realtime->0 high->1 normal->2 background->3", "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: band_of maps realtime->0 high->1 normal->2 background->3",
+          "[priority_band][forwarder]")
 {
     REQUIRE(band_of(priority::realtime) == 0);
     REQUIRE(band_of(priority::high) == 1);
@@ -52,19 +53,21 @@ TEST_CASE("priority_band queue: band_of maps realtime->0 high->1 normal->2 backg
     REQUIRE(band_of(priority::background) == k_egress_bands - 1);
 }
 
-TEST_CASE("priority_band queue: a fresh queue has no work and front_highest is null", "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: a fresh queue has no work and front_highest is null",
+          "[priority_band][forwarder]")
 {
     priority_band_queue q;
     REQUIRE_FALSE(q.has_work());
     REQUIRE(q.front_highest() == nullptr);
-    q.pop_highest();   // a no-op on empty, never crashes
+    q.pop_highest(); // a no-op on empty, never crashes
     REQUIRE_FALSE(q.has_work());
 }
 
-TEST_CASE("priority_band queue: FIFO order is preserved within a band", "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: FIFO order is preserved within a band",
+          "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t b = band_of(priority::normal);
+    const std::size_t   b = band_of(priority::normal);
     REQUIRE(q.enqueue(b, congestion::block, owned("a")));
     REQUIRE(q.enqueue(b, congestion::block, owned("b")));
     REQUIRE(q.enqueue(b, congestion::block, owned("c")));
@@ -125,7 +128,7 @@ TEST_CASE("priority_band queue: block at a full band refuses the new frame and b
           "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t b = band_of(priority::high);
+    const std::size_t   b = band_of(priority::high);
     fill_band(q, b);
 
     REQUIRE(q.blocked_count(b) == 0);
@@ -142,11 +145,12 @@ TEST_CASE("priority_band queue: block at a full band refuses the new frame and b
         REQUIRE(f != "OVERFLOW");
 }
 
-TEST_CASE("priority_band queue: drop_newest at a full band refuses the new frame and bumps dropped_newest_count",
+TEST_CASE("priority_band queue: drop_newest at a full band refuses the new frame and bumps "
+          "dropped_newest_count",
           "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t b = band_of(priority::high);
+    const std::size_t   b = band_of(priority::high);
     fill_band(q, b);
 
     REQUIRE(q.dropped_newest_count(b) == 0);
@@ -163,11 +167,12 @@ TEST_CASE("priority_band queue: drop_newest at a full band refuses the new frame
         REQUIRE(f != "OVERFLOW");
 }
 
-TEST_CASE("priority_band queue: drop_oldest at a full band evicts the oldest and admits the new frame",
+TEST_CASE("priority_band queue: drop_oldest at a full band evicts the oldest and admits the new "
+          "frame",
           "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t b = band_of(priority::high);
+    const std::size_t   b = band_of(priority::high);
     fill_band(q, b);
 
     REQUIRE(q.dropped_oldest_count(b) == 0);
@@ -193,7 +198,7 @@ TEST_CASE("priority_band queue: a warm drop_oldest evict-and-admit loop allocate
           "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t b = band_of(priority::normal);
+    const std::size_t   b = band_of(priority::normal);
     // ONE pre-built owner is shared into the band on every admit (the frame-once carrier):
     // the band moves/holds the handle and addref-shares it, never allocating its own buffer.
     const wire_bytes<> frame = owned(std::string(64, 'x'));
@@ -217,7 +222,7 @@ TEST_CASE("priority_band queue: a steady enqueue/pop loop allocates nothing afte
           "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const wire_bytes<> frame = owned(std::string(64, 'x'));
+    const wire_bytes<>  frame = owned(std::string(64, 'x'));
 
     // Warm: touch every band's full slot ring once, then drain it back to empty.
     for(std::size_t band = 0; band < k_egress_bands; ++band)

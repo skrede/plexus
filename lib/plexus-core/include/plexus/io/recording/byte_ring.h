@@ -41,12 +41,15 @@ class byte_ring
 {
 public:
     explicit byte_ring(std::size_t capacity_bytes, ring_policy policy = ring_policy::drop_newest)
-        : m_owned(capacity_bytes), m_store(m_owned), m_policy(policy)
+            : m_owned(capacity_bytes)
+            , m_store(m_owned)
+            , m_policy(policy)
     {
     }
 
     byte_ring(std::span<std::byte> store, ring_policy policy = ring_policy::drop_newest) noexcept
-        : m_store(store), m_policy(policy)
+            : m_store(store)
+            , m_policy(policy)
     {
     }
 
@@ -88,8 +91,14 @@ public:
     // pre-buffer/FDR snapshot is exactly {head, tail}). The producer publishes at head;
     // the consumer advances tail; both are absolute (never wrapped) so a snapshot stays
     // meaningful while overwrite continues past it.
-    [[nodiscard]] std::uint64_t head() const noexcept { return m_head.load(std::memory_order_acquire); }
-    [[nodiscard]] std::uint64_t tail() const noexcept { return m_tail.load(std::memory_order_acquire); }
+    [[nodiscard]] std::uint64_t head() const noexcept
+    {
+        return m_head.load(std::memory_order_acquire);
+    }
+    [[nodiscard]] std::uint64_t tail() const noexcept
+    {
+        return m_tail.load(std::memory_order_acquire);
+    }
 
     // The byte at an absolute index, mapped into the store by modulo — the read a freeze
     // uses to decode the oldest resident record's timestamp from a snapshot's frozen tail.
@@ -106,7 +115,7 @@ public:
         std::size_t moved = 0;
         while(moved < max_bytes)
         {
-            std::uint64_t len = 0;
+            std::uint64_t len    = 0;
             std::size_t   header = 0;
             if(!peek_length(len, header))
                 break;
@@ -130,9 +139,9 @@ public:
         std::size_t moved = 0;
         while(moved < max_bytes)
         {
-            std::uint64_t len    = 0;
-            std::size_t   header = 0;
-            const std::uint64_t tail = m_tail.load(std::memory_order_relaxed);
+            std::uint64_t       len    = 0;
+            std::size_t         header = 0;
+            const std::uint64_t tail   = m_tail.load(std::memory_order_relaxed);
             if(tail >= frozen_head || !peek_length(len, header))
                 break;
             if(tail + header + len > frozen_head)
@@ -160,7 +169,7 @@ private:
     {
         while(capacity() - used() < frame)
         {
-            std::uint64_t len = 0;
+            std::uint64_t len    = 0;
             std::size_t   header = 0;
             if(!peek_length(len, header))
                 break;
@@ -190,7 +199,8 @@ private:
     void copy_out(std::uint64_t at, std::uint64_t n, byte_sink &sink)
     {
         const std::size_t first = static_cast<std::size_t>(at % capacity());
-        const std::size_t run   = std::min<std::size_t>(static_cast<std::size_t>(n), capacity() - first);
+        const std::size_t run =
+                std::min<std::size_t>(static_cast<std::size_t>(n), capacity() - first);
         sink.write({m_store.data() + first, run});
         if(run < n)
             sink.write({m_store.data(), static_cast<std::size_t>(n) - run});

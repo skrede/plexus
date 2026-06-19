@@ -61,11 +61,11 @@ struct udp_arq_config
     // retransmit BY DESIGN (idempotent at the receiver). The static_assert below binds the
     // default to bitmap_bits so a future sweep that widens the window past the nameable-hole
     // count is a deliberate, visible choice rather than a silent mismatch.
-    std::size_t window{512};                                 // in-flight segment bound (<= 2^15)
-    std::chrono::milliseconds initial_rto{200};              // before any RTT sample
+    std::size_t               window{512};      // in-flight segment bound (<= 2^15)
+    std::chrono::milliseconds initial_rto{200}; // before any RTT sample
     std::chrono::milliseconds min_rto{50};
     std::chrono::milliseconds max_rto{2000};
-    std::uint8_t max_retransmit{6};                          // cap -> connection-fatal on exhaustion
+    std::uint8_t              max_retransmit{6}; // cap -> connection-fatal on exhaustion
 };
 
 // Bind the default window to the selective-ack bitmap width: the default window (512)
@@ -77,16 +77,20 @@ static_assert(udp_arq_config{}.window <= wire::udp_ack::bitmap_bits * 2,
               "default ARQ window outruns the selective-ack bitmap by more than the "
               "RTO-fallback design budget — widen wire::udp_ack::bitmap_bits with it");
 
-template <typename Executor, typename Timer>
+template<typename Executor, typename Timer>
     requires plexus::timer<Timer> && std::constructible_from<Timer, Executor>
 class udp_reliable_arq
 {
 public:
     using timer_type = Timer;
-    using clock = std::chrono::steady_clock;
-    using ms = std::chrono::milliseconds;
+    using clock      = std::chrono::steady_clock;
+    using ms         = std::chrono::milliseconds;
 
-    enum class submit_result : std::uint8_t { admitted, window_full };
+    enum class submit_result : std::uint8_t
+    {
+        admitted,
+        window_full
+    };
 
     // The initial sequence is a STRUCTURAL ctor argument (defaulting to 0), NOT an
     // after-the-fact setter. CONTRACT: both ends start at 0 — the sender's first m_next
@@ -95,49 +99,75 @@ public:
     // first segment. (A per-session random ISN would be negotiated in the handshake and
     // threaded through this same ctor argument on both ends — it is not built here.) A
     // deterministic test that exercises the uint16 wrap binds a non-zero start.
-    explicit udp_reliable_arq(Executor executor, udp_arq_config cfg = {}, std::uint16_t initial_seq = 0)
-        : m_executor(executor)
-        , m_cfg(cfg)
-        , m_window(cfg.window == 0 ? std::size_t{512} : std::min(cfg.window, std::size_t{32768}))
-        , m_slots(m_window)
-        , m_recv(m_window, initial_seq)
-        , m_next(initial_seq)
-        , m_base(initial_seq)
-        , m_rto(cfg.initial_rto, cfg.min_rto, cfg.max_rto)
+    explicit udp_reliable_arq(Executor executor, udp_arq_config cfg = {},
+                              std::uint16_t initial_seq = 0)
+            : m_executor(executor)
+            , m_cfg(cfg)
+            , m_window(cfg.window == 0 ? std::size_t{512}
+                                       : std::min(cfg.window, std::size_t{32768}))
+            , m_slots(m_window)
+            , m_recv(m_window, initial_seq)
+            , m_next(initial_seq)
+            , m_base(initial_seq)
+            , m_rto(cfg.initial_rto, cfg.min_rto, cfg.max_rto)
     {
         for(auto &s : m_slots)
             s.timer = std::make_unique<timer_type>(m_executor);
-        m_recv.on_deliver([this](std::uint16_t seq, bool fragmented, std::span<const std::byte> bytes) {
-            if(m_on_deliver_seq)
-                m_on_deliver_seq(seq, fragmented, bytes);
-            if(m_on_deliver)
-                m_on_deliver(bytes);
-        });
+        m_recv.on_deliver(
+                [this](std::uint16_t seq, bool fragmented, std::span<const std::byte> bytes)
+                {
+                    if(m_on_deliver_seq)
+                        m_on_deliver_seq(seq, fragmented, bytes);
+                    if(m_on_deliver)
+                        m_on_deliver(bytes);
+                });
     }
 
-    udp_reliable_arq(const udp_reliable_arq &) = delete;
+    udp_reliable_arq(const udp_reliable_arq &)            = delete;
     udp_reliable_arq &operator=(const udp_reliable_arq &) = delete;
 
     // (re)transmit segment `seq` carrying `payload` (the channel wraps the envelope). The
     // bool tells the channel whether this segment is a fragment of a large message, so it
     // sets the envelope FRAGMENTED bit on (re)transmit and the peer routes the in-order
     // payload to the reassembler — the fragmenter sits ABOVE the per-segment ARQ.
-    void on_transmit(plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)> cb) { m_on_transmit = std::move(cb); }
+    void on_transmit(plexus::detail::move_only_function<void(std::uint16_t,
+                                                             std::span<const std::byte>, bool)>
+                             cb)
+    {
+        m_on_transmit = std::move(cb);
+    }
     // send the receiver's cumulative+selective ack back to the sender.
-    void on_send_ack(plexus::detail::move_only_function<void(const wire::udp_ack &)> cb) { m_on_send_ack = std::move(cb); }
+    void on_send_ack(plexus::detail::move_only_function<void(const wire::udp_ack &)> cb)
+    {
+        m_on_send_ack = std::move(cb);
+    }
     // an in-order reliable payload is ready for the application (the channel posts it).
-    void on_deliver(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_deliver = std::move(cb); }
+    void on_deliver(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_deliver = std::move(cb);
+    }
     // the same in-order release, carrying the delivered seq and the per-segment FRAGMENTED
     // bit (captured from the inbound envelope at on_segment and held on the reorder slot
     // until release): the channel routes a reliable fragment to the reassembler instead of
     // straight delivery. The bit rides acceptance, so a forged/out-of-window segment that
     // never enters the buffer leaves no residue to prune.
-    void on_deliver_seq(plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> cb) { m_on_deliver_seq = std::move(cb); }
+    void on_deliver_seq(plexus::detail::move_only_function<void(std::uint16_t, bool,
+                                                                std::span<const std::byte>)>
+                                cb)
+    {
+        m_on_deliver_seq = std::move(cb);
+    }
     // the retransmit cap was hit -> the reliable guarantee cannot be met (fatal).
-    void on_exhausted(plexus::detail::move_only_function<void()> cb) { m_on_exhausted = std::move(cb); }
+    void on_exhausted(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_exhausted = std::move(cb);
+    }
     // a cumulative ack slid the base, so the send window freed slots: the congestion=block
     // path drains its bounded backpressure queue from here (the window-drain re-arm idiom).
-    void on_window_advance(plexus::detail::move_only_function<void()> cb) { m_on_window_advance = std::move(cb); }
+    void on_window_advance(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_window_advance = std::move(cb);
+    }
 
     // Has the send window room for at least one more segment? The congestion=block queue
     // drainer consults this to re-submit admissible frames without overrunning the window.
@@ -150,14 +180,14 @@ public:
     {
         if(in_flight() >= m_window)
             return submit_result::window_full;
-        const std::uint16_t seq = m_next++;
-        auto &slot = m_slots[seq % m_window];
+        const std::uint16_t seq  = m_next++;
+        auto               &slot = m_slots[seq % m_window];
         slot.bytes.assign(payload.begin(), payload.end());
-        slot.outstanding = true;
+        slot.outstanding   = true;
         slot.retransmitted = false;
-        slot.retransmits = 0;
-        slot.fragmented = fragmented;
-        slot.sent_at = clock::now();
+        slot.retransmits   = 0;
+        slot.fragmented    = fragmented;
+        slot.sent_at       = clock::now();
         transmit(seq, slot);
         arm(seq);
         return submit_result::admitted;
@@ -204,13 +234,13 @@ public:
 private:
     struct slot
     {
-        std::vector<std::byte> bytes;
+        std::vector<std::byte>      bytes;
         std::unique_ptr<timer_type> timer;
-        clock::time_point sent_at;
-        std::uint8_t retransmits{0};
-        bool outstanding{false};
-        bool retransmitted{false};
-        bool fragmented{false};
+        clock::time_point           sent_at;
+        std::uint8_t                retransmits{0};
+        bool                        outstanding{false};
+        bool                        retransmitted{false};
+        bool                        fragmented{false};
     };
 
     void transmit(std::uint16_t seq, slot &s)
@@ -222,23 +252,25 @@ private:
     void arm(std::uint16_t seq)
     {
         auto &s = m_slots[seq % m_window];
-        s.timer->expires_after(m_rto.backed_off(s.retransmits));   // Karn backoff per retransmit
-        s.timer->async_wait([this, seq](std::error_code ec) {
-            if(ec || m_dead)
-                return;                          // cancelled by ack/teardown — never fire dead
-            on_rto(seq);
-        });
+        s.timer->expires_after(m_rto.backed_off(s.retransmits)); // Karn backoff per retransmit
+        s.timer->async_wait(
+                [this, seq](std::error_code ec)
+                {
+                    if(ec || m_dead)
+                        return; // cancelled by ack/teardown — never fire dead
+                    on_rto(seq);
+                });
     }
 
     void on_rto(std::uint16_t seq)
     {
         auto &s = m_slots[seq % m_window];
         if(!s.outstanding)
-            return;                              // already acked between fire and dispatch
+            return; // already acked between fire and dispatch
         if(s.retransmits >= m_cfg.max_retransmit)
-            return exhausted();                  // the reliable guarantee cannot be met
+            return exhausted(); // the reliable guarantee cannot be met
         ++s.retransmits;
-        s.retransmitted = true;                  // Karn: this segment yields no RTT sample
+        s.retransmitted = true; // Karn: this segment yields no RTT sample
         transmit(seq, s);
         arm(seq);
     }
@@ -249,8 +281,8 @@ private:
     void slide_to(std::uint16_t new_base)
     {
         const std::uint16_t before = m_base;
-        while(static_cast<std::uint16_t>(new_base - m_base) != 0
-              && static_cast<std::uint16_t>(new_base - m_base) < udp_reorder_buffer::half_space)
+        while(static_cast<std::uint16_t>(new_base - m_base) != 0 &&
+              static_cast<std::uint16_t>(new_base - m_base) < udp_reorder_buffer::half_space)
         {
             free_segment(m_base, /*sample_rtt=*/true);
             ++m_base;
@@ -265,7 +297,7 @@ private:
     {
         const auto rel = static_cast<std::uint16_t>(seq - m_base);
         if(rel >= udp_reorder_buffer::half_space || rel >= m_window)
-            return;                              // below base (already freed) or out of window
+            return; // below base (already freed) or out of window
         free_segment(seq, /*sample_rtt=*/true);
     }
 
@@ -275,7 +307,7 @@ private:
         if(!s.outstanding)
             return;
         s.timer->cancel();
-        if(sample_rtt && !s.retransmitted)       // Karn: only an unambiguous (un-retransmitted) sample
+        if(sample_rtt && !s.retransmitted) // Karn: only an unambiguous (un-retransmitted) sample
             m_rto.sample(std::chrono::duration_cast<ms>(clock::now() - s.sent_at));
         s.outstanding = false;
     }
@@ -304,19 +336,21 @@ private:
             m_on_exhausted();
     }
 
-    Executor m_executor;
-    udp_arq_config m_cfg;
-    std::size_t m_window;
-    std::vector<slot> m_slots;                   // a ring of W slots, allocated at setup
+    Executor           m_executor;
+    udp_arq_config     m_cfg;
+    std::size_t        m_window;
+    std::vector<slot>  m_slots; // a ring of W slots, allocated at setup
     udp_reorder_buffer m_recv;
-    std::uint16_t m_next{0};                      // next seq to assign (sender)
-    std::uint16_t m_base{0};                      // oldest unacked seq (sender)
-    udp_rto_estimator m_rto;                      // RFC-6298 SRTT/RTTVAR -> RTO (Karn at the caller)
-    bool m_dead{false};
-    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)> m_on_transmit;
-    plexus::detail::move_only_function<void(const wire::udp_ack &)> m_on_send_ack;
+    std::uint16_t      m_next{0}; // next seq to assign (sender)
+    std::uint16_t      m_base{0}; // oldest unacked seq (sender)
+    udp_rto_estimator  m_rto;     // RFC-6298 SRTT/RTTVAR -> RTO (Karn at the caller)
+    bool               m_dead{false};
+    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)>
+                                                                         m_on_transmit;
+    plexus::detail::move_only_function<void(const wire::udp_ack &)>      m_on_send_ack;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_deliver;
-    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver_seq;
+    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)>
+                                               m_on_deliver_seq;
     plexus::detail::move_only_function<void()> m_on_exhausted;
     plexus::detail::move_only_function<void()> m_on_window_advance;
 };

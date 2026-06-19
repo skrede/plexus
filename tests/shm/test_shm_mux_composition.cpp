@@ -20,8 +20,9 @@ static_assert(plexus::io::transport_backend<plexus::asio::all_backends_mux,
                                             plexus::muxify<plexus::asio::asio_policy>>,
               "the no-shm composition must stay intact (the shm alias is additive)");
 
-TEST_CASE("shm.mux_composition the shm-bearing and no-shm multiplexers both satisfy the backend seam",
-          "[shm][mux][composition]")
+TEST_CASE(
+        "shm.mux_composition the shm-bearing and no-shm multiplexers both satisfy the backend seam",
+        "[shm][mux][composition]")
 {
     SUCCEED("the transport_backend static_asserts proved both compositions at compile time");
 }

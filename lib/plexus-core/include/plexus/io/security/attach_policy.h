@@ -48,8 +48,8 @@ public:
     static constexpr std::size_t k_min_psk_len = 16;
 
     psk_keystore_policy(std::vector<keyed_psk> keys, hmac_fn hmac)
-        : m_keys(std::move(keys))
-        , m_hmac(std::move(hmac))
+            : m_keys(std::move(keys))
+            , m_hmac(std::move(hmac))
     {
         for(const auto &k : m_keys)
             if(k.material.size() < k_min_psk_len)
@@ -68,7 +68,8 @@ public:
     }
 
 private:
-    [[nodiscard]] const keyed_psk *lookup(const std::array<std::byte, k_key_id_len> &id) const noexcept
+    [[nodiscard]] const keyed_psk *
+    lookup(const std::array<std::byte, k_key_id_len> &id) const noexcept
     {
         for(const auto &k : m_keys)
             if(k.key_id == id)
@@ -112,15 +113,18 @@ public:
     attach_prover() = default;
 
     attach_prover(keyed_psk key, hmac_fn hmac)
-        : m_key(std::move(key))
-        , m_hmac(std::move(hmac))
-        , m_engaged(true)
+            : m_key(std::move(key))
+            , m_hmac(std::move(hmac))
+            , m_engaged(true)
     {
     }
 
     [[nodiscard]] bool engaged() const noexcept { return m_engaged; }
 
-    [[nodiscard]] const std::array<std::byte, k_key_id_len> &key_id() const noexcept { return m_key.key_id; }
+    [[nodiscard]] const std::array<std::byte, k_key_id_len> &key_id() const noexcept
+    {
+        return m_key.key_id;
+    }
 
     // Stamp the proof for `facts` into `out` (32 bytes). The role/ids/nonces/transcript
     // in `facts` are the prover's OWN view (its role, its own_nonce, the peer's nonce as
@@ -137,7 +141,7 @@ private:
     // Invoked from the const prove() path; the C++20 fallback move_only_function has a
     // non-const call operator, so the seam holds the MAC mutable (mirroring cookie_secret).
     mutable hmac_fn m_hmac;
-    bool m_engaged{false};
+    bool            m_engaged{false};
 };
 
 }

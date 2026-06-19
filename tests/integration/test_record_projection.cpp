@@ -95,7 +95,7 @@ TEST_CASE("projection input survives the input stream being freed before its pay
     std::vector<std::byte> overwrite(n, std::byte{0xEE});
     REQUIRE(overwrite.size() == n);
 
-    const auto &got = proj->records[0].payload;
+    const auto       &got = proj->records[0].payload;
     const std::string recovered{reinterpret_cast<const char *>(got.data()), got.size()};
     REQUIRE(recovered == payload);
 }

@@ -20,17 +20,17 @@ namespace plexus::io::detail {
 // can never let the table exceed), so the byte cap stays the binding backstop and
 // the count limit never refuses an entry the cap would have admitted; an insert
 // past max_entries refuses (the caller maps that to the existing dropped_cap).
-template <typename Value>
+template<typename Value>
 class reassembler_flat_map
 {
 public:
-    using key_type = std::uint16_t;
+    using key_type   = std::uint16_t;
     using value_type = std::pair<key_type, Value>;
-    using container = std::vector<value_type>;
-    using iterator = typename container::iterator;
+    using container  = std::vector<value_type>;
+    using iterator   = typename container::iterator;
 
     explicit reassembler_flat_map(std::size_t max_entries)
-        : m_max_entries(max_entries)
+            : m_max_entries(max_entries)
     {
     }
 
@@ -66,7 +66,7 @@ private:
     }
 
     std::size_t m_max_entries;
-    container m_entries;
+    container   m_entries;
 };
 
 // The element ceiling the byte cap can never let the table exceed: the cheapest

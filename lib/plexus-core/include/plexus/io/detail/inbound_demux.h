@@ -29,11 +29,11 @@ template<typename Channel, typename Endpoint, typename Hash>
 class basic_inbound_demux
 {
 public:
-    using endpoint_type = Endpoint;
+    using endpoint_type                            = Endpoint;
     static constexpr std::size_t default_max_peers = 4096;
 
     explicit basic_inbound_demux(std::size_t max_peers = default_max_peers) noexcept
-        : m_max_peers(max_peers)
+            : m_max_peers(max_peers)
     {
     }
 
@@ -75,7 +75,7 @@ public:
     [[nodiscard]] std::size_t size() const noexcept { return m_peers.size(); }
 
 private:
-    std::size_t m_max_peers;
+    std::size_t                                        m_max_peers;
     std::unordered_map<endpoint_type, Channel *, Hash> m_peers;
 };
 

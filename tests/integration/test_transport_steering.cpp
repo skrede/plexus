@@ -41,7 +41,8 @@ constexpr int k_reps = 100;
 
 }
 
-TEST_CASE("transport steering: a declared reliable topic is refused on a best_effort path and admissible on a reliable one",
+TEST_CASE("transport steering: a declared reliable topic is refused on a best_effort path and "
+          "admissible on a reliable one",
           "[steering][reliability]")
 {
     pio::transport_selector sel;
@@ -52,13 +53,13 @@ TEST_CASE("transport steering: a declared reliable topic is refused on a best_ef
     const plexus::topic_qos reliable_qos{.reliability = pio::reliability::reliable};
     const plexus::topic_qos best_effort_qos{.reliability = pio::reliability::best_effort};
 
-    const pio::endpoint udp_ep{"udp", "127.0.0.1:5000"};      // best_effort path
-    const pio::endpoint tcp_ep{"tcp", "127.0.0.1:5000"};      // reliable stream
-    const pio::endpoint udpr_ep{"udpr", "127.0.0.1:5000"};    // reliable-datagram opt-in
+    const pio::endpoint udp_ep{"udp", "127.0.0.1:5000"};   // best_effort path
+    const pio::endpoint tcp_ep{"tcp", "127.0.0.1:5000"};   // reliable stream
+    const pio::endpoint udpr_ep{"udpr", "127.0.0.1:5000"}; // reliable-datagram opt-in
 
     for(int iter = 0; iter < k_reps; ++iter)
     {
-        const auto reliable_hint = sel.reliability_hint_of(reliable_qos.reliability);
+        const auto reliable_hint    = sel.reliability_hint_of(reliable_qos.reliability);
         const auto best_effort_hint = sel.reliability_hint_of(best_effort_qos.reliability);
 
         // The declared reliable class steers the verdict: refused on the best_effort
@@ -72,7 +73,8 @@ TEST_CASE("transport steering: a declared reliable topic is refused on a best_ef
     }
 }
 
-TEST_CASE("transport steering: the selector verdict mirrors the engine reliability gate for every scheme",
+TEST_CASE("transport steering: the selector verdict mirrors the engine reliability gate for every "
+          "scheme",
           "[steering][reliability][mirror]")
 {
     pio::transport_selector sel;
@@ -85,8 +87,8 @@ TEST_CASE("transport steering: the selector verdict mirrors the engine reliabili
         for(std::string_view scheme : {"udp", "dtls", "tcp", "tls", "udpr", "unix", "inproc", "ws"})
         {
             const pio::endpoint ep{std::string{scheme}, "addr"};
-            const auto hint = sel.reliability_hint_of(pio::reliability::reliable);
-            const bool admissible = sel.reliability_class(ep, hint) == verdict::admissible;
+            const auto          hint       = sel.reliability_hint_of(pio::reliability::reliable);
+            const bool          admissible = sel.reliability_class(ep, hint) == verdict::admissible;
             REQUIRE(admissible == pio::scheme_is_reliable(ep.scheme));
         }
 }
@@ -106,8 +108,8 @@ TEST_CASE("transport steering: a declared dispatch hint observably steers the cl
     for(int iter = 0; iter < k_reps; ++iter)
     {
         // The declared dispatch field observably changes the local fast-path verdict.
-        REQUIRE(sel.dispatch_class(unix_ep, hinted_qos.dispatch)
-                != sel.dispatch_class(unix_ep, hintless_qos.dispatch));
+        REQUIRE(sel.dispatch_class(unix_ep, hinted_qos.dispatch) !=
+                sel.dispatch_class(unix_ep, hintless_qos.dispatch));
 
         // For a remote peer the verdict records the documented advisory preference.
         REQUIRE(sel.dispatch_class(tcp_ep, hinted_qos.dispatch));

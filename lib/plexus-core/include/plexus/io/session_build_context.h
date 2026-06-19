@@ -28,19 +28,19 @@ namespace plexus::io {
 // of these and the registry borrows it by reference. A slot rebuild (a reconnect)
 // draws the same forwarders, self identity, handshake bound, executor and logger
 // from here, so the node-wide wiring is reused with no re-plumbing.
-template <typename Policy>
+template<typename Policy>
 struct session_build_context
 {
     using executor_type = typename Policy::executor_type;
 
-    executor_type executor;
-    handshake_fsm_config fsm_cfg;
-    std::chrono::nanoseconds handshake_timeout;
-    message_forwarder<Policy> &messages;
+    executor_type                executor;
+    handshake_fsm_config         fsm_cfg;
+    std::chrono::nanoseconds     handshake_timeout;
+    message_forwarder<Policy>   &messages;
     procedure_forwarder<Policy> &procedures;
-    reconnect_config redial;
-    std::uint64_t redial_seed;
-    log::logger &logger;
+    reconnect_config             redial;
+    std::uint64_t                redial_seed;
+    log::logger                 &logger;
     // The node-shared receive route every slot's session delivers data through: the
     // engine sets it after construction, the registry threads it into every built
     // session so a reconnect's slot REBUILD draws it again (the per-session receive
@@ -48,7 +48,8 @@ struct session_build_context
     // shape carrying the message_info serves both arities — a bytes-only consumer
     // drops the info. Absent (unset) until the engine wires it — a session guards on it.
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>,
-                                            const message_info &)> on_message;
+                                            const message_info &)>
+            on_message;
     // The node-shared process-tier object-lane route, shaped like on_message: the
     // engine sets it after construction, the registry threads it into every built
     // session so a reconnect REBUILD draws it again. Absent until the engine wires it.
@@ -88,8 +89,8 @@ struct session_build_context
     // that slot's channel. Type-erased so the core bridge links no libcrypto. Absent
     // (unset) until the gated transport path is wired — a security-engaged accept with no
     // factory then finds no per-session hook and is refused fail-closed (never fail-open).
-    plexus::detail::move_only_function<
-            void(typename Policy::byte_channel_type &, const security_negotiation &)>
+    plexus::detail::move_only_function<void(typename Policy::byte_channel_type &,
+                                            const security_negotiation &)>
             install_security_factory;
 };
 

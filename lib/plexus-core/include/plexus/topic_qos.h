@@ -43,22 +43,22 @@ namespace plexus {
 // shipped low-MiB target).
 struct topic_qos
 {
-    bool                  latch       = false;
-    std::uint32_t         depth       = 1;
-    io::locality          reach       = io::locality::any;
-    io::reliability       reliability = io::reliability::best_effort;
-    io::congestion        congestion  = io::congestion::block;
-    io::priority          priority    = io::priority::normal;
-    io::shm::dispatch_hint dispatch   = io::shm::dispatch_hint::none;
-    std::uint32_t         max_message_bytes = 0;
+    bool                   latch             = false;
+    std::uint32_t          depth             = 1;
+    io::locality           reach             = io::locality::any;
+    io::reliability        reliability       = io::reliability::best_effort;
+    io::congestion         congestion        = io::congestion::block;
+    io::priority           priority          = io::priority::normal;
+    io::shm::dispatch_hint dispatch          = io::shm::dispatch_hint::none;
+    std::uint32_t          max_message_bytes = 0;
 
     // The publisher's OFFERED deadline/liveliness periods — the offered half of the
     // request-vs-offered deadline/lease contract. 0 = not offered = always compatible
     // (a genuine, tested absence, not a euphemism). Read LOCALLY producer-side at the
     // fan-out gate; these never ride the wire (the check is producer-side, so the
     // offered periods are read where the topic was declared).
-    std::uint64_t         offered_deadline_ns = 0;
-    std::uint64_t         offered_lease_ns    = 0;
+    std::uint64_t offered_deadline_ns = 0;
+    std::uint64_t offered_lease_ns    = 0;
 };
 
 }

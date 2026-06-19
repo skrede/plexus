@@ -27,19 +27,23 @@ TEST_CASE("scaffold: the gated shm backend links and runs", "[shm][scaffold]")
 TEST_CASE("scaffold: a value round-trips through MAP_SHARED across fork", "[shm][scaffold]")
 {
     constexpr int k_iterations = 128;
-    for (int i = 0; i < k_iterations; ++i)
+    for(int i = 0; i < k_iterations; ++i)
     {
         auto *word = static_cast<std::atomic<std::uint32_t> *>(
-            ::mmap(nullptr, sizeof(std::atomic<std::uint32_t>),
-                   PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+                ::mmap(nullptr, sizeof(std::atomic<std::uint32_t>), PROT_READ | PROT_WRITE,
+                       MAP_SHARED | MAP_ANONYMOUS, -1, 0));
         REQUIRE(word != MAP_FAILED);
-        new (word) std::atomic<std::uint32_t>{0};
+        new(word) std::atomic<std::uint32_t>{0};
 
         const std::uint32_t expected = 0xA5A50000u | static_cast<std::uint32_t>(i);
 
-        const xproc_outcome outcome = run_forked(
-            [&] { return word->load(std::memory_order_acquire) == expected; },
-            [&] { word->store(expected, std::memory_order_release); return true; });
+        const xproc_outcome outcome =
+                run_forked([&] { return word->load(std::memory_order_acquire) == expected; },
+                           [&]
+                           {
+                               word->store(expected, std::memory_order_release);
+                               return true;
+                           });
 
         const std::uint32_t observed = word->load(std::memory_order_acquire);
         ::munmap(word, sizeof(std::atomic<std::uint32_t>));

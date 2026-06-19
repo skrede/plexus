@@ -13,7 +13,7 @@
 
 namespace plexus::inproc {
 
-template <typename Clock>
+template<typename Clock>
 class inproc_timer;
 
 // Cooperative single-thread step-executor over an inproc_bus. step() advances
@@ -26,24 +26,21 @@ class inproc_timer;
 // virtual clock makes timer firing deterministic, and routing every byte
 // delivery through step() is what makes inproc delivery posted-only rather
 // than synchronous.
-template <typename Clock = std::chrono::steady_clock>
+template<typename Clock = std::chrono::steady_clock>
 class inproc_executor
 {
 public:
     explicit inproc_executor(inproc_bus<Clock> &bus)
-        : m_bus(bus)
+            : m_bus(bus)
     {
     }
 
-    inproc_executor(const inproc_executor &) = delete;
+    inproc_executor(const inproc_executor &)            = delete;
     inproc_executor &operator=(const inproc_executor &) = delete;
-    inproc_executor(inproc_executor &&) = delete;
-    inproc_executor &operator=(inproc_executor &&) = delete;
+    inproc_executor(inproc_executor &&)                 = delete;
+    inproc_executor &operator=(inproc_executor &&)      = delete;
 
-    void post(detail::move_only_function<void()> fn)
-    {
-        m_posted.push_back(std::move(fn));
-    }
+    void post(detail::move_only_function<void()> fn) { m_posted.push_back(std::move(fn)); }
 
     bool step()
     {
@@ -74,10 +71,7 @@ public:
             m_timers.push_back(t);
     }
 
-    void deregister_timer(inproc_timer<Clock> *t) noexcept
-    {
-        std::erase(m_timers, t);
-    }
+    void deregister_timer(inproc_timer<Clock> *t) noexcept { std::erase(m_timers, t); }
 
     inproc_bus<Clock> &bus() noexcept { return m_bus; }
 
@@ -97,9 +91,9 @@ private:
         return false;
     }
 
-    inproc_bus<Clock> &m_bus;
+    inproc_bus<Clock>                             &m_bus;
     std::deque<detail::move_only_function<void()>> m_posted;
-    std::vector<inproc_timer<Clock> *> m_timers;
+    std::vector<inproc_timer<Clock> *>             m_timers;
 };
 
 }

@@ -25,7 +25,7 @@ namespace plexus::testing {
 // did the parent predicate (run after the child exited) return true.
 struct xproc_outcome
 {
-    bool child_succeeded = false;
+    bool child_succeeded  = false;
     bool parent_succeeded = false;
 
     bool ok() const noexcept { return child_succeeded && parent_succeeded; }
@@ -36,24 +36,24 @@ struct xproc_outcome
 // after the child has exited, so shared-region writes the child committed are
 // guaranteed visible. A parent predicate that wants to verify only post-exit
 // state is the common shape; pass an always-true parent to assert child-only.
-template <typename ChildFn, typename ParentFn>
+template<typename ChildFn, typename ParentFn>
 xproc_outcome run_forked(ParentFn &&parent, ChildFn &&child)
 {
     const pid_t pid = ::fork();
-    if (pid == 0)
+    if(pid == 0)
     {
         const bool ok = static_cast<bool>(child());
         ::_exit(ok ? 0 : 1);
     }
 
     xproc_outcome outcome;
-    if (pid < 0)
+    if(pid < 0)
         return outcome;
 
     int status = 0;
-    while (::waitpid(pid, &status, 0) < 0 && errno == EINTR)
+    while(::waitpid(pid, &status, 0) < 0 && errno == EINTR)
         ;
-    outcome.child_succeeded = WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    outcome.child_succeeded  = WIFEXITED(status) && WEXITSTATUS(status) == 0;
     outcome.parent_succeeded = static_cast<bool>(parent());
     return outcome;
 }
@@ -66,17 +66,17 @@ class scoped_shm_name
 {
 public:
     explicit scoped_shm_name(std::string_view prefix)
-        : m_name(std::string(prefix) + std::to_string(::getpid()))
+            : m_name(std::string(prefix) + std::to_string(::getpid()))
     {
         ::shm_unlink(m_name.c_str());
     }
 
     ~scoped_shm_name() { ::shm_unlink(m_name.c_str()); }
 
-    scoped_shm_name(const scoped_shm_name &) = delete;
+    scoped_shm_name(const scoped_shm_name &)            = delete;
     scoped_shm_name &operator=(const scoped_shm_name &) = delete;
 
-    const char *c_str() const noexcept { return m_name.c_str(); }
+    const char        *c_str() const noexcept { return m_name.c_str(); }
     const std::string &str() const noexcept { return m_name; }
 
 private:

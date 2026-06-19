@@ -43,7 +43,8 @@ bool has_key(const std::vector<std::pair<std::string, std::string>> &card, const
     return std::ranges::any_of(card, [&](const auto &kv) { return kv.first == key; });
 }
 
-std::string value_of(const std::vector<std::pair<std::string, std::string>> &card, const std::string &key)
+std::string value_of(const std::vector<std::pair<std::string, std::string>> &card,
+                     const std::string                                      &key)
 {
     for(const auto &[k, v] : card)
         if(k == key)
@@ -56,9 +57,8 @@ std::string value_of(const std::vector<std::pair<std::string, std::string>> &car
 TEST_CASE("contact_card carries exactly node_id, per-transport port keys, and the schema",
           "[discovery][contact_card]")
 {
-    const auto id = node_id_of(1);
-    const auto card = assemble_contact_card(
-        id, {{"tcp", 5000}, {"udp", 5001}});
+    const auto id   = node_id_of(1);
+    const auto card = assemble_contact_card(id, {{"tcp", 5000}, {"udp", 5001}});
 
     REQUIRE(card.size() == 4);
     REQUIRE(has_key(card, "node_id"));
@@ -93,7 +93,7 @@ TEST_CASE("contact_card node_id is the authenticated-peer identity, not a self-a
     plexus::io::security::attach_facts facts;
     facts.initiator_id = node_id_of(10);
     facts.responder_id = node_id_of(20);
-    facts.role = plexus::io::security::attach_role::initiator;
+    facts.role         = plexus::io::security::attach_role::initiator;
 
     const auto authed_peer = plexus::io::authenticated_peer_id(facts);
     REQUIRE(authed_peer == node_id_of(20));
@@ -106,7 +106,7 @@ TEST_CASE("contact_card metadata carries verbatim through static_discovery",
           "[discovery][contact_card]")
 {
     service_info advertised;
-    advertised.name = "node-a";
+    advertised.name     = "node-a";
     advertised.endpoint = {"tcp", "192.0.2.10:5000"};
     advertised.metadata = assemble_contact_card(node_id_of(3), {{"tcp", 5000}, {"udp", 5001}});
 
@@ -124,7 +124,7 @@ TEST_CASE("contact_card lets a browsing peer derive its dial port with no hardco
           "[discovery][contact_card]")
 {
     service_info advertised;
-    advertised.name = "node-b";
+    advertised.name     = "node-b";
     advertised.endpoint = {"tcp", "192.0.2.11:0"};
     advertised.metadata = assemble_contact_card(node_id_of(4), {{"tcp", 5500}, {"udp", 5501}});
 
@@ -143,7 +143,7 @@ TEST_CASE("contact_card lets a browsing peer derive its dial port with no hardco
 
     // The derived dial target is the resolved IPv4 host joined with the advertised
     // port — nothing hardcoded; an absent key yields no port.
-    const std::string host = "192.0.2.11";
+    const std::string host        = "192.0.2.11";
     const std::string dial_target = host + ":" + std::to_string(*tcp_port);
     REQUIRE(dial_target == "192.0.2.11:5500");
     REQUIRE_FALSE(read_transport_port(found.metadata, "serial").has_value());
@@ -155,7 +155,7 @@ TEST_CASE("hex_decode is the exact inverse of hex_encode for arbitrary node ids"
     // Property-style round-trip: decode(encode(id)) == id over a spread of ids.
     for(int seed = 0; seed < 256; ++seed)
     {
-        const auto id = node_id_of(seed);
+        const auto id      = node_id_of(seed);
         const auto decoded = hex_decode(hex_encode(id));
         REQUIRE(decoded.has_value());
         REQUIRE(*decoded == id);
@@ -171,21 +171,21 @@ TEST_CASE("hex_decode rejects everything but exactly 32 lowercase hex characters
     REQUIRE(hex_decode(valid).has_value());
 
     // Reject table: wrong length, uppercase, a non-hex letter, empty, and an embedded NUL.
-    REQUIRE_FALSE(hex_decode(valid.substr(0, 31)).has_value());          // 31 chars
-    REQUIRE_FALSE(hex_decode(valid + "0").has_value());                  // 33 chars
-    REQUIRE_FALSE(hex_decode(std::string(32, 'A')).has_value());         // uppercase
-    REQUIRE_FALSE(hex_decode("0123456789abcdef0123456789abcdeg").has_value());  // 'g'
-    REQUIRE_FALSE(hex_decode("").has_value());                           // empty
+    REQUIRE_FALSE(hex_decode(valid.substr(0, 31)).has_value());                // 31 chars
+    REQUIRE_FALSE(hex_decode(valid + "0").has_value());                        // 33 chars
+    REQUIRE_FALSE(hex_decode(std::string(32, 'A')).has_value());               // uppercase
+    REQUIRE_FALSE(hex_decode("0123456789abcdef0123456789abcdeg").has_value()); // 'g'
+    REQUIRE_FALSE(hex_decode("").has_value());                                 // empty
 
     std::string with_nul(32, '0');
-    with_nul[10] = '\0';                                                 // embedded NUL (length stays 32)
+    with_nul[10] = '\0'; // embedded NUL (length stays 32)
     REQUIRE(with_nul.size() == 32);
     REQUIRE_FALSE(hex_decode(with_nul).has_value());
 
     // A mixed-case otherwise-valid string is rejected (no uppercase tolerated).
     std::string mixed = valid;
-    mixed[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(mixed[0])));
-    if(mixed != valid)   // only meaningful when the first nibble was a letter
+    mixed[0]          = static_cast<char>(std::toupper(static_cast<unsigned char>(mixed[0])));
+    if(mixed != valid) // only meaningful when the first nibble was a letter
         REQUIRE_FALSE(hex_decode(mixed).has_value());
 }
 
@@ -196,10 +196,10 @@ TEST_CASE("static_discovery notifies a browser registered BEFORE a later adverti
 
     std::vector<std::string> seen;
     disco.browse([&](const service_info &svc) { seen.push_back(svc.name); });
-    REQUIRE(seen.empty());   // empty table: nothing fired at registration
+    REQUIRE(seen.empty()); // empty table: nothing fired at registration
 
     service_info late;
-    late.name = "late-joiner";
+    late.name     = "late-joiner";
     late.endpoint = {"tcp", "192.0.2.40:5000"};
     disco.advertise(late);
 
@@ -217,7 +217,7 @@ TEST_CASE("static_discovery notifies EVERY retained browser on a later advertise
     disco.browse([&](const service_info &svc) { b.push_back(svc.name); });
 
     service_info svc;
-    svc.name = "node-z";
+    svc.name     = "node-z";
     svc.endpoint = {"tcp", "192.0.2.41:5000"};
     disco.advertise(svc);
 
@@ -233,13 +233,13 @@ TEST_CASE("static_discovery replaces a same-name entry in place instead of appen
     static_discovery disco{{}};
 
     service_info first;
-    first.name = "node-q";
+    first.name     = "node-q";
     first.endpoint = {"tcp", "192.0.2.42:5000"};
     first.metadata = {{"plexus/tcp/port", "5000"}};
     disco.advertise(first);
 
     service_info updated;
-    updated.name = "node-q";   // SAME name
+    updated.name     = "node-q"; // SAME name
     updated.endpoint = {"tcp", "192.0.2.42:6000"};
     updated.metadata = {{"plexus/tcp/port", "6000"}};
     disco.advertise(updated);
@@ -264,9 +264,9 @@ TEST_CASE("static_discovery stop() drops retained browsers so a later advertise 
     disco.stop();
 
     service_info svc;
-    svc.name = "after-stop";
+    svc.name     = "after-stop";
     svc.endpoint = {"tcp", "192.0.2.43:5000"};
     disco.advertise(svc);
 
-    REQUIRE(seen.empty());   // the browser was dropped at stop()
+    REQUIRE(seen.empty()); // the browser was dropped at stop()
 }

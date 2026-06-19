@@ -50,20 +50,14 @@ shm_error map_errno(int e)
 {
     switch(e)
     {
-    case EEXIST:
-        return shm_error::already_exists;
-    case ENOENT:
-        return shm_error::not_found;
-    case EACCES:
-    case EPERM:
-        return shm_error::permission_denied;
-    case ENOSPC:
-        return shm_error::no_space;
-    case EINVAL:
-    case ENAMETOOLONG:
-        return shm_error::name_invalid;
-    default:
-        return shm_error::unknown;
+        case EEXIST:       return shm_error::already_exists;
+        case ENOENT:       return shm_error::not_found;
+        case EACCES:
+        case EPERM:        return shm_error::permission_denied;
+        case ENOSPC:       return shm_error::no_space;
+        case EINVAL:
+        case ENAMETOOLONG: return shm_error::name_invalid;
+        default:           return shm_error::unknown;
     }
 }
 
@@ -80,23 +74,23 @@ plexus::io::shm::region_status to_status(shm_error e)
     using rs = plexus::io::shm::region_status;
     switch(e)
     {
-    case shm_error::ok:                return rs::ok;
-    case shm_error::already_exists:    return rs::already_exists;
-    case shm_error::not_found:         return rs::not_found;
-    case shm_error::permission_denied: return rs::denied;
-    case shm_error::no_space:          return rs::failed;
-    case shm_error::name_invalid:      return rs::failed;
-    case shm_error::map_failed:        return rs::failed;
-    case shm_error::unknown:           return rs::failed;
+        case shm_error::ok:                return rs::ok;
+        case shm_error::already_exists:    return rs::already_exists;
+        case shm_error::not_found:         return rs::not_found;
+        case shm_error::permission_denied: return rs::denied;
+        case shm_error::no_space:          return rs::failed;
+        case shm_error::name_invalid:      return rs::failed;
+        case shm_error::map_failed:        return rs::failed;
+        case shm_error::unknown:           return rs::failed;
     }
     return rs::failed;
 }
 
 }
 
-plexus::io::shm::region_status posix_shm_region_broker::create(
-    std::string_view name, std::size_t bytes, const plexus::io::shm::create_options &opts,
-    region_handle &out)
+plexus::io::shm::region_status
+posix_shm_region_broker::create(std::string_view name, std::size_t bytes,
+                                const plexus::io::shm::create_options &opts, region_handle &out)
 {
     out = region_handle{};
 
@@ -145,7 +139,7 @@ plexus::io::shm::region_status posix_shm_region_broker::create(
 }
 
 plexus::io::shm::region_status posix_shm_region_broker::attach(std::string_view name,
-                                                               region_handle &out)
+                                                               region_handle   &out)
 {
     out = region_handle{};
 
@@ -169,7 +163,7 @@ plexus::io::shm::region_status posix_shm_region_broker::attach(std::string_view 
     }
 
     const auto length = static_cast<std::size_t>(st.st_size);
-    void *base = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    void      *base   = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(base == MAP_FAILED)
     {
         ::close(fd);
@@ -181,7 +175,7 @@ plexus::io::shm::region_status posix_shm_region_broker::attach(std::string_view 
 }
 
 void posix_shm_region_broker::set_attach_policy(
-    plexus::detail::move_only_function<bool(std::string_view)> policy)
+        plexus::detail::move_only_function<bool(std::string_view)> policy)
 {
     m_attach_policy = std::move(policy);
 }

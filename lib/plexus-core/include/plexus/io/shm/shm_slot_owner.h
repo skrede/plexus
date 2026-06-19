@@ -25,7 +25,7 @@ public:
     shm_slot_owner() = default;
 
     explicit shm_slot_owner(std::atomic<std::uint32_t> *refcount) noexcept
-        : m_rc(refcount)
+            : m_rc(refcount)
     {
         if(m_rc != nullptr)
             m_rc->fetch_add(1, std::memory_order_acq_rel); // pin
@@ -33,11 +33,11 @@ public:
 
     ~shm_slot_owner() { release(); }
 
-    shm_slot_owner(const shm_slot_owner &) = delete;
+    shm_slot_owner(const shm_slot_owner &)            = delete;
     shm_slot_owner &operator=(const shm_slot_owner &) = delete;
 
     shm_slot_owner(shm_slot_owner &&other) noexcept
-        : m_rc(std::exchange(other.m_rc, nullptr))
+            : m_rc(std::exchange(other.m_rc, nullptr))
     {
     }
 

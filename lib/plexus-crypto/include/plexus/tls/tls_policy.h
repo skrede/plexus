@@ -25,10 +25,10 @@ namespace plexus::tls {
 // plaintext transports.
 struct tls_policy
 {
-    using executor_type = ::asio::io_context &;
+    using executor_type     = ::asio::io_context &;
     using byte_channel_type = tls_channel;
-    using timer_type = plexus::asio::asio_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = plexus::asio::asio_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
     {
@@ -39,6 +39,6 @@ struct tls_policy
 }
 
 static_assert(plexus::Policy<plexus::tls::tls_policy>,
-    "tls_policy must satisfy Policy — check the channel/timer constructors and post()");
+              "tls_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

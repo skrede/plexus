@@ -67,11 +67,12 @@ struct counting_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, sample &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   sample                    &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -84,7 +85,7 @@ struct counting_codec
 
 static_assert(plexus::typed_codec<counting_codec>);
 
-using typed_publisher = plexus::publisher<counting_codec>;
+using typed_publisher  = plexus::publisher<counting_codec>;
 using typed_subscriber = plexus::subscriber<counting_codec>;
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -97,10 +98,10 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options base_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0xC0DEu;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0xC0DEu;
     opts.dial_eagerly = eager;
     return opts;
 }
@@ -110,11 +111,11 @@ plexus::node_options base_opts(bool eager)
 // declaration under test.
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -126,9 +127,9 @@ struct net
     inproc_node b;
 
     explicit net(const plexus::node_options &producer_opts)
-        : opts_b(producer_opts)
-        , a(ex, disc, id_a, ta, opts_a)
-        , b(ex, disc, id_b, tb, opts_b)
+            : opts_b(producer_opts)
+            , a(ex, disc, id_a, ta, opts_a)
+            , b(ex, disc, id_b, tb, opts_b)
     {
     }
 
@@ -161,17 +162,17 @@ int publish_k(typed_publisher &pub, net &n, int k)
 TEST_CASE("integration.recording_qos a node declaring no recording QoS ships zero capture",
           "[integration][inproc][recording]")
 {
-    net n{base_opts(/*eager=*/false)};   // producer leaves node_options.capture at the off default
+    net n{base_opts(/*eager=*/false)}; // producer leaves node_options.capture at the off default
     n.connect();
 
-    counting_codec codec;
-    auto encodes = codec.encodes;
+    counting_codec   codec;
+    auto             encodes = codec.encodes;
     typed_subscriber sub{n.a, "topic", [](const sample &) {}};
-    typed_publisher pub{n.b, "topic", plexus::typed_publisher_options{}, codec};
+    typed_publisher  pub{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     publish_k(pub, n, 5);
-    REQUIRE(encodes->load() == 0);   // the off default selects nothing: the gate stays inert
+    REQUIRE(encodes->load() == 0); // the off default selects nothing: the gate stays inert
 }
 
 TEST_CASE("integration.recording_qos a node-level payload default fires the encode per publish",
@@ -182,29 +183,30 @@ TEST_CASE("integration.recording_qos a node-level payload default fires the enco
     net n{producer};
     n.connect();
 
-    counting_codec codec;
-    auto encodes = codec.encodes;
+    counting_codec   codec;
+    auto             encodes = codec.encodes;
     typed_subscriber sub{n.a, "topic", [](const sample &) {}};
-    typed_publisher pub{n.b, "topic", plexus::typed_publisher_options{}, codec};
+    typed_publisher  pub{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     constexpr int k = 5;
     publish_k(pub, n, k);
-    REQUIRE(encodes->load() == k);   // the node default selects every topic for payload capture
+    REQUIRE(encodes->load() == k); // the node default selects every topic for payload capture
 }
 
-TEST_CASE("integration.recording_qos a per-topic publisher override raises capture above an off node default",
+TEST_CASE("integration.recording_qos a per-topic publisher override raises capture above an off "
+          "node default",
           "[integration][inproc][recording]")
 {
-    net n{base_opts(/*eager=*/false)};   // node default off: an unoverridden topic stays inert
+    net n{base_opts(/*eager=*/false)}; // node default off: an unoverridden topic stays inert
     n.connect();
 
     // The selected topic carries a per-topic payload override; the bystander topic relies on
     // the (off) node default. Only the overridden topic encodes.
     counting_codec selected_codec;
     counting_codec bystander_codec;
-    auto selected_encodes = selected_codec.encodes;
-    auto bystander_encodes = bystander_codec.encodes;
+    auto           selected_encodes  = selected_codec.encodes;
+    auto           bystander_encodes = bystander_codec.encodes;
 
     typed_subscriber sub_sel{n.a, "selected", [](const sample &) {}};
     typed_subscriber sub_by{n.a, "bystander", [](const sample &) {}};
@@ -219,6 +221,6 @@ TEST_CASE("integration.recording_qos a per-topic publisher override raises captu
     publish_k(pub_sel, n, k);
     publish_k(pub_by, n, k);
 
-    REQUIRE(selected_encodes->load() == k);    // the per-topic override took effect
-    REQUIRE(bystander_encodes->load() == 0);   // the off node default left the bystander inert
+    REQUIRE(selected_encodes->load() == k);  // the per-topic override took effect
+    REQUIRE(bystander_encodes->load() == 0); // the off node default left the bystander inert
 }

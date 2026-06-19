@@ -15,7 +15,7 @@ namespace plexus::discovery {
 // I found) carry.
 struct service_info
 {
-    std::string name;
+    std::string  name;
     io::endpoint endpoint;
 
     // The node contact card: a generic ordered key/value map a backend maps onto

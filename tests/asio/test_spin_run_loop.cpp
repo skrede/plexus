@@ -52,33 +52,35 @@ std::string str_of(std::span<const std::byte> b)
 // at the requested budget so the driver -- not a raw poll loop -- carries every leg.
 struct spin_loopback
 {
-    ::asio::io_context io;
+    ::asio::io_context   io;
     pasio::spin_run_loop loop;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io};
 
     std::unique_ptr<pasio::udp_channel> accepted;
     std::unique_ptr<pasio::udp_channel> dialed;
-    std::vector<std::string> received;
+    std::vector<std::string>            received;
 
     explicit spin_loopback(std::uint32_t spin_budget)
-        : loop(io, spin_budget)
+            : loop(io, spin_budget)
     {
-        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch) {
-            accepted = std::move(ch);
-            accepted->on_data([this](std::span<const std::byte> b) { received.push_back(str_of(b)); });
-        });
+        server.on_accepted(
+                [this](std::unique_ptr<pasio::udp_channel> ch)
+                {
+                    accepted = std::move(ch);
+                    accepted->on_data([this](std::span<const std::byte> b)
+                                      { received.push_back(str_of(b)); });
+                });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until([this] { return server.port() != 0; });
 
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &) {
-            dialed = std::move(ch);
-        });
+        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch,
+                                const plexus::io::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
         pump_until([this] { return dialed != nullptr && accepted != nullptr; });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -90,7 +92,7 @@ struct spin_loopback
 void round_trips_at(std::uint32_t spin_budget)
 {
     constexpr int k_iterations = 50;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         spin_loopback h{spin_budget};
@@ -98,7 +100,7 @@ void round_trips_at(std::uint32_t spin_budget)
         REQUIRE(h.accepted != nullptr);
 
         const std::string payload = "spin-" + std::to_string(iter);
-        auto frame = bytes_of(payload);
+        auto              frame   = bytes_of(payload);
         h.dialed->send(frame);
 
         h.pump_until([&] { return !h.received.empty(); });
@@ -117,7 +119,8 @@ TEST_CASE("spin_run_loop drives a live udp round-trip end-to-end at the default 
     round_trips_at(pasio::spin_run_loop::default_spin_budget);
 }
 
-TEST_CASE("spin_run_loop budget 0 (drain-then-park) delivers identically -- the spin is a latency policy",
+TEST_CASE("spin_run_loop budget 0 (drain-then-park) delivers identically -- the spin is a latency "
+          "policy",
           "[asio][spin]")
 {
     round_trips_at(0);
@@ -125,13 +128,18 @@ TEST_CASE("spin_run_loop budget 0 (drain-then-park) delivers identically -- the 
 
 TEST_CASE("spin_run_loop::run() exits when the io_context is stopped", "[asio][spin]")
 {
-    ::asio::io_context io;
+    ::asio::io_context   io;
     pasio::spin_run_loop loop{io};
 
     bool ran = false;
-    ::asio::post(io, [&] { ran = true; io.stop(); });
+    ::asio::post(io,
+                 [&]
+                 {
+                     ran = true;
+                     io.stop();
+                 });
 
-    loop.run();   // must return: the posted handler stops the context, breaking the park
+    loop.run(); // must return: the posted handler stops the context, breaking the park
     REQUIRE(ran);
     REQUIRE(io.stopped());
 }

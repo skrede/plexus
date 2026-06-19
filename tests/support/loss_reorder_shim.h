@@ -32,7 +32,10 @@ namespace plexus::testing {
 class shim_lcg
 {
 public:
-    explicit shim_lcg(std::uint64_t seed) noexcept : m_state(seed) {}
+    explicit shim_lcg(std::uint64_t seed) noexcept
+            : m_state(seed)
+    {
+    }
 
     std::uint64_t next() noexcept
     {
@@ -61,10 +64,10 @@ private:
 // setter (the determinism contract: the schedule is fixed at construction).
 struct loss_reorder_config
 {
-    std::uint32_t loss_num = 0;
-    std::uint32_t loss_den = 100;
-    std::size_t reorder_depth = 0;
-    std::uint64_t seed = 0x9E3779B97F4A7C15ull;
+    std::uint32_t loss_num      = 0;
+    std::uint32_t loss_den      = 100;
+    std::size_t   reorder_depth = 0;
+    std::uint64_t seed          = 0x9E3779B97F4A7C15ull;
 };
 
 // A pure (no-IO) deterministic loss/reorder scheduler over an opaque datagram stream.
@@ -77,7 +80,8 @@ class loss_reorder_scheduler
 {
 public:
     explicit loss_reorder_scheduler(loss_reorder_config cfg)
-        : m_cfg(cfg), m_rng(cfg.seed)
+            : m_cfg(cfg)
+            , m_rng(cfg.seed)
     {
     }
 
@@ -116,16 +120,16 @@ private:
     // within the bounded window (not strictly FIFO) yet deterministic.
     std::vector<std::byte> take_held()
     {
-        const std::size_t idx = m_rng.bounded(m_hold.size());
-        std::vector<std::byte> dg = std::move(m_hold[idx]);
+        const std::size_t      idx = m_rng.bounded(m_hold.size());
+        std::vector<std::byte> dg  = std::move(m_hold[idx]);
         m_hold.erase(m_hold.begin() + static_cast<std::ptrdiff_t>(idx));
         return dg;
     }
 
-    loss_reorder_config m_cfg;
-    shim_lcg m_rng;
+    loss_reorder_config                m_cfg;
+    shim_lcg                           m_rng;
     std::deque<std::vector<std::byte>> m_hold;
-    std::size_t m_dropped = 0;
+    std::size_t                        m_dropped = 0;
 };
 
 // A live UDP relay applying the deterministic scheduler at the wire boundary: the client
@@ -136,19 +140,19 @@ class loss_reorder_relay
 {
 public:
     loss_reorder_relay(::asio::io_context &io, std::uint16_t server_port, loss_reorder_config cfg)
-        : m_io(io)
-        , m_front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , m_back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , m_server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
-        , m_sched(cfg)
+            : m_io(io)
+            , m_front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , m_back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , m_server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            , m_sched(cfg)
     {
         recv_front();
         recv_back();
     }
 
     [[nodiscard]] std::uint16_t port() const { return m_front.local_endpoint().port(); }
-    [[nodiscard]] std::size_t dropped() const noexcept { return m_sched.dropped(); }
-    [[nodiscard]] std::size_t forwarded() const noexcept { return m_forwarded; }
+    [[nodiscard]] std::size_t   dropped() const noexcept { return m_sched.dropped(); }
+    [[nodiscard]] std::size_t   forwarded() const noexcept { return m_forwarded; }
 
 private:
     void emit_to_server(std::vector<std::byte> dg)
@@ -159,37 +163,43 @@ private:
 
     void recv_front()
     {
-        m_front.async_receive_from(::asio::buffer(m_front_buf), m_from,
-                                   [this](std::error_code ec, std::size_t n) {
-            if(ec) return;
-            m_client_ep = m_from;
-            for(auto &dg : m_sched.drive(std::span<const std::byte>{m_front_buf.data(), n}))
-                emit_to_server(std::move(dg));
-            recv_front();
-        });
+        m_front.async_receive_from(
+                ::asio::buffer(m_front_buf), m_from,
+                [this](std::error_code ec, std::size_t n)
+                {
+                    if(ec)
+                        return;
+                    m_client_ep = m_from;
+                    for(auto &dg : m_sched.drive(std::span<const std::byte>{m_front_buf.data(), n}))
+                        emit_to_server(std::move(dg));
+                    recv_front();
+                });
     }
 
     void recv_back()
     {
         m_back.async_receive_from(::asio::buffer(m_back_buf), m_from,
-                                  [this](std::error_code ec, std::size_t n) {
-            if(ec) return;
-            if(m_client_ep.port() != 0)
-                m_front.send_to(::asio::buffer(m_back_buf.data(), n), m_client_ep);
-            recv_back();
-        });
+                                  [this](std::error_code ec, std::size_t n)
+                                  {
+                                      if(ec)
+                                          return;
+                                      if(m_client_ep.port() != 0)
+                                          m_front.send_to(::asio::buffer(m_back_buf.data(), n),
+                                                          m_client_ep);
+                                      recv_back();
+                                  });
     }
 
-    ::asio::io_context &m_io;
-    ::asio::ip::udp::socket m_front;
-    ::asio::ip::udp::socket m_back;
-    ::asio::ip::udp::endpoint m_server_ep;
-    ::asio::ip::udp::endpoint m_client_ep;
-    ::asio::ip::udp::endpoint m_from;
+    ::asio::io_context          &m_io;
+    ::asio::ip::udp::socket      m_front;
+    ::asio::ip::udp::socket      m_back;
+    ::asio::ip::udp::endpoint    m_server_ep;
+    ::asio::ip::udp::endpoint    m_client_ep;
+    ::asio::ip::udp::endpoint    m_from;
     std::array<std::byte, 65536> m_front_buf{};
     std::array<std::byte, 65536> m_back_buf{};
-    loss_reorder_scheduler m_sched;
-    std::size_t m_forwarded = 0;
+    loss_reorder_scheduler       m_sched;
+    std::size_t                  m_forwarded = 0;
 };
 
 }

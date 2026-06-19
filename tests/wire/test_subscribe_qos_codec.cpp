@@ -19,37 +19,35 @@ namespace {
 // round-trip proves EVERY field survives.
 subscribe_qos_region non_default_region()
 {
-    return subscribe_qos_region{
-            .durability            = 0,   // none
-            .delivery_mode         = 1,   // pull
-            .replay_depth          = 7,
-            .requested_flags       = detail::k_qos_flag_requires_source_identity
-                                     | detail::k_qos_flag_requested_reliable,
-            .requested_deadline_ns = 0xA1B2C3D4E5F60789ULL,
-            .requested_lease_ns    = 0x0102030405060708ULL,
-            .requested_priority    = 5,
-            .requested_max_message_bytes = 0x00ABCDEFu};
+    return subscribe_qos_region{.durability      = 0, // none
+                                .delivery_mode   = 1, // pull
+                                .replay_depth    = 7,
+                                .requested_flags = detail::k_qos_flag_requires_source_identity |
+                                        detail::k_qos_flag_requested_reliable,
+                                .requested_deadline_ns       = 0xA1B2C3D4E5F60789ULL,
+                                .requested_lease_ns          = 0x0102030405060708ULL,
+                                .requested_priority          = 5,
+                                .requested_max_message_bytes = 0x00ABCDEFu};
 }
 
 subscribe_request base_request()
 {
-    return subscribe_request{
-            .fqn        = "robot/state",
-            .type_name  = "geometry/Pose",
-            .topic_hash = 0xDEADBEEFCAFEF00DULL,
-            .type_hash  = 0x1122334455667788ULL,
-            .source     = endpoint_source_type::publisher};
+    return subscribe_request{.fqn        = "robot/state",
+                             .type_name  = "geometry/Pose",
+                             .topic_hash = 0xDEADBEEFCAFEF00DULL,
+                             .type_hash  = 0x1122334455667788ULL,
+                             .source     = endpoint_source_type::publisher};
 }
 
 }
 
 TEST_CASE("subscribe_qos region round-trips every field", "[wire][subscribe_qos]")
 {
-    auto req = base_request();
+    auto req    = base_request();
     req.has_qos = true;
-    req.qos = non_default_region();
+    req.qos     = non_default_region();
 
-    auto bytes = encode_subscribe_request(req);
+    auto bytes   = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(bytes);
 
     REQUIRE(decoded.has_value());
@@ -75,28 +73,26 @@ TEST_CASE("has_qos=false encode is byte-identical to the pre-region encoding",
     // The region is set but the flag is CLEAR: the encode must write NO trailing
     // bytes, so the result is the exact pre-region layout a v3 producer wrote.
     req.has_qos = false;
-    req.qos = non_default_region();
+    req.qos     = non_default_region();
 
     auto with_struct = encode_subscribe_request(req);
 
     // The reference: the same request with a default-constructed region and the
     // flag clear. Both must be byte-for-byte equal — the region never leaks.
-    subscribe_request plain = base_request();
-    auto reference = encode_subscribe_request(plain);
+    subscribe_request plain     = base_request();
+    auto              reference = encode_subscribe_request(plain);
 
     CHECK(with_struct == reference);
     // And the encoded size is the pre-region minimum-plus-strings (no +32).
-    CHECK(with_struct.size()
-          == detail::subscribe_request_fixed_prefix + 2 + req.fqn.size()
-                 + 2 + req.type_name.size());
+    CHECK(with_struct.size() ==
+          detail::subscribe_request_fixed_prefix + 2 + req.fqn.size() + 2 + req.type_name.size());
 }
 
-TEST_CASE("an absent region decodes back to the friendly defaults",
-          "[wire][subscribe_qos]")
+TEST_CASE("an absent region decodes back to the friendly defaults", "[wire][subscribe_qos]")
 {
-    auto req = base_request();
+    auto req    = base_request();
     req.has_qos = false;
-    auto bytes = encode_subscribe_request(req);
+    auto bytes  = encode_subscribe_request(req);
 
     auto decoded = decode_subscribe_request(bytes);
     REQUIRE(decoded.has_value());
@@ -110,10 +106,10 @@ TEST_CASE("an absent region decodes back to the friendly defaults",
 
 TEST_CASE("a truncated QoS region decodes to nullopt", "[wire][subscribe_qos]")
 {
-    auto req = base_request();
+    auto req    = base_request();
     req.has_qos = true;
-    req.qos = non_default_region();
-    auto bytes = encode_subscribe_request(req);
+    req.qos     = non_default_region();
+    auto bytes  = encode_subscribe_request(req);
 
     // Drop the last byte of the fixed region: the declared length prefix now
     // over-runs the buffer, so read_length_prefixed refuses -> nullopt.
@@ -125,18 +121,18 @@ TEST_CASE("a truncated QoS region decodes to nullopt", "[wire][subscribe_qos]")
 TEST_CASE("a region whose declared length is not exactly 30 decodes to nullopt",
           "[wire][subscribe_qos]")
 {
-    auto req = base_request();
+    auto req    = base_request();
     req.has_qos = true;
-    req.qos = non_default_region();
-    auto bytes = encode_subscribe_request(req);
+    req.qos     = non_default_region();
+    auto bytes  = encode_subscribe_request(req);
 
     // Locate the region length prefix: it sits right after fqn + type_name, i.e.
     // at fixed_prefix + 2 + fqn + 2 + type_name. Rewrite it to a wrong (in-range
     // but != 30) value while leaving 30 bytes present -> exact-length check fails.
-    const std::size_t prefix_off = detail::subscribe_request_fixed_prefix
-                                   + 2 + req.fqn.size() + 2 + req.type_name.size();
+    const std::size_t prefix_off =
+            detail::subscribe_request_fixed_prefix + 2 + req.fqn.size() + 2 + req.type_name.size();
     REQUIRE(prefix_off + 2 <= bytes.size());
-    detail::write_u16(bytes.data() + prefix_off, 29);   // claim 29, not 30
+    detail::write_u16(bytes.data() + prefix_off, 29); // claim 29, not 30
     // Shorten the trailing payload to match the smaller claim so the buffer is
     // self-consistent (the length read succeeds) but the exact-26 gate rejects it.
     bytes.pop_back();
@@ -147,8 +143,8 @@ TEST_CASE("a region whose declared length is not exactly 30 decodes to nullopt",
 TEST_CASE("an over-cap region length decodes to nullopt", "[wire][subscribe_qos]")
 {
     // A hand-built frame whose region length prefix claims more than k_max_qos_region.
-    auto req = base_request();
-    auto bytes = encode_subscribe_request(req);   // no region
+    auto req   = base_request();
+    auto bytes = encode_subscribe_request(req); // no region
 
     // Append a uint16_t length prefix claiming a huge region, with no payload: the
     // read_length_prefixed bounds gate refuses (the payload does not fit), so the
@@ -173,12 +169,12 @@ TEST_CASE("the protocol version is at 7 and the region is trivially copyable",
 
 TEST_CASE("the typed-strict flag bit round-trips in the flags byte", "[wire][subscribe_qos]")
 {
-    auto req = base_request();
+    auto req    = base_request();
     req.has_qos = true;
-    req.qos = non_default_region();
+    req.qos     = non_default_region();
     req.qos.requested_flags |= detail::k_qos_flag_typed_strict;
 
-    auto bytes = encode_subscribe_request(req);
+    auto bytes   = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(bytes);
 
     REQUIRE(decoded.has_value());
@@ -190,9 +186,9 @@ TEST_CASE("the type_undeclared status round-trips through the response codec",
           "[wire][subscribe_qos]")
 {
     subscribe_response resp{.topic_hash = 0x1122334455667788ULL,
-                            .status = subscribe_status::type_undeclared};
+                            .status     = subscribe_status::type_undeclared};
 
-    auto bytes = encode_subscribe_response(resp);
+    auto bytes   = encode_subscribe_response(resp);
     auto decoded = decode_subscribe_response(bytes);
 
     REQUIRE(decoded.has_value());

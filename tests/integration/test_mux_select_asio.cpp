@@ -25,10 +25,11 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace ptls = plexus::tls;
-namespace pio = plexus::io;
+namespace ptls  = plexus::tls;
+namespace pio   = plexus::io;
 
-static_assert(plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
+static_assert(
+        plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
 
 namespace {
 
@@ -43,37 +44,38 @@ struct remote_dial_link
     // The secure member is never exercised on this tcp-only route: its credential
     // stays a default (invalid) one — the SSL_CTX is only ever touched when a "tls"
     // channel is actually dialed/accepted, which this link never does.
-    ptls::tls_credential no_tls;
+    ptls::tls_credential  no_tls;
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
-    ptls::tls_transport secure{io, no_tls};
+    ptls::tls_transport   secure{io, no_tls};
     // The datagram member stays inert on this tcp-only route — its socket is only ever
     // bound when a "udp" channel is actually dialed/accepted, which this link never does.
     pasio::udp_transport datagram{io};
     // The secure-datagram (DTLS) member is likewise inert here: it reuses the same default
     // (invalid) credential and binds no socket unless a "dtls" channel is dialed/accepted.
-    ptls::dtls_transport secure_datagram{io, no_tls};
+    ptls::dtls_transport    secure_datagram{io, no_tls};
     pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
-    std::optional<pio::endpoint> dialed_ep;
+    std::optional<pio::endpoint>                   dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     remote_dial_link()
     {
-        mux.on_dialed([this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep) {
-            dialed = std::move(ch);
-            dialed_ep.emplace(ep);
-        });
-        mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) {
-            accepted = std::move(ch);
-        });
+        mux.on_dialed(
+                [this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep)
+                {
+                    dialed = std::move(ch);
+                    dialed_ep.emplace(ep);
+                });
+        mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch)
+                        { accepted = std::move(ch); });
 
         mux.listen({"tcp", "127.0.0.1:0"});
         mux.dial({"tcp", "127.0.0.1:" + std::to_string(remote.port())});
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -88,7 +90,7 @@ TEST_CASE("mux select: a remote endpoint dials over TCP through the erased chann
           "[integration][mux][select][asio]")
 {
     constexpr int k_iterations = 100;
-    int completed = 0;
+    int           completed    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         remote_dial_link l;
@@ -107,11 +109,12 @@ TEST_CASE("mux select: a remote endpoint dials over TCP through the erased chann
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("mux select: an ACCEPTED TCP connection carries the tcp scheme through the erasure, looped",
-          "[integration][mux][select][asio]")
+TEST_CASE(
+        "mux select: an ACCEPTED TCP connection carries the tcp scheme through the erasure, looped",
+        "[integration][mux][select][asio]")
 {
     constexpr int k_iterations = 100;
-    int completed = 0;
+    int           completed    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         remote_dial_link l;

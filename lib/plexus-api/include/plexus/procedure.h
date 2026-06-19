@@ -31,7 +31,7 @@ namespace plexus {
 // defaulted parameters (the defaults live in node.h's forward declaration, seen first), so
 // every bytes spelling keeps compiling unchanged. no_codec is a sentinel family that names
 // the bytes default and is never instantiated.
-template <typename Sig, template <typename> class CReq, template <typename> class CRes>
+template<typename Sig, template<typename> class CReq, template<typename> class CRes>
 class procedure;
 
 // The bytes serving endpoint: the CONSTRUCTOR is the registration — it serves the
@@ -53,26 +53,26 @@ class procedure;
 // subsequent inbound call for the fqn resolves rpc_status::no_handler (the existing
 // absent-handler path), and the fqn is free to be served again. A moved-from handle is
 // inert (empty retire); its destructor does nothing.
-template <>
+template<>
 class procedure<void, no_codec, no_codec>
 {
 public:
-    using reply_fn = io::reply_fn;
+    using reply_fn   = io::reply_fn;
     using handler_fn = io::handler_fn;
 
-    template <typename Policy, typename... NodeTs, typename Handler>
+    template<typename Policy, typename... NodeTs, typename Handler>
     procedure(node<Policy, NodeTs...> &n, std::string_view fqn, Handler handler)
-        : m_fqn(fqn)
+            : m_fqn(fqn)
     {
         io::endpoint_seam seam = n.endpoint_seam_for();
         seam.serve_procedure(seam.ctx, fqn, handler_fn{std::move(handler)});
         m_retire = [seam, fqn = m_fqn] { seam.retire_procedure(seam.ctx, fqn); };
     }
 
-    procedure(procedure &&) noexcept = default;
+    procedure(procedure &&) noexcept            = default;
     procedure &operator=(procedure &&) noexcept = default;
 
-    procedure(const procedure &) = delete;
+    procedure(const procedure &)            = delete;
     procedure &operator=(const procedure &) = delete;
 
     ~procedure()
@@ -82,7 +82,7 @@ public:
     }
 
 private:
-    std::string m_fqn;
+    std::string                                m_fqn;
     plexus::detail::move_only_function<void()> m_retire;
 };
 
@@ -104,33 +104,32 @@ private:
 // All the lifetime/double-serve guarantees of the bytes specialization hold verbatim:
 // the ctor is the registration, a second LOCAL serve on one fqn throws std::logic_error
 // with zero side effects, and dropping the handle retires it to rpc_status::no_handler.
-template <typename Res, typename Req,
-          template <typename> class CReq, template <typename> class CRes>
+template<typename Res, typename Req, template<typename> class CReq, template<typename> class CRes>
     requires typed_codec<CReq<Req>> && typed_codec<CRes<Res>>
 class procedure<Res(Req), CReq, CRes>
 {
 public:
-    using reply_fn = io::reply_fn;
-    using handler_fn = io::handler_fn;
-    using request_codec = CReq<Req>;
+    using reply_fn       = io::reply_fn;
+    using handler_fn     = io::handler_fn;
+    using request_codec  = CReq<Req>;
     using response_codec = CRes<Res>;
 
-    template <typename Policy, typename... NodeTs, typename Handler>
+    template<typename Policy, typename... NodeTs, typename Handler>
     procedure(node<Policy, NodeTs...> &n, std::string_view fqn, Handler handler,
               request_codec req_codec = {}, response_codec res_codec = {})
-        : m_fqn(fqn)
+            : m_fqn(fqn)
     {
         io::endpoint_seam seam = n.endpoint_seam_for();
         seam.serve_procedure(
-            seam.ctx, fqn,
-            handler_fn{adapt(std::move(handler), std::move(req_codec), std::move(res_codec))});
+                seam.ctx, fqn,
+                handler_fn{adapt(std::move(handler), std::move(req_codec), std::move(res_codec))});
         m_retire = [seam, fqn = m_fqn] { seam.retire_procedure(seam.ctx, fqn); };
     }
 
-    procedure(procedure &&) noexcept = default;
+    procedure(procedure &&) noexcept            = default;
     procedure &operator=(procedure &&) noexcept = default;
 
-    procedure(const procedure &) = delete;
+    procedure(const procedure &)            = delete;
     procedure &operator=(const procedure &) = delete;
 
     ~procedure()
@@ -140,12 +139,13 @@ public:
     }
 
 private:
-    template <typename Handler>
+    template<typename Handler>
     static handler_fn adapt(Handler handler, request_codec req_codec, response_codec res_codec)
     {
         return [handler = std::move(handler), req_codec = std::move(req_codec),
                 res_codec = std::move(res_codec), scratch = std::vector<std::byte>{}](
-                   std::span<const std::byte> param, reply_fn &reply) mutable {
+                       std::span<const std::byte> param, reply_fn &reply) mutable
+        {
             Req request{};
             if(!req_codec.decode(param, request))
             {
@@ -165,7 +165,7 @@ private:
         };
     }
 
-    std::string m_fqn;
+    std::string                                m_fqn;
     plexus::detail::move_only_function<void()> m_retire;
 };
 

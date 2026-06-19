@@ -65,7 +65,7 @@ namespace {
 node_id make_node(std::uint8_t tag)
 {
     node_id n{};
-    n[0] = std::byte{tag};
+    n[0]  = std::byte{tag};
     n[15] = std::byte{0xAB};
     return n;
 }
@@ -78,8 +78,7 @@ std::span<const std::byte> bytes_of(const std::string &s)
 // Encode a complete in-memory stream of mixed-category records through a real byte_ring
 // drain into an in-memory sink. Returns the framed byte stream the reader consumes.
 std::vector<std::byte> encode_mixed_stream(record_stream_writer &w, byte_ring &ring,
-                                           in_memory_byte_sink &sink,
-                                           const std::string &payload)
+                                           in_memory_byte_sink &sink, const std::string &payload)
 {
     sink.write(w.begin_stream(7u, make_node(1), topic_capture_rule{}, {}));
 
@@ -88,7 +87,7 @@ std::vector<std::byte> encode_mixed_stream(record_stream_writer &w, byte_ring &r
     message_info info{};
     info.publication_sequence = 42;
     info.source_timestamp     = 100;
-    info.reception_timestamp   = 101;
+    info.reception_timestamp  = 101;
     ring.try_push(w.sample(11u, plexus::wire::fqn_topic_hash("topic/a"), info, 0xC0DEu, true,
                            capture_fidelity::payload, bytes_of(payload)));
 
@@ -126,7 +125,8 @@ TEST_CASE("record stream reserves the wire-record variant", "[record_stream]")
     REQUIRE(record_category::wire_frame != record_category::dropout);
 }
 
-TEST_CASE("record stream populates the wire variant with no ordinal reorder", "[record_stream][wire]")
+TEST_CASE("record stream populates the wire variant with no ordinal reorder",
+          "[record_stream][wire]")
 {
     // The wire tier reuses ordinal 11 — populating the slot adds only the byte source, never
     // an ordinal reorder. The format version reflects the self-describing preamble layout, not
@@ -135,7 +135,8 @@ TEST_CASE("record stream populates the wire variant with no ordinal reorder", "[
     STATIC_REQUIRE(plexus::io::recording::k_format_version == 2u);
 }
 
-TEST_CASE("record stream round-trips a wire frame byte-identically offline", "[record_stream][wire]")
+TEST_CASE("record stream round-trips a wire frame byte-identically offline",
+          "[record_stream][wire]")
 {
     record_stream_writer w;
     byte_ring            ring{64u * 1024u};
@@ -150,16 +151,16 @@ TEST_CASE("record stream round-trips a wire frame byte-identically offline", "[r
         frame.push_back(static_cast<std::byte>(i & 0xffu));
 
     const node_id peer = make_node(9);
-    ring.try_push(w.wire_frame(77u, wire_direction::out, 42u, peer,
-                               std::span<const std::byte>{frame}));
-    ring.try_push(w.wire_frame(78u, wire_direction::in, 43u, peer,
-                               std::span<const std::byte>{frame}));
+    ring.try_push(
+            w.wire_frame(77u, wire_direction::out, 42u, peer, std::span<const std::byte>{frame}));
+    ring.try_push(
+            w.wire_frame(78u, wire_direction::in, 43u, peer, std::span<const std::byte>{frame}));
 
     while(ring.drain(sink, 4096))
         ;
 
-    record_stream_reader        r{sink.bytes()};
-    stream_definitions          defs;
+    record_stream_reader r{sink.bytes()};
+    stream_definitions   defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
     const recovery_result       res = r.recover(out);
@@ -180,7 +181,8 @@ TEST_CASE("record stream round-trips a wire frame byte-identically offline", "[r
     REQUIRE(std::vector<std::byte>(out[1].payload.begin(), out[1].payload.end()) == frame);
 }
 
-TEST_CASE("record stream interleaves a wire frame with the other categories", "[record_stream][wire]")
+TEST_CASE("record stream interleaves a wire frame with the other categories",
+          "[record_stream][wire]")
 {
     record_stream_writer w;
     byte_ring            ring{64u * 1024u};
@@ -194,7 +196,8 @@ TEST_CASE("record stream interleaves a wire frame with the other categories", "[
     ring.try_push(w.sample(11u, plexus::wire::fqn_topic_hash("topic/a"), info, 0u, false,
                            capture_fidelity::payload, bytes_of(std::string{"payload"})));
 
-    std::vector<std::byte> frame{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}};
+    std::vector<std::byte> frame{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE},
+                                 std::byte{0xEF}};
     ring.try_push(w.wire_frame(2u, wire_direction::out, 1u, make_node(9),
                                std::span<const std::byte>{frame}));
 
@@ -206,8 +209,8 @@ TEST_CASE("record stream interleaves a wire frame with the other categories", "[
     while(ring.drain(sink, 4096))
         ;
 
-    record_stream_reader        r{sink.bytes()};
-    stream_definitions          defs;
+    record_stream_reader r{sink.bytes()};
+    stream_definitions   defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
     const recovery_result       res = r.recover(out);
@@ -232,12 +235,13 @@ TEST_CASE("record stream interleaves a wire frame with the other categories", "[
     REQUIRE(trunc[1].category == record_category::wire_frame);
 }
 
-TEST_CASE("record_wire over a saturated ring sheds at the wire tier", "[record_stream][wire][recorder]")
+TEST_CASE("record_wire over a saturated ring sheds at the wire tier",
+          "[record_stream][wire][recorder]")
 {
     in_memory_byte_sink sink;
     std::uint64_t       tick = 0;
     // A tiny ring so a couple of wire frames overflow it before a drain runs.
-    flat_recorder       recorder{sink, 256u, [&tick] { return ++tick; }};
+    flat_recorder recorder{sink, 256u, [&tick] { return ++tick; }};
     recorder.open(make_node(5), topic_capture_rule{});
 
     const node_id          peer = make_node(9);
@@ -260,8 +264,8 @@ TEST_CASE("record_wire over a saturated ring sheds at the wire tier", "[record_s
         ;
     recorder.flush();
 
-    record_stream_reader        r{sink.bytes()};
-    stream_definitions          defs;
+    record_stream_reader r{sink.bytes()};
+    stream_definitions   defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
     REQUIRE(r.recover(out).header_ok);
@@ -285,8 +289,8 @@ TEST_CASE("record stream round-trips mixed categories offline", "[record_stream]
 
     const auto stream = encode_mixed_stream(w, ring, sink, payload);
 
-    record_stream_reader        r{stream};
-    stream_definitions          defs;
+    record_stream_reader r{stream};
+    stream_definitions   defs;
     REQUIRE(r.read_definitions(defs));
     REQUIRE(defs.clock_epoch == 7u);
     REQUIRE(defs.node == make_node(1));
@@ -325,7 +329,8 @@ TEST_CASE("record stream round-trips mixed categories offline", "[record_stream]
     REQUIRE(out[3].type_id.has_value());
 }
 
-TEST_CASE("record stream recovers every complete record after mid-write truncation", "[record_stream]")
+TEST_CASE("record stream recovers every complete record after mid-write truncation",
+          "[record_stream]")
 {
     record_stream_writer w;
     byte_ring            ring{64u * 1024u};
@@ -334,8 +339,8 @@ TEST_CASE("record stream recovers every complete record after mid-write truncati
 
     const auto full = encode_mixed_stream(w, ring, sink, payload);
 
-    record_stream_reader        whole{full};
-    stream_definitions          wd;
+    record_stream_reader whole{full};
+    stream_definitions   wd;
     REQUIRE(whole.read_definitions(wd));
     std::vector<decoded_record> whole_out;
     const std::size_t           complete = whole.recover(whole_out).recovered;
@@ -372,7 +377,8 @@ TEST_CASE("record stream recovers every complete record after mid-write truncati
     REQUIRE(pr.trailing_partial_dropped);
 }
 
-TEST_CASE("recording_sink captures synthetic edges through the recorder to a byte_sink", "[record_stream][recorder]")
+TEST_CASE("recording_sink captures synthetic edges through the recorder to a byte_sink",
+          "[record_stream][recorder]")
 {
     in_memory_byte_sink sink;
     std::uint64_t       tick = 0;
@@ -393,9 +399,9 @@ TEST_CASE("recording_sink captures synthetic edges through the recorder to a byt
     ee.topic_hash = plexus::wire::fqn_topic_hash("sensor/imu");
     tap.on_endpoint("sensor/imu", ee);
 
-    const std::string         body = "imu-sample-bytes";
+    const std::string              body = "imu-sample-bytes";
     const plexus::io::message_view view{bytes_of(body), {}};
-    message_info              info{};
+    message_info                   info{};
     info.publication_sequence = 9;
     tap.on_message_delivered("sensor/imu", info, view);
 
@@ -403,8 +409,8 @@ TEST_CASE("recording_sink captures synthetic edges through the recorder to a byt
         ;
     recorder.flush();
 
-    record_stream_reader        r{sink.bytes()};
-    stream_definitions          defs;
+    record_stream_reader r{sink.bytes()};
+    stream_definitions   defs;
     REQUIRE(r.read_definitions(defs));
     REQUIRE(defs.node == make_node(2));
 
@@ -426,17 +432,19 @@ TEST_CASE("recording_sink captures synthetic edges through the recorder to a byt
     REQUIRE(got == body);
 }
 
-TEST_CASE("record stream round-trips the opaque schema table and crypto position offline", "[record_stream]")
+TEST_CASE("record stream round-trips the opaque schema table and crypto position offline",
+          "[record_stream]")
 {
     record_stream_writer w;
     in_memory_byte_sink  sink;
 
-    const std::array<std::byte, 4> blob_a{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04}};
+    const std::array<std::byte, 4> blob_a{std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
+                                          std::byte{0x04}};
     const std::array<std::byte, 2> blob_b{std::byte{0xFE}, std::byte{0xED}};
 
     const std::array<type_schema_entry, 2> rows{
-        type_schema_entry{0xC0DEu, "vendor.Imu", "enc/a", "Imu.schema", "schema/a", blob_a},
-        type_schema_entry{0xBEEFu, "vendor.Gps", "enc/b", "Gps.schema", "schema/b", blob_b}};
+            type_schema_entry{0xC0DEu, "vendor.Imu", "enc/a", "Imu.schema", "schema/a", blob_a},
+            type_schema_entry{0xBEEFu, "vendor.Gps", "enc/b", "Gps.schema", "schema/b", blob_b}};
 
     sink.write(w.begin_stream(99u, make_node(7), topic_capture_rule{},
                               std::span<const type_schema_entry>{rows},
@@ -459,11 +467,13 @@ TEST_CASE("record stream round-trips the opaque schema table and crypto position
         REQUIRE(got.message_encoding == src.message_encoding);
         REQUIRE(got.schema_name == src.schema_name);
         REQUIRE(got.schema_encoding == src.schema_encoding);
-        REQUIRE(got.schema_data == std::vector<std::byte>(src.schema_data.begin(), src.schema_data.end()));
+        REQUIRE(got.schema_data ==
+                std::vector<std::byte>(src.schema_data.begin(), src.schema_data.end()));
     }
 }
 
-TEST_CASE("record stream recovers an empty schema table with a default crypto position", "[record_stream]")
+TEST_CASE("record stream recovers an empty schema table with a default crypto position",
+          "[record_stream]")
 {
     record_stream_writer w;
     in_memory_byte_sink  sink;

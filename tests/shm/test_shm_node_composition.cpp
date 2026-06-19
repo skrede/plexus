@@ -35,14 +35,14 @@ static_assert(plexus::io::transport_backend<pasio::shm::local_shm_mux,
 TEST_CASE("shm.node_composition a variadic node composes shm+unix+tcp from its borrowed leaves",
           "[shm][mux][node]")
 {
-    using shm_node = plexus::node<pasio::asio_policy, pasio::shm::shm_member,
-                                  pasio::unix_transport, pasio::asio_transport>;
+    using shm_node = plexus::node<pasio::asio_policy, pasio::shm::shm_member, pasio::unix_transport,
+                                  pasio::asio_transport>;
 
-    ::asio::io_context io;
+    ::asio::io_context                   io;
     plexus::shm::posix_shm_region_broker broker;
-    plexus::discovery::static_discovery disc{{}};
+    plexus::discovery::static_discovery  disc{{}};
 
-    auto shm = pasio::shm::make_shm_member(io, broker);
+    auto                  shm = pasio::shm::make_shm_member(io, broker);
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
 
@@ -50,20 +50,21 @@ TEST_CASE("shm.node_composition a variadic node composes shm+unix+tcp from its b
     id[0] = std::byte{0x2A};
     shm_node node{io, disc, id, shm, local, remote, plexus::node_options{}};
 
-    SUCCEED("node<asio_policy, shm_member, unix_transport, asio_transport> instantiated and constructed");
+    SUCCEED("node<asio_policy, shm_member, unix_transport, asio_transport> instantiated and "
+            "constructed");
 }
 
 TEST_CASE("shm.node_composition the shm-bearing node brings up a same-host listener",
           "[shm][mux][node]")
 {
-    using shm_node = plexus::node<pasio::asio_policy, pasio::shm::shm_member,
-                                  pasio::unix_transport, pasio::asio_transport>;
+    using shm_node = plexus::node<pasio::asio_policy, pasio::shm::shm_member, pasio::unix_transport,
+                                  pasio::asio_transport>;
 
-    ::asio::io_context io;
+    ::asio::io_context                   io;
     plexus::shm::posix_shm_region_broker broker;
-    plexus::discovery::static_discovery disc{{}};
+    plexus::discovery::static_discovery  disc{{}};
 
-    auto shm = pasio::shm::make_shm_member(io, broker);
+    auto                  shm = pasio::shm::make_shm_member(io, broker);
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
 

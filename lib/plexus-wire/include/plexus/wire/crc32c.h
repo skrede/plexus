@@ -38,13 +38,13 @@ inline constexpr std::array<std::uint32_t, 256> k_crc32c_table = build_crc32c_ta
 // crc32c(b.subspan(n), crc32c(b.first(n))). The seed defaults to the standard
 // initial value, so crc32c(data) is the one-shot checksum.
 [[nodiscard]] inline std::uint32_t crc32c(std::span<const std::byte> data,
-                                          std::uint32_t seed = 0u) noexcept
+                                          std::uint32_t              seed = 0u) noexcept
 {
     std::uint32_t crc = ~seed;
     for(std::byte b : data)
     {
         const auto index = static_cast<std::uint8_t>(crc ^ std::to_integer<std::uint8_t>(b));
-        crc = detail::k_crc32c_table[index] ^ (crc >> 8);
+        crc              = detail::k_crc32c_table[index] ^ (crc >> 8);
     }
     return ~crc;
 }

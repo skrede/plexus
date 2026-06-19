@@ -21,10 +21,10 @@
 #include <optional>
 #include <algorithm>
 
-namespace pdt = plexus::dtls_test;
-namespace ptls = plexus::tls;
+namespace pdt   = plexus::dtls_test;
+namespace ptls  = plexus::tls;
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 namespace {
 
@@ -36,54 +36,59 @@ namespace {
 // against the real post-handshake DTLS_get_data_mtu (each fragment rides one DTLS record).
 struct frag_link
 {
-    ::asio::io_context io;
-    ptls::tls_credential server_cred;
-    ptls::tls_credential client_cred;
+    ::asio::io_context           io;
+    ptls::tls_credential         server_cred;
+    ptls::tls_credential         client_cred;
     pio::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
     pio::security::cookie_secret client_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server server_sock{io};
-    pasio::udp_server client_sock{io};
+    pasio::udp_server            server_sock{io};
+    pasio::udp_server            client_sock{io};
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
     std::unique_ptr<ptls::dtls_channel> client_ch;
 
-    bool server_complete{false};
-    bool client_complete{false};
+    bool                                server_complete{false};
+    bool                                client_complete{false};
     std::vector<std::vector<std::byte>> server_received;
 
     std::vector<std::vector<std::byte>> client_to_server;
     std::vector<std::vector<std::byte>> server_to_client;
-    int client_to_server_count{0};
+    int                                 client_to_server_count{0};
 
     frag_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id,
               std::size_t max_payload)
-        : server_cred(pdt::pin_one(server_id, client_id.digest))
-        , client_cred(pdt::pin_one(client_id, server_id.digest))
+            : server_cred(pdt::pin_one(server_id, client_id.digest))
+            , client_cred(pdt::pin_one(client_id, server_id.digest))
     {
         server_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
 
-        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), server_sock.port());
-        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"), client_sock.port());
+        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"),
+                                            server_sock.port());
+        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"),
+                                            client_sock.port());
 
-        server_ch = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred,
-                                                         server_cookie, ptls::dtls_channel::role::server,
-                                                         max_payload);
-        client_ch = std::make_unique<ptls::dtls_channel>(io, client_sock, server_ep, client_cred,
-                                                         client_cookie, ptls::dtls_channel::role::client,
-                                                         max_payload);
+        server_ch = std::make_unique<ptls::dtls_channel>(
+                io, server_sock, client_ep, server_cred, server_cookie,
+                ptls::dtls_channel::role::server, max_payload);
+        client_ch = std::make_unique<ptls::dtls_channel>(
+                io, client_sock, server_ep, client_cred, client_cookie,
+                ptls::dtls_channel::role::client, max_payload);
 
-        server_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) {
-            client_to_server.emplace_back(b.begin(), b.end());
-            ++client_to_server_count;
-        });
-        client_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) {
-            server_to_client.emplace_back(b.begin(), b.end());
-        });
+        server_sock.on_datagram(
+                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
+                {
+                    client_to_server.emplace_back(b.begin(), b.end());
+                    ++client_to_server_count;
+                });
+        client_sock.on_datagram(
+                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
+                { server_to_client.emplace_back(b.begin(), b.end()); });
 
         server_ch->on_external_complete([this] { server_complete = true; });
         client_ch->on_external_complete([this] { client_complete = true; });
-        server_ch->on_data([this](std::span<const std::byte> d) { server_received.emplace_back(d.begin(), d.end()); });
+        server_ch->on_data([this](std::span<const std::byte> d)
+                           { server_received.emplace_back(d.begin(), d.end()); });
     }
 
     void pump_relays()
@@ -114,7 +119,9 @@ struct frag_link
 
     // Send a `size`-byte frame (a deterministic byte ramp) and pump until the server has
     // reassembled exactly one message. Returns the reassembled bytes (empty on timeout).
-    std::vector<std::byte> round_trip(std::size_t size, std::chrono::milliseconds timeout = std::chrono::milliseconds{2000})
+    std::vector<std::byte> round_trip(std::size_t               size,
+                                      std::chrono::milliseconds timeout = std::chrono::milliseconds{
+                                              2000})
     {
         server_received.clear();
         client_to_server_count = 0;
@@ -144,7 +151,8 @@ std::vector<std::byte> ramp(std::size_t size)
 
 }
 
-TEST_CASE("dtls.fragment: a large payload fragments across records and reassembles byte-equal over a live session, looped",
+TEST_CASE("dtls.fragment: a large payload fragments across records and reassembles byte-equal over "
+          "a live session, looped",
           "[dtls][fragment]")
 {
     pdt::identity_fixture srv("frag_srv");
@@ -155,9 +163,9 @@ TEST_CASE("dtls.fragment: a large payload fragments across records and reassembl
     // a 24 KiB message splits into ~18 records and reassembles into ONE on_data byte-equal.
     constexpr std::size_t k_payload = 24u * 1024u;
 
-    constexpr int k_iterations = 50;
-    int proven = 0;
-    int max_fragments = 0;
+    constexpr int k_iterations  = 50;
+    int           proven        = 0;
+    int           max_fragments = 0;
 
     for(int i = 0; i < k_iterations; ++i)
     {
@@ -168,7 +176,7 @@ TEST_CASE("dtls.fragment: a large payload fragments across records and reassembl
 
         const auto got = l.round_trip(k_payload);
         REQUIRE(got.size() == k_payload);
-        REQUIRE(got == ramp(k_payload));               // byte-equal reassembly
+        REQUIRE(got == ramp(k_payload)); // byte-equal reassembly
         // The message crossed the wire as MANY records (fragmentation happened), each one
         // DTLS record — never one oversize record, never a reject.
         REQUIRE(l.client_to_server_count > 1);
@@ -179,14 +187,15 @@ TEST_CASE("dtls.fragment: a large payload fragments across records and reassembl
     REQUIRE(max_fragments > 1);
 }
 
-TEST_CASE("dtls.fragment: a frame at the record budget rides ONE record (parity, no fragmentation), looped",
+TEST_CASE("dtls.fragment: a frame at the record budget rides ONE record (parity, no "
+          "fragmentation), looped",
           "[dtls][fragment]")
 {
     pdt::identity_fixture srv("par_srv");
     pdt::identity_fixture cli("par_cli");
 
     constexpr int k_iterations = 50;
-    int proven = 0;
+    int           proven       = 0;
 
     for(int i = 0; i < k_iterations; ++i)
     {
@@ -204,10 +213,10 @@ TEST_CASE("dtls.fragment: a frame at the record budget rides ONE record (parity,
         // crosses as exactly one record. The size is DERIVED from the record MTU, not a stale
         // 1400-era constant, so it tracks the mtu_budget default.
         constexpr std::size_t k_under_budget = ptls::dtls_channel::default_record_mtu - 128u;
-        const auto got = l.round_trip(k_under_budget);
+        const auto            got            = l.round_trip(k_under_budget);
         REQUIRE(got.size() == k_under_budget);
         REQUIRE(got == ramp(k_under_budget));
-        REQUIRE(l.client_to_server_count == 1);        // ONE record: no fragmentation
+        REQUIRE(l.client_to_server_count == 1); // ONE record: no fragmentation
         ++proven;
     }
     REQUIRE(proven == k_iterations);
@@ -221,7 +230,7 @@ namespace {
 // rejecting; each fragment rides one record bounded by the DTLS_get_data_mtu-derived budget.
 struct large_run
 {
-    std::size_t records;
+    std::size_t            records;
     std::vector<std::byte> got;
 };
 
@@ -239,7 +248,8 @@ large_run dtls_large_run(const pdt::identity_fixture &srv, const pdt::identity_f
 
 }
 
-TEST_CASE("dtls.fragment: a 1 MB / 4 MB best-effort burst reassembles byte-equal over the default send queue",
+TEST_CASE("dtls.fragment: a 1 MB / 4 MB best-effort burst reassembles byte-equal over the default "
+          "send queue",
           "[dtls][fragment]")
 {
     pdt::identity_fixture srv("fragbe_srv");
@@ -252,13 +262,13 @@ TEST_CASE("dtls.fragment: a 1 MB / 4 MB best-effort burst reassembles byte-equal
     // refused fragment on the best-effort path is lost forever, with no retransmit to recover
     // it, so the floor is what keeps the message intact). The relay carries every emitted
     // record into the peer's reassembler, which completes the message byte-for-byte.
-    constexpr std::size_t k_one_mb = 1024 * 1024;
+    constexpr std::size_t k_one_mb  = 1024 * 1024;
     constexpr std::size_t k_four_mb = 4 * 1024 * 1024;
     for(std::size_t size : {k_one_mb, k_four_mb})
     {
         const auto r = dtls_large_run(srv, cli, size, std::chrono::milliseconds{8000});
-        REQUIRE(r.records > 1);                          // the message fragmented into many records
-        REQUIRE(r.got.size() == size);                   // and every fragment arrived and reassembled
+        REQUIRE(r.records > 1);        // the message fragmented into many records
+        REQUIRE(r.got.size() == size); // and every fragment arrived and reassembled
     }
 }
 
@@ -273,57 +283,65 @@ namespace {
 // best-effort message that fits the kernel buffers reassembles byte-equal.
 struct large_link
 {
-    static constexpr std::size_t k_socket_buf = 4u * 1024u * 1024u;     // the host rmem_max/wmem_max ceiling
+    static constexpr std::size_t k_socket_buf =
+            4u * 1024u * 1024u; // the host rmem_max/wmem_max ceiling
 
-    ::asio::io_context io;
-    ptls::tls_credential server_cred;
-    ptls::tls_credential client_cred;
+    ::asio::io_context           io;
+    ptls::tls_credential         server_cred;
+    ptls::tls_credential         client_cred;
     pio::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
     pio::security::cookie_secret client_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server server_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
-    pasio::udp_server client_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
+    pasio::udp_server            server_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf,
+                                             k_socket_buf};
+    pasio::udp_server            client_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf,
+                                             k_socket_buf};
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
     std::unique_ptr<ptls::dtls_channel> client_ch;
 
-    bool server_complete{false};
-    bool client_complete{false};
+    bool                                server_complete{false};
+    bool                                client_complete{false};
     std::vector<std::vector<std::byte>> server_received;
-    std::optional<pio::io_error> client_error;
+    std::optional<pio::io_error>        client_error;
 
     std::vector<std::vector<std::byte>> client_to_server;
     std::vector<std::vector<std::byte>> server_to_client;
 
     large_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id,
                std::size_t max_message_bytes)
-        : server_cred(pdt::pin_one(server_id, client_id.digest))
-        , client_cred(pdt::pin_one(client_id, server_id.digest))
+            : server_cred(pdt::pin_one(server_id, client_id.digest))
+            , client_cred(pdt::pin_one(client_id, server_id.digest))
     {
         server_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
-        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), server_sock.port());
-        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"), client_sock.port());
+        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"),
+                                            server_sock.port());
+        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"),
+                                            client_sock.port());
 
         const std::size_t budget = max_message_bytes + 16u * 1024u * 1024u;
-        server_ch = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred,
-                                                         server_cookie, ptls::dtls_channel::role::server,
-                                                         max_message_bytes, ptls::dtls_channel::default_record_mtu,
-                                                         max_message_bytes, budget, std::chrono::milliseconds{60000});
-        client_ch = std::make_unique<ptls::dtls_channel>(io, client_sock, server_ep, client_cred,
-                                                         client_cookie, ptls::dtls_channel::role::client,
-                                                         max_message_bytes, ptls::dtls_channel::default_record_mtu,
-                                                         max_message_bytes, budget, std::chrono::milliseconds{60000});
+        server_ch                = std::make_unique<ptls::dtls_channel>(
+                io, server_sock, client_ep, server_cred, server_cookie,
+                ptls::dtls_channel::role::server, max_message_bytes,
+                ptls::dtls_channel::default_record_mtu, max_message_bytes, budget,
+                std::chrono::milliseconds{60000});
+        client_ch = std::make_unique<ptls::dtls_channel>(
+                io, client_sock, server_ep, client_cred, client_cookie,
+                ptls::dtls_channel::role::client, max_message_bytes,
+                ptls::dtls_channel::default_record_mtu, max_message_bytes, budget,
+                std::chrono::milliseconds{60000});
 
-        server_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) {
-            client_to_server.emplace_back(b.begin(), b.end());
-        });
-        client_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) {
-            server_to_client.emplace_back(b.begin(), b.end());
-        });
+        server_sock.on_datagram(
+                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
+                { client_to_server.emplace_back(b.begin(), b.end()); });
+        client_sock.on_datagram(
+                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
+                { server_to_client.emplace_back(b.begin(), b.end()); });
 
         server_ch->on_external_complete([this] { server_complete = true; });
         client_ch->on_external_complete([this] { client_complete = true; });
-        server_ch->on_data([this](std::span<const std::byte> d) { server_received.emplace_back(d.begin(), d.end()); });
+        server_ch->on_data([this](std::span<const std::byte> d)
+                           { server_received.emplace_back(d.begin(), d.end()); });
         client_ch->on_error([this](pio::io_error e) { client_error = e; });
     }
 
@@ -353,7 +371,9 @@ struct large_link
         }
     }
 
-    std::vector<std::byte> round_trip(std::size_t size, std::chrono::milliseconds timeout = std::chrono::milliseconds{20000})
+    std::vector<std::byte> round_trip(std::size_t               size,
+                                      std::chrono::milliseconds timeout = std::chrono::milliseconds{
+                                              20000})
     {
         server_received.clear();
         client_ch->send(std::span<const std::byte>{ramp(size)});
@@ -371,7 +391,8 @@ struct large_link
 
 }
 
-TEST_CASE("dtls.fragment: the lifted message ceiling fragments a message above the old 4 MiB cap (no reject), and a multi-MiB best-effort message reassembles byte-equal, looped",
+TEST_CASE("dtls.fragment: the lifted message ceiling fragments a message above the old 4 MiB cap "
+          "(no reject), and a multi-MiB best-effort message reassembles byte-equal, looped",
           "[dtls][fragment][envelope16]")
 {
     // The lifted size envelope on the secure-datagram path. The dtls_channel ctor now threads
@@ -387,11 +408,13 @@ TEST_CASE("dtls.fragment: the lifted message ceiling fragments a message above t
     pdt::identity_fixture srv("env_srv");
     pdt::identity_fixture cli("env_cli");
 
-    constexpr std::size_t k_ceiling = 24u * 1024u * 1024u;   // above 16 MB so a 16 MB send is admitted (not rejected)
-    constexpr std::size_t k_reliable = 3u * 1024u * 1024u;   // the host-reliable best-effort ceiling (under rmem_max)
+    constexpr std::size_t k_ceiling =
+            24u * 1024u * 1024u; // above 16 MB so a 16 MB send is admitted (not rejected)
+    constexpr std::size_t k_reliable =
+            3u * 1024u * 1024u; // the host-reliable best-effort ceiling (under rmem_max)
 
     constexpr int k_iterations = 3;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         large_link l(srv, cli, k_ceiling);
@@ -405,7 +428,7 @@ TEST_CASE("dtls.fragment: the lifted message ceiling fragments a message above t
         l.client_error.reset();
         l.client_ch->send(std::span<const std::byte>{ramp(16u * 1024u * 1024u)});
         l.io.poll();
-        REQUIRE(l.client_error != pio::io_error::message_too_large);   // fragmented, not rejected
+        REQUIRE(l.client_error != pio::io_error::message_too_large); // fragmented, not rejected
 
         // (2) The mechanism: a 3 MiB best-effort message reassembles byte-equal.
         const auto got = l.round_trip(k_reliable);

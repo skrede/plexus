@@ -33,22 +33,25 @@ namespace plexus::io {
 //
 // The callback members are bare-call expressions (no `-> std::same_as`), the void
 // verbs are constrained — the same split byte_channel uses.
-template <typename T, typename Policy>
-concept transport_backend = plexus::Policy<Policy> && requires(T &t,
-                                const io::endpoint &ep,
-                                plexus::detail::move_only_function<void(std::unique_ptr<typename Policy::byte_channel_type>)> on_acc,
-                                plexus::detail::move_only_function<void(std::unique_ptr<typename Policy::byte_channel_type>, const io::endpoint &)> on_ch,
-                                plexus::detail::move_only_function<void(const io::endpoint &, io_error)> on_dfail,
-                                plexus::detail::move_only_function<void(io_error)> on_err)
-{
-    { t.listen(ep) }                    -> std::same_as<void>;
-    t.on_accepted(std::move(on_acc));
-    { t.dial(ep) }                      -> std::same_as<void>;
-    t.on_dialed(std::move(on_ch));
-    t.on_dial_failed(std::move(on_dfail));
-    t.on_error(std::move(on_err));
-    { t.close() }                       -> std::same_as<void>;
-};
+template<typename T, typename Policy>
+concept transport_backend = plexus::Policy<Policy> &&
+        requires(T &t, const io::endpoint &ep,
+                 plexus::detail::move_only_function<void(
+                         std::unique_ptr<typename Policy::byte_channel_type>)>
+                         on_acc,
+                 plexus::detail::move_only_function<void(
+                         std::unique_ptr<typename Policy::byte_channel_type>, const io::endpoint &)>
+                                                                                          on_ch,
+                 plexus::detail::move_only_function<void(const io::endpoint &, io_error)> on_dfail,
+                 plexus::detail::move_only_function<void(io_error)>                       on_err) {
+            { t.listen(ep) } -> std::same_as<void>;
+            t.on_accepted(std::move(on_acc));
+            { t.dial(ep) } -> std::same_as<void>;
+            t.on_dialed(std::move(on_ch));
+            t.on_dial_failed(std::move(on_dfail));
+            t.on_error(std::move(on_err));
+            { t.close() } -> std::same_as<void>;
+        };
 
 }
 

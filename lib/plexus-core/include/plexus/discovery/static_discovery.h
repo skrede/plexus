@@ -23,7 +23,7 @@ class static_discovery final : public discovery
 {
 public:
     explicit static_discovery(std::vector<service_info> table)
-        : m_table(std::move(table))
+            : m_table(std::move(table))
     {
     }
 
@@ -46,13 +46,10 @@ public:
         m_browsers.push_back(on_resolved);
     }
 
-    void stop() override
-    {
-        m_browsers.clear();
-    }
+    void stop() override { m_browsers.clear(); }
 
 private:
-    std::vector<service_info> m_table;
+    std::vector<service_info>      m_table;
     std::vector<resolved_callback> m_browsers;
 };
 

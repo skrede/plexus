@@ -16,16 +16,16 @@
 // accelerated same-host substrate. PLEXUS_SAME_HOST_NO_SHM forces the portable AF_UNIX + TCP
 // branch on any host (it lets the non-shm composition be exercised off a Linux build host).
 #if defined(__linux__) && !defined(PLEXUS_SAME_HOST_NO_SHM)
-#define PLEXUS_SAME_HOST_SHM 1
+    #define PLEXUS_SAME_HOST_SHM 1
 #else
-#define PLEXUS_SAME_HOST_SHM 0
+    #define PLEXUS_SAME_HOST_SHM 0
 #endif
 
 #if PLEXUS_SAME_HOST_SHM
-#include "plexus/asio/shm/linux/shm_member.h"
+    #include "plexus/asio/shm/linux/shm_member.h"
 
-#include "plexus/shm/machine_fingerprint.h"
-#include "plexus/shm/posix_shm_region_broker.h"
+    #include "plexus/shm/machine_fingerprint.h"
+    #include "plexus/shm/posix_shm_region_broker.h"
 #endif
 
 #include <asio/io_context.hpp>
@@ -74,23 +74,24 @@ public:
     using set_type = transport_set<shm::shm_member, unix_transport, asio_transport>;
 
     explicit same_host_transports(::asio::io_context &io, std::string_view region = "")
-        : m_broker(), m_set(io, m_broker, std::string{region})
+            : m_broker()
+            , m_set(io, m_broker, std::string{region})
     {
     }
 #else
     using set_type = transport_set<unix_transport, asio_transport>;
 
-    explicit same_host_transports(::asio::io_context &io,
+    explicit same_host_transports(::asio::io_context               &io,
                                   [[maybe_unused]] std::string_view region = "")
-        : m_set(io)
+            : m_set(io)
     {
     }
 #endif
 
-    same_host_transports(const same_host_transports &) = delete;
+    same_host_transports(const same_host_transports &)            = delete;
     same_host_transports &operator=(const same_host_transports &) = delete;
-    same_host_transports(same_host_transports &&) = delete;
-    same_host_transports &operator=(same_host_transports &&) = delete;
+    same_host_transports(same_host_transports &&)                 = delete;
+    same_host_transports &operator=(same_host_transports &&)      = delete;
 
 #if PLEXUS_SAME_HOST_SHM
     // opts is taken BY VALUE: the default-fill is local to this call and never mutates the

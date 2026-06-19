@@ -35,7 +35,7 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 namespace {
 
@@ -55,7 +55,7 @@ std::vector<std::byte> bytes_of(const std::string &s)
 // the accepted server channel (the engine-owned channel the demux keeps routing to).
 struct loopback
 {
-    ::asio::io_context io;
+    ::asio::io_context   io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io};
 
@@ -64,16 +64,18 @@ struct loopback
 
     loopback()
     {
-        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch) { accepted = std::move(ch); });
+        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch)
+                           { accepted = std::move(ch); });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until([this] { return server.port() != 0; });
 
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
+        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
+                         { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
         pump_until([this] { return dialed != nullptr && accepted != nullptr; });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -98,7 +100,8 @@ struct loopback
 
 }
 
-TEST_CASE("udp.teardown: an inbound datagram after the engine destroys a completed accepted channel is safe, looped",
+TEST_CASE("udp.teardown: an inbound datagram after the engine destroys a completed accepted "
+          "channel is safe, looped",
           "[udp][teardown]")
 {
     // Complete the accept, then destroy the engine-owned accepted channel mid-session
@@ -107,7 +110,7 @@ TEST_CASE("udp.teardown: an inbound datagram after the engine destroys a complet
     // so on_datagram -> lookup -> deliver_inbound is a heap-use-after-free (asan). The
     // fix erases the demux entry on teardown, so the datagram resolves to a clean MISS.
     constexpr int k_iterations = 50;
-    int survived = 0;
+    int           survived     = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         loopback h;
@@ -126,25 +129,28 @@ TEST_CASE("udp.teardown: an inbound datagram after the engine destroys a complet
         h.dialed->send(frame);
         h.drain();
 
-        ++survived;   // reaching here without an asan UAF abort is the proof
+        ++survived; // reaching here without an asan UAF abort is the proof
     }
     REQUIRE(survived == k_iterations);
 }
 
-TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a completed channel tears down",
+TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a completed channel "
+          "tears down",
           "[udp][teardown]")
 {
     // After an engine teardown erases the torn-down entry, a genuinely new dialer must
     // still accept cleanly — the teardown erase must not corrupt the demux or the
     // transport's accept path.
-    ::asio::io_context io;
+    ::asio::io_context   io;
     pasio::udp_transport server{io};
 
     std::vector<std::unique_ptr<pasio::udp_channel>> accepted;
-    server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted.push_back(std::move(ch)); });
+    server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch)
+                       { accepted.push_back(std::move(ch)); });
     server.listen({"udp", "127.0.0.1:0"});
 
-    auto pump = [&](auto pred) {
+    auto pump = [&](auto pred)
+    {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while(!pred() && std::chrono::steady_clock::now() < bound)
         {
@@ -155,23 +161,30 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
     };
     pump([&] { return server.port() != 0; });
 
-    pasio::udp_transport first{io};
+    pasio::udp_transport                first{io};
     std::unique_ptr<pasio::udp_channel> first_dialed;
-    first.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { first_dialed = std::move(ch); });
+    first.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
+                    { first_dialed = std::move(ch); });
     first.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
     pump([&] { return first_dialed != nullptr && accepted.size() == 1; });
     REQUIRE(accepted.size() == 1);
 
     // Tear the first accepted channel down, then bring up a fresh dialer.
     accepted.clear();
-    for(int i = 0; i < 256; ++i) { io.poll(); if(io.stopped()) io.restart(); }
+    for(int i = 0; i < 256; ++i)
+    {
+        io.poll();
+        if(io.stopped())
+            io.restart();
+    }
 
-    pasio::udp_transport second{io};
+    pasio::udp_transport                second{io};
     std::unique_ptr<pasio::udp_channel> second_dialed;
-    second.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { second_dialed = std::move(ch); });
+    second.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
+                     { second_dialed = std::move(ch); });
     second.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
     pump([&] { return second_dialed != nullptr && accepted.size() == 1; });
 
     REQUIRE(second_dialed != nullptr);
-    REQUIRE(accepted.size() == 1);   // the new peer accepted cleanly post-teardown
+    REQUIRE(accepted.size() == 1); // the new peer accepted cleanly post-teardown
 }

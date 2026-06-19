@@ -32,13 +32,13 @@ namespace plexus::tls {
 // is started by the transport/listener via start_client_handshake / start_server_handshake.
 struct tls_traits
 {
-    using stream_type = ::asio::ssl::stream<::asio::ip::tcp::socket>;
+    using stream_type       = ::asio::ssl::stream<::asio::ip::tcp::socket>;
     using lowest_layer_type = stream_type::lowest_layer_type;
 
     static io::endpoint format_endpoint(const stream_type &stream)
     {
         std::error_code ec;
-        auto ep = stream.lowest_layer().remote_endpoint(ec);
+        auto            ep = stream.lowest_layer().remote_endpoint(ec);
         if(ec)
             return {"tls", ""};
         return {"tls", ep.address().to_string() + ":" + std::to_string(ep.port())};
@@ -50,34 +50,39 @@ struct tls_traits
     }
 
     static lowest_layer_type &lowest_layer(stream_type &s) noexcept { return s.lowest_layer(); }
-    static const lowest_layer_type &lowest_layer(const stream_type &s) noexcept { return s.lowest_layer(); }
+    static const lowest_layer_type &lowest_layer(const stream_type &s) noexcept
+    {
+        return s.lowest_layer();
+    }
 
     // The TLS lowest layer is the TCP socket, so the buffer + keepalive knobs apply through
     // the same portable/granular path the TCP channel uses (the read loop arms only post-
     // handshake, so the knobs land on the live TCP socket).
-    static void apply_socket_options(lowest_layer_type &sock,
-                                     const plexus::asio::stream_socket_options &opts, std::error_code &ec)
+    static void apply_socket_options(lowest_layer_type                         &sock,
+                                     const plexus::asio::stream_socket_options &opts,
+                                     std::error_code                           &ec)
     {
         plexus::asio::tcp_traits::apply_socket_options(sock, opts, ec);
     }
 };
 
-class tls_channel
-    : public plexus::asio::stream_channel<::asio::ssl::stream<::asio::ip::tcp::socket>,
-                                          tls_traits, detail::tls_bootstrap<::asio::ssl::stream<::asio::ip::tcp::socket>>>
+class tls_channel : public plexus::asio::stream_channel<
+                            ::asio::ssl::stream<::asio::ip::tcp::socket>, tls_traits,
+                            detail::tls_bootstrap<::asio::ssl::stream<::asio::ip::tcp::socket>>>
 {
     using stream_type = ::asio::ssl::stream<::asio::ip::tcp::socket>;
-    using base = plexus::asio::stream_channel<stream_type, tls_traits, detail::tls_bootstrap<stream_type>>;
+    using base        = plexus::asio::stream_channel<stream_type, tls_traits,
+                                                     detail::tls_bootstrap<stream_type>>;
 
 public:
     // Dial mode: unconnected ssl::stream. The transport async_connects the lowest layer, then
     // calls start_client_handshake(host). The credential is REQUIRED (first after io).
     tls_channel(::asio::io_context &io, const tls_credential &cred,
-                wire::stream_inbound_config cfg = {},
-                io::congestion congestion = io::congestion::block,
-                io::egress_capacity egress = io::egress_capacity::bounded_default(),
-                plexus::asio::stream_socket_options opts = {})
-        : base(io, cfg, congestion, egress, opts, cred)
+                wire::stream_inbound_config         cfg        = {},
+                io::congestion                      congestion = io::congestion::block,
+                io::egress_capacity                 egress = io::egress_capacity::bounded_default(),
+                plexus::asio::stream_socket_options opts   = {})
+            : base(io, cfg, congestion, egress, opts, cred)
     {
     }
 
@@ -88,14 +93,14 @@ public:
     // the dial side).
     tls_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected,
                 const tls_credential &cred, wire::stream_inbound_config cfg = {},
-                io::congestion congestion = io::congestion::block,
-                io::egress_capacity egress = io::egress_capacity::bounded_default(),
-                plexus::asio::stream_socket_options opts = {})
-        : base(io, std::move(connected), cfg, congestion, egress, opts, cred)
+                io::congestion                      congestion = io::congestion::block,
+                io::egress_capacity                 egress = io::egress_capacity::bounded_default(),
+                plexus::asio::stream_socket_options opts   = {})
+            : base(io, std::move(connected), cfg, congestion, egress, opts, cred)
     {
     }
 
-    void start_client_handshake(const std::string &host,
+    void start_client_handshake(const std::string                         &host,
                                 plexus::detail::move_only_function<void()> on_ready = {})
     {
         bootstrap().start_client_handshake(*this, host, std::move(on_ready));
@@ -110,6 +115,6 @@ public:
 }
 
 static_assert(plexus::io::byte_channel<plexus::tls::tls_channel>,
-    "tls_channel must satisfy byte_channel — check the seven verbs");
+              "tls_channel must satisfy byte_channel — check the seven verbs");
 
 #endif

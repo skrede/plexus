@@ -22,8 +22,8 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace wire = plexus::wire;
-namespace pio = plexus::io;
+namespace wire  = plexus::wire;
+namespace pio   = plexus::io;
 
 using forwarder = pio::procedure_forwarder<pasio::asio_policy>;
 using wire::rpc_status;
@@ -50,34 +50,33 @@ std::string to_string(std::span<const std::byte> b)
 // control + rpc frames intact through the reassembler.
 struct live_rpc
 {
-    ::asio::io_context io;
-    pasio::asio_listener listener{io};
+    ::asio::io_context                   io;
+    pasio::asio_listener                 listener{io};
     std::unique_ptr<pasio::asio_channel> server_channel;
-    pasio::asio_channel client{io};
+    pasio::asio_channel                  client{io};
 
-    pio::frame_router server_router;   // server: demux inbound rpc_request
-    pio::frame_router client_router;   // client: demux inbound rpc_response
+    pio::frame_router server_router; // server: demux inbound rpc_request
+    pio::frame_router client_router; // client: demux inbound rpc_response
 
-    std::optional<forwarder> provider;     // server side (constructed once accepted)
-    forwarder caller{io, std::chrono::seconds(30)};   // client side; generous so the roundtrip never trips
+    std::optional<forwarder> provider; // server side (constructed once accepted)
+    forwarder                caller{
+            io, std::chrono::seconds(30)}; // client side; generous so the roundtrip never trips
 
     std::optional<forwarder::peer> caller_peer;
     std::optional<forwarder::peer> provider_peer;
 
     live_rpc()
     {
-        listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) {
-            server_channel = std::move(ch);
-        });
+        listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch)
+                             { server_channel = std::move(ch); });
         listener.start({"tcp", "127.0.0.1:0"});
 
         ::asio::ip::tcp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), listener.port());
         client.socket().connect(server_ep);
 
         // Client receive: header-on frame -> router -> rpc_response -> caller.
-        client_router.on_rpc_response([this](std::span<const std::byte> inner) {
-            caller.deliver_response(*caller_peer, inner);
-        });
+        client_router.on_rpc_response([this](std::span<const std::byte> inner)
+                                      { caller.deliver_response(*caller_peer, inner); });
         client.on_data([this](std::span<const std::byte> frame) { client_router.route(frame); });
         client.start_read();
 
@@ -90,16 +89,16 @@ struct live_rpc
         provider_peer.emplace(forwarder::peer{*server_channel, "client-node"});
 
         // Server receive: header-on frame -> router -> rpc_request -> provider.
-        server_router.on_rpc_request([this](std::span<const std::byte> inner) {
-            provider->deliver_request(*provider_peer, inner);
-        });
-        server_channel->on_data([this](std::span<const std::byte> frame) { server_router.route(frame); });
+        server_router.on_rpc_request([this](std::span<const std::byte> inner)
+                                     { provider->deliver_request(*provider_peer, inner); });
+        server_channel->on_data([this](std::span<const std::byte> frame)
+                                { server_router.route(frame); });
         server_channel->start_read();
     }
 
     // Pump the io_context until pred() or a bounded deadline (so a regression fails
     // fast rather than hanging).
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
@@ -119,32 +118,35 @@ TEST_CASE("req/res round-trips over real TCP loopback through plexus-asio, loope
     // one-off pass. The ctest invocation is ALSO repeated >=3 process runs (the
     // CMake verify loop) for cross-process reproducibility.
     constexpr int k_iterations = 100;
-    int resolved = 0;
+    int           resolved     = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         live_rpc h;
 
         std::string seen_param;
-        h.provider->serve("svc", [&](std::span<const std::byte> param, forwarder::reply_fn &reply) {
-            seen_param = to_string(param);
-            const std::string ret = "return-" + seen_param;
-            reply(rpc_status::success, as_bytes(ret));
-        });
+        h.provider->serve("svc",
+                          [&](std::span<const std::byte> param, forwarder::reply_fn &reply)
+                          {
+                              seen_param            = to_string(param);
+                              const std::string ret = "return-" + seen_param;
+                              reply(rpc_status::success, as_bytes(ret));
+                          });
 
-        rpc_status got_status = rpc_status::error;
-        std::string got_return;
+        rpc_status        got_status = rpc_status::error;
+        std::string       got_return;
         const std::string param = "param-" + std::to_string(iter);
         h.caller.call(*h.caller_peer, "svc", as_bytes(param),
-            [&](rpc_status s, std::span<const std::byte> ret) {
-                got_status = s;
-                got_return = to_string(ret);
-            });
+                      [&](rpc_status s, std::span<const std::byte> ret)
+                      {
+                          got_status = s;
+                          got_return = to_string(ret);
+                      });
 
         h.pump_until([&] { return got_status != rpc_status::error; });
 
-        REQUIRE(seen_param == param);                       // provider saw the exact param
+        REQUIRE(seen_param == param); // provider saw the exact param
         REQUIRE(got_status == rpc_status::success);
-        REQUIRE(got_return == "return-" + param);           // caller matched the exact return
+        REQUIRE(got_return == "return-" + param); // caller matched the exact return
         ++resolved;
     }
     REQUIRE(resolved == k_iterations);
@@ -160,36 +162,38 @@ TEST_CASE("concurrent outstanding req/res over real TCP each resolve to their ow
     // reply context being overwritten across dispatches) would surface as a
     // mismatched echo on some call. Asserting each callback resolved to ITS OWN
     // response proves no cross-talk over the wire.
-    constexpr int k_iterations = 100;
+    constexpr int k_iterations  = 100;
     constexpr int m_outstanding = 8;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         live_rpc h;
-        h.provider->serve("echo", [](std::span<const std::byte> param, forwarder::reply_fn &reply) {
-            reply(rpc_status::success, param);
-        });
+        h.provider->serve("echo", [](std::span<const std::byte> param, forwarder::reply_fn &reply)
+                          { reply(rpc_status::success, param); });
 
         std::array<std::string, m_outstanding> got{};
-        std::array<rpc_status, m_outstanding> status{};
+        std::array<rpc_status, m_outstanding>  status{};
         status.fill(rpc_status::error);
         for(int i = 0; i < m_outstanding; ++i)
         {
             const std::string param = "req-" + std::to_string(iter) + "-" + std::to_string(i);
             h.caller.call(*h.caller_peer, "echo", as_bytes(param),
-                [&got, &status, i](rpc_status s, std::span<const std::byte> ret) {
-                    status[i] = s;
-                    got[i] = to_string(ret);
-                });
+                          [&got, &status, i](rpc_status s, std::span<const std::byte> ret)
+                          {
+                              status[i] = s;
+                              got[i]    = to_string(ret);
+                          });
         }
 
         int done = 0;
-        h.pump_until([&] {
-            done = 0;
-            for(int i = 0; i < m_outstanding; ++i)
-                if(status[i] != rpc_status::error)
-                    ++done;
-            return done == m_outstanding;
-        });
+        h.pump_until(
+                [&]
+                {
+                    done = 0;
+                    for(int i = 0; i < m_outstanding; ++i)
+                        if(status[i] != rpc_status::error)
+                            ++done;
+                    return done == m_outstanding;
+                });
 
         for(int i = 0; i < m_outstanding; ++i)
         {

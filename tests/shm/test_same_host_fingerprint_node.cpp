@@ -23,18 +23,18 @@
 // minted node's engine (the configured local_fingerprint the handshake advertises).
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io::shm;
+namespace pio   = plexus::io::shm;
 
 TEST_CASE("shm.same_host_fingerprint_node make_node default-fills the real machine fingerprint",
           "[shm][node][same_host][fingerprint]")
 {
-    ::asio::io_context io;
+    ::asio::io_context                  io;
     plexus::discovery::static_discovery disc{{}};
 
     pasio::same_host_transports ts{io};
 
     plexus::node_id id{};
-    id[0] = std::byte{0x3C};
+    id[0]     = std::byte{0x3C};
     auto node = ts.make_node(disc, id, plexus::node_options{});
 
     const pio::host_fingerprint effective = node.router().local_fingerprint();
@@ -45,7 +45,7 @@ TEST_CASE("shm.same_host_fingerprint_node make_node default-fills the real machi
 TEST_CASE("shm.same_host_fingerprint_node make_node preserves an explicit fingerprint",
           "[shm][node][same_host][fingerprint]")
 {
-    ::asio::io_context io;
+    ::asio::io_context                  io;
     plexus::discovery::static_discovery disc{{}};
 
     pasio::same_host_transports ts{io};
@@ -53,7 +53,7 @@ TEST_CASE("shm.same_host_fingerprint_node make_node preserves an explicit finger
     plexus::node_id id{};
     id[0] = std::byte{0x4D};
 
-    plexus::node_options opts{};
+    plexus::node_options        opts{};
     const pio::host_fingerprint forced{plexus::shm::read_machine_fingerprint().value ^ 0xA5A5A5A5u};
     opts.handshake.local_fingerprint = forced;
     REQUIRE_FALSE(forced.is_null());

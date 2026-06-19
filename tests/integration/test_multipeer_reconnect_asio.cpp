@@ -40,27 +40,31 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 using pio::endpoint;
 using pio::handshake_fsm_config;
 using pio::reconnect_config;
-using engine = pio::routing_engine<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
-using session = pio::peer_session<pasio::asio_policy>;
+using engine =
+        pio::routing_engine<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
+using session       = pio::peer_session<pasio::asio_policy>;
 using msg_forwarder = pio::message_forwarder<pasio::asio_policy>;
 using rpc_forwarder = pio::procedure_forwarder<pasio::asio_policy>;
 
 namespace {
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu;
 
 handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -90,29 +94,31 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
 // session before the transport.
 struct peer_node
 {
-    pasio::asio_transport transport;
-    msg_forwarder messages;
-    rpc_forwarder procedures;
+    pasio::asio_transport                 transport;
+    msg_forwarder                         messages;
+    rpc_forwarder                         procedures;
     pio::peer_context<pasio::asio_policy> ctx;
-    std::optional<session> responder;
-    pasio::asio_channel *accepted{nullptr};
-    plexus::node_id id;
-    endpoint ep;
+    std::optional<session>                responder;
+    pasio::asio_channel                  *accepted{nullptr};
+    plexus::node_id                       id;
+    endpoint                              ep;
 
     peer_node(::asio::io_context &io, std::uint8_t seed)
-        : transport(io)
-        , messages()
-        , procedures(io, k_long_timeout)
-        , id(make_id(seed))
+            : transport(io)
+            , messages()
+            , procedures(io, k_long_timeout)
+            , id(make_id(seed))
     {
-        transport.on_accepted([this, &io, seed](std::unique_ptr<pasio::asio_channel> ch) {
-            accepted = ch.get();
-            ctx.channel = std::move(ch);
-            ctx.node_name = "dialer-node";
-            responder.emplace(ctx, io, make_cfg(seed), k_long_timeout,
-                              messages, procedures, true);
-            responder->start();
-        });
+        transport.on_accepted(
+                [this, &io, seed](std::unique_ptr<pasio::asio_channel> ch)
+                {
+                    accepted      = ch.get();
+                    ctx.channel   = std::move(ch);
+                    ctx.node_name = "dialer-node";
+                    responder.emplace(ctx, io, make_cfg(seed), k_long_timeout, messages, procedures,
+                                      true);
+                    responder->start();
+                });
         transport.listen({"tcp", "127.0.0.1:0"});
         ep = {"tcp", "127.0.0.1:" + std::to_string(transport.port())};
     }
@@ -120,7 +126,11 @@ struct peer_node
     // Close the accepted (responder) socket so the dialer's read loop sees the FIN —
     // the production drop route on the dialer's slot re-dials. Closing the accepted end
     // (not the dialer's own) is what surfaces the drop on the dialer (Pitfall 1).
-    void drop() { if(accepted) accepted->socket().close(); }
+    void drop()
+    {
+        if(accepted)
+            accepted->socket().close();
+    }
 };
 
 // The dialer engine plus its N peers on one io_context. The engine reaches every peer
@@ -128,13 +138,13 @@ struct peer_node
 // leg can arm a bounded dialer. Member ORDER: io_context/transport BEFORE the engine.
 struct multipeer_net
 {
-    ::asio::io_context io;
-    pasio::asio_transport transport{io};
-    engine a;
+    ::asio::io_context                      io;
+    pasio::asio_transport                   transport{io};
+    engine                                  a;
     std::vector<std::unique_ptr<peer_node>> peers;
 
     multipeer_net(std::size_t n, const reconnect_config &a_redial = fast_cfg())
-        : a(transport, io, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, false)
+            : a(transport, io, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, false)
     {
         a.listen({"tcp", "127.0.0.1:0"});
         for(std::size_t i = 0; i < n; ++i)
@@ -148,7 +158,7 @@ struct multipeer_net
 
     peer_node &peer(std::size_t i) { return *peers[i]; }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         // A GENEROUS wall-clock backstop, not a tight deadline: the happy path exits the
@@ -178,13 +188,14 @@ struct multipeer_net
 
 }
 
-TEST_CASE("multipeer asio: concurrent real socket closes re-dial each dropped slot independently; survivors are undisturbed over real TCP",
+TEST_CASE("multipeer asio: concurrent real socket closes re-dial each dropped slot independently; "
+          "survivors are undisturbed over real TCP",
           "[integration][multipeer][asio]")
 {
-    constexpr int k_iterations = 30;
-    constexpr std::size_t k_n = 3;
-    constexpr std::size_t k_dropped = 2;
-    int proven = 0;
+    constexpr int         k_iterations = 30;
+    constexpr std::size_t k_n          = 3;
+    constexpr std::size_t k_dropped    = 2;
+    int                   proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         multipeer_net net(k_n);
@@ -195,7 +206,7 @@ TEST_CASE("multipeer asio: concurrent real socket closes re-dial each dropped sl
         std::array<std::uint32_t, k_n> attempts{};
         for(std::size_t i = 0; i < k_n; ++i)
         {
-            epoch[i] = net.a.session_for(net.peer(i).id)->session_id();
+            epoch[i]    = net.a.session_for(net.peer(i).id)->session_id();
             attempts[i] = net.a.attempt_count(net.peer(i).id);
         }
 
@@ -206,13 +217,15 @@ TEST_CASE("multipeer asio: concurrent real socket closes re-dial each dropped sl
             net.peer(i).drop();
 
         // Each dropped slot re-handshakes a FRESH epoch on its own backoff.
-        net.pump_until([&] {
-            for(std::size_t i = 0; i < k_dropped; ++i)
-                if(!(net.a.is_connected(net.peer(i).id)
-                     && net.a.session_for(net.peer(i).id)->session_id() != epoch[i]))
-                    return false;
-            return true;
-        });
+        net.pump_until(
+                [&]
+                {
+                    for(std::size_t i = 0; i < k_dropped; ++i)
+                        if(!(net.a.is_connected(net.peer(i).id) &&
+                             net.a.session_for(net.peer(i).id)->session_id() != epoch[i]))
+                            return false;
+                    return true;
+                });
         net.settle();
 
         for(std::size_t i = 0; i < k_dropped; ++i)
@@ -233,13 +246,14 @@ TEST_CASE("multipeer asio: concurrent real socket closes re-dial each dropped sl
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("multipeer asio: one peer crossing a surrender bound is is_dead while every live peer stays connected over real TCP",
+TEST_CASE("multipeer asio: one peer crossing a surrender bound is is_dead while every live peer "
+          "stays connected over real TCP",
           "[integration][multipeer][asio]")
 {
-    constexpr int k_iterations = 20;
-    constexpr std::size_t k_n = 3;
+    constexpr int           k_iterations   = 20;
+    constexpr std::size_t   k_n            = 3;
     constexpr std::uint32_t k_max_attempts = 3;
-    int proven = 0;
+    int                     proven         = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         multipeer_net net(k_n, bounded_cfg(k_max_attempts));

@@ -37,7 +37,8 @@ constexpr locality operator&(locality a, locality b) noexcept
 
 constexpr locality operator~(locality a) noexcept
 {
-    return static_cast<locality>(~static_cast<std::uint8_t>(a) & static_cast<std::uint8_t>(locality::any));
+    return static_cast<locality>(~static_cast<std::uint8_t>(a) &
+                                 static_cast<std::uint8_t>(locality::any));
 }
 
 // The fan-out predicate: a mask delivers to a tier iff they share at least one bit.

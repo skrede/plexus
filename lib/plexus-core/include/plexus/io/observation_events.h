@@ -32,9 +32,9 @@ struct rpc_view
 // wire-stable status byte, and the borrowed return view.
 struct rpc_reply_view
 {
-    std::uint64_t      correlation_id{};
-    wire::rpc_status   status{wire::rpc_status::success};
-    message_view       value{};
+    std::uint64_t    correlation_id{};
+    wire::rpc_status status{wire::rpc_status::success};
+    message_view     value{};
 };
 
 // The QoS transition a subscriber attach resolved to. The edges name where in the

@@ -63,44 +63,50 @@ namespace {
 
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 struct manual_policy
 {
-    using executor_type = inproc_executor<manual_clock> &;
+    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
-    using timer_type = inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using transport_t = inproc_transport<manual_clock>;
-using engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
+using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;
-constexpr std::uint64_t k_tag = 0x5151;
-constexpr const char *k_topic = "topic";
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr std::uint64_t k_tag          = 0x5151;
+constexpr const char   *k_topic        = "topic";
 
 handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -119,17 +125,18 @@ reconnect_config forever_cfg()
 struct counted_payload
 {
     std::string value;
-    int release_calls{0};
-    loan_slot slot{};
+    int         release_calls{0};
+    loan_slot   slot{};
 };
 
 object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
 {
-    p.slot.object = &p.value;
-    p.slot.refs = 1;
-    p.slot.release = [](loan_slot *s) {
-        auto *owner = reinterpret_cast<counted_payload *>(
-            reinterpret_cast<std::byte *>(s) - offsetof(counted_payload, slot));
+    p.slot.object  = &p.value;
+    p.slot.refs    = 1;
+    p.slot.release = [](loan_slot *s)
+    {
+        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) -
+                                                          offsetof(counted_payload, slot));
         ++owner->release_calls;
     };
     return object_carrier{0, tag, &p.value, 0, 0, &p.slot};
@@ -147,23 +154,25 @@ struct lifecycle_only_observer final : plexus::io::observer
 // production mutator.
 struct capture_net
 {
-    inproc_bus<manual_clock> bus;
+    inproc_bus<manual_clock>      bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
-    transport_t transport_b{ex, bus};
+    transport_t                   transport_a{ex, bus};
+    transport_t                   transport_b{ex, bus};
 
     engine a;
     engine b;
 
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint ep_a{"inproc", "node-a"};
-    endpoint ep_b{"inproc", "node-b"};
+    endpoint        ep_a{"inproc", "node-a"};
+    endpoint        ep_b{"inproc", "node-b"};
 
     int encode_calls{0};
 
     capture_net()
-        : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, /*eager=*/true)
-        , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, /*eager=*/true)
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed,
+                /*eager=*/true)
+            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed,
+                /*eager=*/true)
     {
         a.listen(ep_a);
         b.listen(ep_b);
@@ -180,10 +189,9 @@ struct capture_net
     plexus::io::peer_session<manual_policy> *b_live_inbound()
     {
         plexus::io::peer_session<manual_policy> *found = nullptr;
-        b.registry().for_each_connected([&](const plexus::node_id &,
-                                            plexus::io::peer_session<manual_policy> &s) {
-            found = &s;
-        });
+        b.registry().for_each_connected(
+                [&](const plexus::node_id &, plexus::io::peer_session<manual_policy> &s)
+                { found = &s; });
         return found;
     }
 
@@ -193,13 +201,15 @@ struct capture_net
     {
         auto *b_inbound = b_live_inbound();
         REQUIRE(b_inbound != nullptr);
-        b.messages().publish_object(k_topic, make_carrier(p, k_tag),
-                                    [&] {
-                                        ++encode_calls;
-                                        return std::span<const std::byte>{
-                                            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
-                                    },
-                                    b_inbound->session_id());
+        b.messages().publish_object(
+                k_topic, make_carrier(p, k_tag),
+                [&]
+                {
+                    ++encode_calls;
+                    return std::span<const std::byte>{
+                            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
+                },
+                b_inbound->session_id());
         drive();
     }
 };
@@ -221,27 +231,32 @@ int publish_k(capture_net &net, int k)
 
 }
 
-TEST_CASE("capture gate: a metadata-only declaration forces no loan-path encode", "[integration][capture]")
+TEST_CASE("capture gate: a metadata-only declaration forces no loan-path encode",
+          "[integration][capture]")
 {
     constexpr int k = 5;
     manual_clock::reset();
     capture_net net;
-    net.b.capture().set_topic(topic_hash(), topic_capture_rule{.fidelity = capture_fidelity::metadata});
+    net.b.capture().set_topic(topic_hash(),
+                              topic_capture_rule{.fidelity = capture_fidelity::metadata});
 
     REQUIRE(publish_k(net, k) == 0);
 }
 
-TEST_CASE("capture gate: a payload-fidelity topic forces exactly one encode per publish", "[integration][capture]")
+TEST_CASE("capture gate: a payload-fidelity topic forces exactly one encode per publish",
+          "[integration][capture]")
 {
     constexpr int k = 5;
     manual_clock::reset();
     capture_net net;
-    net.b.capture().set_topic(topic_hash(), topic_capture_rule{.fidelity = capture_fidelity::payload});
+    net.b.capture().set_topic(topic_hash(),
+                              topic_capture_rule{.fidelity = capture_fidelity::payload});
 
     REQUIRE(publish_k(net, k) == k);
 }
 
-TEST_CASE("capture gate: an unselected topic with no observer forces no encode", "[integration][capture]")
+TEST_CASE("capture gate: an unselected topic with no observer forces no encode",
+          "[integration][capture]")
 {
     constexpr int k = 5;
     manual_clock::reset();
@@ -250,7 +265,8 @@ TEST_CASE("capture gate: an unselected topic with no observer forces no encode",
     REQUIRE(publish_k(net, k) == 0);
 }
 
-TEST_CASE("capture gate: wire on an inproc topic degrades to payload (one encode per publish)", "[integration][capture]")
+TEST_CASE("capture gate: wire on an inproc topic degrades to payload (one encode per publish)",
+          "[integration][capture]")
 {
     constexpr int k = 4;
     manual_clock::reset();
@@ -262,20 +278,23 @@ TEST_CASE("capture gate: wire on an inproc topic degrades to payload (one encode
     REQUIRE(publish_k(net, k) == k);
 }
 
-TEST_CASE("capture gate: count_n decimation keeps one encode per N publishes", "[integration][capture]")
+TEST_CASE("capture gate: count_n decimation keeps one encode per N publishes",
+          "[integration][capture]")
 {
-    constexpr int k = 9;
+    constexpr int           k = 9;
     constexpr std::uint32_t n = 3;
     manual_clock::reset();
     capture_net net;
-    net.b.capture().set_topic(topic_hash(), topic_capture_rule{.fidelity = capture_fidelity::payload,
-                                                               .mode = decimation_mode::count_n,
-                                                               .decimation = n});
+    net.b.capture().set_topic(topic_hash(),
+                              topic_capture_rule{.fidelity   = capture_fidelity::payload,
+                                                 .mode       = decimation_mode::count_n,
+                                                 .decimation = n});
 
     REQUIRE(publish_k(net, k) == k / static_cast<int>(n));
 }
 
-TEST_CASE("capture gate: the default time_window mechanism admits one record per elapsed window", "[integration][capture]")
+TEST_CASE("capture gate: the default time_window mechanism admits one record per elapsed window",
+          "[integration][capture]")
 {
     // The integration loan path reads the wall clock for the time-window test (the publish
     // path's own now_ns), which is not deterministically drivable from a test. The mechanism
@@ -283,13 +302,14 @@ TEST_CASE("capture gate: the default time_window mechanism admits one record per
     // assertion is exact and free of wall-clock flakiness. Looped to satisfy the no-single-run
     // discipline for a clock-adjacent assertion.
     constexpr std::uint64_t window_ns = 1000;
-    const std::uint64_t hash = topic_hash();
+    const std::uint64_t     hash      = topic_hash();
     for(int run = 0; run < 3; ++run)
     {
         plexus::io::capture_policy policy;
-        policy.set_topic(hash, topic_capture_rule{.fidelity = capture_fidelity::payload,
-                                                  .mode = decimation_mode::time_window,
-                                                  .window_ns = window_ns});
+        policy.set_topic(hash,
+                         topic_capture_rule{.fidelity  = capture_fidelity::payload,
+                                            .mode      = decimation_mode::time_window,
+                                            .window_ns = window_ns});
 
         // Three windows, three records inside each at a fixed instant. The first record of each
         // window is admitted; the two in-window records that follow are not.
@@ -305,15 +325,16 @@ TEST_CASE("capture gate: the default time_window mechanism admits one record per
     }
 }
 
-TEST_CASE("capture gate: the folded should_emit matches the dual gate across the observer x selected matrix",
+TEST_CASE("capture gate: the folded should_emit matches the dual gate across the observer x "
+          "selected matrix",
           "[integration][capture]")
 {
     SECTION("unselected topic WITH a data-path observer still posts the metadata floor")
     {
         manual_clock::reset();
-        capture_net net;
+        capture_net        net;
         recording_observer rec;
-        net.b.add_observer(rec);   // observes_data_path() == true
+        net.b.add_observer(rec); // observes_data_path() == true
         net.drive();
 
         counted_payload p;
@@ -321,14 +342,15 @@ TEST_CASE("capture gate: the folded should_emit matches the dual gate across the
         net.publish_once(p);
 
         REQUIRE(rec.for_topic(k_topic).published == 1);
-        REQUIRE(net.encode_calls == 0);   // observer-presence admits the floor, not a payload encode
+        REQUIRE(net.encode_calls == 0); // observer-presence admits the floor, not a payload encode
     }
 
     SECTION("selected payload topic with NO observer still posts and encodes")
     {
         manual_clock::reset();
         capture_net net;
-        net.b.capture().set_topic(topic_hash(), topic_capture_rule{.fidelity = capture_fidelity::payload});
+        net.b.capture().set_topic(topic_hash(),
+                                  topic_capture_rule{.fidelity = capture_fidelity::payload});
 
         counted_payload p;
         p.value = "select-no-obs";
@@ -340,8 +362,8 @@ TEST_CASE("capture gate: the folded should_emit matches the dual gate across the
     SECTION("unselected topic with no observer posts nothing and encodes nothing")
     {
         manual_clock::reset();
-        capture_net net;
-        recording_observer rec;   // registered ONLY as a tally; never added to the engine
+        capture_net        net;
+        recording_observer rec; // registered ONLY as a tally; never added to the engine
 
         counted_payload p;
         p.value = "neither";
@@ -352,17 +374,18 @@ TEST_CASE("capture gate: the folded should_emit matches the dual gate across the
     }
 }
 
-TEST_CASE("capture gate: a lifecycle-only observer never admits payload posts on an unselected topic",
-          "[integration][capture]")
+TEST_CASE(
+        "capture gate: a lifecycle-only observer never admits payload posts on an unselected topic",
+        "[integration][capture]")
 {
     constexpr int k = 4;
     manual_clock::reset();
-    capture_net net;
+    capture_net             net;
     lifecycle_only_observer life;
-    net.b.add_observer(life);   // observes_data_path() == false -> NOT counted as data-path-present
+    net.b.add_observer(life); // observes_data_path() == false -> NOT counted as data-path-present
     net.drive();
 
-    recording_observer rec;     // a separate data-path tally, NOT registered, to confirm no post
+    recording_observer rec; // a separate data-path tally, NOT registered, to confirm no post
     REQUIRE(publish_k(net, k) == 0);
     REQUIRE(rec.for_topic(k_topic).published == 0);
 }

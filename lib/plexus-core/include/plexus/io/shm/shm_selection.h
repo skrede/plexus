@@ -55,9 +55,9 @@ enum class same_host_medium : std::uint8_t
 // wire_fallback AND message_bytes > the capped slot capacity routes to the wire
 // (stream); a wire_fallback message that fits the cap rides the ring. Pure: it reads
 // the LOCAL message size against the LOCALLY-resolved cap, never anything wire-supplied.
-[[nodiscard]] inline same_host_medium route_message_medium(ring_geometry_mode mode,
-                                                          std::size_t message_bytes,
-                                                          std::uint64_t capped_slot_capacity) noexcept
+[[nodiscard]] inline same_host_medium
+route_message_medium(ring_geometry_mode mode, std::size_t message_bytes,
+                     std::uint64_t capped_slot_capacity) noexcept
 {
     if(mode != ring_geometry_mode::wire_fallback)
         return same_host_medium::shm;
@@ -88,8 +88,8 @@ enum class same_host_medium : std::uint8_t
 // a declared max_payload sizes the ring to that width; a subscriber-only upgrade (no
 // max_payload, i.e. 0) falls back to the default ring geometry. Returns the value to
 // pass to shm_topic_registry::acquire, where 0 already means "default geometry".
-[[nodiscard]] inline std::uint32_t upgrade_ring_max_payload(ring_direction direction,
-                                                            std::uint32_t publisher_max_payload) noexcept
+[[nodiscard]] inline std::uint32_t
+upgrade_ring_max_payload(ring_direction direction, std::uint32_t publisher_max_payload) noexcept
 {
     return direction == ring_direction::request ? publisher_max_payload : 0u;
 }

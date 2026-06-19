@@ -8,8 +8,8 @@
 // and MUST OUTLIVE every node it mints:
 //
 //   asio::io_context io;
-//   plexus::shm::posix_shm_region_broker broker;                  // owns the rings; outlives the set
-//   plexus::asio::transport_set<plexus::asio::shm::shm_member,
+//   plexus::shm::posix_shm_region_broker broker;                  // owns the rings; outlives the
+//   set plexus::asio::transport_set<plexus::asio::shm::shm_member,
 //                               plexus::asio::unix_transport,
 //                               plexus::asio::asio_transport> ts{io, broker};
 //   auto node = ts.make_node<plexus::asio::asio_policy>(disc, id, plexus::node_options{});
@@ -67,15 +67,15 @@ namespace pasio = plexus::asio;
 
 int main()
 {
-    ::asio::io_context io;
+    ::asio::io_context                   io;
     plexus::shm::posix_shm_region_broker broker;
-    plexus::discovery::static_discovery disc{{}};
+    plexus::discovery::static_discovery  disc{{}};
 
-    pasio::transport_set<pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport>
-        ts{io, broker};
+    pasio::transport_set<pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport> ts{
+            io, broker};
 
     plexus::node_id id{};
-    id[0] = std::byte{0x2A};
+    id[0]     = std::byte{0x2A};
     auto node = ts.make_node<pasio::asio_policy>(disc, id, plexus::node_options{});
     std::cout << "shm-bearing node minted from a transport_set (shm + unix + tcp leaves)\n";
 

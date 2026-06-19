@@ -25,12 +25,13 @@ namespace pasio = plexus::asio;
 TEST_CASE("a variadic node composes a unix+tcp node from its borrowed leaves",
           "[integration][mux][node]")
 {
-    using multi_node = plexus::node<pasio::asio_policy, pasio::unix_transport, pasio::asio_transport>;
+    using multi_node =
+            plexus::node<pasio::asio_policy, pasio::unix_transport, pasio::asio_transport>;
 
-    ::asio::io_context io;
+    ::asio::io_context                  io;
     plexus::discovery::static_discovery disc{{}};
-    pasio::unix_transport local{io};
-    pasio::asio_transport remote{io};
+    pasio::unix_transport               local{io};
+    pasio::asio_transport               remote{io};
 
     plexus::node_id id{};
     id[0] = std::byte{0x2A};

@@ -28,7 +28,9 @@ namespace plexus {
 // The default projection: an empty tag selecting the streamable text floor. It satisfies
 // no value_projection, so a value_logger with no supplied projection formats through the
 // operator<< floor for a streamable value type.
-struct no_projection {};
+struct no_projection
+{
+};
 
 // The typed value_logger: a subscriber<Codec> whose success branch, instead of invoking
 // a user callback, formats one decoded value to a printable record (a CSV row, a
@@ -47,17 +49,17 @@ struct no_projection {};
 // are borrowed). The decode + format state lives in a heap block the handle owns; the
 // node's stored adapter references it by raw pointer and is retired before the block is
 // freed. Move-only; a moved-from handle is inert.
-template <typename Codec, typename Projection>
+template<typename Codec, typename Projection>
 class value_logger
 {
 public:
     using value_type = typename Codec::value_type;
 
-    template <typename Policy, typename... NodeTs>
-    value_logger(node<Policy, NodeTs...> &n, std::string_view fqn,
-                 const value_logger_options &opts, Codec codec = {}, Projection projection = {})
-        : m_state(std::make_unique<state>(std::move(codec), std::move(projection),
-                                          opts.format, opts.out))
+    template<typename Policy, typename... NodeTs>
+    value_logger(node<Policy, NodeTs...> &n, std::string_view fqn, const value_logger_options &opts,
+                 Codec codec = {}, Projection projection = {})
+            : m_state(std::make_unique<state>(std::move(codec), std::move(projection), opts.format,
+                                              opts.out))
     {
         static_assert(typed_codec<Codec>,
                       "plexus: a value_logger needs a codec satisfying typed_codec "
@@ -68,32 +70,33 @@ public:
                       "value_projection (column names + emit_fields/emit_json) or be "
                       "streamable to an ostream (the operator<< text floor).");
 
-        const auto identity = resolve_identity(m_state->codec, opts.type_id);
-        io::subscriber_qos qos = opts.qos;
-        qos.posture = opts.posture;
-        qos.wants_message_info = true;
+        const auto         identity = resolve_identity(m_state->codec, opts.type_id);
+        io::subscriber_qos qos      = opts.qos;
+        qos.posture                 = opts.posture;
+        qos.wants_message_info      = true;
 
-        state *st = m_state.get();
-        auto bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info)
+        state *st            = m_state.get();
+        auto   bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info)
         { st->on_bytes(bytes, info); };
 
-        io::object_dispatch dispatch = [st](const io::object_carrier &carrier, const io::message_info &info)
+        io::object_dispatch dispatch =
+                [st](const io::object_carrier &carrier, const io::message_info &info)
         { st->on_object(carrier, info); };
 
         io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto rid = seam.register_subscriber(
-            seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id,
-            &io::detail::type_key<value_type>, std::move(dispatch), std::nullopt);
+        const auto        rid  = seam.register_subscriber(
+                seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id,
+                &io::detail::type_key<value_type>, std::move(dispatch), std::nullopt);
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
     // The count of inbound frames whose decode failed — dropped, never a partial line.
     [[nodiscard]] std::size_t decode_failed() const noexcept { return m_state->decode_failed; }
 
-    value_logger(value_logger &&) noexcept = default;
+    value_logger(value_logger &&) noexcept            = default;
     value_logger &operator=(value_logger &&) noexcept = default;
 
-    value_logger(const value_logger &) = delete;
+    value_logger(const value_logger &)            = delete;
     value_logger &operator=(const value_logger &) = delete;
 
     ~value_logger()
@@ -111,20 +114,20 @@ private:
     // counter, and the CSV header-emitted-once latch.
     struct state
     {
-        Codec        codec;
-        Projection   projection;
-        log_format   format;
+        Codec         codec;
+        Projection    projection;
+        log_format    format;
         std::ostream &out;
-        value_type   slot{};
-        std::string  buffer;
-        std::size_t  decode_failed{};
-        bool         header_written{};
+        value_type    slot{};
+        std::string   buffer;
+        std::size_t   decode_failed{};
+        bool          header_written{};
 
         state(Codec c, Projection p, log_format fmt, std::ostream &o)
-            : codec(std::move(c))
-            , projection(std::move(p))
-            , format(fmt)
-            , out(o)
+                : codec(std::move(c))
+                , projection(std::move(p))
+                , format(fmt)
+                , out(o)
         {
         }
 
@@ -157,9 +160,9 @@ private:
         {
             switch(format)
             {
-            case log_format::csv:  format_csv(info);  break;
-            case log_format::jsonl: format_json();    break;
-            case log_format::text: format_text(info); break;
+                case log_format::csv:   format_csv(info); break;
+                case log_format::jsonl: format_json(); break;
+                case log_format::text:  format_text(info); break;
             }
         }
 

@@ -27,16 +27,16 @@ TEST_CASE("mtu_budget admits a caller override (required-with-default)", "[io][m
 
 TEST_CASE("mtu_budget oversize-boundary arithmetic matches the reject gates", "[io][mtu_budget]")
 {
-    const mtu_budget budget{.max_payload = 64};
+    const mtu_budget      budget{.max_payload = 64};
     constexpr std::size_t overhead = plexus::wire::udp_envelope_overhead;
 
     // best_effort gate: size + overhead > max_payload.
     const std::size_t best_effort_max = budget.max_payload - overhead;
-    REQUIRE(best_effort_max + overhead <= budget.max_payload);              // fits at the boundary
-    REQUIRE((best_effort_max + 1) + overhead > budget.max_payload);         // one past rejects
+    REQUIRE(best_effort_max + overhead <= budget.max_payload);      // fits at the boundary
+    REQUIRE((best_effort_max + 1) + overhead > budget.max_payload); // one past rejects
 
     // reliable gate: size + overhead + 1 (the kind marker) > max_payload.
     const std::size_t reliable_max = budget.max_payload - overhead - 1;
-    REQUIRE(reliable_max + overhead + 1 <= budget.max_payload);             // fits at the boundary
-    REQUIRE((reliable_max + 1) + overhead + 1 > budget.max_payload);        // one past rejects
+    REQUIRE(reliable_max + overhead + 1 <= budget.max_payload);      // fits at the boundary
+    REQUIRE((reliable_max + 1) + overhead + 1 > budget.max_payload); // one past rejects
 }

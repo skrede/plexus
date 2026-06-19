@@ -19,7 +19,7 @@ using namespace plexus::wire;
 namespace {
 
 // Big-endian length-prefix builders shared across u8 / u16 / u32 / u64 cases.
-template <typename UIntT>
+template<typename UIntT>
 std::vector<std::byte> pack_prefix_be(UIntT length)
 {
     std::vector<std::byte> out(sizeof(UIntT));
@@ -28,7 +28,7 @@ std::vector<std::byte> pack_prefix_be(UIntT length)
     return out;
 }
 
-template <typename UIntT>
+template<typename UIntT>
 std::vector<std::byte> with_payload(UIntT length, std::size_t payload_bytes,
                                     std::byte fill = std::byte{0xAB})
 {
@@ -37,27 +37,24 @@ std::vector<std::byte> with_payload(UIntT length, std::size_t payload_bytes,
     return out;
 }
 
-template <typename UIntT>
-void expect_some(std::span<const std::byte> input,
-                 std::size_t start_consumed,
-                 std::size_t element_size,
-                 std::size_t expect_consumed_after,
+template<typename UIntT>
+void expect_some(std::span<const std::byte> input, std::size_t start_consumed,
+                 std::size_t element_size, std::size_t expect_consumed_after,
                  std::size_t expect_payload_bytes)
 {
     std::size_t consumed = start_consumed;
-    auto result = read_length_prefixed<UIntT>(input, consumed, element_size);
+    auto        result   = read_length_prefixed<UIntT>(input, consumed, element_size);
     REQUIRE(result.has_value());
     CHECK(consumed == expect_consumed_after);
     CHECK(result->size() == expect_payload_bytes);
 }
 
-template <typename UIntT>
-void expect_none(std::span<const std::byte> input,
-                 std::size_t start_consumed,
+template<typename UIntT>
+void expect_none(std::span<const std::byte> input, std::size_t start_consumed,
                  std::size_t element_size)
 {
     std::size_t consumed = start_consumed;
-    auto result = read_length_prefixed<UIntT>(input, consumed, element_size);
+    auto        result   = read_length_prefixed<UIntT>(input, consumed, element_size);
     CHECK_FALSE(result.has_value());
     CHECK(consumed == start_consumed);
 }
@@ -66,8 +63,7 @@ void expect_none(std::span<const std::byte> input,
 
 // u16 table. Eleven sections covering bounds, multiply-overflow, and
 // start_consumed offsetting.
-TEST_CASE("read_length_prefixed<uint16_t> bounds + overflow table",
-          "[wire][length_prefixed]")
+TEST_CASE("read_length_prefixed<uint16_t> bounds + overflow table", "[wire][length_prefixed]")
 {
     SECTION("empty input + non-zero consumed")
     {
@@ -108,7 +104,7 @@ TEST_CASE("read_length_prefixed<uint16_t> bounds + overflow table",
     SECTION("non-zero start_consumed, prefix at offset")
     {
         std::vector<std::byte> v(2, std::byte{0xCC});
-        auto p = with_payload<std::uint16_t>(2, 2);
+        auto                   p = with_payload<std::uint16_t>(2, 2);
         v.insert(v.end(), p.begin(), p.end());
         expect_some<std::uint16_t>(v, 2, 1, 6, 2);
     }
@@ -118,8 +114,7 @@ TEST_CASE("read_length_prefixed<uint16_t> bounds + overflow table",
     }
 }
 
-TEST_CASE("read_length_prefixed<uint8_t> bounds table",
-          "[wire][length_prefixed]")
+TEST_CASE("read_length_prefixed<uint8_t> bounds table", "[wire][length_prefixed]")
 {
     SECTION("u8 prefix length=0")
     {
@@ -135,8 +130,7 @@ TEST_CASE("read_length_prefixed<uint8_t> bounds table",
     }
 }
 
-TEST_CASE("read_length_prefixed<uint32_t> bounds + overflow table",
-          "[wire][length_prefixed]")
+TEST_CASE("read_length_prefixed<uint32_t> bounds + overflow table", "[wire][length_prefixed]")
 {
     SECTION("u32 prefix length=0")
     {
@@ -156,8 +150,7 @@ TEST_CASE("read_length_prefixed<uint32_t> bounds + overflow table",
     }
 }
 
-TEST_CASE("read_length_prefixed<uint64_t> bounds + overflow table",
-          "[wire][length_prefixed]")
+TEST_CASE("read_length_prefixed<uint64_t> bounds + overflow table", "[wire][length_prefixed]")
 {
     SECTION("u64 prefix length=0")
     {
@@ -173,8 +166,8 @@ TEST_CASE("read_length_prefixed<uint64_t> bounds + overflow table",
         // host (size_t = uint64_t). Helper must reject via the pre-multiply
         // overflow guard. Payload bytes are immaterial (rejection happens
         // before the remaining-bytes check).
-        const auto sentinel = static_cast<std::uint64_t>(
-            (std::numeric_limits<std::size_t>::max() / 4u) + 1u);
+        const auto sentinel =
+                static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max() / 4u) + 1u);
         expect_none<std::uint64_t>(pack_prefix_be<std::uint64_t>(sentinel), 0, 4);
     }
 }

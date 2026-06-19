@@ -19,10 +19,7 @@ inline bool operator==(const endpoint &a, const endpoint &b) noexcept
     return a.scheme == b.scheme && a.address == b.address;
 }
 
-inline bool operator!=(const endpoint &a, const endpoint &b) noexcept
-{
-    return !(a == b);
-}
+inline bool operator!=(const endpoint &a, const endpoint &b) noexcept { return !(a == b); }
 
 }
 

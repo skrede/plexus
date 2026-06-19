@@ -64,8 +64,8 @@ class udp_transport
 {
 public:
     using endpoint_type = ::asio::ip::udp::endpoint;
-    using arq_type = io::detail::udp_handshake_arq<udp_policy>;
-    using hs_type = io::detail::udp_hs_type;
+    using arq_type      = io::detail::udp_handshake_arq<udp_policy>;
+    using hs_type       = io::detail::udp_hs_type;
 
     // global_default is the node-level per-MESSAGE size ceiling and reassembly_budget the
     // always-on aggregate reassembly-memory cap — the two operator-facing message-size
@@ -77,38 +77,45 @@ public:
     // floors the live cap at the per-message ceiling, so a single within-ceiling message's
     // fragment backlog is always admissible regardless of this knob (the ceiling, not this
     // cap, is the message-size authority); raise it only to allow extra backlog past one message.
-    explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload,
-                           arq_type::schedule hs_ladder = arq_type::default_ladder,
-                           io::detail::udp_arq_config arq_cfg = {},
-                           io::congestion congestion = io::congestion::block,
+    explicit udp_transport(::asio::io_context &io,
+                           std::size_t         max_payload       = udp_channel::default_max_payload,
+                           arq_type::schedule  hs_ladder         = arq_type::default_ladder,
+                           io::detail::udp_arq_config arq_cfg    = {},
+                           io::congestion             congestion = io::congestion::block,
                            std::size_t max_peers = detail::udp_inbound_demux::default_max_peers,
                            std::size_t so_sndbuf = udp_server::default_so_sndbuf,
                            std::size_t so_rcvbuf = udp_server::default_so_rcvbuf,
-                           std::size_t send_queue_bytes = udp_server::default_send_queue_bytes,
-                           std::size_t global_default = io::global_default_max_message_bytes,
-                           std::size_t reassembly_budget = io::reassembly_memory_budget,
+                           std::size_t send_queue_bytes   = udp_server::default_send_queue_bytes,
+                           std::size_t global_default     = io::global_default_max_message_bytes,
+                           std::size_t reassembly_budget  = io::reassembly_memory_budget,
                            std::size_t backpressure_bytes = udp_channel::default_backpressure_bytes,
                            std::chrono::milliseconds reassembly_timeout =
-                               udp_channel::reassembler_type::config{}.per_message_timeout)
-        : m_io(io)
-        , m_server(io, congestion, send_queue_bytes, so_sndbuf, so_rcvbuf)
-        , m_max_peers(max_peers)
-        , m_demux(max_peers)
-        , m_max_payload(max_payload)
-        , m_global_default(global_default)
-        , m_reassembly_budget(reassembly_budget)
-        , m_backpressure_bytes(backpressure_bytes)
-        , m_reassembly_timeout(reassembly_timeout)
-        , m_hs_ladder(hs_ladder)
-        , m_arq_cfg(arq_cfg)
-        , m_congestion(congestion)
-        , m_dials(make_defer_destroy())
+                                   udp_channel::reassembler_type::config{}.per_message_timeout)
+            : m_io(io)
+            , m_server(io, congestion, send_queue_bytes, so_sndbuf, so_rcvbuf)
+            , m_max_peers(max_peers)
+            , m_demux(max_peers)
+            , m_max_payload(max_payload)
+            , m_global_default(global_default)
+            , m_reassembly_budget(reassembly_budget)
+            , m_backpressure_bytes(backpressure_bytes)
+            , m_reassembly_timeout(reassembly_timeout)
+            , m_hs_ladder(hs_ladder)
+            , m_arq_cfg(arq_cfg)
+            , m_congestion(congestion)
+            , m_dials(make_defer_destroy())
     {
-        m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { on_datagram(from, bytes); });
-        m_server.on_error([this](io::io_error e) { if(m_on_error) m_on_error(e); });
+        m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes)
+                             { on_datagram(from, bytes); });
+        m_server.on_error(
+                [this](io::io_error e)
+                {
+                    if(m_on_error)
+                        m_on_error(e);
+                });
     }
 
-    udp_transport(const udp_transport &) = delete;
+    udp_transport(const udp_transport &)            = delete;
     udp_transport &operator=(const udp_transport &) = delete;
 
     ~udp_transport() { close(); }
@@ -120,23 +127,41 @@ public:
     // over bare UDP. A generic multiplexer reads these at compile time to route over a pack.
     using channel_type = udp_channel;
     static constexpr std::array<std::string_view, 2> mux_schemes{"udp", "udpr"};
-    static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
+    static constexpr io::transport_kind              mux_tier = io::transport_kind::remote;
 
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> cb) { m_on_accepted = std::move(cb); }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
-    void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> cb)
+    {
+        m_on_accepted = std::move(cb);
+    }
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>,
+                                                           const io::endpoint &)>
+                           cb)
+    {
+        m_on_dialed = std::move(cb);
+    }
+    void
+    on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
+    {
+        m_on_dial_failed = std::move(cb);
+    }
 
     // The drop-observability seam (null by default — zero cost when unobserved). The owner
     // installs the engine's posted drop_sink; an inbound flood refused by the per-peer
     // demux cap emits demux_refused here. The sink POSTS, so the spoof-flood refusal site
     // never fires the observer synchronously (the cap exists to bound exactly that flood).
-    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
+    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
+    {
+        m_on_drop = std::move(cb);
+    }
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
 
     void listen(const io::endpoint &ep)
     {
         std::error_code pec;
-        auto bind_ep = detail::parse_udp(ep.address, pec);
+        auto            bind_ep = detail::parse_udp(ep.address, pec);
         if(pec)
             return report_error(detail::map_error(pec));
         m_server.start(bind_ep);
@@ -150,24 +175,27 @@ public:
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;
-        auto dest = detail::parse_udp(ep.address, pec);
+        auto            dest = detail::parse_udp(ep.address, pec);
         if(pec)
             return report_dial_fail(ep, detail::map_error(pec));
 
-        ensure_bound(dest.protocol());      // a dial-only transport still needs a bound socket to send/recv
+        ensure_bound(
+                dest.protocol()); // a dial-only transport still needs a bound socket to send/recv
 
-        const auto mode = mode_of_scheme(ep.scheme);
-        const std::uint16_t isn = next_isn();   // the dialer's per-session ISN, advertised in the request
-        auto ch = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg,
-                                                m_congestion, m_backpressure_bytes, mode, isn,
-                                                m_global_default, m_reassembly_budget, m_reassembly_timeout);
+        const auto          mode = mode_of_scheme(ep.scheme);
+        const std::uint16_t isn =
+                next_isn(); // the dialer's per-session ISN, advertised in the request
+        auto ch = std::make_unique<udp_channel>(
+                m_io, m_server, dest, m_max_payload, m_arq_cfg, m_congestion, m_backpressure_bytes,
+                mode, isn, m_global_default, m_reassembly_budget, m_reassembly_timeout);
         auto *raw = ch.get();
         m_demux.insert(dest, raw);
         wire_teardown(*raw, dest);
 
-        auto arq = std::make_unique<arq_type>(m_io, m_hs_ladder);
+        auto  arq     = std::make_unique<arq_type>(m_io, m_hs_ladder);
         auto *raw_arq = arq.get();
-        raw_arq->on_transmit([this, dest, mode, isn] { send_handshake(dest, hs_type::request, mode, isn); });
+        raw_arq->on_transmit([this, dest, mode, isn]
+                             { send_handshake(dest, hs_type::request, mode, isn); });
         raw_arq->on_established([this, ep, raw] { resolve_dial(ep, raw); });
         raw_arq->on_timeout([this, ep, raw] { fail_dial(ep, raw); });
 
@@ -201,9 +229,7 @@ private:
     dial_registry::defer_destroy make_defer_destroy()
     {
         return [this](std::unique_ptr<udp_channel> ch)
-        {
-            ::asio::post(m_io, [ch = std::move(ch)]() mutable { ch.reset(); });
-        };
+        { ::asio::post(m_io, [ch = std::move(ch)]() mutable { ch.reset(); }); };
     }
 
     // Bind the shared socket to an ephemeral local endpoint if listen() has not
@@ -231,7 +257,8 @@ private:
             if(hs->type == hs_type::response)
                 resolve_paired(ch);
             else
-                send_handshake(from, hs_type::response, hs->mode, hs->initial_seq);   // re-ack a retransmit, echo mode+ISN
+                send_handshake(from, hs_type::response, hs->mode,
+                               hs->initial_seq); // re-ack a retransmit, echo mode+ISN
             return;
         }
         ch->deliver_inbound(bytes);
@@ -250,21 +277,22 @@ private:
         // Bind the dialer's advertised ISN: the acceptor's receiver (reorder buffer) must
         // expect the peer's sender ISN, and the response ECHOES it (symmetric, like mode) so
         // both ends start the cumulative-ack edge from the same negotiated sequence.
-        auto ch = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg,
-                                                m_congestion, m_backpressure_bytes,
-                                                hs->mode, hs->initial_seq,
-                                                m_global_default, m_reassembly_budget, m_reassembly_timeout);
+        auto  ch  = std::make_unique<udp_channel>(m_io, m_server, from, m_max_payload, m_arq_cfg,
+                                                  m_congestion, m_backpressure_bytes, hs->mode,
+                                                  hs->initial_seq, m_global_default,
+                                                  m_reassembly_budget, m_reassembly_timeout);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
         {
             if(m_on_drop)
-                m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::demux_refused,
+                m_on_drop(io::detail::drop_event{.cause     = io::detail::drop_cause::demux_refused,
                                                  .transport = io::locality::remote});
-            return;                                        // peer cap reached: drop the flood
+            return; // peer cap reached: drop the flood
         }
         wire_teardown(*raw, from);
         m_dials.insert_accepted(raw, std::move(ch));
-        send_handshake(from, hs_type::response, hs->mode, hs->initial_seq); // resolve the dialer's ARQ, echo mode+ISN
+        send_handshake(from, hs_type::response, hs->mode,
+                       hs->initial_seq); // resolve the dialer's ARQ, echo mode+ISN
         if(m_on_accepted)
             m_on_accepted(adopt_accepted(raw));
     }
@@ -281,7 +309,7 @@ private:
         // ARQ-closure capture, which the erase destroys — re-emitting the freed reference
         // is a use-after-free (an on_dialed consumer that copies the endpoint reads it).
         const io::endpoint dialed = ep;
-        auto ch = m_dials.resolve(raw);
+        auto               ch     = m_dials.resolve(raw);
         if(!ch)
             return;
         if(m_on_dialed)
@@ -295,7 +323,7 @@ private:
         // the channel (whose dest the demux is keyed on) is moved out by fail().
         const io::endpoint failed = ep;
         m_demux.erase(raw->dest());
-        m_dials.fail(raw);                  // routes the freed channel through the deferred-destroy sink
+        m_dials.fail(raw); // routes the freed channel through the deferred-destroy sink
         report_dial_fail(failed, io::io_error::timed_out);
     }
 
@@ -317,9 +345,10 @@ private:
         ch.on_teardown([this, key, raw = &ch] { m_demux.erase_if_matches(key, raw); });
     }
 
-    void send_handshake(const endpoint_type &dest, hs_type type,
-                        io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort,
-                        std::uint16_t initial_seq = 0)
+    void
+    send_handshake(const endpoint_type &dest, hs_type type,
+                   io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort,
+                   std::uint16_t                initial_seq = 0)
     {
         io::detail::encode_handshake_into(m_hs_scratch, type, mode, initial_seq);
         m_server.send_to(m_hs_scratch, dest);
@@ -328,7 +357,8 @@ private:
     // The scheme -> channel-mode classifier: "udpr" requests the reliable-datagram ARQ
     // class; every other scheme (including bare "udp") is best_effort. The mirror of the
     // mux selector's reliability_of_scheme, applied at the datagram member's dial face.
-    [[nodiscard]] static io::detail::udp_channel_mode mode_of_scheme(const std::string &scheme) noexcept
+    [[nodiscard]] static io::detail::udp_channel_mode
+    mode_of_scheme(const std::string &scheme) noexcept
     {
         return scheme == "udpr" ? io::detail::udp_channel_mode::reliable_datagram
                                 : io::detail::udp_channel_mode::best_effort;
@@ -350,34 +380,44 @@ private:
         return static_cast<std::uint16_t>(m_isn_rng() % 0xFFFFu) + 1u;
     }
 
-    void report_dial_fail(const io::endpoint &ep, io::io_error e) { if(m_on_dial_failed) m_on_dial_failed(ep, e); }
-    void report_error(io::io_error e) { if(m_on_error) m_on_error(e); }
+    void report_dial_fail(const io::endpoint &ep, io::io_error e)
+    {
+        if(m_on_dial_failed)
+            m_on_dial_failed(ep, e);
+    }
+    void report_error(io::io_error e)
+    {
+        if(m_on_error)
+            m_on_error(e);
+    }
 
-    ::asio::io_context &m_io;
-    udp_server m_server;
-    std::size_t m_max_peers;
+    ::asio::io_context       &m_io;
+    udp_server                m_server;
+    std::size_t               m_max_peers;
     detail::udp_inbound_demux m_demux;
-    std::size_t m_max_payload;               // per-FRAGMENT MTU budget (NOT the message ceiling)
-    std::size_t m_global_default;            // node-level per-MESSAGE size ceiling
-    std::size_t m_reassembly_budget;         // aggregate reassembly-memory cap (always-on)
-    std::size_t m_backpressure_bytes;        // per-channel bounded send queue for windowed fragments
-    std::chrono::milliseconds m_reassembly_timeout;   // per-message reassembly reclaim window
-    arq_type::schedule m_hs_ladder;
+    std::size_t               m_max_payload;    // per-FRAGMENT MTU budget (NOT the message ceiling)
+    std::size_t               m_global_default; // node-level per-MESSAGE size ceiling
+    std::size_t               m_reassembly_budget; // aggregate reassembly-memory cap (always-on)
+    std::size_t m_backpressure_bytes; // per-channel bounded send queue for windowed fragments
+    std::chrono::milliseconds  m_reassembly_timeout; // per-message reassembly reclaim window
+    arq_type::schedule         m_hs_ladder;
     io::detail::udp_arq_config m_arq_cfg;
-    io::congestion m_congestion;
-    std::random_device m_isn_rng;            // OS CSPRNG; one draw per dial/accept (no hot-path RNG, no stream state)
+    io::congestion             m_congestion;
+    std::random_device
+            m_isn_rng; // OS CSPRNG; one draw per dial/accept (no hot-path RNG, no stream state)
     std::vector<std::byte> m_hs_scratch;
-    dial_registry m_dials;                  // the half-open dial table + the accepted table
+    dial_registry          m_dials; // the half-open dial table + the accepted table
     plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
+    plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)>
+                                                                                 m_on_dialed;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)>     m_on_drop;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(io::io_error)>                       m_on_error;
 };
 
 }
 
 static_assert(plexus::io::transport_backend<plexus::asio::udp_transport, plexus::asio::udp_policy>,
-    "udp_transport must satisfy transport_backend — check the listen/dial/on_* surface");
+              "udp_transport must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif

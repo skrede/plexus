@@ -55,7 +55,7 @@ constexpr std::size_t k_low_water = io::fragmentation_limits::max_message_size;
 // copying it (the span-only TLS/inproc fallback); only THEN is pop_highest called, so the
 // scheduler never frees a node the socket is mid-writing — drop_oldest only ever recycles a
 // slot still resident in a band, never one already handed to channel.send().
-template <typename Channel, typename Policy>
+template<typename Channel, typename Policy>
     requires plexus::Policy<Policy>
 class egress_scheduler
 {
@@ -82,17 +82,14 @@ public:
         else
         {
             const drop_cause cause =
-                m_queues[key_of(ch)].enqueue_with_verdict(band, congestion, std::move(frame));
+                    m_queues[key_of(ch)].enqueue_with_verdict(band, congestion, std::move(frame));
             drain(ch);
             return cause;
         }
     }
 
     // Drop a departed peer's bands (peer-death cleanup, called beside the registry removal).
-    void remove(Channel &ch)
-    {
-        m_queues.erase(key_of(ch));
-    }
+    void remove(Channel &ch) { m_queues.erase(key_of(ch)); }
 
     // The per-(destination, band) overflow counters, mirroring asio_channel::dropped_count():
     // each reads the destination's band counter, returning 0 for a destination with no queue.

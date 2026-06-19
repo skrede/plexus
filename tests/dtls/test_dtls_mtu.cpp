@@ -22,10 +22,10 @@
 #include <chrono>
 #include <cstddef>
 
-namespace pdt = plexus::dtls_test;
-namespace ptls = plexus::tls;
+namespace pdt   = plexus::dtls_test;
+namespace ptls  = plexus::tls;
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 namespace {
 
@@ -36,57 +36,67 @@ namespace {
 // binds in the min(configured_cap, DTLS_get_data_mtu) reject.
 struct mtu_link
 {
-    ::asio::io_context io;
-    ptls::tls_credential server_cred;
-    ptls::tls_credential client_cred;
+    ::asio::io_context                  io;
+    ptls::tls_credential                server_cred;
+    ptls::tls_credential                client_cred;
     plexus::io::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
     plexus::io::security::cookie_secret client_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server server_sock{io};
-    pasio::udp_server client_sock{io};
+    pasio::udp_server                   server_sock{io};
+    pasio::udp_server                   client_sock{io};
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
     std::unique_ptr<ptls::dtls_channel> client_ch;
 
-    bool server_complete{false};
-    bool client_complete{false};
+    bool                                server_complete{false};
+    bool                                client_complete{false};
     std::vector<std::vector<std::byte>> server_received;
-    bool client_too_large{false};
+    bool                                client_too_large{false};
 
     std::vector<std::vector<std::byte>> client_to_server;
     std::vector<std::vector<std::byte>> server_to_client;
-    int client_records{0};                       // client->server DTLS records since the last send
+    int client_records{0}; // client->server DTLS records since the last send
 
     mtu_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id,
              std::size_t max_payload,
              std::size_t record_mtu = ptls::dtls_channel::default_record_mtu)
-        : server_cred(pdt::pin_one(server_id, client_id.digest))
-        , client_cred(pdt::pin_one(client_id, server_id.digest))
+            : server_cred(pdt::pin_one(server_id, client_id.digest))
+            , client_cred(pdt::pin_one(client_id, server_id.digest))
     {
         server_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
 
-        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), server_sock.port());
-        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"), client_sock.port());
+        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"),
+                                            server_sock.port());
+        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"),
+                                            client_sock.port());
 
-        server_ch = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred,
-                                                         server_cookie, ptls::dtls_channel::role::server,
-                                                         max_payload, record_mtu);
-        client_ch = std::make_unique<ptls::dtls_channel>(io, client_sock, server_ep, client_cred,
-                                                         client_cookie, ptls::dtls_channel::role::client,
-                                                         max_payload, record_mtu);
+        server_ch = std::make_unique<ptls::dtls_channel>(
+                io, server_sock, client_ep, server_cred, server_cookie,
+                ptls::dtls_channel::role::server, max_payload, record_mtu);
+        client_ch = std::make_unique<ptls::dtls_channel>(
+                io, client_sock, server_ep, client_cred, client_cookie,
+                ptls::dtls_channel::role::client, max_payload, record_mtu);
 
-        server_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) {
-            client_to_server.emplace_back(b.begin(), b.end());
-            ++client_records;
-        });
-        client_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) {
-            server_to_client.emplace_back(b.begin(), b.end());
-        });
+        server_sock.on_datagram(
+                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
+                {
+                    client_to_server.emplace_back(b.begin(), b.end());
+                    ++client_records;
+                });
+        client_sock.on_datagram(
+                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
+                { server_to_client.emplace_back(b.begin(), b.end()); });
 
         server_ch->on_external_complete([this] { server_complete = true; });
         client_ch->on_external_complete([this] { client_complete = true; });
-        server_ch->on_data([this](std::span<const std::byte> d) { server_received.emplace_back(d.begin(), d.end()); });
-        client_ch->on_error([this](pio::io_error e) { if(e == pio::io_error::message_too_large) client_too_large = true; });
+        server_ch->on_data([this](std::span<const std::byte> d)
+                           { server_received.emplace_back(d.begin(), d.end()); });
+        client_ch->on_error(
+                [this](pio::io_error e)
+                {
+                    if(e == pio::io_error::message_too_large)
+                        client_too_large = true;
+                });
     }
 
     void pump_relays()
@@ -117,15 +127,17 @@ struct mtu_link
 
     // Send a frame of `size` bytes and pump until the server receives it OR an oversize
     // error fired. Returns true if the server received exactly one datagram of `size`.
-    bool send_and_deliver(std::size_t size, std::chrono::milliseconds timeout = std::chrono::milliseconds{2000})
+    bool send_and_deliver(std::size_t               size,
+                          std::chrono::milliseconds timeout = std::chrono::milliseconds{2000})
     {
         server_received.clear();
         client_too_large = false;
-        client_records = 0;
+        client_records   = 0;
         std::vector<std::byte> frame(size, std::byte{0xab});
         client_ch->send(std::span<const std::byte>{frame});
         auto bound = std::chrono::steady_clock::now() + timeout;
-        while(server_received.empty() && !client_too_large && std::chrono::steady_clock::now() < bound)
+        while(server_received.empty() && !client_too_large &&
+              std::chrono::steady_clock::now() < bound)
         {
             io.poll();
             if(io.stopped())
@@ -152,9 +164,9 @@ struct mtu_link
     std::size_t probe_one_record_ceiling(std::size_t lo, std::size_t hi)
     {
         if(!delivered_in_one_record(lo))
-            return 0;                                  // floor not single-record: window wrong
+            return 0; // floor not single-record: window wrong
         std::size_t single = lo;
-        std::size_t multi = hi;
+        std::size_t multi  = hi;
         while(multi - single > 1)
         {
             const std::size_t mid = single + (multi - single) / 2;
@@ -169,15 +181,16 @@ struct mtu_link
 
 }
 
-TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fragments byte-equal, looped",
+TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fragments byte-equal, "
+          "looped",
           "[dtls][mtu]")
 {
     pdt::identity_fixture srv("mtu_srv");
     pdt::identity_fixture cli("mtu_cli");
 
     constexpr int k_iterations = 100;
-    int proven = 0;
-    std::size_t observed_cap = 0;
+    int           proven       = 0;
+    std::size_t   observed_cap = 0;
 
     for(int i = 0; i < k_iterations; ++i)
     {
@@ -195,12 +208,13 @@ TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fra
         // strictly below the configured budget. The bound is DERIVED from the record MTU
         // and a worst-case overhead ceiling, not a hardcoded number, so it tracks the
         // mtu_budget default rather than restating a stale 1400-era constant.
-        constexpr std::size_t k_record_mtu = ptls::dtls_channel::default_record_mtu;
-        constexpr std::size_t k_max_record_overhead =
-            37u + plexus::wire::udp_envelope_overhead;  // DTLS 1.2 AEAD-GCM record + udp envelope
+        constexpr std::size_t k_record_mtu          = ptls::dtls_channel::default_record_mtu;
+        constexpr std::size_t k_max_record_overhead = 37u +
+                plexus::wire::udp_envelope_overhead; // DTLS 1.2 AEAD-GCM record + udp envelope
         const std::size_t cap = l.probe_one_record_ceiling(100, k_record_mtu);
-        REQUIRE(cap >= k_record_mtu - k_max_record_overhead);  // within the overhead band below the record MTU
-        REQUIRE(cap < k_record_mtu);                           // strictly below (overhead subtracted)
+        REQUIRE(cap >= k_record_mtu -
+                        k_max_record_overhead); // within the overhead band below the record MTU
+        REQUIRE(cap < k_record_mtu);            // strictly below (overhead subtracted)
         observed_cap = cap;
 
         // The boundary frame is delivered intact AS ONE record (no fragmentation): the
@@ -219,8 +233,9 @@ TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fra
     REQUIRE(observed_cap > 0);
 }
 
-TEST_CASE("dtls.mtu: a low configured cap binds the single-record ceiling below the data-MTU, looped",
-          "[dtls][mtu]")
+TEST_CASE(
+        "dtls.mtu: a low configured cap binds the single-record ceiling below the data-MTU, looped",
+        "[dtls][mtu]")
 {
     pdt::identity_fixture srv("cap_srv");
     pdt::identity_fixture cli("cap_cli");
@@ -231,7 +246,7 @@ TEST_CASE("dtls.mtu: a low configured cap binds the single-record ceiling below 
     constexpr std::size_t k_cap = 200;
 
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         mtu_link l(srv, cli, k_cap);
@@ -252,7 +267,8 @@ TEST_CASE("dtls.mtu: a low configured cap binds the single-record ceiling below 
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("dtls.mtu: a record MTU raised above the legacy 2048 drain buffer rides one record intact, looped",
+TEST_CASE("dtls.mtu: a record MTU raised above the legacy 2048 drain buffer rides one record "
+          "intact, looped",
           "[dtls][mtu]")
 {
     pdt::identity_fixture srv("big_mtu_srv");
@@ -263,9 +279,10 @@ TEST_CASE("dtls.mtu: a record MTU raised above the legacy 2048 drain buffer ride
     // so a record_mtu above 2048 silently corrupted records. Sizing the buffer from the
     // configured record_mtu fixes both. Drive a record budget well above 2048 and assert a
     // frame near that ceiling crosses as exactly ONE record, delivered byte-equal.
-    constexpr std::size_t k_record_mtu = 4096;   // above the legacy 2048 buffer, below the 8192 ceiling
+    constexpr std::size_t k_record_mtu =
+            4096; // above the legacy 2048 buffer, below the 8192 ceiling
     constexpr int k_iterations = 50;
-    int proven = 0;
+    int           proven       = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         mtu_link l(srv, cli, /*max_payload=*/100000, k_record_mtu);
@@ -275,11 +292,11 @@ TEST_CASE("dtls.mtu: a record MTU raised above the legacy 2048 drain buffer ride
 
         // The single-record ceiling now tracks the raised record MTU (was pinned under 2048
         // by the old buffer). It lands within the AEAD-GCM + envelope overhead band below it.
-        constexpr std::size_t k_max_record_overhead =
-            37u + plexus::wire::udp_envelope_overhead;
-        const std::size_t cap = l.probe_one_record_ceiling(2200, k_record_mtu);
-        REQUIRE(cap > 2048);                                   // exceeds the legacy fixed buffer
-        REQUIRE(cap >= k_record_mtu - k_max_record_overhead);  // within the overhead band below the record MTU
+        constexpr std::size_t k_max_record_overhead = 37u + plexus::wire::udp_envelope_overhead;
+        const std::size_t     cap = l.probe_one_record_ceiling(2200, k_record_mtu);
+        REQUIRE(cap > 2048); // exceeds the legacy fixed buffer
+        REQUIRE(cap >= k_record_mtu -
+                        k_max_record_overhead); // within the overhead band below the record MTU
         REQUIRE(cap < k_record_mtu);
 
         // The ceiling frame (> 2048 B) delivers intact as ONE record — pre-fix it was
@@ -290,7 +307,8 @@ TEST_CASE("dtls.mtu: a record MTU raised above the legacy 2048 drain buffer ride
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("dtls.mtu: a frame beyond the bounded max-message size is rejected via message_too_large, looped",
+TEST_CASE("dtls.mtu: a frame beyond the bounded max-message size is rejected via "
+          "message_too_large, looped",
           "[dtls][mtu]")
 {
     pdt::identity_fixture srv("big_srv");
@@ -303,7 +321,7 @@ TEST_CASE("dtls.mtu: a frame beyond the bounded max-message size is rejected via
     // configurable node default (global_default_max_message_bytes) the channel is minted with,
     // not the old hardcoded fragmentation cap — a frame one byte past it is refused.
     constexpr int k_iterations = 30;
-    int proven = 0;
+    int           proven       = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         mtu_link l(srv, cli, /*max_payload=*/100000);
@@ -314,7 +332,7 @@ TEST_CASE("dtls.mtu: a frame beyond the bounded max-message size is rejected via
         REQUIRE_FALSE(l.send_and_deliver(pio::global_default_max_message_bytes + 1));
         REQUIRE(l.client_too_large);
         REQUIRE(l.server_received.empty());
-        REQUIRE(l.client_records == 0);                // nothing crossed the wire
+        REQUIRE(l.client_records == 0); // nothing crossed the wire
         ++proven;
     }
     REQUIRE(proven == k_iterations);

@@ -44,18 +44,18 @@ namespace plexus::io {
 // (its on_redial tears that slot's session down; the next on_dialed rebuilds it);
 // the registry never iterates the map to reconnect the set — set-wide reconnect is
 // a deferred concern, and the per-slot seam is kept minimal.
-template <typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
+template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class peer_session_registry
 {
 public:
     using session_type = peer_session<Policy>;
-    using driver_type = reconnect<Policy, Transport, Clock>;
+    using driver_type  = reconnect<Policy, Transport, Clock>;
     using channel_type = typename Policy::byte_channel_type;
 
     peer_session_registry(Transport &transport, session_build_context<Policy> &build)
-        : m_transport(transport)
-        , m_build(build)
+            : m_transport(transport)
+            , m_build(build)
     {
     }
 
@@ -68,7 +68,8 @@ public:
         if(m_slots.find(id) != m_slots.end())
             return;
         if(endpoint_claimed(id, ep))
-            return m_build.logger.warn("plexus: dial endpoint already claimed by another peer — slot not created");
+            return m_build.logger.warn(
+                    "plexus: dial endpoint already claimed by another peer — slot not created");
         auto slot = std::make_unique<slot_block>(m_transport, m_build, id, ep, node_name);
         wire_redial(*slot, id);
         wire_dead(*slot, id);
@@ -102,12 +103,12 @@ public:
     // slot is inserted into the map BEFORE the session is built and started, so any
     // wiring that looks the slot up by id finds it. No driver re-dials an accepted
     // slot — the dialer owns the redial.
-    template <typename PreBuild = std::nullptr_t>
+    template<typename PreBuild = std::nullptr_t>
     node_id accept_session(std::unique_ptr<channel_type> channel, PreBuild &&pre_build = nullptr)
     {
         const node_id inbound_id = next_inbound_id();
-        auto slot = std::make_unique<slot_block>(m_transport, m_build, inbound_id,
-                                                 endpoint{}, node_name_of(inbound_id));
+        auto slot = std::make_unique<slot_block>(m_transport, m_build, inbound_id, endpoint{},
+                                                 node_name_of(inbound_id));
         auto [it, inserted] = m_slots.emplace(inbound_id, std::move(slot));
         if(!inserted)
         {
@@ -143,8 +144,8 @@ public:
     bool is_connected(const node_id &id) const
     {
         auto it = m_slots.find(id);
-        return it != m_slots.end() && it->second->session.has_value()
-            && it->second->session->is_complete();
+        return it != m_slots.end() && it->second->session.has_value() &&
+                it->second->session->is_complete();
     }
 
     session_type *session_for(const node_id &id)
@@ -182,7 +183,7 @@ public:
     // fn(id, session). It iterates the LIVE slot map only and skips an
     // incomplete/torn-down slot, so a tick-driven emit (the keepalive heartbeat) never
     // touches a dead session — the lifetime invariant. Mirrors is_connected's slot check.
-    template <typename Fn>
+    template<typename Fn>
     void for_each_connected(Fn &&fn)
     {
         for(auto &[id, slot] : m_slots)
@@ -190,8 +191,11 @@ public:
                 fn(id, *slot->session);
     }
 
-    driver_type &driver_for(const node_id &id) { return m_slots.at(id)->driver; }
-    std::uint32_t attempt_count(const node_id &id) const { return m_slots.at(id)->driver.attempt_count(); }
+    driver_type  &driver_for(const node_id &id) { return m_slots.at(id)->driver; }
+    std::uint32_t attempt_count(const node_id &id) const
+    {
+        return m_slots.at(id)->driver.attempt_count();
+    }
 
     // A peer is dead once its driver crossed a surrender bound (the per-slot flag
     // wire_dead latches — the slot is never erased there: that is a use-after-free).
@@ -217,19 +221,19 @@ private:
     // then driver sibling, then the session built from both).
     struct slot_block
     {
-        slot_block(Transport &transport, session_build_context<Policy> &build,
-                   const node_id &id, const endpoint &ep, const std::string &node_name)
-            : driver(transport, build.executor, build.redial, ep, build.redial_seed)
+        slot_block(Transport &transport, session_build_context<Policy> &build, const node_id &id,
+                   const endpoint &ep, const std::string &node_name)
+                : driver(transport, build.executor, build.redial, ep, build.redial_seed)
         {
-            record.peer_id = id;
-            record.node_name = node_name;
+            record.peer_id       = id;
+            record.node_name     = node_name;
             record.dial_endpoint = ep;
         }
 
-        peer_context<Policy> record;          // (1) the driver-free DATA record
-        driver_type driver;                    // (2) the reconnect driver SIBLING
-        std::optional<session_type> session;   // (3) built from the record, destroyed first
-        bool dead{false};                      // latched when the driver surrenders
+        peer_context<Policy>        record;      // (1) the driver-free DATA record
+        driver_type                 driver;      // (2) the reconnect driver SIBLING
+        std::optional<session_type> session;     // (3) built from the record, destroyed first
+        bool                        dead{false}; // latched when the driver surrenders
     };
 
     void build_into(slot_block &slot, std::unique_ptr<channel_type> channel, bool inbound)
@@ -237,8 +241,8 @@ private:
         slot.record.channel = std::move(channel);
         slot.session.reset();
         slot.session.emplace(slot.record, m_build.executor, m_build.fsm_cfg,
-                             m_build.handshake_timeout, m_build.messages,
-                             m_build.procedures, inbound, m_build.logger);
+                             m_build.handshake_timeout, m_build.messages, m_build.procedures,
+                             inbound, m_build.logger);
         if(inbound)
             wire_inbound_drop(slot, slot.record.peer_id);
         else
@@ -256,11 +260,13 @@ private:
     // driver that never dials.
     void wire_drop(slot_block &slot, const node_id &id)
     {
-        slot.session->on_transport_drop([this, id] {
-            auto it = m_slots.find(id);
-            if(it != m_slots.end())
-                it->second->driver.on_channel_dropped();
-        });
+        slot.session->on_transport_drop(
+                [this, id]
+                {
+                    auto it = m_slots.find(id);
+                    if(it != m_slots.end())
+                        it->second->driver.on_channel_dropped();
+                });
     }
 
     // Route an accepted slot's transport drop to a plain tear_down — NO redial (the
@@ -269,11 +275,13 @@ private:
     // accepted peer fires connected/disconnected/ready but never reconnect/dead.
     void wire_inbound_drop(slot_block &slot, const node_id &id)
     {
-        slot.session->on_transport_drop([this, id] {
-            auto it = m_slots.find(id);
-            if(it != m_slots.end() && it->second->session)
-                it->second->session->tear_down();
-        });
+        slot.session->on_transport_drop(
+                [this, id]
+                {
+                    auto it = m_slots.find(id);
+                    if(it != m_slots.end() && it->second->session)
+                        it->second->session->tear_down();
+                });
     }
 
     // Route this slot's session events up to the engine through the node-shared build
@@ -286,17 +294,20 @@ private:
     // engine's posted fan-out adapter, so it stays posted, never inline.
     void wire_observer(slot_block &slot)
     {
-        slot.session->on_lifecycle([this](const lifecycle_event &ev) {
-            if(m_build.on_lifecycle)
-                m_build.on_lifecycle(ev);
-        });
-        slot.session->on_stamp_seen([this](const node_id &id) {
-            if(m_build.on_stamp_seen)
-                m_build.on_stamp_seen(id);
-        });
-        slot.session->on_security([this](const security_event &ev) {
-            m_build.session_observer.on_security(ev);
-        });
+        slot.session->on_lifecycle(
+                [this](const lifecycle_event &ev)
+                {
+                    if(m_build.on_lifecycle)
+                        m_build.on_lifecycle(ev);
+                });
+        slot.session->on_stamp_seen(
+                [this](const node_id &id)
+                {
+                    if(m_build.on_stamp_seen)
+                        m_build.on_stamp_seen(id);
+                });
+        slot.session->on_security([this](const security_event &ev)
+                                  { m_build.session_observer.on_security(ev); });
     }
 
     // Thread the node-shared receive route into this slot's session from the build
@@ -306,21 +317,25 @@ private:
     // The forward re-checks the sink is set, mirroring wire_lifecycle.
     void wire_message_route(slot_block &slot)
     {
-        slot.session->on_message_route([this](std::string_view fqn, std::span<const std::byte> data,
-                                              const message_info &mi) {
-            if(m_build.on_message)
-                m_build.on_message(fqn, data, mi);
-        });
+        slot.session->on_message_route(
+                [this](std::string_view fqn, std::span<const std::byte> data,
+                       const message_info &mi)
+                {
+                    if(m_build.on_message)
+                        m_build.on_message(fqn, data, mi);
+                });
     }
 
     // Thread the node-shared object-lane route into this slot's session, re-threaded on
     // every reconnect rebuild like wire_message_route. The forward re-checks the sink.
     void wire_object_route(slot_block &slot)
     {
-        slot.session->on_object_route([this](std::string_view fqn, const object_carrier &c) {
-            if(m_build.on_object)
-                m_build.on_object(fqn, c);
-        });
+        slot.session->on_object_route(
+                [this](std::string_view fqn, const object_carrier &c)
+                {
+                    if(m_build.on_object)
+                        m_build.on_object(fqn, c);
+                });
     }
 
     // Borrow the node-level security seam into this slot's session (one per node) and
@@ -338,9 +353,8 @@ private:
         if(m_build.install_security_factory)
         {
             channel_type &lower = *slot.record.channel;
-            slot.session->on_install_security([this, &lower](const security_negotiation &neg) {
-                m_build.install_security_factory(lower, neg);
-            });
+            slot.session->on_install_security([this, &lower](const security_negotiation &neg)
+                                              { m_build.install_security_factory(lower, neg); });
         }
     }
 
@@ -350,11 +364,13 @@ private:
     // reconnect the set.
     void wire_redial(slot_block &slot, const node_id &id)
     {
-        slot.driver.on_redial([this, id] {
-            auto it = m_slots.find(id);
-            if(it != m_slots.end() && it->second->session)
-                it->second->session->tear_down();
-        });
+        slot.driver.on_redial(
+                [this, id]
+                {
+                    auto it = m_slots.find(id);
+                    if(it != m_slots.end() && it->second->session)
+                        it->second->session->tear_down();
+                });
     }
 
     // Latch a per-slot dead flag when the driver crosses a surrender bound. on_dead
@@ -363,13 +379,15 @@ private:
     // mid-callback (a use-after-free). is_dead exposes the flag.
     void wire_dead(slot_block &slot, const node_id &id)
     {
-        slot.driver.on_dead([this, id] {
-            auto it = m_slots.find(id);
-            if(it == m_slots.end())
-                return;
-            it->second->dead = true;
-            fire_dead(*it->second, id);
-        });
+        slot.driver.on_dead(
+                [this, id]
+                {
+                    auto it = m_slots.find(id);
+                    if(it == m_slots.end())
+                        return;
+                    it->second->dead = true;
+                    fire_dead(*it->second, id);
+                });
     }
 
     // Fire the dead edge at the surrender latch (the session may already be torn
@@ -382,8 +400,8 @@ private:
     {
         if(!m_build.on_lifecycle)
             return;
-        m_build.on_lifecycle(lifecycle_event{lifecycle_edge::dead, id,
-                slot.record.node_name, peer_kind::dialed, handshake_outcome::none});
+        m_build.on_lifecycle(lifecycle_event{lifecycle_edge::dead, id, slot.record.node_name,
+                                             peer_kind::dialed, handshake_outcome::none});
     }
 
     // Mint a fresh synthetic inbound identity. The counter is 64-bit and packed into
@@ -393,7 +411,7 @@ private:
     node_id next_inbound_id()
     {
         const std::uint64_t n = m_next_inbound++;
-        node_id id{};
+        node_id             id{};
         for(int i = 0; i < 8; ++i)
             id[15 - i] = std::byte{static_cast<std::uint8_t>(n >> (8 * i))};
         return id;
@@ -411,10 +429,10 @@ private:
         return false;
     }
 
-    Transport &m_transport;
-    session_build_context<Policy> &m_build;
+    Transport                                     &m_transport;
+    session_build_context<Policy>                 &m_build;
     std::map<node_id, std::unique_ptr<slot_block>> m_slots;
-    std::uint64_t m_next_inbound{1};
+    std::uint64_t                                  m_next_inbound{1};
 };
 
 }

@@ -36,8 +36,8 @@
 #include <iomanip>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
-namespace wire = plexus::wire;
+namespace pio   = plexus::io;
+namespace wire  = plexus::wire;
 
 namespace {
 
@@ -47,7 +47,7 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{15}, ms{30}, ms{60
 
 std::vector<std::byte> payload_of(int n)
 {
-    std::string s = "sweep-payload-" + std::to_string(n);
+    std::string            s = "sweep-payload-" + std::to_string(n);
     std::vector<std::byte> out(s.size());
     for(std::size_t i = 0; i < s.size(); ++i)
         out[i] = static_cast<std::byte>(s[i]);
@@ -59,25 +59,26 @@ std::vector<std::byte> payload_of(int n)
 // The drop count is recorded as the retransmit-pressure proxy.
 struct prob_relay
 {
-    ::asio::io_context &io;
-    ::asio::ip::udp::socket front;
-    ::asio::ip::udp::socket back;
-    ::asio::ip::udp::endpoint server_ep;
-    ::asio::ip::udp::endpoint client_ep;
-    ::asio::ip::udp::endpoint from;
+    ::asio::io_context         &io;
+    ::asio::ip::udp::socket     front;
+    ::asio::ip::udp::socket     back;
+    ::asio::ip::udp::endpoint   server_ep;
+    ::asio::ip::udp::endpoint   client_ep;
+    ::asio::ip::udp::endpoint   from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
-    std::mt19937 rng;
-    double loss;
-    int dropped{0};
+    std::mt19937                rng;
+    double                      loss;
+    int                         dropped{0};
 
-    prob_relay(::asio::io_context &ctx, std::uint16_t server_port, double loss_rate, std::uint32_t seed)
-        : io(ctx)
-        , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
-        , rng(seed)
-        , loss(loss_rate)
+    prob_relay(::asio::io_context &ctx, std::uint16_t server_port, double loss_rate,
+               std::uint32_t seed)
+            : io(ctx)
+            , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            , rng(seed)
+            , loss(loss_rate)
     {
         recv_front();
         recv_back();
@@ -88,69 +89,90 @@ struct prob_relay
     [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
-        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq
-               && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
+        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq &&
+                wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
     }
 
     void recv_front()
     {
-        front.async_receive_from(::asio::buffer(front_buf), from, [this](std::error_code ec, std::size_t n) {
-            if(ec) return;
-            client_ep = from;
-            std::span<const std::byte> dg{front_buf.data(), n};
-            std::uniform_real_distribution<double> u(0.0, 1.0);
-            if(!(is_data(dg) && u(rng) < loss))
-                back.send_to(::asio::buffer(front_buf.data(), n), server_ep);
-            else
-                ++dropped;
-            recv_front();
-        });
+        front.async_receive_from(::asio::buffer(front_buf), from,
+                                 [this](std::error_code ec, std::size_t n)
+                                 {
+                                     if(ec)
+                                         return;
+                                     client_ep = from;
+                                     std::span<const std::byte>             dg{front_buf.data(), n};
+                                     std::uniform_real_distribution<double> u(0.0, 1.0);
+                                     if(!(is_data(dg) && u(rng) < loss))
+                                         back.send_to(::asio::buffer(front_buf.data(), n),
+                                                      server_ep);
+                                     else
+                                         ++dropped;
+                                     recv_front();
+                                 });
     }
 
     void recv_back()
     {
-        back.async_receive_from(::asio::buffer(back_buf), from, [this](std::error_code ec, std::size_t n) {
-            if(ec) return;
-            if(client_ep.port() != 0)
-                front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
-            recv_back();
-        });
+        back.async_receive_from(::asio::buffer(back_buf), from,
+                                [this](std::error_code ec, std::size_t n)
+                                {
+                                    if(ec)
+                                        return;
+                                    if(client_ep.port() != 0)
+                                        front.send_to(::asio::buffer(back_buf.data(), n),
+                                                      client_ep);
+                                    recv_back();
+                                });
     }
 };
 
 struct cell_result
 {
     bool complete{false};
-    int delivered{0};
-    int dropped{0};
+    int  delivered{0};
+    int  dropped{0};
 };
 
-cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs, std::uint32_t seed)
+cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs,
+                     std::uint32_t seed)
 {
-    pio::detail::udp_arq_config cfg{
-        .window = window, .initial_rto = initial_rto, .min_rto = ms{5},
-        .max_rto = initial_rto * 8, .max_retransmit = 30};
+    pio::detail::udp_arq_config cfg{.window         = window,
+                                    .initial_rto    = initial_rto,
+                                    .min_rto        = ms{5},
+                                    .max_rto        = initial_rto * 8,
+                                    .max_retransmit = 30};
 
-    ::asio::io_context io;
+    ::asio::io_context   io;
     pasio::udp_transport server{io, pasio::udp_channel::default_max_payload,
                                 pasio::udp_transport::arq_type::default_ladder, cfg};
     pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, cfg};
 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
-    std::vector<int> got;
-    server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) {
-        accepted = std::move(ch);
-        accepted->on_data([&](std::span<const std::byte> b) { got.push_back(static_cast<int>(b.size())); });
-    });
+    std::vector<int>                    got;
+    server.on_accepted(
+            [&](std::unique_ptr<pasio::udp_channel> ch)
+            {
+                accepted = std::move(ch);
+                accepted->on_data([&](std::span<const std::byte> b)
+                                  { got.push_back(static_cast<int>(b.size())); });
+            });
     server.listen({"udp", "127.0.0.1:0"});
-    auto pump = [&](auto pred, ms budget) {
+    auto pump = [&](auto pred, ms budget)
+    {
         auto bound = std::chrono::steady_clock::now() + budget;
-        while(!pred() && std::chrono::steady_clock::now() < bound) { io.poll(); if(io.stopped()) io.restart(); }
+        while(!pred() && std::chrono::steady_clock::now() < bound)
+        {
+            io.poll();
+            if(io.stopped())
+                io.restart();
+        }
     };
     pump([&] { return server.port() != 0; }, ms{1000});
 
     prob_relay relay{io, server.port(), loss, seed};
-    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &) { dialed = std::move(ch); });
+    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &)
+                     { dialed = std::move(ch); });
     client.dial({"udp", "127.0.0.1:" + std::to_string(relay.port())});
     pump([&] { return dialed && accepted; }, ms{2000});
     if(!dialed || !accepted)
@@ -160,10 +182,11 @@ cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs
     int submitted = 0;
     while(submitted < n_msgs)
     {
-        if(dialed->send_reliable(payload_of(submitted)) == pasio::udp_channel::submit_result::admitted)
+        if(dialed->send_reliable(payload_of(submitted)) ==
+           pasio::udp_channel::submit_result::admitted)
             ++submitted;
         else
-            pump([&] { return false; }, ms{5});      // let acks slide the window, then retry
+            pump([&] { return false; }, ms{5}); // let acks slide the window, then retry
     }
     pump([&] { return static_cast<int>(got.size()) >= n_msgs; }, ms{8000});
 
@@ -172,12 +195,13 @@ cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs
 
 }
 
-TEST_CASE("udp sweep: reliable delivery completes across a loss x window x RTO grid", "[.sweep][udp]")
+TEST_CASE("udp sweep: reliable delivery completes across a loss x window x RTO grid",
+          "[.sweep][udp]")
 {
-    constexpr int n_msgs = 40;
-    const std::array<double, 4> loss_rates{0.0, 0.1, 0.25, 0.4};
-    const std::array<std::size_t, 3> windows{16, 64, 256};
-    const std::array<ms, 3> rtos{ms{15}, ms{30}, ms{60}};
+    constexpr int                      n_msgs = 40;
+    const std::array<double, 4>        loss_rates{0.0, 0.1, 0.25, 0.4};
+    const std::array<std::size_t, 3>   windows{16, 64, 256};
+    const std::array<ms, 3>            rtos{ms{15}, ms{30}, ms{60}};
     const std::array<std::uint32_t, 3> seeds{1u, 7u, 13u};
 
     std::ostringstream tbl;
@@ -190,15 +214,12 @@ TEST_CASE("udp sweep: reliable delivery completes across a loss x window x RTO g
             for(ms rto : rtos)
                 for(std::uint32_t seed : seeds)
                 {
-                    auto r = run_cell(loss, w, rto, n_msgs, seed);
+                    auto r       = run_cell(loss, w, rto, n_msgs, seed);
                     all_complete = all_complete && r.complete;
-                    tbl << "  " << std::setw(4) << loss
-                        << "  " << std::setw(6) << w
-                        << "  " << std::setw(7) << rto.count()
-                        << "  " << std::setw(4) << seed
-                        << "  " << std::setw(9) << r.delivered
-                        << "  " << std::setw(5) << r.dropped
-                        << "  " << (r.complete ? "yes" : "NO") << "\n";
+                    tbl << "  " << std::setw(4) << loss << "  " << std::setw(6) << w << "  "
+                        << std::setw(7) << rto.count() << "  " << std::setw(4) << seed << "  "
+                        << std::setw(9) << r.delivered << "  " << std::setw(5) << r.dropped << "  "
+                        << (r.complete ? "yes" : "NO") << "\n";
                 }
 
     CAPTURE(tbl.str());

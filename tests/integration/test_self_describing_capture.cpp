@@ -74,11 +74,12 @@ struct reading_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, reading &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   reading                   &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -104,9 +105,9 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options base_opts()
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
     opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = true;
     return opts;
@@ -118,7 +119,7 @@ std::span<const std::byte> as_bytes(std::string_view s)
 }
 
 // Publish one reading through a payload-fidelity typed publisher and drain the recorder out.
-template <typename Recorder>
+template<typename Recorder>
 void capture_one(bare_node &producer, bare_node &consumer, inproc_executor<> &ex,
                  Recorder &recorder, std::uint32_t value)
 {
@@ -163,18 +164,18 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
     producer.listen({"inproc", "host-b:6000"});
     ex.drain();
 
-    const std::string schema_blob = R"({"type":"object","properties":{"value":{"type":"integer"}}})";
+    const std::string schema_blob =
+            R"({"type":"object","properties":{"value":{"type":"integer"}}})";
 
     plexus::recorder_options ropts;
-    ropts.schemas.push_back(plexus::type_schema{
-        .type_id          = k_reading_type_id,
-        .message_encoding = "json",
-        .schema_name      = "reading",
-        .schema_encoding  = "jsonschema",
-        .schema_data      = as_bytes(schema_blob)});
+    ropts.schemas.push_back(plexus::type_schema{.type_id          = k_reading_type_id,
+                                                .message_encoding = "json",
+                                                .schema_name      = "reading",
+                                                .schema_encoding  = "jsonschema",
+                                                .schema_data      = as_bytes(schema_blob)});
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink, std::move(ropts));
+    auto                recorder = producer.make_recorder(sink, std::move(ropts));
 
     const std::uint32_t published = 0xCAFEu;
     capture_one(producer, consumer, ex, recorder, published);
@@ -183,7 +184,7 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
     REQUIRE(!stream.empty());
 
     plexus::io::recording::record_stream_reader reader{stream};
-    plexus::io::recording::stream_definitions defs;
+    plexus::io::recording::stream_definitions   defs;
     REQUIRE(reader.read_definitions(defs));
 
     // The preamble crypto position equals the node's declared wire position.
@@ -196,11 +197,12 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
     REQUIRE(e.message_encoding == "json");
     REQUIRE(e.schema_name == "reading");
     REQUIRE(e.schema_encoding == "jsonschema");
-    const std::vector<std::byte> expected_blob{as_bytes(schema_blob).begin(), as_bytes(schema_blob).end()};
+    const std::vector<std::byte> expected_blob{as_bytes(schema_blob).begin(),
+                                               as_bytes(schema_blob).end()};
     REQUIRE(e.schema_data == expected_blob);
 
     std::vector<plexus::io::recording::decoded_record> records;
-    const auto recovery = reader.recover(records);
+    const auto                                         recovery = reader.recover(records);
     REQUIRE(recovery.header_ok);
 
     const auto telemetry_hash = plexus::wire::fqn_topic_hash("telemetry");
@@ -238,7 +240,7 @@ TEST_CASE("a recorder that declares nothing still writes a valid opaque stream",
     ex.drain();
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink); // default options: empty schemas
+    auto                recorder = producer.make_recorder(sink); // default options: empty schemas
 
     capture_one(producer, consumer, ex, recorder, 0x1234u);
 
@@ -246,7 +248,7 @@ TEST_CASE("a recorder that declares nothing still writes a valid opaque stream",
     REQUIRE(!stream.empty());
 
     plexus::io::recording::record_stream_reader reader{stream};
-    plexus::io::recording::stream_definitions defs;
+    plexus::io::recording::stream_definitions   defs;
     REQUIRE(reader.read_definitions(defs));
     REQUIRE(defs.schema.empty());
     // The unset node wire position defaults to cleartext.
@@ -278,15 +280,14 @@ TEST_CASE("a declared schema larger than the writer's default scratch round-trip
     const std::string big_blob(96u * 1024u, 'x');
 
     plexus::recorder_options ropts;
-    ropts.schemas.push_back(plexus::type_schema{
-        .type_id          = k_reading_type_id,
-        .message_encoding = "json",
-        .schema_name      = "reading",
-        .schema_encoding  = "jsonschema",
-        .schema_data      = as_bytes(big_blob)});
+    ropts.schemas.push_back(plexus::type_schema{.type_id          = k_reading_type_id,
+                                                .message_encoding = "json",
+                                                .schema_name      = "reading",
+                                                .schema_encoding  = "jsonschema",
+                                                .schema_data      = as_bytes(big_blob)});
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink, std::move(ropts));
+    auto                recorder = producer.make_recorder(sink, std::move(ropts));
 
     capture_one(producer, consumer, ex, recorder, 0xBEEFu);
 
@@ -294,10 +295,11 @@ TEST_CASE("a declared schema larger than the writer's default scratch round-trip
     REQUIRE(!stream.empty());
 
     plexus::io::recording::record_stream_reader reader{stream};
-    plexus::io::recording::stream_definitions defs;
+    plexus::io::recording::stream_definitions   defs;
     REQUIRE(reader.read_definitions(defs));
     REQUIRE(defs.schema.size() == 1);
     REQUIRE(defs.schema.front().schema_data.size() == big_blob.size());
-    const std::vector<std::byte> expected_blob{as_bytes(big_blob).begin(), as_bytes(big_blob).end()};
+    const std::vector<std::byte> expected_blob{as_bytes(big_blob).begin(),
+                                               as_bytes(big_blob).end()};
     REQUIRE(defs.schema.front().schema_data == expected_blob);
 }

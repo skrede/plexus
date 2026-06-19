@@ -36,14 +36,14 @@
 #include <utility>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
-namespace wire = plexus::wire;
+namespace pio   = plexus::io;
+namespace wire  = plexus::wire;
 
 namespace {
 
-constexpr std::size_t k_cap = 4096;
-constexpr int k_loops = 4;
-constexpr int k_frames = 4096;
+constexpr std::size_t k_cap    = 4096;
+constexpr int         k_loops  = 4;
+constexpr int         k_frames = 4096;
 
 // Drive a never-reading-peer saturating loop over a stream channel, asserting the outbox
 // never grows past the cap across the WHOLE saturating run. The channel is fed 1 KiB
@@ -51,7 +51,7 @@ constexpr int k_frames = 4096;
 // accumulates). A bounded channel holds at — but never past — the cap; an unbounded one
 // grows without limit, breaching the assertion. The loop bound is generous enough that an
 // unbounded queue blows the cap well before it ends.
-template <typename Channel>
+template<typename Channel>
 void saturate_and_assert_bounded(::asio::io_context &io, Channel &ch)
 {
     std::vector<std::byte> kib(1024, std::byte{0x5A});
@@ -59,7 +59,7 @@ void saturate_and_assert_bounded(::asio::io_context &io, Channel &ch)
     {
         ch.send(kib);
         io.poll();
-        REQUIRE(ch.backpressured() <= k_cap);          // the structural memory bound
+        REQUIRE(ch.backpressured() <= k_cap); // the structural memory bound
     }
     REQUIRE(ch.backpressured() <= k_cap);
 }
@@ -71,10 +71,10 @@ struct unix_pair
 
     unix_pair()
     {
-        char tmpl[] = "/tmp/pxsat-XXXXXX";
-        const char *made = ::mkdtemp(tmpl);
-        dir = made ? made : "";
-        path = dir + "/s";
+        char        tmpl[] = "/tmp/pxsat-XXXXXX";
+        const char *made   = ::mkdtemp(tmpl);
+        dir                = made ? made : "";
+        path               = dir + "/s";
     }
 
     ~unix_pair()
@@ -88,7 +88,8 @@ struct unix_pair
 
 }
 
-TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog as a counted drop, never silent loss",
+TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog as a counted "
+          "drop, never silent loss",
           "[integration][bound][saturation][close-drain]")
 {
     // close() over a non-empty write-queue backlog must surface the still-unsent frames as
@@ -98,12 +99,12 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
     // teardown precludes a non-blocking flush) and records the residual as a drop.
     for(int loop = 0; loop < k_loops; ++loop)
     {
-        ::asio::io_context io;
+        ::asio::io_context        io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket peer{io};
-        ::asio::ip::tcp::socket client{io};
+        ::asio::ip::tcp::socket   peer{io};
+        ::asio::ip::tcp::socket   client{io};
         client.connect(acc.local_endpoint());
-        acc.accept(peer);                               // peer adopts but NEVER reads
+        acc.accept(peer); // peer adopts but NEVER reads
 
         // Floor both kernel buffers so async_write stalls after a few KiB and a backlog
         // accumulates in the userspace queue rather than draining into the kernel.
@@ -119,8 +120,9 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
             pasio::asio_channel idle{io, std::move(idle_client), wire::stream_inbound_config{},
                                      pio::congestion::block, pio::egress_capacity::of_bytes(k_cap)};
             idle.close();
-            REQUIRE(idle.dropped_count() == 0);   // a drained/empty close bumps nothing
-            io.poll();   // drain close()'s posted on_closed while idle is still alive (it captures `this`)
+            REQUIRE(idle.dropped_count() == 0); // a drained/empty close bumps nothing
+            io.poll(); // drain close()'s posted on_closed while idle is still alive (it captures
+                       // `this`)
         }
 
         pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
@@ -134,12 +136,13 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
             ch.send(kib);
             io.poll();
         }
-        REQUIRE(ch.backpressured() > 0);          // a real undrained backlog is present
-        REQUIRE(ch.dropped_count() == 0);         // nothing shed yet (block stalls, never drops)
+        REQUIRE(ch.backpressured() > 0);  // a real undrained backlog is present
+        REQUIRE(ch.dropped_count() == 0); // nothing shed yet (block stalls, never drops)
 
         ch.close();
-        REQUIRE(ch.dropped_count() > 0);          // the abandoned backlog surfaced as a counted drop
-        io.poll();   // drain close()'s posted on_closed before ch leaves scope (the post captures `this`)
+        REQUIRE(ch.dropped_count() > 0); // the abandoned backlog surfaced as a counted drop
+        io.poll(); // drain close()'s posted on_closed before ch leaves scope (the post captures
+                   // `this`)
     }
 }
 
@@ -148,12 +151,12 @@ TEST_CASE("egress_saturation_bounded tcp: a saturating publisher stays memory-bo
 {
     for(int loop = 0; loop < k_loops; ++loop)
     {
-        ::asio::io_context io;
+        ::asio::io_context        io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket peer{io};
-        ::asio::ip::tcp::socket client{io};
+        ::asio::ip::tcp::socket   peer{io};
+        ::asio::ip::tcp::socket   client{io};
         client.connect(acc.local_endpoint());
-        acc.accept(peer);                               // peer adopts but NEVER reads
+        acc.accept(peer); // peer adopts but NEVER reads
 
         // The plaintext channel is already bounded — it pins the structural invariant the
         // unix leg must come to match.
@@ -168,14 +171,14 @@ TEST_CASE("egress_saturation_bounded unix: a saturating publisher stays memory-b
 {
     for(int loop = 0; loop < k_loops; ++loop)
     {
-        unix_pair sock;
-        ::asio::io_context io;
+        unix_pair                                sock;
+        ::asio::io_context                       io;
         ::asio::local::stream_protocol::acceptor acc{
-            io, ::asio::local::stream_protocol::endpoint(sock.path)};
+                io, ::asio::local::stream_protocol::endpoint(sock.path)};
         ::asio::local::stream_protocol::socket peer{io};
         ::asio::local::stream_protocol::socket client{io};
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));
-        acc.accept(peer);                               // peer adopts but NEVER reads
+        acc.accept(peer); // peer adopts but NEVER reads
 
         // Adopt the client end into an accept-mode unix_channel with the small cap: the
         // bounded stream_send_queue holds the outbox at the shallow cap under this

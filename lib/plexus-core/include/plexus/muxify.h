@@ -14,7 +14,7 @@ namespace plexus {
 // byte_channel swapped to io::polymorphic_byte_channel. A node binds muxify<P>
 // when it drives more than one wire transport; a single-transport node keeps P
 // (the concrete channel, zero indirection).
-template <typename P>
+template<typename P>
 struct muxify
 {
     using executor_type     = typename P::executor_type;

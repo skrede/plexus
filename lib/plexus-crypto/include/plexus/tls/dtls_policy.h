@@ -25,10 +25,10 @@ namespace plexus::tls {
 // Policy seam as the plaintext and TLS transports.
 struct dtls_policy
 {
-    using executor_type = ::asio::io_context &;
+    using executor_type     = ::asio::io_context &;
     using byte_channel_type = dtls_channel;
-    using timer_type = plexus::asio::asio_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = plexus::asio::asio_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
     {
@@ -39,6 +39,6 @@ struct dtls_policy
 }
 
 static_assert(plexus::Policy<plexus::tls::dtls_policy>,
-    "dtls_policy must satisfy Policy — check the channel/timer constructors and post()");
+              "dtls_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

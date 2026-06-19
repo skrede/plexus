@@ -54,8 +54,7 @@ struct identified_codec
 
 static_assert(plexus::typed_codec<plain_codec>,
               "a minimal encode/decode codec satisfies typed_codec");
-static_assert(plexus::typed_codec<identified_codec>,
-              "adding type_info does not break typed_codec");
+static_assert(plexus::typed_codec<identified_codec>, "adding type_info does not break typed_codec");
 
 static_assert(!plexus::identity_bearing<plain_codec>,
               "a codec without type_info is not identity_bearing (the no-identity path is a "
@@ -69,7 +68,7 @@ TEST_CASE("resolve_identity uses an identity_bearing codec's type_info when no a
           "[node][typed][concepts]")
 {
     identified_codec codec;
-    const auto resolved = plexus::resolve_identity(codec, std::nullopt);
+    const auto       resolved = plexus::resolve_identity(codec, std::nullopt);
     REQUIRE(resolved.type_id == 0xABCDu);
 }
 
@@ -77,7 +76,8 @@ TEST_CASE("resolve_identity prefers an explicit argument over the codec's type_i
           "[node][typed][concepts]")
 {
     identified_codec codec;
-    const auto resolved = plexus::resolve_identity(codec, plexus::type_identity{0x1234u, "override"});
+    const auto       resolved =
+            plexus::resolve_identity(codec, plexus::type_identity{0x1234u, "override"});
     REQUIRE(resolved.type_id == 0x1234u);
 }
 
@@ -85,6 +85,7 @@ TEST_CASE("resolve_identity resolves a non-identity-bearing codec through an exp
           "[node][typed][concepts]")
 {
     plain_codec codec;
-    const auto resolved = plexus::resolve_identity(codec, plexus::type_identity{0x5678u, "explicit"});
+    const auto  resolved =
+            plexus::resolve_identity(codec, plexus::type_identity{0x5678u, "explicit"});
     REQUIRE(resolved.type_id == 0x5678u);
 }

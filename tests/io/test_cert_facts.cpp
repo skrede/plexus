@@ -32,10 +32,10 @@ TEST_CASE("io.cert_facts carries the full field list and round-trips the identit
           "[io][cert_facts]")
 {
     cert_facts facts;
-    facts.spki_sha256 = digest_of(1);
-    facts.subject = "CN=peer.example";
-    facts.san = {"peer.example", "192.0.2.1"};
-    facts.chain_depth = 0;
+    facts.spki_sha256  = digest_of(1);
+    facts.subject      = "CN=peer.example";
+    facts.san          = {"peer.example", "192.0.2.1"};
+    facts.chain_depth  = 0;
     facts.preverify_ok = true;
 
     // The identity stable subset is readable as stored.

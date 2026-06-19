@@ -23,10 +23,10 @@ namespace plexus::asio {
 // seam — the third backend-independent data point for the Policy concept.
 struct asio_policy
 {
-    using executor_type = ::asio::io_context &;
+    using executor_type     = ::asio::io_context &;
     using byte_channel_type = asio_channel;
-    using timer_type = asio_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = asio_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
     {
@@ -37,6 +37,6 @@ struct asio_policy
 }
 
 static_assert(plexus::Policy<plexus::asio::asio_policy>,
-    "asio_policy must satisfy Policy — check the channel/timer constructors and post()");
+              "asio_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

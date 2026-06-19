@@ -25,10 +25,10 @@ namespace plexus::asio {
 // NON-stream channel needs no Policy reshape.
 struct udp_policy
 {
-    using executor_type = ::asio::io_context &;
+    using executor_type     = ::asio::io_context &;
     using byte_channel_type = udp_channel;
-    using timer_type = asio_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = asio_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
     {
@@ -39,6 +39,6 @@ struct udp_policy
 }
 
 static_assert(plexus::Policy<plexus::asio::udp_policy>,
-    "udp_policy must satisfy Policy — check the channel/timer constructors and post()");
+              "udp_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

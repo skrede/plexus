@@ -13,7 +13,7 @@ namespace plexus::detail {
 // ill-formed) and an overloaded operator() is ambiguous, so both fail this requirement.
 // The serve/subscribe/caller factories gate on this and emit the "spell Sig explicitly"
 // diagnostic.
-template <typename F>
+template<typename F>
 concept deducible_handler = requires { static_cast<void>(&F::operator()); };
 
 // Function-traits over a callable's operator() (the Boost.CallableTraits / function_traits
@@ -23,15 +23,15 @@ concept deducible_handler = requires { static_cast<void>(&F::operator()); };
 // missing form would silently leave a valid lambda non-deducible. The primary is
 // left undefined so a non-deducible callable (generic or overloaded operator()) names no
 // member and fails the concept rather than mis-deducing.
-template <typename F>
+template<typename F>
 struct callable_traits;
 
-#define PLEXUS_CALLABLE_TRAITS(QUALIFIERS)                                                  \
-    template <typename R, typename C, typename A>                                          \
-    struct callable_traits<R (C::*)(A) QUALIFIERS>                                          \
-    {                                                                                      \
-        using result_type   = R;                                                           \
-        using argument_type = A;                                                           \
+#define PLEXUS_CALLABLE_TRAITS(QUALIFIERS)                                                         \
+    template<typename R, typename C, typename A>                                                   \
+    struct callable_traits<R (C::*)(A) QUALIFIERS>                                                 \
+    {                                                                                              \
+        using result_type   = R;                                                                   \
+        using argument_type = A;                                                                   \
     };
 
 PLEXUS_CALLABLE_TRAITS()
@@ -54,14 +54,14 @@ PLEXUS_CALLABLE_TRAITS(const && noexcept)
 // value parameter carries the deducible type T. A per-qualifier specialization captures the
 // leading argument and ignores any trailing parameters. The primary is undefined so a
 // non-deducible callback fails the concept rather than mis-deducing.
-template <typename F>
+template<typename F>
 struct leading_argument;
 
-#define PLEXUS_LEADING_ARGUMENT(QUALIFIERS)                                                \
-    template <typename R, typename C, typename A0, typename... Rest>                        \
-    struct leading_argument<R (C::*)(A0, Rest...) QUALIFIERS>                                \
-    {                                                                                      \
-        using type = A0;                                                                   \
+#define PLEXUS_LEADING_ARGUMENT(QUALIFIERS)                                                        \
+    template<typename R, typename C, typename A0, typename... Rest>                                \
+    struct leading_argument<R (C::*)(A0, Rest...) QUALIFIERS>                                      \
+    {                                                                                              \
+        using type = A0;                                                                           \
     };
 
 PLEXUS_LEADING_ARGUMENT()
@@ -81,18 +81,18 @@ PLEXUS_LEADING_ARGUMENT(const && noexcept)
 
 // Map a concrete subscriber callback F — operator() of the shape (const T&) or
 // (const T&, message_info) — to the value type T it carries (reference and const stripped).
-template <typename F>
+template<typename F>
     requires deducible_handler<F>
 using subscriber_value_t =
-    std::remove_cvref_t<typename leading_argument<decltype(&F::operator())>::type>;
+        std::remove_cvref_t<typename leading_argument<decltype(&F::operator())>::type>;
 
 // The deduced response type carried by an RPC handler's return: the Res of an
 // expected<Res, std::error_code>. Left undefined for any other return type so a handler
 // that does not return the expected-shaped result is rejected at the point of deduction.
-template <typename R>
+template<typename R>
 struct rpc_response;
 
-template <typename Res>
+template<typename Res>
 struct rpc_response<expected<Res, std::error_code>>
 {
     using type = Res;
@@ -102,11 +102,12 @@ struct rpc_response<expected<Res, std::error_code>>
 // expected<Res, std::error_code> — to the signature Res(Req) the procedure/caller
 // templates decompose. The argument's reference and const are stripped to recover Req; the
 // return's expected is unwrapped to recover Res.
-template <typename F>
+template<typename F>
     requires deducible_handler<F>
-using handler_signature_t = typename rpc_response<
-    typename callable_traits<decltype(&F::operator())>::result_type>::type(
-    std::remove_cvref_t<typename callable_traits<decltype(&F::operator())>::argument_type>);
+using handler_signature_t =
+        typename rpc_response<typename callable_traits<decltype(&F::operator())>::result_type>::
+                type(std::remove_cvref_t<
+                        typename callable_traits<decltype(&F::operator())>::argument_type>);
 
 }
 

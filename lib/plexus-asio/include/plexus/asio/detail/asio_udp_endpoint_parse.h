@@ -25,8 +25,8 @@ inline ::asio::ip::udp::endpoint parse_udp(const std::string &addr, std::error_c
         ec = std::make_error_code(std::errc::invalid_argument);
         return {};
     }
-    auto host = addr.substr(0, colon);
-    auto port_str = addr.substr(colon + 1);
+    auto          host     = addr.substr(0, colon);
+    auto          port_str = addr.substr(colon + 1);
     unsigned long port_val = 0;
     auto [ptr, e] = std::from_chars(port_str.data(), port_str.data() + port_str.size(), port_val);
     if(e != std::errc{} || ptr != port_str.data() + port_str.size() || port_val > 65535u)

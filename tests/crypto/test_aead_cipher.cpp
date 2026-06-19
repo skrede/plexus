@@ -53,10 +53,10 @@ std::array<std::byte, k_aead_nonce_len> fixed_nonce(std::uint8_t seed)
 
 void round_trips(aead_cipher_id cipher)
 {
-    const auto key = fixed_key(11);
+    const auto key   = fixed_key(11);
     const auto nonce = fixed_nonce(5);
-    const auto aad = bytes_of("plexus header bytes");
-    const auto pt = bytes_of("the quick brown fox jumps over the lazy dog");
+    const auto aad   = bytes_of("plexus header bytes");
+    const auto pt    = bytes_of("the quick brown fox jumps over the lazy dog");
 
     std::vector<std::byte> sealed;
     REQUIRE(plexus::crypto::seal(cipher, key, nonce, aad, pt, sealed));
@@ -69,10 +69,10 @@ void round_trips(aead_cipher_id cipher)
 
 void rejects_tampering(aead_cipher_id cipher)
 {
-    const auto key = fixed_key(22);
+    const auto key   = fixed_key(22);
     const auto nonce = fixed_nonce(9);
-    const auto aad = bytes_of("aad");
-    const auto pt = bytes_of("confidential payload");
+    const auto aad   = bytes_of("aad");
+    const auto pt    = bytes_of("confidential payload");
 
     std::vector<std::byte> sealed;
     REQUIRE(plexus::crypto::seal(cipher, key, nonce, aad, pt, sealed));
@@ -115,7 +115,8 @@ TEST_CASE("crypto.aead_cipher round-trips under AES-256-GCM", "[crypto][aead]")
     round_trips(aead_cipher_id::aes_256_gcm);
 }
 
-TEST_CASE("crypto.aead_cipher open rejects every tamper class (ChaCha20-Poly1305)", "[crypto][aead]")
+TEST_CASE("crypto.aead_cipher open rejects every tamper class (ChaCha20-Poly1305)",
+          "[crypto][aead]")
 {
     rejects_tampering(aead_cipher_id::chacha20_poly1305);
 }
@@ -127,13 +128,14 @@ TEST_CASE("crypto.aead_cipher open rejects every tamper class (AES-256-GCM)", "[
 
 TEST_CASE("crypto.aead_cipher seals an empty plaintext to exactly the tag", "[crypto][aead]")
 {
-    const auto key = fixed_key(3);
-    const auto nonce = fixed_nonce(1);
-    const auto aad = bytes_of("h");
+    const auto                   key   = fixed_key(3);
+    const auto                   nonce = fixed_nonce(1);
+    const auto                   aad   = bytes_of("h");
     const std::vector<std::byte> empty;
 
     std::vector<std::byte> sealed;
-    REQUIRE(plexus::crypto::seal(aead_cipher_id::chacha20_poly1305, key, nonce, aad, empty, sealed));
+    REQUIRE(plexus::crypto::seal(aead_cipher_id::chacha20_poly1305, key, nonce, aad, empty,
+                                 sealed));
     REQUIRE(sealed.size() == k_aead_tag_len);
 
     std::vector<std::byte> out;
@@ -143,7 +145,7 @@ TEST_CASE("crypto.aead_cipher seals an empty plaintext to exactly the tag", "[cr
 
 TEST_CASE("crypto.key_schedule derives distinct send and recv keys", "[crypto][key_schedule]")
 {
-    const auto psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
+    const auto                psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
     std::array<std::byte, 16> in_nonce{};
     std::array<std::byte, 16> rs_nonce{};
     std::array<std::byte, 32> transcript{};
@@ -162,7 +164,7 @@ TEST_CASE("crypto.key_schedule derives distinct send and recv keys", "[crypto][k
 
 TEST_CASE("crypto.key_schedule binds the transcript digest into the keys", "[crypto][key_schedule]")
 {
-    const auto psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
+    const auto                psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
     std::array<std::byte, 16> in_nonce{};
     std::array<std::byte, 16> rs_nonce{};
     std::array<std::byte, 32> transcript_a{};

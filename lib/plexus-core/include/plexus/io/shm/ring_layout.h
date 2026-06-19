@@ -196,8 +196,10 @@ static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
               "ring sequence/position atomics must be always-lock-free across processes");
 static_assert(std::atomic<std::uint32_t>::is_always_lock_free,
               "ring refcount/flag atomics must be always-lock-free across processes");
-static_assert(std::is_standard_layout_v<cell_t>, "cell_t must be standard-layout for SHM placement");
-static_assert(std::is_standard_layout_v<cursor_t>, "cursor_t must be standard-layout for SHM placement");
+static_assert(std::is_standard_layout_v<cell_t>,
+              "cell_t must be standard-layout for SHM placement");
+static_assert(std::is_standard_layout_v<cursor_t>,
+              "cursor_t must be standard-layout for SHM placement");
 static_assert(std::is_standard_layout_v<control_header_t>,
               "control_header_t must be standard-layout for SHM placement");
 
@@ -210,7 +212,7 @@ static_assert(std::is_standard_layout_v<control_header_t>,
 // build here. A deliberate layout change updates this size AND bumps k_ring_magic so
 // an old region fails-closed on attach.
 static_assert(sizeof(control_header_t) ==
-                  k_cache_line * 2 + k_max_consumers * sizeof(cursor_t) + k_cache_line * 3,
+                      k_cache_line * 2 + k_max_consumers * sizeof(cursor_t) + k_cache_line * 3,
               "control_header_t layout drift -- update the size guard and bump k_ring_magic");
 
 // Round a byte count up to the next multiple of eight so a slot base laid out

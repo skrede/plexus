@@ -24,8 +24,8 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace wire = plexus::wire;
-namespace pio = plexus::io;
+namespace wire  = plexus::wire;
+namespace pio   = plexus::io;
 
 namespace {
 
@@ -43,17 +43,15 @@ std::vector<std::byte> bytes_of(std::string_view s)
 // stands up a fresh listener + client on its own io_context so the iterations
 // are independent.
 std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> payload,
-                                                    std::string_view fqn)
+                                                    std::string_view           fqn)
 {
     ::asio::io_context io;
 
     // Server side: a listener accepts a channel the publisher fans out over.
-    pasio::asio_listener listener(io);
+    pasio::asio_listener                 listener(io);
     std::unique_ptr<pasio::asio_channel> server_channel;
     listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch)
-    {
-        server_channel = std::move(ch);
-    });
+                         { server_channel = std::move(ch); });
     listener.start({"tcp", "127.0.0.1:0"});
     auto port = listener.port();
 
@@ -63,15 +61,16 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
     // the router owns the frame_header strip + type switch and hands the inner
     // unidirectional payload to its consumer. This exercises the unified receive
     // contract honestly rather than hand-stripping the header in the test.
-    pasio::asio_channel client(io);
+    pasio::asio_channel                   client(io);
     std::optional<std::vector<std::byte>> received;
-    pio::frame_router router;
-    router.on_unidirectional([&](const wire::frame_header &, std::span<const std::byte> inner)
-    {
-        auto decoded = wire::decode_unidirectional(inner);
-        if(decoded)
-            received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
-    });
+    pio::frame_router                     router;
+    router.on_unidirectional(
+            [&](const wire::frame_header &, std::span<const std::byte> inner)
+            {
+                auto decoded = wire::decode_unidirectional(inner);
+                if(decoded)
+                    received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
+            });
     client.on_data([&](std::span<const std::byte> frame) { router.route(frame); });
 
     ::asio::ip::tcp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), port);
@@ -89,7 +88,7 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
     // the data frame. The client's frame_router demuxes by frame_header.type — the
     // subscribe has no registered consumer and is warn-and-dropped, the
     // unidirectional data routes to its consumer — so no flush loop is needed.
-    pio::message_forwarder<pasio::asio_policy> fwd{};
+    pio::message_forwarder<pasio::asio_policy>       fwd{};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "client-node"};
     fwd.attach(sub, fqn);
 
@@ -111,15 +110,15 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
 
 TEST_CASE("publish round-trips over real TCP loopback through plexus-asio", "[integration][asio]")
 {
-    const auto payload = bytes_of("plexus-live-tcp-payload");
-    const std::string fqn = "demo._plexus._tcp.local.";
+    const auto        payload = bytes_of("plexus-live-tcp-payload");
+    const std::string fqn     = "demo._plexus._tcp.local.";
 
     // Run the FULL round-trip >=100 times in-body: a live networking claim must
     // be proven reproducible, never asserted from a single run. Each iteration
     // is an independent listener+client+io_context, so a flaky frame would
     // surface as a mismatch on some iteration, not a one-off pass.
     constexpr int k_iterations = 100;
-    int delivered = 0;
+    int           delivered    = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         auto got = one_roundtrip(payload, fqn);

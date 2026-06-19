@@ -66,7 +66,10 @@ struct recovery_result
 class record_stream_reader
 {
 public:
-    explicit record_stream_reader(std::span<const std::byte> stream) noexcept : m_stream(stream) {}
+    explicit record_stream_reader(std::span<const std::byte> stream) noexcept
+            : m_stream(stream)
+    {
+    }
 
     bool read_definitions(stream_definitions &out)
     {
@@ -78,10 +81,10 @@ public:
         out.clock_epoch = r.u64();
         for(std::byte &b : out.node)
             b = static_cast<std::byte>(r.u8());
-        out.rule.fidelity   = static_cast<capture_fidelity>(r.u8());
-        out.rule.mode       = static_cast<decimation_mode>(r.u8());
-        out.rule.decimation = static_cast<std::uint32_t>(r.varint().value_or(0));
-        out.rule.window_ns  = r.varint().value_or(0);
+        out.rule.fidelity           = static_cast<capture_fidelity>(r.u8());
+        out.rule.mode               = static_cast<decimation_mode>(r.u8());
+        out.rule.decimation         = static_cast<std::uint32_t>(r.varint().value_or(0));
+        out.rule.window_ns          = r.varint().value_or(0);
         const std::uint64_t entries = r.varint().value_or(0);
         out.schema.clear();
         for(std::uint64_t i = 0; i < entries && r.ok(); ++i)
@@ -107,8 +110,8 @@ public:
     recovery_result recover(std::vector<decoded_record> &out)
     {
         recovery_result res;
-        res.header_ok   = true;
-        std::size_t at  = m_cursor;
+        res.header_ok  = true;
+        std::size_t at = m_cursor;
         while(at < m_stream.size())
         {
             std::size_t len_off = at;
@@ -124,7 +127,8 @@ public:
                 res.trailing_partial_dropped = true;
                 break;
             }
-            const std::span<const std::byte> payload = m_stream.subspan(len_off, static_cast<std::size_t>(*len));
+            const std::span<const std::byte> payload =
+                    m_stream.subspan(len_off, static_cast<std::size_t>(*len));
             if(is_sync(payload))
             {
                 at = payload_end;
@@ -136,7 +140,7 @@ public:
                 // The length varint may itself be corrupt, so do NOT trust payload_end:
                 // resync by scanning forward for the next sync marker (byte-granular).
                 res.corruption_skipped = true;
-                at = resync_from(at + 1);
+                at                     = resync_from(at + 1);
                 continue;
             }
             at = payload_end;

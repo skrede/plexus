@@ -34,7 +34,7 @@ namespace {
 
 // A distinguishable byte the crashed creator stamps across the orphan region;
 // a non-zero pattern so a fresh (zero-filled) reclaim is unambiguous.
-constexpr std::byte k_stale_byte{0xABu};
+constexpr std::byte   k_stale_byte{0xABu};
 constexpr std::size_t k_region_bytes = 4096;
 
 // Stamp the whole mapped region with the stale sentinel.
@@ -70,50 +70,52 @@ TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_s
         // the region is orphaned live in /dev/shm (the crashed-creator simulation).
         // PARENT: after the child has exited, reclaim the orphan and prove freshness.
         const auto outcome = plexus::testing::run_forked(
-            [&]() -> bool {
-                posix_shm_region_broker broker;
-
-                // The orphan must be present: a plain create (no reclaim flag) finds
-                // the child's live region and returns already_exists, never ok.
+                [&]() -> bool
                 {
-                    region_handle probe;
-                    if(broker.create(name, k_region_bytes, pio::create_options{}, probe) !=
-                       pio::region_status::already_exists)
+                    posix_shm_region_broker broker;
+
+                    // The orphan must be present: a plain create (no reclaim flag) finds
+                    // the child's live region and returns already_exists, never ok.
+                    {
+                        region_handle probe;
+                        if(broker.create(name, k_region_bytes, pio::create_options{}, probe) !=
+                           pio::region_status::already_exists)
+                            return false;
+                    }
+
+                    // Reclaim: create WITH unlink_stale_on_create unlinks the orphan and
+                    // mints a fresh region under the same name.
+                    region_handle fresh;
+                    if(broker.create(name, k_region_bytes,
+                                     pio::create_options{.unlink_stale_on_create = true},
+                                     fresh) != pio::region_status::ok)
                         return false;
-                }
 
-                // Reclaim: create WITH unlink_stale_on_create unlinks the orphan and
-                // mints a fresh region under the same name.
-                region_handle fresh;
-                if(broker.create(name, k_region_bytes,
-                                 pio::create_options{.unlink_stale_on_create = true}, fresh) !=
-                   pio::region_status::ok)
-                    return false;
+                    // The fresh region is the PARENT's: ftruncate zero-fills it, so the
+                    // orphan's stale sentinel did not leak through into the new mapping.
+                    if(!all_zero(fresh))
+                        return false;
 
-                // The fresh region is the PARENT's: ftruncate zero-fills it, so the
-                // orphan's stale sentinel did not leak through into the new mapping.
-                if(!all_zero(fresh))
-                    return false;
-
-                // The parent owns this region and unlinks it on `fresh`'s release
-                // (create-owns-unlink), so no /dev/shm region leaks after the case.
-                return true;
-            },
-            [&]() -> bool {
-                posix_shm_region_broker broker;
-                region_handle orphan;
-                if(broker.create(name, k_region_bytes, pio::create_options{}, orphan) !=
-                   pio::region_status::ok)
-                    ::_exit(1);
-                stamp_stale(orphan);
-                // _exit HERE -- inside the child, with `orphan` still in scope -- is
-                // the load-bearing crash simulation: it skips orphan's create-owns-
-                // unlink destructor, so the named region stays live in /dev/shm with
-                // the sentinel committed (letting the handle destruct at lambda return
-                // would unlink it, defeating the orphan). The exit status (0) is the
-                // child_succeeded signal the parent predicate reads.
-                ::_exit(0);
-            });
+                    // The parent owns this region and unlinks it on `fresh`'s release
+                    // (create-owns-unlink), so no /dev/shm region leaks after the case.
+                    return true;
+                },
+                [&]() -> bool
+                {
+                    posix_shm_region_broker broker;
+                    region_handle           orphan;
+                    if(broker.create(name, k_region_bytes, pio::create_options{}, orphan) !=
+                       pio::region_status::ok)
+                        ::_exit(1);
+                    stamp_stale(orphan);
+                    // _exit HERE -- inside the child, with `orphan` still in scope -- is
+                    // the load-bearing crash simulation: it skips orphan's create-owns-
+                    // unlink destructor, so the named region stays live in /dev/shm with
+                    // the sentinel committed (letting the handle destruct at lambda return
+                    // would unlink it, defeating the orphan). The exit status (0) is the
+                    // child_succeeded signal the parent predicate reads.
+                    ::_exit(0);
+                });
 
         REQUIRE(outcome.child_succeeded);  // the crashed-creator child stamped + orphaned
         REQUIRE(outcome.parent_succeeded); // the parent reclaimed a fresh, zero-filled region

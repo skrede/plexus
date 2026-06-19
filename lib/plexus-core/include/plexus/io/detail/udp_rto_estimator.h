@@ -19,9 +19,9 @@ public:
     using ms = std::chrono::milliseconds;
 
     udp_rto_estimator(ms initial, ms min_rto, ms max_rto) noexcept
-        : m_min(min_rto)
-        , m_max(max_rto)
-        , m_rto(initial)
+            : m_min(min_rto)
+            , m_max(max_rto)
+            , m_rto(initial)
     {
     }
 
@@ -32,15 +32,15 @@ public:
     {
         if(!m_seeded)
         {
-            m_srtt = rtt;
+            m_srtt   = rtt;
             m_rttvar = rtt / 2;
             m_seeded = true;
         }
         else
         {
             const ms err = m_srtt > rtt ? m_srtt - rtt : rtt - m_srtt;
-            m_rttvar = (m_rttvar * 3 + err) / 4;            // (1-1/4)*RTTVAR + 1/4*|SRTT-R|
-            m_srtt = (m_srtt * 7 + rtt) / 8;                // (1-1/8)*SRTT  + 1/8*R
+            m_rttvar     = (m_rttvar * 3 + err) / 4; // (1-1/4)*RTTVAR + 1/4*|SRTT-R|
+            m_srtt       = (m_srtt * 7 + rtt) / 8;   // (1-1/8)*SRTT  + 1/8*R
         }
         m_rto = std::clamp(m_srtt + m_rttvar * 4, m_min, m_max);
     }
@@ -61,11 +61,11 @@ public:
     [[nodiscard]] bool seeded() const noexcept { return m_seeded; }
 
 private:
-    ms m_min;
-    ms m_max;
-    ms m_rto;
-    ms m_srtt{0};
-    ms m_rttvar{0};
+    ms   m_min;
+    ms   m_max;
+    ms   m_rto;
+    ms   m_srtt{0};
+    ms   m_rttvar{0};
     bool m_seeded{false};
 };
 

@@ -13,7 +13,7 @@ namespace plexus::io {
 // release function, not by a cast here.
 struct loan_slot
 {
-    const void *object;
+    const void   *object;
     std::uint32_t refs;
     void (*release)(loan_slot *);
 };
@@ -38,10 +38,10 @@ struct object_carrier
 {
     std::uint64_t topic_hash;
     std::uint64_t type_tag;
-    const void *native_key;
+    const void   *native_key;
     std::uint64_t sequence;
     std::uint64_t source_timestamp;
-    loan_slot *slot;
+    loan_slot    *slot;
 };
 
 // The per-T process-local witness: the address of this inline constant is the
@@ -49,7 +49,7 @@ struct object_carrier
 // singleton — it holds no mutable state, so the no-static-singletons discipline does
 // not apply (it is a type witness whose identity is its address).
 namespace detail {
-template <typename T>
+template<typename T>
 inline constexpr char type_key = 0;
 }
 

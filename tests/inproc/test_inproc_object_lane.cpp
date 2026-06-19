@@ -28,19 +28,20 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // the slot drops to zero. A balanced run ends with refs == 0 and release_calls == 1.
 struct counted_payload
 {
-    int value{0};
-    int release_calls{0};
+    int       value{0};
+    int       release_calls{0};
     loan_slot slot{};
 };
 
 object_carrier make_carrier(counted_payload &p, std::uint64_t topic, std::uint64_t tag,
                             std::uint64_t seq = 0)
 {
-    p.slot.object = &p.value;
-    p.slot.refs = 0;
-    p.slot.release = [](loan_slot *s) {
-        auto *owner = reinterpret_cast<counted_payload *>(
-            reinterpret_cast<std::byte *>(s) - offsetof(counted_payload, slot));
+    p.slot.object  = &p.value;
+    p.slot.refs    = 0;
+    p.slot.release = [](loan_slot *s)
+    {
+        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) -
+                                                          offsetof(counted_payload, slot));
         ++owner->release_calls;
     };
     return object_carrier{topic, tag, &p.value, seq, 0, &p.slot};
@@ -48,10 +49,10 @@ object_carrier make_carrier(counted_payload &p, std::uint64_t topic, std::uint64
 
 struct pair_fixture
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex{bus};
-    inproc_channel<> a{ex};
-    inproc_channel<> b{ex};
+    inproc_channel<>  a{ex};
+    inproc_channel<>  b{ex};
 
     pair_fixture()
     {
@@ -62,22 +63,25 @@ struct pair_fixture
 
 }
 
-TEST_CASE("inproc object lane delivers the carrier to the partner with field fidelity", "[inproc][object]")
+TEST_CASE("inproc object lane delivers the carrier to the partner with field fidelity",
+          "[inproc][object]")
 {
-    pair_fixture fx;
+    pair_fixture    fx;
     counted_payload p;
     p.value = 42;
 
     object_carrier received{};
-    bool got = false;
-    fx.b.on_object([&](const object_carrier &c) {
-        received = c;
-        got = true;
-        plexus::io::release(c);   // the receiving handler owns the delivered reference
-    });
+    bool           got = false;
+    fx.b.on_object(
+            [&](const object_carrier &c)
+            {
+                received = c;
+                got      = true;
+                plexus::io::release(c); // the receiving handler owns the delivered reference
+            });
 
     fx.a.send_object(make_carrier(p, 0xABCDu, 0x1111u, 7));
-    REQUIRE_FALSE(got);   // never synchronous from send_object()
+    REQUIRE_FALSE(got); // never synchronous from send_object()
 
     fx.ex.drain();
     REQUIRE(got);
@@ -91,19 +95,21 @@ TEST_CASE("inproc object lane delivers the carrier to the partner with field fid
     REQUIRE(p.release_calls == 1);
 }
 
-TEST_CASE("inproc object lane preserves FIFO ordering with interleaved byte packets", "[inproc][object]")
+TEST_CASE("inproc object lane preserves FIFO ordering with interleaved byte packets",
+          "[inproc][object]")
 {
-    pair_fixture fx;
+    pair_fixture    fx;
     counted_payload p0, p1;
 
     std::vector<std::string> order;
-    fx.b.on_data([&](std::span<const std::byte> d) {
-        order.emplace_back(reinterpret_cast<const char *>(d.data()), d.size());
-    });
-    fx.b.on_object([&](const object_carrier &c) {
-        order.push_back("obj:" + std::to_string(c.sequence));
-        plexus::io::release(c);
-    });
+    fx.b.on_data([&](std::span<const std::byte> d)
+                 { order.emplace_back(reinterpret_cast<const char *>(d.data()), d.size()); });
+    fx.b.on_object(
+            [&](const object_carrier &c)
+            {
+                order.push_back("obj:" + std::to_string(c.sequence));
+                plexus::io::release(c);
+            });
 
     fx.a.send(as_bytes(std::string{"first"}));
     fx.a.send_object(make_carrier(p0, 1, 1, 100));
@@ -119,9 +125,10 @@ TEST_CASE("inproc object lane preserves FIFO ordering with interleaved byte pack
     REQUIRE(p1.slot.refs == 0u);
 }
 
-TEST_CASE("inproc object lane releases on a closed partner with no handler fire", "[inproc][object]")
+TEST_CASE("inproc object lane releases on a closed partner with no handler fire",
+          "[inproc][object]")
 {
-    pair_fixture fx;
+    pair_fixture    fx;
     counted_payload p;
 
     bool fired = false;
@@ -131,16 +138,16 @@ TEST_CASE("inproc object lane releases on a closed partner with no handler fire"
     fx.a.send_object(make_carrier(p, 1, 1, 1));
     fx.ex.drain();
 
-    REQUIRE_FALSE(fired);          // a closed channel does not invoke its handler
-    REQUIRE(p.slot.refs == 0u);    // but the reference is still released
+    REQUIRE_FALSE(fired);       // a closed channel does not invoke its handler
+    REQUIRE(p.slot.refs == 0u); // but the reference is still released
     REQUIRE(p.release_calls == 1);
 }
 
 TEST_CASE("inproc object lane releases when the target endpoint has vanished", "[inproc][object]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex{bus};
-    counted_payload p;
+    counted_payload   p;
 
     {
         inproc_channel<> a{ex};
@@ -148,10 +155,10 @@ TEST_CASE("inproc object lane releases when the target endpoint has vanished", "
         a.connect_to(b.local_endpoint());
         // Enqueue toward b, then let b deregister before the step-loop delivers.
         a.send_object(make_carrier(p, 1, 1, 1));
-        REQUIRE(p.slot.refs == 1u);   // the bus holds its reference
-    }   // b (and a) destruct: the queued packet's target endpoint no longer exists
+        REQUIRE(p.slot.refs == 1u); // the bus holds its reference
+    } // b (and a) destruct: the queued packet's target endpoint no longer exists
 
-    ex.drain();   // deliver_one walks the now-empty channel set and must release
+    ex.drain(); // deliver_one walks the now-empty channel set and must release
     REQUIRE(p.slot.refs == 0u);
     REQUIRE(p.release_calls == 1);
 }
@@ -161,12 +168,14 @@ TEST_CASE("inproc object lane balances refcounts across a multi-packet burst", "
     pair_fixture fx;
 
     int fires = 0;
-    fx.b.on_object([&](const object_carrier &c) {
-        ++fires;
-        plexus::io::release(c);
-    });
+    fx.b.on_object(
+            [&](const object_carrier &c)
+            {
+                ++fires;
+                plexus::io::release(c);
+            });
 
-    constexpr int k_burst = 32;
+    constexpr int                k_burst = 32;
     std::vector<counted_payload> payloads(k_burst);
     for(int i = 0; i < k_burst; ++i)
         fx.a.send_object(make_carrier(payloads[i], 1, 1, static_cast<std::uint64_t>(i)));

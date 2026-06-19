@@ -36,8 +36,8 @@ enum class ring_geometry_mode : std::uint8_t
 // same-host provisioning only.
 struct shm_geometry
 {
-    std::uint32_t max_consumers = 0;
-    ring_geometry_mode mode = ring_geometry_mode::reliable_preserving;
+    std::uint32_t      max_consumers = 0;
+    ring_geometry_mode mode          = ring_geometry_mode::reliable_preserving;
 };
 
 }

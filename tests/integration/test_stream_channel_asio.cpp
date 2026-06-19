@@ -45,8 +45,8 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
-namespace wire = plexus::wire;
+namespace pio   = plexus::io;
+namespace wire  = plexus::wire;
 
 namespace {
 
@@ -55,9 +55,8 @@ namespace {
 // stays short. Passed EXPLICITLY — the 30s default would make the leg glacial.
 wire::stream_inbound_config short_cfg()
 {
-    return wire::stream_inbound_config{
-        .no_progress_floor = std::chrono::milliseconds(200),
-        .min_throughput_bytes_per_sec = 64};
+    return wire::stream_inbound_config{.no_progress_floor = std::chrono::milliseconds(200),
+                                       .min_throughput_bytes_per_sec = 64};
 }
 
 // Stand up a real loopback pair: an asio_listener accepts a short-config server
@@ -65,20 +64,27 @@ wire::stream_inbound_config short_cfg()
 // pumps one io_context.
 struct loopback
 {
-    ::asio::io_context io;
-    pasio::asio_listener listener{io, short_cfg()};
+    ::asio::io_context                   io;
+    pasio::asio_listener                 listener{io, short_cfg()};
     std::unique_ptr<pasio::asio_channel> server;
-    ::asio::ip::tcp::socket client{io};
+    ::asio::ip::tcp::socket              client{io};
 
     std::optional<wire::close_cause> caused;
-    int closes{0};
+    int                              closes{0};
 
     loopback()
     {
-        listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) {
-            server = std::move(ch);
-            server->on_protocol_close([this](wire::close_cause c) { caused = c; ++closes; });
-        });
+        listener.on_accepted(
+                [this](std::unique_ptr<pasio::asio_channel> ch)
+                {
+                    server = std::move(ch);
+                    server->on_protocol_close(
+                            [this](wire::close_cause c)
+                            {
+                                caused = c;
+                                ++closes;
+                            });
+                });
         listener.start({"tcp", "127.0.0.1:0"});
 
         ::asio::ip::tcp::endpoint ep(::asio::ip::make_address("127.0.0.1"), listener.port());
@@ -86,7 +92,7 @@ struct loopback
         pump_until([this] { return server != nullptr; });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -117,27 +123,29 @@ std::string data_body(const std::vector<std::byte> &frame)
 std::array<std::byte, wire::header_size> withholding_header(std::uint64_t payload_len)
 {
     wire::frame_header hdr{};
-    hdr.type = wire::msg_type::unidirectional;
-    hdr.flags = 0;
-    hdr.session_id = 0;
+    hdr.type         = wire::msg_type::unidirectional;
+    hdr.flags        = 0;
+    hdr.session_id   = 0;
     hdr.timestamp_ns = 0;
-    hdr.payload_len = payload_len;
+    hdr.payload_len  = payload_len;
     return wire::encode_header(hdr);
 }
 
 }
 
-TEST_CASE("asio stream channel: a TCP channel applies the socket-option overrides; the default leaves the kernel untouched; a unix channel no-ops",
+TEST_CASE("asio stream channel: a TCP channel applies the socket-option overrides; the default "
+          "leaves the kernel untouched; a unix channel no-ops",
           "[integration][asio][hardening][socket-options]")
 {
     // A connected loopback pair adopted into accept-mode channels: a configured channel
     // applies SO_SNDBUF/SO_RCVBUF + SO_KEEPALIVE so a get_option readback MOVES off the
     // default (the kernel may double or clamp, so the assertion is "moved", not "equals"),
     // while a default-constructed channel leaves the buffers untouched and keepalive off.
-    ::asio::io_context io;
+    ::asio::io_context        io;
     ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
 
-    auto connected_pair = [&] {
+    auto connected_pair = [&]
+    {
         ::asio::ip::tcp::socket peer{io};
         ::asio::ip::tcp::socket client{io};
         client.connect(acc.local_endpoint());
@@ -151,7 +159,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
     int default_rcv = 0;
     {
         auto [peer, client] = connected_pair();
-        ::asio::socket_base::send_buffer_size snd;
+        ::asio::socket_base::send_buffer_size    snd;
         ::asio::socket_base::receive_buffer_size rcv;
         client.get_option(snd);
         client.get_option(rcv);
@@ -169,17 +177,20 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
         opts.so_sndbuf = static_cast<std::size_t>(default_snd) / 2;
         opts.so_rcvbuf = static_cast<std::size_t>(default_rcv) / 2;
         opts.keepalive = true;
-        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
-                               pio::congestion::block, pio::egress_capacity::bounded_default(),
+        pasio::asio_channel ch{io,
+                               std::move(client),
+                               wire::stream_inbound_config{},
+                               pio::congestion::block,
+                               pio::egress_capacity::bounded_default(),
                                opts};
 
-        ::asio::socket_base::send_buffer_size snd;
+        ::asio::socket_base::send_buffer_size    snd;
         ::asio::socket_base::receive_buffer_size rcv;
-        ::asio::socket_base::keep_alive ka;
+        ::asio::socket_base::keep_alive          ka;
         ch.socket().get_option(snd);
         ch.socket().get_option(rcv);
         ch.socket().get_option(ka);
-        REQUIRE(snd.value() != default_snd);   // moved off the kernel default
+        REQUIRE(snd.value() != default_snd); // moved off the kernel default
         REQUIRE(rcv.value() != default_rcv);
         REQUIRE(ka.value() == true);
         ch.close();
@@ -191,13 +202,13 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
         pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
                                pio::congestion::block};
 
-        ::asio::socket_base::send_buffer_size snd;
+        ::asio::socket_base::send_buffer_size    snd;
         ::asio::socket_base::receive_buffer_size rcv;
-        ::asio::socket_base::keep_alive ka;
+        ::asio::socket_base::keep_alive          ka;
         ch.socket().get_option(snd);
         ch.socket().get_option(rcv);
         ch.socket().get_option(ka);
-        REQUIRE(snd.value() == default_snd);   // untouched
+        REQUIRE(snd.value() == default_snd); // untouched
         REQUIRE(rcv.value() == default_rcv);
         REQUIRE(ka.value() == false);
         ch.close();
@@ -208,7 +219,7 @@ TEST_CASE("asio stream channel: a bad-magic byte run fires on_protocol_close(inv
           "[integration][asio][hardening]")
 {
     constexpr int k_iterations = 20;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;
@@ -232,11 +243,12 @@ TEST_CASE("asio stream channel: a bad-magic byte run fires on_protocol_close(inv
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("asio stream channel: a header with a withheld payload fires on_protocol_close(no_progress_timeout)",
+TEST_CASE("asio stream channel: a header with a withheld payload fires "
+          "on_protocol_close(no_progress_timeout)",
           "[integration][asio][hardening]")
 {
     constexpr int k_iterations = 20;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;
@@ -266,8 +278,11 @@ pio::handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return pio::handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                     .compatible_version_major = 1, .compatible_version_minor = 0};
+    return pio::handshake_fsm_config{.self_id                  = id,
+                                     .version_major            = 1,
+                                     .version_minor            = 0,
+                                     .compatible_version_major = 1,
+                                     .compatible_version_minor = 0};
 }
 
 // A peer_session over a real accepted TCP channel, built dialer-style so its
@@ -278,31 +293,34 @@ pio::handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // Member order: io BEFORE the session so destruction unwinds the session first.
 struct session_under_peer
 {
-    using asio_policy = pasio::asio_policy;
-    using session = pio::peer_session<asio_policy>;
+    using asio_policy   = pasio::asio_policy;
+    using session       = pio::peer_session<asio_policy>;
     using msg_forwarder = pio::message_forwarder<asio_policy>;
     using rpc_forwarder = pio::procedure_forwarder<asio_policy>;
 
-    ::asio::io_context io;
-    pasio::asio_listener listener{io, short_cfg()};
+    ::asio::io_context      io;
+    pasio::asio_listener    listener{io, short_cfg()};
     ::asio::ip::tcp::socket client{io};
 
-    msg_forwarder messages{};
-    rpc_forwarder procedures{io, k_long_timeout};
+    msg_forwarder                  messages{};
+    rpc_forwarder                  procedures{io, k_long_timeout};
     pio::peer_context<asio_policy> ctx;
-    std::optional<session> peer;
+    std::optional<session>         peer;
 
     int drops{0};
 
     session_under_peer()
     {
-        listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) {
-            ctx.channel = std::move(ch);
-            ctx.node_name = "raw-peer";
-            peer.emplace(ctx, io, make_cfg(0x02), k_long_timeout, messages, procedures, false);
-            peer->start();
-            peer->on_transport_drop([this] { ++drops; });
-        });
+        listener.on_accepted(
+                [this](std::unique_ptr<pasio::asio_channel> ch)
+                {
+                    ctx.channel   = std::move(ch);
+                    ctx.node_name = "raw-peer";
+                    peer.emplace(ctx, io, make_cfg(0x02), k_long_timeout, messages, procedures,
+                                 false);
+                    peer->start();
+                    peer->on_transport_drop([this] { ++drops; });
+                });
         listener.start({"tcp", "127.0.0.1:0"});
 
         ::asio::ip::tcp::endpoint ep(::asio::ip::make_address("127.0.0.1"), listener.port());
@@ -310,7 +328,7 @@ struct session_under_peer
         pump_until([this] { return peer.has_value(); });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -333,7 +351,8 @@ struct session_under_peer
 
 }
 
-TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=drop and stalls under block",
+TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=drop and stalls "
+          "under block",
           "[integration][asio][hardening]")
 {
     // The byte-bounded write-queue edge proven over a real (connected) TCP socket whose
@@ -350,13 +369,14 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
     // outright. Without this the test depends on writing megabytes faster than the serial
     // drain empties them — a race that asan instrumentation loses (the drain keeps pace,
     // the queue never reaches the cap, and the shed/stall edge never fires).
-    auto run = [](pio::congestion mode) {
-        ::asio::io_context io;
+    auto run = [](pio::congestion mode)
+    {
+        ::asio::io_context        io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket peer{io};
-        ::asio::ip::tcp::socket client{io};
+        ::asio::ip::tcp::socket   peer{io};
+        ::asio::ip::tcp::socket   client{io};
         client.connect(acc.local_endpoint());
-        acc.accept(peer);                               // peer adopts but NEVER reads
+        acc.accept(peer); // peer adopts but NEVER reads
 
         // Pin both kernel buffers to the floor so async_write stalls after a few KiB, not
         // after megabytes. The kernel may round up, but to its own minimum (KiB-scale),
@@ -367,7 +387,8 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
 
         constexpr std::size_t cap = 4096;
         // Adopt the connected client end into an accept-mode channel with the small cap.
-        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
+        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode,
+                               pio::egress_capacity::of_bytes(cap)};
 
         std::optional<pio::io_error> err;
         ch.on_error([&](pio::io_error e) { err = e; });
@@ -379,8 +400,8 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
         for(int i = 0; i < 4096; ++i)
         {
             ch.send(kib);
-            io.poll();                                  // let async_write make what progress it can
-            REQUIRE(ch.backpressured() <= cap);         // NEVER grows past the cap
+            io.poll();                          // let async_write make what progress it can
+            REQUIRE(ch.backpressured() <= cap); // NEVER grows past the cap
             if(mode == pio::congestion::drop_newest && ch.dropped_count() > 0)
                 break;
             if(mode == pio::congestion::block && err.has_value())
@@ -389,13 +410,13 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
 
         if(mode == pio::congestion::drop_newest)
         {
-            REQUIRE(ch.dropped_count() > 0);            // the overrun was shed at the publisher
+            REQUIRE(ch.dropped_count() > 0); // the overrun was shed at the publisher
         }
         else
         {
             REQUIRE(err.has_value());
-            REQUIRE(*err == pio::io_error::would_block);   // block stalls, never grows
-            REQUIRE(ch.dropped_count() == 0);              // block sheds nothing
+            REQUIRE(*err == pio::io_error::would_block); // block stalls, never grows
+            REQUIRE(ch.dropped_count() == 0);            // block sheds nothing
         }
         REQUIRE(ch.backpressured() <= cap);
     };
@@ -404,7 +425,8 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
     run(pio::congestion::block);
 }
 
-TEST_CASE("asio stream channel: a sustained multi-frame burst gathers into coalesced writes and delivers every frame intact under asan",
+TEST_CASE("asio stream channel: a sustained multi-frame burst gathers into coalesced writes and "
+          "delivers every frame intact under asan",
           "[integration][asio][hardening][throughput]")
 {
     // The owner-lifetime proof under a throughput cell. A real loopback pair: the
@@ -417,38 +439,40 @@ TEST_CASE("asio stream channel: a sustained multi-frame burst gathers into coale
     // that dropped/aliased an owner would corrupt or lose a frame). Looped for
     // reproducibility (a transport claim is never made from one run).
     constexpr int k_iterations = 8;
-    constexpr int k_frames = 2000;            // a sustained cell: deep enough to force gathering
+    constexpr int k_frames     = 2000; // a sustained cell: deep enough to force gathering
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context io;
+        ::asio::io_context        io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket raw_server{io};
-        ::asio::ip::tcp::socket raw_client{io};
+        ::asio::ip::tcp::socket   raw_server{io};
+        ::asio::ip::tcp::socket   raw_client{io};
         raw_client.connect(acc.local_endpoint());
         acc.accept(raw_server);
 
         // A generous cap so the burst backlog accumulates (the gather has frames to coalesce)
         // without the cap shedding; congestion=block surfaces nothing while the peer reads.
         constexpr std::size_t cap = 64u * 1024u * 1024u;
-        pasio::asio_channel server{io, std::move(raw_server), wire::stream_inbound_config{},
-                                   pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
-        pasio::asio_channel client{io, std::move(raw_client), wire::stream_inbound_config{},
-                                   pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
+        pasio::asio_channel   server{io, std::move(raw_server), wire::stream_inbound_config{},
+                                     pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
+        pasio::asio_channel   client{io, std::move(raw_client), wire::stream_inbound_config{},
+                                     pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
 
         std::vector<std::vector<std::byte>> received;
-        server.on_data([&](std::span<const std::byte> d) { received.emplace_back(d.begin(), d.end()); });
+        server.on_data([&](std::span<const std::byte> d)
+                       { received.emplace_back(d.begin(), d.end()); });
 
         // Distinct framed payloads: each frame's body encodes its index so an out-of-order
         // or corrupted gather is caught, not just a count mismatch.
-        auto frame_for = [](int i) {
+        auto frame_for = [](int i)
+        {
             wire::frame_header hdr{};
-            hdr.type = wire::msg_type::unidirectional;
-            const std::string body = "frame-" + std::to_string(i);
+            hdr.type                    = wire::msg_type::unidirectional;
+            const std::string      body = "frame-" + std::to_string(i);
             std::vector<std::byte> payload(body.size());
             std::memcpy(payload.data(), body.data(), body.size());
             hdr.payload_len = payload.size();
             std::vector<std::byte> out;
-            auto h = wire::encode_header(hdr);
+            auto                   h = wire::encode_header(hdr);
             out.insert(out.end(), h.begin(), h.end());
             out.insert(out.end(), payload.begin(), payload.end());
             return out;
@@ -465,15 +489,16 @@ TEST_CASE("asio stream channel: a sustained multi-frame burst gathers into coale
         }
 
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-        while(static_cast<int>(received.size()) < k_frames
-              && std::chrono::steady_clock::now() < bound)
+        while(static_cast<int>(received.size()) < k_frames &&
+              std::chrono::steady_clock::now() < bound)
             io.poll();
 
-        REQUIRE(static_cast<int>(received.size()) == k_frames);   // every frame delivered, none lost to a freed owner
+        REQUIRE(static_cast<int>(received.size()) ==
+                k_frames); // every frame delivered, none lost to a freed owner
         for(int i = 0; i < k_frames; ++i)
         {
             const std::string body = data_body(received[i]);
-            REQUIRE(body == "frame-" + std::to_string(i));        // intact and in FIFO order
+            REQUIRE(body == "frame-" + std::to_string(i)); // intact and in FIFO order
         }
 
         client.close();
@@ -495,7 +520,8 @@ std::vector<std::byte> ramp_payload(std::size_t n)
 
 }
 
-TEST_CASE("asio stream channel: a 16 MB single frame round-trips byte-identically over a real TCP loopback pair, looped",
+TEST_CASE("asio stream channel: a 16 MB single frame round-trips byte-identically over a real TCP "
+          "loopback pair, looped",
           "[integration][asio][envelope16]")
 {
     // The lifted message-size envelope on the TCP stream path: one 16 MiB frame written end
@@ -506,36 +532,38 @@ TEST_CASE("asio stream channel: a 16 MB single frame round-trips byte-identicall
     // Looped in-body and re-run across process runs (a transport claim is never made from one
     // run); the frame body encodes a position ramp so a reorder or corruption is caught, not
     // just a size mismatch.
-    constexpr std::size_t k_payload = 16u * 1024u * 1024u;
-    constexpr std::size_t k_ceiling = 20u * 1024u * 1024u;
+    constexpr std::size_t       k_payload = 16u * 1024u * 1024u;
+    constexpr std::size_t       k_ceiling = 20u * 1024u * 1024u;
     wire::stream_inbound_config cfg{};
-    cfg.max_payload_size = k_ceiling;
-    cfg.buffered_bytes_cap = k_ceiling + wire::header_size;
+    cfg.max_payload_size          = k_ceiling;
+    cfg.buffered_bytes_cap        = k_ceiling + wire::header_size;
     constexpr std::size_t k_queue = k_ceiling + 4u * 1024u * 1024u;
 
     constexpr int k_iterations = 3;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context io;
+        ::asio::io_context        io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket raw_server{io};
-        ::asio::ip::tcp::socket raw_client{io};
+        ::asio::ip::tcp::socket   raw_server{io};
+        ::asio::ip::tcp::socket   raw_client{io};
         raw_client.connect(acc.local_endpoint());
         acc.accept(raw_server);
 
-        pasio::asio_channel server{io, std::move(raw_server), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
-        pasio::asio_channel client{io, std::move(raw_client), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
+        pasio::asio_channel server{io, std::move(raw_server), cfg, pio::congestion::block,
+                                   pio::egress_capacity::of_bytes(k_queue)};
+        pasio::asio_channel client{io, std::move(raw_client), cfg, pio::congestion::block,
+                                   pio::egress_capacity::of_bytes(k_queue)};
 
-        std::vector<std::byte> got;
+        std::vector<std::byte>           got;
         std::optional<wire::close_cause> closed;
         server.on_data([&](std::span<const std::byte> d) { got.assign(d.begin(), d.end()); });
         server.on_protocol_close([&](wire::close_cause c) { closed = c; });
 
-        const auto body = ramp_payload(k_payload);
+        const auto         body = ramp_payload(k_payload);
         wire::frame_header hdr{};
-        hdr.type = wire::msg_type::unidirectional;
-        hdr.payload_len = body.size();
+        hdr.type         = wire::msg_type::unidirectional;
+        hdr.payload_len  = body.size();
         const auto frame = wire::encode_frame(hdr, std::span<const std::byte>{body});
         client.send(std::span<const std::byte>{frame});
 
@@ -545,9 +573,9 @@ TEST_CASE("asio stream channel: a 16 MB single frame round-trips byte-identicall
         while(got.size() < frame.size() && !closed && std::chrono::steady_clock::now() < bound)
             io.poll();
 
-        REQUIRE_FALSE(closed.has_value());          // the receive ceiling admitted the 16 MB frame
+        REQUIRE_FALSE(closed.has_value()); // the receive ceiling admitted the 16 MB frame
         REQUIRE(got.size() == frame.size());
-        REQUIRE(got == frame);                       // byte-equal reassembly, no reorder/corruption
+        REQUIRE(got == frame); // byte-equal reassembly, no reorder/corruption
         const auto delivered_body = std::span<const std::byte>{got}.subspan(wire::header_size);
         REQUIRE(std::equal(delivered_body.begin(), delivered_body.end(), body.begin()));
 
@@ -559,11 +587,12 @@ TEST_CASE("asio stream channel: a 16 MB single frame round-trips byte-identicall
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("asio stream channel: a FRAMING protocol-close does NOT re-dial while a real socket drop does",
+TEST_CASE("asio stream channel: a FRAMING protocol-close does NOT re-dial while a real socket drop "
+          "does",
           "[integration][asio][hardening]")
 {
     constexpr int k_iterations = 20;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // Framing close: a header-size+ bad-magic run trips invalid_magic in the

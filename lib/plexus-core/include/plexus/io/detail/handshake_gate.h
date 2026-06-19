@@ -36,7 +36,7 @@ public:
     using drain_fn = plexus::detail::move_only_function<void(std::span<const std::byte>)>;
 
     explicit handshake_gate(drain_fn drain)
-        : m_drain(std::move(drain))
+            : m_drain(std::move(drain))
     {
     }
 
@@ -76,9 +76,9 @@ public:
     void reset() { m_buffer.clear(); }
 
 private:
-    drain_fn m_drain;
+    drain_fn                           m_drain;
     std::deque<std::vector<std::byte>> m_buffer;
-    bool m_ready{false};
+    bool                               m_ready{false};
 };
 
 }

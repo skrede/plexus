@@ -37,7 +37,7 @@
 // one such broker per instance, so two peers share an shm ring by topic name.
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io::shm;
+namespace pio   = plexus::io::shm;
 using plexus::shm::posix_shm_region_broker;
 using plexus::shm::region_handle;
 
@@ -53,8 +53,8 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
+                     0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -74,13 +74,13 @@ constexpr std::uint32_t k_payload = 0x5A4E0FEEu;
 TEST_CASE("shm.same_host_transports the portable composition stands up a live node",
           "[shm][mux][node][same_host_transports]")
 {
-    ::asio::io_context io;
+    ::asio::io_context                  io;
     plexus::discovery::static_discovery disc{{}};
 
     pasio::same_host_transports ts{io};
 
     plexus::node_id id{};
-    id[0] = std::byte{0x2A};
+    id[0]     = std::byte{0x2A};
     auto node = ts.make_node(disc, id, plexus::node_options{});
 
     const std::string sock = "/tmp/plexus-same-host-" + std::to_string(::getpid()) + ".sock";
@@ -93,7 +93,7 @@ TEST_CASE("shm.same_host_transports the portable composition stands up a live no
 TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by name",
           "[shm][same_host_transports][roundtrip]")
 {
-    const std::string fqn = "topic.same_host_transports." + std::to_string(::getpid());
+    const std::string        fqn  = "topic.same_host_transports." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -111,7 +111,7 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
                 ;
 
             posix_shm_region_broker broker;
-            region_handle ctrl, slab;
+            region_handle           ctrl, slab;
             if(broker.attach(control_name(fqn), ctrl) == pio::region_status::ok &&
                broker.attach(slab_name(fqn), slab) == pio::region_status::ok)
             {
@@ -128,7 +128,7 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
                         for(;;)
                         {
                             pio::broadcast_ring::consume_result out;
-                            const auto st = ring.consume(cursor, out);
+                            const auto                          st = ring.consume(cursor, out);
                             if(st == pio::loan_status::ok)
                             {
                                 std::uint32_t got = 0;
@@ -152,7 +152,7 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
         }
 
         posix_shm_region_broker broker;
-        region_handle ctrl, slab;
+        region_handle           ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
                               pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn),
@@ -169,8 +169,8 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
 
         pio::broadcast_ring::claim_result claim;
         REQUIRE(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable,
-                                       plexus::io::congestion::block, claim) ==
-                pio::loan_status::ok);
+                                       plexus::io::congestion::block,
+                                       claim) == pio::loan_status::ok);
         std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
         REQUIRE(ring.commit(claim.position, sizeof(k_payload)) == pio::loan_status::ok);
 

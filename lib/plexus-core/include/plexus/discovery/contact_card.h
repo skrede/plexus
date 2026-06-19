@@ -26,11 +26,11 @@ namespace plexus::discovery {
 inline constexpr std::uint32_t k_contact_card_schema_version = 1;
 
 inline constexpr std::string_view k_card_node_id_key = "node_id";
-inline constexpr std::string_view k_card_schema_key = "plexus/schema";
+inline constexpr std::string_view k_card_schema_key  = "plexus/schema";
 
 struct listening_transport
 {
-    std::string transport;
+    std::string   transport;
     std::uint16_t port;
 };
 
@@ -39,7 +39,7 @@ namespace detail {
 inline std::string hex_encode(const node_id &id)
 {
     static constexpr char digits[] = "0123456789abcdef";
-    std::string out;
+    std::string           out;
     out.reserve(id.size() * 2);
     for(const std::byte b : id)
     {
@@ -59,9 +59,12 @@ inline std::string hex_encode(const node_id &id)
     node_id id{};
     if(hex.size() != id.size() * 2)
         return std::nullopt;
-    const auto nibble = [](char c) -> int {
-        if(c >= '0' && c <= '9') return c - '0';
-        if(c >= 'a' && c <= 'f') return c - 'a' + 10;
+    const auto nibble = [](char c) -> int
+    {
+        if(c >= '0' && c <= '9')
+            return c - '0';
+        if(c >= 'a' && c <= 'f')
+            return c - 'a' + 10;
         return -1;
     };
     for(std::size_t i = 0; i < id.size(); ++i)
@@ -95,7 +98,8 @@ assemble_contact_card(const node_id &id, const std::vector<listening_transport> 
     card.emplace_back(std::string{k_card_node_id_key}, detail::hex_encode(id));
     for(const auto &t : transports)
         card.emplace_back(detail::port_key(t.transport), std::to_string(t.port));
-    card.emplace_back(std::string{k_card_schema_key}, std::to_string(k_contact_card_schema_version));
+    card.emplace_back(std::string{k_card_schema_key},
+                      std::to_string(k_contact_card_schema_version));
     return card;
 }
 
@@ -103,7 +107,7 @@ assemble_contact_card(const node_id &id, const std::vector<listening_transport> 
 // the advertised endpoint with no hardcoded port. Absent or unparsable yields none.
 [[nodiscard]] inline std::optional<std::uint16_t>
 read_transport_port(const std::vector<std::pair<std::string, std::string>> &card,
-                    std::string_view transport)
+                    std::string_view                                        transport)
 {
     const std::string key = detail::port_key(transport);
     for(const auto &[k, v] : card)
@@ -111,8 +115,8 @@ read_transport_port(const std::vector<std::pair<std::string, std::string>> &card
         if(k != key)
             continue;
         std::uint16_t port{};
-        const char *first = v.data();
-        const char *last = v.data() + v.size();
+        const char   *first = v.data();
+        const char   *last  = v.data() + v.size();
         if(std::from_chars(first, last, port).ec == std::errc{})
             return port;
         return std::nullopt;

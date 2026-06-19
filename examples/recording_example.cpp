@@ -29,7 +29,7 @@
 #include "plexus/discovery/static_discovery.h"
 
 #ifdef PLEXUS_WITH_MCAP_TRANSCODE
-#include "plexus/tools/flat_to_mcap.h"
+    #include "plexus/tools/flat_to_mcap.h"
 #endif
 
 #include <span>
@@ -73,8 +73,9 @@ struct reading_codec
     {
         if(b.size() != 8)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
-        auto u32 = [&](int o) {
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+        auto u32 = [&](int o)
+        {
             std::uint32_t v = 0;
             for(int i = 0; i < 4; ++i)
                 v |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(b[o + i])) << (8 * i);
@@ -107,9 +108,9 @@ private:
 plexus::node_options opts(std::uint64_t seed, bool eager, plexus::recording_qos capture)
 {
     plexus::node_options o;
-    o.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                               std::chrono::milliseconds(2000),
-                                               std::nullopt, std::nullopt};
+    o.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                  std::chrono::milliseconds(2000), std::nullopt,
+                                                  std::nullopt};
     o.redial_seed  = seed;
     o.dial_eagerly = eager;
     o.capture      = capture;
@@ -149,14 +150,16 @@ int main()
         auto rec = pub_node.make_recorder(sink);
 
         {
-            plexus::publisher<reading_codec> temp{
-                pub_node, "telemetry.temperature", plexus::typed_publisher_options{}, reading_codec{}};
-            plexus::publisher<reading_codec> press{
-                pub_node, "telemetry.pressure", plexus::typed_publisher_options{}, reading_codec{}};
-            plexus::subscriber<reading_codec> temp_sub{
-                sub_node, "telemetry.temperature", [](const reading &) {}};
-            plexus::subscriber<reading_codec> press_sub{
-                sub_node, "telemetry.pressure", [](const reading &) {}};
+            plexus::publisher<reading_codec>  temp{pub_node, "telemetry.temperature",
+                                                   plexus::typed_publisher_options{},
+                                                   reading_codec{}};
+            plexus::publisher<reading_codec>  press{pub_node, "telemetry.pressure",
+                                                    plexus::typed_publisher_options{},
+                                                    reading_codec{}};
+            plexus::subscriber<reading_codec> temp_sub{sub_node, "telemetry.temperature",
+                                                       [](const reading &) {}};
+            plexus::subscriber<reading_codec> press_sub{sub_node, "telemetry.pressure",
+                                                        [](const reading &) {}};
             ex.drain();
 
             for(std::uint32_t i = 0; i < 8; ++i)
@@ -184,16 +187,15 @@ int main()
 
 #ifdef PLEXUS_WITH_MCAP_TRANSCODE
     const std::filesystem::path mcap_path = "recording_example_capture.mcap";
-    const auto result = plexus::tools::flat_to_mcap(sink.bytes(), mcap_path);
+    const auto                  result    = plexus::tools::flat_to_mcap(sink.bytes(), mcap_path);
     if(result.ok)
         std::cout << "transcoded to " << mcap_path.string() << ": " << result.channels
                   << " channels, " << result.messages << " messages (open in Foxglove)\n";
     else
         std::cout << "transcode failed: " << result.error << '\n';
 #else
-    std::cout << "build with -DPLEXUS_BUILD_MCAP_TRANSCODE=ON to convert "
-              << flat_path.string() << " to MCAP, or run: mcap_transcode "
-              << flat_path.string() << " out.mcap\n";
+    std::cout << "build with -DPLEXUS_BUILD_MCAP_TRANSCODE=ON to convert " << flat_path.string()
+              << " to MCAP, or run: mcap_transcode " << flat_path.string() << " out.mcap\n";
 #endif
 
     return 0;

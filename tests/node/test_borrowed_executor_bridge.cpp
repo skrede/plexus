@@ -40,7 +40,7 @@
 #include <optional>
 
 #ifdef __linux__
-#include <filesystem>
+    #include <filesystem>
 #endif
 
 namespace {
@@ -51,12 +51,12 @@ using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 
-using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using inproc_publisher = plexus::publisher<>;
+using inproc_node       = plexus::node<inproc_policy, inproc_transport<>>;
+using inproc_publisher  = plexus::publisher<>;
 using inproc_subscriber = plexus::subscriber<>;
-using inproc_caller = plexus::caller<>;
-using inproc_procedure = plexus::procedure<>;
-using reply_t = plexus::reply;
+using inproc_caller     = plexus::caller<>;
+using inproc_procedure  = plexus::procedure<>;
+using reply_t           = plexus::reply;
 
 plexus::node_id make_id(std::uint8_t seed)
 {
@@ -68,10 +68,10 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0xB0D6E5u;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0xB0D6E5u;
     opts.dial_eagerly = eager;
     return opts;
 }
@@ -102,7 +102,7 @@ std::size_t os_thread_count()
 }
 #endif
 
-template <typename Pred>
+template<typename Pred>
 bool pump_until(inproc_executor<> &ex, Pred done, int step_budget = 100000)
 {
     for(int i = 0; i < step_budget; ++i)
@@ -122,11 +122,11 @@ bool pump_until(inproc_executor<> &ex, Pred done, int step_budget = 100000)
 // lifetime contract.
 struct host_bridge
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -151,7 +151,8 @@ struct host_bridge
 // Family 1: no thread is spawned by node construction or by a full pub/sub + call
 // round-trip — the OS thread count is identical before and after (Linux). The host owns
 // the only loop, and it is driven from the test thread.
-TEST_CASE("borrowed executor: no thread is spawned across construction and a full round-trip", "[node][borrowed-executor]")
+TEST_CASE("borrowed executor: no thread is spawned across construction and a full round-trip",
+          "[node][borrowed-executor]")
 {
 #ifdef __linux__
     const std::size_t before = os_thread_count();
@@ -161,14 +162,13 @@ TEST_CASE("borrowed executor: no thread is spawned across construction and a ful
     h.connect();
 
     std::vector<std::string> got;
-    inproc_subscriber sub{h.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
-    inproc_publisher pub{h.b, "topic"};
+    inproc_subscriber sub{h.a, "topic",
+                          [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_publisher  pub{h.b, "topic"};
 
     inproc_procedure proc{
-        h.b, "rpc",
-        [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply) {
-            reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param)));
-        }};
+            h.b, "rpc", [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply)
+            { reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param))); }};
     inproc_caller call{h.a, "rpc"};
     h.pump();
 
@@ -178,7 +178,8 @@ TEST_CASE("borrowed executor: no thread is spawned across construction and a ful
 
     std::optional<std::string> rpc_got;
     call.call(as_bytes("ping"),
-              [&](plexus::expected<reply_t, std::error_code> r) {
+              [&](plexus::expected<reply_t, std::error_code> r)
+              {
                   REQUIRE(static_cast<bool>(r));
                   rpc_got = to_string(r.value().bytes);
               });
@@ -195,7 +196,8 @@ TEST_CASE("borrowed executor: no thread is spawned across construction and a ful
 // sampled at several pipeline stages — after construction, after the subscribe demand,
 // and after the publish — and each time the work resolves ONLY once the host steps the
 // loop. The node never drives its own loop.
-TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop", "[node][borrowed-executor]")
+TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop",
+          "[node][borrowed-executor]")
 {
     host_bridge h;
     h.connect();
@@ -203,8 +205,9 @@ TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop"
     std::vector<std::string> got;
 
     // Sample point 1: a fresh subscriber's standing fan is posted, not run inline.
-    inproc_subscriber sub{h.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
-    inproc_publisher pub{h.b, "topic"};
+    inproc_subscriber sub{h.a, "topic",
+                          [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_publisher  pub{h.b, "topic"};
     REQUIRE(got.empty());
 
     // Sample point 2: still nothing delivered before the loop turns; the subscribe demand
@@ -225,27 +228,27 @@ TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop"
 // The round-trip is itself looped under the host pump: every iteration the host drives
 // the loop and the call completes, proving the no-own-loop property holds repeatedly, not
 // once.
-TEST_CASE("borrowed executor: the host-pumped round-trip is reproducible, looped", "[node][borrowed-executor]")
+TEST_CASE("borrowed executor: the host-pumped round-trip is reproducible, looped",
+          "[node][borrowed-executor]")
 {
     constexpr int k_iterations = 8;
-    host_bridge h;
+    host_bridge   h;
     h.connect();
 
     inproc_procedure proc{
-        h.b, "rpc",
-        [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply) {
-            reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param)));
-        }};
+            h.b, "rpc", [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply)
+            { reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param))); }};
     inproc_caller call{h.a, "rpc"};
     h.pump();
 
     int proven = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
-        const std::string req = "req-" + std::to_string(i);
+        const std::string          req = "req-" + std::to_string(i);
         std::optional<std::string> got;
         call.call(as_bytes(req),
-                  [&](plexus::expected<reply_t, std::error_code> r) {
+                  [&](plexus::expected<reply_t, std::error_code> r)
+                  {
                       REQUIRE(static_cast<bool>(r));
                       got = to_string(r.value().bytes);
                   });

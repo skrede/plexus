@@ -71,14 +71,14 @@ public:
     // nodes), perform the irreducible single async_write over them and invoke the
     // completion with ok once it finishes.
     using buffer_sequence = std::span<const std::span<const std::byte>>;
-    using completion = plexus::detail::move_only_function<void(bool)>;
-    using send_sink = plexus::detail::move_only_function<void(buffer_sequence, completion)>;
+    using completion      = plexus::detail::move_only_function<void(bool)>;
+    using send_sink       = plexus::detail::move_only_function<void(buffer_sequence, completion)>;
 
     explicit stream_send_queue(send_sink sink, std::size_t byte_cap = unbounded,
                                std::size_t gather_limit = default_gather_limit)
-        : m_sink(std::move(sink))
-        , m_byte_cap(byte_cap)
-        , m_gather_limit(gather_limit)
+            : m_sink(std::move(sink))
+            , m_byte_cap(byte_cap)
+            , m_gather_limit(gather_limit)
     {
     }
 
@@ -125,8 +125,8 @@ public:
     // fail path closes the block so a failed write does not chain onto a dead socket.
     void close()
     {
-        m_open = false;
-        m_sending = false;
+        m_open      = false;
+        m_sending   = false;
         m_in_flight = 0;
         m_queue.clear();
         m_views.clear();
@@ -177,34 +177,34 @@ private:
             m_sending = false;
             return;
         }
-        m_sending = true;
+        m_sending   = true;
         m_in_flight = std::min(m_gather_limit, m_queue.size());
         m_views.clear();
         for(std::size_t i = 0; i < m_in_flight; ++i)
             m_views.push_back(static_cast<std::span<const std::byte>>(m_queue[i]));
         m_sink(buffer_sequence{m_views},
-            [this](bool /*ok*/)
-            {
-                if(!m_open)
-                    return;
-                for(std::size_t i = 0; i < m_in_flight; ++i)
-                {
-                    m_bytes -= m_queue.front().size();
-                    m_queue.pop_front();
-                }
-                drive();
-            });
+               [this](bool /*ok*/)
+               {
+                   if(!m_open)
+                       return;
+                   for(std::size_t i = 0; i < m_in_flight; ++i)
+                   {
+                       m_bytes -= m_queue.front().size();
+                       m_queue.pop_front();
+                   }
+                   drive();
+               });
     }
 
-    send_sink m_sink;
-    std::size_t m_byte_cap;
-    std::size_t m_gather_limit;
-    std::deque<wire_bytes<>> m_queue;
-    std::vector<std::span<const std::byte>> m_views;   // reused gather scratch (grows once)
-    std::size_t m_in_flight{0};
-    std::size_t m_bytes{0};
-    bool m_open{true};
-    bool m_sending{false};
+    send_sink                               m_sink;
+    std::size_t                             m_byte_cap;
+    std::size_t                             m_gather_limit;
+    std::deque<wire_bytes<>>                m_queue;
+    std::vector<std::span<const std::byte>> m_views; // reused gather scratch (grows once)
+    std::size_t                             m_in_flight{0};
+    std::size_t                             m_bytes{0};
+    bool                                    m_open{true};
+    bool                                    m_sending{false};
 };
 
 }

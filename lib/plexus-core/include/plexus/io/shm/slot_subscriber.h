@@ -57,9 +57,9 @@ public:
     static constexpr std::uint32_t default_spin_budget = 256;
 
     explicit slot_subscriber(broadcast_ring &ring,
-                             std::uint32_t spin_budget = default_spin_budget) noexcept
-        : m_ring(ring)
-        , m_spin_budget(spin_budget)
+                             std::uint32_t   spin_budget = default_spin_budget) noexcept
+            : m_ring(ring)
+            , m_spin_budget(spin_budget)
     {
         if(m_ring.register_cursor(m_cursor_index) == loan_status::ok)
         {
@@ -75,10 +75,10 @@ public:
             m_ring.unregister_cursor(m_cursor_index);
     }
 
-    slot_subscriber(const slot_subscriber &) = delete;
+    slot_subscriber(const slot_subscriber &)            = delete;
     slot_subscriber &operator=(const slot_subscriber &) = delete;
-    slot_subscriber(slot_subscriber &&) = delete;
-    slot_subscriber &operator=(slot_subscriber &&) = delete;
+    slot_subscriber(slot_subscriber &&)                 = delete;
+    slot_subscriber &operator=(slot_subscriber &&)      = delete;
 
     // Reads the next message for this cursor, resolving lap-behind/skip-tombstone
     // internally so the caller only ever observes ok or empty.
@@ -91,7 +91,7 @@ public:
         for(;;)
         {
             broadcast_ring::consume_result consumed;
-            const loan_status st = m_ring.consume(m_cursor, consumed);
+            const loan_status              st = m_ring.consume(m_cursor, consumed);
             if(st == loan_status::empty)
             {
                 // Adaptive spin-then-park: a back-to-back message may land within the
@@ -135,7 +135,7 @@ public:
         }
     }
 
-    bool registered() const noexcept { return m_registered; }
+    bool          registered() const noexcept { return m_registered; }
     std::uint64_t cursor() const noexcept { return m_cursor; }
 
 private:

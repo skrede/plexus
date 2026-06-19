@@ -63,15 +63,15 @@ namespace plexus::io {
 // per-post liveness guard (a guard reading a member would itself touch dead `this`,
 // and a shared alive-token contradicts the no-shared-ownership model); the owner
 // sequences teardown.
-template <typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
+template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
 {
 public:
     using executor_type = typename Policy::executor_type;
-    using channel_type = typename Policy::byte_channel_type;
+    using channel_type  = typename Policy::byte_channel_type;
     using registry_type = peer_session_registry<Policy, Transport, Clock>;
-    using session_type = peer_session<Policy>;
+    using session_type  = peer_session<Policy>;
 
     // dial_eagerly is required-with-default: false (LAZY) is the default the caller
     // may override to true (EAGER). It is a bool, NOT a std::optional<bool> — its
@@ -81,21 +81,37 @@ public:
                    const reconnect_config &redial, std::uint64_t redial_seed,
                    bool dial_eagerly = false, log::logger &logger = shared_null_logger(),
                    std::size_t global_default = io::global_default_max_message_bytes)
-        : m_transport(transport)
-        , m_executor(executor)
-        , m_monitor(m_executor)
-        , m_messages(global_default, logger)
-        , m_procedures(executor, handshake_timeout, logger)
-        , m_security_fanout{*this}
-        , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures,
-                  redial, redial_seed, logger, {}, {}, {}, {}, m_security_fanout, {}, {}}
-        , m_registry(transport, m_build)
-        , m_coordinator(m_registry)
-        , m_dial_eagerly(dial_eagerly)
+            : m_transport(transport)
+            , m_executor(executor)
+            , m_monitor(m_executor)
+            , m_messages(global_default, logger)
+            , m_procedures(executor, handshake_timeout, logger)
+            , m_security_fanout{*this}
+            , m_build{executor,
+                      fsm_cfg,
+                      handshake_timeout,
+                      m_messages,
+                      m_procedures,
+                      redial,
+                      redial_seed,
+                      logger,
+                      {},
+                      {},
+                      {},
+                      {},
+                      m_security_fanout,
+                      {},
+                      {}}
+            , m_registry(transport, m_build)
+            , m_coordinator(m_registry)
+            , m_dial_eagerly(dial_eagerly)
     {
-        m_transport.on_dialed([this](std::unique_ptr<channel_type> ch, const endpoint &ep) { on_dialed(std::move(ch), ep); });
-        m_transport.on_accepted([this](std::unique_ptr<channel_type> ch) { on_accepted(std::move(ch)); });
-        m_transport.on_dial_failed([this](const endpoint &ep, io_error) { m_registry.notify_dial_failed(ep); });
+        m_transport.on_dialed([this](std::unique_ptr<channel_type> ch, const endpoint &ep)
+                              { on_dialed(std::move(ch), ep); });
+        m_transport.on_accepted([this](std::unique_ptr<channel_type> ch)
+                                { on_accepted(std::move(ch)); });
+        m_transport.on_dial_failed([this](const endpoint &ep, io_error)
+                                   { m_registry.notify_dial_failed(ep); });
         m_build.on_lifecycle = [this](const lifecycle_event &ev) { dispatch_lifecycle(ev); };
         // The egress shed routes through the posted drop_sink (the receive-side causes
         // already install it at their sites) so an egress overflow reaches the observer
@@ -115,41 +131,45 @@ public:
         // acquires/releases the additive ring through the injected gate.
         m_messages.on_demand_transition([this](std::string_view node_name, std::string_view fqn,
                                                demand_transition dir, demand_role role)
-        { m_coordinator.on_edge(node_name, fqn, dir, role); });
+                                        { m_coordinator.on_edge(node_name, fqn, dir, role); });
         // The publish fan's per-message companion route: a fitting message for a co-host
         // (peer, topic) the coordinator minted a companion ring for rides that ring (zero-
         // copy same-host), an over-cap / off-host / un-minted message keeps the recorded
         // wire sub.channel (the dual-delivery fail-safe). Inert until the coordinator holds
         // a companion (the node installs the mint gate only for an shm-bearing composition).
-        m_messages.on_companion_route([this](std::string_view node_name, std::string_view fqn,
-                                             std::size_t bytes) -> channel_type *
-        { return m_coordinator.companion_for(node_name, fqn, bytes); });
+        m_messages.on_companion_route(
+                [this](std::string_view node_name, std::string_view fqn,
+                       std::size_t bytes) -> channel_type *
+                { return m_coordinator.companion_for(node_name, fqn, bytes); });
         // The loan-path encode trigger: the forwarder's typed fast path forces its lazy
         // encode ONLY for a topic the policy selects at payload fidelity and admits this
         // tick, passing the publish path's own now_ns so the time-window mechanism reads no
         // extra clock. An unset hook (no capture) keeps the fast path zero-encode.
         m_messages.set_capture_wants_payload(
-            [this](std::uint64_t hash) { return m_capture.wants_payload(hash, wire::now_timestamp_ns()); });
+                [this](std::uint64_t hash)
+                { return m_capture.wants_payload(hash, wire::now_timestamp_ns()); });
         m_procedures.on_rpc_call(rpc_call_sink());
         m_procedures.on_rpc_serve(rpc_serve_sink());
         m_procedures.on_rpc_reply(rpc_reply_sink());
         // The receive path stamps the one monitor: a data frame stamps deadline +
         // presence (set_on_data_stamp), a heartbeat stamps presence only (on_stamp_seen
         // routed through the build context to each session). Both are plain stores.
-        m_messages.set_on_data_stamp(
-            [this](const node_id &ep, std::uint64_t topic_hash) { m_monitor.stamp_data(ep, topic_hash); });
+        m_messages.set_on_data_stamp([this](const node_id &ep, std::uint64_t topic_hash)
+                                     { m_monitor.stamp_data(ep, topic_hash); });
         m_build.on_stamp_seen = [this](const node_id &ep) { m_monitor.stamp_seen(ep); };
         // Route a fired timing event up the engine's own posted observer seam (mirrors
         // dispatch_lifecycle's posted fan-out — the carrier copies by value into the turn).
-        m_monitor.on_liveness([this](const liveness_event &ev) {
-            Policy::post(m_executor, [this, ev] { fan_liveness(ev); });
-        });
+        m_monitor.on_liveness([this](const liveness_event &ev)
+                              { Policy::post(m_executor, [this, ev] { fan_liveness(ev); }); });
         // The keepalive heartbeat emit rides the SAME single tick (an additional per-tick
         // action, NOT a second timer): on each tick, emit a heartbeat to every connected
         // peer so a silent-but-alive publisher still asserts presence.
-        m_monitor.on_tick_action([this] {
-            m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); });
-        });
+        m_monitor.on_tick_action(
+                [this]
+                {
+                    m_registry.for_each_connected([](const node_id &, session_type &s)
+                                                  { s.emit_heartbeat(); });
+                });
         m_monitor.start();
     }
 
@@ -188,12 +208,12 @@ public:
     // ring single-writer. The decorator stamps the per-direction sequence; the peer identity
     // is bound at the channel-mint point (the slot the channel belongs to), so the wire_record
     // carries both offline cross-node loss-join keys.
-    [[nodiscard]] plexus::detail::move_only_function<
-        void(recording::wire_direction, std::uint64_t, std::span<const std::byte>)> wire_sink(const node_id &peer)
+    [[nodiscard]] plexus::detail::move_only_function<void(recording::wire_direction, std::uint64_t,
+                                                          std::span<const std::byte>)>
+    wire_sink(const node_id &peer)
     {
-        return [this, peer](recording::wire_direction dir, std::uint64_t seq, std::span<const std::byte> bytes) {
-            post_wire(dir, seq, peer, bytes);
-        };
+        return [this, peer](recording::wire_direction dir, std::uint64_t seq,
+                            std::span<const std::byte> bytes) { post_wire(dir, seq, peer, bytes); };
     }
 
     // The data-path observation sinks, shaped exactly like drop_sink: value-capturing,
@@ -209,72 +229,78 @@ public:
     // never policy-selected this phase). An unobserved, unselected node pays one predictable
     // branch and allocates nothing (the typed fast path stays zero-alloc). The post still rides
     // the BORROWED executor — never inline from the per-publish/per-RPC site.
-    [[nodiscard]] plexus::detail::move_only_function<
-        void(std::uint64_t, std::string_view, const message_view &)> publish_sink()
+    [[nodiscard]] plexus::detail::move_only_function<void(std::uint64_t, std::string_view,
+                                                          const message_view &)>
+    publish_sink()
     {
-        return [this](std::uint64_t hash, std::string_view fqn, const message_view &v) {
+        return [this](std::uint64_t hash, std::string_view fqn, const message_view &v)
+        {
             if(!m_capture.should_emit(hash))
                 return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
-                fan_out([&](observer &o) { o.on_message_published(fqn, v); });
-            });
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, v]
+                         { fan_out([&](observer &o) { o.on_message_published(fqn, v); }); });
         };
     }
 
     [[nodiscard]] plexus::detail::move_only_function<
-        void(std::uint64_t, std::string_view, const message_info &, const message_view &)> deliver_sink()
+            void(std::uint64_t, std::string_view, const message_info &, const message_view &)>
+    deliver_sink()
     {
-        return [this](std::uint64_t hash, std::string_view fqn, const message_info &info, const message_view &v) {
+        return [this](std::uint64_t hash, std::string_view fqn, const message_info &info,
+                      const message_view &v)
+        {
             if(!m_capture.should_emit(hash))
                 return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, info, v] {
-                fan_out([&](observer &o) { o.on_message_delivered(fqn, info, v); });
-            });
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, info, v]
+                         { fan_out([&](observer &o) { o.on_message_delivered(fqn, info, v); }); });
         };
     }
 
-    [[nodiscard]] plexus::detail::move_only_function<void(const qos_change_event &)> qos_change_sink()
+    [[nodiscard]] plexus::detail::move_only_function<void(const qos_change_event &)>
+    qos_change_sink()
     {
-        return [this](const qos_change_event &ev) {
+        return [this](const qos_change_event &ev)
+        {
             if(m_capture.observers_present() == 0)
                 return;
-            Policy::post(m_executor, [this, ev] {
-                fan_out([&](observer &o) { o.on_qos_change(ev); });
-            });
+            Policy::post(m_executor,
+                         [this, ev] { fan_out([&](observer &o) { o.on_qos_change(ev); }); });
         };
     }
 
-    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> rpc_call_sink()
+    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)>
+    rpc_call_sink()
     {
-        return [this](std::string_view fqn, const rpc_view &v) {
+        return [this](std::string_view fqn, const rpc_view &v)
+        {
             if(m_capture.observers_present() == 0)
                 return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
-                fan_out([&](observer &o) { o.on_rpc_call(fqn, v); });
-            });
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, v]
+                         { fan_out([&](observer &o) { o.on_rpc_call(fqn, v); }); });
         };
     }
 
-    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> rpc_serve_sink()
+    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)>
+    rpc_serve_sink()
     {
-        return [this](std::string_view fqn, const rpc_view &v) {
+        return [this](std::string_view fqn, const rpc_view &v)
+        {
             if(m_capture.observers_present() == 0)
                 return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
-                fan_out([&](observer &o) { o.on_rpc_serve(fqn, v); });
-            });
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, v]
+                         { fan_out([&](observer &o) { o.on_rpc_serve(fqn, v); }); });
         };
     }
 
-    [[nodiscard]] plexus::detail::move_only_function<
-        void(std::string_view, const rpc_reply_view &)> rpc_reply_sink()
+    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_reply_view &)>
+    rpc_reply_sink()
     {
-        return [this](std::string_view fqn, const rpc_reply_view &v) {
+        return [this](std::string_view fqn, const rpc_reply_view &v)
+        {
             if(m_capture.observers_present() == 0)
                 return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, v] {
-                fan_out([&](observer &o) { o.on_rpc_reply(fqn, v); });
-            });
+            Policy::post(m_executor, [this, fqn = std::string{fqn}, v]
+                         { fan_out([&](observer &o) { o.on_rpc_reply(fqn, v); }); });
         };
     }
 
@@ -294,8 +320,8 @@ public:
     // delivers nothing through it. The 3-arg shape carries the message_info; a
     // bytes-only consumer drops it.
     void on_message_route(plexus::detail::move_only_function<
-                          void(std::string_view, std::span<const std::byte>,
-                               const message_info &)> route)
+                          void(std::string_view, std::span<const std::byte>, const message_info &)>
+                                  route)
     {
         m_build.on_message = std::move(route);
     }
@@ -304,8 +330,9 @@ public:
     // into the build context so EVERY subsequently built session (and every reconnect
     // rebuild) delivers a process-tier object handle through it. Set ONCE before
     // listen/dial.
-    void on_object_route(plexus::detail::move_only_function<
-                         void(std::string_view, const object_carrier &)> route)
+    void on_object_route(
+            plexus::detail::move_only_function<void(std::string_view, const object_carrier &)>
+                    route)
     {
         m_build.on_object = std::move(route);
     }
@@ -373,14 +400,14 @@ public:
     // (absence = no deadline/liveliness monitoring). The reach/reliability gates are
     // orthogonal to the qos and unchanged.
     void subscribe(const node_id &id, std::string_view fqn, const subscriber_qos &qos,
-                   locality reach_mask = locality::any,
-                   reliability_requirement require = reliability_requirement::any,
-                   std::optional<std::uint64_t> type_id = std::nullopt)
+                   locality                     reach_mask = locality::any,
+                   reliability_requirement      require    = reliability_requirement::any,
+                   std::optional<std::uint64_t> type_id    = std::nullopt)
     {
         if(!demand_in_scope(id, reach_mask))
-            return;   // out-of-mask demand: establish NO path toward this peer
+            return; // out-of-mask demand: establish NO path toward this peer
         if(!reliability_in_scope(id, require))
-            return;   // reliability-mismatched demand: establish NO path toward this peer
+            return; // reliability-mismatched demand: establish NO path toward this peer
         reach(id);
         // Record the durable demand FIRST — before any session may exist (an async
         // dial completes later). The session resurrects the recorded demand through the
@@ -405,8 +432,8 @@ public:
         reach(id);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
-            m_procedures.call(session->rpc_peer(), fqn, param, std::move(on_response),
-                              std::nullopt, session->session_id());
+            m_procedures.call(session->rpc_peer(), fqn, param, std::move(on_response), std::nullopt,
+                              session->session_id());
     }
 
     // The peer-targeted retire of a topic demand, mirroring subscribe's shape: forget
@@ -429,22 +456,29 @@ public:
         m_messages.publish(fqn, payload);
     }
 
-    bool is_connected(const node_id &id) const { return m_registry.is_connected(id); }
-    bool is_dead(const node_id &id) const { return m_registry.is_dead(id); }
-    bool has_session(const node_id &id) const { return m_registry.has_session(id); }
+    bool          is_connected(const node_id &id) const { return m_registry.is_connected(id); }
+    bool          is_dead(const node_id &id) const { return m_registry.is_dead(id); }
+    bool          has_session(const node_id &id) const { return m_registry.has_session(id); }
     std::uint32_t attempt_count(const node_id &id) const { return m_registry.attempt_count(id); }
     session_type *session_for(const node_id &id) { return m_registry.session_for(id); }
 
-    const known_peers &known() const noexcept { return m_known; }
-    shm::host_fingerprint local_fingerprint() const noexcept { return m_build.fsm_cfg.local_fingerprint; }
-    message_forwarder<Policy> &messages() noexcept { return m_messages; }
+    const known_peers    &known() const noexcept { return m_known; }
+    shm::host_fingerprint local_fingerprint() const noexcept
+    {
+        return m_build.fsm_cfg.local_fingerprint;
+    }
+    message_forwarder<Policy>   &messages() noexcept { return m_messages; }
     procedure_forwarder<Policy> &procedures() noexcept { return m_procedures; }
-    registry_type &registry() noexcept { return m_registry; }
-    shm::medium_coordinator<registry_type, channel_type> &coordinator() noexcept { return m_coordinator; }
+    registry_type               &registry() noexcept { return m_registry; }
+    shm::medium_coordinator<registry_type, channel_type> &coordinator() noexcept
+    {
+        return m_coordinator;
+    }
 
     // The node passes the consumer-sovereign upgrade-policy hook through to the
     // coordinator once at construction (default-when-unset = attempt_shm_upgrade).
-    void on_upgrade_policy(plexus::detail::move_only_function<bool(bool, shm::dispatch_hint)> policy)
+    void
+    on_upgrade_policy(plexus::detail::move_only_function<bool(bool, shm::dispatch_hint)> policy)
     {
         m_coordinator.on_policy(std::move(policy));
     }
@@ -453,7 +487,8 @@ public:
     // mint_companion) into the coordinator — only when the composition carries an shm
     // member. The mint returns the live companion channel + its per-message route inputs.
     void on_upgrade_gate(
-        plexus::detail::move_only_function<shm::companion_mint<channel_type>(std::string_view)> mint)
+            plexus::detail::move_only_function<shm::companion_mint<channel_type>(std::string_view)>
+                    mint)
     {
         m_coordinator.on_gate(std::move(mint));
     }
@@ -462,8 +497,9 @@ public:
     // mint_receive_companion) into the coordinator — only when the composition carries an
     // shm member. The gate attaches the co-host ring as a consumer and routes drained framed
     // messages through inject_companion_receive to the matching peer session's receive path.
-    void on_upgrade_receive_gate(
-        plexus::detail::move_only_function<shm::companion_receive(std::string_view, std::string_view)> mint)
+    void on_upgrade_receive_gate(plexus::detail::move_only_function<
+                                 shm::companion_receive(std::string_view, std::string_view)>
+                                         mint)
     {
         m_coordinator.on_receive_gate(std::move(mint));
     }
@@ -490,16 +526,14 @@ public:
     // into the turn (the fire-site view does not outlive the deferred fan-out).
     void post_participant(const participant_event &ev)
     {
-        Policy::post(m_executor, [this, ev] {
-            fan_out([&](observer &o) { o.on_participant(ev); });
-        });
+        Policy::post(m_executor,
+                     [this, ev] { fan_out([&](observer &o) { o.on_participant(ev); }); });
     }
 
     void post_endpoint(std::string_view fqn, const endpoint_event &ev)
     {
-        Policy::post(m_executor, [this, fqn = std::string{fqn}, ev] {
-            fan_out([&](observer &o) { o.on_endpoint(fqn, ev); });
-        });
+        Policy::post(m_executor, [this, fqn = std::string{fqn}, ev]
+                     { fan_out([&](observer &o) { o.on_endpoint(fqn, ev); }); });
     }
 
     // POST the node's destroy edge from ~node. UNLIKE the in-life edges above, this is
@@ -510,10 +544,12 @@ public:
     // the node returns) and the flat POD, fanning directly with no engine touch.
     void post_participant_teardown(const participant_event &ev)
     {
-        Policy::post(m_executor, [snapshot = m_observers, ev] {
-            for(auto *o : snapshot)
-                o->on_participant(ev);
-        });
+        Policy::post(m_executor,
+                     [snapshot = m_observers, ev]
+                     {
+                         for(auto *o : snapshot)
+                             o->on_participant(ev);
+                     });
     }
 
 private:
@@ -523,7 +559,10 @@ private:
     struct security_fanout : observer
     {
         routing_engine &engine;
-        explicit security_fanout(routing_engine &e) : engine(e) {}
+        explicit security_fanout(routing_engine &e)
+                : engine(e)
+        {
+        }
         void on_security(const security_event &ev) override { engine.post_security(ev); }
     };
 
@@ -584,8 +623,8 @@ private:
         // mints at accept (the peer's real id arrives only in the handshake), so the capture
         // install is threaded through accept_session, which binds that identity before the
         // session is built.
-        m_registry.accept_session(std::move(channel),
-            [this](channel_type &ch, const node_id &peer) { wire_channel_capture(ch, peer); });
+        m_registry.accept_session(std::move(channel), [this](channel_type &ch, const node_id &peer)
+                                  { wire_channel_capture(ch, peer); });
     }
 
     // Install the posted drop_sink onto a freshly minted channel that carries the
@@ -643,12 +682,13 @@ private:
 
         switch(ev.edge)
         {
-            case lifecycle_edge::connected:    return post_edge(ev, &observer::on_peer_connected);
-            case lifecycle_edge::disconnected: return post_edge(ev, &observer::on_peer_disconnected);
-            case lifecycle_edge::reconnected:  return post_edge(ev, &observer::on_peer_reconnected);
-            case lifecycle_edge::dead:         return post_edge(ev, &observer::on_peer_dead);
-            case lifecycle_edge::ready:        return post_edge(ev, &observer::on_peer_ready);
-            case lifecycle_edge::rejected:     return post_rejected(ev);
+            case lifecycle_edge::connected: return post_edge(ev, &observer::on_peer_connected);
+            case lifecycle_edge::disconnected:
+                return post_edge(ev, &observer::on_peer_disconnected);
+            case lifecycle_edge::reconnected: return post_edge(ev, &observer::on_peer_reconnected);
+            case lifecycle_edge::dead:        return post_edge(ev, &observer::on_peer_dead);
+            case lifecycle_edge::ready:       return post_edge(ev, &observer::on_peer_ready);
+            case lifecycle_edge::rejected:    return post_rejected(ev);
         }
     }
 
@@ -685,16 +725,18 @@ private:
     void post_edge(const lifecycle_event &ev,
                    void (observer::*edge)(const node_id &, std::string_view, peer_kind))
     {
-        Policy::post(m_executor, [this, ev, edge] {
-            fan_out([&](observer &o) { (o.*edge)(ev.id, ev.node_name, ev.kind); });
-        });
+        Policy::post(m_executor, [this, ev, edge]
+                     { fan_out([&](observer &o) { (o.*edge)(ev.id, ev.node_name, ev.kind); }); });
     }
 
     void post_rejected(const lifecycle_event &ev)
     {
-        Policy::post(m_executor, [this, ev] {
-            fan_out([&](observer &o) { o.on_peer_rejected(ev.id, ev.node_name, ev.reason); });
-        });
+        Policy::post(m_executor,
+                     [this, ev]
+                     {
+                         fan_out([&](observer &o)
+                                 { o.on_peer_rejected(ev.id, ev.node_name, ev.reason); });
+                     });
     }
 
     // POST the drop on the borrowed executor, capturing the POD by value into the turn
@@ -702,9 +744,7 @@ private:
     // that keeps a per-packet drop site off the synchronous observer path.
     void post_drop(const detail::drop_event &ev)
     {
-        Policy::post(m_executor, [this, ev] {
-            fan_out([&](observer &o) { o.on_drop(ev); });
-        });
+        Policy::post(m_executor, [this, ev] { fan_out([&](observer &o) { o.on_drop(ev); }); });
     }
 
     // POST a security transition over the same snapshot fan-out the lifecycle and drop
@@ -712,9 +752,7 @@ private:
     // teardown/refusal frame.
     void post_security(const security_event &ev)
     {
-        Policy::post(m_executor, [this, ev] {
-            fan_out([&](observer &o) { o.on_security(ev); });
-        });
+        Policy::post(m_executor, [this, ev] { fan_out([&](observer &o) { o.on_security(ev); }); });
     }
 
     // POST a captured wire frame to the observer fan-out, keeping the single-writer ring
@@ -727,31 +765,33 @@ private:
                    std::span<const std::byte> bytes)
     {
         std::vector<std::byte> owned(bytes.begin(), bytes.end());
-        Policy::post(m_executor, [this, dir, seq, peer, owned = std::move(owned)] {
-            const recording::wire_record rec{dir, seq, peer, 0u, std::span<const std::byte>{owned}};
-            fan_out([&](observer &o) { o.on_wire(rec); });
-        });
+        Policy::post(m_executor,
+                     [this, dir, seq, peer, owned = std::move(owned)]
+                     {
+                         const recording::wire_record rec{dir, seq, peer, 0u,
+                                                          std::span<const std::byte>{owned}};
+                         fan_out([&](observer &o) { o.on_wire(rec); });
+                     });
     }
 
-
-    Transport &m_transport;
-    executor_type m_executor;
-    liveliness_monitor<Policy, Clock> m_monitor;
-    message_forwarder<Policy> m_messages;
-    procedure_forwarder<Policy> m_procedures;
-    security_fanout m_security_fanout;
-    session_build_context<Policy> m_build;
-    registry_type m_registry;
+    Transport                                           &m_transport;
+    executor_type                                        m_executor;
+    liveliness_monitor<Policy, Clock>                    m_monitor;
+    message_forwarder<Policy>                            m_messages;
+    procedure_forwarder<Policy>                          m_procedures;
+    security_fanout                                      m_security_fanout;
+    session_build_context<Policy>                        m_build;
+    registry_type                                        m_registry;
     shm::medium_coordinator<registry_type, channel_type> m_coordinator;
-    known_peers m_known;
-    std::vector<observer *> m_observers;
+    known_peers                                          m_known;
+    std::vector<observer *>                              m_observers;
     // The single capture-decision point: it owns the per-topic selection rules AND the
     // data-path observer-presence count, so the hot sink heads consult one gate
     // (should_emit/observers_present) instead of a separate boolean. add_observer/
     // remove_observer feed it the observes_data_path()-guarded count.
-    capture_policy m_capture;
+    capture_policy                                                   m_capture;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
-    bool m_dial_eagerly;
+    bool                                                             m_dial_eagerly;
 };
 
 }

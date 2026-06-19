@@ -13,11 +13,9 @@ namespace plexus {
 // timer<T>: the backend-independent timer surface a Policy supplies. Mirrors the
 // mdnspp TimerLike shape — expires_after has no return constraint because a
 // steady-timer backend may return the count of cancelled waits.
-template <typename T>
-concept timer = requires(T &t,
-                         std::chrono::milliseconds dur,
-                         detail::move_only_function<void(std::error_code)> handler)
-{
+template<typename T>
+concept timer = requires(T &t, std::chrono::milliseconds dur,
+                         detail::move_only_function<void(std::error_code)> handler) {
     t.expires_after(dur);
     { t.async_wait(std::move(handler)) } -> std::same_as<void>;
     { t.cancel() } -> std::same_as<void>;
@@ -38,22 +36,20 @@ concept timer = requires(T &t,
 // belongs to the transport, not the Policy. (asio_channel/inproc_channel still
 // OFFER executor-alone construction as a convenience — a removed requirement is
 // not a ban.)
-template <typename P>
-concept Policy = requires
-    {
-        typename P::executor_type;
-        typename P::byte_channel_type;
-        typename P::timer_type;
-        typename P::byte_owner;
-    }
-    && io::byte_channel<typename P::byte_channel_type>
-    && timer<typename P::timer_type>
-    && std::constructible_from<typename P::timer_type, typename P::executor_type>
-    && std::constructible_from<typename P::timer_type, typename P::executor_type, std::error_code &>
-    && requires(typename P::executor_type ex, detail::move_only_function<void()> fn)
-    {
-        P::post(ex, std::move(fn));
-    };
+template<typename P>
+concept Policy =
+        requires {
+            typename P::executor_type;
+            typename P::byte_channel_type;
+            typename P::timer_type;
+            typename P::byte_owner;
+        } && io::byte_channel<typename P::byte_channel_type> && timer<typename P::timer_type> &&
+        std::constructible_from<typename P::timer_type, typename P::executor_type> &&
+        std::constructible_from<typename P::timer_type, typename P::executor_type,
+                                std::error_code &> &&
+        requires(typename P::executor_type ex, detail::move_only_function<void()> fn) {
+            P::post(ex, std::move(fn));
+        };
 
 }
 

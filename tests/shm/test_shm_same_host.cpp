@@ -23,7 +23,8 @@ TEST_CASE("same_host: a null peer fingerprint is never same-host", "[shm][same_h
     REQUIRE_FALSE(is_same_host(host_fingerprint{0}, host_fingerprint{0}));
 }
 
-TEST_CASE("same_host: equal non-null fingerprints are same-host; distinct are not", "[shm][same_host]")
+TEST_CASE("same_host: equal non-null fingerprints are same-host; distinct are not",
+          "[shm][same_host]")
 {
     const host_fingerprint a{0xdeadbeef};
     const host_fingerprint same{0xdeadbeef};
@@ -33,7 +34,8 @@ TEST_CASE("same_host: equal non-null fingerprints are same-host; distinct are no
     REQUIRE_FALSE(is_same_host(a, other));
 }
 
-TEST_CASE("same_host: region naming is deterministic and direction-discriminated", "[shm][same_host]")
+TEST_CASE("same_host: region naming is deterministic and direction-discriminated",
+          "[shm][same_host]")
 {
     const std::string fqn = "robot/telemetry/imu";
 
@@ -43,8 +45,8 @@ TEST_CASE("same_host: region naming is deterministic and direction-discriminated
 
     // Deterministic: same input -> same name across calls.
     REQUIRE(req1 == req2);
-    REQUIRE(region_name_for(fqn, ring_direction::response)
-            == region_name_for(fqn, ring_direction::response));
+    REQUIRE(region_name_for(fqn, ring_direction::response) ==
+            region_name_for(fqn, ring_direction::response));
 
     // Direction-discriminated: request and response name distinct rings.
     REQUIRE(req1 != resp);
@@ -60,25 +62,25 @@ TEST_CASE("same_host: the region namespace isolates names and an empty namespace
 
     // BACK-COMPAT: an empty namespace yields byte-identical names to the namespace-less
     // overload, in BOTH directions — so every existing region name is unchanged.
-    REQUIRE(region_name_for(fqn, ring_direction::request, "")
-            == region_name_for(fqn, ring_direction::request));
-    REQUIRE(region_name_for(fqn, ring_direction::response, "")
-            == region_name_for(fqn, ring_direction::response));
+    REQUIRE(region_name_for(fqn, ring_direction::request, "") ==
+            region_name_for(fqn, ring_direction::request));
+    REQUIRE(region_name_for(fqn, ring_direction::response, "") ==
+            region_name_for(fqn, ring_direction::response));
 
     // CONVERGENCE: the SAME namespace + SAME topic -> the SAME name (both peers meet it).
-    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a")
-            == region_name_for(fqn, ring_direction::request, "app-a"));
+    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a") ==
+            region_name_for(fqn, ring_direction::request, "app-a"));
 
     // ISOLATION: DIFFERENT namespaces, SAME topic -> DISTINCT names (no collision), and a
     // non-empty namespace differs from the shared-by-topic default.
-    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a")
-            != region_name_for(fqn, ring_direction::request, "app-b"));
-    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a")
-            != region_name_for(fqn, ring_direction::request));
+    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a") !=
+            region_name_for(fqn, ring_direction::request, "app-b"));
+    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a") !=
+            region_name_for(fqn, ring_direction::request));
 
     // The namespace stays direction-discriminated within one namespace.
-    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a")
-            != region_name_for(fqn, ring_direction::response, "app-a"));
+    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a") !=
+            region_name_for(fqn, ring_direction::response, "app-a"));
 }
 
 TEST_CASE("same_host: a region name is bare lowercase hex", "[shm][same_host]")

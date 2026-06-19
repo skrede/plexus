@@ -58,7 +58,7 @@ struct response_t
     std::uint32_t value{};
 };
 
-template <typename T>
+template<typename T>
 struct u32_codec
 {
     using value_type = T;
@@ -76,7 +76,7 @@ struct u32_codec
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -88,9 +88,8 @@ struct u32_codec
 using req_codec = u32_codec<request_t>;
 using res_codec = u32_codec<response_t>;
 
-using typed_caller = plexus::caller<response_t(request_t), u32_codec>;
-using typed_procedure =
-    plexus::procedure<response_t(request_t), u32_codec>;
+using typed_caller    = plexus::caller<response_t(request_t), u32_codec>;
+using typed_procedure = plexus::procedure<response_t(request_t), u32_codec>;
 using bytes_procedure = plexus::procedure<>;
 
 static_assert(plexus::typed_codec<req_codec>);
@@ -106,10 +105,10 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0x7ED50u;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0x7ED50u;
     opts.dial_eagerly = eager;
     return opts;
 }
@@ -121,11 +120,11 @@ std::span<const std::byte> as_bytes(const std::string &s)
 
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -151,17 +150,16 @@ TEST_CASE("typed reqres: round-trip decodes the handler's response value", "[nod
     net n;
     n.connect();
 
-    typed_procedure proc{
-        n.b, "rpc",
-        [](const request_t &req) -> plexus::expected<response_t, std::error_code> {
-            return response_t{req.value * 2};
-        }};
-    typed_caller call{n.a, "rpc"};
+    typed_procedure proc{n.b, "rpc",
+                         [](const request_t &req) -> plexus::expected<response_t, std::error_code>
+                         { return response_t{req.value * 2}; }};
+    typed_caller    call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::uint32_t> got;
     call.call(request_t{21},
-              [&](plexus::expected<response_t, std::error_code> r) {
+              [&](plexus::expected<response_t, std::error_code> r)
+              {
                   REQUIRE(static_cast<bool>(r));
                   got = r.value().value;
               });
@@ -176,20 +174,21 @@ TEST_CASE("typed reqres: a provider handler error preserves its value under prov
     net n;
     n.connect();
 
-    constexpr int k_provider_value = 77;
-    typed_procedure proc{
-        n.b, "rpc",
-        [](const request_t &) -> plexus::expected<response_t, std::error_code> {
-            return plexus::expected<response_t, std::error_code>{
-                plexus::unexpect,
-                std::error_code{k_provider_value, plexus::call_category()}};
-        }};
-    typed_caller call{n.a, "rpc"};
+    constexpr int   k_provider_value = 77;
+    typed_procedure proc{n.b, "rpc",
+                         [](const request_t &) -> plexus::expected<response_t, std::error_code>
+                         {
+                             return plexus::expected<response_t, std::error_code>{
+                                     plexus::unexpect,
+                                     std::error_code{k_provider_value, plexus::call_category()}};
+                         }};
+    typed_caller    call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::error_code> err;
     call.call(request_t{1},
-              [&](plexus::expected<response_t, std::error_code> r) {
+              [&](plexus::expected<response_t, std::error_code> r)
+              {
                   REQUIRE_FALSE(static_cast<bool>(r));
                   err = r.error();
               });
@@ -205,20 +204,21 @@ TEST_CASE("typed reqres: a provider request-decode failure surfaces as deseriali
     net n;
     n.connect();
 
-    bool handler_ran = false;
-    typed_procedure proc{
-        n.b, "rpc",
-        [&](const request_t &) -> plexus::expected<response_t, std::error_code> {
-            handler_ran = true;
-            return response_t{0};
-        }};
+    bool            handler_ran = false;
+    typed_procedure proc{n.b, "rpc",
+                         [&](const request_t &) -> plexus::expected<response_t, std::error_code>
+                         {
+                             handler_ran = true;
+                             return response_t{0};
+                         }};
     // A BYTES caller sends a malformed (non-4-byte) request to the typed procedure.
     plexus::caller<> raw{n.a, "rpc"};
     n.drive();
 
     std::optional<std::error_code> err;
     raw.call(as_bytes(std::string{"xyz"}),
-             [&](plexus::expected<plexus::reply, std::error_code> r) {
+             [&](plexus::expected<plexus::reply, std::error_code> r)
+             {
                  REQUIRE_FALSE(static_cast<bool>(r));
                  err = r.error();
              });
@@ -228,24 +228,24 @@ TEST_CASE("typed reqres: a provider request-decode failure surfaces as deseriali
     REQUIRE_FALSE(handler_ran);
 }
 
-TEST_CASE("typed reqres: a typed caller against a bytes procedure replying error falls back to error",
-          "[node][typed][call]")
+TEST_CASE(
+        "typed reqres: a typed caller against a bytes procedure replying error falls back to error",
+        "[node][typed][call]")
 {
     net n;
     n.connect();
 
     // A BYTES procedure replies a bare rpc_status::error with no varint payload.
-    bytes_procedure proc{
-        n.b, "rpc",
-        [](std::span<const std::byte>, bytes_procedure::reply_fn &reply) {
-            reply(plexus::wire::rpc_status::error, {});
-        }};
-    typed_caller call{n.a, "rpc"};
+    bytes_procedure proc{n.b, "rpc",
+                         [](std::span<const std::byte>, bytes_procedure::reply_fn &reply)
+                         { reply(plexus::wire::rpc_status::error, {}); }};
+    typed_caller    call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::error_code> err;
     call.call(request_t{5},
-              [&](plexus::expected<response_t, std::error_code> r) {
+              [&](plexus::expected<response_t, std::error_code> r)
+              {
                   REQUIRE_FALSE(static_cast<bool>(r));
                   err = r.error();
               });
@@ -254,23 +254,23 @@ TEST_CASE("typed reqres: a typed caller against a bytes procedure replying error
     REQUIRE(*err == plexus::call_errc::error);
 }
 
-TEST_CASE("typed reqres: a reply-decode failure surfaces as deserialize_failed", "[node][typed][call]")
+TEST_CASE("typed reqres: a reply-decode failure surfaces as deserialize_failed",
+          "[node][typed][call]")
 {
     net n;
     n.connect();
 
     // A BYTES procedure replies success with a malformed (non-4-byte) response payload.
     bytes_procedure proc{
-        n.b, "rpc",
-        [](std::span<const std::byte>, bytes_procedure::reply_fn &reply) {
-            reply(plexus::wire::rpc_status::success, as_bytes(std::string{"no"}));
-        }};
+            n.b, "rpc", [](std::span<const std::byte>, bytes_procedure::reply_fn &reply)
+            { reply(plexus::wire::rpc_status::success, as_bytes(std::string{"no"})); }};
     typed_caller call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::error_code> err;
     call.call(request_t{9},
-              [&](plexus::expected<response_t, std::error_code> r) {
+              [&](plexus::expected<response_t, std::error_code> r)
+              {
                   REQUIRE_FALSE(static_cast<bool>(r));
                   err = r.error();
               });
@@ -279,23 +279,21 @@ TEST_CASE("typed reqres: a reply-decode failure surfaces as deserialize_failed",
     REQUIRE(*err == plexus::call_errc::deserialize_failed);
 }
 
-TEST_CASE("typed reqres: a second local serve on one fqn throws on the typed form", "[node][typed][call]")
+TEST_CASE("typed reqres: a second local serve on one fqn throws on the typed form",
+          "[node][typed][call]")
 {
     net n;
     n.connect();
 
-    typed_procedure proc{
-        n.b, "rpc",
-        [](const request_t &) -> plexus::expected<response_t, std::error_code> {
-            return response_t{0};
-        }};
+    typed_procedure proc{n.b, "rpc",
+                         [](const request_t &) -> plexus::expected<response_t, std::error_code>
+                         { return response_t{0}; }};
 
     REQUIRE_THROWS_AS(
-        (typed_procedure{n.b, "rpc",
-                         [](const request_t &) -> plexus::expected<response_t, std::error_code> {
-                             return response_t{1};
-                         }}),
-        std::logic_error);
+            (typed_procedure{n.b, "rpc",
+                             [](const request_t &) -> plexus::expected<response_t, std::error_code>
+                             { return response_t{1}; }}),
+            std::logic_error);
 }
 
 #ifdef PLEXUS_HAS_FAMILY_SPELLING
@@ -308,7 +306,8 @@ static_assert(__is_same(plexus::procedure<response_t(request_t), u32_codec>,
 static_assert(__is_same(plexus::caller<response_t(request_t), u32_codec>,
                         plexus::caller<response_t(request_t), u32_codec, u32_codec>));
 
-TEST_CASE("typed reqres: the family-form spelling round-trips the typed reqres", "[node][typed][call][family]")
+TEST_CASE("typed reqres: the family-form spelling round-trips the typed reqres",
+          "[node][typed][call][family]")
 {
     using family_procedure = plexus::procedure<response_t(request_t), u32_codec>;
     using family_caller    = plexus::caller<response_t(request_t), u32_codec>;
@@ -316,17 +315,16 @@ TEST_CASE("typed reqres: the family-form spelling round-trips the typed reqres",
     net n;
     n.connect();
 
-    family_procedure proc{
-        n.b, "rpc",
-        [](const request_t &req) -> plexus::expected<response_t, std::error_code> {
-            return response_t{req.value * 2};
-        }};
-    family_caller call{n.a, "rpc"};
+    family_procedure proc{n.b, "rpc",
+                          [](const request_t &req) -> plexus::expected<response_t, std::error_code>
+                          { return response_t{req.value * 2}; }};
+    family_caller    call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::uint32_t> got;
     call.call(request_t{21},
-              [&](plexus::expected<response_t, std::error_code> r) {
+              [&](plexus::expected<response_t, std::error_code> r)
+              {
                   REQUIRE(static_cast<bool>(r));
                   got = r.value().value;
               });

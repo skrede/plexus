@@ -14,9 +14,10 @@
 
 using plexus::io::epoch_source;
 
-TEST_CASE("epoch_source: mints strictly-distinct, non-zero epochs past the u8 boundary", "[io][epoch_source]")
+TEST_CASE("epoch_source: mints strictly-distinct, non-zero epochs past the u8 boundary",
+          "[io][epoch_source]")
 {
-    epoch_source well;
+    epoch_source            well;
     std::set<std::uint64_t> seen;
 
     // 600 mints crosses the old u8 wrap (256) more than twice over: under u8 the
@@ -25,8 +26,8 @@ TEST_CASE("epoch_source: mints strictly-distinct, non-zero epochs past the u8 bo
     for(int i = 0; i < k_mints; ++i)
     {
         const auto epoch = well.next();
-        CHECK(epoch != 0);                 // 0 is the reserved unestablished sentinel
-        CHECK(seen.insert(epoch).second);  // strictly distinct — no wrap collision
+        CHECK(epoch != 0);                // 0 is the reserved unestablished sentinel
+        CHECK(seen.insert(epoch).second); // strictly distinct — no wrap collision
     }
 
     REQUIRE(seen.size() == k_mints);
@@ -38,7 +39,7 @@ TEST_CASE("epoch_source: mints strictly-distinct, non-zero epochs past the u8 bo
 TEST_CASE("epoch_source: current() tracks the last minted epoch", "[io][epoch_source]")
 {
     epoch_source well;
-    CHECK(well.current() == 0);   // nothing minted yet
+    CHECK(well.current() == 0); // nothing minted yet
     const auto first = well.next();
     CHECK(well.current() == first);
     const auto second = well.next();

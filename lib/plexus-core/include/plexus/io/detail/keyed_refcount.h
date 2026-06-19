@@ -22,7 +22,7 @@ public:
 
     std::uint32_t bump(std::string_view k1, std::string_view k2)
     {
-        auto &inner = m_counts[std::string{k1}];
+        auto &inner         = m_counts[std::string{k1}];
         auto [it, inserted] = inner.try_emplace(std::string{k2}, 0u);
         return ++it->second;
     }

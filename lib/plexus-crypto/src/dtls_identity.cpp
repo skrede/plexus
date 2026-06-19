@@ -7,7 +7,7 @@ namespace plexus::tls::detail {
 std::vector<unsigned char> pack_peer_addr(const ::asio::ip::udp::endpoint &ep)
 {
     std::vector<unsigned char> block;
-    const auto addr = ep.address();
+    const auto                 addr = ep.address();
     std::vector<unsigned char> raw;
     if(addr.is_v4())
     {

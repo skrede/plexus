@@ -24,8 +24,14 @@ namespace plexus::wire {
 class writer
 {
 public:
-    explicit writer(std::span<std::byte> region) noexcept : m_region(region) {}
-    explicit writer(std::vector<std::byte> &out) noexcept : m_region(out) {}
+    explicit writer(std::span<std::byte> region) noexcept
+            : m_region(region)
+    {
+    }
+    explicit writer(std::vector<std::byte> &out) noexcept
+            : m_region(out)
+    {
+    }
 
     void u8(std::uint8_t v) noexcept
     {
@@ -92,9 +98,12 @@ private:
 class reader
 {
 public:
-    explicit reader(std::span<const std::byte> data) noexcept : m_data(data) {}
+    explicit reader(std::span<const std::byte> data) noexcept
+            : m_data(data)
+    {
+    }
 
-    [[nodiscard]] bool ok() const noexcept { return m_ok; }
+    [[nodiscard]] bool        ok() const noexcept { return m_ok; }
     [[nodiscard]] std::size_t consumed() const noexcept { return m_offset; }
     [[nodiscard]] std::size_t remaining() const noexcept { return m_data.size() - m_offset; }
 
@@ -150,7 +159,7 @@ public:
         return value;
     }
 
-    template <typename UIntT>
+    template<typename UIntT>
     std::span<const std::byte> length_prefixed(std::size_t element_size = 1) noexcept
     {
         if(!m_ok)

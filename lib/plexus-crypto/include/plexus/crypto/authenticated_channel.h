@@ -47,34 +47,34 @@ namespace plexus::crypto {
 // a pre-rekey frame cannot arrive after the advance, so the receiver opens only the
 // current and the next epoch — there is no previous-epoch drain window (the per-epoch
 // sequence resets on advance, so a prior-epoch frame has no counter to open against).
-template <typename Lower>
+template<typename Lower>
 class authenticated_channel
 {
 public:
-    authenticated_channel(Lower &lower, aead_cipher_id cipher,
-                          const derived_keys &keys, std::uint32_t initial_epoch = 0,
+    authenticated_channel(Lower &lower, aead_cipher_id cipher, const derived_keys &keys,
+                          std::uint32_t initial_epoch   = 0,
                           std::uint64_t rekey_threshold = k_rekey_message_threshold)
-        : m_lower(lower)
-        , m_cipher(cipher)
-        , m_send_key(keys.k_send)
-        , m_recv_key(keys.k_recv)
-        , m_send_epoch(initial_epoch)
-        , m_recv_epoch(initial_epoch)
-        , m_rekey_threshold(rekey_threshold)
+            : m_lower(lower)
+            , m_cipher(cipher)
+            , m_send_key(keys.k_send)
+            , m_recv_key(keys.k_recv)
+            , m_send_epoch(initial_epoch)
+            , m_recv_epoch(initial_epoch)
+            , m_rekey_threshold(rekey_threshold)
     {
         wire_lower();
     }
 
-    authenticated_channel(const authenticated_channel &) = delete;
+    authenticated_channel(const authenticated_channel &)            = delete;
     authenticated_channel &operator=(const authenticated_channel &) = delete;
-    authenticated_channel(authenticated_channel &&) = delete;
-    authenticated_channel &operator=(authenticated_channel &&) = delete;
+    authenticated_channel(authenticated_channel &&)                 = delete;
+    authenticated_channel &operator=(authenticated_channel &&)      = delete;
 
     void send(std::span<const std::byte> data)
     {
         if(data.size() < wire::header_size)
             return;
-        const auto header = data.first(wire::header_size);
+        const auto header  = data.first(wire::header_size);
         const auto payload = data.subspan(wire::header_size);
 
         if(m_send_seq >= m_rekey_threshold)
@@ -98,14 +98,26 @@ public:
 
     [[nodiscard]] io::endpoint remote_endpoint() const { return m_lower.remote_endpoint(); }
 
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_lower.on_closed(std::move(cb)); }
-    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_lower.on_error(std::move(cb)); }
-    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_lower.on_closed(std::move(cb));
+    }
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
+    {
+        m_lower.on_error(std::move(cb));
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
 
     [[nodiscard]] std::uint32_t send_epoch() const noexcept { return m_send_epoch; }
     [[nodiscard]] std::uint64_t send_sequence() const noexcept { return m_send_seq; }
-    [[nodiscard]] std::size_t backpressured() const { return m_lower.backpressured(); }
+    [[nodiscard]] std::size_t   backpressured() const { return m_lower.backpressured(); }
 
 private:
     void wire_lower()
@@ -119,8 +131,8 @@ private:
             return handle_protocol_close(wire::close_cause::buffer_overflow);
 
         const auto epoch_byte = static_cast<std::uint8_t>(bytes[0]);
-        const auto header = bytes.subspan(1, wire::header_size);
-        const auto sealed = bytes.subspan(1 + wire::header_size);
+        const auto header     = bytes.subspan(1, wire::header_size);
+        const auto sealed     = bytes.subspan(1 + wire::header_size);
 
         const aead_key *key = select_recv_key(epoch_byte);
         if(!key)
@@ -179,21 +191,21 @@ private:
         close();
     }
 
-    Lower &m_lower;
-    aead_cipher_id m_cipher;
-    aead_key m_send_key;
-    aead_key m_recv_key;
-    std::uint32_t m_send_epoch;
-    std::uint32_t m_recv_epoch;
-    std::uint64_t m_rekey_threshold;
-    std::uint64_t m_send_seq{0};
-    std::uint64_t m_recv_seq{0};
-    std::vector<std::byte> m_seal_scratch;
-    std::vector<std::byte> m_open_scratch;
-    std::vector<std::byte> m_send_frame;
-    std::vector<std::byte> m_recv_frame;
+    Lower                                                               &m_lower;
+    aead_cipher_id                                                       m_cipher;
+    aead_key                                                             m_send_key;
+    aead_key                                                             m_recv_key;
+    std::uint32_t                                                        m_send_epoch;
+    std::uint32_t                                                        m_recv_epoch;
+    std::uint64_t                                                        m_rekey_threshold;
+    std::uint64_t                                                        m_send_seq{0};
+    std::uint64_t                                                        m_recv_seq{0};
+    std::vector<std::byte>                                               m_seal_scratch;
+    std::vector<std::byte>                                               m_open_scratch;
+    std::vector<std::byte>                                               m_send_frame;
+    std::vector<std::byte>                                               m_recv_frame;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
+    plexus::detail::move_only_function<void(wire::close_cause)>          m_on_protocol_close;
 };
 
 }
@@ -201,7 +213,8 @@ private:
 // The decorator over the erased multi-transport channel is itself a byte_channel:
 // the seven-verb conformance is pinned at compile time so the decorated channel
 // composes anywhere a plaintext one does.
-static_assert(plexus::io::byte_channel<plexus::crypto::authenticated_channel<plexus::io::polymorphic_byte_channel>>,
-    "authenticated_channel must satisfy byte_channel — check the seven verbs");
+static_assert(plexus::io::byte_channel<
+                      plexus::crypto::authenticated_channel<plexus::io::polymorphic_byte_channel>>,
+              "authenticated_channel must satisfy byte_channel — check the seven verbs");
 
 #endif

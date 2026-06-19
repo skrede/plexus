@@ -37,9 +37,10 @@ static_assert(!std::is_convertible_v<session_id, publisher_gid>);
 static_assert(!std::is_convertible_v<session_id, std::uint64_t>);
 static_assert(!std::is_convertible_v<std::uint64_t, session_id>);
 
-TEST_CASE("identity_types: publisher_gid exposes its node_id and endpoint counter", "[io][identity]")
+TEST_CASE("identity_types: publisher_gid exposes its node_id and endpoint counter",
+          "[io][identity]")
 {
-    const auto node = id_with_tail(0x7);
+    const auto          node = id_with_tail(0x7);
     const publisher_gid gid{node, 42};
     CHECK(gid.node_id() == node);
     CHECK(gid.endpoint_counter() == 42);
@@ -47,7 +48,7 @@ TEST_CASE("identity_types: publisher_gid exposes its node_id and endpoint counte
 
 TEST_CASE("identity_types: publisher_gid compares by node_id then counter", "[io][identity]")
 {
-    const auto node = id_with_tail(0x1);
+    const auto          node = id_with_tail(0x1);
     const publisher_gid a{node, 1};
     const publisher_gid b{node, 1};
     const publisher_gid c{node, 2};
@@ -77,7 +78,8 @@ TEST_CASE("identity_types: session_id wraps a raw u64 and compares by value", "[
     CHECK(c < a);
 }
 
-TEST_CASE("identity_types: message_info default-constructs with absent source identity", "[io][identity]")
+TEST_CASE("identity_types: message_info default-constructs with absent source identity",
+          "[io][identity]")
 {
     const message_info info{};
     CHECK(info.source_identity == std::nullopt);
@@ -87,10 +89,11 @@ TEST_CASE("identity_types: message_info default-constructs with absent source id
     CHECK(info.from_intra_process == false);
 }
 
-TEST_CASE("identity_types: message_info carries an explicit source identity when known", "[io][identity]")
+TEST_CASE("identity_types: message_info carries an explicit source identity when known",
+          "[io][identity]")
 {
     const publisher_gid gid{id_with_tail(0x3), 7};
-    message_info info{};
+    message_info        info{};
     info.source_identity = gid;
     REQUIRE(info.source_identity.has_value());
     CHECK(info.source_identity->endpoint_counter() == 7);

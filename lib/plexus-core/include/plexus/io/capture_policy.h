@@ -104,11 +104,11 @@ public:
     std::size_t observers_present() const noexcept { return m_observers_present; }
 
 private:
-    topic_capture_rule m_default{};
+    topic_capture_rule                                    m_default{};
     std::unordered_map<std::uint64_t, topic_capture_rule> m_rules;
-    std::unordered_map<std::uint64_t, std::uint32_t> m_counters;
-    std::unordered_map<std::uint64_t, std::uint64_t> m_last_emit_ns;
-    std::size_t m_observers_present{0};
+    std::unordered_map<std::uint64_t, std::uint32_t>      m_counters;
+    std::unordered_map<std::uint64_t, std::uint64_t>      m_last_emit_ns;
+    std::size_t                                           m_observers_present{0};
 };
 
 }

@@ -29,7 +29,8 @@ namespace plexus {
 using upgrade_policy_fn = bool (*)(bool same_host, io::shm::dispatch_hint own_hint);
 
 // The shipped default: the bilateral, consumer-sovereign same-host auto-upgrade.
-[[nodiscard]] inline bool default_upgrade_policy(bool same_host, io::shm::dispatch_hint own_hint) noexcept
+[[nodiscard]] inline bool default_upgrade_policy(bool                   same_host,
+                                                 io::shm::dispatch_hint own_hint) noexcept
 {
     return io::shm::attempt_shm_upgrade(same_host, own_hint);
 }
@@ -42,10 +43,10 @@ using upgrade_policy_fn = bool (*)(bool same_host, io::shm::dispatch_hint own_hi
 // shared-memory backend is correctly never co-located), not a sentinel for absence.
 struct handshake_options
 {
-    std::uint8_t version_major{1};
-    std::uint8_t version_minor{0};
-    std::uint8_t compatible_version_major{1};
-    std::uint8_t compatible_version_minor{0};
+    std::uint8_t              version_major{1};
+    std::uint8_t              version_minor{0};
+    std::uint8_t              compatible_version_major{1};
+    std::uint8_t              compatible_version_minor{0};
     io::shm::host_fingerprint local_fingerprint{};
 };
 

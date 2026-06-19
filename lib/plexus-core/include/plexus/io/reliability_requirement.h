@@ -33,8 +33,8 @@ enum class reliability_requirement : std::uint8_t
 // is reliable).
 inline bool scheme_is_reliable(std::string_view scheme) noexcept
 {
-    return scheme == "udpr" || scheme == "tcp" || scheme == "tls"
-        || scheme == "unix" || scheme == "inproc";   // plain "udp" and unknowns: not reliable
+    return scheme == "udpr" || scheme == "tcp" || scheme == "tls" || scheme == "unix" ||
+            scheme == "inproc"; // plain "udp" and unknowns: not reliable
 }
 
 }

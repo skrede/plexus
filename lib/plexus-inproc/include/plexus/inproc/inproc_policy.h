@@ -21,10 +21,10 @@ namespace plexus::inproc {
 // compile-time gate proving a second, backend-independent substrate satisfies the seam.
 struct inproc_policy
 {
-    using executor_type = inproc_executor<> &;
+    using executor_type     = inproc_executor<> &;
     using byte_channel_type = inproc_channel<>;
-    using timer_type = inproc_timer<>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = inproc_timer<>;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type ex, detail::move_only_function<void()> fn)
     {
@@ -34,7 +34,8 @@ struct inproc_policy
 
 }
 
-static_assert(plexus::Policy<plexus::inproc::inproc_policy>,
-    "inproc_policy must satisfy Policy — check the channel/timer constructors and post()");
+static_assert(
+        plexus::Policy<plexus::inproc::inproc_policy>,
+        "inproc_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

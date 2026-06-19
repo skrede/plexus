@@ -49,24 +49,33 @@ public:
         if(m_sink)
             m_sink(std::span<const std::byte>{m_sent});
     }
-    void close() {}
+    void                               close() {}
     [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"wire", ""}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb) { m_on_error = std::move(cb); }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
     [[nodiscard]] std::size_t backpressured() const { return 0; }
 
-    std::vector<std::byte>                                              m_sent;
-    std::function<void(std::span<const std::byte>)>                     m_sink;
+    std::vector<std::byte>                                               m_sent;
+    std::function<void(std::span<const std::byte>)>                      m_sink;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                          m_on_closed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)>      m_on_error;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close;
+    plexus::detail::move_only_function<void()>                           m_on_closed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
 
 static_assert(plexus::io::byte_channel<plaintext_lower>,
-    "plaintext_lower must satisfy byte_channel");
+              "plaintext_lower must satisfy byte_channel");
 
 derived_keys fixed_keys()
 {
@@ -104,19 +113,22 @@ std::vector<std::byte> make_frame(std::uint64_t session_id, std::string_view pay
 
 }
 
-TEST_CASE("crypto.wire_crypto_position cleartext-above captures the plaintext frame (live)", "[crypto][wire][wire_crypto_position]")
+TEST_CASE("crypto.wire_crypto_position cleartext-above captures the plaintext frame (live)",
+          "[crypto][wire][wire_crypto_position]")
 {
     // The decorator sits ABOVE any seal, over a plaintext lower channel: the captured OUT
     // bytes are the application-debuggable plaintext frame_header+payload, byte-identical to
     // what was sent. This is the DEFAULT position, proven live over the plaintext path.
-    auto *raw = new plaintext_lower;
+    auto                              *raw = new plaintext_lower;
     recording_channel<plaintext_lower> dec{std::unique_ptr<plaintext_lower>(raw)};
 
     std::vector<std::byte> captured;
-    dec.on_wire([&](wire_direction dir, std::uint64_t, std::span<const std::byte> b) {
-        if(dir == wire_direction::out)
-            captured.assign(b.begin(), b.end());
-    });
+    dec.on_wire(
+            [&](wire_direction dir, std::uint64_t, std::span<const std::byte> b)
+            {
+                if(dir == wire_direction::out)
+                    captured.assign(b.begin(), b.end());
+            });
 
     const auto frame = make_frame(7, "application-debuggable plaintext");
     dec.send(std::span<const std::byte>{frame});
@@ -126,7 +138,8 @@ TEST_CASE("crypto.wire_crypto_position cleartext-above captures the plaintext fr
     REQUIRE(raw->m_sent == frame);
 }
 
-TEST_CASE("crypto.wire_crypto_position ciphertext-below captures the sealed bytes (unit)", "[crypto][wire][wire_crypto_position]")
+TEST_CASE("crypto.wire_crypto_position ciphertext-below captures the sealed bytes (unit)",
+          "[crypto][wire][wire_crypto_position]")
 {
     // The decorator sits BELOW the seal: the authenticated_channel wraps the recording_channel
     // (which owns the plaintext lower), so a send through the auth channel reaches the decorator
@@ -135,16 +148,18 @@ TEST_CASE("crypto.wire_crypto_position ciphertext-below captures the sealed byte
     // secured node stack is NOT wired (out of scope).
     const auto keys = fixed_keys();
 
-    auto *raw = new plaintext_lower;
+    auto                              *raw = new plaintext_lower;
     recording_channel<plaintext_lower> dec{std::unique_ptr<plaintext_lower>(raw)};
     authenticated_channel<recording_channel<plaintext_lower>> auth{
-        dec, aead_cipher_id::chacha20_poly1305, keys};
+            dec, aead_cipher_id::chacha20_poly1305, keys};
 
     std::vector<std::byte> captured;
-    dec.on_wire([&](wire_direction dir, std::uint64_t, std::span<const std::byte> b) {
-        if(dir == wire_direction::out)
-            captured.assign(b.begin(), b.end());
-    });
+    dec.on_wire(
+            [&](wire_direction dir, std::uint64_t, std::span<const std::byte> b)
+            {
+                if(dir == wire_direction::out)
+                    captured.assign(b.begin(), b.end());
+            });
 
     const auto frame = make_frame(7, "sealed below the decorator");
     auth.send(std::span<const std::byte>{frame});
@@ -159,8 +174,8 @@ TEST_CASE("crypto.wire_crypto_position ciphertext-below captures the sealed byte
     // The header rides in clear as the AAD: bytes [1, 1+header_size) equal the frame header.
     const std::span<const std::byte> sealed_header{captured.data() + 1, plexus::wire::header_size};
     const std::span<const std::byte> frame_header{frame.data(), plexus::wire::header_size};
-    REQUIRE(std::vector<std::byte>(sealed_header.begin(), sealed_header.end())
-            == std::vector<std::byte>(frame_header.begin(), frame_header.end()));
+    REQUIRE(std::vector<std::byte>(sealed_header.begin(), sealed_header.end()) ==
+            std::vector<std::byte>(frame_header.begin(), frame_header.end()));
     // What the decorator captured is exactly what the plaintext lower received (the on-wire form).
     REQUIRE(raw->m_sent == captured);
 }

@@ -39,15 +39,14 @@ TEST_CASE("io.verify_policy spki_pin_policy accepts a pinned digest, rejects an 
 {
     spki_pin_policy policy{{digest_of(1), digest_of(2), digest_of(3)}};
 
-    REQUIRE(policy.decide(facts_with(digest_of(1))));   // pin hit
-    REQUIRE(policy.decide(facts_with(digest_of(2))));    // multi-pin set hit
+    REQUIRE(policy.decide(facts_with(digest_of(1)))); // pin hit
+    REQUIRE(policy.decide(facts_with(digest_of(2)))); // multi-pin set hit
     REQUIRE(policy.decide(facts_with(digest_of(3))));
 
     REQUIRE_FALSE(policy.decide(facts_with(digest_of(9)))); // pin miss rejects
 }
 
-TEST_CASE("io.verify_policy empty allowlist rejects any facts (fail-closed)",
-          "[io][verify_policy]")
+TEST_CASE("io.verify_policy empty allowlist rejects any facts (fail-closed)", "[io][verify_policy]")
 {
     spki_pin_policy policy{{}};
 

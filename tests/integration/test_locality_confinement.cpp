@@ -33,19 +33,19 @@
 #include <catch2/catch_test_macros.hpp>
 
 #ifdef PLEXUS_HAVE_ASIO_MUX
-#include "plexus/asio/asio_policy.h"
-#include "plexus/asio/asio_transport.h"
-#include "plexus/asio/asio_channel.h"
-#include "plexus/asio/unix_policy.h"
-#include "plexus/asio/unix_transport.h"
-#include "plexus/asio/unix_channel.h"
+    #include "plexus/asio/asio_policy.h"
+    #include "plexus/asio/asio_transport.h"
+    #include "plexus/asio/asio_channel.h"
+    #include "plexus/asio/unix_policy.h"
+    #include "plexus/asio/unix_transport.h"
+    #include "plexus/asio/unix_channel.h"
 
-#include "plexus/io/peer_session.h"
-#include "plexus/io/peer_context.h"
+    #include "plexus/io/peer_session.h"
+    #include "plexus/io/peer_context.h"
 
-#include <asio/io_context.hpp>
+    #include <asio/io_context.hpp>
 
-#include <unistd.h>
+    #include <unistd.h>
 #endif
 
 #include <span>
@@ -74,14 +74,19 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // forwarder's attach-time tier classification (tier_of(scheme)) is exercised
 // deterministically — no backend, no socket. send() only counts; the bytes are
 // irrelevant to a confinement (delivered-or-not) assertion.
-struct tagged_executor {};
+struct tagged_executor
+{
+};
 
 struct tagged_channel
 {
-    explicit tagged_channel(std::string scheme) : m_scheme(std::move(scheme)) {}
+    explicit tagged_channel(std::string scheme)
+            : m_scheme(std::move(scheme))
+    {
+    }
 
-    void send(std::span<const std::byte>) { ++sends; }
-    void close() {}
+    void                               send(std::span<const std::byte>) { ++sends; }
+    void                               close() {}
     [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {m_scheme, ""}; }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(plexus::detail::move_only_function<void()>) {}
@@ -103,10 +108,10 @@ struct tagged_timer
 
 struct tagged_policy
 {
-    using executor_type = tagged_executor &;
+    using executor_type     = tagged_executor &;
     using byte_channel_type = tagged_channel;
-    using timer_type = tagged_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = tagged_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
 };
@@ -115,7 +120,8 @@ static_assert(plexus::Policy<tagged_policy>);
 
 }
 
-TEST_CASE("locality confinement: the synthetic inproc scheme is anchored to the production process tier",
+TEST_CASE("locality confinement: the synthetic inproc scheme is anchored to the production process "
+          "tier",
           "[integration][locality][confinement]")
 {
     // Without this anchor the process-tier confinement could pass for the wrong reason
@@ -125,14 +131,15 @@ TEST_CASE("locality confinement: the synthetic inproc scheme is anchored to the 
     REQUIRE(tier_of("tcp") == locality::remote);
 }
 
-TEST_CASE("locality confinement: the fan-out gate delivers a topic only to its in-mask tiers (full matrix), looped",
+TEST_CASE("locality confinement: the fan-out gate delivers a topic only to its in-mask tiers (full "
+          "matrix), looped",
           "[integration][locality][confinement]")
 {
     using forwarder = plexus::io::message_forwarder<tagged_policy>;
 
-    constexpr int k_iterations = 100;
-    const std::string fqn = "demo.confined.topic";
-    const std::string payload = "confined-bytes";
+    constexpr int     k_iterations = 100;
+    const std::string fqn          = "demo.confined.topic";
+    const std::string payload      = "confined-bytes";
 
     // The realistic subscriber set: a node fans toward WIRE peers only — a same-host
     // AF_UNIX peer (local tier) and an off-host TCP peer (remote tier). No process-tier
@@ -153,21 +160,21 @@ TEST_CASE("locality confinement: the fan-out gate delivers a topic only to its i
         fwd.declare(fqn, plexus::topic_qos{.reach = locality::process});
         const auto l0 = local_ch.sends, r0 = remote_ch.sends;
         fwd.publish(fqn, as_bytes(payload));
-        REQUIRE(local_ch.sends - l0 == 0);   // a process-only topic touches no off-process transport
+        REQUIRE(local_ch.sends - l0 == 0); // a process-only topic touches no off-process transport
         REQUIRE(remote_ch.sends - r0 == 0);
 
         // process|local: reaches the local channel, NEVER the remote one.
         fwd.declare(fqn, plexus::topic_qos{.reach = locality::process | locality::local});
         const auto l1 = local_ch.sends, r1 = remote_ch.sends;
         fwd.publish(fqn, as_bytes(payload));
-        REQUIRE(local_ch.sends - l1 == 1);   // the local AF_UNIX-tier peer receives
-        REQUIRE(remote_ch.sends - r1 == 0);  // process|local NEVER goes remote
+        REQUIRE(local_ch.sends - l1 == 1);  // the local AF_UNIX-tier peer receives
+        REQUIRE(remote_ch.sends - r1 == 0); // process|local NEVER goes remote
 
         // remote-only: reaches only the remote channel.
         fwd.declare(fqn, plexus::topic_qos{.reach = locality::remote});
         const auto l2 = local_ch.sends, r2 = remote_ch.sends;
         fwd.publish(fqn, as_bytes(payload));
-        REQUIRE(local_ch.sends - l2 == 0);   // a local peer is NEVER reached by a remote topic
+        REQUIRE(local_ch.sends - l2 == 0); // a local peer is NEVER reached by a remote topic
         REQUIRE(remote_ch.sends - r2 == 1);
 
         // any (default): reaches all wire channels.
@@ -188,32 +195,35 @@ namespace {
 
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 struct manual_policy
 {
-    using executor_type = plexus::inproc::inproc_executor<manual_clock> &;
+    using executor_type     = plexus::inproc::inproc_executor<manual_clock> &;
     using byte_channel_type = plexus::inproc::inproc_channel<manual_clock>;
-    using timer_type = plexus::inproc::inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = plexus::inproc::inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using demand_transport = plexus::inproc::inproc_transport<manual_clock>;
-using demand_engine = plexus::io::routing_engine<manual_policy, demand_transport, manual_clock>;
+using demand_engine    = plexus::io::routing_engine<manual_policy, demand_transport, manual_clock>;
 
 plexus::node_id make_id(std::uint8_t seed)
 {
@@ -224,38 +234,43 @@ plexus::node_id make_id(std::uint8_t seed)
 
 plexus::io::handshake_fsm_config make_cfg(std::uint8_t seed)
 {
-    return plexus::io::handshake_fsm_config{.self_id = make_id(seed), .version_major = 1, .version_minor = 0,
-                                            .compatible_version_major = 1, .compatible_version_minor = 0};
+    return plexus::io::handshake_fsm_config{.self_id                  = make_id(seed),
+                                            .version_major            = 1,
+                                            .version_minor            = 0,
+                                            .compatible_version_major = 1,
+                                            .compatible_version_minor = 0};
 }
 
 plexus::io::reconnect_config forever_cfg()
 {
-    return plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                                        std::nullopt, std::nullopt};
+    return plexus::io::reconnect_config{std::chrono::milliseconds(100),
+                                        std::chrono::milliseconds(10000), std::nullopt,
+                                        std::nullopt};
 }
 
 }
 
-TEST_CASE("locality confinement: a local-confined subscribe toward a tcp peer establishes NO remote path (demand gate), looped",
+TEST_CASE("locality confinement: a local-confined subscribe toward a tcp peer establishes NO "
+          "remote path (demand gate), looped",
           "[integration][locality][confinement]")
 {
-    constexpr int k_iterations = 100;
-    constexpr std::uint64_t k_seed = 0xC0FFEEu;
+    constexpr int           k_iterations = 100;
+    constexpr std::uint64_t k_seed       = 0xC0FFEEu;
 
     int proven = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
 
-        plexus::inproc::inproc_bus<manual_clock> bus;
+        plexus::inproc::inproc_bus<manual_clock>      bus;
         plexus::inproc::inproc_executor<manual_clock> ex{bus};
-        demand_transport transport_a{ex, bus};
-        demand_transport transport_b{ex, bus};
+        demand_transport                              transport_a{ex, bus};
+        demand_transport                              transport_b{ex, bus};
 
-        demand_engine a(transport_a, ex, make_cfg(0xA1), std::chrono::hours(1),
-                        forever_cfg(), k_seed, /*eager=*/false);
-        demand_engine b(transport_b, ex, make_cfg(0xB2), std::chrono::hours(1),
-                        forever_cfg(), k_seed, /*eager=*/false);
+        demand_engine a(transport_a, ex, make_cfg(0xA1), std::chrono::hours(1), forever_cfg(),
+                        k_seed, /*eager=*/false);
+        demand_engine b(transport_b, ex, make_cfg(0xB2), std::chrono::hours(1), forever_cfg(),
+                        k_seed, /*eager=*/false);
         a.listen({"inproc", "node-a"});
         b.listen({"inproc", "node-b"});
 
@@ -275,15 +290,15 @@ TEST_CASE("locality confinement: a local-confined subscribe toward a tcp peer es
         //     reach/dial. No slot is built, so no dial was attempted, no path established.
         a.subscribe(remote_id, "confined.topic", locality::local);
         ex.drain();
-        REQUIRE_FALSE(a.has_session(remote_id));   // no slot built for the refused demand
-        REQUIRE_FALSE(a.is_connected(remote_id));  // no remote path established
+        REQUIRE_FALSE(a.has_session(remote_id));  // no slot built for the refused demand
+        REQUIRE_FALSE(a.is_connected(remote_id)); // no remote path established
 
         // (2) The functional control: a PROCESS-scoped subscription toward the inproc peer
         //     (whose tier IS process) is ADMITTED — it dials, handshakes, and connects.
         //     The gate refuses only an out-of-scope mask, never all demand.
         a.subscribe(inproc_id, "open.topic", locality::process);
         ex.drain();
-        REQUIRE(a.is_connected(inproc_id));   // an in-scope demand established a real path
+        REQUIRE(a.is_connected(inproc_id)); // an in-scope demand established a real path
 
         ++proven;
     }
@@ -297,7 +312,7 @@ TEST_CASE("locality confinement: a local-confined subscribe toward a tcp peer es
 namespace {
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 // A per-instance owner-only temp dir + a SHORT AF_UNIX socket path (well under sun_path).
 struct temp_sock
@@ -307,10 +322,10 @@ struct temp_sock
 
     temp_sock()
     {
-        char tmpl[] = "/tmp/pxl-XXXXXX";
-        const char *made = ::mkdtemp(tmpl);
-        dir = made ? made : "";
-        path = dir + "/s";
+        char        tmpl[] = "/tmp/pxl-XXXXXX";
+        const char *made   = ::mkdtemp(tmpl);
+        dir                = made ? made : "";
+        path               = dir + "/s";
     }
 
     ~temp_sock()
@@ -335,46 +350,53 @@ struct temp_sock
 // forwarder fanning over the AF_UNIX channel assert a remote-confined topic is dropped and
 // a local-confined topic is delivered; symmetrically over the TCP channel.
 
-template <typename Policy, typename Transport, typename Channel>
+template<typename Policy, typename Transport, typename Channel>
 struct live_link
 {
     ::asio::io_context io;
-    Transport transport{io};
+    Transport          transport{io};
 
-    pio::message_forwarder<Policy> pub_messages{};
-    pio::message_forwarder<Policy> sub_messages{};
+    pio::message_forwarder<Policy>   pub_messages{};
+    pio::message_forwarder<Policy>   sub_messages{};
     pio::procedure_forwarder<Policy> pub_procedures{io, std::chrono::hours(1)};
     pio::procedure_forwarder<Policy> sub_procedures{io, std::chrono::hours(1)};
 
-    pio::peer_context<Policy> pub_ctx;
-    pio::peer_context<Policy> sub_ctx;
-    std::optional<pio::peer_session<Policy>> publisher;   // the dialer end
-    std::optional<pio::peer_session<Policy>> subscriber;  // the accepted end
+    pio::peer_context<Policy>                pub_ctx;
+    pio::peer_context<Policy>                sub_ctx;
+    std::optional<pio::peer_session<Policy>> publisher;  // the dialer end
+    std::optional<pio::peer_session<Policy>> subscriber; // the accepted end
 
     std::vector<std::string> received;
 
     void wire()
     {
-        transport.on_accepted([this](std::unique_ptr<Channel> ch) {
-            sub_ctx.channel = std::move(ch);
-            sub_ctx.node_name = "publisher-node";
-            subscriber.emplace(sub_ctx, io, make_cfg(0x01), std::chrono::hours(1),
-                               sub_messages, sub_procedures, true);
-            subscriber->on_message([this](std::string_view, std::span<const std::byte> d) {
-                received.emplace_back(reinterpret_cast<const char *>(d.data()), d.size());
-            });
-            subscriber->start();
-        });
-        transport.on_dialed([this](std::unique_ptr<Channel> ch, const pio::endpoint &) {
-            pub_ctx.channel = std::move(ch);
-            pub_ctx.node_name = "subscriber-node";
-            publisher.emplace(pub_ctx, io, make_cfg(0x02), std::chrono::hours(1),
-                              pub_messages, pub_procedures, false);
-            publisher->start();
-        });
+        transport.on_accepted(
+                [this](std::unique_ptr<Channel> ch)
+                {
+                    sub_ctx.channel   = std::move(ch);
+                    sub_ctx.node_name = "publisher-node";
+                    subscriber.emplace(sub_ctx, io, make_cfg(0x01), std::chrono::hours(1),
+                                       sub_messages, sub_procedures, true);
+                    subscriber->on_message(
+                            [this](std::string_view, std::span<const std::byte> d)
+                            {
+                                received.emplace_back(reinterpret_cast<const char *>(d.data()),
+                                                      d.size());
+                            });
+                    subscriber->start();
+                });
+        transport.on_dialed(
+                [this](std::unique_ptr<Channel> ch, const pio::endpoint &)
+                {
+                    pub_ctx.channel   = std::move(ch);
+                    pub_ctx.node_name = "subscriber-node";
+                    publisher.emplace(pub_ctx, io, make_cfg(0x02), std::chrono::hours(1),
+                                      pub_messages, pub_procedures, false);
+                    publisher->start();
+                });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -394,12 +416,16 @@ struct live_link
 // whose reach EXCLUDES the link's tier delivers nothing; a topic whose reach INCLUDES it
 // delivers. `tier_mask` is the reach that should include this link (local for AF_UNIX,
 // remote for TCP); `excluded_mask` is one that should not.
-template <typename Link>
-void prove_link_confinement(Link &l, const std::string &fqn,
-                            locality including_mask, locality excluding_mask)
+template<typename Link>
+void prove_link_confinement(Link &l, const std::string &fqn, locality including_mask,
+                            locality excluding_mask)
 {
-    l.pump_until([&] { return l.publisher && l.subscriber
-                              && l.publisher->is_complete() && l.subscriber->is_complete(); });
+    l.pump_until(
+            [&]
+            {
+                return l.publisher && l.subscriber && l.publisher->is_complete() &&
+                        l.subscriber->is_complete();
+            });
     REQUIRE(l.publisher->is_complete());
     REQUIRE(l.subscriber->is_complete());
 
@@ -414,7 +440,7 @@ void prove_link_confinement(Link &l, const std::string &fqn,
     l.received.clear();
     l.pub_messages.publish(fqn, as_bytes(payload), l.publisher->session_id());
     l.settle(std::chrono::milliseconds(40));
-    REQUIRE(l.received.empty());   // an off-tier topic NEVER crosses this transport
+    REQUIRE(l.received.empty()); // an off-tier topic NEVER crosses this transport
 
     // Including reach: the same fan-out delivers over the real transport.
     l.pub_messages.declare(fqn, plexus::topic_qos{.reach = including_mask});
@@ -427,14 +453,15 @@ void prove_link_confinement(Link &l, const std::string &fqn,
 
 }
 
-TEST_CASE("locality confinement (live AF_UNIX): a remote-confined topic never crosses the local stream; a local one does, looped",
+TEST_CASE("locality confinement (live AF_UNIX): a remote-confined topic never crosses the local "
+          "stream; a local one does, looped",
           "[integration][locality][confinement][unix]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        temp_sock sock;
+        temp_sock                                                                 sock;
         live_link<pasio::unix_policy, pasio::unix_transport, pasio::unix_channel> l;
         l.wire();
         l.transport.listen({"unix", sock.path});
@@ -450,11 +477,12 @@ TEST_CASE("locality confinement (live AF_UNIX): a remote-confined topic never cr
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("locality confinement (live TCP): a local-confined topic never crosses the network stream; a remote one does, looped",
+TEST_CASE("locality confinement (live TCP): a local-confined topic never crosses the network "
+          "stream; a remote one does, looped",
           "[integration][locality][confinement][tcp]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         live_link<pasio::asio_policy, pasio::asio_transport, pasio::asio_channel> l;

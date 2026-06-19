@@ -72,23 +72,29 @@ public:
     // (a large best-effort DTLS message fragments per record under the always-on aggregate bound).
     // max_payload is the per-record logical budget, distinct from the message ceiling.
     explicit dtls_transport(::asio::io_context &io, const tls_credential &cred,
-                            std::size_t max_payload = dtls_channel::default_max_payload,
-                            std::size_t global_default = io::global_default_max_message_bytes,
+                            std::size_t max_payload       = dtls_channel::default_max_payload,
+                            std::size_t global_default    = io::global_default_max_message_bytes,
                             std::size_t reassembly_budget = io::reassembly_memory_budget)
-        : m_io(io)
-        , m_server(io)
-        , m_cred(cred)
-        , m_cookie(make_cookie_secret())
-        , m_max_payload(max_payload)
-        , m_max_message_bytes(global_default)
-        , m_reassembly_budget(reassembly_budget)
-        , m_registry(make_defer_destroy())
+            : m_io(io)
+            , m_server(io)
+            , m_cred(cred)
+            , m_cookie(make_cookie_secret())
+            , m_max_payload(max_payload)
+            , m_max_message_bytes(global_default)
+            , m_reassembly_budget(reassembly_budget)
+            , m_registry(make_defer_destroy())
     {
-        m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { on_datagram(from, bytes); });
-        m_server.on_error([this](io::io_error e) { if(m_on_error) m_on_error(e); });
+        m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes)
+                             { on_datagram(from, bytes); });
+        m_server.on_error(
+                [this](io::io_error e)
+                {
+                    if(m_on_error)
+                        m_on_error(e);
+                });
     }
 
-    dtls_transport(const dtls_transport &) = delete;
+    dtls_transport(const dtls_transport &)            = delete;
     dtls_transport &operator=(const dtls_transport &) = delete;
 
     ~dtls_transport() { close(); }
@@ -100,43 +106,60 @@ public:
     // route over a pack.
     using channel_type = dtls_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"dtls"};
-    static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
+    static constexpr io::transport_kind              mux_tier = io::transport_kind::remote;
 
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> cb) { m_on_accepted = std::move(cb); }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
-    void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> cb)
+    {
+        m_on_accepted = std::move(cb);
+    }
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>,
+                                                           const io::endpoint &)>
+                           cb)
+    {
+        m_on_dialed = std::move(cb);
+    }
+    void
+    on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
+    {
+        m_on_dial_failed = std::move(cb);
+    }
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
 
     // The drop-observability seam (null by default — zero cost when unobserved). The
     // per-peer demux cap refusal emits demux_refused here, the cross-transport twin of the
     // plain-UDP seam. The sink POSTS, so the spoof-flood refusal never fires inline.
-    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
+    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
+    {
+        m_on_drop = std::move(cb);
+    }
 
     void listen(const io::endpoint &ep)
     {
         std::error_code pec;
-        auto bind_ep = plexus::asio::detail::parse_udp(ep.address, pec);
+        auto            bind_ep = plexus::asio::detail::parse_udp(ep.address, pec);
         if(pec)
             return report_error(plexus::asio::detail::map_error(pec));
         m_server.start(bind_ep);
     }
 
-    // dial mints a client channel into the pending-dial registry (transport-owned), kicks the client
-    // DTLS handshake, and fires on_dialed ON external_complete — NOT immediately. ep
-    // rides the closures so the engine correlates the completion by endpoint.
+    // dial mints a client channel into the pending-dial registry (transport-owned), kicks the
+    // client DTLS handshake, and fires on_dialed ON external_complete — NOT immediately. ep rides
+    // the closures so the engine correlates the completion by endpoint.
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;
-        auto dest = plexus::asio::detail::parse_udp(ep.address, pec);
+        auto            dest = plexus::asio::detail::parse_udp(ep.address, pec);
         if(pec)
             return report_dial_fail(ep, plexus::asio::detail::map_error(pec));
 
         ensure_bound(dest.protocol());
 
-        auto ch = std::make_unique<dtls_channel>(m_io, m_server, dest, m_cred, m_cookie,
-                                                 dtls_channel::role::client, m_max_payload,
-                                                 dtls_channel::default_record_mtu,
-                                                 m_max_message_bytes, m_reassembly_budget);
+        auto ch = std::make_unique<dtls_channel>(
+                m_io, m_server, dest, m_cred, m_cookie, dtls_channel::role::client, m_max_payload,
+                dtls_channel::default_record_mtu, m_max_message_bytes, m_reassembly_budget);
         auto *raw = ch.get();
         if(!m_demux.insert(dest, raw))
             return report_dial_fail(ep, io::io_error::address_in_use);
@@ -172,9 +195,7 @@ private:
     dial_registry::defer_destroy make_defer_destroy()
     {
         return [this](std::unique_ptr<dtls_channel> ch)
-        {
-            ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); });
-        };
+        { ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); }); };
     }
 
     void ensure_bound(const ::asio::ip::udp &proto)
@@ -197,24 +218,23 @@ private:
     // (OQ4). on_external_complete fires on_accepted (post mutual-verify, fail-closed).
     void accept_new_peer(const endpoint_type &from, std::span<const std::byte> bytes)
     {
-        auto ch = std::make_unique<dtls_channel>(m_io, m_server, from, m_cred, m_cookie,
-                                                 dtls_channel::role::server, m_max_payload,
-                                                 dtls_channel::default_record_mtu,
-                                                 m_max_message_bytes, m_reassembly_budget);
+        auto ch = std::make_unique<dtls_channel>(
+                m_io, m_server, from, m_cred, m_cookie, dtls_channel::role::server, m_max_payload,
+                dtls_channel::default_record_mtu, m_max_message_bytes, m_reassembly_budget);
         auto *raw = ch.get();
         if(!m_demux.insert(from, raw))
         {
             if(m_on_drop)
-                m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::demux_refused,
+                m_on_drop(io::detail::drop_event{.cause     = io::detail::drop_cause::demux_refused,
                                                  .transport = io::locality::remote});
-            return;                                        // peer cap reached: drop the flood
+            return; // peer cap reached: drop the flood
         }
         wire_teardown(*raw, from);
         m_registry.insert_accepted(raw, std::move(ch));
         raw->on_external_complete([this, raw] { resolve_accept(raw); });
         raw->on_error([this, raw](io::io_error) { drop_accept(raw); });
         raw->start_handshake();
-        raw->deliver_inbound(bytes);                       // feed the triggering ClientHello
+        raw->deliver_inbound(bytes); // feed the triggering ClientHello
     }
 
     void resolve_dial(const io::endpoint &ep, dtls_channel *raw)
@@ -223,7 +243,7 @@ private:
         // closure capture, which the erase destroys — re-emitting the freed reference is
         // a use-after-free (an on_dialed consumer that copies the endpoint reads it).
         const io::endpoint dialed = ep;
-        auto ch = m_registry.resolve(raw);
+        auto               ch     = m_registry.resolve(raw);
         if(!ch)
             return;
         if(m_on_dialed)
@@ -278,28 +298,37 @@ private:
         m_registry.fail_accepted(raw);
     }
 
-    void report_dial_fail(const io::endpoint &ep, io::io_error e) { if(m_on_dial_failed) m_on_dial_failed(ep, e); }
-    void report_error(io::io_error e) { if(m_on_error) m_on_error(e); }
+    void report_dial_fail(const io::endpoint &ep, io::io_error e)
+    {
+        if(m_on_dial_failed)
+            m_on_dial_failed(ep, e);
+    }
+    void report_error(io::io_error e)
+    {
+        if(m_on_error)
+            m_on_error(e);
+    }
 
-    ::asio::io_context &m_io;
-    plexus::asio::udp_server m_server;
-    const tls_credential &m_cred;
-    io::security::cookie_secret m_cookie;                  // the node's single cookie secret
-    std::size_t m_max_payload;
-    std::size_t m_max_message_bytes;                       // per-message ceiling threaded to each channel
-    std::size_t m_reassembly_budget;                       // always-on aggregate reassembly-memory DoS cap
+    ::asio::io_context         &m_io;
+    plexus::asio::udp_server    m_server;
+    const tls_credential       &m_cred;
+    io::security::cookie_secret m_cookie; // the node's single cookie secret
+    std::size_t                 m_max_payload;
+    std::size_t                 m_max_message_bytes; // per-message ceiling threaded to each channel
+    std::size_t m_reassembly_budget; // always-on aggregate reassembly-memory DoS cap
     plexus::asio::detail::basic_inbound_demux<dtls_channel> m_demux;
-    dial_registry m_registry;                             // the half-open dial table + the accepted table
+    dial_registry m_registry; // the half-open dial table + the accepted table
     plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)>
+                                                                                 m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
+    plexus::detail::move_only_function<void(io::io_error)>                       m_on_error;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)>     m_on_drop;
 };
 
 }
 
 static_assert(plexus::io::transport_backend<plexus::tls::dtls_transport, plexus::tls::dtls_policy>,
-    "dtls_transport must satisfy transport_backend — check the listen/dial/on_* surface");
+              "dtls_transport must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif

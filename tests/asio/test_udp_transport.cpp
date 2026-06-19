@@ -42,8 +42,8 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
-namespace wire = plexus::wire;
+namespace pio   = plexus::io;
+namespace wire  = plexus::wire;
 
 namespace {
 
@@ -71,36 +71,42 @@ std::string str_of(std::span<const std::byte> b)
 // accepted server channel and the dialed client channel.
 struct loopback
 {
-    ::asio::io_context io;
+    ::asio::io_context   io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io};
 
     std::unique_ptr<pasio::udp_channel> accepted;
     std::unique_ptr<pasio::udp_channel> dialed;
 
-    std::vector<std::string>     received;       // frames posted to the accepted channel
+    std::vector<std::string>            received; // frames posted to the accepted channel
     std::optional<plexus::io::io_error> client_error;
-    int  accepted_protocol_closes{0};
+    int                                 accepted_protocol_closes{0};
 
     loopback()
     {
-        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch) {
-            accepted = std::move(ch);
-            accepted->on_data([this](std::span<const std::byte> b) { received.push_back(str_of(b)); });
-            accepted->on_protocol_close([this](wire::close_cause) { ++accepted_protocol_closes; });
-        });
+        server.on_accepted(
+                [this](std::unique_ptr<pasio::udp_channel> ch)
+                {
+                    accepted = std::move(ch);
+                    accepted->on_data([this](std::span<const std::byte> b)
+                                      { received.push_back(str_of(b)); });
+                    accepted->on_protocol_close([this](wire::close_cause)
+                                                { ++accepted_protocol_closes; });
+                });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until([this] { return server.port() != 0; });
 
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &) {
-            dialed = std::move(ch);
-            dialed->on_error([this](plexus::io::io_error e) { client_error = e; });
-        });
+        client.on_dialed(
+                [this](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &)
+                {
+                    dialed = std::move(ch);
+                    dialed->on_error([this](plexus::io::io_error e) { client_error = e; });
+                });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
         pump_until([this] { return dialed != nullptr && accepted != nullptr; });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -119,7 +125,7 @@ TEST_CASE("udp best_effort: a dialed channel sends a frame the accepting channel
           "[udp][transport]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;
@@ -127,13 +133,13 @@ TEST_CASE("udp best_effort: a dialed channel sends a frame the accepting channel
         REQUIRE(h.accepted != nullptr);
 
         const std::string payload = "best_effort-" + std::to_string(iter);
-        auto frame = bytes_of(payload);
+        auto              frame   = bytes_of(payload);
         h.dialed->send(frame);
 
         h.pump_until([&] { return !h.received.empty(); });
         REQUIRE(h.received.size() == 1);
         REQUIRE(h.received.front() == payload);
-        REQUIRE(h.accepted_protocol_closes == 0);   // non-stream: on_protocol_close never fires
+        REQUIRE(h.accepted_protocol_closes == 0); // non-stream: on_protocol_close never fires
         ++proven;
     }
     REQUIRE(proven == k_iterations);
@@ -148,7 +154,7 @@ TEST_CASE("udp dedup_live: a replayed datagram is dropped — on_data fires once
     // Encode the SAME envelope (same seq) twice and inject both at the raw socket
     // layer (bypassing the channel's send-side seq increment) so the receiver sees a
     // genuine replay. seq=0 matches the channel's first outbound seq.
-    auto frame = bytes_of("replay-me");
+    auto frame    = bytes_of("replay-me");
     auto datagram = wire::wrap_udp(wire::udp_envelope_kind::best_effort, 0, frame);
 
     // Deliver the identical envelope (same seq) twice to the accepted channel: the
@@ -162,7 +168,8 @@ TEST_CASE("udp dedup_live: a replayed datagram is dropped — on_data fires once
     REQUIRE(h.received.front() == "replay-me");
 }
 
-TEST_CASE("udp oversize: a message beyond the max-message size is rejected at publish with a surfaced error",
+TEST_CASE("udp oversize: a message beyond the max-message size is rejected at publish with a "
+          "surfaced error",
           "[udp][transport]")
 {
     loopback h;
@@ -173,18 +180,20 @@ TEST_CASE("udp oversize: a message beyond the max-message size is rejected at pu
     // max-MESSAGE size, the genuinely-too-big case the reassembler cannot hold. The live
     // ceiling is the channel's effective-max (the node default), not the fragment-count
     // assert constant.
-    std::vector<std::byte> too_big(plexus::io::global_default_max_message_bytes + 1, std::byte{0x5A});
+    std::vector<std::byte> too_big(plexus::io::global_default_max_message_bytes + 1,
+                                   std::byte{0x5A});
     h.dialed->send(too_big);
     h.pump_until([&] { return h.client_error.has_value(); });
 
     REQUIRE(h.client_error.has_value());
     REQUIRE(*h.client_error == plexus::io::io_error::message_too_large);
-    REQUIRE(h.dialed->is_open());     // rejected at publish, channel stays open — not a drop/close
+    REQUIRE(h.dialed->is_open()); // rejected at publish, channel stays open — not a drop/close
 
     // A frame that just fits one datagram still sends unfragmented (boundary: size +
     // overhead == max_payload) — the small path is byte-identical to before.
     h.client_error.reset();
-    std::vector<std::byte> fits(pasio::udp_channel::default_max_payload - wire::udp_envelope_overhead, std::byte{0x01});
+    std::vector<std::byte> fits(
+            pasio::udp_channel::default_max_payload - wire::udp_envelope_overhead, std::byte{0x01});
     h.dialed->send(fits);
     h.pump_until([&] { return !h.received.empty(); });
     REQUIRE_FALSE(h.client_error.has_value());
@@ -194,11 +203,12 @@ TEST_CASE("udp oversize: a message beyond the max-message size is rejected at pu
 TEST_CASE("udp dial: a malformed port fails closed via on_dial_failed, never throwing",
           "[udp][transport][parse]")
 {
-    ::asio::io_context io;
+    ::asio::io_context   io;
     pasio::udp_transport client{io};
 
     std::optional<plexus::io::io_error> dial_error;
-    client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e) { dial_error = e; });
+    client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e)
+                          { dial_error = e; });
 
     // A non-numeric / empty / overflowing port must NOT throw out of dial(): the parser
     // is fail-closed (from_chars, not stoul), so each routes to on_dial_failed.
@@ -210,11 +220,11 @@ TEST_CASE("udp dial: a malformed port fails closed via on_dial_failed, never thr
     REQUIRE(dial_error.has_value());
 
     dial_error.reset();
-    REQUIRE_NOTHROW(client.dial({"udp", "127.0.0.1:70000"}));   // > 65535
+    REQUIRE_NOTHROW(client.dial({"udp", "127.0.0.1:70000"})); // > 65535
     REQUIRE(dial_error.has_value());
 
     dial_error.reset();
-    REQUIRE_NOTHROW(client.dial({"udp", "127.0.0.1:80junk"}));  // trailing junk
+    REQUIRE_NOTHROW(client.dial({"udp", "127.0.0.1:80junk"})); // trailing junk
     REQUIRE(dial_error.has_value());
 }
 
@@ -229,7 +239,7 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
     // DROPPED on a best_effort channel — never routed to the reliable path that would
     // construct an unsolicited ARQ engine and start acking. With seq=0 it would otherwise
     // be a valid first segment.
-    auto payload = bytes_of("spoofed-reliable");
+    auto                   payload = bytes_of("spoofed-reliable");
     std::vector<std::byte> inner(1 + payload.size());
     inner[0] = static_cast<std::byte>(wire::udp_arq_kind::segment);
     for(std::size_t i = 0; i < payload.size(); ++i)
@@ -238,7 +248,7 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
                                    std::span<const std::byte>{inner});
 
     h.accepted->deliver_inbound(datagram);
-    for(int i = 0; i < 64; ++i)   // drain any (erroneous) posted delivery / ack without a long wait
+    for(int i = 0; i < 64; ++i) // drain any (erroneous) posted delivery / ack without a long wait
     {
         h.io.poll();
         if(h.io.stopped())
@@ -260,14 +270,14 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
 // its secure member (inert here — never dialed), hence the PLEXUS_HAVE_TLS_MUX gate.
 // These includes are at file scope (the anonymous namespace above is already closed).
 
-#include "plexus/asio/all_backends_mux.h"
-#include "plexus/asio/unix_transport.h"
+    #include "plexus/asio/all_backends_mux.h"
+    #include "plexus/asio/unix_transport.h"
 
-#include "plexus/io/polymorphic_byte_channel.h"
+    #include "plexus/io/polymorphic_byte_channel.h"
 
-#include "plexus/tls/tls_credential.h"
-#include "plexus/tls/tls_transport.h"
-#include "plexus/tls/dtls_transport.h"
+    #include "plexus/tls/tls_credential.h"
+    #include "plexus/tls/tls_transport.h"
+    #include "plexus/tls/dtls_transport.h"
 
 namespace {
 
@@ -280,16 +290,19 @@ namespace ptls = plexus::tls;
 // dialed here.
 struct mux_face
 {
-    ::asio::io_context &io;
-    ptls::tls_credential no_tls;
-    pasio::unix_transport local{io};
-    pasio::asio_transport remote{io};
-    ptls::tls_transport secure{io, no_tls};
-    pasio::udp_transport datagram{io};
-    ptls::dtls_transport secure_datagram{io, no_tls};
+    ::asio::io_context     &io;
+    ptls::tls_credential    no_tls;
+    pasio::unix_transport   local{io};
+    pasio::asio_transport   remote{io};
+    ptls::tls_transport     secure{io, no_tls};
+    pasio::udp_transport    datagram{io};
+    ptls::dtls_transport    secure_datagram{io, no_tls};
     pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
-    explicit mux_face(::asio::io_context &ctx) : io(ctx) {}
+    explicit mux_face(::asio::io_context &ctx)
+            : io(ctx)
+    {
+    }
 };
 
 // A loopback pair of mux faces on one io_context. The listen face listens on the
@@ -299,23 +312,27 @@ struct mux_face
 struct mux_pair
 {
     ::asio::io_context io;
-    mux_face listen_face{io};
-    mux_face dial_face{io};
+    mux_face           listen_face{io};
+    mux_face           dial_face{io};
 
-    std::optional<plexus::io::endpoint> dialed_ep;
+    std::optional<plexus::io::endpoint>            dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     mux_pair()
     {
-        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) { accepted = std::move(ch); });
-        dial_face.mux.on_dialed([this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const plexus::io::endpoint &ep) {
-            dialed = std::move(ch);
-            dialed_ep.emplace(ep);
-        });
+        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch)
+                                    { accepted = std::move(ch); });
+        dial_face.mux.on_dialed(
+                [this](std::unique_ptr<pio::polymorphic_byte_channel> ch,
+                       const plexus::io::endpoint                    &ep)
+                {
+                    dialed = std::move(ch);
+                    dialed_ep.emplace(ep);
+                });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -334,7 +351,7 @@ TEST_CASE("udp mux: a best_effort 'udp' dial routes to the UDP member and a fram
           "[udp][mux][route]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         mux_pair n;
@@ -343,7 +360,7 @@ TEST_CASE("udp mux: a best_effort 'udp' dial routes to the UDP member and a fram
         n.dial_face.mux.dial({"udp", "127.0.0.1:" + std::to_string(n.listen_face.datagram.port())});
         n.pump_until([&] { return n.dialed && n.accepted; });
 
-        REQUIRE(n.dialed != nullptr);     // delivered POST-handshake via the UDP member
+        REQUIRE(n.dialed != nullptr); // delivered POST-handshake via the UDP member
         REQUIRE(n.accepted != nullptr);
         // The "udp" scheme survives the erasure on both ends — it routed to the datagram
         // member, not a stream member.
@@ -356,7 +373,7 @@ TEST_CASE("udp mux: a best_effort 'udp' dial routes to the UDP member and a fram
         std::optional<std::string> got;
         n.accepted->on_data([&](std::span<const std::byte> b) { got = str_of(b); });
         const std::string payload = "mux-udp-" + std::to_string(iter);
-        auto frame = bytes_of(payload);
+        auto              frame   = bytes_of(payload);
         n.dialed->send(frame);
         n.pump_until([&] { return got.has_value(); });
         REQUIRE(got.has_value());
@@ -409,7 +426,7 @@ TEST_CASE("udp mux: a reliable_datagram 'udpr' dial routes to the UDP+ARQ member
 
     REQUIRE(n.dialed != nullptr);
     REQUIRE(n.accepted != nullptr);
-    REQUIRE(n.dialed->remote_endpoint().scheme == "udpr");     // routed to the UDP+ARQ member
+    REQUIRE(n.dialed->remote_endpoint().scheme == "udpr"); // routed to the UDP+ARQ member
     REQUIRE(n.accepted->remote_endpoint().scheme == "udpr");
     // The dial face's TCP (remote stream) member was NEVER engaged for the "udpr" dial.
     REQUIRE(n.dial_face.remote.port() == 0);
@@ -419,11 +436,11 @@ TEST_CASE("udp mux: a reliable_datagram 'udpr' dial routes to the UDP+ARQ member
     std::optional<std::string> got;
     n.accepted->on_data([&](std::span<const std::byte> b) { got = str_of(b); });
     const std::string payload = "mux-udpr-reliable";
-    auto frame = bytes_of(payload);
+    auto              frame   = bytes_of(payload);
     n.dialed->send(frame);
     n.pump_until([&] { return got.has_value(); });
     REQUIRE(got.has_value());
     REQUIRE(*got == payload);
 }
 
-#endif  // PLEXUS_HAVE_TLS_MUX
+#endif // PLEXUS_HAVE_TLS_MUX

@@ -32,17 +32,17 @@ namespace plexus::io {
 // lifetime (harness-owned in the redial oracles, registry-slot-owned next).
 // Keeping it out leaves the record a pure value bundle and the non-redialing slots
 // free of dead per-slot scaffolding. So this templates over Policy alone.
-template <typename Policy>
+template<typename Policy>
     requires plexus::Policy<Policy>
 struct peer_context
 {
     using channel_type = typename Policy::byte_channel_type;
 
-    std::unique_ptr<channel_type> channel;   // the live connection; the session borrows it
-    node_id peer_id{};                        // the peer's stable identity (the registry key)
-    std::string node_name;                    // the forwarder-peer key, set once at construction
-    endpoint dial_endpoint;                   // the endpoint the slot dials/redials
-    epoch_source epochs;                      // the per-peer well each incarnation draws from
+    std::unique_ptr<channel_type> channel;       // the live connection; the session borrows it
+    node_id                       peer_id{};     // the peer's stable identity (the registry key)
+    std::string                   node_name;     // the forwarder-peer key, set once at construction
+    endpoint                      dial_endpoint; // the endpoint the slot dials/redials
+    epoch_source                  epochs;        // the per-peer well each incarnation draws from
     // Set once on the first complete, NEVER cleared — survives teardown so a redial
     // fires reconnected, not connected. It lives HERE (the record outlives every
     // incarnation) and NOT on peer_session: a session-local flag would reset every

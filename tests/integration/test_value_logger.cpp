@@ -79,8 +79,9 @@ struct reading_codec
     {
         if(b.size() != 8)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
-        auto u32 = [&](int o) {
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+        auto u32 = [&](int o)
+        {
             std::uint32_t v = 0;
             for(int i = 0; i < 4; ++i)
                 v |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(b[o + i])) << (8 * i);
@@ -135,15 +136,17 @@ struct temperature_codec
     {
         auto owner = std::make_shared<std::vector<std::byte>>(4);
         for(int i = 0; i < 4; ++i)
-            (*owner)[i] = static_cast<std::byte>((static_cast<std::uint32_t>(t.celsius) >> (8 * i)) & 0xff);
+            (*owner)[i] = static_cast<std::byte>(
+                    (static_cast<std::uint32_t>(t.celsius) >> (8 * i)) & 0xff);
         return {std::span<const std::byte>{owner->data(), owner->size()}, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> b, temperature &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> b,
+                                                   temperature               &out) const
     {
         if(b.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(b[i])) << (8 * i);
@@ -160,10 +163,10 @@ static_assert(plexus::streamable<temperature>);
 plexus::node_options make_opts(std::uint64_t seed, bool eager)
 {
     plexus::node_options o;
-    o.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                               std::chrono::milliseconds(2000),
-                                               std::nullopt, std::nullopt};
-    o.redial_seed = seed;
+    o.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                  std::chrono::milliseconds(2000), std::nullopt,
+                                                  std::nullopt};
+    o.redial_seed  = seed;
     o.dial_eagerly = eager;
     return o;
 }
@@ -177,11 +180,11 @@ plexus::node_id id_of(std::uint8_t seed)
 
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     inproc_node pub_node{ex, disc, id_of(0x0A), ta, make_opts(0xA, /*eager=*/false)};
     inproc_node sub_node{ex, disc, id_of(0x0B), tb, make_opts(0xB, /*eager=*/true)};
@@ -201,15 +204,15 @@ struct net
 // decode+format path is measured, never an ostream's own buffer growth.
 struct null_streambuf final : std::streambuf
 {
-    int_type overflow(int_type c) override { return c; }
+    int_type        overflow(int_type c) override { return c; }
     std::streamsize xsputn(const char *, std::streamsize n) override { return n; }
 };
 
 std::vector<std::string> lines_of(const std::string &text)
 {
     std::vector<std::string> out;
-    std::istringstream is{text};
-    std::string line;
+    std::istringstream       is{text};
+    std::string              line;
     while(std::getline(is, line))
         out.push_back(line);
     return out;
@@ -217,13 +220,15 @@ std::vector<std::string> lines_of(const std::string &text)
 
 }
 
-TEST_CASE("value logger: a projection emits a named CSV header and per-sample rows", "[integration]")
+TEST_CASE("value logger: a projection emits a named CSV header and per-sample rows",
+          "[integration]")
 {
-    net n;
+    net                n;
     std::ostringstream out;
-    auto logger = n.sub_node.log<reading_codec, reading_projection>(
-        "telemetry", plexus::value_logger_options{.out = out, .format = plexus::log_format::csv},
-        reading_codec{}, reading_projection{});
+    auto               logger = n.sub_node.log<reading_codec, reading_projection>(
+            "telemetry",
+            plexus::value_logger_options{.out = out, .format = plexus::log_format::csv},
+            reading_codec{}, reading_projection{});
     plexus::publisher<reading_codec> pub{n.pub_node, "telemetry", {}, reading_codec{}};
     n.drive();
 
@@ -242,11 +247,12 @@ TEST_CASE("value logger: a projection emits a named CSV header and per-sample ro
 
 TEST_CASE("value logger: a projection emits one named-field JSON object per line", "[integration]")
 {
-    net n;
+    net                n;
     std::ostringstream out;
-    auto logger = n.sub_node.log<reading_codec, reading_projection>(
-        "telemetry", plexus::value_logger_options{.out = out, .format = plexus::log_format::jsonl},
-        reading_codec{}, reading_projection{});
+    auto               logger = n.sub_node.log<reading_codec, reading_projection>(
+            "telemetry",
+            plexus::value_logger_options{.out = out, .format = plexus::log_format::jsonl},
+            reading_codec{}, reading_projection{});
     plexus::publisher<reading_codec> pub{n.pub_node, "telemetry", {}, reading_codec{}};
     n.drive();
 
@@ -259,16 +265,17 @@ TEST_CASE("value logger: a projection emits one named-field JSON object per line
     REQUIRE(logger.decode_failed() == 0);
 }
 
-TEST_CASE("value logger: a projection-less streamable type uses the operator<< text floor", "[integration]")
+TEST_CASE("value logger: a projection-less streamable type uses the operator<< text floor",
+          "[integration]")
 {
     net n;
 
     SECTION("csv single value column")
     {
         std::ostringstream out;
-        auto logger = n.sub_node.log<temperature_codec>(
-            "temp", plexus::value_logger_options{.out = out, .format = plexus::log_format::csv},
-            temperature_codec{});
+        auto               logger = n.sub_node.log<temperature_codec>(
+                "temp", plexus::value_logger_options{.out = out, .format = plexus::log_format::csv},
+                temperature_codec{});
         plexus::publisher<temperature_codec> pub{n.pub_node, "temp", {}, temperature_codec{}};
         n.drive();
 
@@ -284,9 +291,10 @@ TEST_CASE("value logger: a projection-less streamable type uses the operator<< t
     SECTION("json single string field")
     {
         std::ostringstream out;
-        auto logger = n.sub_node.log<temperature_codec>(
-            "temp", plexus::value_logger_options{.out = out, .format = plexus::log_format::jsonl},
-            temperature_codec{});
+        auto               logger = n.sub_node.log<temperature_codec>(
+                "temp",
+                plexus::value_logger_options{.out = out, .format = plexus::log_format::jsonl},
+                temperature_codec{});
         plexus::publisher<temperature_codec> pub{n.pub_node, "temp", {}, temperature_codec{}};
         n.drive();
 
@@ -301,9 +309,10 @@ TEST_CASE("value logger: a projection-less streamable type uses the operator<< t
     SECTION("text line")
     {
         std::ostringstream out;
-        auto logger = n.sub_node.log<temperature_codec>(
-            "temp", plexus::value_logger_options{.out = out, .format = plexus::log_format::text},
-            temperature_codec{});
+        auto               logger = n.sub_node.log<temperature_codec>(
+                "temp",
+                plexus::value_logger_options{.out = out, .format = plexus::log_format::text},
+                temperature_codec{});
         plexus::publisher<temperature_codec> pub{n.pub_node, "temp", {}, temperature_codec{}};
         n.drive();
 
@@ -318,45 +327,49 @@ TEST_CASE("value logger: a projection-less streamable type uses the operator<< t
 
 TEST_CASE("value logger: a malformed payload is counted and writes no line", "[integration]")
 {
-    net n;
+    net                n;
     std::ostringstream out;
-    auto logger = n.sub_node.log<reading_codec, reading_projection>(
-        "telemetry", plexus::value_logger_options{.out = out, .format = plexus::log_format::jsonl},
-        reading_codec{}, reading_projection{});
+    auto               logger = n.sub_node.log<reading_codec, reading_projection>(
+            "telemetry",
+            plexus::value_logger_options{.out = out, .format = plexus::log_format::jsonl},
+            reading_codec{}, reading_projection{});
     // A bytes publisher on the same topic feeds a wrong-length frame the codec rejects.
-    plexus::publisher<> bytes_pub{n.pub_node, "telemetry"};
+    plexus::publisher<>              bytes_pub{n.pub_node, "telemetry"};
     plexus::publisher<reading_codec> good_pub{n.pub_node, "telemetry", {}, reading_codec{}};
     n.drive();
 
-    std::array<std::byte, 3> malformed{};   // not 8 bytes -> decode fails
+    std::array<std::byte, 3> malformed{}; // not 8 bytes -> decode fails
     bytes_pub.publish(std::span<const std::byte>{malformed});
     n.drive();
 
     REQUIRE(logger.decode_failed() == 1);
-    REQUIRE(out.str().empty());   // no partial line for the bad frame
+    REQUIRE(out.str().empty()); // no partial line for the bad frame
 
     good_pub.publish(reading{1, 9});
     n.drive();
 
     REQUIRE(logger.decode_failed() == 1);
-    REQUIRE_FALSE(out.str().empty());   // the good frame still projects
+    REQUIRE_FALSE(out.str().empty()); // the good frame still projects
 }
 
-TEST_CASE("value logger: the warmed steady projection loop is zero per-sample alloc", "[integration]")
+TEST_CASE("value logger: the warmed steady projection loop is zero per-sample alloc",
+          "[integration]")
 {
     constexpr int warm = 64;
-    constexpr int K = 4096;
+    constexpr int K    = 4096;
 
-    net n;
+    net            n;
     null_streambuf sink;
-    std::ostream out{&sink};   // a non-allocating sink: only the format path is measured
-    auto logger = n.sub_node.log<reading_codec, reading_projection>(
-        "telemetry", plexus::value_logger_options{.out = out, .format = plexus::log_format::csv},
-        reading_codec{}, reading_projection{});
+    std::ostream   out{&sink}; // a non-allocating sink: only the format path is measured
+    auto           logger = n.sub_node.log<reading_codec, reading_projection>(
+            "telemetry",
+            plexus::value_logger_options{.out = out, .format = plexus::log_format::csv},
+            reading_codec{}, reading_projection{});
     plexus::publisher<reading_codec> pub{n.pub_node, "telemetry", {}, reading_codec{}};
     n.drive();
 
-    auto publish = [&](std::uint32_t v) {
+    auto publish = [&](std::uint32_t v)
+    {
         pub.publish(reading{7, v});
         n.drive();
     };
@@ -373,5 +386,5 @@ TEST_CASE("value logger: the warmed steady projection loop is zero per-sample al
     const auto after = plexus::testing::alloc_count();
 
     REQUIRE(logger.decode_failed() == 0);
-    REQUIRE(after - before == 0);   // the steady decode+format+write path allocated nothing
+    REQUIRE(after - before == 0); // the steady decode+format+write path allocated nothing
 }

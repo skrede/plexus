@@ -53,9 +53,9 @@ inline close_cause to_close_cause(feed_error error)
 struct stream_inbound_config
 {
     std::chrono::nanoseconds no_progress_floor{std::chrono::seconds{30}};
-    std::size_t min_throughput_bytes_per_sec{64 * 1024};
-    std::size_t max_payload_size{k_max_reassembler_payload_bytes};
-    std::size_t buffered_bytes_cap{k_max_reassembler_payload_bytes + header_size};
+    std::size_t              min_throughput_bytes_per_sec{64 * 1024};
+    std::size_t              max_payload_size{k_max_reassembler_payload_bytes};
+    std::size_t              buffered_bytes_cap{k_max_reassembler_payload_bytes + header_size};
 };
 
 // Stamp the per-MESSAGE receive ceiling and the aggregate reassembly-memory cap onto a
@@ -63,11 +63,11 @@ struct stream_inbound_config
 // buffered_bytes_cap held at the budget (and never below the ceiling + one header). The
 // node-options surface (transport ctor) threads the resolved values in — keeping the
 // no-progress tunables a node may already have set.
-[[nodiscard]] inline stream_inbound_config with_message_limits(stream_inbound_config cfg,
-                                                               std::size_t max_payload_size,
-                                                               std::size_t reassembly_budget) noexcept
+[[nodiscard]] inline stream_inbound_config
+with_message_limits(stream_inbound_config cfg, std::size_t max_payload_size,
+                    std::size_t reassembly_budget) noexcept
 {
-    cfg.max_payload_size = max_payload_size;
+    cfg.max_payload_size   = max_payload_size;
     cfg.buffered_bytes_cap = std::max(reassembly_budget, max_payload_size + header_size);
     return cfg;
 }
@@ -84,19 +84,25 @@ struct stream_inbound_config
 // on <Timer, Executor> — the two Policy-supplied types it actually uses — to stay
 // free of any plexus::Policy dependency and to break the channel<->policy include
 // cycle. It owns no logger, no RNG, no socket; it only detects and signals.
-template <typename Timer, typename Executor>
+template<typename Timer, typename Executor>
 class stream_inbound
 {
 public:
     stream_inbound(Executor ex, stream_inbound_config cfg)
-        : m_reassembler(cfg.max_payload_size, cfg.buffered_bytes_cap)
-        , m_timer(ex)
-        , m_cfg(cfg)
+            : m_reassembler(cfg.max_payload_size, cfg.buffered_bytes_cap)
+            , m_timer(ex)
+            , m_cfg(cfg)
     {
     }
 
-    void on_frame(plexus::detail::move_only_function<void(const complete_frame &)> cb) { m_on_frame = std::move(cb); }
-    void on_protocol_close(plexus::detail::move_only_function<void(close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_frame(plexus::detail::move_only_function<void(const complete_frame &)> cb)
+    {
+        m_on_frame = std::move(cb);
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
 
     void feed(std::span<const std::byte> bytes)
     {
@@ -159,30 +165,31 @@ private:
     {
         if(m_cfg.min_throughput_bytes_per_sec == 0)
             return std::chrono::nanoseconds{0};
-        const std::int64_t ns =
-            static_cast<std::int64_t>(n) * 1'000'000'000
-            / static_cast<std::int64_t>(m_cfg.min_throughput_bytes_per_sec);
+        const std::int64_t ns = static_cast<std::int64_t>(n) * 1'000'000'000 /
+                static_cast<std::int64_t>(m_cfg.min_throughput_bytes_per_sec);
         return std::chrono::nanoseconds{ns};
     }
 
     void arm(std::chrono::nanoseconds d)
     {
         m_timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(d));
-        m_timer.async_wait([this](std::error_code ec) {
-            if(ec)
-                return;   // cancelled by a new frame, completion, or shutdown
-            if(m_on_protocol_close)
-                m_on_protocol_close(close_cause::no_progress_timeout);
-        });
+        m_timer.async_wait(
+                [this](std::error_code ec)
+                {
+                    if(ec)
+                        return; // cancelled by a new frame, completion, or shutdown
+                    if(m_on_protocol_close)
+                        m_on_protocol_close(close_cause::no_progress_timeout);
+                });
         m_armed_deadline = d;
     }
 
-    frame_reassembler m_reassembler;
-    Timer m_timer;
-    stream_inbound_config m_cfg;
-    std::chrono::nanoseconds m_armed_deadline{0};
+    frame_reassembler                                                m_reassembler;
+    Timer                                                            m_timer;
+    stream_inbound_config                                            m_cfg;
+    std::chrono::nanoseconds                                         m_armed_deadline{0};
     plexus::detail::move_only_function<void(const complete_frame &)> m_on_frame;
-    plexus::detail::move_only_function<void(close_cause)> m_on_protocol_close;
+    plexus::detail::move_only_function<void(close_cause)>            m_on_protocol_close;
 };
 
 }

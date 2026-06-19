@@ -45,8 +45,8 @@
 #include <iostream>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
-namespace wire = plexus::wire;
+namespace pio   = plexus::io;
+namespace wire  = plexus::wire;
 
 namespace {
 
@@ -70,13 +70,13 @@ bool equal_bytes(std::span<const std::byte> a, std::span<const std::byte> b)
 plexus::node_options node_opts(const char *name, bool eager, std::uint64_t seed)
 {
     plexus::node_options opts;
-    opts.name = name;
-    opts.dial_eagerly = eager;        // one eager dialer converges the loopback link
-    opts.redial_seed = seed;
+    opts.name         = name;
+    opts.dial_eagerly = eager; // one eager dialer converges the loopback link
+    opts.redial_seed  = seed;
     return opts;
 }
 
-template <typename Pred>
+template<typename Pred>
 void pump_until(::asio::io_context &io, Pred pred,
                 std::chrono::seconds bound = std::chrono::seconds{20})
 {
@@ -104,8 +104,9 @@ int main()
     // The node ceiling is the 16 MB message plus a small framing allowance (the pub/sub
     // frame carries the topic + a header above the raw payload, so the on-wire payload_len
     // is a touch above the message itself).
-    constexpr std::size_t k_node_ceiling = k_message_16mb + 1u * 1024u * 1024u;   // raised above the 8 MiB default
-    constexpr std::size_t k_reassembly_budget = 48u * 1024u * 1024u;              // room for the 16 MB message
+    constexpr std::size_t k_node_ceiling =
+            k_message_16mb + 1u * 1024u * 1024u; // raised above the 8 MiB default
+    constexpr std::size_t k_reassembly_budget = 48u * 1024u * 1024u; // room for the 16 MB message
 
     // Only TWO knobs govern the large-message path: the per-MESSAGE ceiling (the sole size
     // authority) and the aggregate reassembly budget (the receive-side memory backstop). The
@@ -113,11 +114,16 @@ int main()
     // it stays at its default — a within-ceiling message always sends regardless of the cap.
     wire::stream_inbound_config cfg{};
 
-    auto make_transport = [&] {
-        return pasio::asio_transport{
-            io, cfg, /*no_delay=*/true, pio::congestion::block,
-            pio::egress_capacity::bounded_default(),
-            /*socket_options=*/{}, k_node_ceiling, k_reassembly_budget};
+    auto make_transport = [&]
+    {
+        return pasio::asio_transport{io,
+                                     cfg,
+                                     /*no_delay=*/true,
+                                     pio::congestion::block,
+                                     pio::egress_capacity::bounded_default(),
+                                     /*socket_options=*/{},
+                                     k_node_ceiling,
+                                     k_reassembly_budget};
     };
     auto pub_transport = make_transport();
     auto sub_transport = make_transport();
@@ -137,18 +143,16 @@ int main()
     // raises (or tightens) its OWN ceiling above (or below) the node default; an unset topic
     // falls back to the node default. io::effective_max is the resolution rule.
     plexus::topic_qos frames_qos{};
-    frames_qos.max_message_bytes = k_message_16mb;   // an explicit per-topic ceiling for this topic
+    frames_qos.max_message_bytes = k_message_16mb; // an explicit per-topic ceiling for this topic
 
     std::vector<std::byte> frames_received;
-    int oversize_received = 0;
-    plexus::subscriber<> frames_sub{
-        sub_node, "frames",
-        [&](std::span<const std::byte> bytes, const pio::message_info &) {
-            frames_received.assign(bytes.begin(), bytes.end());
-        }};
-    plexus::subscriber<> oversize_sub{
-        sub_node, "oversize",
-        [&](std::span<const std::byte>, const pio::message_info &) { ++oversize_received; }};
+    int                    oversize_received = 0;
+    plexus::subscriber<> frames_sub{sub_node, "frames",
+                                    [&](std::span<const std::byte> bytes, const pio::message_info &)
+                                    { frames_received.assign(bytes.begin(), bytes.end()); }};
+    plexus::subscriber<> oversize_sub{sub_node, "oversize",
+                                      [&](std::span<const std::byte>, const pio::message_info &)
+                                      { ++oversize_received; }};
 
     plexus::publisher<> frames_pub{pub_node, "frames", frames_qos};
     plexus::publisher<> oversize_pub{pub_node, "oversize"};
@@ -156,7 +160,8 @@ int main()
     // Let the eager dialer establish the session and both demands settle before publishing.
     pump_until(io, [] { return false; }, std::chrono::seconds{1});
 
-    std::cout << "shipped node default : " << (pio::global_default_max_message_bytes >> 20) << " MiB\n";
+    std::cout << "shipped node default : " << (pio::global_default_max_message_bytes >> 20)
+              << " MiB\n";
     std::cout << "configured ceiling   : " << (k_node_ceiling >> 20) << " MiB\n";
     std::cout << "reassembly budget    : " << (k_reassembly_budget >> 20) << " MiB\n";
     std::cout << "\"frames\" effective max: "
@@ -176,7 +181,8 @@ int main()
     // subscriber's reassembler refuses it (payload_too_large) and it is never delivered.
     const auto oversize = make_payload(18u * 1024u * 1024u);
     oversize_pub.publish(std::span<const std::byte>{oversize});
-    pump_until(io, [] { return false; }, std::chrono::seconds{1});   // grace window for a (non-)delivery
+    pump_until(
+            io, [] { return false; }, std::chrono::seconds{1}); // grace window for a (non-)delivery
 
     std::cout << "18 MiB oversize publish : deliveries=" << oversize_received
               << " (0 == refused above the ceiling)\n";

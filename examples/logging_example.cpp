@@ -65,8 +65,9 @@ struct reading_codec
     {
         if(b.size() != 8)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
-        auto u32 = [&](int o) {
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+        auto u32 = [&](int o)
+        {
             std::uint32_t v = 0;
             for(int i = 0; i < 4; ++i)
                 v |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(b[o + i])) << (8 * i);
@@ -105,9 +106,9 @@ struct reading_projection
 plexus::node_options opts(std::uint64_t seed, bool eager)
 {
     plexus::node_options o;
-    o.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                               std::chrono::milliseconds(2000),
-                                               std::nullopt, std::nullopt};
+    o.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                  std::chrono::milliseconds(2000), std::nullopt,
+                                                  std::nullopt};
     o.redial_seed  = seed;
     o.dial_eagerly = eager;
     return o;
@@ -149,12 +150,12 @@ int main()
     // value to CSV columns on std::cout. The ostream MUST outlive the handle. The handle is
     // RAII and move-only — keep it alive for the session, drop it to retire.
     auto logger = n.log_node.log<reading_codec, reading_projection>(
-        "telemetry",
-        plexus::value_logger_options{.out = std::cout, .format = plexus::log_format::csv},
-        reading_codec{}, reading_projection{});
+            "telemetry",
+            plexus::value_logger_options{.out = std::cout, .format = plexus::log_format::csv},
+            reading_codec{}, reading_projection{});
 
-    plexus::publisher<reading_codec> pub{
-        n.pub_node, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
+    plexus::publisher<reading_codec> pub{n.pub_node, "telemetry", plexus::typed_publisher_options{},
+                                         reading_codec{}};
     n.ex.drain();
 
     // Publish a few samples; each is decoded + projected to a CSV row on stdout. The header

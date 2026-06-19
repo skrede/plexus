@@ -59,12 +59,21 @@ public:
         if(m_sink)
             m_sink(std::span<const std::byte>{m_sent});
     }
-    void close() { m_closed = true; }
+    void                               close() { m_closed = true; }
     [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"test", ""}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb) { m_on_error = std::move(cb); }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
     [[nodiscard]] std::size_t backpressured() const { return 0; }
 
     void feed(std::span<const std::byte> bytes)
@@ -73,32 +82,33 @@ public:
             m_on_data(bytes);
     }
 
-    std::vector<std::byte>                                              m_sent;
-    bool                                                                m_closed{false};
-    std::function<void(std::span<const std::byte>)>                     m_sink;
+    std::vector<std::byte>                                               m_sent;
+    bool                                                                 m_closed{false};
+    std::function<void(std::span<const std::byte>)>                      m_sink;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                          m_on_closed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)>      m_on_error;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close;
+    plexus::detail::move_only_function<void()>                           m_on_closed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
 
 static_assert(plexus::io::byte_channel<test_lower>,
-    "test_lower must satisfy byte_channel for the decorator test");
+              "test_lower must satisfy byte_channel for the decorator test");
 static_assert(plexus::io::byte_channel<recording_channel<test_lower>>,
-    "recording_channel<test_lower> must satisfy byte_channel");
+              "recording_channel<test_lower> must satisfy byte_channel");
 
 // Structural-absence witness (compile-time): a bare channel type is NOT a recording_channel;
 // only an explicit specialization is. A default (non-wire) node's byte_channel_type — here the
 // inproc policy's — is a bare channel, so the decorator is absent at compile time, not gated by
 // a runtime branch. The decorated-vs-bare TYPE is fixed at the mint point.
 static_assert(!plexus::io::is_recording_channel_v<test_lower>,
-    "a bare channel must not be a recording_channel");
+              "a bare channel must not be a recording_channel");
 static_assert(!plexus::io::is_recording_channel_v<plexus::io::polymorphic_byte_channel>,
-    "the erased channel must not be a recording_channel");
-static_assert(!plexus::io::is_recording_channel_v<plexus::inproc::inproc_policy::byte_channel_type>,
-    "the default inproc channel_type must not be a recording_channel — structurally absent");
+              "the erased channel must not be a recording_channel");
+static_assert(
+        !plexus::io::is_recording_channel_v<plexus::inproc::inproc_policy::byte_channel_type>,
+        "the default inproc channel_type must not be a recording_channel — structurally absent");
 static_assert(plexus::io::is_recording_channel_v<recording_channel<test_lower>>,
-    "an explicit recording_channel specialization must witness presence");
+              "an explicit recording_channel specialization must witness presence");
 
 node_id make_node(std::uint8_t tag)
 {
@@ -118,15 +128,15 @@ std::vector<std::byte> blob(std::uint8_t base, std::size_t n)
 
 }
 
-TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame", "[recording_channel][wire]")
+TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame",
+          "[recording_channel][wire]")
 {
-    auto *raw = new test_lower;
+    auto                         *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::tuple<wire_direction, std::uint64_t, std::vector<std::byte>>> taps;
-    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) {
-        taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end()));
-    });
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b)
+               { taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end())); });
 
     const auto frame = blob(0x10, 64);
     ch.send(std::span<const std::byte>{frame});
@@ -140,15 +150,15 @@ TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame
     REQUIRE(std::get<2>(taps[0]) == frame);
 }
 
-TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN frame", "[recording_channel][wire]")
+TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN frame",
+          "[recording_channel][wire]")
 {
-    auto *raw = new test_lower;
+    auto                         *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::tuple<wire_direction, std::uint64_t, std::vector<std::byte>>> taps;
-    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) {
-        taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end()));
-    });
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b)
+               { taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end())); });
 
     std::vector<std::byte> upward;
     ch.on_data([&](std::span<const std::byte> b) { upward.assign(b.begin(), b.end()); });
@@ -165,9 +175,10 @@ TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN fra
     REQUIRE(std::get<2>(taps[0]) == frame);
 }
 
-TEST_CASE("recording_channel with no tap installed never fires the edge", "[recording_channel][wire]")
+TEST_CASE("recording_channel with no tap installed never fires the edge",
+          "[recording_channel][wire]")
 {
-    auto *raw = new test_lower;
+    auto                         *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::byte> upward;
@@ -182,16 +193,16 @@ TEST_CASE("recording_channel with no tap installed never fires the edge", "[reco
     REQUIRE(upward == frame);
 }
 
-TEST_CASE("recording_channel stamps strictly monotonic independent per-direction sequences", "[recording_channel][wire]")
+TEST_CASE("recording_channel stamps strictly monotonic independent per-direction sequences",
+          "[recording_channel][wire]")
 {
-    auto *raw = new test_lower;
+    auto                         *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::uint64_t> out_seq;
     std::vector<std::uint64_t> in_seq;
-    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte>) {
-        (dir == wire_direction::out ? out_seq : in_seq).push_back(seq);
-    });
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte>)
+               { (dir == wire_direction::out ? out_seq : in_seq).push_back(seq); });
     // A self-loop: this channel's send feeds its own lower on_data, so each send produces
     // BOTH an OUT tap (the send counter) and an IN tap (the recv counter). The two counters
     // are independent, so each run is contiguous 0,1,2,... on its own axis.
@@ -201,11 +212,12 @@ TEST_CASE("recording_channel stamps strictly monotonic independent per-direction
         ch.send(std::span<const std::byte>{blob(static_cast<std::uint8_t>(i), 8)});
 
     const std::vector<std::uint64_t> expected{0, 1, 2, 3, 4};
-    REQUIRE(out_seq == expected);   // the OUT run is contiguous (no gaps)
-    REQUIRE(in_seq == expected);    // the IN run is contiguous and independent
+    REQUIRE(out_seq == expected); // the OUT run is contiguous (no gaps)
+    REQUIRE(in_seq == expected);  // the IN run is contiguous and independent
 }
 
-TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_frame", "[recording_channel][wire][recorder]")
+TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_frame",
+          "[recording_channel][wire][recorder]")
 {
     in_memory_byte_sink sink;
     std::uint64_t       tick = 0;
@@ -216,14 +228,16 @@ TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_f
 
     // Drive a captured frame through the decorator's tap into the sink's on_wire override,
     // exactly as the posted engine edge would (the tap builds a wire_record, on_wire records).
-    auto *raw = new test_lower;
+    auto                         *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     const node_id peer = make_node(9);
-    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) {
-        const wire_record rec{dir, seq, peer, 0u, b};
-        tap.on_wire(rec);
-    });
+    ch.on_wire(
+            [&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b)
+            {
+                const wire_record rec{dir, seq, peer, 0u, b};
+                tap.on_wire(rec);
+            });
 
     const auto frame = blob(0x30, 100);
     ch.send(std::span<const std::byte>{frame});
@@ -232,8 +246,8 @@ TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_f
         ;
     recorder.flush();
 
-    record_stream_reader        r{sink.bytes()};
-    stream_definitions          defs;
+    record_stream_reader r{sink.bytes()};
+    stream_definitions   defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
     REQUIRE(r.recover(out).header_ok);

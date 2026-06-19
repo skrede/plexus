@@ -38,7 +38,10 @@ namespace {
 class lcg
 {
 public:
-    explicit lcg(std::uint64_t seed) noexcept : m_state(seed) {}
+    explicit lcg(std::uint64_t seed) noexcept
+            : m_state(seed)
+    {
+    }
     std::uint64_t next() noexcept
     {
         m_state = m_state * 6364136223846793005ull + 1442695040888963407ull;
@@ -56,9 +59,10 @@ private:
 // datagram to reorder_depth (the representative bounded-reorder UDP model — a heavy-
 // tailed lingering model would have no finite window survive it and is not what a
 // control-loop link exhibits).
-std::vector<std::uint64_t> reordered_schedule(std::size_t count, std::size_t reorder_depth, std::uint64_t seed)
+std::vector<std::uint64_t> reordered_schedule(std::size_t count, std::size_t reorder_depth,
+                                              std::uint64_t seed)
 {
-    lcg rng(seed);
+    lcg                                                  rng(seed);
     std::vector<std::pair<std::uint64_t, std::uint64_t>> keyed;
     keyed.reserve(count);
     for(std::size_t i = 0; i < count; ++i)
@@ -77,11 +81,11 @@ std::vector<std::uint64_t> reordered_schedule(std::size_t count, std::size_t reo
 // sequence rejected as too-old). Each sequence appears exactly once, so any
 // reject_replay would be a logic error (asserted absent), and reject_old is the false
 // reject we measure.
-template <std::size_t Width>
+template<std::size_t Width>
 std::size_t false_rejects(const std::vector<std::uint64_t> &arrival)
 {
     anti_replay_window<Width> w;
-    std::size_t false_old = 0;
+    std::size_t               false_old = 0;
     for(std::uint64_t seq : arrival)
     {
         const auto v = w.check_and_set(seq);
@@ -98,7 +102,7 @@ std::size_t false_rejects(const std::vector<std::uint64_t> &arrival)
 // but with the pre-optimization slide (each new bit b draws from old bit b - by). The
 // word-shift slide() must produce the SAME verdict as this reference for every sequence,
 // which pins it byte-identical across every by displacement.
-template <std::size_t Width>
+template<std::size_t Width>
 class reference_window
 {
 public:
@@ -107,8 +111,8 @@ public:
         if(!m_seen_any)
         {
             m_seen_any = true;
-            m_highest = seq;
-            m_bits[0] = true;
+            m_highest  = seq;
+            m_bits[0]  = true;
             return replay_verdict::accept;
         }
         if(seq > m_highest)
@@ -140,46 +144,60 @@ private:
     }
 
     std::vector<bool> m_bits = std::vector<bool>(Width, false);
-    std::uint64_t m_highest{0};
-    bool m_seen_any{false};
+    std::uint64_t     m_highest{0};
+    bool              m_seen_any{false};
 };
 
 // Drive the production window and the bit-by-bit reference through the SAME schedule;
 // the word-shift is byte-identical iff every verdict matches.
-template <std::size_t Width>
+template<std::size_t Width>
 bool verdicts_match(const std::vector<std::uint64_t> &arrival)
 {
     anti_replay_window<Width> w;
-    reference_window<Width> ref;
+    reference_window<Width>   ref;
     for(std::uint64_t seq : arrival)
         if(w.check_and_set(seq) != ref.check_and_set(seq))
             return false;
     return true;
 }
 
-TEST_CASE("crypto.anti_replay_window word-shift slide is bitmap-identical to the bit-by-bit reference", "[crypto][anti_replay]")
+TEST_CASE("crypto.anti_replay_window word-shift slide is bitmap-identical to the bit-by-bit "
+          "reference",
+          "[crypto][anti_replay]")
 {
     // A schedule spanning the displacement classes the word-shift must get right:
     // by % 64 == 0 (pure word move, the shift-by-64 edge), by % 64 != 0 (intra-word
     // carry), by < 64, by > 64, by == Width - 1, and by >= Width (the fill-0 fast path).
-    const std::array<std::uint64_t, 18> by_classes{
-        1, 63, 64, 65, 127, 128, 200, 256, 1000, 1024, 1025,
-        plexus::crypto::k_anti_replay_window_bits - 1,
-        plexus::crypto::k_anti_replay_window_bits,
-        plexus::crypto::k_anti_replay_window_bits + 1,
-        7, 33, 4095, 8192};
+    const std::array<std::uint64_t, 18> by_classes{1,
+                                                   63,
+                                                   64,
+                                                   65,
+                                                   127,
+                                                   128,
+                                                   200,
+                                                   256,
+                                                   1000,
+                                                   1024,
+                                                   1025,
+                                                   plexus::crypto::k_anti_replay_window_bits - 1,
+                                                   plexus::crypto::k_anti_replay_window_bits,
+                                                   plexus::crypto::k_anti_replay_window_bits + 1,
+                                                   7,
+                                                   33,
+                                                   4095,
+                                                   8192};
 
     std::vector<std::uint64_t> arrival;
-    std::uint64_t highest = 0;
+    std::uint64_t              highest = 0;
     for(std::uint64_t by : by_classes)
     {
         highest += by;
-        arrival.push_back(highest);              // a forward advance that drives slide(by)
+        arrival.push_back(highest); // a forward advance that drives slide(by)
         if(highest >= 5)
         {
-            arrival.push_back(highest - 1);      // an in-window fresh slot
-            arrival.push_back(highest - 5);      // another, after the advance
-            arrival.push_back(highest - 1);      // a replay of an already-set slot
+            arrival.push_back(highest - 1); // an in-window fresh slot
+            arrival.push_back(highest - 5); // another, after the advance
+            arrival.push_back(highest - 1); // a replay of an already-set slot
         }
     }
 
@@ -197,19 +215,21 @@ TEST_CASE("crypto.anti_replay_window word-shift slide is bitmap-identical to the
     REQUIRE(verdicts_match<plexus::crypto::k_anti_replay_window_bits>(reordered));
 }
 
-TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject rates across candidate widths", "[crypto][anti_replay]")
+TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject rates across "
+          "candidate widths",
+          "[crypto][anti_replay]")
 {
     // A 4 MiB message at the 1200-byte MTU fragments into ~3500 sealed datagrams.
-    constexpr std::size_t count = 3500;
-    constexpr std::uint64_t seed = 0x5eed1234abcd0011ull;
+    constexpr std::size_t   count = 3500;
+    constexpr std::uint64_t seed  = 0x5eed1234abcd0011ull;
 
     // The loopback in-flight window: rmem_default (208 KiB) / 1200 B MTU ≈ 177 datagrams
     // can be buffered at once, so backward displacement on a loopback burst is bounded
     // by ~177. The 64-slot window false-rejects here; 256 (and up) is clean.
     constexpr std::size_t loopback_depth = 177;
-    const auto loopback = reordered_schedule(count, loopback_depth, seed);
+    const auto            loopback       = reordered_schedule(count, loopback_depth, seed);
 
-    REQUIRE(false_rejects<64>(loopback) > 0);     // too narrow even for loopback reorder
+    REQUIRE(false_rejects<64>(loopback) > 0); // too narrow even for loopback reorder
     REQUIRE(false_rejects<256>(loopback) == 0);
     REQUIRE(false_rejects<1024>(loopback) == 0);
     REQUIRE(false_rejects<4096>(loopback) == 0);
@@ -220,12 +240,12 @@ TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject r
     // window is clean only to ~1031, so it too false-rejects at the full realistic-link
     // depth — confirming 4096 is the smallest swept width that bears margin over it.
     constexpr std::size_t realistic_link_depth = 1042;
-    const auto realistic = reordered_schedule(count, realistic_link_depth, seed);
+    const auto            realistic = reordered_schedule(count, realistic_link_depth, seed);
 
     REQUIRE(false_rejects<64>(realistic) > 0);
-    REQUIRE(false_rejects<256>(realistic) > 0);    // narrower than the realistic-link in-flight window
-    REQUIRE(false_rejects<1024>(realistic) > 0);   // clean only to ~1031, just short of ~1042
-    REQUIRE(false_rejects<4096>(realistic) == 0);  // the margin-bearing winner
+    REQUIRE(false_rejects<256>(realistic) > 0); // narrower than the realistic-link in-flight window
+    REQUIRE(false_rejects<1024>(realistic) > 0);  // clean only to ~1031, just short of ~1042
+    REQUIRE(false_rejects<4096>(realistic) == 0); // the margin-bearing winner
 
     // The chosen constant is one of the swept candidates and is the smallest clean at the
     // realistic-link reorder depth — a regression that shrinks it below that property

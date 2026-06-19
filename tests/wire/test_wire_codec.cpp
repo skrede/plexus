@@ -22,35 +22,39 @@ using namespace plexus::wire;
 
 TEST_CASE("encode_header produces 28 bytes", "[wire][codec]")
 {
-    frame_header hdr{.type = msg_type::unidirectional, .flags = 0, .session_id = 0,
-                     .timestamp_ns = 0, .payload_len = 0};
-    auto buf = encode_header(hdr);
+    frame_header hdr{.type         = msg_type::unidirectional,
+                     .flags        = 0,
+                     .session_id   = 0,
+                     .timestamp_ns = 0,
+                     .payload_len  = 0};
+    auto         buf = encode_header(hdr);
     CHECK(buf.size() == 28);
 }
 
 TEST_CASE("encoded header starts with magic 0x56 0x50", "[wire][codec]")
 {
-    frame_header hdr{.type = msg_type::unidirectional, .flags = 0, .session_id = 0,
-                     .timestamp_ns = 0, .payload_len = 0};
-    auto buf = encode_header(hdr);
+    frame_header hdr{.type         = msg_type::unidirectional,
+                     .flags        = 0,
+                     .session_id   = 0,
+                     .timestamp_ns = 0,
+                     .payload_len  = 0};
+    auto         buf = encode_header(hdr);
     CHECK(buf[0] == std::byte{0x56});
     CHECK(buf[1] == std::byte{0x50});
 }
 
 TEST_CASE("header round-trip preserves all fields", "[wire][codec]")
 {
-    frame_header hdr{
-        .type         = msg_type::bidirectional,
-        .flags        = 0x3F,
-        // A value with bits set above byte 0 — proves the u64 session_id survives
-        // the round-trip with no truncation (the u8-narrowing tell would drop the
-        // high bytes).
-        .session_id   = 0xA1B2C3D4E5F60789ULL,
-        .timestamp_ns = 0xAABBCCDDEEFF0011ULL,
-        .payload_len  = 0x1234567890ABCDEFULL
-    };
+    frame_header hdr{.type  = msg_type::bidirectional,
+                     .flags = 0x3F,
+                     // A value with bits set above byte 0 — proves the u64 session_id survives
+                     // the round-trip with no truncation (the u8-narrowing tell would drop the
+                     // high bytes).
+                     .session_id   = 0xA1B2C3D4E5F60789ULL,
+                     .timestamp_ns = 0xAABBCCDDEEFF0011ULL,
+                     .payload_len  = 0x1234567890ABCDEFULL};
 
-    auto buf = encode_header(hdr);
+    auto buf     = encode_header(hdr);
     auto decoded = decode_header(buf);
 
     REQUIRE(decoded.has_value());
@@ -63,40 +67,41 @@ TEST_CASE("header round-trip preserves all fields", "[wire][codec]")
 
 TEST_CASE("decode_header returns nullopt for short data", "[wire][codec]")
 {
-    std::array<std::byte, 27> short_buf{};   // one below the 28-byte header_size
-    auto result = decode_header(short_buf);
+    std::array<std::byte, 27> short_buf{}; // one below the 28-byte header_size
+    auto                      result = decode_header(short_buf);
     CHECK_FALSE(result.has_value());
 }
 
 TEST_CASE("decode_header returns nullopt for bad magic", "[wire][codec]")
 {
-    frame_header hdr{.type = msg_type::unidirectional, .flags = 0, .session_id = 0,
-                     .timestamp_ns = 0, .payload_len = 0};
-    auto buf = encode_header(hdr);
-    buf[0] = std::byte{0xFF};
-    auto result = decode_header(buf);
+    frame_header hdr{.type         = msg_type::unidirectional,
+                     .flags        = 0,
+                     .session_id   = 0,
+                     .timestamp_ns = 0,
+                     .payload_len  = 0};
+    auto         buf = encode_header(hdr);
+    buf[0]           = std::byte{0xFF};
+    auto result      = decode_header(buf);
     CHECK_FALSE(result.has_value());
 }
 
 TEST_CASE("header fields are big-endian on wire", "[wire][codec]")
 {
-    frame_header hdr{
-        .type         = msg_type::unidirectional,
-        .flags        = 0,
-        .session_id   = 0x1122334455667788ULL,
-        .timestamp_ns = 0x0102030405060708ULL,
-        .payload_len  = 0
-    };
+    frame_header hdr{.type         = msg_type::unidirectional,
+                     .flags        = 0,
+                     .session_id   = 0x1122334455667788ULL,
+                     .timestamp_ns = 0x0102030405060708ULL,
+                     .payload_len  = 0};
 
     auto buf = encode_header(hdr);
 
     // session_id is the big-endian u64 at offset 4; timestamp_ns the u64 at offset 12.
-    CHECK(buf[4]  == std::byte{0x11});
-    CHECK(buf[5]  == std::byte{0x22});
-    CHECK(buf[6]  == std::byte{0x33});
-    CHECK(buf[7]  == std::byte{0x44});
-    CHECK(buf[8]  == std::byte{0x55});
-    CHECK(buf[9]  == std::byte{0x66});
+    CHECK(buf[4] == std::byte{0x11});
+    CHECK(buf[5] == std::byte{0x22});
+    CHECK(buf[6] == std::byte{0x33});
+    CHECK(buf[7] == std::byte{0x44});
+    CHECK(buf[8] == std::byte{0x55});
+    CHECK(buf[9] == std::byte{0x66});
     CHECK(buf[10] == std::byte{0x77});
     CHECK(buf[11] == std::byte{0x88});
     CHECK(buf[12] == std::byte{0x01});
@@ -111,8 +116,11 @@ TEST_CASE("header fields are big-endian on wire", "[wire][codec]")
 
 TEST_CASE("encode_frame concatenates header and payload", "[wire][codec]")
 {
-    frame_header hdr{.type = msg_type::subscribe, .flags = 0, .session_id = 0,
-                     .timestamp_ns = 100, .payload_len = 0};
+    frame_header           hdr{.type         = msg_type::subscribe,
+                               .flags        = 0,
+                               .session_id   = 0,
+                               .timestamp_ns = 100,
+                               .payload_len  = 0};
     std::vector<std::byte> payload{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}};
 
     auto frame = encode_frame(hdr, payload);
@@ -126,23 +134,23 @@ TEST_CASE("encode_frame concatenates header and payload", "[wire][codec]")
 TEST_CASE("msg_type enum values", "[wire][codec]")
 {
     CHECK(static_cast<uint8_t>(msg_type::unidirectional) == 0x01);
-    CHECK(static_cast<uint8_t>(msg_type::bidirectional)  == 0x02);
-    CHECK(static_cast<uint8_t>(msg_type::handshake_req)  == 0x03);
+    CHECK(static_cast<uint8_t>(msg_type::bidirectional) == 0x02);
+    CHECK(static_cast<uint8_t>(msg_type::handshake_req) == 0x03);
     CHECK(static_cast<uint8_t>(msg_type::handshake_resp) == 0x04);
-    CHECK(static_cast<uint8_t>(msg_type::subscribe)      == 0x05);
-    CHECK(static_cast<uint8_t>(msg_type::unsubscribe)    == 0x06);
-    CHECK(static_cast<uint8_t>(msg_type::fetch_latched)  == 0x07);
+    CHECK(static_cast<uint8_t>(msg_type::subscribe) == 0x05);
+    CHECK(static_cast<uint8_t>(msg_type::unsubscribe) == 0x06);
+    CHECK(static_cast<uint8_t>(msg_type::fetch_latched) == 0x07);
     CHECK(static_cast<uint8_t>(msg_type::fetch_metadata) == 0x08);
 }
 
 TEST_CASE("endpoint_source_type enum values", "[wire][codec]")
 {
-    CHECK(static_cast<uint8_t>(endpoint_source_type::publisher)      == 0x01);
-    CHECK(static_cast<uint8_t>(endpoint_source_type::signal)         == 0x03);
-    CHECK(static_cast<uint8_t>(endpoint_source_type::attribute)      == 0x05);
-    CHECK(static_cast<uint8_t>(endpoint_source_type::caller)         == 0x06);
-    CHECK(static_cast<uint8_t>(endpoint_source_type::procedure)      == 0x07);
-    CHECK(static_cast<uint8_t>(endpoint_source_type::plexus)         == 0x08);
+    CHECK(static_cast<uint8_t>(endpoint_source_type::publisher) == 0x01);
+    CHECK(static_cast<uint8_t>(endpoint_source_type::signal) == 0x03);
+    CHECK(static_cast<uint8_t>(endpoint_source_type::attribute) == 0x05);
+    CHECK(static_cast<uint8_t>(endpoint_source_type::caller) == 0x06);
+    CHECK(static_cast<uint8_t>(endpoint_source_type::procedure) == 0x07);
+    CHECK(static_cast<uint8_t>(endpoint_source_type::plexus) == 0x08);
 }
 
 // --- Data payload codec tests ---
@@ -150,10 +158,7 @@ TEST_CASE("endpoint_source_type enum values", "[wire][codec]")
 TEST_CASE("unidirectional payload size is 17 + data", "[wire][data]")
 {
     unidirectional_header hdr{
-        .source     = endpoint_source_type::publisher,
-        .sequence   = 1,
-        .topic_hash = 0xDEAD
-    };
+            .source = endpoint_source_type::publisher, .sequence = 1, .topic_hash = 0xDEAD};
     std::vector<std::byte> data{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}};
 
     auto encoded = encode_unidirectional(hdr, data);
@@ -163,10 +168,7 @@ TEST_CASE("unidirectional payload size is 17 + data", "[wire][data]")
 TEST_CASE("unidirectional round-trip preserves fields and data", "[wire][data]")
 {
     unidirectional_header hdr{
-        .source     = endpoint_source_type::publisher,
-        .sequence   = 42,
-        .topic_hash = 0xDEAD
-    };
+            .source = endpoint_source_type::publisher, .sequence = 42, .topic_hash = 0xDEAD};
     std::vector<std::byte> data{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}};
 
     auto encoded = encode_unidirectional(hdr, data);
@@ -185,12 +187,9 @@ TEST_CASE("unidirectional round-trip preserves fields and data", "[wire][data]")
 TEST_CASE("unidirectional round-trips a flag-gated source-identity counter", "[wire][data][gid]")
 {
     unidirectional_header hdr{
-        .source     = endpoint_source_type::publisher,
-        .sequence   = 7,
-        .topic_hash = 0xCAFE
-    };
-    std::vector<std::byte> data{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}};
-    constexpr std::uint64_t counter = 0x1234;   // a multi-byte varint
+            .source = endpoint_source_type::publisher, .sequence = 7, .topic_hash = 0xCAFE};
+    std::vector<std::byte>  data{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}};
+    constexpr std::uint64_t counter = 0x1234; // a multi-byte varint
 
     auto encoded = encode_unidirectional(hdr, data, counter);
     auto decoded = decode_unidirectional(encoded, /*has_source_identity=*/true);
@@ -204,17 +203,15 @@ TEST_CASE("unidirectional round-trips a flag-gated source-identity counter", "[w
     CHECK(decoded->data[2] == std::byte{0xCC});
 }
 
-TEST_CASE("unidirectional flag-clear encode is byte-identical to a no-counter frame", "[wire][data][gid]")
+TEST_CASE("unidirectional flag-clear encode is byte-identical to a no-counter frame",
+          "[wire][data][gid]")
 {
     unidirectional_header hdr{
-        .source     = endpoint_source_type::publisher,
-        .sequence   = 42,
-        .topic_hash = 0xDEAD
-    };
+            .source = endpoint_source_type::publisher, .sequence = 42, .topic_hash = 0xDEAD};
     std::vector<std::byte> data{std::byte{0x01}, std::byte{0x02}};
 
-    auto without = encode_unidirectional(hdr, data);                // no counter argument
-    auto clear   = encode_unidirectional(hdr, data, std::nullopt);  // explicitly absent
+    auto without = encode_unidirectional(hdr, data);               // no counter argument
+    auto clear   = encode_unidirectional(hdr, data, std::nullopt); // explicitly absent
     CHECK(without == clear);
 
     // Flag-clear decode yields no counter and the data immediately after the 17B header.
@@ -227,10 +224,7 @@ TEST_CASE("unidirectional flag-clear encode is byte-identical to a no-counter fr
 TEST_CASE("unidirectional decode rejects a truncated source-identity region", "[wire][data][gid]")
 {
     unidirectional_header hdr{
-        .source     = endpoint_source_type::publisher,
-        .sequence   = 1,
-        .topic_hash = 0xBEEF
-    };
+            .source = endpoint_source_type::publisher, .sequence = 1, .topic_hash = 0xBEEF};
     // A 17B header followed by a lone continuation byte (0x80) with no terminator:
     // read_varint must return nullopt, so the whole decode fails (warn-and-drop) —
     // never an over-read past the buffer.
@@ -243,14 +237,12 @@ TEST_CASE("unidirectional decode rejects a truncated source-identity region", "[
 
 TEST_CASE("bidirectional round-trip preserves all fields", "[wire][data]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::caller,
-        .sequence       = 99,
-        .topic_hash     = 0xAAAABBBBCCCCDDDDULL,
-        .type_hash_1    = 0x1111222233334444ULL,
-        .type_hash_2    = 0x5555666677778888ULL,
-        .correlation_id = 12345
-    };
+    bidirectional_header   hdr{.source         = endpoint_source_type::caller,
+                               .sequence       = 99,
+                               .topic_hash     = 0xAAAABBBBCCCCDDDDULL,
+                               .type_hash_1    = 0x1111222233334444ULL,
+                               .type_hash_2    = 0x5555666677778888ULL,
+                               .correlation_id = 12345};
     std::vector<std::byte> data{std::byte{0xFE}, std::byte{0xED}};
 
     auto encoded = encode_bidirectional(hdr, data);
@@ -272,36 +264,31 @@ TEST_CASE("bidirectional round-trip preserves all fields", "[wire][data]")
 TEST_CASE("unidirectional decode fails on short payload", "[wire][data]")
 {
     std::array<std::byte, 16> short_buf{};
-    auto result = decode_unidirectional(short_buf);
+    auto                      result = decode_unidirectional(short_buf);
     CHECK_FALSE(result.has_value());
 }
 
 TEST_CASE("bidirectional decode fails on short payload", "[wire][data]")
 {
     std::array<std::byte, 40> short_buf{};
-    auto result = decode_bidirectional(short_buf);
+    auto                      result = decode_bidirectional(short_buf);
     CHECK_FALSE(result.has_value());
 }
 
 TEST_CASE("full frame round-trip with unidirectional payload", "[wire][data]")
 {
     unidirectional_header uni_hdr{
-        .source     = endpoint_source_type::signal,
-        .sequence   = 7,
-        .topic_hash = 0xCAFE
-    };
+            .source = endpoint_source_type::signal, .sequence = 7, .topic_hash = 0xCAFE};
     std::vector<std::byte> data{std::byte{0xAA}, std::byte{0xBB}};
 
     auto payload = encode_unidirectional(uni_hdr, data);
 
-    frame_header fhdr{
-        .type         = msg_type::unidirectional,
-        .flags        = 0,
-        .session_id   = 0,
-        .timestamp_ns = 1000000,
-        .payload_len  = 0
-    };
-    auto frame = encode_frame(fhdr, payload);
+    frame_header fhdr{.type         = msg_type::unidirectional,
+                      .flags        = 0,
+                      .session_id   = 0,
+                      .timestamp_ns = 1000000,
+                      .payload_len  = 0};
+    auto         frame = encode_frame(fhdr, payload);
 
     CHECK(frame.size() == 28 + payload.size());
 
@@ -311,7 +298,7 @@ TEST_CASE("full frame round-trip with unidirectional payload", "[wire][data]")
     CHECK(decoded_hdr->payload_len == payload.size());
 
     auto payload_span = std::span<const std::byte>(frame).subspan(header_size);
-    auto decoded_uni = decode_unidirectional(payload_span);
+    auto decoded_uni  = decode_unidirectional(payload_span);
     REQUIRE(decoded_uni.has_value());
     CHECK(decoded_uni->header.source == endpoint_source_type::signal);
     CHECK(decoded_uni->header.sequence == 7);
@@ -325,13 +312,11 @@ TEST_CASE("full frame round-trip with unidirectional payload", "[wire][data]")
 
 TEST_CASE("subscribe request round-trip", "[wire][subscribe]")
 {
-    subscribe_request req{
-        .fqn        = "/node/topic",
-        .type_name  = "MyMessage",
-        .topic_hash = 0xDEADBEEF,
-        .type_hash  = 0xCAFEBABE,
-        .source     = endpoint_source_type::publisher
-    };
+    subscribe_request req{.fqn        = "/node/topic",
+                          .type_name  = "MyMessage",
+                          .topic_hash = 0xDEADBEEF,
+                          .type_hash  = 0xCAFEBABE,
+                          .source     = endpoint_source_type::publisher};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);
@@ -358,13 +343,11 @@ TEST_CASE("subscribe response round-trip", "[wire][subscribe]")
 
 TEST_CASE("subscribe request with long strings", "[wire][subscribe]")
 {
-    subscribe_request req{
-        .fqn        = std::string(500, '/'),
-        .type_name  = std::string(300, 'T'),
-        .topic_hash = 0xABCD,
-        .type_hash  = 0xEF01,
-        .source     = endpoint_source_type::signal
-    };
+    subscribe_request req{.fqn        = std::string(500, '/'),
+                          .type_name  = std::string(300, 'T'),
+                          .topic_hash = 0xABCD,
+                          .type_hash  = 0xEF01,
+                          .source     = endpoint_source_type::signal};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);
@@ -377,7 +360,7 @@ TEST_CASE("subscribe request with long strings", "[wire][subscribe]")
 TEST_CASE("subscribe decode fails on truncated payload", "[wire][subscribe]")
 {
     std::array<std::byte, 10> short_buf{};
-    auto result = decode_subscribe_request(short_buf);
+    auto                      result = decode_subscribe_request(short_buf);
     CHECK_FALSE(result.has_value());
 }
 
@@ -454,15 +437,14 @@ TEST_CASE("subscribe response with created status", "[wire][subscribe]")
 // k_max_type_name in subscribe.h's detail namespace; the test does not import
 // the constants, it asserts the contract at the documented bound.
 
-TEST_CASE("decode_subscribe_request rejects oversized fqn beyond k_max_fqn", "[wire][subscribe][oob]")
+TEST_CASE("decode_subscribe_request rejects oversized fqn beyond k_max_fqn",
+          "[wire][subscribe][oob]")
 {
-    subscribe_request req{
-        .fqn        = std::string(1025, '/'),
-        .type_name  = "T",
-        .topic_hash = 0xABCD,
-        .type_hash  = 0xEF01,
-        .source     = endpoint_source_type::signal
-    };
+    subscribe_request req{.fqn        = std::string(1025, '/'),
+                          .type_name  = "T",
+                          .topic_hash = 0xABCD,
+                          .type_hash  = 0xEF01,
+                          .source     = endpoint_source_type::signal};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);
@@ -470,15 +452,14 @@ TEST_CASE("decode_subscribe_request rejects oversized fqn beyond k_max_fqn", "[w
     CHECK_FALSE(decoded.has_value());
 }
 
-TEST_CASE("decode_subscribe_request rejects oversized type_name beyond k_max_type_name", "[wire][subscribe][oob]")
+TEST_CASE("decode_subscribe_request rejects oversized type_name beyond k_max_type_name",
+          "[wire][subscribe][oob]")
 {
-    subscribe_request req{
-        .fqn        = "/topic",
-        .type_name  = std::string(513, 'T'),
-        .topic_hash = 0xABCD,
-        .type_hash  = 0xEF01,
-        .source     = endpoint_source_type::signal
-    };
+    subscribe_request req{.fqn        = "/topic",
+                          .type_name  = std::string(513, 'T'),
+                          .topic_hash = 0xABCD,
+                          .type_hash  = 0xEF01,
+                          .source     = endpoint_source_type::signal};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);
@@ -486,15 +467,14 @@ TEST_CASE("decode_subscribe_request rejects oversized type_name beyond k_max_typ
     CHECK_FALSE(decoded.has_value());
 }
 
-TEST_CASE("decode_subscribe_request accepts fqn and type_name at the cap boundary", "[wire][subscribe][oob]")
+TEST_CASE("decode_subscribe_request accepts fqn and type_name at the cap boundary",
+          "[wire][subscribe][oob]")
 {
-    subscribe_request req{
-        .fqn        = std::string(1024, '/'),
-        .type_name  = std::string(512, 'T'),
-        .topic_hash = 0xABCD,
-        .type_hash  = 0xEF01,
-        .source     = endpoint_source_type::signal
-    };
+    subscribe_request req{.fqn        = std::string(1024, '/'),
+                          .type_name  = std::string(512, 'T'),
+                          .topic_hash = 0xABCD,
+                          .type_hash  = 0xEF01,
+                          .source     = endpoint_source_type::signal};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);
@@ -508,15 +488,14 @@ TEST_CASE("decode_subscribe_request accepts fqn and type_name at the cap boundar
 
 TEST_CASE("RPC request frame: round-trip encode/decode", "[wire][rpc]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::caller,
-        .sequence       = 1,
-        .topic_hash     = 0xAAAA,
-        .type_hash_1    = 0xBBBB,
-        .type_hash_2    = 0xCCCC,
-        .correlation_id = 42
-    };
-    std::array<std::byte, 4> param_data{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04}};
+    bidirectional_header     hdr{.source         = endpoint_source_type::caller,
+                                 .sequence       = 1,
+                                 .topic_hash     = 0xAAAA,
+                                 .type_hash_1    = 0xBBBB,
+                                 .type_hash_2    = 0xCCCC,
+                                 .correlation_id = 42};
+    std::array<std::byte, 4> param_data{std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
+                                        std::byte{0x04}};
 
     auto encoded = encode_rpc_request(hdr, param_data);
     auto decoded = decode_rpc_request(encoded);
@@ -533,15 +512,14 @@ TEST_CASE("RPC request frame: round-trip encode/decode", "[wire][rpc]")
 
 TEST_CASE("RPC response frame: round-trip with success status", "[wire][rpc]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::procedure,
-        .sequence       = 2,
-        .topic_hash     = 0xAAAA,
-        .type_hash_1    = 0xCCCC,
-        .type_hash_2    = 0xBBBB,
-        .correlation_id = 42
-    };
-    std::array<std::byte, 4> return_data{std::byte{0x10}, std::byte{0x20}, std::byte{0x30}, std::byte{0x40}};
+    bidirectional_header     hdr{.source         = endpoint_source_type::procedure,
+                                 .sequence       = 2,
+                                 .topic_hash     = 0xAAAA,
+                                 .type_hash_1    = 0xCCCC,
+                                 .type_hash_2    = 0xBBBB,
+                                 .correlation_id = 42};
+    std::array<std::byte, 4> return_data{std::byte{0x10}, std::byte{0x20}, std::byte{0x30},
+                                         std::byte{0x40}};
 
     auto encoded = encode_rpc_response(hdr, rpc_status::success, return_data);
     // exactly one status byte prepended to the body
@@ -559,14 +537,12 @@ TEST_CASE("RPC response frame: round-trip with success status", "[wire][rpc]")
 
 TEST_CASE("RPC response frame: round-trip with error status", "[wire][rpc]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::procedure,
-        .sequence       = 3,
-        .topic_hash     = 0xAAAA,
-        .type_hash_1    = 0xCCCC,
-        .type_hash_2    = 0xBBBB,
-        .correlation_id = 42
-    };
+    bidirectional_header hdr{.source         = endpoint_source_type::procedure,
+                             .sequence       = 3,
+                             .topic_hash     = 0xAAAA,
+                             .type_hash_1    = 0xCCCC,
+                             .type_hash_2    = 0xBBBB,
+                             .correlation_id = 42};
 
     auto encoded = encode_rpc_response(hdr, rpc_status::no_handler, {});
     auto decoded = decode_rpc_response(encoded);
@@ -578,75 +554,69 @@ TEST_CASE("RPC response frame: round-trip with error status", "[wire][rpc]")
 
 TEST_CASE("RPC response frame: zero-alloc _into matches the allocating encode", "[wire][rpc]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::procedure,
-        .sequence       = 11,
-        .topic_hash     = 0x1234,
-        .type_hash_1    = 0xCCCC,
-        .type_hash_2    = 0xBBBB,
-        .correlation_id = 7
-    };
+    bidirectional_header     hdr{.source         = endpoint_source_type::procedure,
+                                 .sequence       = 11,
+                                 .topic_hash     = 0x1234,
+                                 .type_hash_1    = 0xCCCC,
+                                 .type_hash_2    = 0xBBBB,
+                                 .correlation_id = 7};
     std::array<std::byte, 3> return_data{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}};
 
-    auto allocating = encode_rpc_response(hdr, rpc_status::success, return_data);
+    auto                   allocating = encode_rpc_response(hdr, rpc_status::success, return_data);
     std::vector<std::byte> reused;
     encode_rpc_response_into(reused, hdr, rpc_status::success, return_data);
     CHECK(reused == allocating);
 
-    auto req_allocating = encode_rpc_request(hdr, return_data);
+    auto                   req_allocating = encode_rpc_request(hdr, return_data);
     std::vector<std::byte> req_reused;
     encode_rpc_request_into(req_reused, hdr, return_data);
     CHECK(req_reused == req_allocating);
 }
 
-TEST_CASE("RPC response frame: status byte above the highest enumerator returns nullopt", "[wire][rpc]")
+TEST_CASE("RPC response frame: status byte above the highest enumerator returns nullopt",
+          "[wire][rpc]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::procedure,
-        .sequence       = 4,
-        .topic_hash     = 0xAAAA,
-        .type_hash_1    = 0xCCCC,
-        .type_hash_2    = 0xBBBB,
-        .correlation_id = 42
-    };
-    std::array<std::byte, 4> return_data{std::byte{0x10}, std::byte{0x20}, std::byte{0x30}, std::byte{0x40}};
+    bidirectional_header     hdr{.source         = endpoint_source_type::procedure,
+                                 .sequence       = 4,
+                                 .topic_hash     = 0xAAAA,
+                                 .type_hash_1    = 0xCCCC,
+                                 .type_hash_2    = 0xBBBB,
+                                 .correlation_id = 42};
+    std::array<std::byte, 4> return_data{std::byte{0x10}, std::byte{0x20}, std::byte{0x30},
+                                         std::byte{0x40}};
 
-    auto encoded = encode_rpc_response(hdr, rpc_status::success, return_data);
+    auto encoded                       = encode_rpc_response(hdr, rpc_status::success, return_data);
     encoded[bidirectional_header_size] = std::byte{0xFF};
-    auto decoded = decode_rpc_response(encoded);
+    auto decoded                       = decode_rpc_response(encoded);
 
     CHECK_FALSE(decoded.has_value());
 }
 
 TEST_CASE("RPC response frame: in-range reserved-gap status byte returns nullopt", "[wire][rpc]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::procedure,
-        .sequence       = 6,
-        .topic_hash     = 0xAAAA,
-        .type_hash_1    = 0xCCCC,
-        .type_hash_2    = 0xBBBB,
-        .correlation_id = 42
-    };
+    bidirectional_header     hdr{.source         = endpoint_source_type::procedure,
+                                 .sequence       = 6,
+                                 .topic_hash     = 0xAAAA,
+                                 .type_hash_1    = 0xCCCC,
+                                 .type_hash_2    = 0xBBBB,
+                                 .correlation_id = 42};
     std::array<std::byte, 2> return_data{std::byte{0x10}, std::byte{0x20}};
 
     // 6 sits below the highest enumerator (20) but is a reserved gap with no
     // defined rpc_status — the decoder must reject it, never yield an undefined value.
-    auto encoded = encode_rpc_response(hdr, rpc_status::success, return_data);
+    auto encoded                       = encode_rpc_response(hdr, rpc_status::success, return_data);
     encoded[bidirectional_header_size] = std::byte{6};
     CHECK_FALSE(decode_rpc_response(encoded).has_value());
 }
 
 TEST_CASE("RPC response frame: status byte at the highest enumerator decodes", "[wire][rpc]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::procedure,
-        .sequence       = 8,
-        .topic_hash     = 0xAAAA,
-        .type_hash_1    = 0xCCCC,
-        .type_hash_2    = 0xBBBB,
-        .correlation_id = 42
-    };
+    bidirectional_header hdr{.source         = endpoint_source_type::procedure,
+                             .sequence       = 8,
+                             .topic_hash     = 0xAAAA,
+                             .type_hash_1    = 0xCCCC,
+                             .type_hash_2    = 0xBBBB,
+                             .correlation_id = 42};
 
     // rpc_response_orphan = 20 is the highest valid status — the boundary decodes.
     auto encoded = encode_rpc_response(hdr, rpc_status::rpc_response_orphan, {});
@@ -658,14 +628,12 @@ TEST_CASE("RPC response frame: status byte at the highest enumerator decodes", "
 
 TEST_CASE("RPC request frame: empty payload round-trip", "[wire][rpc]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::caller,
-        .sequence       = 5,
-        .topic_hash     = 0xAAAA,
-        .type_hash_1    = 0xBBBB,
-        .type_hash_2    = 0xCCCC,
-        .correlation_id = 99
-    };
+    bidirectional_header hdr{.source         = endpoint_source_type::caller,
+                             .sequence       = 5,
+                             .topic_hash     = 0xAAAA,
+                             .type_hash_1    = 0xBBBB,
+                             .type_hash_2    = 0xCCCC,
+                             .correlation_id = 99};
 
     auto encoded = encode_rpc_request(hdr, {});
     auto decoded = decode_rpc_request(encoded);
@@ -682,14 +650,12 @@ TEST_CASE("RPC request frame: decode fails below the bidirectional header minimu
 
 TEST_CASE("RPC response frame: decode fails with header but zero inner bytes", "[wire][rpc]")
 {
-    bidirectional_header hdr{
-        .source         = endpoint_source_type::procedure,
-        .sequence       = 9,
-        .topic_hash     = 0xAAAA,
-        .type_hash_1    = 0xCCCC,
-        .type_hash_2    = 0xBBBB,
-        .correlation_id = 42
-    };
+    bidirectional_header hdr{.source         = endpoint_source_type::procedure,
+                             .sequence       = 9,
+                             .topic_hash     = 0xAAAA,
+                             .type_hash_1    = 0xCCCC,
+                             .type_hash_2    = 0xBBBB,
+                             .correlation_id = 42};
 
     // A bidirectional frame with an empty body has no room for the status byte.
     auto encoded = encode_bidirectional(hdr, {});
@@ -750,37 +716,37 @@ std::array<std::byte, k_handshake_proof_len> proof_seed(std::uint8_t base = 0x90
 
 handshake_request make_request(const std::array<std::byte, 16> &id)
 {
-    return handshake_request{
-            .id                       = id,
-            .version_major            = 0x11,
-            .version_minor            = 0x22,
-            .compatible_version_major = 0x33,
-            .compatible_version_minor = 0x44,
-            .protocol_version         = 0x55,
-            .fingerprint              = 0x0123456789ABCDEFull,
-            .key_id                   = key_id_seed(),
-            .own_nonce                = nonce_seed(),
-            .cipher_offer             = cipher_offer_bits::chacha20_poly1305 | cipher_offer_bits::aes_256_gcm,
-            .chosen_cipher            = cipher_offer_bits::chacha20_poly1305,
-            .proof                    = proof_seed()};
+    return handshake_request{.id                       = id,
+                             .version_major            = 0x11,
+                             .version_minor            = 0x22,
+                             .compatible_version_major = 0x33,
+                             .compatible_version_minor = 0x44,
+                             .protocol_version         = 0x55,
+                             .fingerprint              = 0x0123456789ABCDEFull,
+                             .key_id                   = key_id_seed(),
+                             .own_nonce                = nonce_seed(),
+                             .cipher_offer             = cipher_offer_bits::chacha20_poly1305 |
+                                     cipher_offer_bits::aes_256_gcm,
+                             .chosen_cipher = cipher_offer_bits::chacha20_poly1305,
+                             .proof         = proof_seed()};
 }
 
 handshake_response make_response(const std::array<std::byte, 16> &id, handshake_status status)
 {
-    return handshake_response{
-            .id                       = id,
-            .version_major            = 0x11,
-            .version_minor            = 0x22,
-            .compatible_version_major = 0x33,
-            .compatible_version_minor = 0x44,
-            .protocol_version         = 0x55,
-            .fingerprint              = 0xFEDCBA9876543210ull,
-            .key_id                   = key_id_seed(),
-            .own_nonce                = nonce_seed(),
-            .cipher_offer             = cipher_offer_bits::chacha20_poly1305 | cipher_offer_bits::aes_256_gcm,
-            .chosen_cipher            = cipher_offer_bits::aes_256_gcm,
-            .proof                    = proof_seed(0xC1),
-            .status                   = status};
+    return handshake_response{.id                       = id,
+                              .version_major            = 0x11,
+                              .version_minor            = 0x22,
+                              .compatible_version_major = 0x33,
+                              .compatible_version_minor = 0x44,
+                              .protocol_version         = 0x55,
+                              .fingerprint              = 0xFEDCBA9876543210ull,
+                              .key_id                   = key_id_seed(),
+                              .own_nonce                = nonce_seed(),
+                              .cipher_offer             = cipher_offer_bits::chacha20_poly1305 |
+                                      cipher_offer_bits::aes_256_gcm,
+                              .chosen_cipher = cipher_offer_bits::aes_256_gcm,
+                              .proof         = proof_seed(0xC1),
+                              .status        = status};
 }
 
 void check_request_equal(const handshake_request &a, const handshake_request &b)
@@ -805,7 +771,7 @@ TEST_CASE("Handshake request: round-trip across the id field space", "[wire][han
 {
     for(const auto &id : {id_distinct(), id_filled(0x00), id_filled(0xFF), id_mixed_high_bit()})
     {
-        auto req = make_request(id);
+        auto req     = make_request(id);
         auto decoded = decode_handshake_request(encode_handshake_request(req));
         REQUIRE(decoded.has_value());
         check_request_equal(*decoded, req);
@@ -813,7 +779,8 @@ TEST_CASE("Handshake request: round-trip across the id field space", "[wire][han
     }
 }
 
-TEST_CASE("Handshake response: round-trip across id field space and all four statuses", "[wire][handshake]")
+TEST_CASE("Handshake response: round-trip across id field space and all four statuses",
+          "[wire][handshake]")
 {
     const handshake_status statuses[] = {
             handshake_status::accepted, handshake_status::version_incompatible,
@@ -822,7 +789,7 @@ TEST_CASE("Handshake response: round-trip across id field space and all four sta
     for(const auto &id : {id_distinct(), id_filled(0x00), id_filled(0xFF), id_mixed_high_bit()})
         for(auto status : statuses)
         {
-            auto resp = make_response(id, status);
+            auto resp    = make_response(id, status);
             auto decoded = decode_handshake_response(encode_handshake_response(resp));
             REQUIRE(decoded.has_value());
             CHECK(decoded->id == id);
@@ -841,10 +808,12 @@ TEST_CASE("Handshake codec: encoded wire-size pins", "[wire][handshake]")
     // id(16) + 5 single-byte fields + fingerprint(8) + the attach region
     // key_id(8)+own_nonce(16)+cipher_offer(1)+chosen(1)+proof(32) = 87; +status(1) = 88.
     CHECK(encode_handshake_request(make_request(id_distinct())).size() == 87);
-    CHECK(encode_handshake_response(make_response(id_distinct(), handshake_status::accepted)).size() == 88);
+    CHECK(encode_handshake_response(make_response(id_distinct(), handshake_status::accepted))
+                  .size() == 88);
 }
 
-TEST_CASE("Handshake request: every length below the fixed size returns nullopt", "[wire][handshake]")
+TEST_CASE("Handshake request: every length below the fixed size returns nullopt",
+          "[wire][handshake]")
 {
     for(std::size_t len = 0; len < handshake_request_size; ++len)
     {
@@ -855,9 +824,11 @@ TEST_CASE("Handshake request: every length below the fixed size returns nullopt"
     CHECK(decode_handshake_request(exact).has_value());
 }
 
-TEST_CASE("Handshake response: every length below the fixed size returns nullopt", "[wire][handshake]")
+TEST_CASE("Handshake response: every length below the fixed size returns nullopt",
+          "[wire][handshake]")
 {
-    auto valid = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
+    auto valid =
+            encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
     for(std::size_t len = 0; len < handshake_response_size; ++len)
     {
         std::vector<std::byte> payload(valid.begin(), valid.begin() + len);
@@ -866,9 +837,11 @@ TEST_CASE("Handshake response: every length below the fixed size returns nullopt
     CHECK(decode_handshake_response(valid).has_value());
 }
 
-TEST_CASE("Handshake response: status cutoff rejects 0x00 and every byte 0x06..0xFF", "[wire][handshake]")
+TEST_CASE("Handshake response: status cutoff rejects 0x00 and every byte 0x06..0xFF",
+          "[wire][handshake]")
 {
-    auto encoded = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
+    auto encoded =
+            encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
 
     // The status byte is the LAST byte, after the appended attach region, at offset
     // handshake_request_size (the response is the request plus the trailing status).
@@ -882,9 +855,11 @@ TEST_CASE("Handshake response: status cutoff rejects 0x00 and every byte 0x06..0
     }
 }
 
-TEST_CASE("Handshake response: each defined status byte 0x01..0x05 decodes to its enumerator", "[wire][handshake]")
+TEST_CASE("Handshake response: each defined status byte 0x01..0x05 decodes to its enumerator",
+          "[wire][handshake]")
 {
-    auto encoded = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
+    auto encoded =
+            encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
     const std::pair<std::uint8_t, handshake_status> defined[] = {
             {0x01, handshake_status::accepted},
             {0x02, handshake_status::version_incompatible},
@@ -895,7 +870,7 @@ TEST_CASE("Handshake response: each defined status byte 0x01..0x05 decodes to it
     for(auto [byte, status] : defined)
     {
         encoded[handshake_request_size] = std::byte{byte};
-        auto decoded = decode_handshake_response(encoded);
+        auto decoded                    = decode_handshake_response(encoded);
         REQUIRE(decoded.has_value());
         CHECK(decoded->status == status);
     }
@@ -903,13 +878,13 @@ TEST_CASE("Handshake response: each defined status byte 0x01..0x05 decodes to it
 
 TEST_CASE("Handshake encode-into: byte-identical to the allocating encoder", "[wire][handshake]")
 {
-    auto req = make_request(id_mixed_high_bit());
-    auto req_allocating = encode_handshake_request(req);
+    auto                   req            = make_request(id_mixed_high_bit());
+    auto                   req_allocating = encode_handshake_request(req);
     std::vector<std::byte> req_reused;
     encode_handshake_request_into(req_reused, req);
     CHECK(req_reused == req_allocating);
 
-    auto resp = make_response(id_mixed_high_bit(), handshake_status::identity_conflict);
+    auto resp            = make_response(id_mixed_high_bit(), handshake_status::identity_conflict);
     auto resp_allocating = encode_handshake_response(resp);
     std::vector<std::byte> resp_reused;
     encode_handshake_response_into(resp_reused, resp);

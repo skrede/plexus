@@ -31,13 +31,13 @@ public:
     // both do `frame.payload = <vector>`), and the conversion is an
     // unambiguous ownership transfer into the shared buffer.
     shared_bytes(std::vector<std::byte> bytes)
-        : m_owner(std::make_shared<const std::vector<std::byte>>(std::move(bytes)))
+            : m_owner(std::make_shared<const std::vector<std::byte>>(std::move(bytes)))
     {
     }
 
     const std::byte *data() const noexcept { return m_owner ? m_owner->data() : nullptr; }
-    std::size_t size() const noexcept { return m_owner ? m_owner->size() : 0u; }
-    bool empty() const noexcept { return size() == 0u; }
+    std::size_t      size() const noexcept { return m_owner ? m_owner->size() : 0u; }
+    bool             empty() const noexcept { return size() == 0u; }
 
     const std::byte *begin() const noexcept { return data(); }
     const std::byte *end() const noexcept { return data() + size(); }
@@ -78,7 +78,7 @@ enum class feed_error : uint8_t
 struct feed_result
 {
     std::vector<complete_frame> frames;
-    feed_error error{feed_error::none};
+    feed_error                  error{feed_error::none};
 };
 
 class frame_reassembler
@@ -90,10 +90,11 @@ class frame_reassembler
     };
 
 public:
-    explicit frame_reassembler(std::size_t max_payload_size = k_max_reassembler_payload_bytes,
-                               std::size_t buffered_bytes_cap = k_max_reassembler_payload_bytes + header_size)
-        : m_max_payload_size{max_payload_size}
-        , m_buffered_bytes_cap{buffered_bytes_cap}
+    explicit frame_reassembler(std::size_t max_payload_size   = k_max_reassembler_payload_bytes,
+                               std::size_t buffered_bytes_cap = k_max_reassembler_payload_bytes +
+                                       header_size)
+            : m_max_payload_size{max_payload_size}
+            , m_buffered_bytes_cap{buffered_bytes_cap}
     {
     }
 
@@ -150,16 +151,14 @@ public:
                 auto payload_span = remaining.subspan(0, m_pending_header.payload_len);
 
                 std::vector<std::byte> framed(header_size + m_pending_header.payload_len);
-                auto header_bytes = encode_header(m_pending_header);
+                auto                   header_bytes = encode_header(m_pending_header);
                 writer{std::span<std::byte>{framed}}.bytes(header_bytes);
                 if(!payload_span.empty())
-                    std::memcpy(framed.data() + header_size, payload_span.data(), payload_span.size());
+                    std::memcpy(framed.data() + header_size, payload_span.data(),
+                                payload_span.size());
 
-                result.frames.push_back(complete_frame{
-                            .header  = m_pending_header,
-                            .payload = shared_bytes{std::move(framed)}
-                    }
-                );
+                result.frames.push_back(complete_frame{.header  = m_pending_header,
+                                                       .payload = shared_bytes{std::move(framed)}});
 
                 m_consumed += m_pending_header.payload_len;
                 m_state = state::reading_header;
@@ -172,8 +171,8 @@ public:
     void reset()
     {
         m_buffer.clear();
-        m_consumed = 0;
-        m_state = state::reading_header;
+        m_consumed       = 0;
+        m_state          = state::reading_header;
         m_pending_header = {};
     }
 
@@ -208,16 +207,17 @@ private:
     {
         if(m_consumed != 0 && m_consumed >= m_buffer.size() - m_consumed)
         {
-            m_buffer.erase(m_buffer.begin(), m_buffer.begin() + static_cast<std::ptrdiff_t>(m_consumed));
+            m_buffer.erase(m_buffer.begin(),
+                           m_buffer.begin() + static_cast<std::ptrdiff_t>(m_consumed));
             m_consumed = 0;
         }
     }
 
-    state m_state{state::reading_header};
-    std::size_t m_max_payload_size;
-    std::size_t m_buffered_bytes_cap;
-    std::size_t m_consumed{0};
-    frame_header m_pending_header{};
+    state                  m_state{state::reading_header};
+    std::size_t            m_max_payload_size;
+    std::size_t            m_buffered_bytes_cap;
+    std::size_t            m_consumed{0};
+    frame_header           m_pending_header{};
     std::vector<std::byte> m_buffer;
 };
 

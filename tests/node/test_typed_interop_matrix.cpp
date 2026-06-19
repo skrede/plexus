@@ -53,8 +53,8 @@ using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 using plexus::io::message_info;
 
-using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using bytes_publisher = plexus::publisher<>;
+using inproc_node      = plexus::node<inproc_policy, inproc_transport<>>;
+using bytes_publisher  = plexus::publisher<>;
 using bytes_subscriber = plexus::subscriber<>;
 
 struct sample
@@ -69,8 +69,8 @@ struct counting_codec
 {
     using value_type = sample;
 
-    std::uint64_t                          tag = 0xABCD1234u;
-    std::shared_ptr<std::atomic<int>>      encodes = std::make_shared<std::atomic<int>>(0);
+    std::uint64_t                     tag     = 0xABCD1234u;
+    std::shared_ptr<std::atomic<int>> encodes = std::make_shared<std::atomic<int>>(0);
 
     plexus::wire_bytes<> encode(const sample &v) const
     {
@@ -82,11 +82,12 @@ struct counting_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, sample &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   sample                    &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -100,7 +101,7 @@ struct counting_codec
 static_assert(plexus::typed_codec<counting_codec>);
 static_assert(plexus::identity_bearing<counting_codec>);
 
-using typed_publisher = plexus::publisher<counting_codec>;
+using typed_publisher  = plexus::publisher<counting_codec>;
 using typed_subscriber = plexus::subscriber<counting_codec>;
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -113,15 +114,18 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0x511CEu;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0x511CEu;
     opts.dial_eagerly = eager;
     return opts;
 }
 
-std::span<const std::byte> as_bytes(const std::vector<std::byte> &b) { return {b.data(), b.size()}; }
+std::span<const std::byte> as_bytes(const std::vector<std::byte> &b)
+{
+    return {b.data(), b.size()};
+}
 
 std::vector<std::byte> encode_u32(std::uint32_t v)
 {
@@ -135,11 +139,11 @@ std::vector<std::byte> encode_u32(std::uint32_t v)
 // bytes fixture — both-eager double-delivers on a shared bus.
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -160,17 +164,19 @@ struct net
 
 }
 
-TEST_CASE("typed interop cell 1: a typed publisher reaches a bytes subscriber with the codec's encoding", "[node][typed][interop]")
+TEST_CASE("typed interop cell 1: a typed publisher reaches a bytes subscriber with the codec's "
+          "encoding",
+          "[node][typed][interop]")
 {
     // A is the publisher node (eager so its demand-less role still dials), B the bytes
     // subscriber — flip the eager flag so the bytes subscriber's node is the single dialer.
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
-    inproc_node pub_node{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
-    inproc_node sub_node{ex, disc, make_id(0x0B), tb, make_opts(/*eager=*/true)};
+    static_discovery   disc{{}};
+    inproc_node        pub_node{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
+    inproc_node        sub_node{ex, disc, make_id(0x0B), tb, make_opts(/*eager=*/true)};
     sub_node.listen({"inproc", "host-b:6000"});
     pub_node.listen({"inproc", "host-a:5000"});
     ex.drain();
@@ -179,8 +185,8 @@ TEST_CASE("typed interop cell 1: a typed publisher reaches a bytes subscriber wi
     std::vector<std::vector<std::byte>> got;
     bytes_subscriber s{sub_node, "topic",
                        [&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); }};
-    counting_codec codec;
-    typed_publisher p{pub_node, "topic", plexus::typed_publisher_options{}, codec};
+    counting_codec   codec;
+    typed_publisher  p{pub_node, "topic", plexus::typed_publisher_options{}, codec};
     ex.drain();
 
     // The subscriber is bytes (undeclared type), so the typed publisher has no eligible
@@ -193,14 +199,15 @@ TEST_CASE("typed interop cell 1: a typed publisher reaches a bytes subscriber wi
     REQUIRE(codec.encodes->load() == 1);
 }
 
-TEST_CASE("typed interop cell 2: a bytes producer's valid encoding decodes to an equal T", "[node][typed][interop]")
+TEST_CASE("typed interop cell 2: a bytes producer's valid encoding decodes to an equal T",
+          "[node][typed][interop]")
 {
     net n;
     n.connect();
 
     std::vector<sample> got;
-    typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
-    bytes_publisher p{n.b, "topic"};
+    typed_subscriber    s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
+    bytes_publisher     p{n.b, "topic"};
     n.drive();
 
     p.publish(as_bytes(encode_u32(0x0BADF00Du)));
@@ -210,7 +217,9 @@ TEST_CASE("typed interop cell 2: a bytes producer's valid encoding decodes to an
     REQUIRE(got.front().value == 0x0BADF00Du);
 }
 
-TEST_CASE("typed interop cell 3: garbage from a bytes producer drops+counts by default, escapes on opt-in", "[node][typed][interop]")
+TEST_CASE("typed interop cell 3: garbage from a bytes producer drops+counts by default, escapes on "
+          "opt-in",
+          "[node][typed][interop]")
 {
     SECTION("default: dropped + counted, session stays up")
     {
@@ -218,11 +227,11 @@ TEST_CASE("typed interop cell 3: garbage from a bytes producer drops+counts by d
         n.connect();
 
         std::vector<sample> got;
-        typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
-        bytes_publisher p{n.b, "topic"};
+        typed_subscriber    s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
+        bytes_publisher     p{n.b, "topic"};
         n.drive();
 
-        p.publish(as_bytes(std::vector<std::byte>(7, std::byte{0xFF})));   // not 4 bytes
+        p.publish(as_bytes(std::vector<std::byte>(7, std::byte{0xFF}))); // not 4 bytes
         n.drive();
 
         REQUIRE(got.empty());
@@ -235,16 +244,17 @@ TEST_CASE("typed interop cell 3: garbage from a bytes producer drops+counts by d
         net n;
         n.connect();
 
-        std::vector<sample> got;
-        std::vector<std::size_t> raw_sizes;
-        std::vector<std::error_code> ecs;
+        std::vector<sample>              got;
+        std::vector<std::size_t>         raw_sizes;
+        std::vector<std::error_code>     ecs;
         plexus::typed_subscriber_options opts;
-        opts.on_decode_failure = [&](std::span<const std::byte> raw, std::error_code ec) {
+        opts.on_decode_failure = [&](std::span<const std::byte> raw, std::error_code ec)
+        {
             raw_sizes.push_back(raw.size());
             ecs.push_back(ec);
         };
         typed_subscriber s{n.a, "topic", opts, [&](const sample &v) { got.push_back(v); }};
-        bytes_publisher p{n.b, "topic"};
+        bytes_publisher  p{n.b, "topic"};
         n.drive();
 
         p.publish(as_bytes(std::vector<std::byte>(9, std::byte{0xAB})));
@@ -258,7 +268,9 @@ TEST_CASE("typed interop cell 3: garbage from a bytes producer drops+counts by d
     }
 }
 
-TEST_CASE("typed interop cell 4: a typed pair over a NON-process tier round-trips through encode+decode", "[node][typed][interop]")
+TEST_CASE("typed interop cell 4: a typed pair over a NON-process tier round-trips through "
+          "encode+decode",
+          "[node][typed][interop]")
 {
     // Both endpoints are typed with the SAME identity, but the subscriber declares the
     // topic locality-confined to remote so the in-process object lane is never eligible —
@@ -267,12 +279,13 @@ TEST_CASE("typed interop cell 4: a typed pair over a NON-process tier round-trip
     net n;
     n.connect();
 
-    std::vector<sample> got;
+    std::vector<sample>              got;
     plexus::typed_subscriber_options sopts;
     sopts.qos.requested_reliability_reliable = false;
-    typed_subscriber s{n.a, "topic", sopts, [&](const sample &v) { got.push_back(v); }, counting_codec{}};
-    counting_codec codec;
-    auto encodes = codec.encodes;
+    typed_subscriber s{n.a, "topic", sopts, [&](const sample &v) { got.push_back(v); },
+                       counting_codec{}};
+    counting_codec   codec;
+    auto             encodes = codec.encodes;
     // Force the byte path: publish(const T&) on an exhausted pool serializes directly. A
     // depth-0 pool has no slot, so every publish degrades to encode->wire->decode.
     plexus::typed_publisher_options popts;
@@ -285,11 +298,13 @@ TEST_CASE("typed interop cell 4: a typed pair over a NON-process tier round-trip
 
     REQUIRE(got.size() == 1);
     REQUIRE(got.front().value == 0x13572468u);
-    REQUIRE(encodes->load() == 1);          // a real encode happened (no object fast path)
-    REQUIRE(p.loan_exhausted() == 1);       // the depth-0 pool degraded to serialize
+    REQUIRE(encodes->load() == 1);    // a real encode happened (no object fast path)
+    REQUIRE(p.loan_exhausted() == 1); // the depth-0 pool degraded to serialize
 }
 
-TEST_CASE("typed interop cell 5: a declared type mismatch is refused, no delivery, session stays up", "[node][typed][interop]")
+TEST_CASE(
+        "typed interop cell 5: a declared type mismatch is refused, no delivery, session stays up",
+        "[node][typed][interop]")
 {
     net n;
     n.connect();
@@ -303,27 +318,29 @@ TEST_CASE("typed interop cell 5: a declared type mismatch is refused, no deliver
     pub_codec.tag = 0x11111111u;
 
     std::vector<sample> got;
-    typed_subscriber s{n.a, "topic", plexus::typed_subscriber_options{},
-                       [&](const sample &v) { got.push_back(v); }, sub_codec};
-    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, pub_codec};
+    typed_subscriber    s{n.a, "topic", plexus::typed_subscriber_options{},
+                          [&](const sample &v) { got.push_back(v); }, sub_codec};
+    typed_publisher     p{n.b, "topic", plexus::typed_publisher_options{}, pub_codec};
     n.drive();
 
     p.publish(sample{0x99u});
     n.drive();
 
-    REQUIRE(got.empty());                        // the mismatch was refused at attach
-    REQUIRE(n.a.router().is_connected(n.id_b));  // the session is not torn down
+    REQUIRE(got.empty());                       // the mismatch was refused at attach
+    REQUIRE(n.a.router().is_connected(n.id_b)); // the session is not torn down
 }
 
-TEST_CASE("typed interop cell 8: a typed inproc publisher to a bytes subscriber takes the byte path", "[node][typed][interop]")
+TEST_CASE(
+        "typed interop cell 8: a typed inproc publisher to a bytes subscriber takes the byte path",
+        "[node][typed][interop]")
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
-    inproc_node pub_node{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
-    inproc_node sub_node{ex, disc, make_id(0x0B), tb, make_opts(/*eager=*/true)};
+    static_discovery   disc{{}};
+    inproc_node        pub_node{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
+    inproc_node        sub_node{ex, disc, make_id(0x0B), tb, make_opts(/*eager=*/true)};
     sub_node.listen({"inproc", "host-b:6000"});
     pub_node.listen({"inproc", "host-a:5000"});
     ex.drain();
@@ -332,8 +349,8 @@ TEST_CASE("typed interop cell 8: a typed inproc publisher to a bytes subscriber 
     std::vector<std::vector<std::byte>> got;
     bytes_subscriber s{sub_node, "topic",
                        [&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); }};
-    counting_codec codec;
-    auto encodes = codec.encodes;
+    counting_codec   codec;
+    auto             encodes = codec.encodes;
     // A borrowed loan would ride the fast path IF an eligible object subscriber existed; the
     // bytes subscriber has type_id nullopt so it is structurally ineligible. The publish
     // therefore serializes (encode invoked) and the bytes arrive as the encoding.
@@ -348,29 +365,32 @@ TEST_CASE("typed interop cell 8: a typed inproc publisher to a bytes subscriber 
 
     REQUIRE(got.size() == 1);
     REQUIRE(got.front() == encode_u32(0x44332211u));
-    REQUIRE(encodes->load() == 1);   // the byte path was taken: exactly one encode
+    REQUIRE(encodes->load() == 1); // the byte path was taken: exactly one encode
 }
 
-TEST_CASE("typed interop cell 9: a strict typed subscriber refuses an undeclared producer", "[node][typed][interop]")
+TEST_CASE("typed interop cell 9: a strict typed subscriber refuses an undeclared producer",
+          "[node][typed][interop]")
 {
     net n;
     n.connect();
 
-    std::vector<sample> got;
+    std::vector<sample>              got;
     plexus::typed_subscriber_options opts;
     opts.posture = plexus::io::attach_posture::strict;
     typed_subscriber s{n.a, "topic", opts, [&](const sample &v) { got.push_back(v); }};
-    bytes_publisher p{n.b, "topic"};   // never declares a type -> undeclared producer
+    bytes_publisher  p{n.b, "topic"}; // never declares a type -> undeclared producer
     n.drive();
 
     p.publish(as_bytes(encode_u32(0x77u)));
     n.drive();
 
-    REQUIRE(got.empty());                        // strict refused the undeclared producer
-    REQUIRE(n.a.router().is_connected(n.id_b));  // refusal is per-topic, never a teardown
+    REQUIRE(got.empty());                       // strict refused the undeclared producer
+    REQUIRE(n.a.router().is_connected(n.id_b)); // refusal is per-topic, never a teardown
 }
 
-TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is a counted drop, never a cast", "[node][typed][interop]")
+TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is a counted drop, "
+          "never a cast",
+          "[node][typed][interop]")
 {
     // Two distinct C++ types sharing ONE wire type_id in-process. The publisher's codec
     // encodes `other` under the same tag the subscriber's `sample` codec declares; the
@@ -384,9 +404,9 @@ TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is
     };
     struct other_codec
     {
-        using value_type = other;
+        using value_type                          = other;
         std::shared_ptr<std::atomic<int>> encodes = std::make_shared<std::atomic<int>>(0);
-        plexus::wire_bytes<> encode(const other &) const
+        plexus::wire_bytes<>              encode(const other &) const
         {
             ++*encodes;
             auto owner = std::make_shared<std::vector<std::byte>>(4, std::byte{0});
@@ -404,11 +424,11 @@ TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is
     net n;
     n.connect();
 
-    int sample_calls = 0;
-    typed_subscriber s{n.a, "topic", plexus::typed_subscriber_options{},
-                       [&](const sample &) { ++sample_calls; }, counting_codec{}};
-    plexus::publisher<other_codec> p{n.b, "topic",
-                                     plexus::typed_publisher_options{}, other_codec{}};
+    int                            sample_calls = 0;
+    typed_subscriber               s{n.a, "topic", plexus::typed_subscriber_options{},
+                                     [&](const sample &) { ++sample_calls; }, counting_codec{}};
+    plexus::publisher<other_codec> p{n.b, "topic", plexus::typed_publisher_options{},
+                                     other_codec{}};
     n.drive();
 
     auto loan = p.borrow();
@@ -417,7 +437,7 @@ TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is
     p.publish(std::move(loan));
     n.drive();
 
-    REQUIRE(sample_calls == 0);                          // the typed callback never ran
-    REQUIRE(n.a.object_dispatch_mismatch() == 1);        // the demux counted the misconfig
-    REQUIRE(n.a.router().is_connected(n.id_b));           // no crash, no teardown
+    REQUIRE(sample_calls == 0);                   // the typed callback never ran
+    REQUIRE(n.a.object_dispatch_mismatch() == 1); // the demux counted the misconfig
+    REQUIRE(n.a.router().is_connected(n.id_b));   // no crash, no teardown
 }

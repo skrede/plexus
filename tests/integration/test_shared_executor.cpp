@@ -26,8 +26,8 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace wire = plexus::wire;
-namespace pio = plexus::io;
+namespace wire  = plexus::wire;
+namespace pio   = plexus::io;
 namespace pmdns = plexus::mdnspp;
 
 namespace {
@@ -41,7 +41,7 @@ std::vector<std::byte> bytes_of(std::string_view s)
 }
 
 std::string read_card_value(const std::vector<std::pair<std::string, std::string>> &card,
-                            std::string_view key)
+                            std::string_view                                        key)
 {
     for(const auto &[k, v] : card)
         if(k == key)
@@ -65,49 +65,51 @@ std::string read_card_value(const std::vector<std::pair<std::string, std::string
 // executor is structural — both objects bind `&io`, and the one poll loop drains
 // both subsystems' handlers. The transport round-trip is the positive evidence
 // that opaque bytes move on the same context the discovery machinery runs on.
-TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context", "[integration][asio]")
+TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context",
+          "[integration][asio]")
 {
-    ::asio::io_context io;   // the SINGLE shared executor
+    ::asio::io_context io; // the SINGLE shared executor
 
     // --- Discovery on the shared context ---
     // Advertise a local service and browse for it on the SAME io_context, so a
     // real mDNS resolve (announce -> query -> aggregate) progresses on the shared
     // executor — positive evidence the discovery path runs on `io`, not merely
     // that its callback was armed.
-    pmdns::mdnspp_discovery advertiser(io, "_plexus._tcp.local.");
-    plexus::discovery::service_info local{"probe._plexus._tcp.local.", {"tcp", "127.0.0.1:5555"},
+    pmdns::mdnspp_discovery         advertiser(io, "_plexus._tcp.local.");
+    plexus::discovery::service_info local{"probe._plexus._tcp.local.",
+                                          {"tcp", "127.0.0.1:5555"},
                                           {{"node_id", "0011"}, {"plexus/tcp/port", "5555"}}};
     advertiser.advertise(local);
 
-    pmdns::mdnspp_discovery discovery(io, "_plexus._tcp.local.");
-    int resolved_count = 0;
+    pmdns::mdnspp_discovery                          discovery(io, "_plexus._tcp.local.");
+    int                                              resolved_count = 0;
     std::vector<std::pair<std::string, std::string>> resolved_metadata;
-    discovery.browse([&](const plexus::discovery::service_info &svc)
-    {
-        ++resolved_count;
-        if(!svc.metadata.empty())
-            resolved_metadata = svc.metadata;
-    });
+    discovery.browse(
+            [&](const plexus::discovery::service_info &svc)
+            {
+                ++resolved_count;
+                if(!svc.metadata.empty())
+                    resolved_metadata = svc.metadata;
+            });
 
     // --- Transport round-trip on the SAME context ---
-    pasio::asio_listener listener(io);
+    pasio::asio_listener                 listener(io);
     std::unique_ptr<pasio::asio_channel> server_channel;
     listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch)
-    {
-        server_channel = std::move(ch);
-    });
+                         { server_channel = std::move(ch); });
     listener.start({"tcp", "127.0.0.1:0"});
     auto port = listener.port();
 
-    pasio::asio_channel client(io);
+    pasio::asio_channel                   client(io);
     std::optional<std::vector<std::byte>> received;
-    pio::frame_router router;
-    router.on_unidirectional([&](const wire::frame_header &, std::span<const std::byte> inner)
-    {
-        auto decoded = wire::decode_unidirectional(inner);
-        if(decoded)
-            received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
-    });
+    pio::frame_router                     router;
+    router.on_unidirectional(
+            [&](const wire::frame_header &, std::span<const std::byte> inner)
+            {
+                auto decoded = wire::decode_unidirectional(inner);
+                if(decoded)
+                    received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
+            });
     // on_data now delivers a COMPLETE header-on frame; the frame_router owns the
     // header strip + type switch and hands the inner payload to its consumer.
     client.on_data([&](std::span<const std::byte> frame) { router.route(frame); });
@@ -120,9 +122,9 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     while(!server_channel)
         io.poll_one();
 
-    const auto payload = bytes_of("shared-executor-payload");
-    const std::string fqn = "demo._plexus._tcp.local.";
-    pio::message_forwarder<pasio::asio_policy> fwd{};
+    const auto                                       payload = bytes_of("shared-executor-payload");
+    const std::string                                fqn     = "demo._plexus._tcp.local.";
+    pio::message_forwarder<pasio::asio_policy>       fwd{};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "peer-node"};
     fwd.attach(sub, fqn);
     // The subscribe is now frame_header-wrapped (control frames are framed like
@@ -137,16 +139,15 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     // browse's silence timeout (mdnspp default 3s) so both subsystems progress to
     // a result on the shared context. Bounded so a regression fails fast.
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
-    while(std::chrono::steady_clock::now() < deadline &&
-          (!received || resolved_count == 0))
+    while(std::chrono::steady_clock::now() < deadline && (!received || resolved_count == 0))
         io.poll();
 
     discovery.stop();
     advertiser.stop();
-    io.poll();   // drain the browse/advertise stop + trailing discovery handlers
+    io.poll(); // drain the browse/advertise stop + trailing discovery handlers
 
     REQUIRE(received.has_value());
-    REQUIRE(*received == payload);   // the transport round-trip progressed on `io`
+    REQUIRE(*received == payload); // the transport round-trip progressed on `io`
     // The self-advertised service resolved through the mDNS path on the SAME
     // io_context — positive evidence the discovery subsystem ran on the shared
     // executor, not merely that its callback was armed.
@@ -169,8 +170,9 @@ TEST_CASE("mdnspp re-advertise on a live server updates the record in place", "[
 {
     ::asio::io_context io;
 
-    pmdns::mdnspp_discovery advertiser(io, "_plexus._tcp.local.");
-    plexus::discovery::service_info local{"inplace._plexus._tcp.local.", {"tcp", "127.0.0.1:5566"},
+    pmdns::mdnspp_discovery         advertiser(io, "_plexus._tcp.local.");
+    plexus::discovery::service_info local{"inplace._plexus._tcp.local.",
+                                          {"tcp", "127.0.0.1:5566"},
                                           {{"node_id", "0022"}, {"plexus/tcp/port", "5566"}}};
     advertiser.advertise(local);
 
@@ -184,15 +186,16 @@ TEST_CASE("mdnspp re-advertise on a live server updates the record in place", "[
     local.metadata.emplace_back("plexus/schema", "1");
     advertiser.advertise(local);
 
-    pmdns::mdnspp_discovery discovery(io, "_plexus._tcp.local.");
-    int resolved_count = 0;
+    pmdns::mdnspp_discovery                          discovery(io, "_plexus._tcp.local.");
+    int                                              resolved_count = 0;
     std::vector<std::pair<std::string, std::string>> resolved_metadata;
-    discovery.browse([&](const plexus::discovery::service_info &svc)
-    {
-        ++resolved_count;
-        if(!svc.metadata.empty())
-            resolved_metadata = svc.metadata;
-    });
+    discovery.browse(
+            [&](const plexus::discovery::service_info &svc)
+            {
+                ++resolved_count;
+                if(!svc.metadata.empty())
+                    resolved_metadata = svc.metadata;
+            });
 
     // Poll past the browse silence timeout (mdnspp default 3s) so aggregation completes.
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);

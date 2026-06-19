@@ -73,12 +73,12 @@ struct ring_geometry
 // declaration that would exceed the per-ring ceiling is left for the caller to detect
 // via ring_memory_for — the fail-closed registration path owns that bound + diagnostic.
 [[nodiscard]] inline ring_geometry ring_geometry_for(std::optional<std::uint32_t> max_payload,
-                                                     ring_geometry_mode mode,
+                                                     ring_geometry_mode           mode,
                                                      std::uint32_t consumer_capacity) noexcept
 {
     const std::uint64_t capacity = consumer_capacity == 0 ? k_max_consumers : consumer_capacity;
-    const std::uint64_t want = max_payload.value_or(0);
-    const std::uint64_t slot = round_up_8(want);
+    const std::uint64_t want     = max_payload.value_or(0);
+    const std::uint64_t slot     = round_up_8(want);
 
     ring_geometry geom{256, 4096};
     if(want > 131072)
@@ -88,9 +88,9 @@ struct ring_geometry
         // best_effort_large admits depth == capacity for the same low memory the old
         // depth-16 deep tier gave.
         const std::uint64_t depth = mode == ring_geometry_mode::best_effort_large
-                                        ? next_pow2_at_least(capacity)
-                                        : next_pow2_strictly_above(capacity);
-        geom = ring_geometry{depth, slot};
+                ? next_pow2_at_least(capacity)
+                : next_pow2_strictly_above(capacity);
+        geom                      = ring_geometry{depth, slot};
     }
     else if(want > 65536)
         geom = ring_geometry{64, slot};
@@ -107,7 +107,8 @@ struct ring_geometry
 
 // Source-compatible overload for callers that have not yet threaded a declared mode
 // and capacity: the safe default reliable ring sized to the shipped capacity floor.
-[[nodiscard]] inline ring_geometry ring_geometry_for(std::optional<std::uint32_t> max_payload) noexcept
+[[nodiscard]] inline ring_geometry
+ring_geometry_for(std::optional<std::uint32_t> max_payload) noexcept
 {
     return ring_geometry_for(max_payload, ring_geometry_mode::reliable_preserving, k_max_consumers);
 }
@@ -122,7 +123,7 @@ struct ring_geometry
 {
     const ring_geometry geom = ring_geometry_for(max_payload, mode, consumer_capacity);
     return control_region_bytes(geom.cell_count) +
-           slab_region_bytes(geom.cell_count, geom.slot_capacity);
+            slab_region_bytes(geom.cell_count, geom.slot_capacity);
 }
 
 }

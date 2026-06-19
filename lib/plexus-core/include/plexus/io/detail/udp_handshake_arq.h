@@ -31,7 +31,7 @@ namespace plexus::io::detail {
 // start() arms the first attempt and immediately sends (the first transmit is not on
 // the timer — the timer covers the RETRANSMITS). on_established() (fed by the demux
 // recv path when the paired frame arrives) cancels and completes exactly once.
-template <typename Policy>
+template<typename Policy>
     requires plexus::Policy<Policy>
 class udp_handshake_arq
 {
@@ -43,28 +43,34 @@ public:
     // The fixed retransmit ladder: the delay BEFORE retransmit attempt N (the first
     // transmit fires immediately at start, so index 0 = 250 ms guards transmit #1).
     // The proven-core schedule and the production default.
-    static constexpr schedule default_ladder{
-        std::chrono::milliseconds{250},
-        std::chrono::milliseconds{500},
-        std::chrono::milliseconds{1000}};
+    static constexpr schedule default_ladder{std::chrono::milliseconds{250},
+                                             std::chrono::milliseconds{500},
+                                             std::chrono::milliseconds{1000}};
 
     // The ladder is a required-WITH-default ctor argument: production binds the proven
     // 250/500/1000 ms schedule; a deterministic test may bind a compressed ladder to
     // exercise the same retransmit/surrender mechanics quickly. NOT a mutable setter —
     // the schedule is fixed at construction, never a test-only post-hoc knob.
-    explicit udp_handshake_arq(typename Policy::executor_type executor, schedule ladder = default_ladder)
-        : m_timer(executor)
-        , m_ladder(ladder)
+    explicit udp_handshake_arq(typename Policy::executor_type executor,
+                               schedule                       ladder = default_ladder)
+            : m_timer(executor)
+            , m_ladder(ladder)
     {
     }
 
-    udp_handshake_arq(const udp_handshake_arq &) = delete;
+    udp_handshake_arq(const udp_handshake_arq &)            = delete;
     udp_handshake_arq &operator=(const udp_handshake_arq &) = delete;
 
     // Called on each ladder fire: (re)send the handshake frame.
-    void on_transmit(plexus::detail::move_only_function<void()> cb) { m_on_transmit = std::move(cb); }
+    void on_transmit(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_transmit = std::move(cb);
+    }
     // Called once when the paired frame arrives: the session is established.
-    void on_established(plexus::detail::move_only_function<void()> cb) { m_on_established = std::move(cb); }
+    void on_established(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_established = std::move(cb);
+    }
     // Called once when all 3 attempts are exhausted: a handshake-timeout abort.
     void on_timeout(plexus::detail::move_only_function<void()> cb) { m_on_timeout = std::move(cb); }
 
@@ -77,7 +83,10 @@ public:
         arm();
     }
 
-    [[nodiscard]] static constexpr std::size_t max_attempts() noexcept { return std::tuple_size_v<schedule>; }
+    [[nodiscard]] static constexpr std::size_t max_attempts() noexcept
+    {
+        return std::tuple_size_v<schedule>;
+    }
 
     // The paired handshake frame arrived: cancel the pending retransmit and complete.
     // Idempotent — a duplicate/late arrival after resolution is a no-op.
@@ -100,7 +109,7 @@ public:
     }
 
     [[nodiscard]] std::uint8_t attempts() const noexcept { return m_attempt; }
-    [[nodiscard]] bool resolved() const noexcept { return m_resolved; }
+    [[nodiscard]] bool         resolved() const noexcept { return m_resolved; }
 
 private:
     // Arm the wait that guards the transmit just sent. The ladder entry for the
@@ -110,20 +119,22 @@ private:
     void arm()
     {
         m_timer.expires_after(m_ladder[m_attempt - 1]);
-        m_timer.async_wait([this](std::error_code ec)
-        {
-            if(ec)
-                return;                  // cancelled by resolution/teardown — never fire on a dead ARQ
-            if(m_attempt >= m_ladder.size())
-                return surrender();      // the final attempt's wait elapsed: abort, no further transmit
-            transmit();
-            arm();
-        });
+        m_timer.async_wait(
+                [this](std::error_code ec)
+                {
+                    if(ec)
+                        return; // cancelled by resolution/teardown — never fire on a dead ARQ
+                    if(m_attempt >= m_ladder.size())
+                        return surrender(); // the final attempt's wait elapsed: abort, no further
+                                            // transmit
+                    transmit();
+                    arm();
+                });
     }
 
     void transmit()
     {
-        ++m_attempt;                     // count this transmit (1 after start, up to ladder size)
+        ++m_attempt; // count this transmit (1 after start, up to ladder size)
         if(m_on_transmit)
             m_on_transmit();
     }
@@ -137,10 +148,10 @@ private:
             m_on_timeout();
     }
 
-    timer_type m_timer;
-    schedule m_ladder;
-    std::uint8_t m_attempt{0};
-    bool m_resolved{false};
+    timer_type                                 m_timer;
+    schedule                                   m_ladder;
+    std::uint8_t                               m_attempt{0};
+    bool                                       m_resolved{false};
     plexus::detail::move_only_function<void()> m_on_transmit;
     plexus::detail::move_only_function<void()> m_on_established;
     plexus::detail::move_only_function<void()> m_on_timeout;

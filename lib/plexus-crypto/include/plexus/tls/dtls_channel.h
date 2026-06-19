@@ -64,9 +64,14 @@ namespace plexus::tls {
 class dtls_channel
 {
 public:
-    enum class role { client, server };
+    enum class role
+    {
+        client,
+        server
+    };
 
-    using reassembler_type = io::detail::reassembler<::asio::io_context &, plexus::asio::asio_timer>;
+    using reassembler_type =
+            io::detail::reassembler<::asio::io_context &, plexus::asio::asio_timer>;
 
     // The per-channel LOGICAL payload ceiling — the upper term of the
     // min(max_payload, DTLS_get_data_mtu) oversize cap. A caller MAY raise it above the
@@ -97,16 +102,17 @@ public:
     dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
                  ::asio::ip::udp::endpoint dest, const tls_credential &cred,
                  io::security::cookie_secret &cookie_state, role r,
-                 std::size_t max_payload = default_max_payload,
-                 std::size_t record_mtu = default_record_mtu,
-                 std::size_t max_message_bytes = io::global_default_max_message_bytes,
-                 std::size_t reassembly_budget = io::reassembly_memory_budget,
-                 std::chrono::milliseconds reassembly_timeout = reassembler_type::config{}.per_message_timeout);
+                 std::size_t               max_payload       = default_max_payload,
+                 std::size_t               record_mtu        = default_record_mtu,
+                 std::size_t               max_message_bytes = io::global_default_max_message_bytes,
+                 std::size_t               reassembly_budget = io::reassembly_memory_budget,
+                 std::chrono::milliseconds reassembly_timeout =
+                         reassembler_type::config{}.per_message_timeout);
 
-    dtls_channel(const dtls_channel &) = delete;
+    dtls_channel(const dtls_channel &)            = delete;
     dtls_channel &operator=(const dtls_channel &) = delete;
-    dtls_channel(dtls_channel &&) = delete;
-    dtls_channel &operator=(dtls_channel &&) = delete;
+    dtls_channel(dtls_channel &&)                 = delete;
+    dtls_channel &operator=(dtls_channel &&)      = delete;
 
     // The dtor cancels the retransmit timer FIRST, then frees the external BIO
     // (SSL_free frees the internal BIO). No on_closed post (a this-capturing post
@@ -119,17 +125,29 @@ public:
 
     [[nodiscard]] io::endpoint remote_endpoint() const;
 
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
-    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
 
     // The transport's private teardown seam, fired from the dtor — distinct from the
     // consumer-facing on_closed/on_error the engine claims. The transport demuxes inbound
     // by endpoint to a NON-owning raw ref; this lets it erase that ref when the engine
     // (the channel's owner) destroys the channel, so a later datagram is a clean MISS
     // rather than a freed-pointer deref.
-    void on_teardown(plexus::detail::move_only_function<void()> cb) { m_on_teardown = std::move(cb); }
+    void on_teardown(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_teardown = std::move(cb);
+    }
 
     // DTLS owns no socket and keeps no bounded userspace egress queue: the post-ready
     // path fires application bytes straight through SSL_write -> drain_outbound to the
@@ -145,7 +163,10 @@ public:
 
     // Fires ONCE on a verified mutual completion (the transport resolves the FSM
     // via handshake_fsm::on_external_complete from this edge). Set before driving.
-    void on_external_complete(plexus::detail::move_only_function<void()> cb) { m_on_external_complete = std::move(cb); }
+    void on_external_complete(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_external_complete = std::move(cb);
+    }
 
     // Kick the handshake: synthesize the ClientHello (client) / arm accept (server),
     // drain the BIO to the wire, and arm the retransmit timer. The transport calls
@@ -157,11 +178,11 @@ public:
     void deliver_inbound(std::span<const std::byte> datagram);
 
     [[nodiscard]] const ::asio::ip::udp::endpoint &dest() const noexcept { return m_dest; }
-    [[nodiscard]] bool is_open() const noexcept { return m_open; }
+    [[nodiscard]] bool                             is_open() const noexcept { return m_open; }
     [[nodiscard]] bool complete() const noexcept { return m_complete_fired; }
 
     // The cert-derived peer identity, valid only after on_external_complete fired.
-    [[nodiscard]] const node_id &peer_node_id() const noexcept { return m_node_id; }
+    [[nodiscard]] const node_id     &peer_node_id() const noexcept { return m_node_id; }
     [[nodiscard]] const std::string &peer_node_name() const noexcept { return m_node_name; }
 
 private:
@@ -192,21 +213,22 @@ private:
     void publish_cookie_ex_data();
     void capture_peer_identity();
 
-    ::asio::io_context &m_io;
-    plexus::asio::udp_server &m_server;
-    ::asio::ip::udp::endpoint m_dest;
+    ::asio::io_context          &m_io;
+    plexus::asio::udp_server    &m_server;
+    ::asio::ip::udp::endpoint    m_dest;
     io::security::cookie_secret &m_cookie_state;
-    role m_role;
-    std::size_t m_max_payload;
-    std::size_t m_record_mtu;
-    std::size_t m_max_message_bytes;
-    std::size_t m_reassembly_budget;
-    std::chrono::milliseconds m_reassembly_timeout;
-    std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()};   // stable per-construction egress key
+    role                         m_role;
+    std::size_t                  m_max_payload;
+    std::size_t                  m_record_mtu;
+    std::size_t                  m_max_message_bytes;
+    std::size_t                  m_reassembly_budget;
+    std::chrono::milliseconds    m_reassembly_timeout;
+    std::uint64_t                m_scheduler_key{
+            io::detail::next_scheduler_key()}; // stable per-construction egress key
 
-    detail::shared_ssl_ctx m_ssl_ctx;            // up_ref'd shared SSL_CTX
-    ssl_st *m_ssl{nullptr};
-    void *m_external_bio{nullptr};               // BIO* (opaque in the header)
+    detail::shared_ssl_ctx   m_ssl_ctx; // up_ref'd shared SSL_CTX
+    ssl_st                  *m_ssl{nullptr};
+    void                    *m_external_bio{nullptr}; // BIO* (opaque in the header)
     plexus::asio::asio_timer m_retransmit;
 
     // The open-before-data gate, composed in DROP-PRESERVING / ready-edge mode: a
@@ -231,8 +253,8 @@ private:
     // sits on the decrypted drain_inbound path. Its per-message timeout timer is cancelled in
     // the dtor FIRST (before m_gate.reset() / the OpenSSL teardown) so a timer firing after
     // teardown is a guarded no-op (single-owner, no use-after-free, no shared_from_this).
-    std::vector<std::byte> m_frag_scratch;        // reused fragment-encode buffer
-    std::uint16_t m_out_msg_id{0};                // per-message fragment grouping id (sender)
+    std::vector<std::byte>            m_frag_scratch;  // reused fragment-encode buffer
+    std::uint16_t                     m_out_msg_id{0}; // per-message fragment grouping id (sender)
     std::unique_ptr<reassembler_type> m_reassembler;
 
     // The verify-time depth-0 leaf facts the verify callback stashes here through the
@@ -240,15 +262,15 @@ private:
     // completion edge derives node_id (first 16 bytes of spki_sha256) + node_name
     // (subject) from this value — no second SPKI digest at the capture site.
     io::security::cert_facts m_peer_facts;
-    node_id m_node_id{};
-    std::string m_node_name;
+    node_id                  m_node_id{};
+    std::string              m_node_name;
 
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()> m_on_closed;
-    plexus::detail::move_only_function<void()> m_on_teardown;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
-    plexus::detail::move_only_function<void()> m_on_external_complete;
+    plexus::detail::move_only_function<void()>                           m_on_closed;
+    plexus::detail::move_only_function<void()>                           m_on_teardown;
+    plexus::detail::move_only_function<void(io::io_error)>               m_on_error;
+    plexus::detail::move_only_function<void(wire::close_cause)>          m_on_protocol_close;
+    plexus::detail::move_only_function<void()>                           m_on_external_complete;
 
     bool m_open{true};
     bool m_complete_fired{false};
@@ -257,6 +279,6 @@ private:
 }
 
 static_assert(plexus::io::byte_channel<plexus::tls::dtls_channel>,
-    "dtls_channel must satisfy byte_channel — check the send/close/on_* surface");
+              "dtls_channel must satisfy byte_channel — check the send/close/on_* surface");
 
 #endif

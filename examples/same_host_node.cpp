@@ -40,13 +40,13 @@ namespace pasio = plexus::asio;
 
 int main()
 {
-    ::asio::io_context io;
+    ::asio::io_context                  io;
     plexus::discovery::static_discovery disc{{}};
 
     pasio::same_host_transports ts{io};
 
     plexus::node_id id{};
-    id[0] = std::byte{0x2A};
+    id[0]     = std::byte{0x2A};
     auto node = ts.make_node(disc, id, plexus::node_options{});
     std::cout << "portable same-host node minted (accelerated where the host offers it)\n";
 

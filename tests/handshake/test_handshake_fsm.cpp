@@ -57,55 +57,52 @@ constexpr node_id id_with_head(std::uint8_t head) noexcept
 // pinned at (1,0). The compat floor is what peer (major,minor) is checked against.
 handshake_fsm_config config_for(node_id self) noexcept
 {
-    return handshake_fsm_config{
-        .self_id                  = self,
-        .version_major            = 1,
-        .version_minor            = 0,
-        .compatible_version_major = 1,
-        .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = self,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 // A request that passes every gate by default: matching protocol, compatible
 // version, and the given peer identity. Individual fields are overridden per case.
 handshake_request good_request(node_id peer) noexcept
 {
-    return handshake_request{
-        .id                       = peer,
-        .version_major            = 1,
-        .version_minor            = 0,
-        .compatible_version_major = 1,
-        .compatible_version_minor = 0,
-        .protocol_version         = k_protocol_version,
-        .fingerprint              = 0,
-        .key_id                   = {},
-        .own_nonce                = {},
-        .cipher_offer             = 0,
-        .chosen_cipher            = 0,
-        .proof                    = {}};
+    return handshake_request{.id                       = peer,
+                             .version_major            = 1,
+                             .version_minor            = 0,
+                             .compatible_version_major = 1,
+                             .compatible_version_minor = 0,
+                             .protocol_version         = k_protocol_version,
+                             .fingerprint              = 0,
+                             .key_id                   = {},
+                             .own_nonce                = {},
+                             .cipher_offer             = 0,
+                             .chosen_cipher            = 0,
+                             .proof                    = {}};
 }
 
 // A response that passes every gate by default: accepted status, matching protocol,
 // compatible version, and the given peer identity.
 handshake_response good_response(node_id peer) noexcept
 {
-    return handshake_response{
-        .id                       = peer,
-        .version_major            = 1,
-        .version_minor            = 0,
-        .compatible_version_major = 1,
-        .compatible_version_minor = 0,
-        .protocol_version         = k_protocol_version,
-        .fingerprint              = 0,
-        .key_id                   = {},
-        .own_nonce                = {},
-        .cipher_offer             = 0,
-        .chosen_cipher            = 0,
-        .proof                    = {},
-        .status                   = handshake_status::accepted};
+    return handshake_response{.id                       = peer,
+                              .version_major            = 1,
+                              .version_minor            = 0,
+                              .compatible_version_major = 1,
+                              .compatible_version_minor = 0,
+                              .protocol_version         = k_protocol_version,
+                              .fingerprint              = 0,
+                              .key_id                   = {},
+                              .own_nonce                = {},
+                              .cipher_offer             = 0,
+                              .chosen_cipher            = 0,
+                              .proof                    = {},
+                              .status                   = handshake_status::accepted};
 }
 
-constexpr node_id k_self  = id_with_tail(0x10);
-constexpr node_id k_peer  = id_with_tail(0x20);
+constexpr node_id k_self = id_with_tail(0x10);
+constexpr node_id k_peer = id_with_tail(0x20);
 
 }
 
@@ -120,21 +117,21 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
         SECTION("on_dial_started -> dialing/none")
         {
             handshake_fsm fsm(config_for(k_self));
-            auto r = fsm.on_dial_started();
+            auto          r = fsm.on_dial_started();
             REQUIRE(fsm.state() == peer_fsm_state::dialing);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_outbound_connected -> handshaking/send_request")
         {
             handshake_fsm fsm(config_for(k_self));
-            auto r = fsm.on_outbound_connected();
+            auto          r = fsm.on_outbound_connected();
             REQUIRE(fsm.state() == peer_fsm_state::handshaking);
             REQUIRE(r.action == fsm_action::send_request);
         }
         SECTION("on_request(non-bootstrap) -> handshake_resolved/send_response")
         {
             handshake_fsm fsm(config_for(k_self));
-            auto r = fsm.on_request(good_request(k_peer), false);
+            auto          r = fsm.on_request(good_request(k_peer), false);
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::send_response);
             REQUIRE(r.outcome == handshake_outcome::accept_inbound);
@@ -145,21 +142,21 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
             // flight is unsolicited and ignored — the FSM does NOT fabricate an
             // accept_outbound completion for a request it never sent.
             handshake_fsm fsm(config_for(k_self));
-            auto r = fsm.on_response(good_response(k_peer));
+            auto          r = fsm.on_response(good_response(k_peer));
             REQUIRE(fsm.state() == peer_fsm_state::not_connected);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_timeout -> none, state unchanged")
         {
             handshake_fsm fsm(config_for(k_self));
-            auto r = fsm.on_timeout();
+            auto          r = fsm.on_timeout();
             REQUIRE(fsm.state() == peer_fsm_state::not_connected);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_torn_down -> not_connected/none")
         {
             handshake_fsm fsm(config_for(k_self));
-            auto r = fsm.on_torn_down();
+            auto          r = fsm.on_torn_down();
             REQUIRE(fsm.state() == peer_fsm_state::not_connected);
             REQUIRE(r.action == fsm_action::none);
         }
@@ -167,7 +164,8 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
 
     SECTION("dialing")
     {
-        auto dialing = [] {
+        auto dialing = []
+        {
             handshake_fsm fsm(config_for(k_self));
             fsm.on_dial_started();
             return fsm;
@@ -175,21 +173,21 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
         SECTION("on_dial_started again -> stays dialing/none (idempotent re-dial)")
         {
             auto fsm = dialing();
-            auto r = fsm.on_dial_started();
+            auto r   = fsm.on_dial_started();
             REQUIRE(fsm.state() == peer_fsm_state::dialing);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_outbound_connected -> handshaking/send_request")
         {
             auto fsm = dialing();
-            auto r = fsm.on_outbound_connected();
+            auto r   = fsm.on_outbound_connected();
             REQUIRE(fsm.state() == peer_fsm_state::handshaking);
             REQUIRE(r.action == fsm_action::send_request);
         }
         SECTION("on_request(non-bootstrap) -> handshake_resolved/send_response")
         {
             auto fsm = dialing();
-            auto r = fsm.on_request(good_request(k_peer), false);
+            auto r   = fsm.on_request(good_request(k_peer), false);
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::send_response);
         }
@@ -199,21 +197,21 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
             // send_request was emitted. A response here is unsolicited and ignored
             // (the corrected resolve_outbound state guard).
             auto fsm = dialing();
-            auto r = fsm.on_response(good_response(k_peer));
+            auto r   = fsm.on_response(good_response(k_peer));
             REQUIRE(fsm.state() == peer_fsm_state::dialing);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_timeout -> retry, state stays dialing")
         {
             auto fsm = dialing();
-            auto r = fsm.on_timeout();
+            auto r   = fsm.on_timeout();
             REQUIRE(fsm.state() == peer_fsm_state::dialing);
             REQUIRE(r.action == fsm_action::retry);
         }
         SECTION("on_torn_down -> not_connected/none")
         {
             auto fsm = dialing();
-            auto r = fsm.on_torn_down();
+            auto r   = fsm.on_torn_down();
             REQUIRE(fsm.state() == peer_fsm_state::not_connected);
             REQUIRE(r.action == fsm_action::none);
         }
@@ -221,7 +219,8 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
 
     SECTION("handshaking")
     {
-        auto handshaking = [] {
+        auto handshaking = []
+        {
             handshake_fsm fsm(config_for(k_self));
             fsm.on_dial_started();
             fsm.on_outbound_connected();
@@ -232,7 +231,7 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
             // A stray dial once an outbound connection is established must NOT
             // regress the session back to dialing and discard the connection.
             auto fsm = handshaking();
-            auto r = fsm.on_dial_started();
+            auto r   = fsm.on_dial_started();
             REQUIRE(fsm.state() == peer_fsm_state::handshaking);
             REQUIRE(r.action == fsm_action::none);
         }
@@ -241,14 +240,14 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
             // A duplicate connected event must NOT re-emit send_request on a
             // connection that is already handshaking.
             auto fsm = handshaking();
-            auto r = fsm.on_outbound_connected();
+            auto r   = fsm.on_outbound_connected();
             REQUIRE(fsm.state() == peer_fsm_state::handshaking);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_response(accepted, compatible) -> handshake_resolved/complete")
         {
             auto fsm = handshaking();
-            auto r = fsm.on_response(good_response(k_peer));
+            auto r   = fsm.on_response(good_response(k_peer));
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::complete);
             REQUIRE(r.outcome == handshake_outcome::accept_outbound);
@@ -256,7 +255,7 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
         SECTION("on_request -> simultaneous-connect complete/accept_inbound")
         {
             auto fsm = handshaking();
-            auto r = fsm.on_request(good_request(k_peer), false);
+            auto r   = fsm.on_request(good_request(k_peer), false);
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::complete);
             REQUIRE(r.outcome == handshake_outcome::accept_inbound);
@@ -264,14 +263,14 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
         SECTION("on_timeout -> abort, state back to not_connected")
         {
             auto fsm = handshaking();
-            auto r = fsm.on_timeout();
+            auto r   = fsm.on_timeout();
             REQUIRE(fsm.state() == peer_fsm_state::not_connected);
             REQUIRE(r.action == fsm_action::abort);
         }
         SECTION("on_torn_down -> not_connected/none")
         {
             auto fsm = handshaking();
-            auto r = fsm.on_torn_down();
+            auto r   = fsm.on_torn_down();
             REQUIRE(fsm.state() == peer_fsm_state::not_connected);
             REQUIRE(r.action == fsm_action::none);
         }
@@ -279,7 +278,8 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
 
     SECTION("handshake_resolved")
     {
-        auto resolved = [] {
+        auto resolved = []
+        {
             handshake_fsm fsm(config_for(k_self));
             fsm.on_dial_started();
             fsm.on_outbound_connected();
@@ -290,28 +290,28 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
         {
             // A stray dial on a resolved session must NOT reset it back to dialing.
             auto fsm = resolved();
-            auto r = fsm.on_dial_started();
+            auto r   = fsm.on_dial_started();
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_outbound_connected -> no-op, no send_request on resolved session")
         {
             auto fsm = resolved();
-            auto r = fsm.on_outbound_connected();
+            auto r   = fsm.on_outbound_connected();
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_response again -> none (latch holds, no second complete)")
         {
             auto fsm = resolved();
-            auto r = fsm.on_response(good_response(k_peer));
+            auto r   = fsm.on_response(good_response(k_peer));
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_request again -> send_response, no second complete")
         {
             auto fsm = resolved();
-            auto r = fsm.on_request(good_request(k_peer), false);
+            auto r   = fsm.on_request(good_request(k_peer), false);
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::send_response);
             REQUIRE(r.outcome == handshake_outcome::accept_inbound);
@@ -319,14 +319,14 @@ TEST_CASE("A: state x event matrix is total and defined", "[handshake]")
         SECTION("on_timeout -> none, stays resolved")
         {
             auto fsm = resolved();
-            auto r = fsm.on_timeout();
+            auto r   = fsm.on_timeout();
             REQUIRE(fsm.state() == peer_fsm_state::handshake_resolved);
             REQUIRE(r.action == fsm_action::none);
         }
         SECTION("on_torn_down -> not_connected/none, latch cleared")
         {
             auto fsm = resolved();
-            auto r = fsm.on_torn_down();
+            auto r   = fsm.on_torn_down();
             REQUIRE(fsm.state() == peer_fsm_state::not_connected);
             REQUIRE(r.action == fsm_action::none);
         }
@@ -418,21 +418,25 @@ TEST_CASE("E: version-compat matrix and protocol-gate ordering", "[handshake]")
 {
     // peer (major, minor) vs compat floor (1, 0); expected compatible? The
     // equal-minor case is the >= EDGE and must be compatible.
-    struct compat_case { std::uint8_t major; std::uint8_t minor; bool compatible; };
-    auto c = GENERATE(
-        compat_case{2, 0, true},   // peer major newer
-        compat_case{1, 1, true},   // equal major, peer minor newer
-        compat_case{1, 0, true},   // equal major, equal minor (the >= edge)
-        compat_case{0, 9, false},  // peer major older
-        compat_case{1, 0, true});  // duplicate boundary, kept for clarity of the edge
+    struct compat_case
+    {
+        std::uint8_t major;
+        std::uint8_t minor;
+        bool         compatible;
+    };
+    auto c = GENERATE(compat_case{2, 0, true},  // peer major newer
+                      compat_case{1, 1, true},  // equal major, peer minor newer
+                      compat_case{1, 0, true},  // equal major, equal minor (the >= edge)
+                      compat_case{0, 9, false}, // peer major older
+                      compat_case{1, 0, true}); // duplicate boundary, kept for clarity of the edge
 
     SECTION("E-compat on_request")
     {
         handshake_fsm fsm(config_for(k_self));
-        auto req = good_request(k_peer);
+        auto          req = good_request(k_peer);
         req.version_major = c.major;
         req.version_minor = c.minor;
-        auto r = fsm.on_request(req, true);
+        auto r            = fsm.on_request(req, true);
         if(c.compatible)
             REQUIRE(r.action == fsm_action::complete);
         else
@@ -448,10 +452,10 @@ TEST_CASE("E: version-compat matrix and protocol-gate ordering", "[handshake]")
         handshake_fsm fsm(config_for(k_self));
         fsm.on_dial_started();
         fsm.on_outbound_connected();
-        auto resp = good_response(k_peer);
+        auto resp          = good_response(k_peer);
         resp.version_major = c.major;
         resp.version_minor = c.minor;
-        auto r = fsm.on_response(resp);
+        auto r             = fsm.on_response(resp);
         if(c.compatible)
             REQUIRE(r.action == fsm_action::complete);
         else
@@ -464,9 +468,9 @@ TEST_CASE("E: version-compat matrix and protocol-gate ordering", "[handshake]")
     SECTION("E-gate: bad protocol on_request aborts, records the bad byte")
     {
         handshake_fsm fsm(config_for(k_self));
-        auto req = good_request(k_peer);
+        auto          req    = good_request(k_peer);
         req.protocol_version = k_protocol_version + 7;
-        auto r = fsm.on_request(req, true);
+        auto r               = fsm.on_request(req, true);
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_version);
         REQUIRE(fsm.state() == peer_fsm_state::not_connected);
@@ -478,9 +482,9 @@ TEST_CASE("E: version-compat matrix and protocol-gate ordering", "[handshake]")
         handshake_fsm fsm(config_for(k_self));
         fsm.on_dial_started();
         fsm.on_outbound_connected();
-        auto resp = good_response(k_peer);
+        auto resp             = good_response(k_peer);
         resp.protocol_version = k_protocol_version + 9;
-        auto r = fsm.on_response(resp);
+        auto r                = fsm.on_response(resp);
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_version);
         REQUIRE(fsm.last_seen_their_protocol_version() == k_protocol_version + 9);
@@ -493,9 +497,9 @@ TEST_CASE("E: version-compat matrix and protocol-gate ordering", "[handshake]")
         handshake_fsm fsm(config_for(k_self));
         fsm.on_dial_started();
         fsm.on_outbound_connected();
-        auto resp = good_response(k_peer);          // accepted, compatible
+        auto resp             = good_response(k_peer); // accepted, compatible
         resp.protocol_version = k_protocol_version + 1;
-        auto r = fsm.on_response(resp);
+        auto r                = fsm.on_response(resp);
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_version);
 
@@ -512,7 +516,7 @@ TEST_CASE("F: identity collision aborts reject_identity", "[handshake]")
     SECTION("on_request with peer id == self id")
     {
         handshake_fsm fsm(config_for(k_self));
-        auto r = fsm.on_request(good_request(k_self), true);
+        auto          r = fsm.on_request(good_request(k_self), true);
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_identity);
         REQUIRE(fsm.state() == peer_fsm_state::not_connected);
@@ -538,9 +542,9 @@ TEST_CASE("F: identity collision aborts reject_identity", "[handshake]")
         handshake_fsm fsm(config_for(k_self));
         fsm.on_dial_started();
         fsm.on_outbound_connected();
-        auto resp = good_response(k_peer);
+        auto resp   = good_response(k_peer);
         resp.status = handshake_status::identity_conflict;
-        auto r = fsm.on_response(resp);
+        auto r      = fsm.on_response(resp);
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_identity);
         REQUIRE(fsm.state() == peer_fsm_state::not_connected);
@@ -551,9 +555,9 @@ TEST_CASE("F: identity collision aborts reject_identity", "[handshake]")
         handshake_fsm fsm(config_for(k_self));
         fsm.on_dial_started();
         fsm.on_outbound_connected();
-        auto resp = good_response(k_peer);
+        auto resp   = good_response(k_peer);
         resp.status = handshake_status::version_incompatible;
-        auto r = fsm.on_response(resp);
+        auto r      = fsm.on_response(resp);
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_version);
         REQUIRE(fsm.state() == peer_fsm_state::not_connected);
@@ -564,9 +568,9 @@ TEST_CASE("F: identity collision aborts reject_identity", "[handshake]")
         handshake_fsm fsm(config_for(k_self));
         fsm.on_dial_started();
         fsm.on_outbound_connected();
-        auto resp = good_response(k_peer);
+        auto resp   = good_response(k_peer);
         resp.status = handshake_status::rejected_unknown;
-        auto r = fsm.on_response(resp);
+        auto r      = fsm.on_response(resp);
         REQUIRE(r.action == fsm_action::abort);
         REQUIRE(r.outcome == handshake_outcome::reject_version);
         REQUIRE(fsm.state() == peer_fsm_state::not_connected);
@@ -581,7 +585,8 @@ TEST_CASE("G: dedup arbitration is greater-wins, symmetric, and convergent", "[h
 {
     // Drive one FSM whose self is `mine` through a simultaneous connect against a
     // peer `theirs`, returning the dedup verdict on the completing inbound.
-    auto verdict_on_race = [](node_id mine, node_id theirs) {
+    auto verdict_on_race = [](node_id mine, node_id theirs)
+    {
         handshake_fsm fsm(config_for(mine));
         fsm.on_dial_started();
         fsm.on_outbound_connected();
@@ -604,17 +609,16 @@ TEST_CASE("G: dedup arbitration is greater-wins, symmetric, and convergent", "[h
     {
         // GENERATE over both orderings of an id pair; whichever side holds the
         // greater id must get keep_outbound and the other keep_inbound — mirrored.
-        auto pair = GENERATE(
-            std::pair<node_id, node_id>{id_with_tail(0x80), id_with_tail(0x01)},
-            std::pair<node_id, node_id>{id_with_tail(0x01), id_with_tail(0x80)},
-            // The unsigned high-bit edge: a leading 0xFF outranks a leading 0x01.
-            std::pair<node_id, node_id>{id_with_head(0xFF), id_with_head(0x01)},
-            std::pair<node_id, node_id>{id_with_head(0x01), id_with_head(0xFF)});
+        auto pair = GENERATE(std::pair<node_id, node_id>{id_with_tail(0x80), id_with_tail(0x01)},
+                             std::pair<node_id, node_id>{id_with_tail(0x01), id_with_tail(0x80)},
+                             // The unsigned high-bit edge: a leading 0xFF outranks a leading 0x01.
+                             std::pair<node_id, node_id>{id_with_head(0xFF), id_with_head(0x01)},
+                             std::pair<node_id, node_id>{id_with_head(0x01), id_with_head(0xFF)});
 
         node_id mine   = pair.first;
         node_id theirs = pair.second;
-        auto expected  = mine > theirs ? dedup_decision::keep_outbound
-                                       : dedup_decision::keep_inbound;
+        auto    expected =
+                mine > theirs ? dedup_decision::keep_outbound : dedup_decision::keep_inbound;
         REQUIRE(verdict_on_race(mine, theirs) == expected);
     }
 
@@ -623,8 +627,8 @@ TEST_CASE("G: dedup arbitration is greater-wins, symmetric, and convergent", "[h
         // A sanity pin that the array compare is unsigned-lexicographic: leading
         // 0xFF is strictly greater than leading 0x01.
         REQUIRE(id_with_head(0xFF) > id_with_head(0x01));
-        REQUIRE(verdict_on_race(id_with_head(0xFF), id_with_head(0x01))
-                == dedup_decision::keep_outbound);
+        REQUIRE(verdict_on_race(id_with_head(0xFF), id_with_head(0x01)) ==
+                dedup_decision::keep_outbound);
     }
 }
 
@@ -757,7 +761,7 @@ TEST_CASE("J: compile-time pins, node_id order, and zero-alloc steady step", "[h
         fsm.on_outbound_connected();
 
         plexus::testing::reset_alloc_count();
-        auto r = fsm.on_response(good_response(k_peer));
+        auto r     = fsm.on_response(good_response(k_peer));
         auto delta = plexus::testing::alloc_count();
 
         REQUIRE(r.action == fsm_action::complete);

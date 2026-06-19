@@ -35,7 +35,8 @@ namespace {
 // OpenSSL. Mirrors the cookie_secret oracle's fake_hmac.
 hmac_fn fake_hmac()
 {
-    return [](std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out)
+    return [](std::span<const std::byte> key, std::span<const std::byte> msg,
+              std::span<std::byte> out)
     {
         if(out.size() != 32)
             return false;
@@ -43,9 +44,11 @@ hmac_fn fake_hmac()
         {
             unsigned acc = 0x811c9dc5u + static_cast<unsigned>(i);
             for(std::size_t k = 0; k < key.size(); ++k)
-                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u + static_cast<unsigned>(k);
+                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u +
+                        static_cast<unsigned>(k);
             for(std::size_t m = 0; m < msg.size(); ++m)
-                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u + static_cast<unsigned>(m + i);
+                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u +
+                        static_cast<unsigned>(m + i);
             out[i] = static_cast<std::byte>(acc & 0xffu);
         }
         return true;
@@ -86,9 +89,9 @@ attach_facts facts_for(std::uint8_t key_seed, attach_role role)
 std::array<std::byte, 32> proof_for(std::span<const std::byte> material, const attach_facts &f)
 {
     static constexpr std::array<std::byte, 13> label{
-        std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'u'},
-        std::byte{'s'}, std::byte{'-'}, std::byte{'a'}, std::byte{'t'}, std::byte{'t'},
-        std::byte{'a'}, std::byte{'c'}, std::byte{'h'}};
+            std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'u'},
+            std::byte{'s'}, std::byte{'-'}, std::byte{'a'}, std::byte{'t'}, std::byte{'t'},
+            std::byte{'a'}, std::byte{'c'}, std::byte{'h'}};
     std::vector<std::byte> msg;
     msg.insert(msg.end(), label.begin(), label.end());
     msg.push_back(static_cast<std::byte>(f.role));
@@ -107,19 +110,19 @@ std::array<std::byte, 32> proof_for(std::span<const std::byte> material, const a
 TEST_CASE("io.attach_policy admits a matching key-id with a valid recomputed proof",
           "[io][attach_policy]")
 {
-    const auto material = material_of(0xA0);
+    const auto          material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
 
-    auto facts = facts_for(0x01, attach_role::initiator);
+    auto       facts = facts_for(0x01, attach_role::initiator);
     const auto proof = proof_for(material, facts);
-    facts.proof = proof;
+    facts.proof      = proof;
 
     REQUIRE(policy.decide(facts));
 }
 
 TEST_CASE("io.attach_policy refuses a wrong proof", "[io][attach_policy]")
 {
-    const auto material = material_of(0xA0);
+    const auto          material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
 
     auto facts = facts_for(0x01, attach_role::initiator);
@@ -132,12 +135,12 @@ TEST_CASE("io.attach_policy refuses a wrong proof", "[io][attach_policy]")
 
 TEST_CASE("io.attach_policy refuses an unknown / removed key-id", "[io][attach_policy]")
 {
-    const auto material = material_of(0xA0);
+    const auto          material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
 
-    auto facts = facts_for(0x09, attach_role::initiator); // no key 0x09 in the store
+    auto       facts = facts_for(0x09, attach_role::initiator); // no key 0x09 in the store
     const auto proof = proof_for(material, facts);
-    facts.proof = proof;
+    facts.proof      = proof;
 
     REQUIRE_FALSE(policy.decide(facts));
 }
@@ -145,24 +148,24 @@ TEST_CASE("io.attach_policy refuses an unknown / removed key-id", "[io][attach_p
 TEST_CASE("io.attach_policy dual single-key keystores each admit their own peer (rotation)",
           "[io][attach_policy]")
 {
-    const auto old_key = material_of(0xA0);
-    const auto new_key = material_of(0xB0);
-    psk_keystore_policy policy{
-        {{key_id_of(0x01), old_key}, {key_id_of(0x02), new_key}}, fake_hmac()};
+    const auto          old_key = material_of(0xA0);
+    const auto          new_key = material_of(0xB0);
+    psk_keystore_policy policy{{{key_id_of(0x01), old_key}, {key_id_of(0x02), new_key}},
+                               fake_hmac()};
 
-    auto old_facts = facts_for(0x01, attach_role::initiator);
-    auto old_proof = proof_for(old_key, old_facts);
+    auto old_facts  = facts_for(0x01, attach_role::initiator);
+    auto old_proof  = proof_for(old_key, old_facts);
     old_facts.proof = old_proof;
 
-    auto new_facts = facts_for(0x02, attach_role::responder);
-    auto new_proof = proof_for(new_key, new_facts);
+    auto new_facts  = facts_for(0x02, attach_role::responder);
+    auto new_proof  = proof_for(new_key, new_facts);
     new_facts.proof = new_proof;
 
     REQUIRE(policy.decide(old_facts));
     REQUIRE(policy.decide(new_facts));
 
     // A proof minted under the old key but presented with the new key-id refuses.
-    auto crossed = facts_for(0x02, attach_role::initiator);
+    auto crossed  = facts_for(0x02, attach_role::initiator);
     crossed.proof = old_proof;
     REQUIRE_FALSE(policy.decide(crossed));
 }
@@ -170,14 +173,14 @@ TEST_CASE("io.attach_policy dual single-key keystores each admit their own peer 
 TEST_CASE("io.attach_policy refuses a proof presented under the other role (reflection)",
           "[io][attach_policy]")
 {
-    const auto material = material_of(0xA0);
+    const auto          material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
 
     // Compute the proof for the initiator direction, then present it as a responder.
-    auto as_initiator = facts_for(0x01, attach_role::initiator);
-    const auto reflected = proof_for(material, as_initiator);
+    auto       as_initiator = facts_for(0x01, attach_role::initiator);
+    const auto reflected    = proof_for(material, as_initiator);
 
-    auto as_responder = facts_for(0x01, attach_role::responder);
+    auto as_responder  = facts_for(0x01, attach_role::responder);
     as_responder.proof = reflected;
 
     REQUIRE_FALSE(policy.decide(as_responder));
@@ -186,19 +189,20 @@ TEST_CASE("io.attach_policy refuses a proof presented under the other role (refl
 TEST_CASE("io.attach_policy keystore ctor throws on material below the minimum length",
           "[io][attach_policy]")
 {
-    REQUIRE_THROWS([&] {
-        psk_keystore_policy bad{{{key_id_of(0x01), material_of(0xA0, 15)}}, fake_hmac()};
-    }());
-    REQUIRE_NOTHROW([&] {
-        psk_keystore_policy ok{{{key_id_of(0x01), material_of(0xA0, 16)}}, fake_hmac()};
-    }());
+    REQUIRE_THROWS(
+            [&]
+            {
+                psk_keystore_policy bad{{{key_id_of(0x01), material_of(0xA0, 15)}}, fake_hmac()};
+            }());
+    REQUIRE_NOTHROW(
+            [&]
+            { psk_keystore_policy ok{{{key_id_of(0x01), material_of(0xA0, 16)}}, fake_hmac()}; }());
 }
 
-TEST_CASE("io.attach_policy empty keystore refuses everything (fail-closed)",
-          "[io][attach_policy]")
+TEST_CASE("io.attach_policy empty keystore refuses everything (fail-closed)", "[io][attach_policy]")
 {
-    psk_keystore_policy policy{{}, fake_hmac()};
-    auto facts = facts_for(0x01, attach_role::initiator);
+    psk_keystore_policy       policy{{}, fake_hmac()};
+    auto                      facts = facts_for(0x01, attach_role::initiator);
     std::array<std::byte, 32> proof{};
     facts.proof = proof;
     REQUIRE_FALSE(policy.decide(facts));
