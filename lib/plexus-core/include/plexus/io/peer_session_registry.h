@@ -10,6 +10,7 @@
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/session_build_context.h"
+#include "plexus/io/detail/peer_session_build.h"
 
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
@@ -28,22 +29,19 @@
 
 namespace plexus::io {
 
-// The multi-peer connection map: a node_id -> slot table where each slot bundles,
-// in a deliberate member ORDER, the per-peer state a session is built from. The
-// order IS the lifetime discipline: (1) the peer_context DATA record (the plan's
-// driver-free value bundle), (2) the reconnect driver SIBLING (owned next to the
-// record, NOT inside it — the record stays a pure value), then (3) the
-// std::optional<peer_session> last. Because the optional session is declared last
-// it is destroyed FIRST, so both the record (whose channel/epoch the session
-// borrows) and the driver outlive every incarnation built from them — the
-// cross-incarnation monotonicity and no-use-after-free are structural.
+// over-limit: one cohesive multi-peer connection map; the public query/lifecycle verbs all
+// reach the shared m_slots ownership table + the borrowed m_build context, so splitting the
+// surface scatters that shared state (the session-build and seam-wiring helpers are extracted
+// to detail/peer_session_build.h).
 //
-// On a dial success the engine hands the live channel to this registry, which
-// stores it in the slot's record and builds the session from that record by one
-// reference, then start()s it. Each slot's driver re-dials ONLY its own slot
-// (its on_redial tears that slot's session down; the next on_dialed rebuilds it);
-// the registry never iterates the map to reconnect the set — set-wide reconnect is
-// a deferred concern, and the per-slot seam is kept minimal.
+// The multi-peer connection map: a node_id -> slot table where each slot bundles, in a
+// deliberate member ORDER, the per-peer state a session is built from. The order IS the
+// lifetime discipline (record, then driver sibling, then the optional session last): the
+// session is destroyed FIRST, so the record (whose channel/epoch it borrows) and the driver
+// outlive every incarnation — cross-incarnation monotonicity and no-use-after-free are
+// structural. Each slot's driver re-dials ONLY its own slot; the registry never iterates the
+// map to reconnect the set (set-wide reconnect is a deferred concern). The session-build and
+// seam-wiring helpers are extracted to detail/peer_session_build.h (relocation by friend).
 template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class peer_session_registry
@@ -59,10 +57,8 @@ public:
     {
     }
 
-    // Create the slot (record + its driver sibling) if absent. The driver is
-    // constructed against the engine's transport, the slot's endpoint and the
-    // node-wide redial_config; its on_redial tears down only this slot. Idempotent —
-    // a second ensure_slot for a known id is a no-op.
+    // Create the slot (record + its driver sibling) if absent. Idempotent — a second
+    // ensure_slot for a known id is a no-op.
     void ensure_slot(const node_id &id, const endpoint &ep, const std::string &node_name)
     {
         if(m_slots.find(id) != m_slots.end())
@@ -71,38 +67,31 @@ public:
             return m_build.logger.warn(
                     "plexus: dial endpoint already claimed by another peer — slot not created");
         auto slot = std::make_unique<slot_block>(m_transport, m_build, id, ep, node_name);
-        wire_redial(*slot, id);
-        wire_dead(*slot, id);
+        detail::wire_redial(*this, *slot, id);
+        detail::wire_dead(*this, *slot, id);
         m_slots.emplace(id, std::move(slot));
     }
 
-    // The shared dial-success tail (BOTH the lazy and eager knobs converge here): the
-    // just-dialed channel is correlated to its slot BY THE ENDPOINT it dialed (the
-    // transport hands that back) — NOT by arrival order, which a real async transport
-    // reorders. Store it into the slot's record and build the session from the record
-    // by one reference, then start() it. A completion for an endpoint with no live
-    // slot (a torn-down peer) is dropped.
+    // The shared dial-success tail: the just-dialed channel is correlated to its slot BY THE
+    // ENDPOINT it dialed (the transport hands that back) — NOT by arrival order, which a real
+    // async transport reorders. A completion for an endpoint with no live slot is dropped.
     void build_session_for_endpoint(const endpoint &ep, std::unique_ptr<channel_type> channel)
     {
         for(auto &[id, slot] : m_slots)
             if(slot->record.dial_endpoint == ep)
             {
-                // The dial settled into a channel: re-open the driver's in-flight gate
-                // so a subsequent drop can re-dial, and a redundant reach() during the
-                // dial window already became a no-op (the double-dial UAF guard).
+                // Re-open the driver's in-flight gate so a subsequent drop can re-dial (a
+                // redundant reach() during the dial window was a no-op — the double-dial guard).
                 slot->driver.mark_dial_settled();
                 return build_into(*slot, std::move(channel), false);
             }
     }
 
-    // The inbound-bootstrap tail: a peer dialed US. We build an accepted session on
-    // a slot keyed by a synthetic inbound identity (the peer's real node_id arrives
-    // in the handshake; inbound slots are keyed by arrival order for now). Each
-    // accepted peer gets a DISTINCT node_name derived from its synthetic id, so two
-    // concurrently-accepted peers never share a forwarder refcount/demand key. The
-    // slot is inserted into the map BEFORE the session is built and started, so any
-    // wiring that looks the slot up by id finds it. No driver re-dials an accepted
-    // slot — the dialer owns the redial.
+    // The inbound-bootstrap tail: a peer dialed US. Build an accepted session on a slot keyed
+    // by a synthetic inbound identity. Each accepted peer gets a DISTINCT node_name so two
+    // concurrently-accepted peers never share a forwarder refcount/demand key. The slot is
+    // inserted BEFORE the session is built so any by-id wiring lookup finds it. No driver
+    // re-dials an accepted slot — the dialer owns the redial.
     template<typename PreBuild = std::nullptr_t>
     node_id accept_session(std::unique_ptr<channel_type> channel, PreBuild &&pre_build = nullptr)
     {
@@ -122,11 +111,7 @@ public:
     }
 
     // The peer node_id of the slot that dialed this endpoint, or absence if none claims it.
-    // The dial-success tail correlates a freshly minted channel to its slot by the endpoint
-    // it dialed; this surfaces that same correlation at the channel-mint point so a per-
-    // channel capture can carry the right join key. A reverse scan over the slot map (the
-    // map is small — one entry per known peer — and this is the cold mint path, not a hot
-    // per-frame lookup).
+    // A reverse scan over the small slot map (the cold mint path, not a hot per-frame lookup).
     std::optional<node_id> id_for_endpoint(const endpoint &ep) const
     {
         for(const auto &[id, slot] : m_slots)
@@ -157,9 +142,8 @@ public:
     }
 
     // The session for a peer keyed by the forwarder node_name (the coordinator keys its
-    // companion lanes by node_name, not node_id). The same-host receive companion routes a
-    // drained framed message to this session's inject_receive. nullptr for an unknown name or
-    // a slot whose session is not built — a drained frame for a vanished peer is then dropped.
+    // companion lanes by node_name). nullptr for an unknown name or an unbuilt session — a
+    // drained frame for a vanished peer is then dropped.
     session_type *session_for_name(std::string_view node_name)
     {
         for(auto &[id, slot] : m_slots)
@@ -168,9 +152,8 @@ public:
         return nullptr;
     }
 
-    // The same-host verdict for a peer keyed by the forwarder node_name (the
-    // coordinator's verdict-read on a demand edge). Fail-closed: an unknown name, or a
-    // slot whose session is not yet built, is NOT same-host (no ring acquire).
+    // The same-host verdict for a peer keyed by the forwarder node_name. Fail-closed: an
+    // unknown name or an unbuilt session is NOT same-host (no ring acquire).
     [[nodiscard]] bool same_host_for(std::string_view node_name) const
     {
         for(const auto &[id, slot] : m_slots)
@@ -179,10 +162,8 @@ public:
         return false;
     }
 
-    // Iterate every CONNECTED peer (a slot with a complete session), calling
-    // fn(id, session). It iterates the LIVE slot map only and skips an
-    // incomplete/torn-down slot, so a tick-driven emit (the keepalive heartbeat) never
-    // touches a dead session — the lifetime invariant. Mirrors is_connected's slot check.
+    // Iterate every CONNECTED peer (a slot with a complete session), skipping an
+    // incomplete/torn-down slot, so a tick-driven emit never touches a dead session.
     template<typename Fn>
     void for_each_connected(Fn &&fn)
     {
@@ -197,18 +178,17 @@ public:
         return m_slots.at(id)->driver.attempt_count();
     }
 
-    // A peer is dead once its driver crossed a surrender bound (the per-slot flag
-    // wire_dead latches — the slot is never erased there: that is a use-after-free).
+    // A peer is dead once its driver crossed a surrender bound (the per-slot flag wire_dead
+    // latches — the slot is never erased there: that would be a use-after-free).
     bool is_dead(const node_id &id) const
     {
         auto it = m_slots.find(id);
         return it != m_slots.end() && it->second->dead;
     }
 
-    // Route a per-endpoint dial failure to the slot that dialed it: many slots share
-    // one transport, so the failure is correlated by endpoint, NOT by a per-driver
-    // transport callback (which they would clobber). A failure for an unknown
-    // endpoint (no live slot) is a no-op.
+    // Route a per-endpoint dial failure to the slot that dialed it: many slots share one
+    // transport, so the failure is correlated by endpoint, NOT by a per-driver transport
+    // callback (which they would clobber). A failure for an unknown endpoint is a no-op.
     void notify_dial_failed(const endpoint &ep)
     {
         for(auto &[id, slot] : m_slots)
@@ -217,8 +197,8 @@ public:
     }
 
 private:
-    // The per-peer slot: the member order encodes the outlive discipline (record,
-    // then driver sibling, then the session built from both).
+    // The per-peer slot: the member order encodes the outlive discipline (record, then driver
+    // sibling, then the session built from both).
     struct slot_block
     {
         slot_block(Transport &transport, session_build_context<Policy> &build, const node_id &id,
@@ -244,170 +224,38 @@ private:
                              m_build.handshake_timeout, m_build.messages, m_build.procedures,
                              inbound, m_build.logger);
         if(inbound)
-            wire_inbound_drop(slot, slot.record.peer_id);
+            detail::wire_inbound_drop(*this, slot, slot.record.peer_id);
         else
-            wire_drop(slot, slot.record.peer_id);
-        wire_observer(slot);
-        wire_message_route(slot);
-        wire_object_route(slot);
-        wire_security(slot);
+            detail::wire_drop(*this, slot, slot.record.peer_id);
+        detail::wire_observer(*this, slot);
+        detail::wire_message_route(*this, slot);
+        detail::wire_object_route(*this, slot);
+        detail::wire_security(*this, slot);
         slot.session->start();
     }
 
-    // Route a dialed slot's transport drop to its OWN driver, BY id through the
-    // registry (the session must not hold the driver directly). Set ONLY on dialed
-    // slots — an accepted slot owns no redial, so routing its drop would advance a
-    // driver that never dials.
-    void wire_drop(slot_block &slot, const node_id &id)
-    {
-        slot.session->on_transport_drop(
-                [this, id]
-                {
-                    auto it = m_slots.find(id);
-                    if(it != m_slots.end())
-                        it->second->driver.on_channel_dropped();
-                });
-    }
+    template<typename R, typename S>
+    friend void detail::wire_drop(R &, S &, const node_id &);
+    template<typename R, typename S>
+    friend void detail::wire_inbound_drop(R &, S &, const node_id &);
+    template<typename R, typename S>
+    friend void detail::wire_observer(R &, S &);
+    template<typename R, typename S>
+    friend void detail::wire_message_route(R &, S &);
+    template<typename R, typename S>
+    friend void detail::wire_object_route(R &, S &);
+    template<typename R, typename S>
+    friend void detail::wire_security(R &, S &);
+    template<typename R, typename S>
+    friend void detail::wire_redial(R &, S &, const node_id &);
+    template<typename R, typename S>
+    friend void detail::wire_dead(R &, S &, const node_id &);
+    template<typename R, typename S>
+    friend void detail::fire_dead(R &, S &, const node_id &);
 
-    // Route an accepted slot's transport drop to a plain tear_down — NO redial (the
-    // dialer owns reconnection; an accepted peer that drops simply disconnects). The
-    // tear_down fires disconnected through the session's was-complete guard, so an
-    // accepted peer fires connected/disconnected/ready but never reconnect/dead.
-    void wire_inbound_drop(slot_block &slot, const node_id &id)
-    {
-        slot.session->on_transport_drop(
-                [this, id]
-                {
-                    auto it = m_slots.find(id);
-                    if(it != m_slots.end() && it->second->session)
-                        it->second->session->tear_down();
-                });
-    }
-
-    // Route this slot's session events up to the engine through the node-shared build
-    // context: the lifecycle edge and the presence stamp ride their typed sinks (the
-    // engine arms its monitor off them), and the security edge rides the one shared
-    // observer. Set for BOTH inbound and dialed slots (an accepted peer still fires
-    // connected/disconnected/ready and may receive a heartbeat). Because build_into
-    // re-runs on every reconnect rebuild this re-threads each incarnation, so a single
-    // installed observer survives reconnect; the security forward goes straight into the
-    // engine's posted fan-out adapter, so it stays posted, never inline.
-    void wire_observer(slot_block &slot)
-    {
-        slot.session->on_lifecycle(
-                [this](const lifecycle_event &ev)
-                {
-                    if(m_build.on_lifecycle)
-                        m_build.on_lifecycle(ev);
-                });
-        slot.session->on_stamp_seen(
-                [this](const node_id &id)
-                {
-                    if(m_build.on_stamp_seen)
-                        m_build.on_stamp_seen(id);
-                });
-        slot.session->on_security([this](const security_event &ev)
-                                  { m_build.session_observer.on_security(ev); });
-    }
-
-    // Thread the node-shared receive route into this slot's session from the build
-    // context, set for both inbound and dialed slots. Because build_into re-runs on
-    // every reconnect rebuild, the route is re-threaded each time — this is the whole
-    // point: the per-session receive seam is lost on a rebuild, the shared route is not.
-    // The forward re-checks the sink is set, mirroring wire_lifecycle.
-    void wire_message_route(slot_block &slot)
-    {
-        slot.session->on_message_route(
-                [this](std::string_view fqn, std::span<const std::byte> data,
-                       const message_info &mi)
-                {
-                    if(m_build.on_message)
-                        m_build.on_message(fqn, data, mi);
-                });
-    }
-
-    // Thread the node-shared object-lane route into this slot's session, re-threaded on
-    // every reconnect rebuild like wire_message_route. The forward re-checks the sink.
-    void wire_object_route(slot_block &slot)
-    {
-        slot.session->on_object_route(
-                [this](std::string_view fqn, const object_carrier &c)
-                {
-                    if(m_build.on_object)
-                        m_build.on_object(fqn, c);
-                });
-    }
-
-    // Borrow the node-level security seam into this slot's session (one per node) and
-    // thread the per-session AEAD decorator-install hook from the build-context factory
-    // (capturing THIS slot's just-built channel as the lower channel). The session's
-    // security EVENT leg is wired in wire_observer; this installs the channel-level seam.
-    // The seam pointer, the build context and the slot's channel all outlive every
-    // incarnation built from the slot, so the captured channel reference stays valid for
-    // the hook's single fire. When no factory is set the hook is left absent, so a
-    // security-engaged accept over a plaintext channel is refused fail-closed rather than
-    // proceeding in cleartext.
-    void wire_security(slot_block &slot)
-    {
-        slot.session->set_security_seam(&m_build.install_security);
-        if(m_build.install_security_factory)
-        {
-            channel_type &lower = *slot.record.channel;
-            slot.session->on_install_security([this, &lower](const security_negotiation &neg)
-                                              { m_build.install_security_factory(lower, neg); });
-        }
-    }
-
-    // Per-slot redial routing: the driver tears down THIS slot's dead session before
-    // the fresh channel lands (the next on_dialed, correlated by endpoint, rebuilds
-    // it). It tears down only this slot — the registry never loops the map to
-    // reconnect the set.
-    void wire_redial(slot_block &slot, const node_id &id)
-    {
-        slot.driver.on_redial(
-                [this, id]
-                {
-                    auto it = m_slots.find(id);
-                    if(it != m_slots.end() && it->second->session)
-                        it->second->session->tear_down();
-                });
-    }
-
-    // Latch a per-slot dead flag when the driver crosses a surrender bound. on_dead
-    // fires from the driver's own report_dead stack frame while it lives in the slot,
-    // so the slot is MARKED, never erased here — erasing it would free the driver
-    // mid-callback (a use-after-free). is_dead exposes the flag.
-    void wire_dead(slot_block &slot, const node_id &id)
-    {
-        slot.driver.on_dead(
-                [this, id]
-                {
-                    auto it = m_slots.find(id);
-                    if(it == m_slots.end())
-                        return;
-                    it->second->dead = true;
-                    fire_dead(*it->second, id);
-                });
-    }
-
-    // Fire the dead edge at the surrender latch (the session may already be torn
-    // down, so it cannot own this edge — the slot does). The kind is dialed: drivers
-    // are wired only on dialed slots (build_into gates wire_drop on !inbound and
-    // accept_session constructs no driver), so on_dead structurally never fires for
-    // an accepted slot — no inbound dead path exists. The slot is MARKED dead, never
-    // erased here (erasing would free the driver mid-callback — a use-after-free).
-    void fire_dead(slot_block &slot, const node_id &id)
-    {
-        if(!m_build.on_lifecycle)
-            return;
-        m_build.on_lifecycle(lifecycle_event{lifecycle_edge::dead, id, slot.record.node_name,
-                                             peer_kind::dialed, handshake_outcome::none});
-    }
-
-    // Mint a fresh synthetic inbound identity. The counter is 64-bit and packed into
-    // the id's low bytes, so the synthetic-id space is 2^64 wide — it does not wrap
-    // after 256 accepts (a uint8 counter aliased a live slot's id, and the colliding
-    // map insert then dropped the freshly-started session and its live channel).
+    // Mint a fresh synthetic inbound identity. The counter is 64-bit and packed into the id's
+    // low bytes, so the synthetic-id space is 2^64 wide — it does not wrap after 256 accepts
+    // (a uint8 counter aliased a live slot's id, dropping a freshly-started session).
     node_id next_inbound_id()
     {
         const std::uint64_t n = m_next_inbound++;
@@ -417,10 +265,9 @@ private:
         return id;
     }
 
-    // The dial→slot correlation key is the endpoint (the transport hands back the
-    // endpoint a channel dialed), which is unambiguous only if at most one live slot
-    // claims an endpoint: a second slot sharing it would steal the first's dial
-    // completion. Reject the duplicate rather than mis-route silently.
+    // The dial→slot correlation key is the endpoint, unambiguous only if at most one live slot
+    // claims it: a second slot sharing it would steal the first's dial completion. Reject the
+    // duplicate rather than mis-route silently.
     bool endpoint_claimed(const node_id &id, const endpoint &ep) const
     {
         for(const auto &[other, slot] : m_slots)

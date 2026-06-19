@@ -1,106 +1,28 @@
 #ifndef HPP_GUARD_PLEXUS_IO_HANDSHAKE_FSM_H
 #define HPP_GUARD_PLEXUS_IO_HANDSHAKE_FSM_H
 
-#include "plexus/io/security/attach_policy.h"
+#include "plexus/io/handshake_protocol.h"
 #include "plexus/io/security/attach_facts.h"
+#include "plexus/io/security/attach_policy.h"
 #include "plexus/io/shm/same_host.h"
 
 #include "plexus/wire/handshake.h"
 
 #include "plexus/node_id.h"
 
-#include <array>
 #include <cstdint>
 #include <optional>
 
 namespace plexus::io {
 
-// State the FSM advances through during a handshake. There is no `connected`
-// enumerator: `connected` is bridge-owned, not an FSM state. handshake_resolved
-// is the terminal state — the precondition the bridge composes onto.
-enum class peer_fsm_state : std::uint8_t
-{
-    not_connected,
-    dialing,
-    handshaking,
-    handshake_resolved
-};
-
-// Action the bridge must perform in response to an FSM step. The FSM is pure: it
-// touches no socket, posts to no strand, schedules no timer, and moves no bytes.
-// send_request / send_response name the two directions' intent; the bridge later
-// encodes the matching frame.
-enum class fsm_action : std::uint8_t
-{
-    none,
-    send_request,
-    send_response,
-    complete,
-    retry,
-    abort
-};
-
-// Outcome of a handshake step. Drives bridge-side bookkeeping when a step accepts
-// or rejects. reject_identity is the equal-node_id collision; reject_version
-// covers both the exact-protocol gate and the compat-window failure.
-enum class handshake_outcome : std::uint8_t
-{
-    none,
-    accept_outbound,
-    accept_inbound,
-    reject_version,
-    reject_identity,
-    reject_unauthorized
-};
-
-// Dedup arbitration verdict, populated only when a step completes with a pending
-// counter-direction connection. The bridge owns the channel handles and drops the
-// loser's; the FSM returns only the verdict.
-enum class dedup_decision : std::uint8_t
-{
-    none,
-    keep_outbound,
-    keep_inbound
-};
-
-// Step result: the FSM's pure-data channel back to the bridge. No payload bytes —
-// the codec is a later block, so "send_request"/"send_response" name intent only.
-struct fsm_step_result
-{
-    fsm_action        action{fsm_action::none};
-    handshake_outcome outcome{handshake_outcome::none};
-    dedup_decision    dedup{dedup_decision::none};
-};
-
-// Static configuration for one handshake. node_id and the four self-version fields
-// are required with NO default — a zeroed default would silently ship a real,
-// comparable identity, so the categories stay distinct (required != default).
+// over-limit: one transition table over a single handshake transcript; the on_* events
+// and resolve helpers all advance the shared m_state/m_peer_id/m_inbound_pending/
+// m_complete_emitted transcript, so splitting them scatters that shared state.
 //
-// local_fingerprint is the node's own same-host fingerprint, computed ONCE into the
-// node's owned state (machine_fingerprint, the compiled backend read) and carried
-// here so the FSM stamps it onto the outbound request/response. Unlike self_id it is
-// required-WITH-default: a null (zero) fingerprint is the meaningful "no co-location
-// signal advertised" value — a node with no shared-memory backend leaves it null and
-// is correctly never same-host, so the default IS a valid advertisement, not a
-// stand-in for absence.
-// attach_policy is the node-level admission gate, borrowed (the node owns it for the
-// FSM's lifetime). A null policy is accept-any — the explicit no-PSK default that
-// preserves the pre-attach-gate behavior.
-struct handshake_fsm_config
-{
-    node_id                        self_id;
-    std::uint8_t                   version_major;
-    std::uint8_t                   version_minor;
-    std::uint8_t                   compatible_version_major;
-    std::uint8_t                   compatible_version_minor;
-    shm::host_fingerprint          local_fingerprint{};
-    const security::attach_policy *attach_policy{nullptr};
-};
-
 // Pure, sans-IO handshake state machine. Holds no asio / transport / logger types
 // and moves no bytes — fully testable in isolation. The bridge feeds it via the
-// seven on_* events and reacts to the returned fsm_step_result. The FSM does NOT
-// log: it returns abort/reject and the bridge logs at action-execution time.
+// on_* events and reacts to the returned fsm_step_result. The FSM does NOT log: it
+// returns abort/reject and the bridge logs at action-execution time.
 class handshake_fsm
 {
 public:
@@ -109,9 +31,8 @@ public:
     {
     }
 
-    // An outbound dial has begun. Subsequent on_timeout returns retry. Guarded to
-    // the pre-handshake states: a stray dial once handshaking or resolved must NOT
-    // regress an established or completed session back to dialing.
+    // Guarded to the pre-handshake states: a stray dial once handshaking or resolved
+    // must NOT regress an established session.
     fsm_step_result on_dial_started() noexcept
     {
         if(m_state == peer_fsm_state::not_connected || m_state == peer_fsm_state::dialing)
@@ -119,9 +40,8 @@ public:
         return {};
     }
 
-    // The dial succeeded; we own an outbound connection. Emit send_request and
-    // wait for the response to close the loop. Guarded so a stray connected event
-    // on an already-handshaking or resolved session does not re-emit send_request.
+    // Guarded so a stray connected event on an already-handshaking session does not
+    // re-emit send_request.
     fsm_step_result on_outbound_connected() noexcept
     {
         if(m_state == peer_fsm_state::handshaking || m_state == peer_fsm_state::handshake_resolved)
@@ -130,9 +50,9 @@ public:
         return {.action = fsm_action::send_request};
     }
 
-    // Inbound handshake_request. inbound_is_bootstrap marks a fresh inbound with
-    // no counter-direction dial in flight (the common path under demand-driven
-    // lazy dial): it completes inbound-only rather than stranding the session.
+    // Inbound handshake_request. inbound_is_bootstrap marks a fresh inbound with no
+    // counter-direction dial in flight (the common path under demand-driven lazy
+    // dial): it completes inbound-only rather than stranding the session.
     fsm_step_result on_request(const wire::handshake_request &req, bool inbound_is_bootstrap,
                                const security::attach_facts &facts = {}) noexcept
     {
@@ -144,8 +64,6 @@ public:
         return resolve_inbound(inbound_is_bootstrap);
     }
 
-    // Inbound handshake_response. Compatible + accepted completes accept_outbound;
-    // a rejected status or incompatible version aborts.
     fsm_step_result on_response(const wire::handshake_response &resp,
                                 const security::attach_facts   &facts = {}) noexcept
     {
@@ -161,7 +79,6 @@ public:
         return resolve_outbound();
     }
 
-    // The handshake timer fired. handshaking → abort; dialing → retry; else none.
     fsm_step_result on_timeout() noexcept
     {
         if(m_state == peer_fsm_state::handshaking)
@@ -175,10 +92,8 @@ public:
     }
 
     // A crypto-handshake transport completed its own handshake (mutual cert verify
-    // already passed at the crypto layer), so the session resolves with no plexus
-    // version/identity wire round-trip. Skips all validation and dedup — the crypto
-    // handshake and its in-band negotiation already gated those. Latched once via
-    // the shared m_complete_emitted; on_torn_down resets it for a fresh cycle.
+    // already passed), so the session resolves with no plexus wire round-trip. Latched
+    // once via m_complete_emitted; on_torn_down resets it for a fresh cycle.
     fsm_step_result on_external_complete() noexcept
     {
         if(m_complete_emitted)
@@ -188,8 +103,6 @@ public:
         return {.action = fsm_action::complete, .outcome = handshake_outcome::accept_outbound};
     }
 
-    // The bridge tore the peer down. Reset to a clean cycle: clear the latch and
-    // the inbound-pending flag so a fresh handshake can complete again.
     fsm_step_result on_torn_down() noexcept
     {
         m_state            = peer_fsm_state::not_connected;
@@ -205,22 +118,19 @@ public:
     }
 
     // The peer's advertised same-host fingerprint, learned at the last validated
-    // request/response. Null (zero) until a frame is validated, and null thereafter
-    // if the peer advertised nothing — exactly the conservative not-same-host value
-    // the session's is_same_host compare null-guards on.
+    // request/response. Null (zero) until a frame is validated, and the conservative
+    // not-same-host value the session's is_same_host compare null-guards on.
     shm::host_fingerprint last_seen_peer_fingerprint() const noexcept { return m_peer_fingerprint; }
     shm::host_fingerprint local_fingerprint() const noexcept { return m_cfg.local_fingerprint; }
 
-    // The node-level admission gate this FSM was configured with (null = accept-any).
-    // The bridge reads it to decide whether an attach is security-engaged: a null gate
-    // means no PSK posture, so no facts assembly, no decorator install, no event.
+    // The node-level admission gate (null = accept-any). The bridge reads it to decide
+    // whether an attach is security-engaged.
     const security::attach_policy *attach_policy() const noexcept { return m_cfg.attach_policy; }
 
 private:
-    // The exact-match protocol gate runs ahead of every compat / status check, and
-    // the identity-collision gate catches an equal node_id at validation so dedup
-    // never sees the equal case. Returns a populated abort result when a gate trips;
-    // captures the learned peer id for the dedup arbitration on the accept path.
+    // The exact-match protocol gate runs ahead of every compat / status check, and the
+    // identity-collision gate catches an equal node_id at validation so dedup never sees
+    // the equal case. Captures the learned peer id for the dedup arbitration.
     std::optional<fsm_step_result> validate(std::uint8_t   peer_protocol_version,
                                             const node_id &peer_id, std::uint64_t peer_fingerprint,
                                             const security::attach_facts &facts = {}) noexcept
@@ -236,10 +146,9 @@ private:
         return std::nullopt;
     }
 
-    // A fresh inbound bootstrap completes inbound-only (no counter-dial to
-    // arbitrate). A mid-dial inbound with an outbound in flight is the second
-    // arrival of a simultaneous connect: arbitrate and complete once. Otherwise
-    // send the accept response and await the response side.
+    // A fresh inbound bootstrap completes inbound-only (no counter-dial to arbitrate).
+    // A mid-dial inbound with an outbound in flight is the second arrival of a
+    // simultaneous connect: arbitrate and complete once.
     fsm_step_result resolve_inbound(bool inbound_is_bootstrap) noexcept
     {
         m_inbound_pending = true;
@@ -253,9 +162,8 @@ private:
     }
 
     // The response that closes a single-direction dial, or the second arrival of a
-    // simultaneous connect after on_request already completed (the latch no-ops it).
-    // A response arriving with no outbound request ever sent (state not_connected /
-    // dialing) is unsolicited: ignore it rather than fabricate a completion.
+    // simultaneous connect after on_request already completed (the latch no-ops it). A
+    // response with no outbound request ever sent is unsolicited: ignore it.
     fsm_step_result resolve_outbound() noexcept
     {
         if(m_state != peer_fsm_state::handshaking && m_state != peer_fsm_state::handshake_resolved)
@@ -275,7 +183,6 @@ private:
         return m_state == peer_fsm_state::handshaking ||
                 m_state == peer_fsm_state::handshake_resolved;
     }
-
     fsm_step_result complete_inbound(dedup_decision dedup) noexcept
     {
         m_state            = peer_fsm_state::handshake_resolved;
@@ -290,9 +197,9 @@ private:
         return {.action = fsm_action::send_response, .outcome = handshake_outcome::accept_inbound};
     }
 
-    // Greater node_id keeps its outbound; the loser keeps the inbound it accepted.
-    // Both sides compute the same surviving connection (the equal case is rejected
-    // at validation, so the comparison is strict).
+    // Greater node_id keeps its outbound; the loser keeps the inbound it accepted. Both
+    // sides compute the same surviving connection (the equal case is rejected at
+    // validation, so the comparison is strict).
     dedup_decision arbitrate_dedup() const noexcept
     {
         return m_cfg.self_id > m_peer_id ? dedup_decision::keep_outbound
@@ -306,22 +213,22 @@ private:
                  peer_minor >= m_cfg.compatible_version_minor);
     }
 
+    fsm_step_result abort_result(handshake_outcome reason) noexcept
+    {
+        m_state = peer_fsm_state::not_connected;
+        return {.action = fsm_action::abort, .outcome = reason};
+    }
     fsm_step_result reject_version_result() noexcept
     {
-        m_state = peer_fsm_state::not_connected;
-        return {.action = fsm_action::abort, .outcome = handshake_outcome::reject_version};
+        return abort_result(handshake_outcome::reject_version);
     }
-
     fsm_step_result identity_conflict_result() noexcept
     {
-        m_state = peer_fsm_state::not_connected;
-        return {.action = fsm_action::abort, .outcome = handshake_outcome::reject_identity};
+        return abort_result(handshake_outcome::reject_identity);
     }
-
     fsm_step_result reject_unauthorized_result() noexcept
     {
-        m_state = peer_fsm_state::not_connected;
-        return {.action = fsm_action::abort, .outcome = handshake_outcome::reject_unauthorized};
+        return abort_result(handshake_outcome::reject_unauthorized);
     }
 
     handshake_fsm_config  m_cfg;
@@ -330,9 +237,9 @@ private:
     peer_fsm_state        m_state{peer_fsm_state::not_connected};
     std::uint8_t          m_last_seen_their_protocol_version{0};
     bool                  m_inbound_pending{false};
-    // Latches true once a step has emitted complete. The matching second arrival
-    // of a simultaneous connect skips re-emitting complete so the bridge installs
-    // forwarders exactly once; on_torn_down clears it for a fresh cycle.
+    // Latches true once a step has emitted complete. The matching second arrival of a
+    // simultaneous connect skips re-emitting complete so the bridge installs forwarders
+    // exactly once; on_torn_down clears it for a fresh cycle.
     bool m_complete_emitted{false};
 };
 
