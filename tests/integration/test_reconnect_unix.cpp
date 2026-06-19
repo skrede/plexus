@@ -44,26 +44,30 @@
 #include <string_view>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 using pio::handshake_fsm_config;
 using pio::reconnect_config;
-using session = pio::peer_session<pasio::unix_policy>;
+using session       = pio::peer_session<pasio::unix_policy>;
 using msg_forwarder = pio::message_forwarder<pasio::unix_policy>;
 using rpc_forwarder = pio::procedure_forwarder<pasio::unix_policy>;
-using driver_t = pio::reconnect<pasio::unix_policy, pasio::unix_transport, std::chrono::steady_clock>;
+using driver_t =
+        pio::reconnect<pasio::unix_policy, pasio::unix_transport, std::chrono::steady_clock>;
 
 namespace {
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu;
 
 handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 // A per-instance owner-only temp directory + a SHORT socket path within it.
@@ -74,10 +78,10 @@ struct temp_sock
 
     temp_sock()
     {
-        char tmpl[] = "/tmp/pxu-XXXXXX";
-        const char *made = ::mkdtemp(tmpl);
-        dir = made ? made : "";
-        path = dir + "/s";
+        char        tmpl[] = "/tmp/pxu-XXXXXX";
+        const char *made   = ::mkdtemp(tmpl);
+        dir                = made ? made : "";
+        path               = dir + "/s";
     }
 
     ~temp_sock()
@@ -98,8 +102,8 @@ struct temp_sock
 // channels before the io_context.
 struct unix_reconnect
 {
-    temp_sock sock;
-    ::asio::io_context io;
+    temp_sock             sock;
+    ::asio::io_context    io;
     pasio::unix_transport transport{io};
 
     msg_forwarder req_messages{};
@@ -109,9 +113,9 @@ struct unix_reconnect
 
     plexus::io::peer_context<pasio::unix_policy> req_ctx;
     plexus::io::peer_context<pasio::unix_policy> resp_ctx;
-    std::optional<driver_t> driver;
-    std::optional<session> requester;
-    std::optional<session> responder;
+    std::optional<driver_t>                      driver;
+    std::optional<session>                       requester;
+    std::optional<session>                       responder;
 
     int drops_seen{0};
 
@@ -120,24 +124,33 @@ struct unix_reconnect
     // (ENOENT) and the listener is brought up later — the same-host cold-start race.
     unix_reconnect(const reconnect_config &cfg, bool listen_first)
     {
-        transport.on_accepted([this](std::unique_ptr<pasio::unix_channel> ch) {
-            resp_ctx.channel = std::move(ch);
-            resp_ctx.node_name = "requester-node";
-            responder.emplace(resp_ctx, io, make_cfg(0x01), k_long_timeout,
-                              resp_messages, resp_procedures, true);
-            responder->start();
-        });
-        transport.on_dialed([this](std::unique_ptr<pasio::unix_channel> ch, const pio::endpoint &) {
-            req_ctx.channel = std::move(ch);
-            req_ctx.node_name = "responder-node";
-            requester.emplace(req_ctx, io, make_cfg(0x02), k_long_timeout,
-                              req_messages, req_procedures, false);
-            requester->start();
-            // Route a transport DROP — not a clean close — to the driver through the
-            // session's production drop seam, set AFTER start() (start() owns the
-            // channel's on_error); a clean tear_down sets m_torn_down first.
-            requester->on_transport_drop([this] { ++drops_seen; driver->on_channel_dropped(); });
-        });
+        transport.on_accepted(
+                [this](std::unique_ptr<pasio::unix_channel> ch)
+                {
+                    resp_ctx.channel   = std::move(ch);
+                    resp_ctx.node_name = "requester-node";
+                    responder.emplace(resp_ctx, io, make_cfg(0x01), k_long_timeout, resp_messages,
+                                      resp_procedures, true);
+                    responder->start();
+                });
+        transport.on_dialed(
+                [this](std::unique_ptr<pasio::unix_channel> ch, const pio::endpoint &)
+                {
+                    req_ctx.channel   = std::move(ch);
+                    req_ctx.node_name = "responder-node";
+                    requester.emplace(req_ctx, io, make_cfg(0x02), k_long_timeout, req_messages,
+                                      req_procedures, false);
+                    requester->start();
+                    // Route a transport DROP — not a clean close — to the driver through the
+                    // session's production drop seam, set AFTER start() (start() owns the
+                    // channel's on_error); a clean tear_down sets m_torn_down first.
+                    requester->on_transport_drop(
+                            [this]
+                            {
+                                ++drops_seen;
+                                driver->on_channel_dropped();
+                            });
+                });
 
         if(listen_first)
             transport.listen({"unix", sock.path});
@@ -146,15 +159,17 @@ struct unix_reconnect
         // The driver no longer self-wires the transport's dial-failure callback (a
         // shared transport's single callback cannot belong to one of many drivers);
         // the owner routes a failure to its sole driver.
-        transport.on_dial_failed([this](const pio::endpoint &, pio::io_error) {
-            driver->notify_dial_failed();
-        });
-        driver->on_redial([this] {
-            if(requester) requester->tear_down();
-        });
+        transport.on_dial_failed([this](const pio::endpoint &, pio::io_error)
+                                 { driver->notify_dial_failed(); });
+        driver->on_redial(
+                [this]
+                {
+                    if(requester)
+                        requester->tear_down();
+                });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -176,11 +191,12 @@ reconnect_config fast_cfg()
 
 }
 
-TEST_CASE("unix reconnect: an established session whose channel drops re-dials and re-handshakes over real AF_UNIX",
+TEST_CASE("unix reconnect: an established session whose channel drops re-dials and re-handshakes "
+          "over real AF_UNIX",
           "[integration][reconnect][unix]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         unix_reconnect h(fast_cfg(), /*listen_first=*/true);
@@ -207,11 +223,12 @@ TEST_CASE("unix reconnect: an established session whose channel drops re-dials a
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("unix reconnect: a cold-start dial to a missing socket re-dials until a listener appears, then completes over real AF_UNIX",
+TEST_CASE("unix reconnect: a cold-start dial to a missing socket re-dials until a listener "
+          "appears, then completes over real AF_UNIX",
           "[integration][reconnect][unix]")
 {
     constexpr int k_iterations = 30;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // No socket file bound yet: the initial dial is refused (ENOENT mapped to a

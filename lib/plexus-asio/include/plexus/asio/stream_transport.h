@@ -31,19 +31,34 @@ namespace plexus::asio {
 // move_only_function holds the unique_ptr) — no shared lifetime handle is taken; the
 // transport owner must outlive any pending connect, the same caller-owned lifetime discipline
 // the channel and listener document. close() stops the acceptor.
-template <typename Channel, typename Listener, typename Traits>
+template<typename Channel, typename Listener, typename Traits>
 class stream_transport
 {
 public:
     using channel_type = Channel;
 
-    stream_transport(const stream_transport &) = delete;
+    stream_transport(const stream_transport &)            = delete;
     stream_transport &operator=(const stream_transport &) = delete;
 
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> cb) { m_on_accepted = std::move(cb); }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
-    void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> cb)
+    {
+        m_on_accepted = std::move(cb);
+    }
+    void on_dialed(
+            plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)>
+                    cb)
+    {
+        m_on_dialed = std::move(cb);
+    }
+    void
+    on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
+    {
+        m_on_dial_failed = std::move(cb);
+    }
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
 
     void listen(const io::endpoint &ep) { m_listener.start(ep); }
 
@@ -53,48 +68,54 @@ public:
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;
-        auto target = Traits::parse(ep.address, pec);
+        auto            target = Traits::parse(ep.address, pec);
         if(pec)
             return report_dial_fail(ep, detail::map_error(pec));
-        auto ch = std::make_unique<Channel>(m_io, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
+        auto  ch  = std::make_unique<Channel>(m_io, m_cfg, m_congestion, m_egress_capacity,
+                                              m_socket_options);
         auto &raw = *ch;
         raw.socket().async_connect(target,
-            [this, ep, ch = std::move(ch)](std::error_code ec) mutable {
-                if(ec)
-                    return report_dial_fail(ep, detail::map_error(ec));
-                Traits::after_connect(*ch, m_no_delay);
-                ch->start_read();
-                if(m_on_dialed)
-                    m_on_dialed(std::move(ch), ep);
-            });
+                                   [this, ep, ch = std::move(ch)](std::error_code ec) mutable
+                                   {
+                                       if(ec)
+                                           return report_dial_fail(ep, detail::map_error(ec));
+                                       Traits::after_connect(*ch, m_no_delay);
+                                       ch->start_read();
+                                       if(m_on_dialed)
+                                           m_on_dialed(std::move(ch), ep);
+                                   });
     }
 
     void close() { m_listener.stop(); }
 
 protected:
-    template <typename... ListenerArgs>
+    template<typename... ListenerArgs>
     stream_transport(::asio::io_context &io, wire::stream_inbound_config cfg, bool no_delay,
                      io::congestion congestion, io::egress_capacity egress,
                      stream_socket_options socket_options, ListenerArgs &&...largs)
-        : m_io(io)
-        , m_listener(std::forward<ListenerArgs>(largs)...)
-        , m_cfg(cfg)
-        , m_no_delay(no_delay)
-        , m_congestion(congestion)
-        , m_egress_capacity(egress)
-        , m_socket_options(socket_options)
+            : m_io(io)
+            , m_listener(std::forward<ListenerArgs>(largs)...)
+            , m_cfg(cfg)
+            , m_no_delay(no_delay)
+            , m_congestion(congestion)
+            , m_egress_capacity(egress)
+            , m_socket_options(socket_options)
     {
-        m_listener.on_accepted([this](std::unique_ptr<Channel> ch) {
-            if(m_on_accepted)
-                m_on_accepted(std::move(ch));
-        });
-        m_listener.on_error([this](io::io_error e) {
-            if(m_on_error)
-                m_on_error(e);
-        });
+        m_listener.on_accepted(
+                [this](std::unique_ptr<Channel> ch)
+                {
+                    if(m_on_accepted)
+                        m_on_accepted(std::move(ch));
+                });
+        m_listener.on_error(
+                [this](io::io_error e)
+                {
+                    if(m_on_error)
+                        m_on_error(e);
+                });
     }
 
-    [[nodiscard]] Listener &listener() noexcept { return m_listener; }
+    [[nodiscard]] Listener       &listener() noexcept { return m_listener; }
     [[nodiscard]] const Listener &listener() const noexcept { return m_listener; }
 
 private:
@@ -104,17 +125,18 @@ private:
             m_on_dial_failed(ep, e);
     }
 
-    ::asio::io_context &m_io;
-    Listener m_listener;
-    wire::stream_inbound_config m_cfg;
-    bool m_no_delay;
-    io::congestion m_congestion;
-    io::egress_capacity m_egress_capacity;
-    stream_socket_options m_socket_options;
+    ::asio::io_context                                                &m_io;
+    Listener                                                           m_listener;
+    wire::stream_inbound_config                                        m_cfg;
+    bool                                                               m_no_delay;
+    io::congestion                                                     m_congestion;
+    io::egress_capacity                                                m_egress_capacity;
+    stream_socket_options                                              m_socket_options;
     plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)>
+                                                                                 m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(io::io_error)>                       m_on_error;
 };
 
 }

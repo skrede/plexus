@@ -40,17 +40,18 @@ namespace {
 struct counted_payload
 {
     std::string value;
-    int release_calls{0};
-    loan_slot slot{};
+    int         release_calls{0};
+    loan_slot   slot{};
 };
 
 object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
 {
-    p.slot.object = &p.value;
-    p.slot.refs = 1;   // the caller owns one reference on entry to publish_object
-    p.slot.release = [](loan_slot *s) {
-        auto *owner = reinterpret_cast<counted_payload *>(
-            reinterpret_cast<std::byte *>(s) - offsetof(counted_payload, slot));
+    p.slot.object  = &p.value;
+    p.slot.refs    = 1; // the caller owns one reference on entry to publish_object
+    p.slot.release = [](loan_slot *s)
+    {
+        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) -
+                                                          offsetof(counted_payload, slot));
         ++owner->release_calls;
     };
     return object_carrier{0, tag, &p.value, 0, 0, &p.slot};
@@ -61,23 +62,28 @@ object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
 struct sink_peer
 {
     explicit sink_peer(inproc_executor<> &ex, std::string node_name)
-        : fwd_channel(ex), sink(ex), name(std::move(node_name))
+            : fwd_channel(ex)
+            , sink(ex)
+            , name(std::move(node_name))
     {
         fwd_channel.connect_to(sink.local_endpoint());
-        sink.on_data([this](std::span<const std::byte> d) { byte_frames.emplace_back(d.begin(), d.end()); });
-        sink.on_object([this](const object_carrier &c) {
-            objects.push_back(c);
-            plexus::io::release(c);   // the receiving handler owns the delivered reference
-        });
+        sink.on_data([this](std::span<const std::byte> d)
+                     { byte_frames.emplace_back(d.begin(), d.end()); });
+        sink.on_object(
+                [this](const object_carrier &c)
+                {
+                    objects.push_back(c);
+                    plexus::io::release(c); // the receiving handler owns the delivered reference
+                });
     }
 
     forwarder::peer peer() { return forwarder::peer{fwd_channel, name}; }
 
-    inproc_channel<> fwd_channel;
-    inproc_channel<> sink;
-    std::string name;
+    inproc_channel<>                    fwd_channel;
+    inproc_channel<>                    sink;
+    std::string                         name;
     std::vector<std::vector<std::byte>> byte_frames;
-    std::vector<object_carrier> objects;
+    std::vector<object_carrier>         objects;
 };
 
 std::size_t count_data_frames(const sink_peer &s)
@@ -96,25 +102,29 @@ constexpr std::uint64_t k_tag = 0x7777;
 
 }
 
-TEST_CASE("publish_object: a matching process-tier subscriber receives the object, encode never runs",
-          "[forwarder][object]")
+TEST_CASE(
+        "publish_object: a matching process-tier subscriber receives the object, encode never runs",
+        "[forwarder][object]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{};
-    sink_peer s(ex, "node-a");
+    forwarder         fwd{};
+    sink_peer         s(ex, "node-a");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
     REQUIRE(fwd.attach_for_fanout(s.peer(), "alpha", k_tag));
 
     counted_payload p;
-    p.value = "payload";
+    p.value          = "payload";
     int encode_calls = 0;
-    fwd.publish_object("alpha", make_carrier(p, k_tag), [&] {
-        ++encode_calls;
-        return std::span<const std::byte>{
-            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
-    });
+    fwd.publish_object("alpha", make_carrier(p, k_tag),
+                       [&]
+                       {
+                           ++encode_calls;
+                           return std::span<const std::byte>{
+                                   reinterpret_cast<const std::byte *>(p.value.data()),
+                                   p.value.size()};
+                       });
     ex.drain();
 
     REQUIRE(s.objects.size() == 1);
@@ -129,23 +139,26 @@ TEST_CASE("publish_object: a matching process-tier subscriber receives the objec
 TEST_CASE("publish_object: a bytes-family subscriber takes the byte path with one encode",
           "[forwarder][object]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{};
-    sink_peer s(ex, "node-a");
+    forwarder         fwd{};
+    sink_peer         s(ex, "node-a");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
     // No subscriber type_id: a bytes-family attach. Eligibility's type_id gate fails.
     REQUIRE(fwd.attach_for_fanout(s.peer(), "alpha", std::nullopt));
 
     counted_payload p;
-    p.value = "payload";
+    p.value          = "payload";
     int encode_calls = 0;
-    fwd.publish_object("alpha", make_carrier(p, k_tag), [&] {
-        ++encode_calls;
-        return std::span<const std::byte>{
-            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
-    });
+    fwd.publish_object("alpha", make_carrier(p, k_tag),
+                       [&]
+                       {
+                           ++encode_calls;
+                           return std::span<const std::byte>{
+                                   reinterpret_cast<const std::byte *>(p.value.data()),
+                                   p.value.size()};
+                       });
     ex.drain();
 
     CHECK(s.objects.empty());
@@ -154,27 +167,31 @@ TEST_CASE("publish_object: a bytes-family subscriber takes the byte path with on
     CHECK(p.release_calls == 1);
 }
 
-TEST_CASE("publish_object: a mixed subscriber set delivers object AND bytes with exactly one encode",
-          "[forwarder][object]")
+TEST_CASE(
+        "publish_object: a mixed subscriber set delivers object AND bytes with exactly one encode",
+        "[forwarder][object]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{};
-    sink_peer typed(ex, "node-typed");
-    sink_peer bytes(ex, "node-bytes");
+    forwarder         fwd{};
+    sink_peer         typed(ex, "node-typed");
+    sink_peer         bytes(ex, "node-bytes");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
     REQUIRE(fwd.attach_for_fanout(typed.peer(), "alpha", k_tag));
     REQUIRE(fwd.attach_for_fanout(bytes.peer(), "alpha", std::nullopt));
 
     counted_payload p;
-    p.value = "payload";
+    p.value          = "payload";
     int encode_calls = 0;
-    fwd.publish_object("alpha", make_carrier(p, k_tag), [&] {
-        ++encode_calls;
-        return std::span<const std::byte>{
-            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
-    });
+    fwd.publish_object("alpha", make_carrier(p, k_tag),
+                       [&]
+                       {
+                           ++encode_calls;
+                           return std::span<const std::byte>{
+                                   reinterpret_cast<const std::byte *>(p.value.data()),
+                                   p.value.size()};
+                       });
     ex.drain();
 
     CHECK(typed.objects.size() == 1);
@@ -187,10 +204,10 @@ TEST_CASE("publish_object: a mixed subscriber set delivers object AND bytes with
 
 TEST_CASE("publish_object: a tag mismatch falls back to the byte path", "[forwarder][object]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{};
-    sink_peer s(ex, "node-a");
+    forwarder         fwd{};
+    sink_peer         s(ex, "node-a");
 
     // Producer + subscriber both declare the SAME type (so attach is accepted), but
     // the published carrier carries a DIFFERENT wire tag — eligibility's tag compare
@@ -199,13 +216,16 @@ TEST_CASE("publish_object: a tag mismatch falls back to the byte path", "[forwar
     REQUIRE(fwd.attach_for_fanout(s.peer(), "alpha", k_tag));
 
     counted_payload p;
-    p.value = "payload";
+    p.value          = "payload";
     int encode_calls = 0;
-    fwd.publish_object("alpha", make_carrier(p, 0x9999), [&] {
-        ++encode_calls;
-        return std::span<const std::byte>{
-            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
-    });
+    fwd.publish_object("alpha", make_carrier(p, 0x9999),
+                       [&]
+                       {
+                           ++encode_calls;
+                           return std::span<const std::byte>{
+                                   reinterpret_cast<const std::byte *>(p.value.data()),
+                                   p.value.size()};
+                       });
     ex.drain();
 
     CHECK(s.objects.empty());
@@ -217,10 +237,10 @@ TEST_CASE("publish_object: a tag mismatch falls back to the byte path", "[forwar
 TEST_CASE("publish_object: a process-excluding reach mask produces no object and no encode",
           "[forwarder][object]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{};
-    sink_peer s(ex, "node-a");
+    forwarder         fwd{};
+    sink_peer         s(ex, "node-a");
 
     // reach excludes the process tier, so the single same-process subscriber is gated
     // out before eligibility — no fast path, and (no byte-eligible subscriber remains)
@@ -231,13 +251,16 @@ TEST_CASE("publish_object: a process-excluding reach mask produces no object and
     REQUIRE(fwd.attach_for_fanout(s.peer(), "alpha", k_tag));
 
     counted_payload p;
-    p.value = "payload";
+    p.value          = "payload";
     int encode_calls = 0;
-    fwd.publish_object("alpha", make_carrier(p, k_tag), [&] {
-        ++encode_calls;
-        return std::span<const std::byte>{
-            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
-    });
+    fwd.publish_object("alpha", make_carrier(p, k_tag),
+                       [&]
+                       {
+                           ++encode_calls;
+                           return std::span<const std::byte>{
+                                   reinterpret_cast<const std::byte *>(p.value.data()),
+                                   p.value.size()};
+                       });
     ex.drain();
 
     CHECK(s.objects.empty());
@@ -249,10 +272,10 @@ TEST_CASE("publish_object: a process-excluding reach mask produces no object and
 TEST_CASE("publish_object: a latched topic forces one encode even when every subscriber fast-paths",
           "[forwarder][object]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{};
-    sink_peer typed(ex, "node-typed");
+    forwarder         fwd{};
+    sink_peer         typed(ex, "node-typed");
 
     plexus::topic_qos qos;
     qos.latch = true;
@@ -261,17 +284,20 @@ TEST_CASE("publish_object: a latched topic forces one encode even when every sub
     REQUIRE(fwd.attach_for_fanout(typed.peer(), "alpha", k_tag));
 
     counted_payload p;
-    p.value = "latched-payload";
+    p.value          = "latched-payload";
     int encode_calls = 0;
-    fwd.publish_object("alpha", make_carrier(p, k_tag), [&] {
-        ++encode_calls;
-        return std::span<const std::byte>{
-            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
-    });
+    fwd.publish_object("alpha", make_carrier(p, k_tag),
+                       [&]
+                       {
+                           ++encode_calls;
+                           return std::span<const std::byte>{
+                                   reinterpret_cast<const std::byte *>(p.value.data()),
+                                   p.value.size()};
+                       });
     ex.drain();
 
-    CHECK(typed.objects.size() == 1);   // the live subscriber still fast-pathed
-    CHECK(encode_calls == 1);           // but the latch forced exactly one encode
+    CHECK(typed.objects.size() == 1); // the live subscriber still fast-pathed
+    CHECK(encode_calls == 1);         // but the latch forced exactly one encode
     CHECK(p.release_calls == 1);
 
     // A late BYTES joiner (durability=latest) replays the encoded frame the latch
@@ -287,22 +313,25 @@ TEST_CASE("publish_object: a latched topic forces one encode even when every sub
 TEST_CASE("publish_object: the caller reference is balanced when no subscriber matches",
           "[forwarder][object]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder fwd{};
+    forwarder         fwd{};
 
     // No subscribers, unlatched topic: nothing to deliver, encode never runs, but the
     // caller's reference must still be released exactly once.
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
 
     counted_payload p;
-    p.value = "payload";
+    p.value          = "payload";
     int encode_calls = 0;
-    fwd.publish_object("alpha", make_carrier(p, k_tag), [&] {
-        ++encode_calls;
-        return std::span<const std::byte>{
-            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
-    });
+    fwd.publish_object("alpha", make_carrier(p, k_tag),
+                       [&]
+                       {
+                           ++encode_calls;
+                           return std::span<const std::byte>{
+                                   reinterpret_cast<const std::byte *>(p.value.data()),
+                                   p.value.size()};
+                       });
     ex.drain();
 
     CHECK(encode_calls == 0);

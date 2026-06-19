@@ -38,14 +38,14 @@ namespace {
 // the subscribe_response the producer emitted.
 struct capture
 {
-    explicit capture(inproc_executor<> &ex) : sink(ex)
+    explicit capture(inproc_executor<> &ex)
+            : sink(ex)
     {
-        sink.on_data([this](std::span<const std::byte> d) {
-            frames.emplace_back(d.begin(), d.end());
-        });
+        sink.on_data([this](std::span<const std::byte> d)
+                     { frames.emplace_back(d.begin(), d.end()); });
     }
 
-    inproc_channel<> sink;
+    inproc_channel<>                    sink;
     std::vector<std::vector<std::byte>> frames;
 };
 
@@ -98,11 +98,11 @@ plexus::io::subscriber_qos strict_typed()
 
 TEST_CASE("type_id_match: a matching type_id stays subscribed", "[forwarder][type_id]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
@@ -117,11 +117,11 @@ TEST_CASE("type_id_match: a matching type_id stays subscribed", "[forwarder][typ
 TEST_CASE("type_id_match: a mismatched type_id is refused with type_mismatch",
           "[forwarder][type_id]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
@@ -138,11 +138,11 @@ TEST_CASE("type_id_match: a mismatched type_id is refused with type_mismatch",
 TEST_CASE("type_id_match: an undeclared producer type accepts any subscriber type",
           "[forwarder][type_id]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     // No declared producer type_id for "alpha": any subscriber type_id is accepted.
@@ -157,11 +157,11 @@ TEST_CASE("type_id_match: an undeclared producer type accepts any subscriber typ
 TEST_CASE("type_id_match: an undeclared subscriber type is accepted against a typed producer",
           "[forwarder][type_id]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
@@ -177,11 +177,11 @@ TEST_CASE("type_id_match: an undeclared subscriber type is accepted against a ty
 TEST_CASE("strict posture: a typed strict subscriber is refused by an undeclared producer",
           "[forwarder][type_id][strict]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     // No declared producer type for "alpha". A strict typed subscriber refuses to bind.
@@ -202,11 +202,11 @@ TEST_CASE("strict posture: a typed strict subscriber is refused by an undeclared
 TEST_CASE("strict posture: a typed strict subscriber binds to a matching typed producer",
           "[forwarder][type_id][strict]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
@@ -226,11 +226,11 @@ TEST_CASE("strict posture: a typed strict subscriber binds to a matching typed p
 TEST_CASE("strict posture: a lenient subscriber still binds to an undeclared producer",
           "[forwarder][type_id][strict]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     // A lenient (default-posture) typed subscriber attaches to an untyped producer —
@@ -251,8 +251,7 @@ TEST_CASE("strict posture: the typed-strict bit round-trips through the wire reg
     CHECK(lifted.posture == plexus::io::attach_posture::strict);
 
     const auto lenient_region = plexus::io::to_wire_region(plexus::io::subscriber_qos{});
-    CHECK((lenient_region.requested_flags
-           & plexus::wire::detail::k_qos_flag_typed_strict) == 0);
-    CHECK(plexus::io::from_wire_region(lenient_region).posture
-          == plexus::io::attach_posture::lenient);
+    CHECK((lenient_region.requested_flags & plexus::wire::detail::k_qos_flag_typed_strict) == 0);
+    CHECK(plexus::io::from_wire_region(lenient_region).posture ==
+          plexus::io::attach_posture::lenient);
 }

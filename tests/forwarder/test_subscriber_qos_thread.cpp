@@ -31,16 +31,16 @@ using forwarder = plexus::io::message_forwarder<inproc_policy>;
 
 TEST_CASE("forwarder: a subscriber qos thread stores the requested periods in the registry")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex{bus};
 
-    forwarder fwd{};
+    forwarder        fwd{};
     inproc_channel<> ch{ex};
-    forwarder::peer peer{ch, "node-a"};
+    forwarder::peer  peer{ch, "node-a"};
 
     // A subscriber with NON-default requested periods (a real choice, not 0).
     const subscriber_qos qos{.requested_deadline_ns = 300'000'000ull,
-                             .requested_lease_ns = 500'000'000ull};
+                             .requested_lease_ns    = 500'000'000ull};
 
     REQUIRE(fwd.attach(peer, "alpha", qos));
 
@@ -55,14 +55,14 @@ TEST_CASE("forwarder: a subscriber qos thread stores the requested periods in th
 
 TEST_CASE("registry: add_subscriber stores the subscriber qos and qos_for_subscriber reads it back")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex{bus};
-    inproc_channel<> ch{ex};
+    inproc_channel<>  ch{ex};
 
     plexus::io::subscriber_registry<inproc_channel<>> registry;
-    const std::uint64_t hash = plexus::wire::fqn_topic_hash("alpha");
-    const subscriber_qos qos{.requested_deadline_ns = 123'456'789ull,
-                             .requested_lease_ns = 987'654'321ull};
+    const std::uint64_t                               hash = plexus::wire::fqn_topic_hash("alpha");
+    const subscriber_qos                              qos{.requested_deadline_ns = 123'456'789ull,
+                                                          .requested_lease_ns    = 987'654'321ull};
 
     registry.add_subscriber(hash, "alpha", ch, "node-a", qos);
 

@@ -50,35 +50,38 @@ namespace {
 
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 struct manual_policy
 {
-    using executor_type = inproc_executor<manual_clock> &;
+    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
-    using timer_type = inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using transport_t = inproc_transport<manual_clock>;
-using engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
+using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu;
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -89,8 +92,11 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -112,19 +118,20 @@ reconnect_config forever_cfg()
 struct fan_net
 {
     static constexpr std::uint8_t k_pub_seed = 0xD0;
-    static constexpr const char *k_topic = "topic";
+    static constexpr const char  *k_topic    = "topic";
 
     explicit fan_net(std::size_t subscriber_count)
-        : pub_transport(ex, bus)
-        , pub(pub_transport, ex, make_cfg(k_pub_seed), k_long_timeout, forever_cfg(), k_seed, false)
+            : pub_transport(ex, bus)
+            , pub(pub_transport, ex, make_cfg(k_pub_seed), k_long_timeout, forever_cfg(), k_seed,
+                  false)
     {
         pub.listen({"inproc", "pub"});
         for(std::size_t i = 0; i < subscriber_count; ++i)
         {
             const auto seed = static_cast<std::uint8_t>(0x10 + i);
-            auto t = std::make_unique<transport_t>(ex, bus);
-            auto e = std::make_unique<engine>(*t, ex, make_cfg(seed), k_long_timeout,
-                                              forever_cfg(), k_seed, false);
+            auto       t    = std::make_unique<transport_t>(ex, bus);
+            auto e = std::make_unique<engine>(*t, ex, make_cfg(seed), k_long_timeout, forever_cfg(),
+                                              k_seed, false);
             const std::string name = "sub-" + std::to_string(i);
             e->listen({"inproc", name});
             e->note_peer(pub_id(), {"inproc", "pub"});
@@ -138,12 +145,12 @@ struct fan_net
 
     void drive() { ex.drain(); }
 
-    inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t pub_transport;
-    engine pub;
+    inproc_bus<manual_clock>                  bus;
+    inproc_executor<manual_clock>             ex{bus};
+    transport_t                               pub_transport;
+    engine                                    pub;
     std::vector<std::unique_ptr<transport_t>> sub_transports;
-    std::vector<std::unique_ptr<engine>> subs;
+    std::vector<std::unique_ptr<engine>>      subs;
 };
 
 // A caller engine and a provider engine on one inproc bus, connected through the
@@ -152,15 +159,17 @@ struct fan_net
 // registered on BOTH so a test reads each engine's taps.
 struct rpc_net
 {
-    static constexpr std::uint8_t k_caller_seed = 0xA1;
+    static constexpr std::uint8_t k_caller_seed   = 0xA1;
     static constexpr std::uint8_t k_provider_seed = 0xB2;
-    static constexpr const char *k_proc = "svc";
+    static constexpr const char  *k_proc          = "svc";
 
     rpc_net()
-        : caller_transport(ex, bus)
-        , provider_transport(ex, bus)
-        , caller(caller_transport, ex, make_cfg(k_caller_seed), k_long_timeout, forever_cfg(), k_seed, false)
-        , provider(provider_transport, ex, make_cfg(k_provider_seed), k_long_timeout, forever_cfg(), k_seed, false)
+            : caller_transport(ex, bus)
+            , provider_transport(ex, bus)
+            , caller(caller_transport, ex, make_cfg(k_caller_seed), k_long_timeout, forever_cfg(),
+                     k_seed, false)
+            , provider(provider_transport, ex, make_cfg(k_provider_seed), k_long_timeout,
+                       forever_cfg(), k_seed, false)
     {
         caller.listen({"inproc", "caller"});
         provider.listen({"inproc", "provider"});
@@ -173,27 +182,28 @@ struct rpc_net
 
     void drive() { ex.drain(); }
 
-    inproc_bus<manual_clock> bus;
+    inproc_bus<manual_clock>      bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t caller_transport;
-    transport_t provider_transport;
-    engine caller;
-    engine provider;
+    transport_t                   caller_transport;
+    transport_t                   provider_transport;
+    engine                        caller;
+    engine                        provider;
 };
 
 }
 
-TEST_CASE("obs tap: one publish to N subscribers fires published once and delivered once per destination",
+TEST_CASE("obs tap: one publish to N subscribers fires published once and delivered once per "
+          "destination",
           "[integration][observer][tap]")
 {
     constexpr std::size_t k_subscribers = 3;
-    const std::string payload = "tap-fan-out";
+    const std::string     payload       = "tap-fan-out";
 
     manual_clock::reset();
-    fan_net net{k_subscribers};
+    fan_net            net{k_subscribers};
     recording_observer rec;
     net.pub.add_observer(rec);
-    net.drive();   // settle the N subscribe round-trips
+    net.drive(); // settle the N subscribe round-trips
 
     net.pub.publish(fan_net::k_topic, as_bytes(payload));
 
@@ -202,11 +212,12 @@ TEST_CASE("obs tap: one publish to N subscribers fires published once and delive
     REQUIRE(rec.for_topic(fan_net::k_topic).published == 0);
     REQUIRE(rec.for_topic(fan_net::k_topic).delivered == 0);
 
-    net.drive();   // pump the posted tap turns
+    net.drive(); // pump the posted tap turns
 
     const auto &t = rec.for_topic(fan_net::k_topic);
-    REQUIRE(t.published == 1);                                  // on_message_published once per publish
-    REQUIRE(t.delivered == static_cast<int>(k_subscribers));   // on_message_delivered once per destination
+    REQUIRE(t.published == 1); // on_message_published once per publish
+    REQUIRE(t.delivered ==
+            static_cast<int>(k_subscribers)); // on_message_delivered once per destination
 }
 
 TEST_CASE("obs tap: the delivered view borrows the surfaced owner (a shared addref, not a copy)",
@@ -215,7 +226,7 @@ TEST_CASE("obs tap: the delivered view borrows the surfaced owner (a shared addr
     const std::string payload = "tap-zero-copy";
 
     manual_clock::reset();
-    fan_net net{1};
+    fan_net            net{1};
     recording_observer rec;
     net.pub.add_observer(rec);
     net.drive();
@@ -232,38 +243,41 @@ TEST_CASE("obs tap: the delivered view borrows the surfaced owner (a shared addr
     REQUIRE(t.last_view_use_count >= 1);
 }
 
-TEST_CASE("obs tap: an rpc round-trip fires call once (caller), serve once (provider), reply once (caller)",
+TEST_CASE("obs tap: an rpc round-trip fires call once (caller), serve once (provider), reply once "
+          "(caller)",
           "[integration][observer][tap]")
 {
     using plexus::wire::rpc_status;
 
     manual_clock::reset();
-    rpc_net net;
+    rpc_net            net;
     recording_observer caller_rec;
     recording_observer provider_rec;
     net.caller.add_observer(caller_rec);
     net.provider.add_observer(provider_rec);
-    net.drive();   // settle the dial + handshake
+    net.drive(); // settle the dial + handshake
     REQUIRE(net.caller.is_connected(rpc_net::provider_id()));
 
-    net.provider.procedures().serve(rpc_net::k_proc,
-        [](std::span<const std::byte>,
-           plexus::io::procedure_forwarder<manual_policy>::reply_fn &reply) {
-            reply(plexus::wire::rpc_status::success, {});
-        });
+    net.provider.procedures().serve(
+            rpc_net::k_proc,
+            [](std::span<const std::byte>,
+               plexus::io::procedure_forwarder<manual_policy>::reply_fn &reply)
+            { reply(plexus::wire::rpc_status::success, {}); });
 
     rpc_status got = rpc_status::error;
     net.caller.call(rpc_net::provider_id(), rpc_net::k_proc, as_bytes(std::string{"ping"}),
-        [&](rpc_status s, std::span<const std::byte>) { got = s; });
+                    [&](rpc_status s, std::span<const std::byte>) { got = s; });
 
     // Posted-not-inline: the call tap fans out on the executor, so the caller's counter
     // is still zero synchronously at the call() return.
     REQUIRE(caller_rec.for_topic(rpc_net::k_proc).rpc_call == 0);
 
-    net.drive();   // pump the request, the dispatch + reply, and the posted tap turns
+    net.drive(); // pump the request, the dispatch + reply, and the posted tap turns
 
-    REQUIRE(caller_rec.for_topic(rpc_net::k_proc).rpc_call == 1);    // call() once on the caller
-    REQUIRE(provider_rec.for_topic(rpc_net::k_proc).rpc_serve == 1); // deliver_request() once on the provider
-    REQUIRE(caller_rec.for_topic(rpc_net::k_proc).rpc_reply == 1);   // deliver_response() once on the caller
+    REQUIRE(caller_rec.for_topic(rpc_net::k_proc).rpc_call == 1); // call() once on the caller
+    REQUIRE(provider_rec.for_topic(rpc_net::k_proc).rpc_serve ==
+            1); // deliver_request() once on the provider
+    REQUIRE(caller_rec.for_topic(rpc_net::k_proc).rpc_reply ==
+            1); // deliver_response() once on the caller
     REQUIRE(got == rpc_status::success);
 }

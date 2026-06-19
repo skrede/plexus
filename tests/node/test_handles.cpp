@@ -43,8 +43,8 @@ using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 
-using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using inproc_publisher = plexus::publisher<>;
+using inproc_node       = plexus::node<inproc_policy, inproc_transport<>>;
+using inproc_publisher  = plexus::publisher<>;
 using inproc_subscriber = plexus::subscriber<>;
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -61,10 +61,10 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0xC0FFEEu;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0xC0FFEEu;
     opts.dial_eagerly = eager;
     return opts;
 }
@@ -83,11 +83,11 @@ std::string to_string(std::span<const std::byte> b)
 // shared static_discovery, eager-dialing to a live connection.
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -133,13 +133,15 @@ TEST_CASE("handles: a subscriber is move-only", "[node][handles]")
     static_assert(std::is_nothrow_move_assignable_v<inproc_subscriber>);
 }
 
-TEST_CASE("handles: moving a subscriber transfers the demand; the moved-from dtor is a no-op", "[node][handles]")
+TEST_CASE("handles: moving a subscriber transfers the demand; the moved-from dtor is a no-op",
+          "[node][handles]")
 {
-    net n;
+    net                      n;
     std::vector<std::string> got;
 
     {
-        inproc_subscriber s1{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber s1{n.a, "topic",
+                             [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         n.drive();
 
         // Move the live demand into s2, then double-move into s3. The moved-from s1/s2
@@ -159,14 +161,16 @@ TEST_CASE("handles: moving a subscriber transfers the demand; the moved-from dto
     REQUIRE(n.a_demand_for("topic") == 0);
 }
 
-TEST_CASE("handles: dropping a subscriber stops its callback and retires the engine demand", "[node][handles]")
+TEST_CASE("handles: dropping a subscriber stops its callback and retires the engine demand",
+          "[node][handles]")
 {
-    net n;
+    net                      n;
     std::vector<std::string> got;
-    inproc_publisher p{n.b, "topic"};
+    inproc_publisher         p{n.b, "topic"};
 
     {
-        inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber s{n.a, "topic",
+                            [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         n.drive();
         REQUIRE(n.a_demand_for("topic") == 1);
 
@@ -179,19 +183,22 @@ TEST_CASE("handles: dropping a subscriber stops its callback and retires the eng
     REQUIRE(n.a_demand_for("topic") == 0);
     p.publish(as_bytes("after-drop"));
     n.drive();
-    REQUIRE(got.size() == 1);   // still 1 — no callback after drop
+    REQUIRE(got.size() == 1); // still 1 — no callback after drop
 }
 
-TEST_CASE("handles: two subscribers on one fqn both fire and retire independently", "[node][handles]")
+TEST_CASE("handles: two subscribers on one fqn both fire and retire independently",
+          "[node][handles]")
 {
-    net n;
+    net                      n;
     std::vector<std::string> got1;
     std::vector<std::string> got2;
-    inproc_publisher p{n.b, "topic"};
+    inproc_publisher         p{n.b, "topic"};
 
-    auto s1 = inproc_subscriber{n.a, "topic", [&](std::span<const std::byte> b) { got1.push_back(to_string(b)); }};
+    auto s1 = inproc_subscriber{n.a, "topic", [&](std::span<const std::byte> b)
+                                { got1.push_back(to_string(b)); }};
     {
-        inproc_subscriber s2{n.a, "topic", [&](std::span<const std::byte> b) { got2.push_back(to_string(b)); }};
+        inproc_subscriber s2{n.a, "topic",
+                             [&](std::span<const std::byte> b) { got2.push_back(to_string(b)); }};
         n.drive();
 
         p.publish(as_bytes("both"));

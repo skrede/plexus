@@ -66,9 +66,8 @@ inline std::optional<heartbeat> decode_heartbeat(std::span<const std::byte> payl
     if(payload.size() < detail::heartbeat_payload_size)
         return std::nullopt;
 
-    return heartbeat{
-            .version  = wire::detail::read_u8(payload.data()),
-            .reserved = wire::detail::read_u8(payload.data() + 1)};
+    return heartbeat{.version  = wire::detail::read_u8(payload.data()),
+                     .reserved = wire::detail::read_u8(payload.data() + 1)};
 }
 
 }

@@ -14,7 +14,7 @@ using aead_key = std::array<std::byte, 32>;
 
 // RFC 8439 nonce width (96-bit) and the Poly1305/GCM tag width (128-bit).
 constexpr std::size_t k_aead_nonce_len = 12;
-constexpr std::size_t k_aead_tag_len = 16;
+constexpr std::size_t k_aead_tag_len   = 16;
 
 enum class aead_cipher_id : std::uint8_t
 {
@@ -36,9 +36,8 @@ enum class aead_cipher_id : std::uint8_t
 // a caller never reads attacker-controlled, unverified plaintext from a rejected packet.
 [[nodiscard]] bool open(aead_cipher_id cipher, const aead_key &key,
                         std::span<const std::byte, k_aead_nonce_len> nonce,
-                        std::span<const std::byte> aad,
-                        std::span<const std::byte> ciphertext_and_tag,
-                        std::vector<std::byte> &out);
+                        std::span<const std::byte>                   aad,
+                        std::span<const std::byte> ciphertext_and_tag, std::vector<std::byte> &out);
 
 }
 

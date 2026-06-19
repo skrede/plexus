@@ -72,31 +72,31 @@ constexpr std::size_t k_fetch_cap = 1024;
 // run), frames each publish ONCE and shares the single owning buffer across subscribers,
 // and warn-and-drops a malformed frame on the receive tail through the injected cold-path
 // logger& (default shared null_logger). It never interprets the payload.
-template <typename Policy>
+template<typename Policy>
     requires plexus::Policy<Policy>
 class message_forwarder
 {
 public:
-    using channel_type = typename Policy::byte_channel_type;
+    using channel_type  = typename Policy::byte_channel_type;
     using endpoint_type = subscription_endpoint<channel_type>;
-    using peer = typename endpoint_type::peer;
+    using peer          = typename endpoint_type::peer;
 
     // global_default is the node-level per-message size default the RxO size relation
     // resolves an offered topic's 0=unset max against — the SAME node-level value the
     // data-path transports resolve against, so a remote subscribe is admitted against
     // one consistent ceiling rather than a forwarder-local constant that could drift.
     // It is required-with-default: the shipped constant is the meaningful fallback.
-    explicit message_forwarder(std::size_t global_default = io::global_default_max_message_bytes,
-                               log::logger &logger = shared_null_logger())
-        : m_logger(logger), m_global_default(global_default)
+    explicit message_forwarder(std::size_t  global_default = io::global_default_max_message_bytes,
+                               log::logger &logger         = shared_null_logger())
+            : m_logger(logger)
+            , m_global_default(global_default)
     {
     }
 
     // Per-(peer, fqn) refcount gate: only the 0->1 transition registers the fan-out
     // entry and emits the wire subscribe_request; later attaches just bump and return
     // false. The subscriber's declared type_id rides the request for subscribe-time match.
-    bool attach(const peer &p, std::string_view fqn,
-                const subscriber_qos &qos = subscriber_qos{},
+    bool attach(const peer &p, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{},
                 std::optional<std::uint64_t> type_id = std::nullopt)
     {
         if(!m_endpoint.attach_gate(p.node_name, fqn))
@@ -120,55 +120,58 @@ public:
     // parsing risk), and subscribe.h already caps the attacker-controlled string fields.
     bool attach_for_fanout(const peer &p, std::string_view fqn,
                            std::optional<std::uint64_t> subscriber_type_id = std::nullopt,
-                           const subscriber_qos &sub_qos = subscriber_qos{})
+                           const subscriber_qos        &sub_qos            = subscriber_qos{})
     {
         auto hash = wire::fqn_topic_hash(fqn);
         if(type_id_mismatch(hash, subscriber_type_id))
         {
             auto resp = wire::encode_subscribe_response(
-                {.topic_hash = hash, .status = wire::subscribe_status::type_mismatch});
+                    {.topic_hash = hash, .status = wire::subscribe_status::type_mismatch});
             send_control(p.channel, wire::msg_type::subscribe_response, resp);
             return false;
         }
         // Strict typed posture: a typed-and-strict subscriber refuses an untyped producer.
         // Ordered AFTER type_mismatch (a declared-vs-declared mismatch is more specific).
-        if(sub_qos.posture == attach_posture::strict && subscriber_type_id
-           && !m_endpoint.registry().producer_type_id(hash))
+        if(sub_qos.posture == attach_posture::strict && subscriber_type_id &&
+           !m_endpoint.registry().producer_type_id(hash))
         {
             auto resp = wire::encode_subscribe_response(
-                {.topic_hash = hash, .status = wire::subscribe_status::type_undeclared});
+                    {.topic_hash = hash, .status = wire::subscribe_status::type_undeclared});
             send_control(p.channel, wire::msg_type::subscribe_response, resp);
             return false;
         }
         // The request-vs-offered compatibility gate over the full QoS matrix: the
         // subscriber's REQUESTED sub_qos arrived off the wire; the topic's OFFERED qos and
         // source-identity offer are read locally.
-        const topic_qos offered = m_endpoint.registry().qos_for(hash);
-        const bool offers_sid   = m_endpoint.registry().offers_source_identity(hash);
-        const auto rxo = io::rxo_check(offered, offers_sid, m_global_default, sub_qos);
-        if(rxo.verdict == io::rxo_verdict::incompatible_qos
-           || rxo.verdict == io::rxo_verdict::source_identity_incompatible)
+        const topic_qos offered    = m_endpoint.registry().qos_for(hash);
+        const bool      offers_sid = m_endpoint.registry().offers_source_identity(hash);
+        const auto      rxo        = io::rxo_check(offered, offers_sid, m_global_default, sub_qos);
+        if(rxo.verdict == io::rxo_verdict::incompatible_qos ||
+           rxo.verdict == io::rxo_verdict::source_identity_incompatible)
         {
             auto resp = wire::encode_subscribe_response(
-                {.topic_hash = hash, .status = status_of(rxo.verdict)});
+                    {.topic_hash = hash, .status = status_of(rxo.verdict)});
             send_control(p.channel, wire::msg_type::subscribe_response, resp);
             emit_qos_change(qos_edge::refused, hash, sub_qos, rxo.verdict, subscriber_type_id);
             return false;
         }
         if(m_endpoint.registry().bump_refcount(p.node_name, fqn) != 1u)
             return false;
-        m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos, subscriber_type_id);
-        emit_qos_change(rxo.verdict == io::rxo_verdict::degraded ? qos_edge::degraded : qos_edge::accepted,
+        m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos,
+                                             subscriber_type_id);
+        emit_qos_change(rxo.verdict == io::rxo_verdict::degraded ? qos_edge::degraded
+                                                                 : qos_edge::accepted,
                         hash, sub_qos, rxo.verdict, subscriber_type_id);
         // A degraded verdict ADMITS (the consumer chose permissive) but the reply carries
         // the degraded-field set so the accept is non-silent.
         auto resp = rxo.verdict == io::rxo_verdict::degraded
-            ? wire::encode_subscribe_response({.topic_hash = hash,
-                                               .status = wire::subscribe_status::subscribed_degraded,
-                                               .has_degraded = true,
-                                               .degraded_flags = rxo.degraded_fields})
-            : wire::encode_subscribe_response({.topic_hash = hash,
-                                               .status = wire::subscribe_status::subscribed});
+                ? wire::encode_subscribe_response(
+                          {.topic_hash     = hash,
+                           .status         = wire::subscribe_status::subscribed_degraded,
+                           .has_degraded   = true,
+                           .degraded_flags = rxo.degraded_fields})
+                : wire::encode_subscribe_response(
+                          {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
         send_control(p.channel, wire::msg_type::subscribe_response, resp);
         replay_if_latched(p, hash);
         // A remote subscribe arrived: the local node is the PUBLISHER for this pair, so a
@@ -181,7 +184,7 @@ public:
     // subscribe is requested, possibly before the session exists (async dial pending), so
     // the session resurrects it through the counted path on completion.
     void remember_demand(const std::string &node_name, std::string_view fqn,
-                         const subscriber_qos &qos = subscriber_qos{},
+                         const subscriber_qos        &qos     = subscriber_qos{},
                          std::optional<std::uint64_t> type_id = std::nullopt)
     {
         record_remote_topic(node_name, fqn, qos, type_id);
@@ -200,16 +203,14 @@ public:
     // source-identity carriage: publishes set the gid flag and carry a varint endpoint
     // counter the receiver pairs with the session peer's node_id.
     void declare(std::string_view fqn, topic_qos qos,
-                 std::optional<std::uint64_t> producer_type_id = std::nullopt,
-                 bool emit_source_identity = false)
+                 std::optional<std::uint64_t> producer_type_id     = std::nullopt,
+                 bool                         emit_source_identity = false)
     {
-        m_endpoint.registry().declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id, emit_source_identity);
+        m_endpoint.registry().declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id,
+                                      emit_source_identity);
     }
 
-    void latch(std::string_view fqn)
-    {
-        declare(fqn, topic_qos{.latch = true, .depth = 1});
-    }
+    void latch(std::string_view fqn) { declare(fqn, topic_qos{.latch = true, .depth = 1}); }
 
     // Frame ONCE and fan the single owning buffer to each subscribed channel; no
     // subscriber means no send (demand-driven). session_id is passed per send (NOT a
@@ -217,35 +218,33 @@ public:
     void publish(std::string_view fqn, std::span<const std::byte> payload,
                  std::uint64_t session_id = 0)
     {
-        auto hash = wire::fqn_topic_hash(fqn);
+        auto        hash  = wire::fqn_topic_hash(fqn);
         const auto *topic = m_endpoint.registry().entry_for(hash);
         const auto *subs =
-            topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
-        const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
-        const bool latched = qos.latch;
-        const locality reach = qos.reach;
+                topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
+        const topic_qos qos     = topic != nullptr ? topic->qos : topic_qos{};
+        const bool      latched = qos.latch;
+        const locality  reach   = qos.reach;
         // A null topic implies subs == nullptr and latched == false, so past this return
         // `topic` is always valid.
         if(subs == nullptr && !latched)
             return;
 
-        wire::unidirectional_header uhdr{
-                .source     = wire::endpoint_source_type::publisher,
-                .sequence   = m_endpoint.next_sequence(),
-                .topic_hash = hash
-        };
+        wire::unidirectional_header uhdr{.source     = wire::endpoint_source_type::publisher,
+                                         .sequence   = m_endpoint.next_sequence(),
+                                         .topic_hash = hash};
         // When the topic offers source identity, frame the gid flag + a varint endpoint
         // counter the receiver pairs with the session node_id; absent yields a
         // byte-identical no-flag frame. Decided once at framing time, so the
         // frame-ONCE-fan-to-N invariant holds (one buffer for all subs).
         const std::optional<std::uint64_t> counter =
-            topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
+                topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
         wire::frame_header fhdr{
                 .type         = wire::msg_type::unidirectional,
                 .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
                 .session_id   = session_id,
                 .timestamp_ns = wire::now_timestamp_ns(),
-                .payload_len  = 0   // set inside the one-pass encode from the framed region size
+                .payload_len  = 0 // set inside the one-pass encode from the framed region size
         };
         // Frame ONCE into a single owning buffer; the owner is addref-shared to each
         // subscriber's band slot (frame-once-fan-to-N) and rides the band → channel send
@@ -263,7 +262,7 @@ public:
         emit_published(hash, fqn, bare);
 
         const message_info pub_info{.publication_sequence = uhdr.sequence,
-                                    .source_timestamp = fhdr.timestamp_ns};
+                                    .source_timestamp     = fhdr.timestamp_ns};
 
         // The fan-out confinement gate: send to a subscriber only when the topic's reach
         // mask shares a bit with the subscriber's cached tier (fail-closed access control).
@@ -291,10 +290,10 @@ public:
                     channel_type *route = sub.channel;
                     if(m_companion_route)
                         if(channel_type *companion =
-                               m_companion_route(sub.node_name, fqn, framed.size()))
+                                   m_companion_route(sub.node_name, fqn, framed.size()))
                             route = companion;
                     const detail::drop_cause cause =
-                        m_egress.enqueue(*route, band, qos.congestion, framed);
+                            m_egress.enqueue(*route, band, qos.congestion, framed);
                     if(cause != detail::drop_cause::none)
                         shed(hash, band, cause, sub.tier);
                     emit_delivered(hash, fqn, pub_info, bare);
@@ -311,20 +310,20 @@ public:
     // Reference protocol: the CALLER owns one reference on entry; each fast-path
     // send_object addrefs through the bus, and this verb releases the caller's reference
     // once after the fan loop — so the slot is balanced on every path.
-    template <typename EncodeFn>
+    template<typename EncodeFn>
     void publish_object(std::string_view fqn, object_carrier carrier, EncodeFn &&encode,
                         std::uint64_t session_id = 0)
     {
-        auto hash = wire::fqn_topic_hash(fqn);
+        auto        hash  = wire::fqn_topic_hash(fqn);
         const auto *topic = m_endpoint.registry().entry_for(hash);
         const auto *subs =
-            topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
-        const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
-        const bool latched = qos.latch;
-        const locality reach = qos.reach;
+                topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
+        const topic_qos qos     = topic != nullptr ? topic->qos : topic_qos{};
+        const bool      latched = qos.latch;
+        const locality  reach   = qos.reach;
 
         carrier.topic_hash = hash;
-        carrier.sequence = m_endpoint.next_sequence();
+        carrier.sequence   = m_endpoint.next_sequence();
         // Skip the source-stamp clock read when no attached subscriber wants message_info,
         // leaving source_timestamp == 0 (the "not stamped" sentinel the ==0 keying relies
         // on). The latch is local-only, so a remote-decoded subscriber always reads true.
@@ -334,27 +333,26 @@ public:
         // Framed lazily AT MOST ONCE into a single owning buffer the first time any byte
         // need appears, then addref-shared across every byte-path subscriber + the latch
         // ring (frame-once-fan-to-N).
-        wire_bytes<> framed;
-        bool encoded = false;
-        const std::optional<std::uint64_t> counter =
-            topic != nullptr && topic->emit_source_identity ? topic->endpoint_counter
-                                                            : std::nullopt;
-        const auto encode_once = [&] {
+        wire_bytes<>                       framed;
+        bool                               encoded = false;
+        const std::optional<std::uint64_t> counter = topic != nullptr && topic->emit_source_identity
+                ? topic->endpoint_counter
+                : std::nullopt;
+        const auto                         encode_once = [&]
+        {
             if(encoded)
                 return;
-            encoded = true;
-            std::span<const std::byte> bytes = std::forward<EncodeFn>(encode)();
-            wire::unidirectional_header uhdr{
-                    .source     = wire::endpoint_source_type::publisher,
-                    .sequence   = carrier.sequence,
-                    .topic_hash = hash
-            };
-            wire::frame_header fhdr{
+            encoded                           = true;
+            std::span<const std::byte>  bytes = std::forward<EncodeFn>(encode)();
+            wire::unidirectional_header uhdr{.source     = wire::endpoint_source_type::publisher,
+                                             .sequence   = carrier.sequence,
+                                             .topic_hash = hash};
+            wire::frame_header          fhdr{
                     .type         = wire::msg_type::unidirectional,
                     .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
                     .session_id   = session_id,
                     .timestamp_ns = carrier.source_timestamp,
-                    .payload_len  = 0   // set inside the one-pass encode from the framed region size
+                    .payload_len  = 0 // set inside the one-pass encode from the framed region size
             };
             framed = frame_owned(fhdr, uhdr, bytes, counter);
         };
@@ -368,7 +366,7 @@ public:
         // once per fanned destination below.
         const bool capture_payload = m_capture_wants_payload && m_capture_wants_payload(hash);
         const message_info obj_info{.publication_sequence = carrier.sequence,
-                                    .source_timestamp = carrier.source_timestamp};
+                                    .source_timestamp     = carrier.source_timestamp};
         if(capture_payload)
             encode_once();
         // The bare codec bytes (the framed buffer minus the frame prefix), an aliasing
@@ -397,7 +395,7 @@ public:
                 }
                 encode_once();
                 const detail::drop_cause cause =
-                    m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
+                        m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
                 if(cause != detail::drop_cause::none)
                     shed(hash, band, cause, sub.tier);
                 emit_delivered(hash, fqn, obj_info, bare);
@@ -450,7 +448,7 @@ public:
     const std::vector<remembered_demand> &remembered_topics(const std::string &node_name) const
     {
         static const std::vector<remembered_demand> empty;
-        auto it = m_remote_topics.find(node_name);
+        auto                                        it = m_remote_topics.find(node_name);
         return it == m_remote_topics.end() ? empty : it->second;
     }
 
@@ -458,12 +456,11 @@ public:
     // frame_header strip and the type switch), resolve the fqn by topic_hash, and hand the
     // opaque wire_bytes up to on_message. A decode failure or unresolved topic_hash is
     // warn-and-DROPPED through the injected logger&: never thrown, never propagated.
-    template <typename OnMessage>
-    void deliver(const peer &p, std::span<const std::byte> inner,
-                 const node_id &source_node_id, bool has_source_identity,
-                 OnMessage &&on_message)
+    template<typename OnMessage>
+    void deliver(const peer &p, std::span<const std::byte> inner, const node_id &source_node_id,
+                 bool has_source_identity, OnMessage &&on_message)
     {
-        (void)p;   // identity symmetry with the procedure receive tail; resolution is by topic_hash
+        (void)p; // identity symmetry with the procedure receive tail; resolution is by topic_hash
         // has_source_identity mirrors the frame's gid flag. The bytes-only tail discards
         // the counter, but it MUST still pass the flag: the producer emits the varint per
         // ITS topic declaration, independent of which receive callback is set, so the data
@@ -492,11 +489,11 @@ public:
     // ONLY within its own node_id namespace (structural anti-spoof — a forged counter
     // cannot impersonate another node). A future relay/bridge/store-and-forward topology
     // would break this invariant and MUST carry full origin identity locally on those frames.
-    template <typename OnMessage>
+    template<typename OnMessage>
     void deliver(const peer &p, std::span<const std::byte> inner, message_info info,
                  const node_id &source_node_id, bool has_source_identity, OnMessage &&on_message)
     {
-        (void)p;   // identity symmetry with the procedure receive tail; resolution is by topic_hash
+        (void)p; // identity symmetry with the procedure receive tail; resolution is by topic_hash
         auto decoded = wire::decode_unidirectional(inner, has_source_identity);
         if(!decoded)
             return drop("plexus: forwarder unidirectional_decode_failed");
@@ -514,7 +511,8 @@ public:
 
     // The receive-path liveness stamp hook, wired by the engine to its liveliness
     // monitor's stamp_data; absent = no stamp, so the forwarder stays monitor-agnostic.
-    void set_on_data_stamp(plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> hook)
+    void
+    set_on_data_stamp(plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> hook)
     {
         m_on_data_stamp = std::move(hook);
     }
@@ -535,14 +533,17 @@ public:
     // fires the qos-change sink. Each sink posts, so a per-publish/per-destination fan never
     // touches an observer inline. Absent = one predictable branch (the forwarder stays
     // observer-agnostic when unwired).
-    void on_published(plexus::detail::move_only_function<
-                      void(std::uint64_t, std::string_view, const message_view &)> hook)
+    void on_published(plexus::detail::move_only_function<void(std::uint64_t, std::string_view,
+                                                              const message_view &)>
+                              hook)
     {
         m_on_published = std::move(hook);
     }
 
-    void on_delivered(plexus::detail::move_only_function<
-                      void(std::uint64_t, std::string_view, const message_info &, const message_view &)> hook)
+    void on_delivered(
+            plexus::detail::move_only_function<void(std::uint64_t, std::string_view,
+                                                    const message_info &, const message_view &)>
+                    hook)
     {
         m_on_delivered = std::move(hook);
     }
@@ -566,8 +567,9 @@ public:
     // with no SHM companion (the recommended fail-safe default: the wire is the standing
     // channel, the ring an additive fast path). The hook owner consults
     // route_message_medium against the SHM member's resolved_geometry_for(fqn).
-    void on_companion_route(
-        plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view, std::size_t)> hook)
+    void on_companion_route(plexus::detail::move_only_function<
+                            channel_type *(std::string_view, std::string_view, std::size_t)>
+                                    hook)
     {
         m_companion_route = std::move(hook);
     }
@@ -576,9 +578,10 @@ public:
     // medium coordinator's on_edge. The forwarder only ANNOUNCES the 0->1/1->0 edge it
     // already knows from its refcount gate — it gains no same_host, no acquire, no
     // transport. Absent = one predictable branch (no allocating observer list).
-    void on_demand_transition(
-        plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition,
-                                               demand_role)> hook)
+    void
+    on_demand_transition(plexus::detail::move_only_function<void(std::string_view, std::string_view,
+                                                                 demand_transition, demand_role)>
+                                 hook)
     {
         m_on_demand_transition = std::move(hook);
     }
@@ -591,8 +594,8 @@ public:
         auto it = m_retained.find(topic_hash);
         if(it == m_retained.end() || it->second.empty())
             return;
-        const std::size_t limit =
-            std::min<std::size_t>({static_cast<std::size_t>(max_samples), it->second.count(), k_fetch_cap});
+        const std::size_t limit = std::min<std::size_t>(
+                {static_cast<std::size_t>(max_samples), it->second.count(), k_fetch_cap});
         replay_window(p, it->second, limit);
     }
 
@@ -611,7 +614,8 @@ public:
     }
 
     // The per-(topic, band, cause) drop tally; 0 for an unknown topic or out-of-range band.
-    [[nodiscard]] std::size_t dropped(std::string_view fqn, std::size_t band, detail::drop_cause cause) const
+    [[nodiscard]] std::size_t dropped(std::string_view fqn, std::size_t band,
+                                      detail::drop_cause cause) const
     {
         return m_endpoint.registry().dropped(wire::fqn_topic_hash(fqn), band, cause);
     }
@@ -634,9 +638,10 @@ private:
     // allocated owning buffer and return a wire_bytes whose view aliases it. The owner
     // (shared_ptr<const vector>) is the single per-publish allocation that the fan-out
     // shares by addref across every band slot + the latch ring — no per-destination copy.
-    wire_bytes<> frame_owned(const wire::frame_header &fhdr, const wire::unidirectional_header &uhdr,
-                             std::span<const std::byte> payload,
-                             std::optional<std::uint64_t> counter)
+    wire_bytes<> frame_owned(const wire::frame_header          &fhdr,
+                             const wire::unidirectional_header &uhdr,
+                             std::span<const std::byte>         payload,
+                             std::optional<std::uint64_t>       counter)
     {
         auto buf = std::make_shared<std::vector<std::byte>>();
         wire::encode_unidirectional_frame_into(*buf, fhdr, uhdr, payload, counter);
@@ -650,8 +655,8 @@ private:
     // (data_frame.h), so a payload-fidelity tap records bytes byte-identical to encode().
     static message_view bare_of(const wire_bytes<> &framed, std::optional<std::uint64_t> counter)
     {
-        const std::size_t prefix = wire::header_size + wire::unidirectional_header_size
-                                   + (counter ? wire::varint_size(*counter) : 0);
+        const std::size_t prefix = wire::header_size + wire::unidirectional_header_size +
+                (counter ? wire::varint_size(*counter) : 0);
         const std::span<const std::byte> view = static_cast<std::span<const std::byte>>(framed);
         return message_view{view.subspan(prefix), framed.owner()};
     }
@@ -682,20 +687,17 @@ private:
         const subscriber_qos sub = m_endpoint.registry().qos_for_subscriber(hash, p.channel);
         switch(sub.durability_mode)
         {
-        case durability::none:
-            return;
-        case durability::latest:
-            p.channel.send(it->second.newest());
-            return;
-        case durability::all:
-        {
-            const std::size_t count = it->second.count();
-            const std::size_t limit = sub.replay_depth
-                                          ? std::min<std::size_t>(count, sub.replay_depth)
-                                          : count;
-            replay_window(p, it->second, limit);
-            return;
-        }
+            case durability::none:   return;
+            case durability::latest: p.channel.send(it->second.newest()); return;
+            case durability::all:
+                {
+                    const std::size_t count = it->second.count();
+                    const std::size_t limit = sub.replay_depth
+                            ? std::min<std::size_t>(count, sub.replay_depth)
+                            : count;
+                    replay_window(p, it->second, limit);
+                    return;
+                }
         }
     }
 
@@ -711,8 +713,9 @@ private:
     // The zero-serialization fast path is taken only on a same-process tier, over a
     // channel that exposes the object lane (if-constexpr on the concrete channel type, not
     // a concept verb), AND with a stored type_id matching the carrier's wire tag.
-    static bool eligible_for_object(const typename subscriber_registry<channel_type>::subscriber &sub,
-                                    const object_carrier &carrier)
+    static bool
+    eligible_for_object(const typename subscriber_registry<channel_type>::subscriber &sub,
+                        const object_carrier                                         &carrier)
     {
         if constexpr(requires(channel_type &c) { c.send_object(carrier); })
             return sub.tier == locality::process && sub.type_id && *sub.type_id == carrier.type_tag;
@@ -736,41 +739,39 @@ private:
     static wire::subscribe_status status_of(io::rxo_verdict v)
     {
         return v == io::rxo_verdict::source_identity_incompatible
-                   ? wire::subscribe_status::source_identity_incompatible
-                   : wire::subscribe_status::incompatible_qos;
+                ? wire::subscribe_status::source_identity_incompatible
+                : wire::subscribe_status::incompatible_qos;
     }
 
     void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash,
                         std::optional<std::uint64_t> type_id = std::nullopt,
-                        const subscriber_qos &sub_qos = subscriber_qos{})
+                        const subscriber_qos        &sub_qos = subscriber_qos{})
     {
         // The type_id rides the type_hash field; 0 is the undeclared sentinel the producer
         // reads back as "no type declared" — never a mismatch.
-        wire::subscribe_request req{
-                .fqn        = std::string{fqn},
-                .type_name  = {},
-                .topic_hash = hash,
-                .type_hash  = type_id.value_or(0),
-                .source     = wire::endpoint_source_type::publisher
-        };
+        wire::subscribe_request req{.fqn        = std::string{fqn},
+                                    .type_name  = {},
+                                    .topic_hash = hash,
+                                    .type_hash  = type_id.value_or(0),
+                                    .source     = wire::endpoint_source_type::publisher};
         // Carry the choice OUT only when it differs from the friendly default, so a
         // default subscribe stays byte-identical to the pre-region encoding.
         if(!(sub_qos == subscriber_qos{}))
         {
             req.has_qos = true;
-            req.qos = to_wire_region(sub_qos);
+            req.qos     = to_wire_region(sub_qos);
         }
         m_endpoint.send_subscribe(channel, req);
     }
 
     void record_remote_topic(const std::string &node_name, std::string_view fqn,
-                             const subscriber_qos &qos,
+                             const subscriber_qos        &qos,
                              std::optional<std::uint64_t> type_id = std::nullopt)
     {
         auto &topics = m_remote_topics[node_name];
         for(const auto &existing : topics)
             if(existing.fqn == fqn)
-                return;   // idempotent: a re-record keeps the first stored qos + type_id
+                return; // idempotent: a re-record keeps the first stored qos + type_id
         topics.emplace_back(remembered_demand{std::string{fqn}, qos, type_id});
     }
 
@@ -801,8 +802,10 @@ private:
     {
         m_endpoint.registry().record_drop(hash, band, cause);
         if(m_on_drop)
-            m_on_drop(detail::drop_event{.cause = cause, .transport = tier,
-                                         .band = static_cast<std::uint8_t>(band), .topic_hash = hash});
+            m_on_drop(detail::drop_event{.cause      = cause,
+                                         .transport  = tier,
+                                         .band       = static_cast<std::uint8_t>(band),
+                                         .topic_hash = hash});
     }
 
     // Hand the published/delivered view to the engine sink (which posts a snapshot to the
@@ -836,9 +839,12 @@ private:
                          rxo_verdict verdict, std::optional<std::uint64_t> type_id)
     {
         if(m_on_qos_change)
-            m_on_qos_change(qos_change_event{.edge = edge, .topic_hash = hash, .peer = node_id{},
-                                             .requested = requested, .verdict = verdict,
-                                             .type_id = type_id});
+            m_on_qos_change(qos_change_event{.edge       = edge,
+                                             .topic_hash = hash,
+                                             .peer       = node_id{},
+                                             .requested  = requested,
+                                             .verdict    = verdict,
+                                             .type_id    = type_id});
     }
 
     void drop(std::string_view message) { m_logger.warn(message); }
@@ -848,16 +854,18 @@ private:
     // topic's 0=unset max against (effective_max). Set from the node-level default at
     // construction (no independent constant default here) so the forwarder and the data
     // path resolve against ONE value.
-    std::size_t m_global_default;
-    endpoint_type m_endpoint;
-    detail::egress_scheduler<channel_type, Policy> m_egress;
-    std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
-    std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
+    std::size_t                                                              m_global_default;
+    endpoint_type                                                            m_endpoint;
+    detail::egress_scheduler<channel_type, Policy>                           m_egress;
+    std::unordered_map<std::string, std::vector<remembered_demand>>          m_remote_topics;
+    std::unordered_map<std::uint64_t, detail::history_ring>                  m_retained;
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp;
-    plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop;
-    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_view &)> m_on_published;
-    plexus::detail::move_only_function<
-        void(std::uint64_t, std::string_view, const message_info &, const message_view &)> m_on_delivered;
+    plexus::detail::move_only_function<void(const detail::drop_event &)>     m_on_drop;
+    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_view &)>
+            m_on_published;
+    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_info &,
+                                            const message_view &)>
+                                                                       m_on_delivered;
     plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change;
     // The loan-path encode trigger: returns true when the topic wants a payload encode for
     // this record (selected at payload fidelity AND admitted by decimation this tick). Unset
@@ -867,13 +875,14 @@ private:
     // The wire_fallback per-message companion route (size <= cap -> the returned SHM
     // channel, else nullptr -> the recorded wire sub.channel). Unset on every node with
     // no SHM wire_fallback companion, so the fan-out branch is never entered there.
-    plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view, std::size_t)>
-        m_companion_route;
+    plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view,
+                                                      std::size_t)>
+            m_companion_route;
     // The demand-transition emit slot (the coordinator's on_edge). Unset on a node with no
     // same-host upgrade coordinator, so the attach/detach gate fires one predictable branch.
     plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition,
-                                           demand_role)>
-        m_on_demand_transition;
+                                            demand_role)>
+            m_on_demand_transition;
 };
 
 }

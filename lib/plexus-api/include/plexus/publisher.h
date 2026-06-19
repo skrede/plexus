@@ -29,7 +29,7 @@ namespace plexus {
 // (publisher<Codec> below); the bytes endpoint is the publisher<void> specialization —
 // publisher<> selects it via the defaulted Codec (the default lives in node.h's forward
 // declaration, seen first), so every bytes spelling keeps compiling unchanged.
-template <typename Codec>
+template<typename Codec>
 class publisher;
 
 // The typed publisher's construction-time options. The pool depth is required-with-
@@ -39,10 +39,10 @@ class publisher;
 // publisher's flag.
 struct typed_publisher_options
 {
-    topic_qos                     qos{};
-    bool                          emit_source_identity = false;
-    std::size_t                   pool_depth           = 8;
-    std::optional<type_identity>  type_id{};
+    topic_qos                    qos{};
+    bool                         emit_source_identity = false;
+    std::size_t                  pool_depth           = 8;
+    std::optional<type_identity> type_id{};
 
     // The producer-side same-host ring geometry override. std::optional because ABSENCE
     // is meaningful: unset falls back to the node-level shm_geometry default, present
@@ -65,7 +65,7 @@ struct typed_publisher_options
 // member-init aggregation — declare the node ref first and the endpoint handles after
 // it, so reverse destruction retires the handles before the node. A moved-from handle
 // is inert (null forwarder, empty retire); its destructor does nothing.
-template <>
+template<>
 class publisher<void>
 {
 public:
@@ -73,12 +73,12 @@ public:
     // private friend seam, then capture the type-erased outbound seam for the direct
     // publish. The ctor stays a template over <Policy, NodeTs...> so it binds across the
     // node's transport pack; the captured seam carries no Policy.
-    template <typename Policy, typename... NodeTs>
+    template<typename Policy, typename... NodeTs>
     publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {},
-              bool emit_source_identity = false,
-              std::optional<io::shm::shm_geometry> shm_geometry = std::nullopt)
-        : m_seam(n.endpoint_seam_for())
-        , m_fqn(fqn)
+              bool                                 emit_source_identity = false,
+              std::optional<io::shm::shm_geometry> shm_geometry         = std::nullopt)
+            : m_seam(n.endpoint_seam_for())
+            , m_fqn(fqn)
     {
         m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt,
                                  shm_geometry, std::nullopt);
@@ -90,8 +90,8 @@ public:
     void publish(std::span<const std::byte> bytes) { m_seam.publish(m_seam.ctx, m_fqn, bytes); }
 
     publisher(publisher &&other) noexcept
-        : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
-        , m_fqn(std::move(other.m_fqn))
+            : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
+            , m_fqn(std::move(other.m_fqn))
     {
     }
 
@@ -100,12 +100,12 @@ public:
         if(this != &other)
         {
             m_seam = std::exchange(other.m_seam, io::endpoint_seam{});
-            m_fqn = std::move(other.m_fqn);
+            m_fqn  = std::move(other.m_fqn);
         }
         return *this;
     }
 
-    publisher(const publisher &) = delete;
+    publisher(const publisher &)            = delete;
     publisher &operator=(const publisher &) = delete;
 
     // The producer DECLARATION persists for the node's life so the endpoint identity stays
@@ -119,7 +119,13 @@ public:
     ~publisher() noexcept
     {
         if(m_seam.ctx != nullptr)
-            try { m_seam.retire_publisher(m_seam.ctx, m_fqn); } catch(...) {}
+            try
+            {
+                m_seam.retire_publisher(m_seam.ctx, m_fqn);
+            }
+            catch(...)
+            {
+            }
     }
 
 private:
@@ -140,20 +146,20 @@ private:
 //
 // LIFETIME: a publisher must NOT outlive its node (member-init aggregation, node ref
 // first). A moved-from handle is inert (null forwarder); its destructor does nothing.
-template <typename Codec>
+template<typename Codec>
 class publisher
 {
 public:
     using value_type = typename Codec::value_type;
 
-    template <typename Policy, typename... NodeTs>
+    template<typename Policy, typename... NodeTs>
     publisher(node<Policy, NodeTs...> &n, std::string_view fqn,
               const typed_publisher_options &opts = {}, Codec codec = {})
-        : m_seam(n.endpoint_seam_for())
-        , m_fqn(fqn)
-        , m_codec(std::move(codec))
-        , m_identity(resolve_identity(m_codec, opts.type_id))
-        , m_pool(opts.pool_depth)
+            : m_seam(n.endpoint_seam_for())
+            , m_fqn(fqn)
+            , m_codec(std::move(codec))
+            , m_identity(resolve_identity(m_codec, opts.type_id))
+            , m_pool(opts.pool_depth)
     {
         static_assert(typed_codec<Codec>,
                       "plexus: a typed publisher needs a codec satisfying typed_codec "
@@ -161,14 +167,15 @@ public:
                       "decode(span, value_type&) -> expected<void, error_code>).");
         m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity,
                                  m_identity.type_id, opts.shm_geometry,
-                                 opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
+                                 opts.capture ? std::optional{opts.capture->to_rule()}
+                                              : std::nullopt);
     }
 
     // Borrow a slot to construct a value in place (zero-copy publish). An empty loan on
     // pool exhaustion — publish(loan&&) of an empty loan takes the serialize path on a
     // freshly encoded value the consumer supplies, so the caller checks valid() only when
     // it wants to react to exhaustion itself.
-    template <typename... Args>
+    template<typename... Args>
     detail::loan<value_type> borrow(Args &&...args)
     {
         return m_pool.try_borrow(std::forward<Args>(args)...);
@@ -183,8 +190,8 @@ public:
         if(!held)
             return;
         auto carrier = detail::loan_pool<value_type>::carrier_for(held, m_identity.type_id);
-        const value_type &value = *static_cast<const value_type *>(carrier.slot->object);
-        auto encode = [&] { return encode_to_span(value); };
+        const value_type &value  = *static_cast<const value_type *>(carrier.slot->object);
+        auto              encode = [&] { return encode_to_span(value); };
         m_seam.publish_object(m_seam.ctx, m_fqn, carrier, io::make_encode_thunk(encode));
     }
 
@@ -208,25 +215,31 @@ public:
     [[nodiscard]] std::size_t loan_exhausted() const noexcept { return m_loan_exhausted; }
 
     publisher(publisher &&other) noexcept
-        : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
-        , m_fqn(std::move(other.m_fqn))
-        , m_codec(std::move(other.m_codec))
-        , m_identity(other.m_identity)
-        , m_pool(std::move(other.m_pool))
-        , m_loan_exhausted(other.m_loan_exhausted)
+            : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
+            , m_fqn(std::move(other.m_fqn))
+            , m_codec(std::move(other.m_codec))
+            , m_identity(other.m_identity)
+            , m_pool(std::move(other.m_pool))
+            , m_loan_exhausted(other.m_loan_exhausted)
     {
     }
 
-    publisher(const publisher &) = delete;
+    publisher(const publisher &)            = delete;
     publisher &operator=(const publisher &) = delete;
-    publisher &operator=(publisher &&) = delete;
+    publisher &operator=(publisher &&)      = delete;
 
     // Handle-lifetime drop edge via the same posted-edge-from-dtor safety pattern as the
     // bytes publisher<void>: gate on the moved-from sentinel alone, swallow any exception.
     ~publisher() noexcept
     {
         if(m_seam.ctx != nullptr)
-            try { m_seam.retire_publisher(m_seam.ctx, m_fqn); } catch(...) {}
+            try
+            {
+                m_seam.retire_publisher(m_seam.ctx, m_fqn);
+            }
+            catch(...)
+            {
+            }
     }
 
 private:
@@ -236,13 +249,13 @@ private:
         return static_cast<std::span<const std::byte>>(m_scratch);
     }
 
-    io::endpoint_seam                  m_seam{};
-    std::string                        m_fqn;
-    Codec                              m_codec;
-    type_identity                      m_identity;
-    detail::loan_pool<value_type>      m_pool;
-    wire_bytes<>                       m_scratch;
-    std::size_t                        m_loan_exhausted{};
+    io::endpoint_seam             m_seam{};
+    std::string                   m_fqn;
+    Codec                         m_codec;
+    type_identity                 m_identity;
+    detail::loan_pool<value_type> m_pool;
+    wire_bytes<>                  m_scratch;
+    std::size_t                   m_loan_exhausted{};
 };
 
 }

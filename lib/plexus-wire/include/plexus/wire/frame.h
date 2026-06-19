@@ -30,28 +30,28 @@ constexpr std::byte magic_byte_1{0x50};
 // requires no protocol bump. Further control types take 0x0D+.
 enum class msg_type : uint8_t
 {
-    unidirectional      = 0x01,
-    bidirectional       = 0x02,
-    handshake_req       = 0x03,
-    handshake_resp      = 0x04,
-    subscribe           = 0x05,
-    unsubscribe         = 0x06,
-    fetch_latched       = 0x07,
-    fetch_metadata      = 0x08,
-    rpc_request         = 0x09,
-    rpc_response        = 0x0A,
-    subscribe_response  = 0x0B,
-    heartbeat           = 0x0C
+    unidirectional     = 0x01,
+    bidirectional      = 0x02,
+    handshake_req      = 0x03,
+    handshake_resp     = 0x04,
+    subscribe          = 0x05,
+    unsubscribe        = 0x06,
+    fetch_latched      = 0x07,
+    fetch_metadata     = 0x08,
+    rpc_request        = 0x09,
+    rpc_response       = 0x0A,
+    subscribe_response = 0x0B,
+    heartbeat          = 0x0C
 };
 
 enum class endpoint_source_type : uint8_t
 {
-    publisher      = 0x01,
-    signal         = 0x03,
-    attribute      = 0x05,
-    caller         = 0x06,
-    procedure      = 0x07,
-    plexus         = 0x08
+    publisher = 0x01,
+    signal    = 0x03,
+    attribute = 0x05,
+    caller    = 0x06,
+    procedure = 0x07,
+    plexus    = 0x08
 };
 
 // frame_header.flags bit allocation. The flags byte was always written 0 in

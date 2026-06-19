@@ -61,9 +61,8 @@ namespace detail {
 // on the types) so the multiplexing_transport branch is NEVER instantiated for a
 // single transport — instantiating it eagerly would fail mux_member for a leaf whose
 // concrete-channel completion shape does not satisfy the multiplexer's erased one.
-template <typename Policy, typename... Transports>
-using node_engine_policy =
-    std::conditional_t<sizeof...(Transports) == 1, Policy, muxify<Policy>>;
+template<typename Policy, typename... Transports>
+using node_engine_policy = std::conditional_t<sizeof...(Transports) == 1, Policy, muxify<Policy>>;
 
 // The single-transport node carries no composition glue. An empty member under
 // [[no_unique_address]] keeps it zero-overhead; the multi-transport node holds the
@@ -74,33 +73,32 @@ using node_engine_policy =
 struct no_mux_glue
 {
     no_mux_glue() = default;
-    template <typename... Ignored>
+    template<typename... Ignored>
     explicit no_mux_glue(Ignored &&...) noexcept
     {
     }
 };
 
-template <bool Single, typename... Transports>
+template<bool Single, typename... Transports>
 struct mux_selection
 {
     using transport = io::multiplexing_transport<Transports...>;
-    using glue = io::multiplexing_transport<Transports...>;
+    using glue      = io::multiplexing_transport<Transports...>;
 };
 
-template <typename... Transports>
+template<typename... Transports>
 struct mux_selection<true, Transports...>
 {
     using transport = std::tuple_element_t<0, std::tuple<Transports...>>;
-    using glue = no_mux_glue;
+    using glue      = no_mux_glue;
 };
 
-template <typename... Transports>
+template<typename... Transports>
 using node_engine_transport =
-    typename mux_selection<sizeof...(Transports) == 1, Transports...>::transport;
+        typename mux_selection<sizeof...(Transports) == 1, Transports...>::transport;
 
-template <typename... Transports>
-using node_mux_glue =
-    typename mux_selection<sizeof...(Transports) == 1, Transports...>::glue;
+template<typename... Transports>
+using node_mux_glue = typename mux_selection<sizeof...(Transports) == 1, Transports...>::glue;
 
 // FNV-1a 64 over the name, run twice with distinct offset baselines, folding the two
 // 8-byte digests into the 16-byte node_id. Deterministic and platform-stable (the
@@ -109,21 +107,21 @@ using node_mux_glue =
 // who wants distinct identities for equal names supplies the node_id verbatim.
 inline node_id hash_node_id(std::string_view name) noexcept
 {
-    constexpr std::uint64_t k_prime = 1099511628211ull;
+    constexpr std::uint64_t k_prime    = 1099511628211ull;
     constexpr std::uint64_t k_basis_lo = 1469598103934665603ull;
     constexpr std::uint64_t k_basis_hi = 0x9e3779b97f4a7c15ull;
-    std::uint64_t lo = k_basis_lo;
-    std::uint64_t hi = k_basis_hi;
+    std::uint64_t           lo         = k_basis_lo;
+    std::uint64_t           hi         = k_basis_hi;
     for(char c : name)
     {
         const auto byte = static_cast<std::uint64_t>(static_cast<unsigned char>(c));
-        lo = (lo ^ byte) * k_prime;
-        hi = (hi ^ byte) * k_prime;
+        lo              = (lo ^ byte) * k_prime;
+        hi              = (hi ^ byte) * k_prime;
     }
     node_id id{};
     for(int i = 0; i < 8; ++i)
     {
-        id[i] = static_cast<std::byte>((lo >> (8 * i)) & 0xff);
+        id[i]     = static_cast<std::byte>((lo >> (8 * i)) & 0xff);
         id[8 + i] = static_cast<std::byte>((hi >> (8 * i)) & 0xff);
     }
     return id;
@@ -144,25 +142,24 @@ struct typed_publisher_options;
 struct value_logger_options;
 struct no_projection;
 
-template <typename Codec = void>
+template<typename Codec = void>
 class publisher;
 
-template <typename Codec = void>
+template<typename Codec = void>
 class subscriber;
 
-template <typename Codec, typename Projection = no_projection>
+template<typename Codec, typename Projection = no_projection>
 class value_logger;
 
-template <typename T> struct no_codec;
+template<typename T>
+struct no_codec;
 
-template <typename Sig = void,
-          template <typename> class CReq = no_codec,
-          template <typename> class CRes = CReq>
+template<typename Sig = void, template<typename> class CReq = no_codec,
+         template<typename> class CRes = CReq>
 class caller;
 
-template <typename Sig = void,
-          template <typename> class CReq = no_codec,
-          template <typename> class CRes = CReq>
+template<typename Sig = void, template<typename> class CReq = no_codec,
+         template<typename> class CRes = CReq>
 class procedure;
 
 // The consumable public surface: a node composes a routing_engine over an injected
@@ -185,70 +182,70 @@ class procedure;
 // member endpoint factories, and the private outbound seams) whose members capture
 // `this` and reach node-private state, so they cannot relocate without becoming a
 // behavior-changing rewrite. The relocatable internals already live in detail/.
-template <typename Policy, typename... Transports>
-    requires plexus::Policy<Policy>
-          && (sizeof...(Transports) >= 1)
-          && (sizeof...(Transports) == 1
-                  ? io::transport_backend<
-                        std::tuple_element_t<0, std::tuple<Transports..., void>>, Policy>
-                  : (io::mux_member<Transports> && ...))
+template<typename Policy, typename... Transports>
+    requires plexus::Policy<Policy> && (sizeof...(Transports) >= 1) &&
+        (sizeof...(Transports) == 1
+                 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>,
+                                         Policy>
+                 : (io::mux_member<Transports> && ...))
 class node
 {
     // The four endpoint handles are the ONLY construction path for an endpoint: the
     // registration/retire seams below are PRIVATE, reachable solely through these
     // friends, so there is no public node.publish / node.subscribe / declare_* factory.
-    template <typename C> friend class publisher;
-    template <typename C> friend class subscriber;
-    template <typename C, typename Pr> friend class value_logger;
-    template <typename S, template <typename> class Cq, template <typename> class Cs>
+    template<typename C>
+    friend class publisher;
+    template<typename C>
+    friend class subscriber;
+    template<typename C, typename Pr>
+    friend class value_logger;
+    template<typename S, template<typename> class Cq, template<typename> class Cs>
     friend class caller;
-    template <typename S, template <typename> class Cq, template <typename> class Cs>
+    template<typename S, template<typename> class Cq, template<typename> class Cs>
     friend class procedure;
 
 public:
-    using executor_type = typename Policy::executor_type;
-    using engine_policy = detail::node_engine_policy<Policy, Transports...>;
+    using executor_type    = typename Policy::executor_type;
+    using engine_policy    = detail::node_engine_policy<Policy, Transports...>;
     using engine_transport = detail::node_engine_transport<Transports...>;
-    using engine_type =
-        io::routing_engine<engine_policy, engine_transport>;
-    using engine_channel = typename engine_type::channel_type;
+    using engine_type      = io::routing_engine<engine_policy, engine_transport>;
+    using engine_channel   = typename engine_type::channel_type;
 
     // The node_id is taken VERBATIM: plexus compares the identity, never mints or
     // interprets it.
     node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id,
          Transports &...transports, const node_options &opts)
-        : m_id(id)
-        , m_executor(executor)
-        , m_disc(disc)
-        , m_logger(resolve_logger(opts))
-        , m_service_name(opts.name.empty() ? io::node_name_of(id) : opts.name)
-        , m_max_message_bytes(opts.max_message_bytes)
-        , m_shm_geometry(opts.shm_geometry)
-        , m_max_ring_slab_bytes(opts.max_ring_slab_bytes)
-        , m_wire_crypto_position(opts.wire.position)
-        // The leaves are BORROWED three ways from this one pack and never consumed: the mux
-        // glue borrows them, resolve_hook captures the shm member by reference, and
-        // engine_leaf re-reads them. multiplexing_transport is borrow-only (its lifetime
-        // doc), so a future edit must NOT introduce a move into the mux ctor — that would
-        // invalidate the subsequent engine_leaf/resolve_hook reads of the same pack.
-        , m_glue(transports..., io::transport_selector{}, resolve_hook(transports...))
-        , m_leaf(engine_leaf(transports...))
-        , m_engine(m_leaf, executor, make_fsm_cfg(id, opts),
-                   opts.handshake_timeout, opts.reconnect, opts.redial_seed,
-                   opts.dial_eagerly, resolve_logger(opts), opts.max_message_bytes)
+            : m_id(id)
+            , m_executor(executor)
+            , m_disc(disc)
+            , m_logger(resolve_logger(opts))
+            , m_service_name(opts.name.empty() ? io::node_name_of(id) : opts.name)
+            , m_max_message_bytes(opts.max_message_bytes)
+            , m_shm_geometry(opts.shm_geometry)
+            , m_max_ring_slab_bytes(opts.max_ring_slab_bytes)
+            , m_wire_crypto_position(opts.wire.position)
+            // The leaves are BORROWED three ways from this one pack and never consumed: the mux
+            // glue borrows them, resolve_hook captures the shm member by reference, and
+            // engine_leaf re-reads them. multiplexing_transport is borrow-only (its lifetime
+            // doc), so a future edit must NOT introduce a move into the mux ctor — that would
+            // invalidate the subsequent engine_leaf/resolve_hook reads of the same pack.
+            , m_glue(transports..., io::transport_selector{}, resolve_hook(transports...))
+            , m_leaf(engine_leaf(transports...))
+            , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout,
+                       opts.reconnect, opts.redial_seed, opts.dial_eagerly, resolve_logger(opts),
+                       opts.max_message_bytes)
     {
         // The fqn-to-callback demux: install the node-shared receive route ONCE, before
         // any session is built (the route's set-before-listen contract). Every delivered
         // data frame fans to every callback locally registered for its fqn.
-        m_engine.on_message_route(
-            [this](std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info)
-            { dispatch_message(fqn, bytes, info); });
+        m_engine.on_message_route([this](std::string_view fqn, std::span<const std::byte> bytes,
+                                         const io::message_info &info)
+                                  { dispatch_message(fqn, bytes, info); });
         // The object-lane demux beside the byte route: a process-tier object handle fans
         // to every typed subscriber on its fqn, native-key-checked (never a cast on a
         // mismatch). The route is a READ-ONLY sub-callback — the session owns the release.
-        m_engine.on_object_route(
-            [this](std::string_view fqn, const io::object_carrier &carrier)
-            { dispatch_object(fqn, carrier); });
+        m_engine.on_object_route([this](std::string_view fqn, const io::object_carrier &carrier)
+                                 { dispatch_object(fqn, carrier); });
         // Observe peer-ready edges so a standing demand re-fans to a peer that becomes
         // ready AFTER the demand was registered (the late-join half on the sub side).
         m_engine.add_observer(m_peer_watch);
@@ -282,14 +279,14 @@ public:
     // of this overload, never the default — the verbatim ctor above is the primary.
     node(executor_type executor, discovery::discovery &disc, std::string_view name,
          Transports &...transports, const node_options &opts)
-        : node(executor, disc, detail::hash_node_id(name), transports..., opts)
+            : node(executor, disc, detail::hash_node_id(name), transports..., opts)
     {
     }
 
-    node(const node &) = delete;
+    node(const node &)            = delete;
     node &operator=(const node &) = delete;
-    node(node &&) = delete;
-    node &operator=(node &&) = delete;
+    node(node &&)                 = delete;
+    node &operator=(node &&)      = delete;
 
     // The destroy edge is POSTED before member teardown (the engine, declared last, is
     // still alive — m_executor too), so it surfaces only if the owner pumps the executor
@@ -335,10 +332,10 @@ public:
 
     // Escape hatches: the live engine objects, for advanced peer-level work the
     // topic-level public verbs deliberately hide.
-    engine_type &router() noexcept { return m_engine; }
+    engine_type       &router() noexcept { return m_engine; }
     const engine_type &router() const noexcept { return m_engine; }
-    auto &message_forwarder() noexcept { return m_engine.messages(); }
-    executor_type executor() const noexcept { return m_executor; }
+    auto              &message_forwarder() noexcept { return m_engine.messages(); }
+    executor_type      executor() const noexcept { return m_executor; }
 
     // The count of object-lane deliveries dropped at the demux because the carrier's
     // process-local type witness did not match a tag-equal subscriber's — the never-UB
@@ -363,7 +360,7 @@ public:
     // Serve a typed procedure: Sig = Res(Req) is deduced from a
     // (const Req&) -> expected<Res, error_code> handler; the family expands to
     // Family<Req> / Family<Res>.
-    template <template <typename> class Family, typename Handler>
+    template<template<typename> class Family, typename Handler>
     auto serve(std::string_view fqn, Handler handler)
     {
         static_assert(detail::deducible_handler<Handler>,
@@ -376,7 +373,7 @@ public:
 
     // A typed calling endpoint. A caller has no handler to deduce from, so the signature
     // is spelled explicitly alongside the family: node.caller<Res(Req), pair_codec>("div").
-    template <typename Sig, template <typename> class Family>
+    template<typename Sig, template<typename> class Family>
     auto caller(std::string_view fqn)
     {
         return plexus::caller<Sig, Family>{*this, fqn};
@@ -384,7 +381,7 @@ public:
 
     // Subscribe a typed topic: the value type T is deduced from a (const T&) or
     // (const T&, message_info) callback; the family expands to Family<T>.
-    template <template <typename> class Family, typename Cb>
+    template<template<typename> class Family, typename Cb>
     auto subscribe(std::string_view topic, Cb cb)
     {
         static_assert(detail::deducible_handler<Cb>,
@@ -398,8 +395,9 @@ public:
     // Advertise a typed topic. A publisher has no callable to deduce from, so the codec is
     // supplied as a finished type (the pub/sub slots take finished codecs, not families):
     // node.advertise<reading_codec>("telemetry").
-    template <typename Codec>
-    auto advertise(std::string_view topic, const typed_publisher_options &opts = {}, Codec codec = {})
+    template<typename Codec>
+    auto advertise(std::string_view topic, const typed_publisher_options &opts = {},
+                   Codec codec = {})
     {
         return publisher<Codec>{*this, topic, opts, std::move(codec)};
     }
@@ -409,7 +407,7 @@ public:
     // opts.out. The codec is spelled explicitly; an opt-in projection (column names +
     // field emit) is supplied as a sibling argument, defaulting to the operator<< text
     // floor. The codec and projection live only in the returned handle — never the tap.
-    template <typename Codec, typename Projection = no_projection>
+    template<typename Codec, typename Projection = no_projection>
     [[nodiscard]] auto log(std::string_view topic, const value_logger_options &opts,
                            Codec codec = {}, Projection projection = {})
     {
@@ -422,11 +420,11 @@ public:
     // registers its tap on the engine here (auto-feeding the always-on metadata floor) and
     // deregisters it before teardown; the bytes land in the consumer's byte_sink, which
     // MUST outlive the handle. The drain rides this node's executor turns — no thread.
-    [[nodiscard]] recorder<engine_type, Policy>
-    make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
+    [[nodiscard]] recorder<engine_type, Policy> make_recorder(io::recording::byte_sink &sink,
+                                                              recorder_options          opts = {})
     {
-        return recorder<engine_type, Policy>{m_engine, m_executor, m_id, sink, std::move(opts),
-                                             m_wire_crypto_position};
+        return recorder<engine_type, Policy>{m_engine, m_executor,      m_id,
+                                             sink,     std::move(opts), m_wire_crypto_position};
     }
     // --------------------------------------------------------------------------------
 
@@ -445,16 +443,18 @@ private:
 
     // Register a standing subscriber: mint its id, store it, and fan its demand to every
     // currently known peer. Returns the id the retire seam keys on.
-    registration_id register_subscriber_seam(
-        std::string_view fqn, const io::subscriber_qos &qos,
-        plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb,
-        std::optional<std::uint64_t> type_id = std::nullopt,
-        object_entry obj = {},
-        std::optional<io::topic_capture_rule> capture = std::nullopt)
+    registration_id
+    register_subscriber_seam(std::string_view fqn, const io::subscriber_qos &qos,
+                             plexus::detail::move_only_function<void(std::span<const std::byte>,
+                                                                     const io::message_info &)>
+                                                                   cb,
+                             std::optional<std::uint64_t>          type_id = std::nullopt,
+                             object_entry                          obj     = {},
+                             std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
         const registration_id rid = m_next_registration++;
         m_subscriptions.push_back(
-            {rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
+                {rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         // Thread the subscriber's own hint (the bilateral OR — a hint on EITHER end
@@ -463,11 +463,12 @@ private:
         // SAME for_each_shm_member path the publisher provisions through.
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
         provision_same_host_ring(fqn, subscriber_effective_bytes(qos), m_shm_geometry);
-        m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered,
-                                     wire::fqn_topic_hash(fqn), type_id});
+        m_engine.post_endpoint(
+                fqn,
+                {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
-            m_engine.subscribe(peer, fqn, qos, io::locality::any,
-                               io::reliability_requirement::any, type_id);
+            m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any,
+                               type_id);
         return rid;
     }
 
@@ -483,8 +484,9 @@ private:
         m_subscriptions.erase(it);
         if(!any_subscriber_for(fqn))
         {
-            m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired,
-                                         wire::fqn_topic_hash(fqn), std::nullopt});
+            m_engine.post_endpoint(fqn,
+                                   {io::endpoint_edge::subscriber_retired,
+                                    wire::fqn_topic_hash(fqn), std::nullopt});
             for(const auto &peer : m_known_peers)
                 m_engine.unsubscribe(peer, fqn);
         }
@@ -496,22 +498,23 @@ private:
     // lifetime is a distinct concept, surfaced separately: this declares the topic and
     // posts the declared edge; retire_publisher_seam posts the handle-drop edge. The handle
     // drives publish directly.
-    void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity,
-                                std::optional<std::uint64_t> type_id = std::nullopt,
-                                std::optional<io::shm::shm_geometry> shm_geometry = std::nullopt,
-                                std::optional<io::topic_capture_rule> capture = std::nullopt)
+    void declare_publisher_seam(std::string_view fqn, const topic_qos &qos,
+                                bool                                  emit_source_identity,
+                                std::optional<std::uint64_t>          type_id      = std::nullopt,
+                                std::optional<io::shm::shm_geometry>  shm_geometry = std::nullopt,
+                                std::optional<io::topic_capture_rule> capture      = std::nullopt)
     {
         m_engine.messages().declare(fqn, qos, type_id, emit_source_identity);
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
-        m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_declared,
-                                     wire::fqn_topic_hash(fqn), type_id});
+        m_engine.post_endpoint(
+                fqn, {io::endpoint_edge::publisher_declared, wire::fqn_topic_hash(fqn), type_id});
         // Resolution order per-topic ?: node-default ?: shipped: the per-topic geometry
         // when declared, else the node-level default; the effective per-message size is
         // the topic override when set, else the node default. The provisioning is a
         // producer-side same-host-local value — never wire-advertised, never RxO.
-        const io::shm::shm_geometry geom = shm_geometry.value_or(m_shm_geometry);
-        const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
+        const io::shm::shm_geometry geom            = shm_geometry.value_or(m_shm_geometry);
+        const std::size_t           effective_bytes = io::effective_max(qos, m_max_message_bytes);
         provision_same_host_ring(fqn, effective_bytes, geom);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
     }
@@ -521,8 +524,9 @@ private:
     // observable lifetime only, posted like every other edge.
     void retire_publisher_seam(std::string_view fqn)
     {
-        m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_dropped,
-                                     wire::fqn_topic_hash(fqn), std::nullopt});
+        m_engine.post_endpoint(
+                fqn,
+                {io::endpoint_edge::publisher_dropped, wire::fqn_topic_hash(fqn), std::nullopt});
     }
 
     // Provision the declaring topic's same-host ring geometry on the shm member (if the
@@ -538,11 +542,12 @@ private:
 
     // A subscriber-only ring sizes to the subscriber's requested per-message max when it
     // set one, else the node default — the consumer-rescues-itself default-geometry ring.
-    [[nodiscard]] std::size_t subscriber_effective_bytes(const io::subscriber_qos &qos) const noexcept
+    [[nodiscard]] std::size_t
+    subscriber_effective_bytes(const io::subscriber_qos &qos) const noexcept
     {
         return qos.requested_max_message_bytes != 0
-                   ? static_cast<std::size_t>(qos.requested_max_message_bytes)
-                   : m_max_message_bytes;
+                ? static_cast<std::size_t>(qos.requested_max_message_bytes)
+                : m_max_message_bytes;
     }
 
     void apply_shm_slab_ceiling(std::uint64_t bytes)
@@ -560,41 +565,46 @@ private:
     void install_upgrade_coordinator(upgrade_policy_fn policy)
     {
         m_engine.on_upgrade_policy(policy);
-        for_each_shm_member([this](auto &m) {
-            using member_t = std::remove_reference_t<decltype(m)>;
-            m_engine.on_upgrade_gate(
-                [&m](std::string_view fqn) -> io::shm::companion_mint<engine_channel> {
-                    const std::string key{fqn};
-                    std::unique_ptr<typename member_t::channel_type> ch = m.mint_companion(key);
-                    if(!ch)
-                        return {};
-                    const auto g = m.resolved_geometry_for(key);
-                    return {wrap_companion(std::move(ch)), g.mode, g.slot_capacity};
+        for_each_shm_member(
+                [this](auto &m)
+                {
+                    using member_t = std::remove_reference_t<decltype(m)>;
+                    m_engine.on_upgrade_gate(
+                            [&m](std::string_view fqn) -> io::shm::companion_mint<engine_channel>
+                            {
+                                const std::string                                key{fqn};
+                                std::unique_ptr<typename member_t::channel_type> ch =
+                                        m.mint_companion(key);
+                                if(!ch)
+                                    return {};
+                                const auto g = m.resolved_geometry_for(key);
+                                return {wrap_companion(std::move(ch)), g.mode, g.slot_capacity};
+                            });
+                    // The SUBSCRIBER-side receive gate: attach the co-host ring as a consumer and
+                    // route each drained framed message into the matching peer session's receive
+                    // path (the engine resolves the session by node_name). The drain is posted on
+                    // this node's executor by the notifier bridge, so inject runs on an executor
+                    // turn — no drain thread. The returned owner is type-erased into a closure that
+                    // holds the concrete RAII handle by move (never called — it exists to own); the
+                    // coordinator drops it on 1->0/peer-dead, running the handle dtor (clear sink,
+                    // release ring). The closure captures the engine by reference — it outlives the
+                    // coordinator that owns the sink, so the receive route stays valid for the
+                    // lane's life. A null handle (broker failure) declines: the subscriber keeps
+                    // the wire.
+                    m_engine.on_upgrade_receive_gate(
+                            [&m, this](std::string_view node_name,
+                                       std::string_view fqn) -> io::shm::companion_receive
+                            {
+                                const std::string key{fqn};
+                                const std::string peer{node_name};
+                                auto              handle = m.mint_receive_companion(
+                                        key, [this, peer](std::span<const std::byte> frame)
+                                        { m_engine.inject_companion_receive(peer, frame); });
+                                if(!handle)
+                                    return {};
+                                return {[h = std::move(handle)]() mutable { (void)h; }};
+                            });
                 });
-            // The SUBSCRIBER-side receive gate: attach the co-host ring as a consumer and
-            // route each drained framed message into the matching peer session's receive
-            // path (the engine resolves the session by node_name). The drain is posted on
-            // this node's executor by the notifier bridge, so inject runs on an executor
-            // turn — no drain thread. The returned owner is type-erased into a closure that
-            // holds the concrete RAII handle by move (never called — it exists to own); the
-            // coordinator drops it on 1->0/peer-dead, running the handle dtor (clear sink,
-            // release ring). The closure captures the engine by reference — it outlives the
-            // coordinator that owns the sink, so the receive route stays valid for the lane's
-            // life. A null handle (broker failure) declines: the subscriber keeps the wire.
-            m_engine.on_upgrade_receive_gate(
-                [&m, this](std::string_view node_name,
-                           std::string_view fqn) -> io::shm::companion_receive {
-                    const std::string key{fqn};
-                    const std::string peer{node_name};
-                    auto handle = m.mint_receive_companion(
-                        key, [this, peer](std::span<const std::byte> frame) {
-                            m_engine.inject_companion_receive(peer, frame);
-                        });
-                    if(!handle)
-                        return {};
-                    return {[h = std::move(handle)]() mutable { (void)h; }};
-                });
-        });
     }
 
     // Wrap a minted concrete shm channel into the engine's byte_channel. A multi-transport
@@ -602,12 +612,12 @@ private:
     // multiplexing_transport::wrap); the shm member exists only in such a composition, so
     // the engine channel is the erased type. The if-constexpr keeps a single-transport
     // build (no shm member reaches here) from instantiating the erasure.
-    template <typename C>
+    template<typename C>
     static std::unique_ptr<engine_channel> wrap_companion(std::unique_ptr<C> ch)
     {
         if constexpr(std::is_same_v<engine_channel, io::polymorphic_byte_channel>)
             return std::make_unique<engine_channel>(
-                std::make_unique<io::channel_adapter<C>>(std::move(ch)));
+                    std::make_unique<io::channel_adapter<C>>(std::move(ch)));
         else
             return ch;
     }
@@ -617,7 +627,7 @@ private:
     // provisioning verb) or a single borrowed transport (apply fn directly if it is the
     // shm member). The capability check is an if-constexpr on the member type, so a
     // composition with no shm member is a compile-time no-op.
-    template <typename F>
+    template<typename F>
     void for_each_shm_member(F &&fn)
     {
         if constexpr(sizeof...(Transports) == 1)
@@ -627,17 +637,20 @@ private:
         }
         else
         {
-            m_leaf.for_each_member([&](auto &m) {
-                using M = std::remove_reference_t<decltype(m)>;
-                if constexpr(has_topic_geometry<M>)
-                    fn(m);
-            });
+            m_leaf.for_each_member(
+                    [&](auto &m)
+                    {
+                        using M = std::remove_reference_t<decltype(m)>;
+                        if constexpr(has_topic_geometry<M>)
+                            fn(m);
+                    });
         }
     }
 
-    template <typename M>
-    static constexpr bool has_topic_geometry =
-        requires(M &m) { m.set_topic_geometry(std::string{}, std::size_t{}, io::shm::shm_geometry{}); };
+    template<typename M>
+    static constexpr bool has_topic_geometry = requires(M &m) {
+        m.set_topic_geometry(std::string{}, std::size_t{}, io::shm::shm_geometry{});
+    };
 
     // The caller seam: resolve the FIRST connection-order peer with a complete session
     // and route the call to it directly through the procedure forwarder (carrying the
@@ -650,7 +663,7 @@ private:
     // fabricated rpc_status) and never touches the forwarder. The engine silently drops a
     // pre-completion call; the facade completes the errc itself — it never hangs,
     // buffers, or queues.
-    template <typename OnReply>
+    template<typename OnReply>
     void call_seam(std::string_view fqn, std::span<const std::byte> param, OnReply on_reply,
                    std::optional<std::chrono::nanoseconds> deadline)
     {
@@ -661,11 +674,11 @@ private:
                 continue;
             const std::optional<publisher_gid> provider{publisher_gid{peer, 0}};
             m_engine.procedures().call(
-                session->rpc_peer(), fqn, param,
-                [on_reply = std::move(on_reply), provider](
-                    wire::rpc_status status, std::span<const std::byte> bytes) mutable
-                { on_reply(status, bytes, provider); },
-                deadline, session->session_id());
+                    session->rpc_peer(), fqn, param,
+                    [on_reply = std::move(on_reply),
+                     provider](wire::rpc_status status, std::span<const std::byte> bytes) mutable
+                    { on_reply(status, bytes, provider); },
+                    deadline, session->session_id());
             return;
         }
         Policy::post(m_executor, [on_reply = std::move(on_reply)]() mutable
@@ -738,8 +751,8 @@ private:
         // reception zeroed) and never triggers the clock read. publication_sequence and
         // from_intra_process are arity-independent and always honest; source_identity is
         // absent (the object lane carries no gid).
-        std::uint64_t reception = 0;
-        bool reception_read = false;
+        std::uint64_t reception      = 0;
+        bool          reception_read = false;
 
         for(auto &[rid, sub] : m_subscriptions)
         {
@@ -758,7 +771,7 @@ private:
             {
                 if(!reception_read)
                 {
-                    reception = wire::now_timestamp_ns();
+                    reception      = wire::now_timestamp_ns();
                     reception_read = true;
                 }
                 info.source_timestamp    = carrier.source_timestamp;
@@ -783,19 +796,22 @@ private:
     io::endpoint_seam endpoint_seam_for() noexcept
     {
         io::endpoint_seam s{};
-        s.ctx = this;
-        s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos,
-                                 bool emit, std::optional<std::uint64_t> type_id,
-                                 std::optional<io::shm::shm_geometry> shm_geometry,
+        s.ctx               = this;
+        s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos, bool emit,
+                                 std::optional<std::uint64_t>          type_id,
+                                 std::optional<io::shm::shm_geometry>  shm_geometry,
                                  std::optional<io::topic_capture_rule> capture)
-        { static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry, capture); };
+        {
+            static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry,
+                                                             capture);
+        };
         s.publish = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes)
         { static_cast<node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
         s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier,
                               io::encode_thunk encode)
         {
             static_cast<node *>(ctx)->m_engine.messages().publish_object(
-                fqn, carrier, [&] { return io::invoke(encode); });
+                    fqn, carrier, [&] { return io::invoke(encode); });
         };
         s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos,
                                    io::bytes_cb cb, std::optional<std::uint64_t> type_id,
@@ -803,8 +819,8 @@ private:
                                    std::optional<io::topic_capture_rule> capture) -> registration_id
         {
             return static_cast<node *>(ctx)->register_subscriber_seam(
-                fqn, qos, std::move(cb), type_id,
-                object_entry{native_key, std::move(dispatch)}, capture);
+                    fqn, qos, std::move(cb), type_id, object_entry{native_key, std::move(dispatch)},
+                    capture);
         };
         s.retire_subscriber = [](void *ctx, registration_id rid)
         { static_cast<node *>(ctx)->retire_subscriber_seam(rid); };
@@ -821,16 +837,17 @@ private:
     }
     // --------------------------------------------------------------------------------
 
-    static io::handshake_fsm_config make_fsm_cfg(const plexus::node_id &id, const node_options &opts)
+    static io::handshake_fsm_config make_fsm_cfg(const plexus::node_id &id,
+                                                 const node_options    &opts)
     {
         return io::handshake_fsm_config{
-            .self_id = id,
-            .version_major = opts.handshake.version_major,
-            .version_minor = opts.handshake.version_minor,
-            .compatible_version_major = opts.handshake.compatible_version_major,
-            .compatible_version_minor = opts.handshake.compatible_version_minor,
-            .local_fingerprint = opts.handshake.local_fingerprint,
-            .attach_policy = opts.attach_policy};
+                .self_id                  = id,
+                .version_major            = opts.handshake.version_major,
+                .version_minor            = opts.handshake.version_minor,
+                .compatible_version_major = opts.handshake.compatible_version_major,
+                .compatible_version_minor = opts.handshake.compatible_version_minor,
+                .local_fingerprint        = opts.handshake.local_fingerprint,
+                .attach_policy            = opts.attach_policy};
     }
 
     static log::logger &resolve_logger(const node_options &opts)
@@ -842,9 +859,10 @@ private:
     // node reads it to install the same-host preference hook only when a composition
     // actually carries shared memory; a composition without it keeps the default
     // first-candidate hook unchanged.
-    template <typename M>
-    static constexpr bool has_can_acquire =
-        requires(M &m) { { m.can_acquire(std::declval<const io::endpoint &>()) } -> std::convertible_to<bool>; };
+    template<typename M>
+    static constexpr bool has_can_acquire = requires(M &m) {
+        { m.can_acquire(std::declval<const io::endpoint &>()) } -> std::convertible_to<bool>;
+    };
 
     static constexpr bool any_shm_member = (has_can_acquire<Transports> || ...);
 
@@ -872,7 +890,7 @@ private:
     // INSTANTIATES for a leaf that has can_acquire, so a non-shm leaf in the pack (AF_UNIX,
     // TCP) never forces a prefer_shm_hook<that-leaf> instantiation (which would fail to
     // compile — no can_acquire). The fold over these per-leaf binds is the type-safe seam.
-    template <typename M>
+    template<typename M>
     static void bind_shm_hook(io::selection_hook &hook, M &member)
     {
         if constexpr(has_can_acquire<M>)
@@ -934,21 +952,21 @@ private:
         }
     }
 
-    plexus::node_id m_id;
-    executor_type m_executor;
-    discovery::discovery &m_disc;
-    log::logger &m_logger;
-    std::string m_service_name;
-    std::string m_host;
+    plexus::node_id                             m_id;
+    executor_type                               m_executor;
+    discovery::discovery                       &m_disc;
+    log::logger                                &m_logger;
+    std::string                                 m_service_name;
+    std::string                                 m_host;
     std::vector<discovery::listening_transport> m_listens;
 
     // The node-level size + same-host ring defaults a publisher with no per-topic
     // override resolves against (per-topic ?: these node defaults ?: shipped constant).
     // Held so the declare path can resolve the effective geometry and provision the
     // same-host ring; producer-side only, never wire-advertised.
-    std::size_t m_max_message_bytes;
+    std::size_t           m_max_message_bytes;
     io::shm::shm_geometry m_shm_geometry;
-    std::uint64_t m_max_ring_slab_bytes;
+    std::uint64_t         m_max_ring_slab_bytes;
 
     // The node's per-transport wire-capture crypto position, retained from node_options.wire
     // so make_recorder can stamp it into the recorder's stream preamble (a recording-only
@@ -968,12 +986,12 @@ private:
     // The endpoint state is declared BEFORE the engine so the engine — which captures
     // &m_peer_watch through add_observer and a `this`-bound route — is destroyed FIRST,
     // leaving no dangling observer/route reference during teardown.
-    peer_watch m_peer_watch{*this};
-    std::vector<plexus::node_id> m_known_peers;
+    peer_watch                                            m_peer_watch{*this};
+    std::vector<plexus::node_id>                          m_known_peers;
     std::vector<std::pair<registration_id, subscription>> m_subscriptions;
-    std::vector<std::string> m_served_fqns;
-    registration_id m_next_registration{1};
-    std::size_t m_object_dispatch_mismatch{};
+    std::vector<std::string>                              m_served_fqns;
+    registration_id                                       m_next_registration{1};
+    std::size_t                                           m_object_dispatch_mismatch{};
 
     engine_type m_engine;
 };

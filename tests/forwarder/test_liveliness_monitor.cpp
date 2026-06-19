@@ -44,10 +44,12 @@ namespace {
 // A period pinned a tick above the granularity: an advance(P + a tick) reliably
 // crosses a tick expiry so the scan fires. (M1: a sub-granularity period would never
 // cross a tick boundary and the test would stick — never fire.)
-constexpr auto k_period = k_tick_granularity * 3;   // 300ms
-constexpr auto k_lease  = k_tick_granularity * 5;   // 500ms
-static_assert(k_period >= k_tick_granularity, "a deadline period below the tick granularity never crosses a tick");
-static_assert(k_lease >= k_tick_granularity, "a lease below the tick granularity never crosses a tick");
+constexpr auto k_period = k_tick_granularity * 3; // 300ms
+constexpr auto k_lease  = k_tick_granularity * 5; // 500ms
+static_assert(k_period >= k_tick_granularity,
+              "a deadline period below the tick granularity never crosses a tick");
+static_assert(k_lease >= k_tick_granularity,
+              "a lease below the tick granularity never crosses a tick");
 
 constexpr int k_loops = 50;
 
@@ -62,39 +64,43 @@ node_id make_id(std::uint8_t seed)
 struct event_sink
 {
     int missed_deadline = 0;
-    int lease_expired = 0;
+    int lease_expired   = 0;
 
     void attach(monitor &m)
     {
-        m.on_liveness([this](const liveness_event &ev) {
-            if(ev.kind == liveness_kind::missed_deadline)
-                ++missed_deadline;
-            else
-                ++lease_expired;
-        });
+        m.on_liveness(
+                [this](const liveness_event &ev)
+                {
+                    if(ev.kind == liveness_kind::missed_deadline)
+                        ++missed_deadline;
+                    else
+                        ++lease_expired;
+                });
     }
 };
 
 }
 
-TEST_CASE("liveliness monitor: a data gap beyond the deadline period fires exactly one missed-deadline")
+TEST_CASE("liveliness monitor: a data gap beyond the deadline period fires exactly one "
+          "missed-deadline")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock> bus;
+        inproc_bus<test_clock>      bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor m{ex};
+        monitor    m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
 
-        const node_id id = make_id(0x11);
+        const node_id       id         = make_id(0x11);
         const std::uint64_t topic_hash = 0xABCDull;
         m.register_endpoint(id, topic_hash,
-                            static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()), 0);
+                            static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),
+                            0);
 
         m.stamp_data(id, topic_hash);
 
@@ -125,16 +131,17 @@ TEST_CASE("liveliness monitor: a data gap beyond the deadline period fires exact
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("liveliness monitor: a presence gap beyond the lease fires exactly one lease-expiry; a heartbeat keeps it alive")
+TEST_CASE("liveliness monitor: a presence gap beyond the lease fires exactly one lease-expiry; a "
+          "heartbeat keeps it alive")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock> bus;
+        inproc_bus<test_clock>      bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor m{ex};
+        monitor    m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
@@ -175,21 +182,22 @@ TEST_CASE("liveliness monitor: a presence gap beyond the lease fires exactly one
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("liveliness monitor: the two stamps are distinct — a heartbeat refreshes the lease but NOT the deadline")
+TEST_CASE("liveliness monitor: the two stamps are distinct — a heartbeat refreshes the lease but "
+          "NOT the deadline")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock> bus;
+        inproc_bus<test_clock>      bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor m{ex};
+        monitor    m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
 
-        const node_id id = make_id(0x33);
+        const node_id       id         = make_id(0x33);
         const std::uint64_t topic_hash = 0xBEEFull;
         // L > P so the deadline lapses first; both periods >= the granularity.
         m.register_endpoint(id, topic_hash,
@@ -201,7 +209,7 @@ TEST_CASE("liveliness monitor: the two stamps are distinct — a heartbeat refre
         // Advance past the deadline period (but under the lease), feeding only
         // heartbeats — they refresh presence but NOT the data clock.
         test_clock::advance(k_period + k_tick_granularity);
-        m.stamp_seen(id);   // a heartbeat: keeps the lease alive, deadline already lapsed
+        m.stamp_seen(id); // a heartbeat: keeps the lease alive, deadline already lapsed
         ex.drain();
 
         // The deadline fired (data lapsed); the lease did NOT (the heartbeat kept presence).
@@ -219,16 +227,16 @@ TEST_CASE("liveliness monitor: a 0 period is inert (never fires)")
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock> bus;
+        inproc_bus<test_clock>      bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor m{ex};
+        monitor    m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
 
         const node_id id = make_id(0x44);
-        m.register_endpoint(id, 0xABCDull, 0, 0);   // neither axis requested
+        m.register_endpoint(id, 0xABCDull, 0, 0); // neither axis requested
 
         // Advance far with no stamps: a not-requested axis is skipped, never a false fire.
         test_clock::advance(k_lease * 4);
@@ -247,15 +255,15 @@ TEST_CASE("liveliness monitor: a deregistered endpoint never fires (no resurrect
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock> bus;
+        inproc_bus<test_clock>      bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor m{ex};
+        monitor    m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
 
-        const node_id id = make_id(0x55);
+        const node_id       id         = make_id(0x55);
         const std::uint64_t topic_hash = 0xCAFEull;
         m.register_endpoint(id, topic_hash,
                             static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),
@@ -278,13 +286,13 @@ TEST_CASE("liveliness monitor: a deregistered endpoint never fires (no resurrect
 TEST_CASE("liveliness monitor: a stamp allocates nothing in steady state")
 {
     test_clock::reset();
-    inproc_bus<test_clock> bus;
+    inproc_bus<test_clock>      bus;
     inproc_executor<test_clock> ex{bus};
 
     monitor m{ex};
     m.start();
 
-    const node_id id = make_id(0x66);
+    const node_id       id         = make_id(0x66);
     const std::uint64_t topic_hash = 0xD00Dull;
     // Warm the maps once (register grows the entries).
     m.register_endpoint(id, topic_hash,

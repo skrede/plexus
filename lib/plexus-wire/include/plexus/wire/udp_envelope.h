@@ -55,19 +55,19 @@ constexpr std::size_t udp_envelope_overhead = 3;
 // even at a far larger per-message fragment count. This sub-header is APPENDED only when the
 // FRAGMENTED bit is set, so the common single-datagram path keeps the 3-byte overhead with
 // zero fragmentation cost.
-constexpr std::size_t udp_fragment_subheader = 10;
+constexpr std::size_t udp_fragment_subheader       = 10;
 constexpr std::size_t udp_fragment_header_overhead = udp_envelope_overhead + udp_fragment_subheader;
 
 enum class udp_envelope_kind : std::uint8_t
 {
-    best_effort = 0,
+    best_effort  = 0,
     reliable_arq = 1,
 };
 
 namespace detail {
 
-constexpr std::uint8_t udp_kind_shift = 6u;
-constexpr std::uint8_t udp_kind_mask = 0b1100'0000u;
+constexpr std::uint8_t udp_kind_shift     = 6u;
+constexpr std::uint8_t udp_kind_mask      = 0b1100'0000u;
 constexpr std::uint8_t udp_fragmented_bit = 0b0000'0001u;
 
 // Pack the kind discriminator into bits 7..6 and the FRAGMENTED flag into bit0. The
@@ -85,16 +85,17 @@ inline std::uint8_t pack_ver_flags(udp_envelope_kind kind, bool fragmented = fal
 
 struct udp_decode_result
 {
-    udp_envelope_kind kind;
-    std::uint16_t seq;
+    udp_envelope_kind          kind;
+    std::uint16_t              seq;
     std::span<const std::byte> frame;
-    bool fragmented;
+    bool                       fragmented;
 };
 
-inline std::vector<std::byte> wrap_udp(udp_envelope_kind kind, std::uint16_t seq, std::span<const std::byte> frame)
+inline std::vector<std::byte> wrap_udp(udp_envelope_kind kind, std::uint16_t seq,
+                                       std::span<const std::byte> frame)
 {
     std::vector<std::byte> buf(udp_envelope_overhead + frame.size());
-    writer w{buf};
+    writer                 w{buf};
 
     w.u8(detail::pack_ver_flags(kind));
     w.u16(seq);
@@ -130,16 +131,15 @@ inline std::optional<udp_decode_result> unwrap_udp(std::span<const std::byte> da
     if(datagram.size() < udp_envelope_overhead)
         return std::nullopt;
 
-    reader r{datagram};
+    reader     r{datagram};
     const auto ver_flags = r.u8();
-    const auto seq = r.u16();
+    const auto seq       = r.u16();
 
-    return udp_decode_result{
-            .kind       = static_cast<udp_envelope_kind>((ver_flags & detail::udp_kind_mask) >> detail::udp_kind_shift),
-            .seq        = seq,
-            .frame      = r.rest(),
-            .fragmented = (ver_flags & detail::udp_fragmented_bit) != 0u
-    };
+    return udp_decode_result{.kind = static_cast<udp_envelope_kind>(
+                                     (ver_flags & detail::udp_kind_mask) >> detail::udp_kind_shift),
+                             .seq        = seq,
+                             .frame      = r.rest(),
+                             .fragmented = (ver_flags & detail::udp_fragmented_bit) != 0u};
 }
 
 // Wrap an inner frame with the FRAGMENTED bit set but WITHOUT the 6-byte wire
@@ -148,8 +148,8 @@ inline std::optional<udp_decode_result> unwrap_udp(std::span<const std::byte> da
 // needs the envelope bit to flag the peer that the in-order-delivered payload is a
 // fragment to reassemble. The best_effort path uses wrap_udp_fragment_into (the bit AND
 // the sub-header) instead; the unfragmented wrap_udp_into above is untouched.
-inline void wrap_udp_into_fragmented(std::vector<std::byte> &out, udp_envelope_kind kind, std::uint16_t seq,
-                                     std::span<const std::byte> frame)
+inline void wrap_udp_into_fragmented(std::vector<std::byte> &out, udp_envelope_kind kind,
+                                     std::uint16_t seq, std::span<const std::byte> frame)
 {
     out.resize(udp_envelope_overhead + frame.size());
     writer w{out};
@@ -164,9 +164,9 @@ inline void wrap_udp_into_fragmented(std::vector<std::byte> &out, udp_envelope_k
 // frame). The reassembler keys its table on these fields.
 struct udp_fragment_header
 {
-    std::uint16_t msg_id;
-    std::uint32_t frag_idx;
-    std::uint32_t frag_cnt;
+    std::uint16_t              msg_id;
+    std::uint32_t              frag_idx;
+    std::uint32_t              frag_cnt;
     std::span<const std::byte> payload;
 };
 
@@ -175,9 +175,9 @@ struct udp_fragment_header
 // resize() reuses the buffer's capacity so a fragmenting send loop allocates nothing
 // after the warm-up grow. The unfragmented wrap_udp_into above is untouched — this
 // overhead exists only on the fragmenting path.
-inline void wrap_udp_fragment_into(std::vector<std::byte> &out, udp_envelope_kind kind, std::uint16_t seq,
-                                   std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt,
-                                   std::span<const std::byte> frag_bytes)
+inline void wrap_udp_fragment_into(std::vector<std::byte> &out, udp_envelope_kind kind,
+                                   std::uint16_t seq, std::uint16_t msg_id, std::uint32_t frag_idx,
+                                   std::uint32_t frag_cnt, std::span<const std::byte> frag_bytes)
 {
     out.resize(udp_fragment_header_overhead + frag_bytes.size());
     writer w{out};
@@ -211,21 +211,18 @@ inline void encode_udp_fragment_payload_into(std::vector<std::byte> &out, std::u
 // of a fragmented datagram yields). Fail-closed: a frame shorter than the 10-byte
 // sub-header is rejected to nullopt before any read, never indexing past the span. The
 // returned payload is a view into the caller's frame (frame.subspan past the sub-header).
-inline std::optional<udp_fragment_header> decode_udp_fragment_header(std::span<const std::byte> frame)
+inline std::optional<udp_fragment_header>
+decode_udp_fragment_header(std::span<const std::byte> frame)
 {
     if(frame.size() < udp_fragment_subheader)
         return std::nullopt;
 
     reader r{frame};
-    auto msg_id = r.u16();
-    auto frag_idx = r.u32();
-    auto frag_cnt = r.u32();
+    auto   msg_id   = r.u16();
+    auto   frag_idx = r.u32();
+    auto   frag_cnt = r.u32();
     return udp_fragment_header{
-            .msg_id   = msg_id,
-            .frag_idx = frag_idx,
-            .frag_cnt = frag_cnt,
-            .payload  = r.rest()
-    };
+            .msg_id = msg_id, .frag_idx = frag_idx, .frag_cnt = frag_cnt, .payload = r.rest()};
 }
 
 }

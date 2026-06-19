@@ -24,10 +24,10 @@ namespace plexus::asio {
 // transport — a second backend-within-asio data point for the concept.
 struct unix_policy
 {
-    using executor_type = ::asio::io_context &;
+    using executor_type     = ::asio::io_context &;
     using byte_channel_type = unix_channel;
-    using timer_type = asio_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = asio_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
     {
@@ -38,6 +38,6 @@ struct unix_policy
 }
 
 static_assert(plexus::Policy<plexus::asio::unix_policy>,
-    "unix_policy must satisfy Policy — check the channel/timer constructors and post()");
+              "unix_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

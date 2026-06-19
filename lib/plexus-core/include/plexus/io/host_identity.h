@@ -22,8 +22,7 @@ namespace plexus::io {
 // reads the peer's half. This reads ONLY the authenticated binding, never a wire claim.
 [[nodiscard]] inline node_id authenticated_peer_id(const security::attach_facts &facts) noexcept
 {
-    return facts.role == security::attach_role::initiator ? facts.responder_id
-                                                          : facts.initiator_id;
+    return facts.role == security::attach_role::initiator ? facts.responder_id : facts.initiator_id;
 }
 
 // The TLS-path identity: the SPKI-derived node_id already computed for the verified

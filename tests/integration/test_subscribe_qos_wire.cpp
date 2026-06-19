@@ -22,10 +22,7 @@ using plexus::io::from_wire_region;
 
 namespace {
 
-bool round_trips(const subscriber_qos &q)
-{
-    return from_wire_region(to_wire_region(q)) == q;
-}
+bool round_trips(const subscriber_qos &q) { return from_wire_region(to_wire_region(q)) == q; }
 
 }
 
@@ -56,19 +53,19 @@ TEST_CASE("subscribe_qos_wire: the scalar and enum fields round-trip")
 
 TEST_CASE("subscribe_qos_wire: combinations of every flag and field round-trip together")
 {
-    REQUIRE(round_trips(subscriber_qos{.durability_mode = durability::latest,
-                                       .delivery_mode = delivery::pull,
-                                       .replay_depth = 32,
-                                       .requires_source_identity = true,
+    REQUIRE(round_trips(subscriber_qos{.durability_mode                = durability::latest,
+                                       .delivery_mode                  = delivery::pull,
+                                       .replay_depth                   = 32,
+                                       .requires_source_identity       = true,
                                        .requested_reliability_reliable = true,
-                                       .requested_deadline_ns = 200,
-                                       .requested_lease_ns = 400,
-                                       .requested_priority = 3,
-                                       .requested_max_message_bytes = 8u * 1024u * 1024u,
-                                       .rxo = rxo_mode::strict,
-                                       .posture = attach_posture::strict}));
+                                       .requested_deadline_ns          = 200,
+                                       .requested_lease_ns             = 400,
+                                       .requested_priority             = 3,
+                                       .requested_max_message_bytes    = 8u * 1024u * 1024u,
+                                       .rxo                            = rxo_mode::strict,
+                                       .posture                        = attach_posture::strict}));
 
-    REQUIRE(round_trips(subscriber_qos{.durability_mode = durability::all,
+    REQUIRE(round_trips(subscriber_qos{.durability_mode                = durability::all,
                                        .requested_reliability_reliable = true,
-                                       .rxo = rxo_mode::strict}));
+                                       .rxo                            = rxo_mode::strict}));
 }

@@ -41,14 +41,13 @@ std::span<const std::byte> as_bytes(const std::string &s)
 struct capture
 {
     explicit capture(inproc_executor<> &ex)
-        : sink(ex)
+            : sink(ex)
     {
-        sink.on_data([this](std::span<const std::byte> d) {
-            frames.emplace_back(d.begin(), d.end());
-        });
+        sink.on_data([this](std::span<const std::byte> d)
+                     { frames.emplace_back(d.begin(), d.end()); });
     }
 
-    inproc_channel<> sink;
+    inproc_channel<>                    sink;
     std::vector<std::vector<std::byte>> frames;
 };
 
@@ -66,7 +65,7 @@ std::vector<std::string> data_bodies(const capture &cap)
         auto hdr = plexus::wire::decode_header(f);
         if(!hdr || hdr->type != plexus::wire::msg_type::unidirectional)
             continue;
-        auto inner = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
+        auto inner   = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
         auto decoded = plexus::wire::decode_unidirectional(inner);
         if(!decoded)
             continue;
@@ -84,11 +83,11 @@ TEST_CASE("a none+pull subscriber gets 0 on subscribe, then fetch_latched caps a
     // Reproducibility: the PULL delivery effects are proven over repeated runs.
     for(int iter = 0; iter < 50; ++iter)
     {
-        inproc_bus<> bus;
+        inproc_bus<>      bus;
         inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        capture cap(ex);
-        auto peer = make_peer(ch, cap, "node-a");
+        inproc_channel<>  ch(ex);
+        capture           cap(ex);
+        auto              peer = make_peer(ch, cap, "node-a");
         // The topic_hash the wire fetch_latched_request would carry.
         const auto hash = plexus::wire::fqn_topic_hash("topic");
 
@@ -123,11 +122,11 @@ TEST_CASE("a none+pull subscriber gets 0 on subscribe, then fetch_latched caps a
 TEST_CASE("fetch_latched against a never-declared topic replays zero frames (no crash)",
           "[fetch_latched][forwarder]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     fwd.fetch_latched(peer, plexus::wire::fqn_topic_hash("nope"), 5);

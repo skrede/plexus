@@ -77,30 +77,33 @@ forwarder::peer make_peer(inproc_channel<> &ch, std::string node_name)
 
 }
 
-TEST_CASE("message_info: the existing 2-arg deliver hands up the topic and bytes", "[forwarder][message_info]")
+TEST_CASE("message_info: the existing 2-arg deliver hands up the topic and bytes",
+          "[forwarder][message_info]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    auto peer = make_peer(ch, "node-a");
+    inproc_channel<>  ch(ex);
+    auto              peer = make_peer(ch, "node-a");
 
     forwarder fwd{};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
-    const std::string body = "payload";
-    plexus::wire::unidirectional_header uhdr{
-        .source     = plexus::wire::endpoint_source_type::publisher,
-        .sequence   = 7,
-        .topic_hash = plexus::wire::fqn_topic_hash("alpha")};
+    const std::string                   body = "payload";
+    plexus::wire::unidirectional_header uhdr{.source =
+                                                     plexus::wire::endpoint_source_type::publisher,
+                                             .sequence   = 7,
+                                             .topic_hash = plexus::wire::fqn_topic_hash("alpha")};
     auto inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
 
     std::string got_fqn;
     std::string got_bytes;
-    fwd.deliver(peer, inner, plexus::node_id{}, /*has_source_identity=*/false, [&](std::string_view fqn, std::span<const std::byte> data) {
-        got_fqn.assign(fqn);
-        got_bytes.assign(reinterpret_cast<const char *>(data.data()), data.size());
-    });
+    fwd.deliver(peer, inner, plexus::node_id{}, /*has_source_identity=*/false,
+                [&](std::string_view fqn, std::span<const std::byte> data)
+                {
+                    got_fqn.assign(fqn);
+                    got_bytes.assign(reinterpret_cast<const char *>(data.data()), data.size());
+                });
 
     CHECK(got_fqn == "alpha");
     CHECK(got_bytes == body);
@@ -109,36 +112,37 @@ TEST_CASE("message_info: the existing 2-arg deliver hands up the topic and bytes
 TEST_CASE("message_info: the metadata overload delivers a fully-populated info",
           "[forwarder][message_info]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    auto peer = make_peer(ch, "node-a");
+    inproc_channel<>  ch(ex);
+    auto              peer = make_peer(ch, "node-a");
 
     forwarder fwd{};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
-    const std::string body = "payload";
-    constexpr std::uint64_t k_sequence = 42;
-    plexus::wire::unidirectional_header uhdr{
-        .source     = plexus::wire::endpoint_source_type::publisher,
-        .sequence   = k_sequence,
-        .topic_hash = plexus::wire::fqn_topic_hash("alpha")};
+    const std::string                   body       = "payload";
+    constexpr std::uint64_t             k_sequence = 42;
+    plexus::wire::unidirectional_header uhdr{.source =
+                                                     plexus::wire::endpoint_source_type::publisher,
+                                             .sequence   = k_sequence,
+                                             .topic_hash = plexus::wire::fqn_topic_hash("alpha")};
     auto inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
 
     // The header-derived half of message_info as the session stamps it at on_receive:
     // a known source_timestamp from the frame header and a later receiver stamp.
     message_info session_info{};
     session_info.source_timestamp    = 1000;
-    session_info.reception_timestamp  = 2000;
-    session_info.from_intra_process   = true;
+    session_info.reception_timestamp = 2000;
+    session_info.from_intra_process  = true;
 
-    std::string got_fqn;
-    std::string got_bytes;
+    std::string  got_fqn;
+    std::string  got_bytes;
     message_info got{};
-    bool delivered = false;
+    bool         delivered = false;
     fwd.deliver(peer, inner, session_info, peer_node_id(), /*has_source_identity=*/false,
-                [&](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) {
+                [&](std::string_view fqn, std::span<const std::byte> data, const message_info &mi)
+                {
                     delivered = true;
                     got_fqn.assign(fqn);
                     got_bytes.assign(reinterpret_cast<const char *>(data.data()), data.size());
@@ -148,41 +152,42 @@ TEST_CASE("message_info: the metadata overload delivers a fully-populated info",
     REQUIRE(delivered);
     CHECK(got_fqn == "alpha");
     CHECK(got_bytes == body);
-    CHECK(got.publication_sequence == k_sequence);           // filled by the forwarder
-    CHECK(got.source_timestamp == 1000);                     // == frame_header.timestamp_ns
-    CHECK(got.reception_timestamp == 2000);                  // receiver-stamped
-    CHECK(got.reception_timestamp >= got.source_timestamp);  // monotonic
+    CHECK(got.publication_sequence == k_sequence);          // filled by the forwarder
+    CHECK(got.source_timestamp == 1000);                    // == frame_header.timestamp_ns
+    CHECK(got.reception_timestamp == 2000);                 // receiver-stamped
+    CHECK(got.reception_timestamp >= got.source_timestamp); // monotonic
     CHECK(got.from_intra_process == true);
-    CHECK_FALSE(got.source_identity.has_value());            // flag clear → source identity absent
+    CHECK_FALSE(got.source_identity.has_value()); // flag clear → source identity absent
 }
 
 TEST_CASE("message_info: the metadata overload reconstructs source_identity from a flag-gated gid",
           "[forwarder][message_info][gid]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    auto peer = make_peer(ch, "node-a");
+    inproc_channel<>  ch(ex);
+    auto              peer = make_peer(ch, "node-a");
 
     forwarder fwd{};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
-    const std::string body = "payload";
-    constexpr std::uint64_t k_counter = 0x2A;   // the endpoint counter on the wire
-    plexus::wire::unidirectional_header uhdr{
-        .source     = plexus::wire::endpoint_source_type::publisher,
-        .sequence   = 9,
-        .topic_hash = plexus::wire::fqn_topic_hash("alpha")};
+    const std::string                   body      = "payload";
+    constexpr std::uint64_t             k_counter = 0x2A; // the endpoint counter on the wire
+    plexus::wire::unidirectional_header uhdr{.source =
+                                                     plexus::wire::endpoint_source_type::publisher,
+                                             .sequence   = 9,
+                                             .topic_hash = plexus::wire::fqn_topic_hash("alpha")};
     // A flag-gated frame: the varint endpoint counter rides the inner payload.
     auto inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body), k_counter);
 
     message_info got{};
-    bool delivered = false;
+    bool         delivered = false;
     fwd.deliver(peer, inner, message_info{}, peer_node_id(0xCD), /*has_source_identity=*/true,
-                [&](std::string_view, std::span<const std::byte>, const message_info &mi) {
+                [&](std::string_view, std::span<const std::byte>, const message_info &mi)
+                {
                     delivered = true;
-                    got = mi;
+                    got       = mi;
                 });
 
     REQUIRE(delivered);
@@ -194,17 +199,18 @@ TEST_CASE("message_info: the metadata overload reconstructs source_identity from
     CHECK(*got.source_identity == publisher_gid{peer_node_id(0xCD), k_counter});
 }
 
-TEST_CASE("message_info: declare(emit_source_identity) mints a stable, distinct per-endpoint gid counter",
+TEST_CASE("message_info: declare(emit_source_identity) mints a stable, distinct per-endpoint gid "
+          "counter",
           "[forwarder][message_info][gid]")
 {
     // Producer side: the endpoint counter is minted ONCE at the first source-identity
     // declare, is STABLE across a re-declare (so an endpoint's gid does not drift —
     // IDENT-02), and is DISTINCT per declared topic. Captured off the wire via a
     // subscribed channel so it exercises the real publish framing.
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> sub(ex);
-    inproc_channel<> capture(ex);
+    inproc_channel<>  sub(ex);
+    inproc_channel<>  capture(ex);
     sub.connect_to(capture.local_endpoint());
     std::vector<std::byte> framed;
     capture.on_data([&](std::span<const std::byte> f) { framed.assign(f.begin(), f.end()); });
@@ -214,15 +220,16 @@ TEST_CASE("message_info: declare(emit_source_identity) mints a stable, distinct 
 
     // The decoded endpoint counter of the LAST frame captured on the wire (nullopt when
     // the frame's gid flag was clear).
-    auto published_counter = [&](std::string_view fqn) -> std::optional<std::uint64_t> {
+    auto published_counter = [&](std::string_view fqn) -> std::optional<std::uint64_t>
+    {
         framed.clear();
         fwd.publish(fqn, as_bytes(std::string{"x"}));
         ex.drain();
         auto hdr = plexus::wire::decode_header(framed);
         REQUIRE(hdr.has_value());
-        const bool flag = (hdr->flags & plexus::wire::k_flag_source_identity) != 0;
-        auto inner = std::span<const std::byte>(framed).subspan(plexus::wire::header_size);
-        auto decoded = plexus::wire::decode_unidirectional(inner, flag);
+        const bool flag    = (hdr->flags & plexus::wire::k_flag_source_identity) != 0;
+        auto       inner   = std::span<const std::byte>(framed).subspan(plexus::wire::header_size);
+        auto       decoded = plexus::wire::decode_unidirectional(inner, flag);
         REQUIRE(decoded.has_value());
         return decoded->endpoint_counter;
     };

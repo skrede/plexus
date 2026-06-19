@@ -38,8 +38,8 @@ using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 using plexus::io::message_info;
 
-using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using inproc_publisher = plexus::publisher<>;
+using inproc_node       = plexus::node<inproc_policy, inproc_transport<>>;
+using inproc_publisher  = plexus::publisher<>;
 using inproc_subscriber = plexus::subscriber<>;
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -55,10 +55,10 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0xC0FFEEu;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0xC0FFEEu;
     opts.dial_eagerly = eager;
     return opts;
 }
@@ -75,11 +75,11 @@ std::string to_string(std::span<const std::byte> b)
 
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -108,12 +108,13 @@ struct net
 TEST_CASE("bytes pub/sub: end-to-end delivery is byte-identical, looped", "[node][pubsub]")
 {
     constexpr int k_iterations = 8;
-    net n;
+    net           n;
     n.connect();
 
     std::vector<std::string> got;
-    inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
-    inproc_publisher p{n.b, "topic"};
+    inproc_subscriber        s{n.a, "topic",
+                               [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_publisher         p{n.b, "topic"};
     n.drive();
 
     int delivered = 0;
@@ -129,15 +130,16 @@ TEST_CASE("bytes pub/sub: end-to-end delivery is byte-identical, looped", "[node
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("bytes pub/sub: the 3-arg callback receives a populated message_info with the source gid", "[node][pubsub]")
+TEST_CASE("bytes pub/sub: the 3-arg callback receives a populated message_info with the source gid",
+          "[node][pubsub]")
 {
     net n;
     n.connect();
 
-    std::vector<std::string> got;
+    std::vector<std::string>  got;
     std::vector<message_info> infos;
-    inproc_subscriber s{n.a, "topic",
-                        [&](std::span<const std::byte> b, const message_info &mi) {
+    inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b, const message_info &mi)
+                        {
                             got.push_back(to_string(b));
                             infos.push_back(mi);
                         }};
@@ -156,14 +158,16 @@ TEST_CASE("bytes pub/sub: the 3-arg callback receives a populated message_info w
     REQUIRE(infos.front().source_identity->node_id() == n.id_b);
 }
 
-TEST_CASE("bytes pub/sub: the 2-arg path is unchanged when a source-identity topic publishes", "[node][pubsub]")
+TEST_CASE("bytes pub/sub: the 2-arg path is unchanged when a source-identity topic publishes",
+          "[node][pubsub]")
 {
     net n;
     n.connect();
 
     std::vector<std::string> got;
-    inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
-    inproc_publisher p{n.b, "topic", plexus::topic_qos{}, /*emit_source_identity=*/true};
+    inproc_subscriber        s{n.a, "topic",
+                               [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_publisher         p{n.b, "topic", plexus::topic_qos{}, /*emit_source_identity=*/true};
     n.drive();
 
     p.publish(as_bytes("bytes-only"));
@@ -173,10 +177,12 @@ TEST_CASE("bytes pub/sub: the 2-arg path is unchanged when a source-identity top
     REQUIRE(got.front() == "bytes-only");
 }
 
-TEST_CASE("bytes pub/sub: the standing fan reaches a peer discovered AFTER the subscriber registers, looped", "[node][pubsub]")
+TEST_CASE("bytes pub/sub: the standing fan reaches a peer discovered AFTER the subscriber "
+          "registers, looped",
+          "[node][pubsub]")
 {
     constexpr int k_iterations = 5;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         net n;
@@ -184,7 +190,8 @@ TEST_CASE("bytes pub/sub: the standing fan reaches a peer discovered AFTER the s
         // A subscribes with NO peer known yet (B has not been constructed-as-connected;
         // only A has listened). The demand is standing.
         std::vector<std::string> got;
-        inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber s{n.a, "topic",
+                            [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         n.a.listen({"inproc", "host-a:5000"});
         n.drive();
 

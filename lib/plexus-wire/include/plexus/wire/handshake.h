@@ -76,35 +76,35 @@ constexpr std::size_t k_handshake_proof_len = 32;
 // big-endian (write_u64/read_u64), so the value crosses hosts identically.
 struct handshake_request
 {
-    std::array<std::byte, 16> id;
-    std::uint8_t              version_major;
-    std::uint8_t              version_minor;
-    std::uint8_t              compatible_version_major;
-    std::uint8_t              compatible_version_minor;
-    std::uint8_t              protocol_version;
-    std::uint64_t             fingerprint;
+    std::array<std::byte, 16>                     id;
+    std::uint8_t                                  version_major;
+    std::uint8_t                                  version_minor;
+    std::uint8_t                                  compatible_version_major;
+    std::uint8_t                                  compatible_version_minor;
+    std::uint8_t                                  protocol_version;
+    std::uint64_t                                 fingerprint;
     std::array<std::byte, k_handshake_key_id_len> key_id;
-    std::array<std::byte, 16> own_nonce;
-    std::uint8_t              cipher_offer;
-    std::uint8_t              chosen_cipher;
-    std::array<std::byte, k_handshake_proof_len> proof;
+    std::array<std::byte, 16>                     own_nonce;
+    std::uint8_t                                  cipher_offer;
+    std::uint8_t                                  chosen_cipher;
+    std::array<std::byte, k_handshake_proof_len>  proof;
 };
 
 struct handshake_response
 {
-    std::array<std::byte, 16> id;
-    std::uint8_t              version_major;
-    std::uint8_t              version_minor;
-    std::uint8_t              compatible_version_major;
-    std::uint8_t              compatible_version_minor;
-    std::uint8_t              protocol_version;
-    std::uint64_t             fingerprint;
+    std::array<std::byte, 16>                     id;
+    std::uint8_t                                  version_major;
+    std::uint8_t                                  version_minor;
+    std::uint8_t                                  compatible_version_major;
+    std::uint8_t                                  compatible_version_minor;
+    std::uint8_t                                  protocol_version;
+    std::uint64_t                                 fingerprint;
     std::array<std::byte, k_handshake_key_id_len> key_id;
-    std::array<std::byte, 16> own_nonce;
-    std::uint8_t              cipher_offer;
-    std::uint8_t              chosen_cipher;
-    std::array<std::byte, k_handshake_proof_len> proof;
-    handshake_status          status;
+    std::array<std::byte, 16>                     own_nonce;
+    std::uint8_t                                  cipher_offer;
+    std::uint8_t                                  chosen_cipher;
+    std::array<std::byte, k_handshake_proof_len>  proof;
+    handshake_status                              status;
 };
 
 // FIXED wire size of an encoded handshake_request: id(16) + 5 single-byte fields +
@@ -126,12 +126,11 @@ inline bool is_defined_handshake_status(std::uint8_t byte) noexcept
 {
     switch(static_cast<handshake_status>(byte))
     {
-    case handshake_status::accepted:
-    case handshake_status::version_incompatible:
-    case handshake_status::identity_conflict:
-    case handshake_status::rejected_unknown:
-    case handshake_status::unauthorized:
-        return true;
+        case handshake_status::accepted:
+        case handshake_status::version_incompatible:
+        case handshake_status::identity_conflict:
+        case handshake_status::rejected_unknown:
+        case handshake_status::unauthorized:         return true;
     }
     return false;
 }
@@ -154,7 +153,8 @@ inline void encode_handshake_request_into(std::vector<std::byte> &out, const han
     w.bytes(req.proof);
 }
 
-inline void encode_handshake_response_into(std::vector<std::byte> &out, const handshake_response &resp)
+inline void encode_handshake_response_into(std::vector<std::byte>   &out,
+                                           const handshake_response &resp)
 {
     out.resize(handshake_response_size);
     writer w{out};
@@ -193,7 +193,7 @@ inline std::optional<handshake_request> decode_handshake_request(std::span<const
         return std::nullopt;
 
     handshake_request req{};
-    reader r{payload};
+    reader            r{payload};
     r.copy_to(req.id.data(), req.id.size());
     req.version_major            = r.u8();
     req.version_minor            = r.u8();
@@ -203,19 +203,20 @@ inline std::optional<handshake_request> decode_handshake_request(std::span<const
     req.fingerprint              = r.u64();
     r.copy_to(req.key_id.data(), req.key_id.size());
     r.copy_to(req.own_nonce.data(), req.own_nonce.size());
-    req.cipher_offer             = r.u8();
-    req.chosen_cipher            = r.u8();
+    req.cipher_offer  = r.u8();
+    req.chosen_cipher = r.u8();
     r.copy_to(req.proof.data(), req.proof.size());
     return req;
 }
 
-inline std::optional<handshake_response> decode_handshake_response(std::span<const std::byte> payload)
+inline std::optional<handshake_response>
+decode_handshake_response(std::span<const std::byte> payload)
 {
     if(payload.size() < handshake_response_size)
         return std::nullopt;
 
     handshake_response resp{};
-    reader r{payload};
+    reader             r{payload};
     r.copy_to(resp.id.data(), resp.id.size());
     resp.version_major            = r.u8();
     resp.version_minor            = r.u8();
@@ -225,14 +226,14 @@ inline std::optional<handshake_response> decode_handshake_response(std::span<con
     resp.fingerprint              = r.u64();
     r.copy_to(resp.key_id.data(), resp.key_id.size());
     r.copy_to(resp.own_nonce.data(), resp.own_nonce.size());
-    resp.cipher_offer             = r.u8();
-    resp.chosen_cipher            = r.u8();
+    resp.cipher_offer  = r.u8();
+    resp.chosen_cipher = r.u8();
     r.copy_to(resp.proof.data(), resp.proof.size());
 
     auto status_byte = r.u8();
     if(!is_defined_handshake_status(status_byte))
         return std::nullopt;
-    resp.status                   = static_cast<handshake_status>(status_byte);
+    resp.status = static_cast<handshake_status>(status_byte);
     return resp;
 }
 

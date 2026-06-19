@@ -60,15 +60,15 @@ struct test_policy
 
 struct coord
 {
-    std::atomic<std::uint32_t> regions_ready{0};  // consumer: regions mapped + armed
-    std::atomic<std::uint32_t> tearing_down{0};    // consumer: about to tear down
-    std::atomic<std::uint32_t> producer_done{0};   // producer: flood finished
+    std::atomic<std::uint32_t> regions_ready{0}; // consumer: regions mapped + armed
+    std::atomic<std::uint32_t> tearing_down{0};  // consumer: about to tear down
+    std::atomic<std::uint32_t> producer_done{0}; // producer: flood finished
 };
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
+                     0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -89,7 +89,7 @@ constexpr std::uint32_t k_payload = 0xFEEDFACEu;
 bool flood(const std::string &fqn, coord *c)
 {
     posix_shm_region_broker broker;
-    region_handle ctrl, slab;
+    region_handle           ctrl, slab;
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
        broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
@@ -126,7 +126,7 @@ bool flood(const std::string &fqn, coord *c)
 TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state",
           "[shm][teardown_race]")
 {
-    const std::string fqn = "topic.teardown." + std::to_string(::getpid());
+    const std::string        fqn  = "topic.teardown." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -146,7 +146,7 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state",
         }
 
         posix_shm_region_broker broker;
-        region_handle ctrl, slab;
+        region_handle           ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
                               pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn),
@@ -165,13 +165,16 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state",
         {
             plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
             pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(
-                ring, bridge, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+                    ring, bridge, plexus::io::reliability::best_effort,
+                    plexus::io::congestion::drop_newest);
 
-            bridge.arm([&] {
-                pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn
-                    deliver = [](plexus::wire_bytes<pio::shm_slot_owner>) {};
-                channel.drain(deliver); // touches the subscriber -- must be alive here
-            });
+            bridge.arm(
+                    [&]
+                    {
+                        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn
+                                deliver = [](plexus::wire_bytes<pio::shm_slot_owner>) {};
+                        channel.drain(deliver); // touches the subscriber -- must be alive here
+                    });
 
             c->regions_ready.store(1, std::memory_order_release);
 
@@ -181,9 +184,9 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state",
             // yet run, or a CQE in flight, must not touch the destroyed subscriber.
             io.run_for(std::chrono::milliseconds(2));
             c->tearing_down.store(1, std::memory_order_release);
-            bridge.disarm();           // stop -> (io_uring exit drops the SQE) -> close fd
-            io.poll();                  // run any drain already posted BEFORE the channel dies
-        }                               // channel + bridge destruct here (bridge dtor disarm is a no-op)
+            bridge.disarm(); // stop -> (io_uring exit drops the SQE) -> close fd
+            io.poll();       // run any drain already posted BEFORE the channel dies
+        } // channel + bridge destruct here (bridge dtor disarm is a no-op)
 
         // Drain any residual posted handlers on a now-disarmed reactor (none should
         // touch freed state; this flushes the queue so asan sees a clean teardown).

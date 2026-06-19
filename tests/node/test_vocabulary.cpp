@@ -31,7 +31,8 @@ TEST_CASE("expected carries a value", "[vocabulary][expected]")
 
 TEST_CASE("expected carries an error via unexpected", "[vocabulary][expected]")
 {
-    expected<int, std::error_code> e{unexpected<std::error_code>(make_error_code(call_errc::timeout))};
+    expected<int, std::error_code> e{
+            unexpected<std::error_code>(make_error_code(call_errc::timeout))};
 
     REQUIRE_FALSE(static_cast<bool>(e));
     REQUIRE_FALSE(e.has_value());
@@ -67,7 +68,7 @@ TEST_CASE("expected<void> default-constructs to a success state", "[vocabulary][
 TEST_CASE("expected<void> carries an error via unexpected", "[vocabulary][expected]")
 {
     expected<void, std::error_code> e{
-        unexpected<std::error_code>(make_error_code(call_errc::deserialize_failed))};
+            unexpected<std::error_code>(make_error_code(call_errc::deserialize_failed))};
 
     REQUIRE_FALSE(static_cast<bool>(e));
     REQUIRE_FALSE(e.has_value());
@@ -109,13 +110,13 @@ TEST_CASE("distinct call_errc map to distinct codes", "[vocabulary][call_errc]")
 
 TEST_CASE("from_rpc_status maps every failure status", "[vocabulary][call_errc]")
 {
-    REQUIRE(from_rpc_status(rpc_status::error)               == call_errc::error);
-    REQUIRE(from_rpc_status(rpc_status::timeout)             == call_errc::timeout);
-    REQUIRE(from_rpc_status(rpc_status::cancelled)           == call_errc::cancelled);
-    REQUIRE(from_rpc_status(rpc_status::no_handler)          == call_errc::no_handler);
-    REQUIRE(from_rpc_status(rpc_status::deserialize_failed)  == call_errc::deserialize_failed);
-    REQUIRE(from_rpc_status(rpc_status::topic_not_found)     == call_errc::topic_not_found);
-    REQUIRE(from_rpc_status(rpc_status::peer_disconnected)   == call_errc::peer_disconnected);
+    REQUIRE(from_rpc_status(rpc_status::error) == call_errc::error);
+    REQUIRE(from_rpc_status(rpc_status::timeout) == call_errc::timeout);
+    REQUIRE(from_rpc_status(rpc_status::cancelled) == call_errc::cancelled);
+    REQUIRE(from_rpc_status(rpc_status::no_handler) == call_errc::no_handler);
+    REQUIRE(from_rpc_status(rpc_status::deserialize_failed) == call_errc::deserialize_failed);
+    REQUIRE(from_rpc_status(rpc_status::topic_not_found) == call_errc::topic_not_found);
+    REQUIRE(from_rpc_status(rpc_status::peer_disconnected) == call_errc::peer_disconnected);
     REQUIRE(from_rpc_status(rpc_status::rpc_response_orphan) == call_errc::rpc_response_orphan);
 }
 

@@ -36,14 +36,14 @@ public:
 
     ~loaned_buffer() { reclaim(); }
 
-    loaned_buffer(const loaned_buffer &) = delete;
+    loaned_buffer(const loaned_buffer &)            = delete;
     loaned_buffer &operator=(const loaned_buffer &) = delete;
 
     loaned_buffer(loaned_buffer &&other) noexcept
-        : m_slot(other.m_slot),
-          m_capacity(other.m_capacity),
-          m_filled(other.m_filled),
-          m_position(other.m_position)
+            : m_slot(other.m_slot)
+            , m_capacity(other.m_capacity)
+            , m_filled(other.m_filled)
+            , m_position(other.m_position)
     {
         other.m_slot     = nullptr;
         other.m_capacity = 0;
@@ -57,10 +57,10 @@ public:
 
         reclaim();
 
-        m_slot       = other.m_slot;
-        m_capacity   = other.m_capacity;
-        m_filled     = other.m_filled;
-        m_position   = other.m_position;
+        m_slot     = other.m_slot;
+        m_capacity = other.m_capacity;
+        m_filled   = other.m_filled;
+        m_position = other.m_position;
 
         other.m_slot     = nullptr;
         other.m_capacity = 0;
@@ -91,7 +91,9 @@ private:
     friend struct ::plexus::io::shm::test::handle_test_access;
 
     loaned_buffer(std::byte *slot, std::size_t capacity, std::uint64_t position) noexcept
-        : m_slot(slot), m_capacity(capacity), m_position(position)
+            : m_slot(slot)
+            , m_capacity(capacity)
+            , m_position(position)
     {
     }
 

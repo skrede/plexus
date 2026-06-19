@@ -40,19 +40,19 @@ struct decoded_record
     // The wire-frame join keys, distinct from a sample's publication_sequence so a
     // packet-level loss join never collides with message identity. wire_seq is the
     // decorator's own per-direction monotonic counter; payload carries the framed bytes.
-    wire_direction               wire_dir{wire_direction::out};
-    std::uint64_t                wire_seq{};
+    wire_direction wire_dir{wire_direction::out};
+    std::uint64_t  wire_seq{};
 };
 
 namespace detail {
 
 inline void decode_sample(wire::reader &r, decoded_record &rec)
 {
-    rec.capture_ts           = r.u64();
-    rec.topic_hash           = r.u64();
-    rec.publication_sequence = r.u64();
-    rec.source_timestamp     = r.u64();
-    rec.reception_timestamp  = r.u64();
+    rec.capture_ts              = r.u64();
+    rec.topic_hash              = r.u64();
+    rec.publication_sequence    = r.u64();
+    rec.source_timestamp        = r.u64();
+    rec.reception_timestamp     = r.u64();
     const bool          present = r.u8() != 0;
     const std::uint64_t id      = r.varint().value_or(0);
     if(present)
@@ -74,10 +74,10 @@ inline void decode_drop(wire::reader &r, decoded_record &rec)
 
 inline void decode_qos(wire::reader &r, decoded_record &rec)
 {
-    rec.capture_ts = r.u64();
-    rec.edge       = r.u8();
-    rec.topic_hash = r.u64();
-    rec.verdict    = r.u8();
+    rec.capture_ts              = r.u64();
+    rec.edge                    = r.u8();
+    rec.topic_hash              = r.u64();
+    rec.verdict                 = r.u8();
     const bool          present = r.u8() != 0;
     const std::uint64_t id      = r.varint().value_or(0);
     if(present)
@@ -94,9 +94,9 @@ inline void decode_participant(wire::reader &r, decoded_record &rec)
 
 inline void decode_endpoint(wire::reader &r, decoded_record &rec)
 {
-    rec.capture_ts = r.u64();
-    rec.edge       = r.u8();
-    rec.topic_hash = r.u64();
+    rec.capture_ts              = r.u64();
+    rec.edge                    = r.u8();
+    rec.topic_hash              = r.u64();
     const bool          present = r.u8() != 0;
     const std::uint64_t id      = r.varint().value_or(0);
     if(present)

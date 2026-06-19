@@ -16,21 +16,21 @@
 // using-directive makes plexus::asio visible and an unqualified `asio` then resolves
 // ambiguously between ::asio and plexus::asio inside the asio headers.
 #ifdef PLEXUS_HAVE_ASIO_MUX
-#include "plexus/asio/udp_server.h"
-#include "plexus/io/detail/send_queue.h"
+    #include "plexus/asio/udp_server.h"
+    #include "plexus/io/detail/send_queue.h"
 
-#include <asio/io_context.hpp>
-#include <asio/ip/udp.hpp>
+    #include <asio/io_context.hpp>
+    #include <asio/ip/udp.hpp>
 #endif
 
 #ifdef PLEXUS_HAVE_CRYPTO_DATAGRAM
-#include "plexus/crypto/datagram_authenticated_channel.h"
-#include "plexus/crypto/key_schedule.h"
-#include "plexus/crypto/aead_epoch.h"
-#include "plexus/crypto/aead_cipher.h"
+    #include "plexus/crypto/datagram_authenticated_channel.h"
+    #include "plexus/crypto/key_schedule.h"
+    #include "plexus/crypto/aead_epoch.h"
+    #include "plexus/crypto/aead_cipher.h"
 
-#include "plexus/wire/frame_codec.h"
-#include "plexus/wire/frame.h"
+    #include "plexus/wire/frame_codec.h"
+    #include "plexus/wire/frame.h"
 #endif
 
 #include <catch2/catch_test_macros.hpp>
@@ -70,8 +70,12 @@ struct sink_channel
     explicit sink_channel(sink_executor &) {}
     sink_channel(sink_executor &, std::error_code &) {}
 
-    void send(std::span<const std::byte> d) { total_bytes += d.size(); ++sends; }
-    void close() {}
+    void send(std::span<const std::byte> d)
+    {
+        total_bytes += d.size();
+        ++sends;
+    }
+    void                       close() {}
     [[nodiscard]] io::endpoint remote_endpoint() const { return {}; }
     void on_data(detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(detail::move_only_function<void()>) {}
@@ -93,10 +97,10 @@ struct sink_timer
 
 struct sink_policy
 {
-    using executor_type = sink_executor &;
+    using executor_type     = sink_executor &;
     using byte_channel_type = sink_channel;
-    using timer_type = sink_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = sink_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type, detail::move_only_function<void()> fn) { fn(); }
 };
@@ -115,14 +119,18 @@ struct banding_sink_channel
     explicit banding_sink_channel(sink_executor &) {}
     banding_sink_channel(sink_executor &, std::error_code &) {}
 
-    void send(std::span<const std::byte> d) { total_bytes += d.size(); ++sends; }
-    void close() {}
+    void send(std::span<const std::byte> d)
+    {
+        total_bytes += d.size();
+        ++sends;
+    }
+    void                       close() {}
     [[nodiscard]] io::endpoint remote_endpoint() const { return {}; }
     void on_data(detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(detail::move_only_function<void()>) {}
     void on_error(detail::move_only_function<void(io::io_error)>) {}
     void on_protocol_close(detail::move_only_function<void(wire::close_cause)>) {}
-    [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+    [[nodiscard]] std::size_t   backpressured() const noexcept { return 0; }
     [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return 1; }
 
     std::size_t total_bytes{0};
@@ -131,10 +139,10 @@ struct banding_sink_channel
 
 struct banding_sink_policy
 {
-    using executor_type = sink_executor &;
+    using executor_type     = sink_executor &;
     using byte_channel_type = banding_sink_channel;
-    using timer_type = sink_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = sink_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type, detail::move_only_function<void()> fn) { fn(); }
 };
@@ -150,36 +158,39 @@ static_assert(plexus::Policy<banding_sink_policy>);
 // the sink Policy so the global new/delete delta reflects the forwarder's own heap
 // behavior. (The absolute per-publish owner allocation is the producer-ownership cost a
 // recycled loan removes later.)
-TEST_CASE("steady-state publish->frame-once->fan-out loop stays frame-once: per-publish allocation does not scale with the subscriber count", "[integration]")
+TEST_CASE("steady-state publish->frame-once->fan-out loop stays frame-once: per-publish allocation "
+          "does not scale with the subscriber count",
+          "[integration]")
 {
     using forwarder = io::message_forwarder<sink_policy>;
 
-    constexpr int K = 1024;    // steady-state message count
-    const std::string fqn = "demo._plexus._tcp.local.";
+    constexpr int     K       = 1024; // steady-state message count
+    const std::string fqn     = "demo._plexus._tcp.local.";
     const std::string payload = "deterministic-steady-state-payload";
 
     // The per-publish allocation count for a fan-out of N subscribers, after warm-up.
-    const auto allocs_per_publish = [&](int subscribers) {
-        sink_executor ex;
+    const auto allocs_per_publish = [&](int subscribers)
+    {
+        sink_executor                              ex;
         std::vector<std::unique_ptr<sink_channel>> channels;
-        std::vector<forwarder::peer> peers;
-        forwarder fwd{};
+        std::vector<forwarder::peer>               peers;
+        forwarder                                  fwd{};
         for(int i = 0; i < subscribers; ++i)
         {
             channels.push_back(std::make_unique<sink_channel>(ex));
             peers.push_back(forwarder::peer{*channels.back(), "node-" + std::to_string(i)});
             fwd.attach(peers.back(), fqn);
         }
-        fwd.publish(fqn, as_bytes(payload));   // warm-up: reach the steady owner-buffer size
+        fwd.publish(fqn, as_bytes(payload)); // warm-up: reach the steady owner-buffer size
         plexus::testing::reset_alloc_count();
         const auto before = plexus::testing::alloc_count();
         for(int i = 0; i < K; ++i)
             fwd.publish(fqn, as_bytes(payload));
-        const auto after = plexus::testing::alloc_count();
+        const auto  after = plexus::testing::alloc_count();
         std::size_t sends = 0;
         for(const auto &ch : channels)
             sends += ch->sends;
-        REQUIRE(sends >= static_cast<std::size_t>(K) * subscribers);   // every publish fanned to all
+        REQUIRE(sends >= static_cast<std::size_t>(K) * subscribers); // every publish fanned to all
         return (after - before) / K;
     };
 
@@ -195,22 +206,25 @@ TEST_CASE("steady-state publish->frame-once->fan-out loop stays frame-once: per-
 // retain adds zero heap — so the latched-minus-unlatched per-publish allocation DELTA
 // is zero. (The publish itself still allocates its one frame owner; that owner cost is
 // common to both arms and cancels in the delta.)
-TEST_CASE("steady-state depth-N history-ring retain adds no allocation beyond the frame-once publish", "[integration]")
+TEST_CASE(
+        "steady-state depth-N history-ring retain adds no allocation beyond the frame-once publish",
+        "[integration]")
 {
     using forwarder = io::message_forwarder<sink_policy>;
 
-    constexpr std::uint32_t N = 8;   // ring depth
-    constexpr int K = 1024;          // steady-state message count
-    const std::string fqn = "demo._plexus._tcp.local.";
-    const std::string payload = "deterministic-steady-state-payload";
+    constexpr std::uint32_t N       = 8;    // ring depth
+    constexpr int           K       = 1024; // steady-state message count
+    const std::string       fqn     = "demo._plexus._tcp.local.";
+    const std::string       payload = "deterministic-steady-state-payload";
 
     // The per-publish allocation count over a single subscriber, with the topic either
     // latched (depth-N retain in the loop) or not (publish + fan-out only).
-    const auto allocs_per_publish = [&](bool latched) {
-        sink_executor ex;
-        sink_channel ch(ex);
+    const auto allocs_per_publish = [&](bool latched)
+    {
+        sink_executor   ex;
+        sink_channel    ch(ex);
         forwarder::peer peer{ch, "node-a"};
-        forwarder fwd{};
+        forwarder       fwd{};
         if(latched)
             fwd.declare(fqn, topic_qos{.latch = true, .depth = N});
         fwd.attach(peer, fqn);
@@ -240,23 +254,22 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
 {
     using forwarder = io::message_forwarder<sink_policy>;
 
-    constexpr int K = 1024;
-    const std::string fqn = "demo._plexus._tcp.local.";
+    constexpr int     K       = 1024;
+    const std::string fqn     = "demo._plexus._tcp.local.";
     const std::string payload = "deterministic-steady-state-payload";
 
-    sink_executor ex;
-    sink_channel ch(ex);
+    sink_executor   ex;
+    sink_channel    ch(ex);
     forwarder::peer peer{ch, "node-rx"};
 
     forwarder fwd{};
-    fwd.attach(peer, fqn);   // resolves topic_hash -> fqn for the receive tail
+    fwd.attach(peer, fqn); // resolves topic_hash -> fqn for the receive tail
 
     // Build the inner unidirectional payload ONCE (the borrowed receive buffer).
-    wire::unidirectional_header uhdr{
-        .source     = wire::endpoint_source_type::publisher,
-        .sequence   = 1,
-        .topic_hash = wire::fqn_topic_hash(fqn)};
-    auto inner = wire::encode_unidirectional(uhdr, as_bytes(payload));
+    wire::unidirectional_header uhdr{.source     = wire::endpoint_source_type::publisher,
+                                     .sequence   = 1,
+                                     .topic_hash = wire::fqn_topic_hash(fqn)};
+    auto                        inner = wire::encode_unidirectional(uhdr, as_bytes(payload));
 
     // The session-assembled metadata half: a stack POD reused every iteration.
     io::message_info info{};
@@ -264,7 +277,8 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
     info.from_intra_process = false;
 
     std::size_t seen = 0;
-    auto on_message = [&](std::string_view, std::span<const std::byte>, const io::message_info &) { ++seen; };
+    auto on_message  = [&](std::string_view, std::span<const std::byte>, const io::message_info &)
+    { ++seen; };
 
     // The session peer's node_id (the gid's node_id half on reconstruction).
     node_id src{};
@@ -280,8 +294,8 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
         fwd.deliver(peer, inner, info, src, /*has_source_identity=*/false, on_message);
     auto after = plexus::testing::alloc_count();
 
-    REQUIRE(seen == static_cast<std::size_t>(K) + 1);   // every deliver reached the callback
-    REQUIRE(after - before == 0);                       // zero allocation across the steady-state loop
+    REQUIRE(seen == static_cast<std::size_t>(K) + 1); // every deliver reached the callback
+    REQUIRE(after - before == 0); // zero allocation across the steady-state loop
 
     // --- source-identity path (gid flag set) ---
     // The inner now carries a varint endpoint counter; deliver decodes it and constructs
@@ -289,13 +303,14 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
     // zero steady-state heap, same as the bytes-only path.
     auto inner_gid = wire::encode_unidirectional(uhdr, as_bytes(payload), std::uint64_t{0x1234});
     std::size_t gid_seen = 0;
-    bool gid_ok = true;
-    auto on_gid = [&](std::string_view, std::span<const std::byte>, const io::message_info &mi) {
+    bool        gid_ok   = true;
+    auto on_gid = [&](std::string_view, std::span<const std::byte>, const io::message_info &mi)
+    {
         ++gid_seen;
         if(!mi.source_identity || mi.source_identity->endpoint_counter() != 0x1234)
             gid_ok = false;
     };
-    fwd.deliver(peer, inner_gid, info, src, /*has_source_identity=*/true, on_gid);   // warm-up
+    fwd.deliver(peer, inner_gid, info, src, /*has_source_identity=*/true, on_gid); // warm-up
 
     plexus::testing::reset_alloc_count();
     before = plexus::testing::alloc_count();
@@ -304,8 +319,8 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
     after = plexus::testing::alloc_count();
 
     REQUIRE(gid_seen == static_cast<std::size_t>(K) + 1);
-    REQUIRE(gid_ok);                  // every delivery reconstructed the gid
-    REQUIRE(after - before == 0);     // gid reconstruction is zero steady-state heap
+    REQUIRE(gid_ok);              // every delivery reconstructed the gid
+    REQUIRE(after - before == 0); // gid reconstruction is zero steady-state heap
 }
 
 // The egress-scheduler band->drain path adds NOTHING beyond the frame-once publish owner.
@@ -317,21 +332,24 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
 // fans to. Each enqueue/immediate-drain advances the band's FIFO ring by one slot, so the
 // warm-up cycles the in-use band's whole pooled ring once (k_band_depth publishes) to
 // first-touch every slot's handle.
-TEST_CASE("steady-state publish through the egress scheduler bands stays frame-once: per-publish allocation does not scale with the subscriber count", "[integration]")
+TEST_CASE("steady-state publish through the egress scheduler bands stays frame-once: per-publish "
+          "allocation does not scale with the subscriber count",
+          "[integration]")
 {
     using forwarder = io::message_forwarder<banding_sink_policy>;
 
-    constexpr int K = 1024;                                       // steady-state message count
-    const std::size_t warm = io::detail::k_band_depth;            // cycle the in-use band ring once
-    const std::string fqn = "demo._plexus._tcp.local.";
+    constexpr int     K       = 1024;                     // steady-state message count
+    const std::size_t warm    = io::detail::k_band_depth; // cycle the in-use band ring once
+    const std::string fqn     = "demo._plexus._tcp.local.";
     const std::string payload = "deterministic-steady-state-payload";
 
     // The per-publish allocation count for a fan-out of N subscribers through the bands.
-    const auto allocs_per_publish = [&](int subscribers) {
-        sink_executor ex;
+    const auto allocs_per_publish = [&](int subscribers)
+    {
+        sink_executor                                      ex;
         std::vector<std::unique_ptr<banding_sink_channel>> channels;
-        std::vector<forwarder::peer> peers;
-        forwarder fwd{};
+        std::vector<forwarder::peer>                       peers;
+        forwarder                                          fwd{};
         for(int i = 0; i < subscribers; ++i)
         {
             channels.push_back(std::make_unique<banding_sink_channel>(ex));
@@ -346,11 +364,11 @@ TEST_CASE("steady-state publish through the egress scheduler bands stays frame-o
         const auto before = plexus::testing::alloc_count();
         for(int i = 0; i < K; ++i)
             fwd.publish(fqn, as_bytes(payload));
-        const auto after = plexus::testing::alloc_count();
+        const auto  after = plexus::testing::alloc_count();
         std::size_t sends = 0;
         for(const auto &ch : channels)
             sends += ch->sends;
-        REQUIRE(sends >= static_cast<std::size_t>(K) * subscribers);   // every publish drained to all
+        REQUIRE(sends >= static_cast<std::size_t>(K) * subscribers); // every publish drained to all
         return (after - before) / K;
     };
 
@@ -361,26 +379,27 @@ TEST_CASE("steady-state publish through the egress scheduler bands stays frame-o
 }
 
 #ifdef PLEXUS_HAVE_ASIO_MUX
-#include "plexus/io/polymorphic_byte_channel.h"
+    #include "plexus/io/polymorphic_byte_channel.h"
 
 // The same steady-state no-alloc invariant must hold when the publish loop fans over a
-// type-erased polymorphic_byte_channel instead of a concrete channel: the erasure is ONE virtual hop
-// per send to the owned concrete channel, minted ONCE at wrap (here at setup), and the
-// adapter stores no per-verb callable — so the abstract base adds zero steady-state heap
-// blocks. Measured directly over a vector of polymorphic_byte_channels wrapping the inert
-// banding_sink_channel (it exposes the backpressured() read the erasure now forwards; no
-// forwarder Policy is needed: the gate is the channel layer's per-send behavior).
-TEST_CASE("steady-state fan-out over a type-erased polymorphic_byte_channel is zero-alloc", "[integration]")
+// type-erased polymorphic_byte_channel instead of a concrete channel: the erasure is ONE virtual
+// hop per send to the owned concrete channel, minted ONCE at wrap (here at setup), and the adapter
+// stores no per-verb callable — so the abstract base adds zero steady-state heap blocks. Measured
+// directly over a vector of polymorphic_byte_channels wrapping the inert banding_sink_channel (it
+// exposes the backpressured() read the erasure now forwards; no forwarder Policy is needed: the
+// gate is the channel layer's per-send behavior).
+TEST_CASE("steady-state fan-out over a type-erased polymorphic_byte_channel is zero-alloc",
+          "[integration]")
 {
     namespace pio = plexus::io;
 
-    constexpr int N = 8;
-    constexpr int K = 1024;
+    constexpr int     N       = 8;
+    constexpr int     K       = 1024;
     const std::string payload = "deterministic-steady-state-payload";
 
-    sink_executor ex;
+    sink_executor                                               ex;
     std::vector<std::unique_ptr<pio::polymorphic_byte_channel>> channels;
-    std::vector<banding_sink_channel *> sinks;   // observers into the owned concrete channels
+    std::vector<banding_sink_channel *> sinks; // observers into the owned concrete channels
     channels.reserve(N);
     sinks.reserve(N);
     for(int i = 0; i < N; ++i)
@@ -388,7 +407,7 @@ TEST_CASE("steady-state fan-out over a type-erased polymorphic_byte_channel is z
         auto inner = std::make_unique<banding_sink_channel>(ex);
         sinks.push_back(inner.get());
         channels.push_back(std::make_unique<pio::polymorphic_byte_channel>(
-            std::make_unique<pio::channel_adapter<banding_sink_channel>>(std::move(inner))));
+                std::make_unique<pio::channel_adapter<banding_sink_channel>>(std::move(inner))));
     }
 
     // Warm-up: one fan-out round before measuring (no scratch grows here, but mirror the gate).
@@ -423,23 +442,24 @@ TEST_CASE("steady-state fan-out over a type-erased polymorphic_byte_channel is z
 // cleanly succeed rather than drawing ICMP noise), warming one send then asserting K idle-path
 // sends allocate nothing. K is kept well under the loopback recv-buffer envelope so the path
 // never falls back to the async queue; a would_block fallback would show as queued bytes > 0.
-TEST_CASE("steady-state udp best-effort 72 B send on the idle fast-path is zero-alloc", "[integration][udp]")
+TEST_CASE("steady-state udp best-effort 72 B send on the idle fast-path is zero-alloc",
+          "[integration][udp]")
 {
     namespace pasio = plexus::asio;
 
     ::asio::io_context io;
-    pasio::udp_server sink{io};
+    pasio::udp_server  sink{io};
     sink.start(::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 0});
 
     pasio::udp_server server{io};
     server.start(::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 0});
 
-    const ::asio::ip::udp::endpoint dest{::asio::ip::make_address_v4("127.0.0.1"), sink.port()};
-    const std::array<std::byte, 72> payload{};
+    const ::asio::ip::udp::endpoint  dest{::asio::ip::make_address_v4("127.0.0.1"), sink.port()};
+    const std::array<std::byte, 72>  payload{};
     const std::span<const std::byte> bytes{payload};
 
     server.send_standalone_to(bytes, dest);   // warm-up: prime the non-blocking socket
-    REQUIRE(server.queued_send_bytes() == 0);   // the idle fast-path queued nothing
+    REQUIRE(server.queued_send_bytes() == 0); // the idle fast-path queued nothing
 
     constexpr int K = 256;
     plexus::testing::reset_alloc_count();
@@ -448,8 +468,8 @@ TEST_CASE("steady-state udp best-effort 72 B send on the idle fast-path is zero-
         server.send_standalone_to(bytes, dest);
     const auto after = plexus::testing::alloc_count();
 
-    REQUIRE(server.queued_send_bytes() == 0);   // stayed on the idle fast-path throughout
-    REQUIRE(after - before == 0);               // the synchronous send owns no node, copies nothing
+    REQUIRE(server.queued_send_bytes() == 0); // stayed on the idle fast-path throughout
+    REQUIRE(after - before == 0);             // the synchronous send owns no node, copies nothing
 }
 
 // The WARM pooled queued path is also 0-alloc in steady state: once a would_block (or any
@@ -472,23 +492,24 @@ TEST_CASE("steady-state udp best-effort 72 B send on the idle fast-path is zero-
 // change; a delta == 0 queued path needs the drive-completion made allocation-free (a send-sink
 // contract change), which is out of this change's scope. The latency-critical path stays the idle
 // fast-path above (genuinely 0-alloc); this queued path is the burst/backpressure regime.
-TEST_CASE("steady-state udp send_queue pooled queued path recycles buffers (alloc is payload-size independent)",
+TEST_CASE("steady-state udp send_queue pooled queued path recycles buffers (alloc is payload-size "
+          "independent)",
           "[integration][udp]")
 {
     using endpoint = ::asio::ip::udp::endpoint;
-    using queue = plexus::io::detail::send_queue<endpoint>;
+    using queue    = plexus::io::detail::send_queue<endpoint>;
     const endpoint dest{::asio::ip::make_address_v4("127.0.0.1"), 9};
 
     // The steady-state allocation count of a warm queued path sliding `K` datagrams of the given
     // payload size through a constant-depth backlog (drain one + enqueue one each step).
-    const auto steady_allocs = [&](std::span<const std::byte> bytes) {
+    const auto steady_allocs = [&](std::span<const std::byte> bytes)
+    {
         // The deferred sink: hold the single live completion so the test controls when the front
         // node pops. At most ONE completion is outstanding (the block's serial drive), so a lone
         // member — not a growing container — carries it, keeping the harness itself zero-alloc.
         queue::completion live;
-        queue q{[&](std::span<const std::byte>, const endpoint &, queue::completion done) {
-            live = std::move(done);
-        }};
+        queue q{[&](std::span<const std::byte>, const endpoint &, queue::completion done)
+                { live = std::move(done); }};
 
         // Prime a steady backlog: the first enqueue drives the front (stashing the live
         // completion); the rest pile behind it so the deque never reaches the empty state.
@@ -512,14 +533,14 @@ TEST_CASE("steady-state udp send_queue pooled queued path recycles buffers (allo
         for(int i = 0; i < K; ++i)
         {
             auto done = std::move(live);
-            done(true);                        // drain one: pop + recycle into the freelist
-            REQUIRE(q.enqueue(bytes, dest));   // enqueue one: pull a warm recycled buffer
+            done(true);                      // drain one: pop + recycle into the freelist
+            REQUIRE(q.enqueue(bytes, dest)); // enqueue one: pull a warm recycled buffer
         }
         return plexus::testing::alloc_count() - before;
     };
 
     const std::array<std::byte, 72> small{};
-    const std::vector<std::byte> large(8192, std::byte{0x5A});
+    const std::vector<std::byte>    large(8192, std::byte{0x5A});
 
     // Buffer recycling is proven: the steady-state allocation is IDENTICAL whether the datagram is
     // 72 B or 8 KiB — the node buffer is never reallocated, only its spilled capacity reused.
@@ -537,8 +558,12 @@ namespace {
 // down to the datagram boundary with no transport-side allocation masking the seal's heap.
 struct sink_lower
 {
-    void send(std::span<const std::byte> d) { last_size = d.size(); ++sends; }
-    void close() {}
+    void send(std::span<const std::byte> d)
+    {
+        last_size = d.size();
+        ++sends;
+    }
+    void                               close() {}
     [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"wire", ""}; }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(plexus::detail::move_only_function<void()>) {}
@@ -582,10 +607,11 @@ plexus::crypto::derived_keys datagram_keys()
 // m_send_frame buffers, the lower send — adds ZERO heap beyond that irreducible OpenSSL floor.
 // This isolates the plexus datagram boundary from the AEAD primitive's internals, which is what
 // the no-hot-path-alloc invariant governs here.
-TEST_CASE("steady-state AEAD datagram send adds zero plexus-side heap beyond the OpenSSL seal floor",
-          "[integration][datagram][dtls]")
+TEST_CASE(
+        "steady-state AEAD datagram send adds zero plexus-side heap beyond the OpenSSL seal floor",
+        "[integration][datagram][dtls]")
 {
-    namespace pc = plexus::crypto;
+    namespace pc  = plexus::crypto;
     using channel = pc::datagram_authenticated_channel<sink_lower>;
 
     const auto keys = datagram_keys();
@@ -593,40 +619,43 @@ TEST_CASE("steady-state AEAD datagram send adds zero plexus-side heap beyond the
     // A 72 B application payload behind a plaintext frame header (the AEAD-AAD): the smallest
     // realistic best-effort datagram, matching the UDP fast-path's 72 B gate.
     plexus::wire::frame_header hdr{};
-    hdr.type = plexus::wire::msg_type::unidirectional;
-    hdr.flags = 0;
-    hdr.session_id = 7;
+    hdr.type         = plexus::wire::msg_type::unidirectional;
+    hdr.flags        = 0;
+    hdr.session_id   = 7;
     hdr.timestamp_ns = 7777;
     const std::array<std::byte, 72> body{};
-    hdr.payload_len = body.size();
-    const auto frame = plexus::wire::encode_frame(hdr, body);
+    hdr.payload_len                        = body.size();
+    const auto                       frame = plexus::wire::encode_frame(hdr, body);
     const std::span<const std::byte> frame_view{frame};
-    const auto header = frame_view.first(plexus::wire::header_size);
-    const auto payload = frame_view.subspan(plexus::wire::header_size);
+    const auto                       header  = frame_view.first(plexus::wire::header_size);
+    const auto                       payload = frame_view.subspan(plexus::wire::header_size);
 
     constexpr int K = 1024;
 
     // Baseline: the per-call OpenSSL allocation floor of a bare seal() into reused scratch
     // (same cipher, key, header-AAD, payload as the channel performs internally). Warm once so
     // the scratch is sized, then measure the steady per-call delta — the irreducible EVP cost.
-    const auto seal_allocs = [&] {
+    const auto seal_allocs = [&]
+    {
         std::vector<std::byte> scratch;
-        const auto nonce = pc::make_nonce(0, 0);
-        REQUIRE(pc::seal(pc::aead_cipher_id::chacha20_poly1305, keys.k_send, nonce, header, payload, scratch));
+        const auto             nonce = pc::make_nonce(0, 0);
+        REQUIRE(pc::seal(pc::aead_cipher_id::chacha20_poly1305, keys.k_send, nonce, header, payload,
+                         scratch));
         plexus::testing::reset_alloc_count();
         const auto before = plexus::testing::alloc_count();
         for(int i = 0; i < K; ++i)
         {
             const auto n = pc::make_nonce(0, static_cast<std::uint64_t>(i));
-            REQUIRE(pc::seal(pc::aead_cipher_id::chacha20_poly1305, keys.k_send, n, header, payload, scratch));
+            REQUIRE(pc::seal(pc::aead_cipher_id::chacha20_poly1305, keys.k_send, n, header, payload,
+                             scratch));
         }
         return plexus::testing::alloc_count() - before;
     }();
 
     // The channel: same seal, plus the plexus framing/assembly boundary on top.
     sink_lower lower;
-    channel sealed{lower, pc::aead_cipher_id::chacha20_poly1305, keys};
-    sealed.send(frame);   // warm-up: size m_seal_scratch + m_send_frame to the steady frame
+    channel    sealed{lower, pc::aead_cipher_id::chacha20_poly1305, keys};
+    sealed.send(frame); // warm-up: size m_seal_scratch + m_send_frame to the steady frame
     REQUIRE(lower.sends == 1);
 
     plexus::testing::reset_alloc_count();
@@ -635,7 +664,8 @@ TEST_CASE("steady-state AEAD datagram send adds zero plexus-side heap beyond the
         sealed.send(frame);
     const auto channel_allocs = plexus::testing::alloc_count() - before;
 
-    REQUIRE(lower.sends == static_cast<std::size_t>(K) + 1);   // every send reached the datagram boundary
+    REQUIRE(lower.sends ==
+            static_cast<std::size_t>(K) + 1); // every send reached the datagram boundary
     // The plexus datagram boundary adds NOTHING beyond the OpenSSL seal floor: the channel's
     // per-send heap equals a bare seal's, so seq/nonce/frame-assembly/lower-send are all 0-alloc.
     REQUIRE(channel_allocs == seal_allocs);

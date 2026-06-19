@@ -39,16 +39,16 @@ public:
     static constexpr std::uint32_t default_spin_budget = 256;
 
     explicit spin_run_loop(::asio::io_context &io,
-                           std::uint32_t spin_budget = default_spin_budget) noexcept
-        : m_io(io)
-        , m_spin_budget(spin_budget)
+                           std::uint32_t       spin_budget = default_spin_budget) noexcept
+            : m_io(io)
+            , m_spin_budget(spin_budget)
     {
     }
 
-    spin_run_loop(const spin_run_loop &) = delete;
+    spin_run_loop(const spin_run_loop &)            = delete;
     spin_run_loop &operator=(const spin_run_loop &) = delete;
-    spin_run_loop(spin_run_loop &&) = delete;
-    spin_run_loop &operator=(spin_run_loop &&) = delete;
+    spin_run_loop(spin_run_loop &&)                 = delete;
+    spin_run_loop &operator=(spin_run_loop &&)      = delete;
 
     // Non-blocking drive step: drain ready handlers; on idle spin up to spin_budget
     // polls (each an epoll_wait(0) probe + core relax) catching a fresh arrival

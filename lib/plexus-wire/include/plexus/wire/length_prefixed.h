@@ -50,14 +50,12 @@ namespace plexus::wire {
 //     and the helper applies the overflow / bounds checks against
 //     length * element_size. element_size = 0 short-circuits to the
 //     length-only check and is treated as a no-payload variant.
-template <typename UIntT>
+template<typename UIntT>
 [[nodiscard]] std::optional<std::span<const std::byte>>
-read_length_prefixed(std::span<const std::byte> data,
-                     std::size_t &consumed,
+read_length_prefixed(std::span<const std::byte> data, std::size_t &consumed,
                      std::size_t element_size = 1) noexcept
 {
-    static_assert(std::is_unsigned_v<UIntT>,
-                  "read_length_prefixed: UIntT must be unsigned");
+    static_assert(std::is_unsigned_v<UIntT>, "read_length_prefixed: UIntT must be unsigned");
 
     if(consumed > data.size())
         return std::nullopt;
@@ -78,8 +76,7 @@ read_length_prefixed(std::span<const std::byte> data,
         static_assert(sizeof(UIntT) == 0, "read_length_prefixed: unsupported UIntT width");
 
     const auto length_sz = static_cast<std::size_t>(length);
-    if(element_size != 0
-       && length_sz > std::numeric_limits<std::size_t>::max() / element_size)
+    if(element_size != 0 && length_sz > std::numeric_limits<std::size_t>::max() / element_size)
         return std::nullopt;
     const auto payload_bytes = length_sz * element_size;
 
@@ -88,7 +85,7 @@ read_length_prefixed(std::span<const std::byte> data,
         return std::nullopt;
 
     const auto payload_offset = consumed + sizeof(UIntT);
-    consumed = payload_offset + payload_bytes;
+    consumed                  = payload_offset + payload_bytes;
     return std::span<const std::byte>{data.data() + payload_offset, payload_bytes};
 }
 

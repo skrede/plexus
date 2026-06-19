@@ -18,8 +18,9 @@ namespace plexus::io::security {
 // only irreducible crypto primitive here; the core owns the rotation + validate logic
 // over this functor (the D-LITMUS bar — the decision needs no crypto lib). Returns
 // false on any MAC failure so the caller fails the cookie closed.
-using hmac_fn = plexus::detail::move_only_function<
-    bool(std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out_32)>;
+using hmac_fn = plexus::detail::move_only_function<bool(std::span<const std::byte> key,
+                                                        std::span<const std::byte> msg,
+                                                        std::span<std::byte>       out_32)>;
 
 // The injected entropy seam: fill `out` with cryptographically-strong bytes. Returns
 // false on a degraded RNG so the caller refuses to install a zero/constant key.
@@ -63,8 +64,8 @@ public:
     // false on any fill the buffer would be left zero (an all-zero HMAC key silently
     // weakens the source-spoof cookie to a forgeable constant), so refuse to construct.
     cookie_secret(hmac_fn hmac, rand_fn rand)
-        : m_hmac(std::move(hmac))
-        , m_rand(std::move(rand))
+            : m_hmac(std::move(hmac))
+            , m_rand(std::move(rand))
     {
         if(!m_rand(m_key) || !m_rand(m_cur) || !m_rand(m_prev))
             throw std::runtime_error("cookie_secret: rand_fn failed (degraded RNG)");
@@ -82,8 +83,8 @@ public:
         std::array<std::byte, 16> next{};
         if(!m_rand(next))
             return;
-        m_prev = m_cur;
-        m_cur = next;
+        m_prev        = m_cur;
+        m_cur         = next;
         m_last_rotate = now;
     }
 
@@ -111,18 +112,17 @@ public:
 
 private:
     // HMAC over the packed [peer_addr || nonce]: assemble the message once, MAC it.
-    [[nodiscard]] bool mac(std::span<const std::byte> peer_addr,
-                           const std::array<std::byte, 16> &nonce,
-                           std::span<std::byte> out) const
+    [[nodiscard]] bool mac(std::span<const std::byte>       peer_addr,
+                           const std::array<std::byte, 16> &nonce, std::span<std::byte> out) const
     {
         std::vector<std::byte> msg(peer_addr.begin(), peer_addr.end());
         msg.insert(msg.end(), nonce.begin(), nonce.end());
         return m_hmac(m_key, msg, out);
     }
 
-    std::array<std::byte, 32> m_key{};        // process-random HMAC key
-    std::array<std::byte, 16> m_cur{};
-    std::array<std::byte, 16> m_prev{};
+    std::array<std::byte, 32>             m_key{}; // process-random HMAC key
+    std::array<std::byte, 16>             m_cur{};
+    std::array<std::byte, 16>             m_prev{};
     std::chrono::steady_clock::time_point m_last_rotate{};
 
     // The injected functors are invoked from the const query paths (mint/validate). The

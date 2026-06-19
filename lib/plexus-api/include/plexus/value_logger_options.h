@@ -28,11 +28,11 @@ enum class log_format
 // a live projecting subscriber, not a recorder declaration.
 struct value_logger_options
 {
-    std::ostream &              out;
-    log_format                  format  = log_format::csv;
-    io::attach_posture          posture = io::attach_posture::lenient;
+    std::ostream                &out;
+    log_format                   format  = log_format::csv;
+    io::attach_posture           posture = io::attach_posture::lenient;
     std::optional<type_identity> type_id{};
-    io::subscriber_qos          qos{};
+    io::subscriber_qos           qos{};
 };
 
 }

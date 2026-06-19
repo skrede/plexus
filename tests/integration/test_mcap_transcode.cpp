@@ -88,11 +88,12 @@ struct reading_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, reading &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   reading                   &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -118,9 +119,9 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options base_opts()
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
     opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = true;
     return opts;
@@ -140,21 +141,21 @@ std::vector<std::byte> capture_session(int count)
 
     plexus::node_options consumer_opts = base_opts();
     plexus::node_options producer_opts = base_opts();
-    producer_opts.wire = plexus::wire_capture_qos{.enabled = true,
-                                                  .position = plexus::wire_crypto_position::cleartext};
+    producer_opts.wire                 = plexus::wire_capture_qos{
+            .enabled = true, .position = plexus::wire_crypto_position::cleartext};
 
     bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, consumer_opts};
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto                recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
     ex.drain();
 
     typed_subscriber sub{consumer, "telemetry", [](const reading &) {}};
-    typed_publisher pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
+    typed_publisher  pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
     ex.drain();
 
     for(int i = 0; i < count; ++i)
@@ -193,9 +194,9 @@ struct read_back
 
 read_back read_mcap(const std::filesystem::path &path)
 {
-    read_back rb;
+    read_back        rb;
     mcap::McapReader reader;
-    const auto status = reader.open(path.string());
+    const auto       status = reader.open(path.string());
     REQUIRE(status.ok());
 
     for(const auto &view : reader.readMessages())
@@ -205,8 +206,9 @@ read_back read_mcap(const std::filesystem::path &path)
         rb.topics.insert(topic);
         if(rb.channel_encodings.find(topic) == rb.channel_encodings.end())
             rb.channel_encodings.emplace(
-                topic, std::pair{view.channel->messageEncoding,
-                                 view.schema ? view.schema->encoding : std::string{}});
+                    topic,
+                    std::pair{view.channel->messageEncoding,
+                              view.schema ? view.schema->encoding : std::string{}});
         if(topic == "plexus/wire/meta")
             ++rb.wire_meta_messages;
         else if(topic == "plexus/wire")
@@ -241,13 +243,13 @@ struct summary_check
 
 summary_check read_summary(const std::filesystem::path &path)
 {
-    summary_check sc;
+    summary_check    sc;
     mcap::McapReader reader;
     REQUIRE(reader.open(path.string()).ok());
 
     const auto status = reader.readSummary(mcap::ReadSummaryMethod::NoFallbackScan);
-    sc.summary_ok    = status.ok();
-    sc.chunk_indexes = reader.chunkIndexes().size();
+    sc.summary_ok     = status.ok();
+    sc.chunk_indexes  = reader.chunkIndexes().size();
     if(const auto &stats = reader.statistics())
         sc.message_count = stats->messageCount;
     reader.close();
@@ -272,7 +274,7 @@ TEST_CASE("mcap transcode round-trips a captured session through the mcap reader
     REQUIRE(!flat.empty());
 
     const auto out = std::filesystem::temp_directory_path() /
-                     std::filesystem::path{"plexus_transcode_roundtrip.mcap"};
+            std::filesystem::path{"plexus_transcode_roundtrip.mcap"};
     std::filesystem::remove(out);
 
     const auto result = plexus::tools::flat_to_mcap(flat, out);
@@ -366,7 +368,7 @@ struct json_reading_codec
 static_assert(plexus::typed_codec<json_reading_codec>);
 
 constexpr std::string_view k_reading_jsonschema =
-    R"({"type":"object","title":"json_reading","properties":{"value":{"type":"integer"}}})";
+        R"({"type":"object","title":"json_reading","properties":{"value":{"type":"integer"}}})";
 
 // Drive a single producer that captures a DECLARED json topic and an UNDECLARED topic, both
 // at payload fidelity, and return the flat capture. The declared topic's preamble entry
@@ -386,8 +388,8 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
     in_memory_byte_sink sink;
 
     plexus::recorder_options ropts;
-    const auto schema_bytes = std::as_bytes(std::span{k_reading_jsonschema.data(),
-                                                      k_reading_jsonschema.size()});
+    const auto               schema_bytes =
+            std::as_bytes(std::span{k_reading_jsonschema.data(), k_reading_jsonschema.size()});
     ropts.schemas.push_back(plexus::type_schema{.type_id          = 0x70110001u,
                                                 .message_encoding = "json",
                                                 .schema_name      = "json_reading",
@@ -399,10 +401,10 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
     producer.listen({"inproc", "host-b:6000"});
     ex.drain();
 
-    using declared_publisher = plexus::publisher<json_reading_codec>;
+    using declared_publisher  = plexus::publisher<json_reading_codec>;
     using declared_subscriber = plexus::subscriber<json_reading_codec>;
-    using opaque_publisher = typed_publisher;
-    using opaque_subscriber = typed_subscriber;
+    using opaque_publisher    = typed_publisher;
+    using opaque_subscriber   = typed_subscriber;
 
     declared_subscriber d_sub{consumer, "declared.telemetry", [](const json_reading &) {}};
     opaque_subscriber   o_sub{consumer, "opaque.telemetry", [](const reading &) {}};
@@ -439,15 +441,16 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
 
 }
 
-TEST_CASE("mcap transcode labels a declared data channel from the preamble; undeclared stays opaque",
-          "[mcap_transcode][mcap]")
+TEST_CASE(
+        "mcap transcode labels a declared data channel from the preamble; undeclared stays opaque",
+        "[mcap_transcode][mcap]")
 {
     const int  count = 4;
     const auto flat  = capture_declared_and_opaque(count);
     REQUIRE(!flat.empty());
 
     const auto out = std::filesystem::temp_directory_path() /
-                     std::filesystem::path{"plexus_transcode_declared.mcap"};
+            std::filesystem::path{"plexus_transcode_declared.mcap"};
     std::filesystem::remove(out);
 
     const auto result = plexus::tools::flat_to_mcap(flat, out);

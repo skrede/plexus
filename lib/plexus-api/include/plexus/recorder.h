@@ -49,7 +49,7 @@ namespace plexus {
 // Move-only (structural single-owner; no copy, no shared_from_this, no raw pointers in the
 // surface). The heap drain block keeps the ring's address stable across a move so the
 // already-posted drain task stays valid.
-template <typename Engine, typename Policy>
+template<typename Engine, typename Policy>
 class recorder
 {
     // The recording state lives behind a stable heap address so a posted drain task —
@@ -62,24 +62,27 @@ class recorder
     struct block
     {
         using mode_variant =
-            std::variant<io::recording::flat_recorder, io::recording::pre_buffer_controller>;
+                std::variant<io::recording::flat_recorder, io::recording::pre_buffer_controller>;
 
         block(io::recording::byte_sink &sink, const recorder_options &opts,
               io::recording::flat_recorder::clock_fn clock, std::size_t scratch_bytes)
-            : machinery(make_machinery(sink, opts, std::move(clock), scratch_bytes))
+                : machinery(make_machinery(sink, opts, std::move(clock), scratch_bytes))
         {
         }
 
-        static mode_variant make_machinery(io::recording::byte_sink &sink,
-                                            const recorder_options &opts,
-                                            io::recording::flat_recorder::clock_fn clock,
-                                            std::size_t scratch_bytes)
+        static mode_variant make_machinery(io::recording::byte_sink              &sink,
+                                           const recorder_options                &opts,
+                                           io::recording::flat_recorder::clock_fn clock,
+                                           std::size_t                            scratch_bytes)
         {
             if(opts.mode == recording_mode::pre_buffer)
-                return mode_variant{std::in_place_type<io::recording::pre_buffer_controller>,
-                                    sink, opts.ring_bytes, std::move(clock), opts.drain_batch_bytes};
+                return mode_variant{std::in_place_type<io::recording::pre_buffer_controller>, sink,
+                                    opts.ring_bytes, std::move(clock), opts.drain_batch_bytes};
             return mode_variant{std::in_place_type<io::recording::flat_recorder>,
-                                sink, opts.ring_bytes, std::move(clock), opts.drain_batch_bytes,
+                                sink,
+                                opts.ring_bytes,
+                                std::move(clock),
+                                opts.drain_batch_bytes,
                                 scratch_bytes};
         }
 
@@ -99,10 +102,10 @@ class recorder
             }
         }
 
-        mode_variant                                    machinery;
-        plexus::detail::move_only_function<void()>      rearm;
-        bool                                            draining{false};
-        bool                                            armed{false};
+        mode_variant                               machinery;
+        plexus::detail::move_only_function<void()> rearm;
+        bool                                       draining{false};
+        bool                                       armed{false};
     };
 
 public:
@@ -112,15 +115,15 @@ public:
     // owned); the consumer's byte_sink is borrowed too and MUST outlive the recorder. The
     // crypto position is the node's per-transport wire-capture position, threaded through so
     // the stream preamble records which tap the wire capture used (a recording-only fact).
-    recorder(Engine &engine, typename Engine::executor_type executor,
-             const node_id &id, io::recording::byte_sink &sink, recorder_options opts,
-             wire_crypto_position crypto)
-        : m_engine(&engine)
-        , m_executor(executor)
-        , m_block(std::make_shared<block>(sink, opts,
-                  io::recording::flat_recorder::clock_fn{[] { return wire::now_timestamp_ns(); }},
-                  preamble_scratch_bytes(opts.schemas)))
-        , m_sink(make_sink())
+    recorder(Engine &engine, typename Engine::executor_type executor, const node_id &id,
+             io::recording::byte_sink &sink, recorder_options opts, wire_crypto_position crypto)
+            : m_engine(&engine)
+            , m_executor(executor)
+            , m_block(std::make_shared<block>(sink, opts,
+                                              io::recording::flat_recorder::clock_fn{
+                                                      [] { return wire::now_timestamp_ns(); }},
+                                              preamble_scratch_bytes(opts.schemas)))
+            , m_sink(make_sink())
     {
         if(opts.mode == recording_mode::pre_buffer && opts.on_anomaly)
             pre().on_anomaly(std::move(*opts.on_anomaly));
@@ -133,21 +136,22 @@ public:
                         static_cast<io::recording::capture_crypto_position>(crypto));
         }
         m_block->draining = true;
-        m_block->rearm = [blk = std::weak_ptr<block>(m_block), exec = &m_executor] {
+        m_block->rearm    = [blk = std::weak_ptr<block>(m_block), exec = &m_executor]
+        {
             if(auto live = blk.lock())
                 post_drain(live, exec);
         };
         m_engine->add_observer(*m_sink);
     }
 
-    recorder(const recorder &) = delete;
+    recorder(const recorder &)            = delete;
     recorder &operator=(const recorder &) = delete;
 
     recorder(recorder &&other) noexcept
-        : m_engine(other.m_engine)
-        , m_executor(other.m_executor)
-        , m_block(std::move(other.m_block))
-        , m_sink(std::move(other.m_sink))
+            : m_engine(other.m_engine)
+            , m_executor(other.m_executor)
+            , m_block(std::move(other.m_block))
+            , m_sink(std::move(other.m_sink))
     {
         other.m_engine = nullptr;
     }
@@ -203,11 +207,20 @@ public:
     // call it directly for explicit drain control.
     bool pump() { return m_block->pump(); }
 
-    void flush() { std::visit([](auto &m) { m.flush(); }, m_block->machinery); }
+    void flush()
+    {
+        std::visit([](auto &m) { m.flush(); }, m_block->machinery);
+    }
 
 private:
-    io::recording::flat_recorder         &flat() { return std::get<io::recording::flat_recorder>(m_block->machinery); }
-    io::recording::pre_buffer_controller &pre()  { return std::get<io::recording::pre_buffer_controller>(m_block->machinery); }
+    io::recording::flat_recorder &flat()
+    {
+        return std::get<io::recording::flat_recorder>(m_block->machinery);
+    }
+    io::recording::pre_buffer_controller &pre()
+    {
+        return std::get<io::recording::pre_buffer_controller>(m_block->machinery);
+    }
 
     // The observer forwards each edge to whichever discipline the variant holds, stamping
     // each sample with the topic's capture_policy-resolved fidelity (no longer hard-coded
@@ -217,13 +230,10 @@ private:
     std::unique_ptr<io::observer> make_sink()
     {
         return std::make_unique<variant_sink>(
-            *m_block,
-            [engine = m_engine](std::uint64_t hash) {
-                return engine->capture().rule_for(hash).fidelity;
-            },
-            [engine = m_engine](std::uint64_t hash) {
-                return engine->messages().producer_type_id(hash);
-            });
+                *m_block, [engine = m_engine](std::uint64_t hash)
+                { return engine->capture().rule_for(hash).fidelity; },
+                [engine = m_engine](std::uint64_t hash)
+                { return engine->messages().producer_type_id(hash); });
     }
 
     // Translate the public schemas into the core preamble rows (field-for-field; the views
@@ -235,8 +245,12 @@ private:
         std::vector<io::recording::type_schema_entry> rows;
         rows.reserve(schemas.size());
         for(const type_schema &s : schemas)
-            rows.push_back({s.type_id, {}, s.message_encoding, s.schema_name,
-                            s.schema_encoding, s.schema_data});
+            rows.push_back({s.type_id,
+                            {},
+                            s.message_encoding,
+                            s.schema_name,
+                            s.schema_encoding,
+                            s.schema_data});
         return rows;
     }
 
@@ -248,12 +262,12 @@ private:
     {
         constexpr std::size_t k_default_scratch = 64u * 1024u;
         constexpr std::size_t k_header_margin   = 256u;
-        auto blob = [](std::size_t n) { return wire::varint_size(n) + n; };
-        std::size_t need = k_header_margin + wire::varint_size(schemas.size());
+        auto                  blob = [](std::size_t n) { return wire::varint_size(n) + n; };
+        std::size_t           need = k_header_margin + wire::varint_size(schemas.size());
         for(const type_schema &s : schemas)
-            need += wire::varint_size(s.type_id) + blob(0)
-                  + blob(s.message_encoding.size()) + blob(s.schema_name.size())
-                  + blob(s.schema_encoding.size()) + blob(s.schema_data.size());
+            need += wire::varint_size(s.type_id) + blob(0) + blob(s.message_encoding.size()) +
+                    blob(s.schema_name.size()) + blob(s.schema_encoding.size()) +
+                    blob(s.schema_data.size());
         return std::max(k_default_scratch, need);
     }
 
@@ -271,17 +285,19 @@ private:
     static void post_drain(const std::shared_ptr<block> &blk, executor_ptr exec)
     {
         std::weak_ptr<block> weak = blk;
-        Policy::post(*exec, [weak = std::move(weak), exec]() mutable {
-            auto live = weak.lock();
-            if(!live || !live->draining)
-                return;
-            if(live->pump())
-            {
-                post_drain(live, exec); // work remains — keep draining on later turns
-                return;
-            }
-            live->armed = false; // ring empty — go quiescent until the next edge kicks
-        });
+        Policy::post(*exec,
+                     [weak = std::move(weak), exec]() mutable
+                     {
+                         auto live = weak.lock();
+                         if(!live || !live->draining)
+                             return;
+                         if(live->pump())
+                         {
+                             post_drain(live, exec); // work remains — keep draining on later turns
+                             return;
+                         }
+                         live->armed = false; // ring empty — go quiescent until the next edge kicks
+                     });
     }
 
     // A small observer that dispatches every posted edge to the variant-held recorder. It
@@ -291,18 +307,19 @@ private:
     {
     public:
         using type_id_resolver =
-            plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)>;
+                plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)>;
 
         // The fidelity resolver maps a topic hash to its capture_policy-resolved tier so a
         // recorded sample is stamped with its true fidelity (unset falls back to payload);
         // the type_id resolver maps it to its registered producer type_id so the sample keys
         // to the declared schema (absent => 0/not-present, a valid opaque sample).
-        variant_sink(block &blk,
-                     plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> fidelity,
-                     type_id_resolver type_id)
-            : m_block(blk)
-            , m_fidelity_resolver(std::move(fidelity))
-            , m_type_id_resolver(std::move(type_id))
+        variant_sink(
+                block                                                                  &blk,
+                plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> fidelity,
+                type_id_resolver                                                        type_id)
+                : m_block(blk)
+                , m_fidelity_resolver(std::move(fidelity))
+                , m_type_id_resolver(std::move(type_id))
         {
         }
 
@@ -345,36 +362,39 @@ private:
     private:
         void sample(std::string_view fqn, const io::message_info &info, const io::message_view &v)
         {
-            const std::uint64_t hash = wire::fqn_topic_hash(fqn);
+            const std::uint64_t              hash  = wire::fqn_topic_hash(fqn);
             const std::span<const std::byte> bytes = v;
-            const io::capture_fidelity fidelity =
-                m_fidelity_resolver ? m_fidelity_resolver(hash) : io::capture_fidelity::payload;
+            const io::capture_fidelity       fidelity =
+                    m_fidelity_resolver ? m_fidelity_resolver(hash) : io::capture_fidelity::payload;
             const std::optional<std::uint64_t> id =
-                m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
-            record([&](auto &m) {
-                m.record_sample(hash, info, id.value_or(0), id.has_value(), fidelity, bytes);
-            });
+                    m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
+            record(
+                    [&](auto &m)
+                    {
+                        m.record_sample(hash, info, id.value_or(0), id.has_value(), fidelity,
+                                        bytes);
+                    });
         }
 
         // Encode the edge into whichever discipline the variant holds, then re-arm the
         // cooperative drain (event-driven resume — the quiescent drain wakes on the push).
-        template <typename Fn>
+        template<typename Fn>
         void record(Fn &&fn)
         {
             std::visit(std::forward<Fn>(fn), m_block.machinery);
             m_block.kick();
         }
 
-        block             &m_block;
-        const io::message_info m_empty_info{};
+        block                                                                  &m_block;
+        const io::message_info                                                  m_empty_info{};
         plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> m_fidelity_resolver;
-        type_id_resolver m_type_id_resolver;
+        type_id_resolver                                                        m_type_id_resolver;
     };
 
-    Engine                       *m_engine;
+    Engine                        *m_engine;
     typename Engine::executor_type m_executor;
-    std::shared_ptr<block>        m_block;
-    std::unique_ptr<io::observer> m_sink;
+    std::shared_ptr<block>         m_block;
+    std::unique_ptr<io::observer>  m_sink;
 };
 
 }

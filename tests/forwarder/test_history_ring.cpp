@@ -40,14 +40,13 @@ std::span<const std::byte> as_bytes(const std::string &s)
 struct capture
 {
     explicit capture(inproc_executor<> &ex)
-        : sink(ex)
+            : sink(ex)
     {
-        sink.on_data([this](std::span<const std::byte> d) {
-            frames.emplace_back(d.begin(), d.end());
-        });
+        sink.on_data([this](std::span<const std::byte> d)
+                     { frames.emplace_back(d.begin(), d.end()); });
     }
 
-    inproc_channel<> sink;
+    inproc_channel<>                    sink;
     std::vector<std::vector<std::byte>> frames;
 };
 
@@ -65,7 +64,7 @@ std::vector<std::string> data_bodies(const capture &cap)
         auto hdr = plexus::wire::decode_header(f);
         if(!hdr || hdr->type != plexus::wire::msg_type::unidirectional)
             continue;
-        auto inner = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
+        auto inner   = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
         auto decoded = plexus::wire::decode_unidirectional(inner);
         if(!decoded)
             continue;
@@ -83,15 +82,15 @@ TEST_CASE("durability=all on a depth-N ring replays EXACTLY the last N oldest->n
     // Reproducibility: the exactly-N delivery effect is proven over repeated runs.
     for(int iter = 0; iter < 50; ++iter)
     {
-        inproc_bus<> bus;
+        inproc_bus<>      bus;
         inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        capture cap(ex);
-        auto peer = make_peer(ch, cap, "node-a");
+        inproc_channel<>  ch(ex);
+        capture           cap(ex);
+        auto              peer = make_peer(ch, cap, "node-a");
 
         forwarder fwd{};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
-        for(int i = 0; i < 7; ++i)   // N+k: publish v0..v6 with zero subscribers
+        for(int i = 0; i < 7; ++i) // N+k: publish v0..v6 with zero subscribers
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));
         ex.drain();
 
@@ -101,7 +100,7 @@ TEST_CASE("durability=all on a depth-N ring replays EXACTLY the last N oldest->n
         ex.drain();
 
         auto bodies = data_bodies(cap);
-        REQUIRE(bodies.size() == 5);   // the last N, not N+k, not 1
+        REQUIRE(bodies.size() == 5); // the last N, not N+k, not 1
         REQUIRE(bodies == std::vector<std::string>{"v2", "v3", "v4", "v5", "v6"});
     }
 }
@@ -111,11 +110,11 @@ TEST_CASE("durability=all with fewer than N retained replays all of them oldest-
 {
     for(int iter = 0; iter < 50; ++iter)
     {
-        inproc_bus<> bus;
+        inproc_bus<>      bus;
         inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        capture cap(ex);
-        auto peer = make_peer(ch, cap, "node-a");
+        inproc_channel<>  ch(ex);
+        capture           cap(ex);
+        auto              peer = make_peer(ch, cap, "node-a");
 
         forwarder fwd{};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
@@ -129,7 +128,7 @@ TEST_CASE("durability=all with fewer than N retained replays all of them oldest-
         ex.drain();
 
         auto bodies = data_bodies(cap);
-        REQUIRE(bodies.size() == 3);   // count < N
+        REQUIRE(bodies.size() == 3); // count < N
         REQUIRE(bodies == std::vector<std::string>{"v0", "v1", "v2"});
     }
 }
@@ -139,11 +138,11 @@ TEST_CASE("durability=all with replay_depth caps to the most-recent replay_depth
 {
     for(int iter = 0; iter < 50; ++iter)
     {
-        inproc_bus<> bus;
+        inproc_bus<>      bus;
         inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        capture cap(ex);
-        auto peer = make_peer(ch, cap, "node-a");
+        inproc_channel<>  ch(ex);
+        capture           cap(ex);
+        auto              peer = make_peer(ch, cap, "node-a");
 
         forwarder fwd{};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
@@ -158,23 +157,24 @@ TEST_CASE("durability=all with replay_depth caps to the most-recent replay_depth
         ex.drain();
 
         auto bodies = data_bodies(cap);
-        REQUIRE(bodies.size() == 2);   // min(count=5, replay_depth=2)
-        REQUIRE(bodies == std::vector<std::string>{"v3", "v4"});   // the newest 2, oldest->newest
+        REQUIRE(bodies.size() == 2);                             // min(count=5, replay_depth=2)
+        REQUIRE(bodies == std::vector<std::string>{"v3", "v4"}); // the newest 2, oldest->newest
     }
 }
 
 TEST_CASE("a depth-1 ring stays byte-identical to last-writer-wins (all/latest/none)",
           "[history_ring][forwarder]")
 {
-    auto replay = [](durability mode) {
-        inproc_bus<> bus;
+    auto replay = [](durability mode)
+    {
+        inproc_bus<>      bus;
         inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        capture cap(ex);
-        auto peer = make_peer(ch, cap, "node-a");
+        inproc_channel<>  ch(ex);
+        capture           cap(ex);
+        auto              peer = make_peer(ch, cap, "node-a");
 
         forwarder fwd{};
-        fwd.latch("topic");   // depth-1 convenience
+        fwd.latch("topic"); // depth-1 convenience
         fwd.publish("topic", as_bytes(std::string{"v1"}));
         fwd.publish("topic", as_bytes(std::string{"v2"}));
         ex.drain();
@@ -198,8 +198,5 @@ TEST_CASE("a depth-1 ring stays byte-identical to last-writer-wins (all/latest/n
         REQUIRE(bodies.size() == 1);
         REQUIRE(bodies[0] == "v2");
     }
-    SECTION("none -> zero")
-    {
-        REQUIRE(replay(durability::none).empty());
-    }
+    SECTION("none -> zero") { REQUIRE(replay(durability::none).empty()); }
 }

@@ -10,7 +10,7 @@
 
 namespace plexus::detail {
 
-template <typename T>
+template<typename T>
 class loan_pool;
 
 // A move-only handle to a pool slot holding a live T. The handle owns the slot until it
@@ -21,14 +21,14 @@ class loan_pool;
 // A published handle is left null, so its destructor releases nothing — the
 // double-release a published-then-destroyed handle would otherwise cause is closed by
 // nulling, asserted in debug.
-template <typename T>
+template<typename T>
 class loan
 {
 public:
     loan() = default;
 
     loan(loan &&other) noexcept
-        : m_slot(std::exchange(other.m_slot, nullptr))
+            : m_slot(std::exchange(other.m_slot, nullptr))
     {
     }
 
@@ -42,13 +42,13 @@ public:
         return *this;
     }
 
-    loan(const loan &) = delete;
+    loan(const loan &)            = delete;
     loan &operator=(const loan &) = delete;
 
     ~loan() { release_if_held(); }
 
     [[nodiscard]] bool valid() const noexcept { return m_slot != nullptr; }
-    explicit operator bool() const noexcept { return valid(); }
+    explicit           operator bool() const noexcept { return valid(); }
 
     T &operator*() const noexcept { return *object_ptr(); }
     T *operator->() const noexcept { return object_ptr(); }
@@ -57,7 +57,7 @@ private:
     friend class loan_pool<T>;
 
     explicit loan(io::loan_slot *slot) noexcept
-        : m_slot(slot)
+            : m_slot(slot)
     {
     }
 
@@ -91,33 +91,33 @@ private:
 //
 // Exhaustion (no free slot) is NOT an error and NEVER blocks or grows: try_borrow returns
 // an empty loan and the publisher degrades to the serialize path with a counter.
-template <typename T>
+template<typename T>
 class loan_pool
 {
 public:
     explicit loan_pool(std::size_t capacity)
-        : m_slots(new node[capacity])
-        , m_capacity(capacity)
+            : m_slots(new node[capacity])
+            , m_capacity(capacity)
     {
         for(std::size_t i = 0; i < capacity; ++i)
         {
-            m_slots[i].owner = this;
-            m_slots[i].control.refs = 0;
+            m_slots[i].owner           = this;
+            m_slots[i].control.refs    = 0;
             m_slots[i].control.release = &release_slot;
-            m_slots[i].next_free = m_free;
-            m_free = &m_slots[i];
+            m_slots[i].next_free       = m_free;
+            m_free                     = &m_slots[i];
         }
     }
 
     ~loan_pool() { delete[] m_slots; }
 
-    loan_pool(const loan_pool &) = delete;
+    loan_pool(const loan_pool &)            = delete;
     loan_pool &operator=(const loan_pool &) = delete;
 
     loan_pool(loan_pool &&other) noexcept
-        : m_slots(std::exchange(other.m_slots, nullptr))
-        , m_free(std::exchange(other.m_free, nullptr))
-        , m_capacity(std::exchange(other.m_capacity, 0))
+            : m_slots(std::exchange(other.m_slots, nullptr))
+            , m_free(std::exchange(other.m_free, nullptr))
+            , m_capacity(std::exchange(other.m_capacity, 0))
     {
         restamp_owner();
     }
@@ -127,8 +127,8 @@ public:
         if(this != &other)
         {
             delete[] m_slots;
-            m_slots = std::exchange(other.m_slots, nullptr);
-            m_free = std::exchange(other.m_free, nullptr);
+            m_slots    = std::exchange(other.m_slots, nullptr);
+            m_free     = std::exchange(other.m_free, nullptr);
             m_capacity = std::exchange(other.m_capacity, 0);
             restamp_owner();
         }
@@ -138,15 +138,15 @@ public:
     // Borrow a slot and construct a T in place from the forwarded arguments. Returns an
     // empty loan on exhaustion. The slot's refcount starts at 1 (the loan's own
     // reference); a publish transfers that reference to the in-flight carrier.
-    template <typename... Args>
+    template<typename... Args>
     loan<T> try_borrow(Args &&...args)
     {
         node *n = pop_free();
         if(n == nullptr)
             return loan<T>{};
-        T *obj = ::new(static_cast<void *>(&n->storage)) T(std::forward<Args>(args)...);
+        T *obj            = ::new(static_cast<void *>(&n->storage)) T(std::forward<Args>(args)...);
         n->control.object = obj;
-        n->control.refs = 1;
+        n->control.refs   = 1;
         return loan<T>{&n->control};
     }
 
@@ -169,9 +169,9 @@ private:
     struct node
     {
         alignas(T) std::byte storage[sizeof(T)];
-        io::loan_slot        control;
-        loan_pool           *owner;
-        node                *next_free;
+        io::loan_slot control;
+        loan_pool    *owner;
+        node         *next_free;
     };
 
     // Destroy the object in place and return its slot to the freelist. The node is
@@ -180,8 +180,8 @@ private:
     // release), never a cast across an erased boundary.
     static void release_slot(io::loan_slot *control) noexcept
     {
-        node *n = reinterpret_cast<node *>(reinterpret_cast<std::byte *>(control)
-                                           - offsetof(node, control));
+        node *n = reinterpret_cast<node *>(reinterpret_cast<std::byte *>(control) -
+                                           offsetof(node, control));
         std::launder(reinterpret_cast<T *>(&n->storage))->~T();
         control->object = nullptr;
         n->owner->push_free(n);
@@ -202,14 +202,14 @@ private:
         if(m_free == nullptr)
             return nullptr;
         node *n = m_free;
-        m_free = n->next_free;
+        m_free  = n->next_free;
         return n;
     }
 
     void push_free(node *n) noexcept
     {
         n->next_free = m_free;
-        m_free = n;
+        m_free       = n;
     }
 
     node       *m_slots;

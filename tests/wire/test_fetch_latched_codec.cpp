@@ -13,7 +13,7 @@ TEST_CASE("fetch_latched_request round-trips topic_hash and max_samples", "[wire
     const fetch_latched_request req{.topic_hash = 0xDEADBEEFCAFEF00DULL, .max_samples = 42};
 
     auto bytes = encode_fetch_latched_request(req);
-    REQUIRE(bytes.size() == detail::fetch_latched_request_size);   // exactly 12 bytes
+    REQUIRE(bytes.size() == detail::fetch_latched_request_size); // exactly 12 bytes
     REQUIRE(bytes.size() == 12);
 
     auto decoded = decode_fetch_latched_request(bytes);

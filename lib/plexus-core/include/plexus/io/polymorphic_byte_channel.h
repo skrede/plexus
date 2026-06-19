@@ -43,15 +43,17 @@ class concrete_channel_base
 public:
     virtual ~concrete_channel_base() = default;
 
-    virtual void send(std::span<const std::byte> data) = 0;
-    virtual void close() = 0;
-    [[nodiscard]] virtual endpoint remote_endpoint() const = 0;
-    virtual void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) = 0;
-    virtual void on_closed(plexus::detail::move_only_function<void()> cb) = 0;
-    virtual void on_error(plexus::detail::move_only_function<void(io_error)> cb) = 0;
-    virtual void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) = 0;
-    [[nodiscard]] virtual std::size_t backpressured() const = 0;
-    [[nodiscard]] virtual std::uint64_t scheduler_key() const = 0;
+    virtual void                   send(std::span<const std::byte> data) = 0;
+    virtual void                   close()                               = 0;
+    [[nodiscard]] virtual endpoint remote_endpoint() const               = 0;
+    virtual void
+    on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) = 0;
+    virtual void on_closed(plexus::detail::move_only_function<void()> cb)            = 0;
+    virtual void on_error(plexus::detail::move_only_function<void(io_error)> cb)     = 0;
+    virtual void
+    on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) = 0;
+    [[nodiscard]] virtual std::size_t   backpressured() const                         = 0;
+    [[nodiscard]] virtual std::uint64_t scheduler_key() const                         = 0;
 
     // The optional drop edge: a wrapped channel that surfaces unroutable/congested drops
     // (inproc, shm) forwards the engine's posted drop_sink down to its concrete on_drop;
@@ -60,20 +62,35 @@ public:
     virtual void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)>) {}
 };
 
-template <typename C>
+template<typename C>
 class channel_adapter final : public concrete_channel_base
 {
 public:
-    explicit channel_adapter(std::unique_ptr<C> c) : m_c(std::move(c)) {}
+    explicit channel_adapter(std::unique_ptr<C> c)
+            : m_c(std::move(c))
+    {
+    }
 
-    void send(std::span<const std::byte> data) override { m_c->send(data); }
-    void close() override { m_c->close(); }
+    void                   send(std::span<const std::byte> data) override { m_c->send(data); }
+    void                   close() override { m_c->close(); }
     [[nodiscard]] endpoint remote_endpoint() const override { return m_c->remote_endpoint(); }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) override { m_c->on_data(std::move(cb)); }
-    void on_closed(plexus::detail::move_only_function<void()> cb) override { m_c->on_closed(std::move(cb)); }
-    void on_error(plexus::detail::move_only_function<void(io_error)> cb) override { m_c->on_error(std::move(cb)); }
-    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) override { m_c->on_protocol_close(std::move(cb)); }
-    [[nodiscard]] std::size_t backpressured() const override { return m_c->backpressured(); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) override
+    {
+        m_c->on_data(std::move(cb));
+    }
+    void on_closed(plexus::detail::move_only_function<void()> cb) override
+    {
+        m_c->on_closed(std::move(cb));
+    }
+    void on_error(plexus::detail::move_only_function<void(io_error)> cb) override
+    {
+        m_c->on_error(std::move(cb));
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) override
+    {
+        m_c->on_protocol_close(std::move(cb));
+    }
+    [[nodiscard]] std::size_t   backpressured() const override { return m_c->backpressured(); }
     [[nodiscard]] std::uint64_t scheduler_key() const override { return m_c->scheduler_key(); }
 
     // Forward the drop_sink install only to a concrete channel that has the edge; a channel
@@ -92,23 +109,41 @@ private:
 class polymorphic_byte_channel
 {
 public:
-    explicit polymorphic_byte_channel(std::unique_ptr<concrete_channel_base> impl) : m_impl(std::move(impl)) {}
+    explicit polymorphic_byte_channel(std::unique_ptr<concrete_channel_base> impl)
+            : m_impl(std::move(impl))
+    {
+    }
 
-    polymorphic_byte_channel(const polymorphic_byte_channel &) = delete;
+    polymorphic_byte_channel(const polymorphic_byte_channel &)            = delete;
     polymorphic_byte_channel &operator=(const polymorphic_byte_channel &) = delete;
-    polymorphic_byte_channel(polymorphic_byte_channel &&) = default;
-    polymorphic_byte_channel &operator=(polymorphic_byte_channel &&) = default;
+    polymorphic_byte_channel(polymorphic_byte_channel &&)                 = default;
+    polymorphic_byte_channel &operator=(polymorphic_byte_channel &&)      = default;
 
-    void send(std::span<const std::byte> data) { m_impl->send(data); }
-    void close() { m_impl->close(); }
+    void                   send(std::span<const std::byte> data) { m_impl->send(data); }
+    void                   close() { m_impl->close(); }
     [[nodiscard]] endpoint remote_endpoint() const { return m_impl->remote_endpoint(); }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_impl->on_data(std::move(cb)); }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_impl->on_closed(std::move(cb)); }
-    void on_error(plexus::detail::move_only_function<void(io_error)> cb) { m_impl->on_error(std::move(cb)); }
-    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_impl->on_protocol_close(std::move(cb)); }
-    [[nodiscard]] std::size_t backpressured() const { return m_impl->backpressured(); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_impl->on_data(std::move(cb));
+    }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_impl->on_closed(std::move(cb));
+    }
+    void on_error(plexus::detail::move_only_function<void(io_error)> cb)
+    {
+        m_impl->on_error(std::move(cb));
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
+    {
+        m_impl->on_protocol_close(std::move(cb));
+    }
+    [[nodiscard]] std::size_t   backpressured() const { return m_impl->backpressured(); }
     [[nodiscard]] std::uint64_t scheduler_key() const { return m_impl->scheduler_key(); }
-    void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> cb) { m_impl->on_drop(std::move(cb)); }
+    void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> cb)
+    {
+        m_impl->on_drop(std::move(cb));
+    }
 
 private:
     std::unique_ptr<concrete_channel_base> m_impl;
@@ -117,6 +152,6 @@ private:
 }
 
 static_assert(plexus::io::byte_channel<plexus::io::polymorphic_byte_channel>,
-    "polymorphic_byte_channel must satisfy byte_channel — check the seven erased verbs");
+              "polymorphic_byte_channel must satisfy byte_channel — check the seven erased verbs");
 
 #endif

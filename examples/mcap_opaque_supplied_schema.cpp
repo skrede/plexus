@@ -92,7 +92,7 @@ struct blob_codec
 
     plexus::wire_bytes<> encode(const opaque_blob &b) const
     {
-        auto owner = std::make_shared<std::vector<std::byte>>(b.bytes);
+        auto                       owner = std::make_shared<std::vector<std::byte>>(b.bytes);
         std::span<const std::byte> view{owner->data(), owner->size()};
         return {view, std::move(owner)};
     }
@@ -108,13 +108,13 @@ struct blob_codec
 // The exact encoding the supplied bytes satisfy. The blob the producer builds below IS valid
 // JSON matching this schema — declaring anything the bytes do not satisfy would be dishonest.
 constexpr std::string_view k_blob_jsonschema =
-    R"({"type":"object","title":"opaque_blob","properties":{)"
-    R"("seq":{"type":"integer"},"reading":{"type":"integer"}}})";
+        R"({"type":"object","title":"opaque_blob","properties":{)"
+        R"("seq":{"type":"integer"},"reading":{"type":"integer"}}})";
 
 opaque_blob make_blob(std::uint32_t seq, std::uint32_t reading)
 {
     const std::string json =
-        "{\"seq\":" + std::to_string(seq) + ",\"reading\":" + std::to_string(reading) + "}";
+            "{\"seq\":" + std::to_string(seq) + ",\"reading\":" + std::to_string(reading) + "}";
     opaque_blob b;
     b.bytes.assign(reinterpret_cast<const std::byte *>(json.data()),
                    reinterpret_cast<const std::byte *>(json.data()) + json.size());
@@ -152,10 +152,10 @@ plexus::node_id id_of(std::uint8_t seed)
 
 int main()
 {
-    plexus::inproc::inproc_bus<> bus;
-    plexus::inproc::inproc_executor<> ex{bus};
-    transport_t ta{ex, bus};
-    transport_t tb{ex, bus};
+    plexus::inproc::inproc_bus<>        bus;
+    plexus::inproc::inproc_executor<>   ex{bus};
+    transport_t                         ta{ex, bus};
+    transport_t                         tb{ex, bus};
     plexus::discovery::static_discovery disc{{}};
 
     buffer_sink sink;
@@ -170,8 +170,8 @@ int main()
         // Supply the encoding + schema the opaque bytes actually satisfy. plexus copies this
         // verbatim into the stream preamble; the transcode labels the data channel from it.
         plexus::recorder_options ropts;
-        const auto schema_bytes =
-            std::as_bytes(std::span{k_blob_jsonschema.data(), k_blob_jsonschema.size()});
+        const auto               schema_bytes =
+                std::as_bytes(std::span{k_blob_jsonschema.data(), k_blob_jsonschema.size()});
         ropts.schemas.push_back(plexus::type_schema{.type_id          = 0x0BACED01u,
                                                     .message_encoding = "json",
                                                     .schema_name      = "opaque_blob",
@@ -183,9 +183,10 @@ int main()
         pub_opts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
 
         {
-            plexus::publisher<blob_codec> sensor{pub_node, "telemetry.sensor", pub_opts, blob_codec{}};
-            plexus::subscriber<blob_codec> sensor_sub{
-                sub_node, "telemetry.sensor", [](const opaque_blob &) {}};
+            plexus::publisher<blob_codec>  sensor{pub_node, "telemetry.sensor", pub_opts,
+                                                  blob_codec{}};
+            plexus::subscriber<blob_codec> sensor_sub{sub_node, "telemetry.sensor",
+                                                      [](const opaque_blob &) {}};
             ex.drain();
 
             for(std::uint32_t i = 0; i < 8; ++i)
@@ -211,7 +212,7 @@ int main()
     std::cout << "captured " << sink.bytes().size() << " bytes -> " << flat_path.string() << '\n';
 
     const std::filesystem::path mcap_path = "mcap_opaque_supplied_schema.mcap";
-    const auto result                     = plexus::tools::flat_to_mcap(sink.bytes(), mcap_path);
+    const auto                  result    = plexus::tools::flat_to_mcap(sink.bytes(), mcap_path);
     if(!result.ok)
     {
         std::cout << "transcode failed: " << result.error << '\n';

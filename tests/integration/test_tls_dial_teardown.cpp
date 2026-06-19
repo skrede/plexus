@@ -39,7 +39,7 @@
 #include <filesystem>
 
 namespace ptls = plexus::tls;
-namespace pio = plexus::io;
+namespace pio  = plexus::io;
 namespace wire = plexus::wire;
 
 using spki_digest = std::array<std::byte, 32>;
@@ -51,20 +51,20 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest digest{};
+    spki_digest           digest{};
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path()
-            / ("plexus_tlsdt_" + tag + "_" + std::to_string(::getpid())
-               + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() /
+                ("plexus_tlsdt_" + tag + "_" + std::to_string(::getpid()) + "_" +
+                 std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
-        key_path = dir / "key.pem";
+        key_path  = dir / "key.pem";
         generate();
     }
 
-    identity_fixture(const identity_fixture &) = delete;
+    identity_fixture(const identity_fixture &)            = delete;
     identity_fixture &operator=(const identity_fixture &) = delete;
 
     ~identity_fixture()
@@ -75,7 +75,8 @@ struct identity_fixture
 
     void generate()
     {
-        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"), &EVP_PKEY_free);
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"),
+                                                                 &EVP_PKEY_free);
         REQUIRE(pkey);
         std::unique_ptr<X509, decltype(&X509_free)> cert(X509_new(), &X509_free);
         REQUIRE(cert);
@@ -85,13 +86,14 @@ struct identity_fixture
         X509_set_pubkey(cert.get(), pkey.get());
         X509_NAME *name = X509_get_subject_name(cert.get());
         X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-            reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1, 0);
+                                   reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1,
+                                   0);
         X509_set_issuer_name(cert.get(), name);
         REQUIRE(X509_sign(cert.get(), pkey.get(), EVP_sha256()) != 0);
         write_pem(cert.get(), pkey.get());
-        std::filesystem::permissions(key_path,
-            std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-            std::filesystem::perm_options::replace);
+        std::filesystem::permissions(
+                key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+                std::filesystem::perm_options::replace);
         auto d = ptls::spki_fingerprint(*cert.get());
         REQUIRE(d.has_value());
         digest = *d;
@@ -113,7 +115,7 @@ struct identity_fixture
 ptls::tls_credential make_cred(const identity_fixture &self, const spki_digest &peer_pin)
 {
     auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-        std::vector<spki_digest>{peer_pin});
+            std::vector<spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -130,8 +132,8 @@ TEST_CASE("tls_dial_teardown: an io_context destroyed mid-handshake leaks nothin
     // own io_context (and transport) is destroyed before the mutual handshake completes.
     for(int iter = 0; iter < 16; ++iter)
     {
-        ::asio::io_context server_io;
-        auto server_cred = make_cred(server_id, client_id.digest);
+        ::asio::io_context  server_io;
+        auto                server_cred = make_cred(server_id, client_id.digest);
         ptls::tls_transport server{server_io, server_cred};
         server.listen(pio::endpoint{"tls", "127.0.0.1:0"});
         for(int i = 0; i < 50 && server.port() == 0; ++i)
@@ -140,8 +142,8 @@ TEST_CASE("tls_dial_teardown: an io_context destroyed mid-handshake leaks nothin
         REQUIRE(port != 0);
 
         {
-            ::asio::io_context client_io;
-            auto client_cred = make_cred(client_id, server_id.digest);
+            ::asio::io_context  client_io;
+            auto                client_cred = make_cred(client_id, server_id.digest);
             ptls::tls_transport client{client_io, client_cred};
             client.dial(pio::endpoint{"tls", "127.0.0.1:" + std::to_string(port)});
 

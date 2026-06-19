@@ -51,7 +51,7 @@ using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 using plexus::io::message_info;
 
-using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
+using inproc_node     = plexus::node<inproc_policy, inproc_transport<>>;
 using bytes_publisher = plexus::publisher<>;
 
 // A trivial value type: one 32-bit number. The codec serializes it little-endian and
@@ -79,11 +79,12 @@ struct counting_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, sample &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   sample                    &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -97,7 +98,7 @@ struct counting_codec
 static_assert(plexus::typed_codec<counting_codec>);
 static_assert(plexus::identity_bearing<counting_codec>);
 
-using typed_publisher = plexus::publisher<counting_codec>;
+using typed_publisher  = plexus::publisher<counting_codec>;
 using typed_subscriber = plexus::subscriber<counting_codec>;
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -110,15 +111,18 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0x7A9EDu;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0x7A9EDu;
     opts.dial_eagerly = eager;
     return opts;
 }
 
-std::span<const std::byte> as_bytes(const std::vector<std::byte> &b) { return {b.data(), b.size()}; }
+std::span<const std::byte> as_bytes(const std::vector<std::byte> &b)
+{
+    return {b.data(), b.size()};
+}
 
 std::vector<std::byte> encode_u32(std::uint32_t v)
 {
@@ -132,11 +136,11 @@ std::vector<std::byte> encode_u32(std::uint32_t v)
 // single-dialer topology, copied from the bytes fixture).
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -157,13 +161,14 @@ struct net
 
 }
 
-TEST_CASE("typed pub/sub: a bytes producer's encoded frame decodes to a value-equal T", "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: a bytes producer's encoded frame decodes to a value-equal T",
+          "[node][typed][pubsub]")
 {
     net n;
     n.connect();
 
     std::vector<sample> got;
-    typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
+    typed_subscriber    s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
     // A bytes publisher on the SAME topic forces the byte path: the typed subscriber must
     // decode the wire frame (no shared in-process object), proving encode->bytes->decode
     // value equality end to end.
@@ -178,29 +183,30 @@ TEST_CASE("typed pub/sub: a bytes producer's encoded frame decodes to a value-eq
     REQUIRE(got.front().value == 0xDEADBEEFu);
 }
 
-TEST_CASE("typed pub/sub: the fast path delivers by address with zero encodes", "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: the fast path delivers by address with zero encodes",
+          "[node][typed][pubsub]")
 {
     net n;
     n.connect();
 
     std::vector<const sample *> seen_addr;
-    std::vector<std::uint32_t> seen_value;
-    std::vector<message_info> infos;
-    typed_subscriber s{n.a, "topic",
-                       [&](const sample &v, const message_info &info) {
+    std::vector<std::uint32_t>  seen_value;
+    std::vector<message_info>   infos;
+    typed_subscriber            s{n.a, "topic", [&](const sample &v, const message_info &info)
+                                  {
                            seen_addr.push_back(&v);
                            seen_value.push_back(v.value);
                            infos.push_back(info);
-                       }};
-    counting_codec codec;
-    auto encodes = codec.encodes;
-    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
+                                  }};
+    counting_codec              codec;
+    auto                        encodes = codec.encodes;
+    typed_publisher             p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     // Borrow, mark the object (mutate a field), capture its address, publish.
     auto loan = p.borrow();
     REQUIRE(loan);
-    loan->value = 0x1234u;
+    loan->value                  = 0x1234u;
     const sample *published_addr = &*loan;
     p.publish(std::move(loan));
     n.drive();
@@ -217,16 +223,18 @@ TEST_CASE("typed pub/sub: the fast path delivers by address with zero encodes", 
     REQUIRE_FALSE(infos.front().source_identity.has_value());
 }
 
-TEST_CASE("typed pub/sub: publish(const T&) delivers value-equal over the fast path with zero encodes", "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: publish(const T&) delivers value-equal over the fast path with zero "
+          "encodes",
+          "[node][typed][pubsub]")
 {
     net n;
     n.connect();
 
     std::vector<std::uint32_t> got;
-    typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v.value); }};
-    counting_codec codec;
-    auto encodes = codec.encodes;
-    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
+    typed_subscriber           s{n.a, "topic", [&](const sample &v) { got.push_back(v.value); }};
+    counting_codec             codec;
+    auto                       encodes = codec.encodes;
+    typed_publisher            p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     p.publish(sample{0x55AA55AAu});
@@ -238,7 +246,8 @@ TEST_CASE("typed pub/sub: publish(const T&) delivers value-equal over the fast p
     REQUIRE(p.loan_exhausted() == 0);
 }
 
-TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, escaped on opt-in", "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, escaped on opt-in",
+          "[node][typed][pubsub]")
 {
     SECTION("default: drop + count, node stays connected")
     {
@@ -246,17 +255,17 @@ TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, es
         n.connect();
 
         std::vector<sample> got;
-        typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
-        bytes_publisher p{n.b, "topic"};
+        typed_subscriber    s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
+        bytes_publisher     p{n.b, "topic"};
         n.drive();
 
-        const std::vector<std::byte> garbage(7, std::byte{0xFF});   // not 4 bytes -> decode fails
+        const std::vector<std::byte> garbage(7, std::byte{0xFF}); // not 4 bytes -> decode fails
         p.publish(as_bytes(garbage));
         n.drive();
 
         REQUIRE(got.empty());
         REQUIRE(s.decode_failed() == 1);
-        REQUIRE(n.a.router().is_connected(n.id_b));   // never a teardown
+        REQUIRE(n.a.router().is_connected(n.id_b)); // never a teardown
     }
 
     SECTION("opt-in escape callback receives the raw bytes + errc")
@@ -264,16 +273,17 @@ TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, es
         net n;
         n.connect();
 
-        std::vector<sample> got;
-        std::vector<std::size_t> escaped_sizes;
-        std::vector<std::error_code> escaped_errcs;
+        std::vector<sample>              got;
+        std::vector<std::size_t>         escaped_sizes;
+        std::vector<std::error_code>     escaped_errcs;
         plexus::typed_subscriber_options opts;
-        opts.on_decode_failure = [&](std::span<const std::byte> raw, std::error_code ec) {
+        opts.on_decode_failure = [&](std::span<const std::byte> raw, std::error_code ec)
+        {
             escaped_sizes.push_back(raw.size());
             escaped_errcs.push_back(ec);
         };
         typed_subscriber s{n.a, "topic", opts, [&](const sample &v) { got.push_back(v); }};
-        bytes_publisher p{n.b, "topic"};
+        bytes_publisher  p{n.b, "topic"};
         n.drive();
 
         const std::vector<std::byte> garbage(7, std::byte{0xFF});
@@ -288,14 +298,15 @@ TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, es
     }
 }
 
-TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, lenient admits", "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, lenient admits",
+          "[node][typed][pubsub]")
 {
     SECTION("strict: no delivery from an undeclared producer")
     {
         net n;
         n.connect();
 
-        std::vector<sample> got;
+        std::vector<sample>              got;
         plexus::typed_subscriber_options opts;
         opts.posture = plexus::io::attach_posture::strict;
         typed_subscriber s{n.a, "topic", opts, [&](const sample &v) { got.push_back(v); }};
@@ -307,7 +318,7 @@ TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, l
         p.publish(as_bytes(frame));
         n.drive();
 
-        REQUIRE(got.empty());   // strict refused the attach to an undeclared producer
+        REQUIRE(got.empty()); // strict refused the attach to an undeclared producer
     }
 
     SECTION("lenient default: admits an undeclared producer")
@@ -316,8 +327,8 @@ TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, l
         n.connect();
 
         std::vector<sample> got;
-        typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
-        bytes_publisher p{n.b, "topic"};
+        typed_subscriber    s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
+        bytes_publisher     p{n.b, "topic"};
         n.drive();
 
         const auto frame = encode_u32(0x22u);
@@ -329,15 +340,15 @@ TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, l
     }
 }
 
-TEST_CASE("typed pub/sub: a dropped typed subscriber delivers nothing on a later publish", "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: a dropped typed subscriber delivers nothing on a later publish",
+          "[node][typed][pubsub]")
 {
     net n;
     n.connect();
 
-    int delivered = 0;
-    auto s = std::make_unique<typed_subscriber>(
-        n.a, "topic", [&](const sample &) { ++delivered; });
-    counting_codec codec;
+    int  delivered = 0;
+    auto s = std::make_unique<typed_subscriber>(n.a, "topic", [&](const sample &) { ++delivered; });
+    counting_codec  codec;
     typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 

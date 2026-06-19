@@ -85,8 +85,9 @@ public:
     // consumed SEPARATELY by reliability_class (the verdict that composes the hint
     // with the path's own class); the hint reaches select() only so the signature
     // stays stable for callers that thread the axis through dial(ep).
-    [[nodiscard]] transport_kind select(const endpoint &ep,
-                                        reliability_hint /*tier-neutral; composed by reliability_class*/) const noexcept
+    [[nodiscard]] transport_kind
+    select(const endpoint &ep,
+           reliability_hint /*tier-neutral; composed by reliability_class*/) const noexcept
     {
         if(ep.scheme == "unix" || ep.scheme == "inproc" || ep.scheme == "shm")
             return transport_kind::local;
@@ -118,7 +119,7 @@ public:
             return reliability_hint::reliable_datagram;
         if(scheme == "tcp" || scheme == "tls")
             return reliability_hint::reliable;
-        return reliability_hint::unspecified;   // unix/inproc (local) and unknown: no claim
+        return reliability_hint::unspecified; // unix/inproc (local) and unknown: no claim
     }
 
     // Compose a topic's reliability requirement (expressed as a hint) with a path's
@@ -131,7 +132,7 @@ public:
     // scheme_is_reliable DIRECTLY (not off reliability_of_scheme) keeps this verdict
     // lock-step with the engine-side reliability gate for EVERY scheme, unknown
     // included — the documented mirror invariant the two enforcement points share.
-    [[nodiscard]] reliability_admissibility reliability_class(const endpoint &ep,
+    [[nodiscard]] reliability_admissibility reliability_class(const endpoint  &ep,
                                                               reliability_hint hint) const noexcept
     {
         if(hint == reliability_hint::reliable && !scheme_is_reliable(ep.scheme))
@@ -175,8 +176,8 @@ public:
     // The actual acquire (and the dual-delivery wire fallback) is the registry's job.
     [[nodiscard]] bool shm_eligible_for(const endpoint &ep, shm::dispatch_hint h) const noexcept
     {
-        return select(ep, reliability_hint::unspecified) == transport_kind::local
-            && shm::shm_eligible(h);
+        return select(ep, reliability_hint::unspecified) == transport_kind::local &&
+                shm::shm_eligible(h);
     }
 };
 

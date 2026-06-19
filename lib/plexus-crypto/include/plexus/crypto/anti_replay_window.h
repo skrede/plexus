@@ -34,7 +34,7 @@ enum class replay_verdict : std::uint8_t
 // preceding slots; the check is O(1) and the state is bounded — never an unbounded
 // set of seen sequences. The receiver reconstructs the AEAD nonce from the sequence
 // carried explicitly on each datagram, so drop/reorder never desyncs a counter.
-template <std::size_t Width = k_anti_replay_window_bits>
+template<std::size_t Width = k_anti_replay_window_bits>
 class anti_replay_window
 {
 public:
@@ -64,7 +64,7 @@ public:
         if(!m_seen_any)
         {
             m_seen_any = true;
-            m_highest = seq;
+            m_highest  = seq;
             set_bit(0);
             return replay_verdict::accept;
         }
@@ -87,7 +87,7 @@ public:
     void reset() noexcept
     {
         m_bitmap.fill(0u);
-        m_highest = 0;
+        m_highest  = 0;
         m_seen_any = false;
     }
 
@@ -95,11 +95,14 @@ public:
 
 private:
     static constexpr std::size_t k_word_bits = 64;
-    static constexpr std::size_t k_words = (Width + k_word_bits - 1) / k_word_bits;
+    static constexpr std::size_t k_words     = (Width + k_word_bits - 1) / k_word_bits;
 
     // Bit b counts slots BELOW m_highest: bit 0 is m_highest itself, bit k is the
     // sequence m_highest - k.
-    void set_bit(std::size_t b) noexcept { m_bitmap[b / k_word_bits] |= (1ull << (b % k_word_bits)); }
+    void set_bit(std::size_t b) noexcept
+    {
+        m_bitmap[b / k_word_bits] |= (1ull << (b % k_word_bits));
+    }
     [[nodiscard]] bool test_bit(std::size_t b) const noexcept
     {
         return (m_bitmap[b / k_word_bits] & (1ull << (b % k_word_bits))) != 0u;
@@ -118,11 +121,11 @@ private:
             return;
         }
         const std::size_t word_shift = static_cast<std::size_t>(by) / k_word_bits;
-        const std::size_t bit_shift = static_cast<std::size_t>(by) % k_word_bits;
+        const std::size_t bit_shift  = static_cast<std::size_t>(by) % k_word_bits;
         for(std::size_t i = k_words; i-- > 0;)
         {
             const std::size_t src = i - word_shift;
-            std::uint64_t w = (i >= word_shift) ? (m_bitmap[src] << bit_shift) : 0u;
+            std::uint64_t     w   = (i >= word_shift) ? (m_bitmap[src] << bit_shift) : 0u;
             if(bit_shift != 0 && i > word_shift)
                 w |= m_bitmap[src - 1] >> (k_word_bits - bit_shift);
             m_bitmap[i] = w;
@@ -141,8 +144,8 @@ private:
     }
 
     std::array<std::uint64_t, k_words> m_bitmap{};
-    std::uint64_t m_highest{0};
-    bool m_seen_any{false};
+    std::uint64_t                      m_highest{0};
+    bool                               m_seen_any{false};
 };
 
 }

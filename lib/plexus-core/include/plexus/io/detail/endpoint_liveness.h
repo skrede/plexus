@@ -28,12 +28,12 @@ namespace plexus::io::detail {
 // brings the gap back under the period clears the latch).
 struct endpoint_liveness
 {
-    std::uint64_t last_data_seen_ns = 0;
-    std::uint64_t last_seen_ns      = 0;
+    std::uint64_t last_data_seen_ns  = 0;
+    std::uint64_t last_seen_ns       = 0;
     std::uint64_t deadline_period_ns = 0;
     std::uint64_t lease_ns           = 0;
-    bool deadline_violated = false;
-    bool lease_expired     = false;
+    bool          deadline_violated  = false;
+    bool          lease_expired      = false;
 };
 
 }

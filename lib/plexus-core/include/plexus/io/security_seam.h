@@ -40,7 +40,8 @@ struct security_seam
     // fallback move_only_function has a non-const call operator, and the seam is borrowed
     // const by every session (mirroring cookie_secret's mutable hmac seam).
     mutable plexus::detail::move_only_function<bool(std::span<const std::byte> transcript,
-                                                    std::span<std::byte, 32> out)> transcript;
+                                                    std::span<std::byte, 32>   out)>
+            transcript;
 
     [[nodiscard]] bool engaged() const noexcept { return static_cast<bool>(transcript); }
 

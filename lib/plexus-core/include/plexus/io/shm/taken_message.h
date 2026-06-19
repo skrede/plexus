@@ -41,13 +41,13 @@ public:
 
     ~taken_message() { reclaim(); }
 
-    taken_message(const taken_message &) = delete;
+    taken_message(const taken_message &)            = delete;
     taken_message &operator=(const taken_message &) = delete;
 
     taken_message(taken_message &&other) noexcept
-        : m_payload(other.m_payload),
-          m_length(other.m_length),
-          m_refcount(other.m_refcount)
+            : m_payload(other.m_payload)
+            , m_length(other.m_length)
+            , m_refcount(other.m_refcount)
     {
         other.m_payload  = nullptr;
         other.m_length   = 0;
@@ -61,9 +61,9 @@ public:
 
         reclaim();
 
-        m_payload    = other.m_payload;
-        m_length     = other.m_length;
-        m_refcount   = other.m_refcount;
+        m_payload  = other.m_payload;
+        m_length   = other.m_length;
+        m_refcount = other.m_refcount;
 
         other.m_payload  = nullptr;
         other.m_length   = 0;
@@ -86,8 +86,8 @@ public:
     {
         assert(m_payload != nullptr &&
                "taken_message::as_wire_bytes() on an empty or moved-from handle");
-        return ::plexus::wire_bytes<shm_slot_owner>(
-            std::span<const std::byte>(m_payload, m_length), shm_slot_owner(m_refcount));
+        return ::plexus::wire_bytes<shm_slot_owner>(std::span<const std::byte>(m_payload, m_length),
+                                                    shm_slot_owner(m_refcount));
     }
 
     // The adopt tag: the slot_subscriber has ALREADY pinned the slot via the ring's
@@ -106,9 +106,9 @@ private:
 
     taken_message(const std::byte *payload, std::size_t length,
                   std::atomic<std::uint32_t> *refcount) noexcept
-        : m_payload(payload),
-          m_length(length),
-          m_refcount(refcount)
+            : m_payload(payload)
+            , m_length(length)
+            , m_refcount(refcount)
     {
         if(m_refcount != nullptr)
             m_refcount->fetch_add(1, std::memory_order_acq_rel); // pin at take()
@@ -119,9 +119,9 @@ private:
     // exactly once when the handle dies.
     taken_message(adopt_pin_t, const std::byte *payload, std::size_t length,
                   std::atomic<std::uint32_t> *refcount) noexcept
-        : m_payload(payload),
-          m_length(length),
-          m_refcount(refcount)
+            : m_payload(payload)
+            , m_length(length)
+            , m_refcount(refcount)
     {
     }
 
@@ -137,9 +137,9 @@ private:
         m_refcount = nullptr;
     }
 
-    const std::byte             *m_payload{nullptr};
-    std::size_t                  m_length{0};
-    std::atomic<std::uint32_t>  *m_refcount{nullptr};
+    const std::byte            *m_payload{nullptr};
+    std::size_t                 m_length{0};
+    std::atomic<std::uint32_t> *m_refcount{nullptr};
 };
 
 }

@@ -17,7 +17,7 @@ namespace plexus::wire {
 inline std::array<std::byte, header_size> encode_header(const frame_header &hdr)
 {
     std::array<std::byte, header_size> buf{};
-    writer w{std::span<std::byte>{buf}};
+    writer                             w{std::span<std::byte>{buf}};
 
     w.u8(std::to_integer<std::uint8_t>(magic_byte_0));
     w.u8(std::to_integer<std::uint8_t>(magic_byte_1));
@@ -41,18 +41,17 @@ inline std::optional<frame_header> decode_header(std::span<const std::byte> data
     reader r{data};
     r.u8();
     r.u8();
-    return frame_header{
-            .type         = static_cast<msg_type>(r.u8()),
-            .flags        = r.u8(),
-            .session_id   = r.u64(),
-            .timestamp_ns = r.u64(),
-            .payload_len  = r.u64()
-    };
+    return frame_header{.type         = static_cast<msg_type>(r.u8()),
+                        .flags        = r.u8(),
+                        .session_id   = r.u64(),
+                        .timestamp_ns = r.u64(),
+                        .payload_len  = r.u64()};
 }
 
-inline std::vector<std::byte> encode_frame(const frame_header &hdr, std::span<const std::byte> payload)
+inline std::vector<std::byte> encode_frame(const frame_header        &hdr,
+                                           std::span<const std::byte> payload)
 {
-    auto adjusted = hdr;
+    auto adjusted        = hdr;
     adjusted.payload_len = payload.size();
 
     auto header_bytes = encode_header(adjusted);
@@ -72,7 +71,7 @@ inline std::vector<std::byte> encode_frame(const frame_header &hdr, std::span<co
 inline void encode_frame_into(std::vector<std::byte> &out, const frame_header &hdr,
                               std::span<const std::byte> payload)
 {
-    auto adjusted = hdr;
+    auto adjusted        = hdr;
     adjusted.payload_len = payload.size();
 
     auto header_bytes = encode_header(adjusted);
@@ -86,7 +85,7 @@ inline void encode_frame_into(std::vector<std::byte> &out, const frame_header &h
 inline uint64_t now_timestamp_ns()
 {
     auto now = std::chrono::system_clock::now();
-    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
+    auto ns  = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
     return static_cast<uint64_t>(ns.count());
 }
 

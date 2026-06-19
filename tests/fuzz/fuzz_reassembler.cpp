@@ -22,8 +22,8 @@
 
 namespace {
 
-using fuzz_executor = plexus::inproc::inproc_executor<std::chrono::steady_clock>;
-using fuzz_timer = plexus::inproc::inproc_timer<std::chrono::steady_clock>;
+using fuzz_executor    = plexus::inproc::inproc_executor<std::chrono::steady_clock>;
+using fuzz_timer       = plexus::inproc::inproc_timer<std::chrono::steady_clock>;
 using fuzz_reassembler = plexus::io::detail::reassembler<fuzz_executor &, fuzz_timer>;
 
 // Read up to two bytes as a big-endian uint16, tolerating a short span (a missing
@@ -53,12 +53,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
 {
     using namespace plexus;
 
-    const auto bytes = std::span<const std::byte>{
-        reinterpret_cast<const std::byte *>(Data), Size};
+    const auto bytes = std::span<const std::byte>{reinterpret_cast<const std::byte *>(Data), Size};
 
     plexus::inproc::inproc_bus<std::chrono::steady_clock> bus;
-    fuzz_executor ex{bus};
-    fuzz_reassembler r{ex};
+    fuzz_executor                                         ex{bus};
+    fuzz_reassembler                                      r{ex};
 
     // (a) Drive the fail-closed fragment sub-header decode over the raw bytes, then
     // feed the decoded fields -- the wire-decode-to-reassembler path on real input.
@@ -68,12 +67,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
     // (b) Independently fuzz the reassembler's own range checks with field values
     // derived directly from the raw bytes (so idx/cnt combinations the decode would
     // never surface are still exercised), feeding the trailing bytes as the payload.
-    const auto msg_id = read_u16_lenient(bytes, 0);
+    const auto msg_id   = read_u16_lenient(bytes, 0);
     const auto frag_idx = read_u32_lenient(bytes, 2);
     const auto frag_cnt = read_u32_lenient(bytes, 6);
-    const auto payload = bytes.size() > wire::udp_fragment_subheader
-                             ? bytes.subspan(wire::udp_fragment_subheader)
-                             : std::span<const std::byte>{};
+    const auto payload  = bytes.size() > wire::udp_fragment_subheader
+            ? bytes.subspan(wire::udp_fragment_subheader)
+            : std::span<const std::byte>{};
     (void)r.feed(msg_id, frag_idx, frag_cnt, payload);
 
     return 0;

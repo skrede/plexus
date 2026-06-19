@@ -64,7 +64,7 @@ struct futex_signal_notifier
     std::atomic<std::uint32_t> *generation = nullptr;
 
     explicit futex_signal_notifier(std::atomic<std::uint32_t> *gen = nullptr) noexcept
-        : generation(gen)
+            : generation(gen)
     {
     }
 
@@ -77,7 +77,8 @@ struct futex_signal_notifier
     void disarm() noexcept {}
 };
 
-static_assert(pio::notifier<futex_signal_notifier>, "futex_signal_notifier must satisfy the notifier seam");
+static_assert(pio::notifier<futex_signal_notifier>,
+              "futex_signal_notifier must satisfy the notifier seam");
 
 // shmr: the reactor-reaped variant. On the publish side it does NOT issue a futex wake
 // (the reactor reaps the CQE); the cross-process read here spins on the ring exactly as
@@ -101,8 +102,8 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
+                     0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -152,11 +153,11 @@ bool subscribe_and_check(const std::string &fqn, coord *c, const std::vector<std
     for(;;)
     {
         pio::broadcast_ring::consume_result out;
-        const auto st = ring.consume(cursor, out);
+        const auto                          st = ring.consume(cursor, out);
         if(st == pio::loan_status::ok)
         {
             ok = out.slab.size() == expected.size() &&
-                 std::memcmp(out.slab.data(), expected.data(), expected.size()) == 0;
+                    std::memcmp(out.slab.data(), expected.data(), expected.size()) == 0;
             break;
         }
         if(st == pio::loan_status::congested)
@@ -171,7 +172,7 @@ bool subscribe_and_check(const std::string &fqn, coord *c, const std::vector<std
 // (set_topic_geometry), and listen()s — minting + sizing the ring through the member's
 // acquire path — then send()s the payload over the handed-up shm_byte_channel. The child
 // attaches and verifies byte-exact. Returns whether the bytes crossed intact.
-template <typename Notifier>
+template<typename Notifier>
 bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes,
                         pio::ring_geometry_mode mode, std::uint32_t capacity)
 {
@@ -197,14 +198,15 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes,
     posix_shm_region_broker broker;
     // The binder constructs each ring's notifier over the in-region generation word, so a
     // futex variant's signal() wakes across address spaces (the spin variant ignores it).
-    typename member_t::notifier_binder binder =
-        [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &gen,
-           std::atomic<std::uint32_t> &) {
-            if constexpr(std::is_constructible_v<Notifier, std::atomic<std::uint32_t> *>)
-                slot.emplace(&gen);
-            else
-                slot.emplace();
-        };
+    typename member_t::notifier_binder binder = [](std::optional<Notifier>    &slot,
+                                                   std::atomic<std::uint32_t> &gen,
+                                                   std::atomic<std::uint32_t> &)
+    {
+        if constexpr(std::is_constructible_v<Notifier, std::atomic<std::uint32_t> *>)
+            slot.emplace(&gen);
+        else
+            slot.emplace();
+    };
     member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block,
                     std::move(binder)};
 
@@ -240,7 +242,7 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes,
     while(::waitpid(pid, &status, 0) < 0)
         ;
     const bool ok = WIFEXITED(status) && WEXITSTATUS(status) == 0 &&
-                    c->bytes_ok.load(std::memory_order_acquire) == 1u;
+            c->bytes_ok.load(std::memory_order_acquire) == 1u;
     ::munmap(c, sizeof(coord));
     return ok;
 }
@@ -248,14 +250,14 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes,
 // Whether the live mux member can mint the ring for (payload, mode, capacity) at all —
 // the fail-closed probe. Drives the member's acquire path; no fork. Returns true iff a
 // channel was handed up (the ring acquired), and the registry's bound diagnostic.
-template <typename Notifier>
+template<typename Notifier>
 struct acquire_probe
 {
-    bool                channel_minted = false;
-    pio::acquire_bound  bound          = pio::acquire_bound::none;
+    bool               channel_minted = false;
+    pio::acquire_bound bound          = pio::acquire_bound::none;
 };
 
-template <typename Notifier>
+template<typename Notifier>
 acquire_probe<Notifier> probe_acquire(const std::string &fqn, std::size_t payload_bytes,
                                       pio::ring_geometry_mode mode, std::uint32_t capacity)
 {
@@ -267,7 +269,8 @@ acquire_probe<Notifier> probe_acquire(const std::string &fqn, std::size_t payloa
     member.set_topic_geometry(fqn, payload_bytes, pio::shm_geometry{capacity, mode});
 
     std::unique_ptr<channel_t> channel;
-    member.on_dialed([&](std::unique_ptr<channel_t> ch, const endpoint &) { channel = std::move(ch); });
+    member.on_dialed([&](std::unique_ptr<channel_t> ch, const endpoint &)
+                     { channel = std::move(ch); });
     member.dial(endpoint{"shm", fqn});
 
     acquire_probe<Notifier> r;
@@ -278,8 +281,9 @@ acquire_probe<Notifier> probe_acquire(const std::string &fqn, std::size_t payloa
 
 }
 
-TEMPLATE_TEST_CASE("shm.large_message a >1 MiB and the 16 MiB payload round-trip over the live mux path",
-                   "[shm][large_message]", futex_signal_notifier, spin_notifier)
+TEMPLATE_TEST_CASE(
+        "shm.large_message a >1 MiB and the 16 MiB payload round-trip over the live mux path",
+        "[shm][large_message]", futex_signal_notifier, spin_notifier)
 {
     // The large cells run twice in one ctest invocation: the timing/transport
     // reproducibility discipline (no success declared from a single run). A typical
@@ -289,19 +293,20 @@ TEMPLATE_TEST_CASE("shm.large_message a >1 MiB and the 16 MiB payload round-trip
     for(int run = 0; run < 2; ++run)
     {
         // > 1 MiB: above the prior ~1 MiB single-message SHM limit.
-        REQUIRE(live_mux_roundtrip<TestType>(
-            base + ".over1mib." + std::to_string(run), 2 * k_mib,
-            pio::ring_geometry_mode::reliable_preserving, /*capacity=*/2u));
+        REQUIRE(live_mux_roundtrip<TestType>(base + ".over1mib." + std::to_string(run), 2 * k_mib,
+                                             pio::ring_geometry_mode::reliable_preserving,
+                                             /*capacity=*/2u));
 
         // The 16 MiB headline at a typical fan-out (capacity 2 -> depth 4 -> 64 MiB,
         // well under the 512 MiB ceiling).
-        REQUIRE(live_mux_roundtrip<TestType>(
-            base + ".16mib." + std::to_string(run), 16 * k_mib,
-            pio::ring_geometry_mode::reliable_preserving, /*capacity=*/2u));
+        REQUIRE(live_mux_roundtrip<TestType>(base + ".16mib." + std::to_string(run), 16 * k_mib,
+                                             pio::ring_geometry_mode::reliable_preserving,
+                                             /*capacity=*/2u));
     }
 }
 
-TEMPLATE_TEST_CASE("shm.large_message probe-higher: reliable fails closed above the ceiling, explicit best-effort round-trips",
+TEMPLATE_TEST_CASE("shm.large_message probe-higher: reliable fails closed above the ceiling, "
+                   "explicit best-effort round-trips",
                    "[shm][large_message]", futex_signal_notifier, spin_notifier)
 {
     // A payload above the chosen 512 MiB ceiling AT THE FULL FAN-OUT: 17 MiB at capacity
@@ -312,10 +317,10 @@ TEMPLATE_TEST_CASE("shm.large_message probe-higher: reliable fails closed above 
     const std::string base = "topic.probe." + std::to_string(::getpid());
 
     const acquire_probe<TestType> reliable =
-        probe_acquire<TestType>(base + ".reliable", 17 * k_mib,
-                                pio::ring_geometry_mode::reliable_preserving, /*capacity=*/16u);
-    REQUIRE_FALSE(reliable.channel_minted);                       // fail-closed, no ring
-    REQUIRE(reliable.bound == pio::acquire_bound::slab_ceiling);  // the CEILING bound, not OS
+            probe_acquire<TestType>(base + ".reliable", 17 * k_mib,
+                                    pio::ring_geometry_mode::reliable_preserving, /*capacity=*/16u);
+    REQUIRE_FALSE(reliable.channel_minted);                      // fail-closed, no ring
+    REQUIRE(reliable.bound == pio::acquire_bound::slab_ceiling); // the CEILING bound, not OS
 
     // Explicit best_effort_large at the same payload + capacity round-trips (depth ==
     // capacity keeps the slab under the ceiling). This is the ONLY way best_effort is

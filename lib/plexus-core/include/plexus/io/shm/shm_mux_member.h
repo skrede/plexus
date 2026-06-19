@@ -48,21 +48,23 @@ namespace plexus::io::shm {
 // on_error are stored; on_protocol_close never fires (no byte-stream framing exists
 // on a shared-memory ring, so no partial-frame violation is expressible). It borrows
 // the registry + channel BY REFERENCE; the registry outlives every channel it mints.
-template <typename Broker, typename Notifier>
+template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_byte_channel
 {
 public:
     using registry_type = shm_topic_registry<Broker, Notifier>;
 
-    shm_byte_channel(registry_type &registry, shm_channel<Notifier> &channel,
-                     std::string fqn, endpoint remote) noexcept
-        : m_registry(registry), m_channel(channel),
-          m_fqn(std::move(fqn)), m_remote(std::move(remote))
+    shm_byte_channel(registry_type &registry, shm_channel<Notifier> &channel, std::string fqn,
+                     endpoint remote) noexcept
+            : m_registry(registry)
+            , m_channel(channel)
+            , m_fqn(std::move(fqn))
+            , m_remote(std::move(remote))
     {
     }
 
-    shm_byte_channel(const shm_byte_channel &) = delete;
+    shm_byte_channel(const shm_byte_channel &)            = delete;
     shm_byte_channel &operator=(const shm_byte_channel &) = delete;
 
     ~shm_byte_channel()
@@ -116,9 +118,18 @@ public:
     }
 
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(io_error)> cb) { m_on_error = std::move(cb); }
-    void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
-    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_error(plexus::detail::move_only_function<void(io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
+    void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> cb)
+    {
+        m_on_drop = std::move(cb);
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
 
     // send() memcpys straight into the shared-memory slab (no bounded userspace egress
     // queue): the bounded ring's own congestion verdict is surfaced inline at send time,
@@ -141,9 +152,8 @@ public:
         if(!m_on_data)
             return;
         typename shm_channel<Notifier>::deliver_fn deliver =
-            [this](::plexus::wire_bytes<shm_slot_owner> wb) {
-                m_on_data(std::span<const std::byte>{wb.data(), wb.size()});
-            };
+                [this](::plexus::wire_bytes<shm_slot_owner> wb)
+        { m_on_data(std::span<const std::byte>{wb.data(), wb.size()}); };
         m_channel.drain(deliver);
     }
 
@@ -156,21 +166,21 @@ private:
     void emit_drop()
     {
         if(m_on_drop)
-            m_on_drop(detail::drop_event{.cause = detail::drop_cause::blocked,
+            m_on_drop(detail::drop_event{.cause     = detail::drop_cause::blocked,
                                          .transport = locality::local});
     }
 
-    registry_type        &m_registry;
+    registry_type         &m_registry;
     shm_channel<Notifier> &m_channel;
-    std::string           m_fqn;
-    endpoint              m_remote;
-    std::uint64_t         m_scheduler_key{detail::next_scheduler_key()};
-    bool                  m_released = false;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)>      m_on_data;
-    plexus::detail::move_only_function<void()>                               m_on_closed;
-    plexus::detail::move_only_function<void(io_error)>                       m_on_error;
-    plexus::detail::move_only_function<void(const detail::drop_event &)>      m_on_drop;
-    plexus::detail::move_only_function<void(wire::close_cause)>              m_on_protocol_close;
+    std::string            m_fqn;
+    endpoint               m_remote;
+    std::uint64_t          m_scheduler_key{detail::next_scheduler_key()};
+    bool                   m_released = false;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
+    plexus::detail::move_only_function<void()>                           m_on_closed;
+    plexus::detail::move_only_function<void(io_error)>                   m_on_error;
+    plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop;
+    plexus::detail::move_only_function<void(wire::close_cause)>          m_on_protocol_close;
 };
 
 // The RAII receive lane over a co-host companion ring: it holds ONE request-direction
@@ -181,7 +191,7 @@ private:
 // in flight never delivers onto a torn-down sink and a release at 1->0 unmaps the ring.
 // Single-owner (the coordinator holds it by unique_ptr); non-copy/non-move (the captured
 // registry reference + the installed sink pin its address).
-template <typename Broker, typename Notifier>
+template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_companion_consumer
 {
@@ -189,11 +199,12 @@ public:
     using registry_type = shm_topic_registry<Broker, Notifier>;
 
     shm_companion_consumer(registry_type &registry, std::string fqn) noexcept
-        : m_registry(registry), m_fqn(std::move(fqn))
+            : m_registry(registry)
+            , m_fqn(std::move(fqn))
     {
     }
 
-    shm_companion_consumer(const shm_companion_consumer &) = delete;
+    shm_companion_consumer(const shm_companion_consumer &)            = delete;
     shm_companion_consumer &operator=(const shm_companion_consumer &) = delete;
 
     ~shm_companion_consumer()
@@ -224,18 +235,18 @@ private:
 // reference. Templated on the broker + notifier seams so this core header pulls no
 // POSIX/asio dependency; the asio composition supplies the posix broker + the reactor
 // bridge notifier (and the binder that constructs the bridge over the ring word).
-template <typename Broker, typename Notifier>
+template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_mux_member
 {
 public:
-    using channel_type   = shm_byte_channel<Broker, Notifier>;
-    using registry_type  = shm_topic_registry<Broker, Notifier>;
+    using channel_type    = shm_byte_channel<Broker, Notifier>;
+    using registry_type   = shm_topic_registry<Broker, Notifier>;
     using notifier_binder = typename registry_type::notifier_binder;
 
     static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
-    static constexpr io::transport_kind mux_tier = io::transport_kind::local;
-    static constexpr bool mux_prefers_shm = true;
+    static constexpr io::transport_kind              mux_tier        = io::transport_kind::local;
+    static constexpr bool                            mux_prefers_shm = true;
 
     // The binder constructs each ring's notifier over the in-region generation word
     // (a reactor bridge captures the executor; the default emplaces a default-built
@@ -247,19 +258,33 @@ public:
     // application's same-host shm from unrelated apps that pick a different one.
     shm_mux_member(Broker &broker, reliability rel, congestion cong,
                    notifier_binder bind_notifier = registry_type::default_notifier_binder(),
-                   std::string region_ns = {}) noexcept
-        : m_registry(broker, rel, cong, std::move(bind_notifier), k_max_ring_slab_bytes,
-                     std::move(region_ns))
+                   std::string     region_ns     = {}) noexcept
+            : m_registry(broker, rel, cong, std::move(bind_notifier), k_max_ring_slab_bytes,
+                         std::move(region_ns))
     {
     }
 
-    shm_mux_member(const shm_mux_member &) = delete;
+    shm_mux_member(const shm_mux_member &)            = delete;
     shm_mux_member &operator=(const shm_mux_member &) = delete;
 
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> cb) { m_on_accepted = std::move(cb); }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)> cb) { m_on_dialed = std::move(cb); }
-    void on_dial_failed(plexus::detail::move_only_function<void(const endpoint &, io_error)> cb) { m_on_dial_failed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(io_error)> cb) { m_on_error = std::move(cb); }
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> cb)
+    {
+        m_on_accepted = std::move(cb);
+    }
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>,
+                                                           const endpoint &)>
+                           cb)
+    {
+        m_on_dialed = std::move(cb);
+    }
+    void on_dial_failed(plexus::detail::move_only_function<void(const endpoint &, io_error)> cb)
+    {
+        m_on_dial_failed = std::move(cb);
+    }
+    void on_error(plexus::detail::move_only_function<void(io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
 
     // The creator side: acquire (minting) the ring for the topic and announce the
     // accepted channel over it.
@@ -337,20 +362,20 @@ public:
     // only the wire receive path (the fail-safe). The framed bytes are header-on (the wire
     // frame the publisher's send wrote), so the caller feeds them into the SAME receive entry
     // the wire session feeds.
-    [[nodiscard]] std::unique_ptr<shm_companion_consumer<Broker, Notifier>>
-    mint_receive_companion(const std::string &fqn,
-                           plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame)
+    [[nodiscard]] std::unique_ptr<shm_companion_consumer<Broker, Notifier>> mint_receive_companion(
+            const std::string                                                   &fqn,
+            plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame)
     {
         const resolved_geometry g = resolve(fqn, ring_direction::request);
         if(m_registry.acquire(fqn, ring_direction::request, g.max_payload, g.mode,
-                              g.consumer_capacity, acquire_mode::join_live) == acquire_result::failed)
+                              g.consumer_capacity,
+                              acquire_mode::join_live) == acquire_result::failed)
             return nullptr;
         auto handle = std::make_unique<shm_companion_consumer<Broker, Notifier>>(m_registry, fqn);
         m_registry.set_consumer_sink(
-            fqn, ring_direction::request,
-            [cb = std::move(on_frame)](::plexus::wire_bytes<shm_slot_owner> wb) mutable {
-                cb(std::span<const std::byte>{wb.data(), wb.size()});
-            });
+                fqn, ring_direction::request,
+                [cb = std::move(on_frame)](::plexus::wire_bytes<shm_slot_owner> wb) mutable
+                { cb(std::span<const std::byte>{wb.data(), wb.size()}); });
         return handle;
     }
 
@@ -364,8 +389,9 @@ public:
     // topic) resolves to the default ring, exactly as before.
     void set_topic_geometry(const std::string &fqn, std::size_t effective_bytes, shm_geometry geom)
     {
-        m_geometry.insert_or_assign(
-            fqn, provisioned{static_cast<std::uint32_t>(effective_bytes), geom.mode, geom.max_consumers});
+        m_geometry.insert_or_assign(fqn,
+                                    provisioned{static_cast<std::uint32_t>(effective_bytes),
+                                                geom.mode, geom.max_consumers});
     }
 
     // The resolved mode + the capped ring's per-message slot capacity for an fqn, read
@@ -386,7 +412,7 @@ public:
         auto it = m_geometry.find(fqn);
         if(it == m_geometry.end())
             return {};
-        const provisioned &p = it->second;
+        const provisioned  &p    = it->second;
         const ring_geometry geom = ring_geometry_for(p.max_payload, p.mode, p.consumer_capacity);
         return {p.mode, geom.slot_capacity};
     }
@@ -404,9 +430,9 @@ private:
     // the shipped floor). All producer-side, never wire-advertised.
     struct provisioned
     {
-        std::uint32_t      max_payload        = 0;
-        ring_geometry_mode mode               = ring_geometry_mode::reliable_preserving;
-        std::uint32_t      consumer_capacity  = 0;
+        std::uint32_t      max_payload       = 0;
+        ring_geometry_mode mode              = ring_geometry_mode::reliable_preserving;
+        std::uint32_t      consumer_capacity = 0;
     };
 
     // The resolved acquire arguments for one (fqn, direction): the request direction
@@ -424,7 +450,8 @@ private:
     {
         auto it = m_geometry.find(fqn);
         if(it == m_geometry.end())
-            return {upgrade_ring_max_payload(direction, 0), ring_geometry_mode::reliable_preserving, 0};
+            return {upgrade_ring_max_payload(direction, 0), ring_geometry_mode::reliable_preserving,
+                    0};
         const provisioned &p = it->second;
         return {upgrade_ring_max_payload(direction, p.max_payload), p.mode, p.consumer_capacity};
     }
@@ -434,7 +461,7 @@ private:
     // reference, so the refcount stays at one held by the minted channel). Returns nullptr
     // on a broker failure. ep.address is the fqn the deterministic region name derives from.
     std::unique_ptr<channel_type> open(const endpoint &ep,
-                                       acquire_mode amode = acquire_mode::reclaim_stale)
+                                       acquire_mode    amode = acquire_mode::reclaim_stale)
     {
         shm_channel<Notifier> *ch = m_registry.channel_for(ep.address, ring_direction::request);
         if(ch == nullptr) // no probe held it: acquire fresh
@@ -456,12 +483,13 @@ private:
             m_on_dial_failed(ep, e);
     }
 
-    registry_type m_registry;
-    std::unordered_map<std::string, provisioned> m_geometry;
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)>                  m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const endpoint &, io_error)>                      m_on_dial_failed;
-    plexus::detail::move_only_function<void(io_error)>                                        m_on_error;
+    registry_type                                                           m_registry;
+    std::unordered_map<std::string, provisioned>                            m_geometry;
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)>
+                                                                         m_on_dialed;
+    plexus::detail::move_only_function<void(const endpoint &, io_error)> m_on_dial_failed;
+    plexus::detail::move_only_function<void(io_error)>                   m_on_error;
 };
 
 // The same-host preference hook: prefer the shared-memory candidate when the pair is
@@ -475,15 +503,16 @@ private:
 // the seed constraint). A non-eligible endpoint, or one the probe declines, routes to
 // the first non-SHM candidate (the stream fallback). The probe captures the member by
 // reference; the member outlives the mux (the borrow discipline the multiplexer documents).
-template <typename Member>
+template<typename Member>
 [[nodiscard]] inline io::selection_hook prefer_shm_hook(Member &member)
 {
     plexus::detail::move_only_function<bool(const endpoint &)> can_acquire =
-        [&member](const endpoint &ep) { return member.can_acquire(ep); };
-    return [probe = std::move(can_acquire)](const endpoint &ep,
-                                            std::span<const io::mux_candidate> candidates) mutable
-               -> std::size_t {
-        std::size_t fallback = candidates.front().index; // the first candidate (stream)
+            [&member](const endpoint &ep) { return member.can_acquire(ep); };
+    return [probe = std::move(can_acquire)](
+                   const endpoint                    &ep,
+                   std::span<const io::mux_candidate> candidates) mutable -> std::size_t
+    {
+        std::size_t fallback      = candidates.front().index; // the first candidate (stream)
         bool        have_fallback = false;
         for(const io::mux_candidate &c : candidates)
         {

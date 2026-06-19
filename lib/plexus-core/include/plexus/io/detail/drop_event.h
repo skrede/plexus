@@ -28,7 +28,8 @@ enum class drop_cause : std::uint8_t
     demux_refused,      // an inbound datagram refused by the per-peer demux cap
     arq_shed,           // a reliable frame shed at the publisher under congestion=drop
     unroutable,         // a process-tier packet to a partner the bus never minted / since vanished
-    closed_unsent,      // bytes still queued when close() abandoned the backlog (TLS-safe teardown, no flush)
+    closed_unsent, // bytes still queued when close() abandoned the backlog (TLS-safe teardown, no
+                   // flush)
 };
 
 // A plain serializable drop record: cause, peer, topic, transport tier, band, and a
@@ -40,12 +41,12 @@ enum class drop_cause : std::uint8_t
 // later (the null-default observer shape, one predictable branch when unused).
 struct drop_event
 {
-    drop_cause   cause{drop_cause::none};
-    locality     transport{locality::any};   // the delivery tier the dropped frame targeted
-    std::uint8_t band{0};                     // the egress priority band (egress causes only)
+    drop_cause    cause{drop_cause::none};
+    locality      transport{locality::any}; // the delivery tier the dropped frame targeted
+    std::uint8_t  band{0};                  // the egress priority band (egress causes only)
     std::uint64_t topic_hash{0};
-    node_id      peer{};                      // the subscribed peer's node identity
-    std::uint64_t count{1};                   // burst-coalescing count
+    node_id       peer{};   // the subscribed peer's node identity
+    std::uint64_t count{1}; // burst-coalescing count
 };
 
 }

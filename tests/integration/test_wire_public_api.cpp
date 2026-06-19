@@ -69,9 +69,10 @@ using wire_node = plexus::node<wire_policy, wire_transport>;
 // channel, NOT a recording_channel; only the wire-capturing node's channel type is the
 // decorator. The decorated-vs-bare TYPE is fixed at the node's construction.
 static_assert(!plexus::io::is_recording_channel_v<inproc_policy::byte_channel_type>,
-    "a default node's channel must NOT be a recording_channel — structurally absent");
-static_assert(plexus::io::is_recording_channel_v<wire_policy::byte_channel_type>,
-    "the wire-capturing node's channel must be a recording_channel — structurally present");
+              "a default node's channel must NOT be a recording_channel — structurally absent");
+static_assert(
+        plexus::io::is_recording_channel_v<wire_policy::byte_channel_type>,
+        "the wire-capturing node's channel must be a recording_channel — structurally present");
 
 struct reading
 {
@@ -91,11 +92,12 @@ struct reading_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, reading &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   reading                   &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -121,18 +123,18 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options base_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0xD00Du;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = eager;
     return opts;
 }
 
 std::size_t count_wire_frames(std::span<const std::byte> stream)
 {
-    record_stream_reader        r{stream};
-    stream_definitions          defs;
+    record_stream_reader r{stream};
+    stream_definitions   defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
     REQUIRE(r.recover(out).header_ok);
@@ -145,7 +147,8 @@ std::size_t count_wire_frames(std::span<const std::byte> stream)
 
 }
 
-TEST_CASE("public API: a node that opts a transport into wire capture records wire frames", "[wire_public_api][wire]")
+TEST_CASE("public API: a node that opts a transport into wire capture records wire frames",
+          "[wire_public_api][wire]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};
@@ -161,21 +164,21 @@ TEST_CASE("public API: a node that opts a transport into wire capture records wi
 
     plexus::node_options consumer_opts = base_opts(/*eager=*/true);
     plexus::node_options producer_opts = base_opts(/*eager=*/true);
-    producer_opts.wire = plexus::wire_capture_qos{.enabled = true,
-                                                  .position = plexus::wire_crypto_position::cleartext};
+    producer_opts.wire                 = plexus::wire_capture_qos{
+            .enabled = true, .position = plexus::wire_crypto_position::cleartext};
 
     bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, consumer_opts};
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto                recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
     ex.drain();
 
     typed_subscriber sub{consumer, "telemetry", [](const reading &) {}};
-    typed_publisher pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
+    typed_publisher  pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
     ex.drain();
 
     for(int i = 0; i < 8; ++i)
@@ -195,7 +198,8 @@ TEST_CASE("public API: a node that opts a transport into wire capture records wi
     REQUIRE(count_wire_frames(sink.bytes()) > 0);
 }
 
-TEST_CASE("public API: a default node records no wire frames (structural absence)", "[wire_public_api][wire]")
+TEST_CASE("public API: a default node records no wire frames (structural absence)",
+          "[wire_public_api][wire]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};
@@ -215,14 +219,14 @@ TEST_CASE("public API: a default node records no wire frames (structural absence
     bare_node producer{ex, disc, make_id(0x1B), producer_tp, producer_opts};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto                recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-c:5000"});
     producer.listen({"inproc", "host-d:6000"});
     ex.drain();
 
     typed_subscriber sub{consumer, "telemetry", [](const reading &) {}};
-    typed_publisher pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
+    typed_publisher  pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
     ex.drain();
 
     for(int i = 0; i < 8; ++i)

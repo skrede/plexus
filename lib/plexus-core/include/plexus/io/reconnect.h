@@ -23,11 +23,12 @@ namespace plexus::io {
 // sequence and an MCU port can swap the PRNG (the <random> dependency stays behind
 // this seam — never a bare random_device{}() inline). The shift is capped at 20 so
 // the 64-bit scale cannot overflow.
-template <typename Rng>
-std::chrono::milliseconds compute_backoff(const reconnect_config &cfg, std::uint32_t attempt, Rng &rng)
+template<typename Rng>
+std::chrono::milliseconds compute_backoff(const reconnect_config &cfg, std::uint32_t attempt,
+                                          Rng &rng)
 {
-    const auto shift = std::min(attempt, std::uint32_t{20});
-    auto ceiling = cfg.min_delay * (std::uint64_t{1} << shift);
+    const auto shift   = std::min(attempt, std::uint32_t{20});
+    auto       ceiling = cfg.min_delay * (std::uint64_t{1} << shift);
     if(ceiling > cfg.max_delay)
         ceiling = cfg.max_delay;
     std::uniform_int_distribution<std::int64_t> dist{0, static_cast<std::int64_t>(ceiling.count())};
@@ -46,7 +47,7 @@ std::chrono::milliseconds compute_backoff(const reconnect_config &cfg, std::uint
 // full-jitter backoff; the handler self-guards if(ec) so a timer firing after
 // teardown is a no-op. Surrender bounds (max_attempts/max_elapsed) stop the cycle
 // and latch is_surrendered(); the harness rebuilds a fresh epoch on each on_dialed.
-template <typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
+template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
     requires plexus::Policy<Policy>
 class reconnect
 {
@@ -55,8 +56,11 @@ public:
 
     reconnect(Transport &transport, typename Policy::executor_type executor,
               const reconnect_config &cfg, io::endpoint endpoint, std::uint64_t seed = 0)
-        : m_transport(transport), m_cfg(cfg), m_endpoint(std::move(endpoint))
-        , m_backoff_timer(executor), m_rng(seed)
+            : m_transport(transport)
+            , m_cfg(cfg)
+            , m_endpoint(std::move(endpoint))
+            , m_backoff_timer(executor)
+            , m_rng(seed)
     {
     }
 
@@ -93,7 +97,11 @@ public:
     // The owner observed a dial failure for THIS driver's endpoint: back off and
     // re-dial. (The registry/engine correlates the transport's per-endpoint failure
     // to the matching slot; a single-connection owner routes its sole failure here.)
-    void notify_dial_failed() { m_dialing = false; schedule_redial(); }
+    void notify_dial_failed()
+    {
+        m_dialing = false;
+        schedule_redial();
+    }
 
     // The dial produced a channel (the engine's on_dialed tail built — or will build —
     // the session): the in-flight gate re-opens so a later drop can re-dial. Connected
@@ -103,10 +111,14 @@ public:
     // An established session's transport dropped (broken_pipe/connection_reset on an
     // already-complete session). Back off and re-dial a fresh incarnation. A clean
     // tear_down/intentional close must NOT route here — only a transport drop does.
-    void on_channel_dropped() { m_dialing = false; schedule_redial(); }
+    void on_channel_dropped()
+    {
+        m_dialing = false;
+        schedule_redial();
+    }
 
     std::uint32_t attempt_count() const noexcept { return m_attempt; }
-    bool is_surrendered() const noexcept { return m_surrendered; }
+    bool          is_surrendered() const noexcept { return m_surrendered; }
 
 private:
     // A retry is committed here (the attempt counter advances at scheduling time so
@@ -119,11 +131,13 @@ private:
         if(surrendered())
             return report_dead();
         m_backoff_timer.expires_after(compute_backoff(m_cfg, m_attempt, m_rng));
-        m_backoff_timer.async_wait([this](std::error_code ec) {
-            if(ec)
-                return;   // cancelled by teardown — never dial a dead driver
-            dial();
-        });
+        m_backoff_timer.async_wait(
+                [this](std::error_code ec)
+                {
+                    if(ec)
+                        return; // cancelled by teardown — never dial a dead driver
+                    dial();
+                });
     }
 
     void dial()
@@ -136,13 +150,14 @@ private:
 
     bool surrendered() const noexcept
     {
-        return (m_cfg.max_attempts.has_value() && m_attempt >= *m_cfg.max_attempts)
-            || (m_cfg.max_elapsed.has_value() && elapsed() >= *m_cfg.max_elapsed);
+        return (m_cfg.max_attempts.has_value() && m_attempt >= *m_cfg.max_attempts) ||
+                (m_cfg.max_elapsed.has_value() && elapsed() >= *m_cfg.max_elapsed);
     }
 
     std::chrono::milliseconds elapsed() const noexcept
     {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - m_first_attempt);
+        return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() -
+                                                                     m_first_attempt);
     }
 
     void report_dead()
@@ -152,15 +167,15 @@ private:
             m_on_dead();
     }
 
-    Transport &m_transport;
-    reconnect_config m_cfg;
-    io::endpoint m_endpoint;
-    timer_type m_backoff_timer;
-    std::mt19937_64 m_rng;
-    typename Clock::time_point m_first_attempt{};
-    std::uint32_t m_attempt{0};
-    bool m_surrendered{false};
-    bool m_dialing{false};
+    Transport                                 &m_transport;
+    reconnect_config                           m_cfg;
+    io::endpoint                               m_endpoint;
+    timer_type                                 m_backoff_timer;
+    std::mt19937_64                            m_rng;
+    typename Clock::time_point                 m_first_attempt{};
+    std::uint32_t                              m_attempt{0};
+    bool                                       m_surrendered{false};
+    bool                                       m_dialing{false};
     plexus::detail::move_only_function<void()> m_on_redial;
     plexus::detail::move_only_function<void()> m_on_dead;
 };

@@ -37,10 +37,10 @@ using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 
-using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
-using inproc_caller = plexus::caller<>;
+using inproc_node      = plexus::node<inproc_policy, inproc_transport<>>;
+using inproc_caller    = plexus::caller<>;
 using inproc_procedure = plexus::procedure<>;
-using reply_t = plexus::reply;
+using reply_t          = plexus::reply;
 
 plexus::node_id make_id(std::uint8_t seed)
 {
@@ -52,10 +52,10 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0xE12Cu;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0xE12Cu;
     opts.dial_eagerly = eager;
     return opts;
 }
@@ -71,7 +71,7 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // re-enters step() (which re-checks the timer each call) so the deadline resolves without
 // an unbounded sleep; the budget caps it so a never-firing path is a bounded failure, not
 // a hang.
-template <typename Pred>
+template<typename Pred>
 bool pump_until(inproc_executor<> &ex, Pred done, std::chrono::milliseconds budget)
 {
     const auto deadline = std::chrono::steady_clock::now() + budget;
@@ -86,25 +86,27 @@ bool pump_until(inproc_executor<> &ex, Pred done, std::chrono::milliseconds budg
 
 }
 
-TEST_CASE("caller errc: no-provider completes POSTED with no_provider and never hangs, looped", "[node][call][errc]")
+TEST_CASE("caller errc: no-provider completes POSTED with no_provider and never hangs, looped",
+          "[node][call][errc]")
 {
     constexpr int k_iterations = 5;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        inproc_bus<> bus;
-        inproc_executor<> ex{bus};
+        inproc_bus<>       bus;
+        inproc_executor<>  ex{bus};
         inproc_transport<> ta{ex, bus};
-        static_discovery disc{{}};
+        static_discovery   disc{{}};
 
         // A lone node with NO peer known — no connected provider for any fqn.
-        inproc_node a{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
+        inproc_node   a{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
         inproc_caller call{a, "rpc"};
 
-        bool fired = false;
+        bool                           fired = false;
         std::optional<std::error_code> err;
         call.call(as_bytes(std::string{"req"}),
-                  [&](plexus::expected<reply_t, std::error_code> r) {
+                  [&](plexus::expected<reply_t, std::error_code> r)
+                  {
                       fired = true;
                       REQUIRE_FALSE(static_cast<bool>(r));
                       err = r.error();
@@ -123,16 +125,17 @@ TEST_CASE("caller errc: no-provider completes POSTED with no_provider and never 
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("caller errc: a provider that never replies resolves timeout through the deadline path", "[node][call][errc]")
+TEST_CASE("caller errc: a provider that never replies resolves timeout through the deadline path",
+          "[node][call][errc]")
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
-    const auto id_a = make_id(0x0A);
-    const auto id_b = make_id(0x0B);
+    const auto  id_a = make_id(0x0A);
+    const auto  id_b = make_id(0x0B);
     inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
     inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
     a.listen({"inproc", "host-a:5000"});
@@ -143,15 +146,16 @@ TEST_CASE("caller errc: a provider that never replies resolves timeout through t
     // A provider that DROPS every request: it never invokes reply, so only the per-call
     // deadline resolves the call (rpc_status::timeout -> call_errc::timeout).
     inproc_procedure proc{
-        b, "rpc",
-        [](std::span<const std::byte>, inproc_procedure::reply_fn &) { /* never replies */ }};
+            b, "rpc",
+            [](std::span<const std::byte>, inproc_procedure::reply_fn &) { /* never replies */ }};
 
-    inproc_caller call{a, "rpc"};
+    inproc_caller                  call{a, "rpc"};
     std::optional<std::error_code> err;
-    plexus::call_options opts;
+    plexus::call_options           opts;
     opts.deadline = std::chrono::milliseconds(20);
     call.call(as_bytes(std::string{"req"}), opts,
-              [&](plexus::expected<reply_t, std::error_code> r) {
+              [&](plexus::expected<reply_t, std::error_code> r)
+              {
                   REQUIRE_FALSE(static_cast<bool>(r));
                   err = r.error();
               });

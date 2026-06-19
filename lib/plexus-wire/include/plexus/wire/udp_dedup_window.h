@@ -32,9 +32,9 @@ namespace plexus::wire {
 class udp_dedup_window
 {
 public:
-    using seq_t = std::uint16_t;
-    static constexpr std::size_t depth_max = 32;
-    static constexpr seq_t half_space = 32768;
+    using seq_t                             = std::uint16_t;
+    static constexpr std::size_t depth_max  = 32;
+    static constexpr seq_t       half_space = 32768;
 
     enum class outcome : std::uint8_t
     {
@@ -44,7 +44,7 @@ public:
     };
 
     explicit udp_dedup_window(std::size_t depth = depth_max) noexcept
-        : m_depth{std::clamp(depth, std::size_t{1}, depth_max)}
+            : m_depth{std::clamp(depth, std::size_t{1}, depth_max)}
     {
     }
 
@@ -63,8 +63,8 @@ public:
                 m_bitmap = 0u;
             else
                 m_bitmap <<= adv;
-            m_bitmap     |= 1ull;
-            m_high_water  = seq;
+            m_bitmap |= 1ull;
+            m_high_water = seq;
             return outcome::fresh;
         }
 

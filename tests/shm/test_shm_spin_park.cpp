@@ -35,7 +35,7 @@ namespace {
 struct backing_region
 {
     explicit backing_region(std::size_t bytes)
-        : m_storage(bytes + k_cache_line)
+            : m_storage(bytes + k_cache_line)
     {
         auto base    = reinterpret_cast<std::uintptr_t>(m_storage.data());
         auto aligned = (base + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
@@ -81,14 +81,15 @@ struct fixture
 
 TEST_CASE("shm.spin_park: budget 0 parks immediately on an empty ring", "[shm][spin_park]")
 {
-    fixture        f;
+    fixture         f;
     slot_subscriber sub{f.ring, /*spin_budget=*/0};
 
     taken_message msg;
-    REQUIRE(sub.take(msg) == loan_status::empty);   // no spin — the futex-park floor
+    REQUIRE(sub.take(msg) == loan_status::empty); // no spin — the futex-park floor
 }
 
-TEST_CASE("shm.spin_park: a present message is taken regardless of the spin budget", "[shm][spin_park]")
+TEST_CASE("shm.spin_park: a present message is taken regardless of the spin budget",
+          "[shm][spin_park]")
 {
     for(std::uint32_t budget : {0u, 64u, 256u, 4096u})
     {
@@ -104,26 +105,31 @@ TEST_CASE("shm.spin_park: a present message is taken regardless of the spin budg
     }
 }
 
-TEST_CASE("shm.spin_park: a message landing during the spin window is caught without parking", "[shm][spin_park]")
+TEST_CASE("shm.spin_park: a message landing during the spin window is caught without parking",
+          "[shm][spin_park]")
 {
-    constexpr int k_iterations = 50;
-    int caught_by_spin = 0;
+    constexpr int k_iterations   = 50;
+    int           caught_by_spin = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        fixture         f;
+        fixture f;
         // A large budget so the spin window comfortably covers the publisher's delay.
         slot_subscriber sub{f.ring, /*spin_budget=*/4'000'000};
 
         std::atomic<bool> go{false};
-        std::thread producer([&] {
-            while(!go.load(std::memory_order_acquire)) { /* spin to align */ }
-            std::this_thread::sleep_for(std::chrono::microseconds(20));
-            f.publish(0xABCD0000u | static_cast<std::uint32_t>(iter));
-        });
+        std::thread       producer(
+                [&]
+                {
+                    while(!go.load(std::memory_order_acquire))
+                    { /* spin to align */
+                    }
+                    std::this_thread::sleep_for(std::chrono::microseconds(20));
+                    f.publish(0xABCD0000u | static_cast<std::uint32_t>(iter));
+                });
 
         go.store(true, std::memory_order_release);
-        taken_message msg;
-        const loan_status st = sub.take(msg);        // spins; should catch the late publish
+        taken_message     msg;
+        const loan_status st = sub.take(msg); // spins; should catch the late publish
         producer.join();
 
         if(st == loan_status::ok)
@@ -140,7 +146,8 @@ TEST_CASE("shm.spin_park: a message landing during the spin window is caught wit
     REQUIRE(caught_by_spin >= k_iterations - 2);
 }
 
-TEST_CASE("shm.spin_park: an idle subscriber with a budget terminates to empty (parks)", "[shm][spin_park]")
+TEST_CASE("shm.spin_park: an idle subscriber with a budget terminates to empty (parks)",
+          "[shm][spin_park]")
 {
     fixture         f;
     slot_subscriber sub{f.ring, /*spin_budget=*/100'000};

@@ -39,13 +39,14 @@
 #include <filesystem>
 
 namespace pasio = plexus::asio;
-namespace ptls = plexus::tls;
-namespace pio = plexus::io;
+namespace ptls  = plexus::tls;
+namespace pio   = plexus::io;
 
 // The full 32-byte SHA-256 SPKI digest — the core cert_facts::spki_sha256 field type.
 using spki_digest = std::array<std::byte, 32>;
 
-static_assert(plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
+static_assert(
+        plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
 
 namespace {
 
@@ -56,20 +57,20 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest digest{};
+    spki_digest           digest{};
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path()
-            / ("plexus_tls_mux_" + tag + "_" + std::to_string(::getpid())
-               + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() /
+                ("plexus_tls_mux_" + tag + "_" + std::to_string(::getpid()) + "_" +
+                 std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
-        key_path = dir / "key.pem";
+        key_path  = dir / "key.pem";
         generate();
     }
 
-    identity_fixture(const identity_fixture &) = delete;
+    identity_fixture(const identity_fixture &)            = delete;
     identity_fixture &operator=(const identity_fixture &) = delete;
 
     ~identity_fixture()
@@ -80,8 +81,8 @@ struct identity_fixture
 
     void generate()
     {
-        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(
-            EVP_EC_gen("P-256"), &EVP_PKEY_free);
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"),
+                                                                 &EVP_PKEY_free);
         REQUIRE(pkey);
 
         std::unique_ptr<X509, decltype(&X509_free)> cert(X509_new(), &X509_free);
@@ -93,14 +94,15 @@ struct identity_fixture
 
         X509_NAME *name = X509_get_subject_name(cert.get());
         X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-            reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1, 0);
+                                   reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1,
+                                   0);
         X509_set_issuer_name(cert.get(), name);
         REQUIRE(X509_sign(cert.get(), pkey.get(), EVP_sha256()) != 0);
 
         write_pem(cert.get(), pkey.get());
-        std::filesystem::permissions(key_path,
-            std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-            std::filesystem::perm_options::replace);
+        std::filesystem::permissions(
+                key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+                std::filesystem::perm_options::replace);
 
         auto d = ptls::spki_fingerprint(*cert.get());
         REQUIRE(d.has_value());
@@ -124,7 +126,7 @@ struct identity_fixture
 ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &peer_pin)
 {
     auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-        std::vector<spki_digest>{peer_pin});
+            std::vector<spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -134,24 +136,24 @@ ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &pe
 // face cannot share a member; a real two-node loopback gives each node its own set.
 struct mux_face
 {
-    ::asio::io_context &io;
-    ptls::tls_credential cred;
+    ::asio::io_context   &io;
+    ptls::tls_credential  cred;
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
-    ptls::tls_transport secure;
+    ptls::tls_transport   secure;
     // The datagram member stays inert on these tls/tcp routes — its socket is only ever
     // bound when a "udp" channel is actually dialed/accepted, which these faces never do.
     pasio::udp_transport datagram{io};
     // The secure-datagram (DTLS) member reuses this face's credential but stays inert on
     // the tls/tcp routes these faces exercise — its socket binds only on a "dtls" dial.
-    ptls::dtls_transport secure_datagram;
+    ptls::dtls_transport    secure_datagram;
     pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
     mux_face(::asio::io_context &ctx, ptls::tls_credential c)
-        : io(ctx)
-        , cred(std::move(c))
-        , secure(io, cred)
-        , secure_datagram(io, cred)
+            : io(ctx)
+            , cred(std::move(c))
+            , secure(io, cred)
+            , secure_datagram(io, cred)
     {
     }
 };
@@ -164,27 +166,28 @@ struct mux_face
 struct mux_pair
 {
     ::asio::io_context io;
-    mux_face listen_face;
-    mux_face dial_face;
+    mux_face           listen_face;
+    mux_face           dial_face;
 
-    std::optional<pio::endpoint> dialed_ep;
+    std::optional<pio::endpoint>                   dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     mux_pair(const identity_fixture &server_id, const identity_fixture &client_id)
-        : listen_face(io, pin_one(server_id, client_id.digest))
-        , dial_face(io, pin_one(client_id, server_id.digest))
+            : listen_face(io, pin_one(server_id, client_id.digest))
+            , dial_face(io, pin_one(client_id, server_id.digest))
     {
-        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) {
-            accepted = std::move(ch);
-        });
-        dial_face.mux.on_dialed([this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep) {
-            dialed = std::move(ch);
-            dialed_ep.emplace(ep);
-        });
+        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch)
+                                    { accepted = std::move(ch); });
+        dial_face.mux.on_dialed(
+                [this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep)
+                {
+                    dialed = std::move(ch);
+                    dialed_ep.emplace(ep);
+                });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -201,7 +204,7 @@ TEST_CASE("tls mux: the selector classifies tls and tcp as remote, unix and inpr
           "[tls][mux][select]")
 {
     pio::transport_selector sel;
-    const auto reserved = pio::reliability_hint::unspecified;
+    const auto              reserved = pio::reliability_hint::unspecified;
 
     // "tls" is a REMOTE-tier scheme — so the locality confinement still EXCLUDES
     // it (a host-confined process|local topic never rides tls even though tls
@@ -212,7 +215,8 @@ TEST_CASE("tls mux: the selector classifies tls and tcp as remote, unix and inpr
     REQUIRE(sel.select({"inproc", "node-a"}, reserved) == pio::transport_kind::local);
 }
 
-TEST_CASE("tls mux: a tls dial routes to the secure member and the scheme survives the erasure, looped",
+TEST_CASE("tls mux: a tls dial routes to the secure member and the scheme survives the erasure, "
+          "looped",
           "[tls][mux][route]")
 {
     identity_fixture server_id("srv");
@@ -226,8 +230,8 @@ TEST_CASE("tls mux: a tls dial routes to the secure member and the scheme surviv
         n.dial_face.mux.dial({"tls", "127.0.0.1:" + std::to_string(n.listen_face.secure.port())});
         n.pump_until([&] { return n.dialed && n.accepted; });
 
-        REQUIRE(n.dialed != nullptr);     // delivered POST-handshake via the secure member
-        REQUIRE(n.accepted != nullptr);   // accepted POST-handshake via the secure member
+        REQUIRE(n.dialed != nullptr);   // delivered POST-handshake via the secure member
+        REQUIRE(n.accepted != nullptr); // accepted POST-handshake via the secure member
         // The "tls" scheme survives the type-erasure on BOTH ends.
         REQUIRE(n.dialed->remote_endpoint().scheme == "tls");
         REQUIRE(n.accepted->remote_endpoint().scheme == "tls");

@@ -25,10 +25,7 @@ using test_reassembler =
         io::detail::reassembler<plexus::inproc::inproc_executor<testing::test_clock> &,
                                 plexus::inproc::inproc_timer<testing::test_clock>>;
 
-std::vector<std::byte> one_byte()
-{
-    return std::vector<std::byte>(1, std::byte{0xAB});
-}
+std::vector<std::byte> one_byte() { return std::vector<std::byte>(1, std::byte{0xAB}); }
 
 }
 
@@ -39,7 +36,7 @@ TEST_CASE("reassembler refuses a tiny datagram claiming a huge frag_cnt at the s
     // A cap far below the slot-table cost a frag_cnt=32768 open would charge: structural_cost
     // alone is hundreds of KiB, so a 64 KiB cap cannot admit the entry.
     constexpr std::uint16_t frag_cnt = 32768;
-    constexpr std::size_t cap = 64u * 1024u;
+    constexpr std::size_t   cap      = 64u * 1024u;
     REQUIRE(test_reassembler::structural_cost(frag_cnt) > cap);
 
     test_reassembler r{h.ex, {.total_memory_cap = cap}};
@@ -55,9 +52,9 @@ TEST_CASE("reassembler refuses a tiny datagram claiming a huge frag_cnt at the s
 TEST_CASE("reassembler keeps held_bytes within the cap as crafted opens are refused",
           "[reassemble][bound][dos]")
 {
-    testing::harness h;
+    testing::harness      h;
     constexpr std::size_t cap = 256u * 1024u;
-    test_reassembler r{h.ex, {.total_memory_cap = cap}};
+    test_reassembler      r{h.ex, {.total_memory_cap = cap}};
 
     // Each distinct msg_id claims a frag_cnt whose structural cost is a meaningful slice of
     // the cap; once the table fills the cap, every further distinct id is refused. The held
@@ -66,7 +63,8 @@ TEST_CASE("reassembler keeps held_bytes within the cap as crafted opens are refu
     for(std::uint16_t id = 1; id <= 5000; ++id)
     {
         const auto o = r.feed(id, 0, frag_cnt, one_byte());
-        CHECK((o == test_reassembler::outcome::admitted || o == test_reassembler::outcome::dropped_cap));
+        CHECK((o == test_reassembler::outcome::admitted ||
+               o == test_reassembler::outcome::dropped_cap));
         CHECK(r.held_bytes() <= cap);
     }
 

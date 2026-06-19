@@ -67,11 +67,12 @@ struct reading_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, reading &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   reading                   &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -97,9 +98,9 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options base_opts()
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
     opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = true;
     return opts;
@@ -121,7 +122,7 @@ TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the frame
     bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto                recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
@@ -150,11 +151,11 @@ TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the frame
     REQUIRE(!stream.empty());
 
     plexus::io::recording::record_stream_reader reader{stream};
-    plexus::io::recording::stream_definitions defs;
+    plexus::io::recording::stream_definitions   defs;
     REQUIRE(reader.read_definitions(defs));
 
     std::vector<plexus::io::recording::decoded_record> records;
-    const auto recovery = reader.recover(records);
+    const auto                                         recovery = reader.recover(records);
     REQUIRE(recovery.header_ok);
 
     const auto telemetry_hash = plexus::wire::fqn_topic_hash("telemetry");
@@ -177,7 +178,8 @@ TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the frame
 
         std::uint32_t recovered = 0;
         for(int i = 0; i < 4; ++i)
-            recovered |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(rec.payload[i])) << (8 * i);
+            recovered |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(rec.payload[i]))
+                    << (8 * i);
         REQUIRE(recovered == published);
     }
     REQUIRE(saw_payload_sample);

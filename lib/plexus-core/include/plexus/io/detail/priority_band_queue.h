@@ -138,14 +138,14 @@ private:
             {
                 cause = evict_oldest_or_refuse_cause(congestion);
                 if(cause == drop_cause::drop_newest || cause == drop_cause::blocked)
-                    return cause;   // refused: the resident set is untouched
+                    return cause; // refused: the resident set is untouched
             }
             if(m_slots.size() != k_band_depth)
                 m_slots.resize(k_band_depth);
             const std::size_t tail = (m_head + m_count) % k_band_depth;
-            m_slots[tail] = std::move(frame);
+            m_slots[tail]          = std::move(frame);
             ++m_count;
-            return cause;   // none on a clean admit, drop_oldest when an eviction made room
+            return cause; // none on a clean admit, drop_oldest when an eviction made room
         }
 
         // At a full band: block/drop_newest bump their counter and refuse (returning the
@@ -156,9 +156,14 @@ private:
         {
             switch(congestion)
             {
-            case io::congestion::block:       ++m_blocked;        return drop_cause::blocked;
-            case io::congestion::drop_newest: ++m_dropped_newest; return drop_cause::drop_newest;
-            case io::congestion::drop_oldest: pop(); ++m_dropped_oldest; return drop_cause::drop_oldest;
+                case io::congestion::block: ++m_blocked; return drop_cause::blocked;
+                case io::congestion::drop_newest:
+                    ++m_dropped_newest;
+                    return drop_cause::drop_newest;
+                case io::congestion::drop_oldest:
+                    pop();
+                    ++m_dropped_oldest;
+                    return drop_cause::drop_oldest;
             }
             return drop_cause::blocked;
         }
@@ -170,7 +175,7 @@ private:
         void pop() noexcept
         {
             m_slots[m_head] = wire_bytes<>{};
-            m_head = (m_head + 1) % k_band_depth;
+            m_head          = (m_head + 1) % k_band_depth;
             --m_count;
         }
 
@@ -179,11 +184,11 @@ private:
         [[nodiscard]] std::size_t blocked() const noexcept { return m_blocked; }
 
         std::vector<wire_bytes<>> m_slots;
-        std::size_t m_head{0};
-        std::size_t m_count{0};
-        std::size_t m_dropped_oldest{0};
-        std::size_t m_dropped_newest{0};
-        std::size_t m_blocked{0};
+        std::size_t               m_head{0};
+        std::size_t               m_count{0};
+        std::size_t               m_dropped_oldest{0};
+        std::size_t               m_dropped_newest{0};
+        std::size_t               m_blocked{0};
     };
 
     std::array<band, k_egress_bands> m_bands;

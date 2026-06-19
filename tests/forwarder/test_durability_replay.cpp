@@ -41,14 +41,13 @@ std::span<const std::byte> as_bytes(const std::string &s)
 struct capture
 {
     explicit capture(inproc_executor<> &ex)
-        : sink(ex)
+            : sink(ex)
     {
-        sink.on_data([this](std::span<const std::byte> d) {
-            frames.emplace_back(d.begin(), d.end());
-        });
+        sink.on_data([this](std::span<const std::byte> d)
+                     { frames.emplace_back(d.begin(), d.end()); });
     }
 
-    inproc_channel<> sink;
+    inproc_channel<>                    sink;
     std::vector<std::vector<std::byte>> frames;
 };
 
@@ -66,7 +65,7 @@ std::vector<std::string> data_bodies(const capture &cap)
         auto hdr = plexus::wire::decode_header(f);
         if(!hdr || hdr->type != plexus::wire::msg_type::unidirectional)
             continue;
-        auto inner = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
+        auto inner   = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
         auto decoded = plexus::wire::decode_unidirectional(inner);
         if(!decoded)
             continue;
@@ -84,11 +83,11 @@ TEST_CASE("a durability=none subscriber gets ZERO retained frames on subscribe",
     // Reproducibility: a delivery-effect feature is proven over repeated runs.
     for(int iter = 0; iter < 50; ++iter)
     {
-        inproc_bus<> bus;
+        inproc_bus<>      bus;
         inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        capture cap(ex);
-        auto peer = make_peer(ch, cap, "node-a");
+        inproc_channel<>  ch(ex);
+        capture           cap(ex);
+        auto              peer = make_peer(ch, cap, "node-a");
 
         forwarder fwd{};
         fwd.latch("topic");
@@ -100,7 +99,7 @@ TEST_CASE("a durability=none subscriber gets ZERO retained frames on subscribe",
         REQUIRE(fwd.attach_for_fanout(peer, "topic", std::nullopt, q));
         ex.drain();
 
-        REQUIRE(data_bodies(cap).empty());   // none -> no retained frame
+        REQUIRE(data_bodies(cap).empty()); // none -> no retained frame
     }
 }
 
@@ -109,11 +108,11 @@ TEST_CASE("a durability=latest subscriber gets EXACTLY ONE retained frame",
 {
     for(int iter = 0; iter < 50; ++iter)
     {
-        inproc_bus<> bus;
+        inproc_bus<>      bus;
         inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        capture cap(ex);
-        auto peer = make_peer(ch, cap, "node-a");
+        inproc_channel<>  ch(ex);
+        capture           cap(ex);
+        auto              peer = make_peer(ch, cap, "node-a");
 
         forwarder fwd{};
         fwd.latch("topic");
@@ -134,11 +133,11 @@ TEST_CASE("a durability=latest subscriber gets EXACTLY ONE retained frame",
 TEST_CASE("a default-qos subscriber gets ZERO retained frames (default == none)",
           "[durability][forwarder]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     fwd.latch("topic");
@@ -151,17 +150,17 @@ TEST_CASE("a default-qos subscriber gets ZERO retained frames (default == none)"
     REQUIRE(fwd.attach_for_fanout(peer, "topic"));
     ex.drain();
 
-    REQUIRE(data_bodies(cap).empty());   // default none -> no retained frame
+    REQUIRE(data_bodies(cap).empty()); // default none -> no retained frame
 }
 
 TEST_CASE("a durability=all subscriber replays as latest against the depth-1 slot",
           "[durability][forwarder]")
 {
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    capture cap(ex);
-    auto peer = make_peer(ch, cap, "node-a");
+    inproc_channel<>  ch(ex);
+    capture           cap(ex);
+    auto              peer = make_peer(ch, cap, "node-a");
 
     forwarder fwd{};
     fwd.latch("topic");

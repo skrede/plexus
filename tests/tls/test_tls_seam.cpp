@@ -40,7 +40,7 @@
 #include <filesystem>
 
 namespace ptls = plexus::tls;
-namespace pio = plexus::io;
+namespace pio  = plexus::io;
 
 // The full 32-byte SHA-256 SPKI digest — the core cert_facts::spki_sha256 field type.
 using spki_digest = std::array<std::byte, 32>;
@@ -65,8 +65,8 @@ namespace {
 // prove it).
 void comdat_probe()
 {
-    ::asio::io_context io;
-    ::asio::ssl::context ctx(::asio::ssl::context::tls);
+    ::asio::io_context                           io;
+    ::asio::ssl::context                         ctx(::asio::ssl::context::tls);
     ::asio::ssl::stream<::asio::ip::tcp::socket> stream(io, ctx);
     REQUIRE(stream.native_handle() != nullptr);
     io.poll();
@@ -78,7 +78,7 @@ struct identity
 {
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest digest{};
+    spki_digest           digest{};
 };
 
 // Generate an EC P-256 self-signed cert+key, write them to a fresh temp dir
@@ -87,20 +87,20 @@ struct identity
 struct identity_fixture
 {
     std::filesystem::path dir;
-    identity id;
+    identity              id;
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path()
-            / ("plexus_tls_" + tag + "_" + std::to_string(::getpid())
-               + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() /
+                ("plexus_tls_" + tag + "_" + std::to_string(::getpid()) + "_" +
+                 std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         id.cert_path = dir / "cert.pem";
-        id.key_path = dir / "key.pem";
+        id.key_path  = dir / "key.pem";
         generate();
     }
 
-    identity_fixture(const identity_fixture &) = delete;
+    identity_fixture(const identity_fixture &)            = delete;
     identity_fixture &operator=(const identity_fixture &) = delete;
 
     ~identity_fixture()
@@ -111,8 +111,8 @@ struct identity_fixture
 
     void generate()
     {
-        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(
-            EVP_EC_gen("P-256"), &EVP_PKEY_free);
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"),
+                                                                 &EVP_PKEY_free);
         REQUIRE(pkey);
 
         std::unique_ptr<X509, decltype(&X509_free)> cert(X509_new(), &X509_free);
@@ -124,14 +124,16 @@ struct identity_fixture
 
         X509_NAME *name = X509_get_subject_name(cert.get());
         X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-            reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1, 0);
+                                   reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1,
+                                   0);
         X509_set_issuer_name(cert.get(), name);
         REQUIRE(X509_sign(cert.get(), pkey.get(), EVP_sha256()) != 0);
 
         write_pem(cert.get(), pkey.get());
         std::filesystem::permissions(id.key_path,
-            std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-            std::filesystem::perm_options::replace);
+                                     std::filesystem::perms::owner_read |
+                                             std::filesystem::perms::owner_write,
+                                     std::filesystem::perm_options::replace);
 
         auto d = ptls::spki_fingerprint(*cert.get());
         REQUIRE(d.has_value());
@@ -155,7 +157,7 @@ struct identity_fixture
 ptls::tls_credential make_cred(const identity &self, const spki_digest &peer_pin)
 {
     auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-        std::vector<spki_digest>{peer_pin});
+            std::vector<spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -166,40 +168,38 @@ ptls::tls_credential make_cred(const identity &self, const spki_digest &peer_pin
 // handshaking) channel lands via on_dialed ONLY post-handshake.
 struct dial_tls_link
 {
-    ::asio::io_context io;
+    ::asio::io_context   io;
     ptls::tls_credential server_cred;
     ptls::tls_credential client_cred;
-    ptls::tls_transport server{io, server_cred};
-    ptls::tls_transport client{io, client_cred};
+    ptls::tls_transport  server{io, server_cred};
+    ptls::tls_transport  client{io, client_cred};
 
-    std::unique_ptr<ptls::tls_channel> accepted;   // server end
-    std::unique_ptr<ptls::tls_channel> dialed;     // client end
-    bool dial_failed{false};
+    std::unique_ptr<ptls::tls_channel> accepted; // server end
+    std::unique_ptr<ptls::tls_channel> dialed;   // client end
+    bool                               dial_failed{false};
 
     std::vector<std::vector<std::byte>> server_received;
 
     dial_tls_link(const identity &server_id, const identity &client_id)
-        : server_cred(make_cred(server_id, client_id.digest))
-        , client_cred(make_cred(client_id, server_id.digest))
+            : server_cred(make_cred(server_id, client_id.digest))
+            , client_cred(make_cred(client_id, server_id.digest))
     {
-        server.on_accepted([this](std::unique_ptr<ptls::tls_channel> ch) {
-            accepted = std::move(ch);
-            accepted->on_data([this](std::span<const std::byte> d) {
-                server_received.emplace_back(d.begin(), d.end());
-            });
-        });
-        client.on_dialed([this](std::unique_ptr<ptls::tls_channel> ch, const pio::endpoint &) {
-            dialed = std::move(ch);
-        });
-        client.on_dial_failed([this](const pio::endpoint &, pio::io_error) {
-            dial_failed = true;
-        });
+        server.on_accepted(
+                [this](std::unique_ptr<ptls::tls_channel> ch)
+                {
+                    accepted = std::move(ch);
+                    accepted->on_data([this](std::span<const std::byte> d)
+                                      { server_received.emplace_back(d.begin(), d.end()); });
+                });
+        client.on_dialed([this](std::unique_ptr<ptls::tls_channel> ch, const pio::endpoint &)
+                         { dialed = std::move(ch); });
+        client.on_dial_failed([this](const pio::endpoint &, pio::io_error) { dial_failed = true; });
 
         server.listen({"tls", "127.0.0.1:0"});
         client.dial({"tls", "127.0.0.1:" + std::to_string(server.port())});
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -217,10 +217,12 @@ struct dial_tls_link
 
 std::vector<std::byte> make_frame(const std::string &payload)
 {
-    plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::unidirectional,
-                                   .flags = 0, .session_id = 1,
-                                   .timestamp_ns = 0, .payload_len = 0};
-    auto bytes = reinterpret_cast<const std::byte *>(payload.data());
+    plexus::wire::frame_header hdr{.type         = plexus::wire::msg_type::unidirectional,
+                                   .flags        = 0,
+                                   .session_id   = 1,
+                                   .timestamp_ns = 0,
+                                   .payload_len  = 0};
+    auto                       bytes = reinterpret_cast<const std::byte *>(payload.data());
     return plexus::wire::encode_frame(hdr, std::span<const std::byte>{bytes, payload.size()});
 }
 
@@ -238,15 +240,15 @@ TEST_CASE("dtls seam: share_context up_refs the SSL_CTX once and returns an owni
           "[tls][seam][dtls]")
 {
     identity_fixture self_id("dtls_share");
-    auto cred = make_cred(self_id.id, self_id.id.digest);
+    auto             cred = make_cred(self_id.id, self_id.id.digest);
     REQUIRE(cred.valid());
 
     {
         auto shared = ptls::detail::share_dtls_context(cred);
-        REQUIRE(shared != nullptr);          // a live, refcounted SSL_CTX*
-        REQUIRE(reinterpret_cast<void *>(&cred.ssl_ctx())
-                == reinterpret_cast<void *>(shared.get()));
-    }                                        // the shared handle's ref is released here
+        REQUIRE(shared != nullptr); // a live, refcounted SSL_CTX*
+        REQUIRE(reinterpret_cast<void *>(&cred.ssl_ctx()) ==
+                reinterpret_cast<void *>(shared.get()));
+    } // the shared handle's ref is released here
 
     // The credential's own ref survives the shared handle's release — the up_ref/
     // free accounting balanced (a double-free or under-ref would have crashed/freed).
@@ -258,23 +260,22 @@ TEST_CASE("dtls seam: share_context up_refs the SSL_CTX once and returns an owni
     REQUIRE_THROWS(ptls::detail::share_dtls_context(empty));
 }
 
-TEST_CASE("dtls seam: load_dtls_credential builds a valid DTLS SSL_CTX",
-          "[tls][seam][dtls]")
+TEST_CASE("dtls seam: load_dtls_credential builds a valid DTLS SSL_CTX", "[tls][seam][dtls]")
 {
     identity_fixture self_id("dtls_cred");
-    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-        std::vector<spki_digest>{self_id.id.digest});
+    auto             policy = std::make_shared<const pio::security::spki_pin_policy>(
+            std::vector<spki_digest>{self_id.id.digest});
 
-    auto cred = ptls::load_dtls_credential(
-        self_id.id.cert_path.string(), self_id.id.key_path.string(), policy);
+    auto cred = ptls::load_dtls_credential(self_id.id.cert_path.string(),
+                                           self_id.id.key_path.string(), policy);
     REQUIRE(cred.valid());
 
     // The DTLS ctx shares like the TLS one (the up_ref/free accounting is the same).
     REQUIRE_NOTHROW(ptls::detail::share_dtls_context(cred));
 
     // A missing verify policy fails closed.
-    REQUIRE_THROWS(ptls::load_dtls_credential(
-        self_id.id.cert_path.string(), self_id.id.key_path.string(), nullptr));
+    REQUIRE_THROWS(ptls::load_dtls_credential(self_id.id.cert_path.string(),
+                                              self_id.id.key_path.string(), nullptr));
 }
 
 TEST_CASE("dtls seam: the cookie MAC is deterministic per nonce and binds the peer addr",
@@ -284,15 +285,15 @@ TEST_CASE("dtls seam: the cookie MAC is deterministic per nonce and binds the pe
     // mint MAC binds [peer_addr || nonce] under the process-random key. Same addr =>
     // same minted MAC (deterministic, no rotation in this window); a cookie minted
     // for addr_a validates for addr_a but NOT for addr_b (the addr binding).
-    auto secret = ptls::make_cookie_secret();
-    const std::byte addr_a[] = {std::byte{127}, std::byte{0}, std::byte{0}, std::byte{1},
-                                std::byte{0x1f}, std::byte{0x90}};   // 127.0.0.1:8080
-    const std::byte addr_b[] = {std::byte{127}, std::byte{0}, std::byte{0}, std::byte{1},
-                                std::byte{0x23}, std::byte{0x28}};   // 127.0.0.1:9000
+    auto            secret   = ptls::make_cookie_secret();
+    const std::byte addr_a[] = {std::byte{127}, std::byte{0},    std::byte{0},
+                                std::byte{1},   std::byte{0x1f}, std::byte{0x90}}; // 127.0.0.1:8080
+    const std::byte addr_b[] = {std::byte{127}, std::byte{0},    std::byte{0},
+                                std::byte{1},   std::byte{0x23}, std::byte{0x28}}; // 127.0.0.1:9000
     std::span<const std::byte> span_a{addr_a, sizeof(addr_a)};
     std::span<const std::byte> span_b{addr_b, sizeof(addr_b)};
 
-    constexpr std::size_t klen = pio::security::cookie_secret::k_cookie_len;
+    constexpr std::size_t       klen = pio::security::cookie_secret::k_cookie_len;
     std::array<std::byte, klen> mac_a1{};
     std::array<std::byte, klen> mac_a2{};
     std::array<std::byte, klen> mac_b{};
@@ -311,14 +312,15 @@ TEST_CASE("dtls seam: the cookie MAC is deterministic per nonce and binds the pe
     REQUIRE_FALSE(secret.validate(span_b, mac_a1));
 }
 
-TEST_CASE("tls transport: a DIALED pair completes a real mutual-TLS handshake over loopback, looped",
-          "[tls][handshake]")
+TEST_CASE(
+        "tls transport: a DIALED pair completes a real mutual-TLS handshake over loopback, looped",
+        "[tls][handshake]")
 {
     identity_fixture server_id("srv");
     identity_fixture client_id("cli");
 
     constexpr int k_iterations = 100;
-    int completed = 0;
+    int           completed    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         dial_tls_link l(server_id.id, client_id.id);
@@ -326,7 +328,7 @@ TEST_CASE("tls transport: a DIALED pair completes a real mutual-TLS handshake ov
 
         REQUIRE_FALSE(l.dial_failed);
         REQUIRE(l.accepted != nullptr);
-        REQUIRE(l.dialed != nullptr);   // delivered POST-handshake only
+        REQUIRE(l.dialed != nullptr); // delivered POST-handshake only
         REQUIRE(l.dialed->remote_endpoint().scheme == "tls");
         ++completed;
     }
@@ -340,10 +342,10 @@ TEST_CASE("tls transport: a frame sent post-handshake reassembles byte-identical
     identity_fixture client_id("cli");
 
     const std::string payload = "encrypted-bytes-over-a-mutual-tls-channel";
-    const auto frame = make_frame(payload);
+    const auto        frame   = make_frame(payload);
 
     constexpr int k_iterations = 100;
-    int delivered = 0;
+    int           delivered    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         dial_tls_link l(server_id.id, client_id.id);

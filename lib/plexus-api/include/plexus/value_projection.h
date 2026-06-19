@@ -24,7 +24,7 @@ namespace plexus {
 //       -> append each field's text value to `row`, separated by `delim`
 //   emit_json(const T&, std::string& obj)
 //       -> append the body of a JSON object (the "name":value pairs, no braces) to `obj`
-template <typename P, typename T>
+template<typename P, typename T>
 concept value_projection = requires(const P &p, const T &v, std::string &buf) {
     { p.columns() } -> std::ranges::range;
     requires std::convertible_to<std::ranges::range_value_t<decltype(p.columns())>,
@@ -36,20 +36,20 @@ concept value_projection = requires(const P &p, const T &v, std::string &buf) {
 // The text FLOOR for a type that opts into no projection: anything streamable to an
 // ostream. It carries no column structure — one value column / one JSON string field /
 // the streamed text line.
-template <typename T>
+template<typename T>
 concept streamable = requires(std::ostream &os, const T &v) {
     { os << v } -> std::convertible_to<std::ostream &>;
 };
 
 // A type is loggable when it either provides a projection or is streamable; the handle
 // requires one of the two so a non-formattable value type is a clear compile error.
-template <typename P, typename T>
+template<typename P, typename T>
 concept loggable_value = value_projection<P, T> || streamable<T>;
 
 // Append the streamed text of a value to a reused buffer through a thread-local string
 // stream, so the floor reuses one ostringstream rather than constructing one per record.
 // The stream is cleared (not reconstructed) between uses; its grown buffer is retained.
-template <streamable T>
+template<streamable T>
 inline void stream_to(const T &v, std::string &out)
 {
     thread_local std::ostringstream os;

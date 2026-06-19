@@ -45,8 +45,8 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
+                     0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -71,7 +71,7 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
           "[shm][same_host_roundtrip]")
 {
     // The fqn unique to this process so concurrent ctest shards never collide.
-    const std::string fqn = "topic.roundtrip." + std::to_string(::getpid());
+    const std::string        fqn  = "topic.roundtrip." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -91,7 +91,7 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
                 ; // wait for the creator to stamp the regions
 
             posix_shm_region_broker broker;
-            region_handle ctrl, slab;
+            region_handle           ctrl, slab;
             if(broker.attach(control_name(fqn), ctrl) == pio::region_status::ok &&
                broker.attach(slab_name(fqn), slab) == pio::region_status::ok)
             {
@@ -113,7 +113,7 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
                         for(;;)
                         {
                             pio::broadcast_ring::consume_result out;
-                            const auto st = ring.consume(cursor, out);
+                            const auto                          st = ring.consume(cursor, out);
                             if(st == pio::loan_status::ok)
                             {
                                 std::uint32_t got = 0;
@@ -141,7 +141,7 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
         // CREATOR parent: create the two regions, build the ring, publish ONE value,
         // wait for the consumer to read it, then tear down.
         posix_shm_region_broker broker;
-        region_handle ctrl, slab;
+        region_handle           ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
                               pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn),
@@ -163,8 +163,8 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
         // Publish the value (reliable claim -> fill -> commit).
         pio::broadcast_ring::claim_result claim;
         REQUIRE(ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable,
-                                       plexus::io::congestion::block, claim) ==
-                pio::loan_status::ok);
+                                       plexus::io::congestion::block,
+                                       claim) == pio::loan_status::ok);
         std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
         REQUIRE(ring.commit(claim.position, sizeof(k_payload)) == pio::loan_status::ok);
 

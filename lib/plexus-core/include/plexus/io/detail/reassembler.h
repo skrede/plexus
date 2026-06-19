@@ -45,7 +45,7 @@ namespace plexus::io::detail {
 // timer; the owning channel cancels the reassembler before it dies, so a timer firing after
 // teardown is a guarded no-op (the if(ec || m_dead) guard). Sans-IO: on_deliver fires synchronously
 // on completion (the channel posts on_data around it; the block never touches the io_context).
-template <typename Executor, typename Timer>
+template<typename Executor, typename Timer>
     requires plexus::timer<Timer> && std::constructible_from<Timer, Executor>
 class reassembler
 {
@@ -56,27 +56,27 @@ public:
 
     struct config
     {
-        std::size_t max_message_size{global_default_max_message_bytes};
-        std::size_t total_memory_cap{reassembly_memory_budget};
+        std::size_t               max_message_size{global_default_max_message_bytes};
+        std::size_t               total_memory_cap{reassembly_memory_budget};
         std::chrono::milliseconds per_message_timeout{5000};
     };
 
     enum class outcome : std::uint8_t
     {
-        admitted,         // fragment stored; the message is still incomplete
-        completed,        // this fragment finished the message (on_deliver fired)
-        dropped_malformed,// idx>=cnt, oversize cnt, or a per-message-ceiling overrun
-        dropped_cap,      // admitting a new partial would breach the total-memory cap
+        admitted,          // fragment stored; the message is still incomplete
+        completed,         // this fragment finished the message (on_deliver fired)
+        dropped_malformed, // idx>=cnt, oversize cnt, or a per-message-ceiling overrun
+        dropped_cap,       // admitting a new partial would breach the total-memory cap
     };
 
     explicit reassembler(Executor executor, config cfg = {})
-        : m_executor(executor)
-        , m_cfg(cfg)
-        , m_table(cap_implied_max_partials(cfg.total_memory_cap, structural_cost(1)))
+            : m_executor(executor)
+            , m_cfg(cfg)
+            , m_table(cap_implied_max_partials(cfg.total_memory_cap, structural_cost(1)))
     {
     }
 
-    reassembler(const reassembler &) = delete;
+    reassembler(const reassembler &)            = delete;
     reassembler &operator=(const reassembler &) = delete;
 
     using drop_sink = plexus::detail::move_only_function<void(const drop_event &)>;
@@ -95,8 +95,8 @@ public:
                  std::span<const std::byte> bytes)
     {
         const outcome o = (frag_cnt == 0 || frag_idx >= frag_cnt || frag_cnt > max_fragment_count)
-                              ? outcome::dropped_malformed
-                              : admit_fragment(msg_id, frag_idx, frag_cnt, bytes);
+                ? outcome::dropped_malformed
+                : admit_fragment(msg_id, frag_idx, frag_cnt, bytes);
         if(o == outcome::dropped_malformed)
             emit_drop(drop_cause::malformed);
         else if(o == outcome::dropped_cap)
@@ -119,18 +119,18 @@ public:
     // bitmap), charged against the same cap as payload — see the BOUNDS note at the class head.
     [[nodiscard]] static constexpr std::size_t structural_cost(std::uint32_t frag_cnt) noexcept
     {
-        return static_cast<std::size_t>(frag_cnt) * sizeof(std::vector<std::byte>)
-               + (static_cast<std::size_t>(frag_cnt) + 7u) / 8u;
+        return static_cast<std::size_t>(frag_cnt) * sizeof(std::vector<std::byte>) +
+                (static_cast<std::size_t>(frag_cnt) + 7u) / 8u;
     }
 
 private:
     struct entry
     {
-        std::vector<std::vector<std::byte>> slots;   // per-index fragment bytes
-        std::vector<bool> present;
-        std::size_t received{0};
-        std::size_t size{0};                         // payload bytes held by this entry
-        std::size_t overhead{0};                     // structural slot/present cost charged to the cap
+        std::vector<std::vector<std::byte>> slots; // per-index fragment bytes
+        std::vector<bool>                   present;
+        std::size_t                         received{0};
+        std::size_t                         size{0}; // payload bytes held by this entry
+        std::size_t            overhead{0}; // structural slot/present cost charged to the cap
         std::unique_ptr<Timer> timer;
     };
 
@@ -142,36 +142,40 @@ private:
         {
             it = open_entry(msg_id, frag_cnt, bytes.size());
             if(it == m_table.end())
-                return outcome::dropped_cap;          // the byte cap or the count ceiling refused
+                return outcome::dropped_cap; // the byte cap or the count ceiling refused
         }
         return store(it->second, msg_id, frag_idx, bytes);
     }
 
-    typename reassembler_flat_map<entry>::iterator open_entry(std::uint16_t msg_id, std::uint32_t frag_cnt, std::size_t payload)
+    typename reassembler_flat_map<entry>::iterator
+    open_entry(std::uint16_t msg_id, std::uint32_t frag_cnt, std::size_t payload)
     {
         if(m_held + structural_cost(frag_cnt) + payload > m_cfg.total_memory_cap)
-            return m_table.end();                     // structural + payload cost cannot fit the cap
+            return m_table.end(); // structural + payload cost cannot fit the cap
         entry e;
         e.slots.resize(frag_cnt);
         e.present.assign(frag_cnt, false);
         e.overhead = structural_cost(frag_cnt);
-        e.timer = std::make_unique<Timer>(m_executor);
-        auto it = m_table.emplace(msg_id, std::move(e));   // refuses past the cap-implied count ceiling
+        e.timer    = std::make_unique<Timer>(m_executor);
+        auto it =
+                m_table.emplace(msg_id, std::move(e)); // refuses past the cap-implied count ceiling
         if(it == m_table.end())
             return it;
-        m_held += it->second.overhead;                // charge the structural cost up front
+        m_held += it->second.overhead; // charge the structural cost up front
         arm_timeout(msg_id, it->second);
         return it;
     }
 
-    outcome store(entry &e, std::uint16_t msg_id, std::uint32_t frag_idx, std::span<const std::byte> bytes)
+    outcome store(entry &e, std::uint16_t msg_id, std::uint32_t frag_idx,
+                  std::span<const std::byte> bytes)
     {
         if(frag_idx >= e.slots.size())
-            return outcome::dropped_malformed;        // frag_cnt disagreed with the open entry
+            return outcome::dropped_malformed; // frag_cnt disagreed with the open entry
         if(e.present[frag_idx])
-            return outcome::admitted;                 // duplicate / overlap — ignore, keep the first
-        if(e.size + bytes.size() > m_cfg.max_message_size || m_held + bytes.size() > m_cfg.total_memory_cap)
-            return outcome::dropped_malformed;        // per-message ceiling / total cap overrun
+            return outcome::admitted; // duplicate / overlap — ignore, keep the first
+        if(e.size + bytes.size() > m_cfg.max_message_size ||
+           m_held + bytes.size() > m_cfg.total_memory_cap)
+            return outcome::dropped_malformed; // per-message ceiling / total cap overrun
 
         e.slots[frag_idx].assign(bytes.begin(), bytes.end());
         e.present[frag_idx] = true;
@@ -192,19 +196,21 @@ private:
         for(auto &slot : e.slots)
             msg.insert(msg.end(), slot.begin(), slot.end());
         if(m_on_deliver)
-            m_on_deliver(wire::shared_bytes{std::move(msg)});   // one owned materialization rides up
+            m_on_deliver(wire::shared_bytes{std::move(msg)}); // one owned materialization rides up
         evict(msg_id);
     }
 
     void arm_timeout(std::uint16_t msg_id, entry &e)
     {
         e.timer->expires_after(m_cfg.per_message_timeout);
-        e.timer->async_wait([this, msg_id](std::error_code ec) {
-            if(ec || m_dead)
-                return;                               // cancelled by completion / teardown
-            evict(msg_id);                            // best-effort reclaim of the stalled partial
-            emit_drop(drop_cause::reassembly_evicted);
-        });
+        e.timer->async_wait(
+                [this, msg_id](std::error_code ec)
+                {
+                    if(ec || m_dead)
+                        return;    // cancelled by completion / teardown
+                    evict(msg_id); // best-effort reclaim of the stalled partial
+                    emit_drop(drop_cause::reassembly_evicted);
+                });
     }
 
     void emit_drop(drop_cause cause)
@@ -223,13 +229,13 @@ private:
         m_table.erase(it);
     }
 
-    Executor m_executor;
-    config m_cfg;
+    Executor                    m_executor;
+    config                      m_cfg;
     reassembler_flat_map<entry> m_table;
-    std::size_t m_held{0};
-    bool m_dead{false};
-    deliver_sink m_on_deliver;
-    drop_sink m_on_drop;
+    std::size_t                 m_held{0};
+    bool                        m_dead{false};
+    deliver_sink                m_on_deliver;
+    drop_sink                   m_on_drop;
 };
 
 }

@@ -32,7 +32,7 @@ public:
     mdnspp_discovery(::asio::io_context &io, std::string service_type);
     ~mdnspp_discovery() override;
 
-    mdnspp_discovery(const mdnspp_discovery &) = delete;
+    mdnspp_discovery(const mdnspp_discovery &)            = delete;
     mdnspp_discovery &operator=(const mdnspp_discovery &) = delete;
 
     // Publish a local service so peers can resolve it (mDNS announce).
@@ -48,8 +48,8 @@ public:
 private:
     struct impl;
 
-    ::asio::io_context &m_io;
-    std::string m_service_type;
+    ::asio::io_context   &m_io;
+    std::string           m_service_type;
     std::unique_ptr<impl> m_impl;
 };
 

@@ -2,7 +2,7 @@
 #define HPP_GUARD_PLEXUS_DETAIL_CPU_RELAX_H
 
 #if defined(__x86_64__) || defined(__i386__)
-#include <immintrin.h>
+    #include <immintrin.h>
 #endif
 
 namespace plexus::detail {

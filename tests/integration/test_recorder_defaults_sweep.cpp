@@ -108,9 +108,9 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(plexus::recording_qos capture)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                    std::chrono::milliseconds(2000), std::nullopt,
+                                                    std::nullopt};
     opts.redial_seed = 0x9163u;
     opts.capture     = capture;
     return opts;
@@ -155,14 +155,14 @@ std::uint64_t recovered_samples(std::size_t ring_bytes, std::size_t payload_byte
 
         plexus::recorder_options ro;
         ro.ring_bytes = ring_bytes;
-        auto rec = n_node.make_recorder(sink, std::move(ro));
+        auto rec      = n_node.make_recorder(sink, std::move(ro));
 
         {
             plexus::topic_qos qos;
             qos.latch = true;
             plexus::publisher<>  pub{n_node, "defaults.topic", qos};
             plexus::subscriber<> sub{n_node, "defaults.topic",
-                [](std::span<const std::byte>, const message_info &) {}};
+                                     [](std::span<const std::byte>, const message_info &) {}};
             n.drive();
 
             const std::vector<std::byte> body(payload_bytes, std::byte{0x5A});
@@ -215,7 +215,7 @@ decim_counts count_n_run(std::uint32_t n_keep, std::size_t payload_bytes, int bu
 
         plexus::recorder_options ro;
         ro.ring_bytes = 1u << 24; // roomy: isolate the decimation effect from ring overflow
-        auto rec = n_node.make_recorder(sink, std::move(ro));
+        auto rec      = n_node.make_recorder(sink, std::move(ro));
 
         {
             plexus::typed_publisher_options popts;
@@ -274,13 +274,14 @@ constexpr std::size_t k_modest_payload = 512;
 // A genuine saturating large-payload burst: 2000 records of 4 KiB is ~8 MiB of raw payload,
 // far past the 1 MiB default (so it sheds) yet inside a 16 MiB firehose override (so it
 // recovers in full) — the override path.
-constexpr int           k_firehose_burst   = 2000;
-constexpr std::size_t   k_firehose_payload = 4096;
-constexpr std::size_t   k_firehose_ring    = 16u * 1024u * 1024u;
+constexpr int         k_firehose_burst   = 2000;
+constexpr std::size_t k_firehose_payload = 4096;
+constexpr std::size_t k_firehose_ring    = 16u * 1024u * 1024u;
 
 }
 
-TEST_CASE("recorder defaults the shipped ring_bytes gives full recall for a modest small-payload workload",
+TEST_CASE("recorder defaults the shipped ring_bytes gives full recall for a modest small-payload "
+          "workload",
           "[recorder_defaults][sweep]")
 {
     // The chosen cell is the SHIPPED default, not a literal. The conservative 1 MiB default
@@ -293,7 +294,7 @@ TEST_CASE("recorder defaults the shipped ring_bytes gives full recall for a mode
     for(int run = 0; run < 3; ++run)
     {
         const std::uint64_t delivered =
-            recovered_samples(shipped_ring, k_modest_payload, k_modest_burst);
+                recovered_samples(shipped_ring, k_modest_payload, k_modest_burst);
         // Full recall: every produced sample of the modest small-payload backlog is
         // recovered at the conservative default — the design point.
         REQUIRE(delivered == static_cast<std::uint64_t>(k_modest_burst));
@@ -306,14 +307,14 @@ TEST_CASE("recorder defaults raising ring_bytes recovers a saturating burst the 
     // The default is conservative on purpose: a saturating large-payload burst (~8 MiB of
     // raw payload) overflows the 1 MiB ring and sheds — observable while recording, the
     // intended posture. This proves the default is a live floor, not a roomy ceiling.
-    const std::uint64_t at_default =
-        recovered_samples(plexus::recorder_options{}.ring_bytes, k_firehose_payload, k_firehose_burst);
+    const std::uint64_t at_default = recovered_samples(plexus::recorder_options{}.ring_bytes,
+                                                       k_firehose_payload, k_firehose_burst);
     REQUIRE(at_default < static_cast<std::uint64_t>(k_firehose_burst));
 
     // Raising ring_bytes to a firehose value recovers the same burst in full — the explicit
     // override path for a large-payload capture.
     const std::uint64_t at_firehose =
-        recovered_samples(k_firehose_ring, k_firehose_payload, k_firehose_burst);
+            recovered_samples(k_firehose_ring, k_firehose_payload, k_firehose_burst);
     REQUIRE(at_firehose == static_cast<std::uint64_t>(k_firehose_burst));
 }
 

@@ -74,11 +74,12 @@ struct counting_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, sample &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   sample                    &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -91,7 +92,7 @@ struct counting_codec
 
 static_assert(plexus::typed_codec<counting_codec>);
 
-using typed_publisher = plexus::publisher<counting_codec>;
+using typed_publisher  = plexus::publisher<counting_codec>;
 using typed_subscriber = plexus::subscriber<counting_codec>;
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -104,21 +105,21 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0x57A11Du;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0x57A11Du;
     opts.dial_eagerly = eager;
     return opts;
 }
 
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -156,7 +157,7 @@ TEST_CASE("inproc stamp demand: a 3-arg subscriber with default qos sees populat
     std::vector<message_info> infos;
     typed_subscriber s{n.a, "topic",
                        [&](const sample &, const message_info &info) { infos.push_back(info); }};
-    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
+    typed_publisher  p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
     n.drive();
 
     auto loan = p.borrow();
@@ -178,12 +179,12 @@ TEST_CASE("inproc stamp demand: a 3-arg subscriber that opts out sees a document
     n.connect();
 
     plexus::typed_subscriber_options opts;
-    opts.qos.wants_message_info = false;   // an informed 3-arg opt-out: deliver no timestamps
+    opts.qos.wants_message_info = false; // an informed 3-arg opt-out: deliver no timestamps
 
     std::vector<message_info> infos;
     typed_subscriber s{n.a, "topic", opts,
                        [&](const sample &, const message_info &info) { infos.push_back(info); }};
-    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
+    typed_publisher  p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
     n.drive();
 
     auto loan = p.borrow();
@@ -193,23 +194,23 @@ TEST_CASE("inproc stamp demand: a 3-arg subscriber that opts out sees a document
     n.drive();
 
     REQUIRE(infos.size() == 1);
-    REQUIRE(infos.front().source_timestamp == 0);        // documented "not stamped"
+    REQUIRE(infos.front().source_timestamp == 0); // documented "not stamped"
     REQUIRE(infos.front().reception_timestamp == 0);
-    REQUIRE(infos.front().from_intra_process);            // arity-independent, always honest
+    REQUIRE(infos.front().from_intra_process); // arity-independent, always honest
 }
 
 TEST_CASE("inproc stamp demand: the per-topic latch OR-reduces over local subscriber demand",
           "[integration][inproc][stamp]")
 {
     using registry = plexus::io::subscriber_registry<stub_channel>;
-    registry reg;
+    registry   reg;
     const auto hash = plexus::wire::fqn_topic_hash("topic");
 
     // An unknown topic latches true (the safe always-on default — it stamps).
     REQUIRE(reg.any_subscriber_wants_info(hash));
 
     // A lone no-info subscriber (the 2-arg arity) collapses the latch to false.
-    stub_channel c_no;
+    stub_channel               c_no;
     plexus::io::subscriber_qos qos_no;
     qos_no.wants_message_info = false;
     reg.add_subscriber(hash, "topic", c_no, "node-no", qos_no);
@@ -217,8 +218,8 @@ TEST_CASE("inproc stamp demand: the per-topic latch OR-reduces over local subscr
 
     // A second, info-wanting subscriber forces stamping for the whole topic (OR-reduce):
     // a suppressing subscriber never starves a demanding one.
-    stub_channel c_yes;
-    plexus::io::subscriber_qos qos_yes;   // wants_message_info defaults true
+    stub_channel               c_yes;
+    plexus::io::subscriber_qos qos_yes; // wants_message_info defaults true
     reg.add_subscriber(hash, "topic", c_yes, "node-yes", qos_yes);
     REQUIRE(reg.any_subscriber_wants_info(hash));
 

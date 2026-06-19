@@ -82,11 +82,12 @@ struct reading_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, reading &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
+                                                   reading                   &out) const
     {
         if(bytes.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -112,9 +113,9 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options base_opts()
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
     opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = true;
     return opts;
@@ -122,9 +123,9 @@ plexus::node_options base_opts()
 
 // Drive a wire-capturing producer + a plain consumer over inproc, publish a run of typed
 // readings, drain the recorder, and return the accumulated flat capture bytes.
-std::vector<std::byte> capture_session(int count,
-                                       plexus::wire_crypto_position position =
-                                           plexus::wire_crypto_position::cleartext)
+std::vector<std::byte>
+capture_session(int                          count,
+                plexus::wire_crypto_position position = plexus::wire_crypto_position::cleartext)
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};
@@ -142,14 +143,14 @@ std::vector<std::byte> capture_session(int count,
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto                recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
     ex.drain();
 
     typed_subscriber sub{consumer, "telemetry", [](const reading &) {}};
-    typed_publisher pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
+    typed_publisher  pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
     ex.drain();
 
     for(int i = 0; i < count; ++i)
@@ -173,7 +174,7 @@ std::vector<std::byte> capture_session(int count,
 std::uint16_t rd_u16(std::span<const std::byte> b, std::size_t off)
 {
     return static_cast<std::uint16_t>(static_cast<std::uint8_t>(b[off])) |
-           static_cast<std::uint16_t>(static_cast<std::uint8_t>(b[off + 1])) << 8;
+            static_cast<std::uint16_t>(static_cast<std::uint8_t>(b[off + 1])) << 8;
 }
 
 std::uint32_t rd_u32(std::span<const std::byte> b, std::size_t off)
@@ -197,13 +198,14 @@ struct parsed_epb
 
 struct parsed_pcapng
 {
-    bool                    shb_magic_ok{false};
-    bool                    shb_has_crypto_comment{false};
+    bool                         shb_magic_ok{false};
+    bool                         shb_has_crypto_comment{false};
     std::optional<std::uint16_t> idb_linktype;
-    std::vector<parsed_epb> epbs;
+    std::vector<parsed_epb>      epbs;
 };
 
-bool span_contains(std::span<const std::byte> b, std::size_t off, std::size_t len, std::string_view needle)
+bool span_contains(std::span<const std::byte> b, std::size_t off, std::size_t len,
+                   std::string_view needle)
 {
     if(needle.empty() || len < needle.size())
         return false;
@@ -232,11 +234,11 @@ void parse_epb_options(std::span<const std::byte> b, std::size_t opt_off, std::s
         const std::uint16_t code = rd_u16(b, opt_off);
         const std::uint16_t len  = rd_u16(b, opt_off + 2);
         opt_off += 4;
-        if(code == 0)  // opt_endofopt
+        if(code == 0) // opt_endofopt
             break;
-        if(code == 2 && len == 4)  // epb_flags
+        if(code == 2 && len == 4) // epb_flags
             epb.flags_low2 = rd_u32(b, opt_off) & 0x3u;
-        if(code == 1 && span_contains(b, opt_off, len, "crypto_position="))  // opt_comment
+        if(code == 1 && span_contains(b, opt_off, len, "crypto_position=")) // opt_comment
             epb.comment_has_crypto = true;
         opt_off += (static_cast<std::size_t>(len) + 3u) & ~std::size_t{3};
     }
@@ -254,24 +256,24 @@ parsed_pcapng parse_pcapng(std::span<const std::byte> b)
         REQUIRE(at + total <= b.size());
         const std::size_t body = at + 8;
 
-        if(type == 0x0A0D0D0Au)  // SHB
+        if(type == 0x0A0D0D0Au) // SHB
         {
-            out.shb_magic_ok            = rd_u32(b, body) == 0x1A2B3C4Du;
-            const std::size_t opt_off   = body + 16;  // magic + major + minor + section_length
-            out.shb_has_crypto_comment  = span_contains(b, opt_off, at + total - 4 - opt_off,
-                                                        "plexus.crypto_position=");
+            out.shb_magic_ok          = rd_u32(b, body) == 0x1A2B3C4Du;
+            const std::size_t opt_off = body + 16; // magic + major + minor + section_length
+            out.shb_has_crypto_comment =
+                    span_contains(b, opt_off, at + total - 4 - opt_off, "plexus.crypto_position=");
         }
-        else if(type == 0x00000001u)  // IDB
+        else if(type == 0x00000001u) // IDB
         {
             out.idb_linktype = rd_u16(b, body);
         }
-        else if(type == 0x00000006u)  // EPB
+        else if(type == 0x00000006u) // EPB
         {
             parsed_epb epb;
-            epb.timestamp    = static_cast<std::uint64_t>(rd_u32(b, body + 4)) << 32 |
-                            rd_u32(b, body + 8);
-            epb.captured_len = rd_u32(b, body + 12);
-            epb.original_len = rd_u32(b, body + 16);
+            epb.timestamp =
+                    static_cast<std::uint64_t>(rd_u32(b, body + 4)) << 32 | rd_u32(b, body + 8);
+            epb.captured_len           = rd_u32(b, body + 12);
+            epb.original_len           = rd_u32(b, body + 16);
             const std::size_t data_off = body + 20;
             if(epb.captured_len >= 4)
             {
@@ -297,7 +299,7 @@ TEST_CASE("pcap transcode round-trips a captured session through a parsed pcapng
     REQUIRE(!flat.empty());
 
     const auto out = std::filesystem::temp_directory_path() /
-                     std::filesystem::path{"plexus_transcode_roundtrip.pcapng"};
+            std::filesystem::path{"plexus_transcode_roundtrip.pcapng"};
     std::filesystem::remove(out);
 
     const auto result = plexus::tools::flat_to_pcap(flat, out);
@@ -356,8 +358,9 @@ TEST_CASE("pcap transcode round-trips a captured session through a parsed pcapng
     // The same session recorded with the ciphertext tap position: byte-identical wire frames,
     // but the projector stamps crypto_position=ciphertext into the SHB and every frame comment.
     // The QA gate reads that carried token to exercise the dissector's sealed-blob branch.
-    const auto cipher = capture_session(count, plexus::wire_crypto_position::ciphertext);
-    std::ofstream cipher_fixture{std::filesystem::path{PLEXUS_QA_CIPHER_CAPTURE_PATH}, std::ios::binary};
+    const auto    cipher = capture_session(count, plexus::wire_crypto_position::ciphertext);
+    std::ofstream cipher_fixture{std::filesystem::path{PLEXUS_QA_CIPHER_CAPTURE_PATH},
+                                 std::ios::binary};
     if(cipher_fixture)
         cipher_fixture.write(reinterpret_cast<const char *>(cipher.data()),
                              static_cast<std::streamsize>(cipher.size()));

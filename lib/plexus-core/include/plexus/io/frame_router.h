@@ -37,11 +37,11 @@ public:
     // lives in the header that route() otherwise strips before deliver. Handing it
     // alongside the inner payload is what keeps the forwarder header-aware ONLY on the
     // one path that needs it, without re-decoding the header downstream.
-    using data_consumer =
-        plexus::detail::move_only_function<void(const wire::frame_header &, std::span<const std::byte>)>;
+    using data_consumer = plexus::detail::move_only_function<void(const wire::frame_header &,
+                                                                  std::span<const std::byte>)>;
 
     explicit frame_router(log::logger &logger = shared_null_logger()) noexcept
-        : m_logger(logger)
+            : m_logger(logger)
     {
     }
 
@@ -106,17 +106,17 @@ private:
 
     void drop(std::string_view message) { m_logger.warn(message); }
 
-    log::logger &m_logger;
+    log::logger  &m_logger;
     data_consumer m_unidirectional;
-    consumer m_subscribe;
-    consumer m_fetch_latched;
-    consumer m_unsubscribe;
-    consumer m_subscribe_response;
-    consumer m_rpc_request;
-    consumer m_rpc_response;
-    consumer m_handshake_req;
-    consumer m_handshake_resp;
-    consumer m_heartbeat;
+    consumer      m_subscribe;
+    consumer      m_fetch_latched;
+    consumer      m_unsubscribe;
+    consumer      m_subscribe_response;
+    consumer      m_rpc_request;
+    consumer      m_rpc_response;
+    consumer      m_handshake_req;
+    consumer      m_handshake_resp;
+    consumer      m_heartbeat;
 };
 
 }

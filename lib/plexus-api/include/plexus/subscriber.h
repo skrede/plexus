@@ -29,7 +29,7 @@ namespace plexus {
 // (subscriber<Codec> below); the bytes endpoint is the subscriber<void> specialization —
 // subscriber<> selects it via the defaulted Codec (the default lives in node.h's forward
 // declaration, seen first), so every bytes spelling keeps compiling unchanged.
-template <typename Codec>
+template<typename Codec>
 class subscriber;
 
 // The typed subscriber's construction-time options. posture is the typed attach gate
@@ -39,16 +39,16 @@ class subscriber;
 // An explicit type identity overrides the codec's own.
 struct typed_subscriber_options
 {
-    io::subscriber_qos                                                            qos{};
-    io::attach_posture                                                            posture =
-        io::attach_posture::lenient;
-    std::optional<type_identity>                                                  type_id{};
-    std::optional<std::function<void(std::span<const std::byte>, std::error_code)>> on_decode_failure{};
+    io::subscriber_qos           qos{};
+    io::attach_posture           posture = io::attach_posture::lenient;
+    std::optional<type_identity> type_id{};
+    std::optional<std::function<void(std::span<const std::byte>, std::error_code)>>
+            on_decode_failure{};
 
     // The per-topic recording-QoS override. std::optional because ABSENCE is meaningful:
     // unset falls back to the node-level recording_qos default, present overrides the
     // recording fidelity for this topic alone (the shm_geometry/publisher precedent).
-    std::optional<recording_qos>                                                  capture{};
+    std::optional<recording_qos> capture{};
 };
 
 // The bytes subscribing endpoint: the CONSTRUCTOR is the registration — it installs a
@@ -65,36 +65,37 @@ struct typed_subscriber_options
 // the callback and, when it was the last local subscriber for the fqn, unsubscribes the
 // topic from every fanned peer. A moved-from handle is inert (empty retire); its
 // destructor does nothing, so no callback ever fires through a dropped subscriber.
-template <>
+template<>
 class subscriber<void>
 {
 public:
-    template <typename Policy, typename... NodeTs, typename Cb>
+    template<typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, Cb cb)
-        : subscriber(n, fqn, io::subscriber_qos{}, std::move(cb))
+            : subscriber(n, fqn, io::subscriber_qos{}, std::move(cb))
     {
     }
 
-    template <typename Policy, typename... NodeTs, typename Cb>
-    subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const io::subscriber_qos &qos, Cb cb)
+    template<typename Policy, typename... NodeTs, typename Cb>
+    subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const io::subscriber_qos &qos,
+               Cb cb)
     {
         // The arity is the implicit stamp demand: a 2-arg callback provably consumes no
         // message_info, so it never wants the receive-side clock read. Resolved once here
         // (the same if constexpr adapt() keys on) and carried on the LOCAL qos only.
         io::subscriber_qos local_qos = qos;
         local_qos.wants_message_info =
-            std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>;
+                std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>;
         io::endpoint_seam seam = n.endpoint_seam_for();
         const auto rid = seam.register_subscriber(seam.ctx, fqn, local_qos, adapt(std::move(cb)),
                                                   std::nullopt, nullptr, io::object_dispatch{},
                                                   std::nullopt);
-        m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
+        m_retire       = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
-    subscriber(subscriber &&) noexcept = default;
+    subscriber(subscriber &&) noexcept            = default;
     subscriber &operator=(subscriber &&) noexcept = default;
 
-    subscriber(const subscriber &) = delete;
+    subscriber(const subscriber &)            = delete;
     subscriber &operator=(const subscriber &) = delete;
 
     ~subscriber()
@@ -108,16 +109,18 @@ private:
     // forwarded the message_info; a 2-arg callable is wrapped to drop it. The arity is
     // resolved ONCE here (the cold registration path), so the hot demux fans a uniform
     // signature with no per-frame branch.
-    template <typename Cb>
-    static plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)>
+    template<typename Cb>
+    static plexus::detail::move_only_function<void(std::span<const std::byte>,
+                                                   const io::message_info &)>
     adapt(Cb cb)
     {
-        if constexpr(std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>)
-            return [cb = std::move(cb)](std::span<const std::byte> bytes, const io::message_info &info) mutable
-            { cb(bytes, info); };
+        if constexpr(std::is_invocable_v<Cb &, std::span<const std::byte>,
+                                         const io::message_info &>)
+            return [cb = std::move(cb)](std::span<const std::byte> bytes,
+                                        const io::message_info &info) mutable { cb(bytes, info); };
         else
-            return [cb = std::move(cb)](std::span<const std::byte> bytes, const io::message_info &) mutable
-            { cb(bytes); };
+            return [cb = std::move(cb)](std::span<const std::byte> bytes,
+                                        const io::message_info &) mutable { cb(bytes); };
     }
 
     plexus::detail::move_only_function<void()> m_retire;
@@ -139,53 +142,54 @@ private:
 // first). The decode state lives in a heap block the handle owns; the node's stored
 // adapters reference it by raw pointer and are retired (removing both entries) before the
 // block is freed. A moved-from handle is inert; its destructor does nothing.
-template <typename Codec>
+template<typename Codec>
 class subscriber
 {
 public:
     using value_type = typename Codec::value_type;
     using typed_callback =
-        plexus::detail::move_only_function<void(const value_type &, const io::message_info &)>;
+            plexus::detail::move_only_function<void(const value_type &, const io::message_info &)>;
 
-    template <typename Policy, typename... NodeTs, typename Cb>
+    template<typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, Cb cb)
-        : subscriber(n, fqn, typed_subscriber_options{}, std::move(cb), Codec{})
+            : subscriber(n, fqn, typed_subscriber_options{}, std::move(cb), Codec{})
     {
     }
 
-    template <typename Policy, typename... NodeTs, typename Cb>
+    template<typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn,
                const typed_subscriber_options &opts, Cb cb, Codec codec = {})
-        : m_state(std::make_unique<state>(std::move(codec), adapt(std::move(cb)),
-                                          opts.on_decode_failure))
+            : m_state(std::make_unique<state>(std::move(codec), adapt(std::move(cb)),
+                                              opts.on_decode_failure))
     {
         static_assert(typed_codec<Codec>,
                       "plexus: a typed subscriber needs a codec satisfying typed_codec "
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
 
-        const auto identity = resolve_identity(m_state->codec, opts.type_id);
-        io::subscriber_qos qos = opts.qos;
-        qos.posture = opts.posture;
+        const auto         identity = resolve_identity(m_state->codec, opts.type_id);
+        io::subscriber_qos qos      = opts.qos;
+        qos.posture                 = opts.posture;
         // A 2-arg typed callback consumes no message_info, so it never wants the receive-
         // side clock read; a 3-arg callback wants it UNLESS the qos explicitly opted out.
         // Carried on the LOCAL qos only — never the subscribe wire region.
         qos.wants_message_info =
-            std::is_invocable_v<Cb &, const value_type &, const io::message_info &>
-            && opts.qos.wants_message_info;
+                std::is_invocable_v<Cb &, const value_type &, const io::message_info &> &&
+                opts.qos.wants_message_info;
 
-        state *st = m_state.get();
-        auto bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info)
+        state *st            = m_state.get();
+        auto   bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info)
         { st->on_bytes(bytes, info); };
 
-        io::object_dispatch dispatch = [st](const io::object_carrier &carrier, const io::message_info &info)
+        io::object_dispatch dispatch =
+                [st](const io::object_carrier &carrier, const io::message_info &info)
         { st->on_object(carrier, info); };
 
         io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto rid = seam.register_subscriber(
-            seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id,
-            &io::detail::type_key<value_type>, std::move(dispatch),
-            opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
+        const auto        rid  = seam.register_subscriber(
+                seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id,
+                &io::detail::type_key<value_type>, std::move(dispatch),
+                opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
@@ -193,10 +197,10 @@ public:
     // through the live handle.
     [[nodiscard]] std::size_t decode_failed() const noexcept { return m_state->decode_failed; }
 
-    subscriber(subscriber &&) noexcept = default;
+    subscriber(subscriber &&) noexcept            = default;
     subscriber &operator=(subscriber &&) noexcept = default;
 
-    subscriber(const subscriber &) = delete;
+    subscriber(const subscriber &)            = delete;
     subscriber &operator=(const subscriber &) = delete;
 
     ~subscriber()
@@ -207,7 +211,7 @@ public:
 
 private:
     // Normalize the user callback to the 2-arg typed shape, the arity resolved ONCE here.
-    template <typename Cb>
+    template<typename Cb>
     static typed_callback adapt(Cb cb)
     {
         if constexpr(std::is_invocable_v<Cb &, const value_type &, const io::message_info &>)
@@ -223,17 +227,17 @@ private:
     // the opt-in escape callback — all cold-path setup, no per-message allocation.
     struct state
     {
-        Codec          codec;
-        typed_callback callback;
+        Codec                                                                           codec;
+        typed_callback                                                                  callback;
         std::optional<std::function<void(std::span<const std::byte>, std::error_code)>> on_failure;
-        value_type     slot{};
-        std::size_t    decode_failed{};
+        value_type                                                                      slot{};
+        std::size_t decode_failed{};
 
         state(Codec c, typed_callback cb,
               std::optional<std::function<void(std::span<const std::byte>, std::error_code)>> fail)
-            : codec(std::move(c))
-            , callback(std::move(cb))
-            , on_failure(std::move(fail))
+                : codec(std::move(c))
+                , callback(std::move(cb))
+                , on_failure(std::move(fail))
         {
         }
 

@@ -15,22 +15,21 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
 {
     using namespace plexus::wire;
 
-    auto bytes = std::span<const std::byte>{
-        reinterpret_cast<const std::byte *>(Data), Size};
+    auto bytes = std::span<const std::byte>{reinterpret_cast<const std::byte *>(Data), Size};
 
     // Derive a starting offset from the first byte so the consumed-offset bounds path
     // (consumed may legitimately equal Size) is exercised alongside the body decode.
-    std::size_t consumed = Size == 0 ? 0 : (static_cast<std::size_t>(Data[0]) % (Size + 1));
-    const std::size_t before = consumed;
+    std::size_t       consumed = Size == 0 ? 0 : (static_cast<std::size_t>(Data[0]) % (Size + 1));
+    const std::size_t before   = consumed;
 
     auto value = read_varint(bytes, consumed);
     (void)value;
 
     // The decoder must never advance consumed past the buffer, and must not move it on
     // failure (nullopt leaves it where it was so the caller can discriminate underrun).
-    if (consumed > Size)
+    if(consumed > Size)
         __builtin_trap();
-    if (!value && consumed != before)
+    if(!value && consumed != before)
         __builtin_trap();
     return 0;
 }

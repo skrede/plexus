@@ -26,10 +26,17 @@
 #include <optional>
 #include <system_error>
 
-struct div_request  { std::int32_t numerator{}; std::int32_t denominator{}; };
-struct div_response { std::int32_t quotient{}; };
+struct div_request
+{
+    std::int32_t numerator{};
+    std::int32_t denominator{};
+};
+struct div_response
+{
+    std::int32_t quotient{};
+};
 
-template <typename T>
+template<typename T>
 struct pair_codec
 {
     using value_type = T;
@@ -45,7 +52,7 @@ struct pair_codec
     {
         if(b.size() != sizeof(T))
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::memcpy(&out, b.data(), sizeof(T));
         return {};
     }
@@ -53,30 +60,30 @@ struct pair_codec
 
 int main()
 {
-    asio::io_context io;
-    plexus::asio::asio_transport transport{io};
+    asio::io_context                 io;
+    plexus::asio::asio_transport     transport{io};
     plexus::mdnspp::mdnspp_discovery disc{io, "_plexus._tcp.local."};
 
     plexus::node_options opts;
-    opts.name = "divide-server";
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(200),
-                                                  std::chrono::seconds(5),
-                                                  std::nullopt, std::nullopt};
+    opts.name      = "divide-server";
+    opts.reconnect = plexus::io::reconnect_config{
+            std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     opts.redial_seed = 0xD17DE;
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
-        io, disc, "divide-server", transport, opts};
+            io, disc, "divide-server", transport, opts};
     node.listen({"tcp", "127.0.0.1:5576"});
 
     using divide_procedure = plexus::procedure<div_response(div_request), pair_codec>;
     divide_procedure divide{
-        node, "divide",
-        [](const div_request &req) -> plexus::expected<div_response, std::error_code> {
-            if(req.denominator == 0)
-                return plexus::expected<div_response, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
-            return div_response{req.numerator / req.denominator};
-        }};
+            node, "divide",
+            [](const div_request &req) -> plexus::expected<div_response, std::error_code>
+            {
+                if(req.denominator == 0)
+                    return plexus::expected<div_response, std::error_code>{
+                            plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                return div_response{req.numerator / req.denominator};
+            }};
 
     io.run();
 }

@@ -63,33 +63,38 @@ public:
     // minted channel's inbound config; a per-topic override resolves through io::effective_max.
     tls_transport(::asio::io_context &io, const tls_credential &cred,
                   wire::stream_inbound_config cfg = {}, bool no_delay = true,
-                  io::congestion congestion = io::congestion::block,
-                  io::egress_capacity egress = io::egress_capacity::bounded_default(),
+                  io::congestion      congestion = io::congestion::block,
+                  io::egress_capacity egress     = io::egress_capacity::bounded_default(),
                   plexus::asio::stream_socket_options socket_options = {},
-                  std::size_t global_default = io::global_default_max_message_bytes,
+                  std::size_t global_default    = io::global_default_max_message_bytes,
                   std::size_t reassembly_budget = io::reassembly_memory_budget)
-        : m_io(io)
-        , m_cred(cred)
-        , m_listener(io, cred, wire::with_message_limits(cfg, global_default, reassembly_budget),
-                     no_delay, congestion, egress, socket_options)
-        , m_cfg(wire::with_message_limits(cfg, global_default, reassembly_budget))
-        , m_no_delay(no_delay)
-        , m_congestion(congestion)
-        , m_egress_capacity(egress)
-        , m_socket_options(socket_options)
-        , m_pending([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
+            : m_io(io)
+            , m_cred(cred)
+            , m_listener(io, cred,
+                         wire::with_message_limits(cfg, global_default, reassembly_budget),
+                         no_delay, congestion, egress, socket_options)
+            , m_cfg(wire::with_message_limits(cfg, global_default, reassembly_budget))
+            , m_no_delay(no_delay)
+            , m_congestion(congestion)
+            , m_egress_capacity(egress)
+            , m_socket_options(socket_options)
+            , m_pending([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
     {
-        m_listener.on_accepted([this](std::unique_ptr<tls_channel> ch) {
-            if(m_on_accepted)
-                m_on_accepted(std::move(ch));
-        });
-        m_listener.on_error([this](io::io_error e) {
-            if(m_on_error)
-                m_on_error(e);
-        });
+        m_listener.on_accepted(
+                [this](std::unique_ptr<tls_channel> ch)
+                {
+                    if(m_on_accepted)
+                        m_on_accepted(std::move(ch));
+                });
+        m_listener.on_error(
+                [this](io::io_error e)
+                {
+                    if(m_on_error)
+                        m_on_error(e);
+                });
     }
 
-    tls_transport(const tls_transport &) = delete;
+    tls_transport(const tls_transport &)            = delete;
     tls_transport &operator=(const tls_transport &) = delete;
 
     // The concrete channel this member's completions deliver + its routing identity: the
@@ -98,12 +103,27 @@ public:
     // still excludes it. A generic multiplexer reads these at compile time to route over a pack.
     using channel_type = tls_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"tls"};
-    static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
+    static constexpr io::transport_kind              mux_tier = io::transport_kind::remote;
 
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> cb) { m_on_accepted = std::move(cb); }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> cb) { m_on_dialed = std::move(cb); }
-    void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb) { m_on_dial_failed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> cb)
+    {
+        m_on_accepted = std::move(cb);
+    }
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>,
+                                                           const io::endpoint &)>
+                           cb)
+    {
+        m_on_dialed = std::move(cb);
+    }
+    void
+    on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
+    {
+        m_on_dial_failed = std::move(cb);
+    }
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
 
     void listen(const io::endpoint &ep) { m_listener.start(ep); }
 
@@ -112,22 +132,26 @@ public:
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;
-        auto target = plexus::asio::detail::parse(ep.address, pec);
+        auto            target = plexus::asio::detail::parse(ep.address, pec);
         if(pec)
             return report_dial_fail(ep, plexus::asio::detail::map_error(pec));
-        auto ch = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
+        auto  ch  = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion,
+                                                  m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
-        raw->socket().async_connect(target,
-            [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable {
-                if(ec)
-                    return report_dial_fail(ep, plexus::asio::detail::map_error(ec));
-                if(m_no_delay)
+        raw->socket().async_connect(
+                target,
+                [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable
                 {
-                    std::error_code nec;
-                    (void)raw->socket().set_option(::asio::ip::tcp::no_delay(true), nec);   // disable Nagle pre-handshake
-                }
-                run_handshake(std::move(ch), raw, ep);
-            });
+                    if(ec)
+                        return report_dial_fail(ep, plexus::asio::detail::map_error(ec));
+                    if(m_no_delay)
+                    {
+                        std::error_code nec;
+                        (void)raw->socket().set_option(::asio::ip::tcp::no_delay(true),
+                                                       nec); // disable Nagle pre-handshake
+                    }
+                    run_handshake(std::move(ch), raw, ep);
+                });
     }
 
     void close()
@@ -156,7 +180,7 @@ private:
     void resolve_dial(const io::endpoint &ep, tls_channel *raw)
     {
         const io::endpoint dialed = ep;
-        auto ch = m_pending.resolve(raw);
+        auto               ch     = m_pending.resolve(raw);
         if(ch && m_on_dialed)
             m_on_dialed(std::move(ch), dialed);
     }
@@ -184,24 +208,26 @@ private:
             m_on_dial_failed(ep, e);
     }
 
-    ::asio::io_context &m_io;
-    const tls_credential &m_cred;
-    tls_listener m_listener;
-    wire::stream_inbound_config m_cfg;
-    bool m_no_delay;
-    io::congestion m_congestion;
-    io::egress_capacity m_egress_capacity;
+    ::asio::io_context                 &m_io;
+    const tls_credential               &m_cred;
+    tls_listener                        m_listener;
+    wire::stream_inbound_config         m_cfg;
+    bool                                m_no_delay;
+    io::congestion                      m_congestion;
+    io::egress_capacity                 m_egress_capacity;
     plexus::asio::stream_socket_options m_socket_options;
-    io::pending_dial_registry<tls_channel, std::monostate> m_pending;   // transport-owned half-open dials
+    io::pending_dial_registry<tls_channel, std::monostate>
+            m_pending; // transport-owned half-open dials
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)>
+                                                                                 m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(io::io_error)>                       m_on_error;
 };
 
 }
 
 static_assert(plexus::io::transport_backend<plexus::tls::tls_transport, plexus::tls::tls_policy>,
-    "tls_transport must satisfy transport_backend — check the listen/dial/on_* surface");
+              "tls_transport must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif

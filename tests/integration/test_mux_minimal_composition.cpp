@@ -14,7 +14,7 @@
 #include <asio/io_context.hpp>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 using mux_pol = plexus::muxify<pasio::asio_policy>;
 
@@ -30,12 +30,12 @@ using minimal_mux = pio::multiplexing_transport<pasio::unix_transport, pasio::as
 // transport_backend surface the engine drives over it — composing fewer members does not
 // weaken the contract. These two static_asserts preserve the gate the deleted asio mux
 // policy header carried, now at a living site.
-static_assert(plexus::Policy<mux_pol>,
-    "muxify<asio_policy> must satisfy Policy");
+static_assert(plexus::Policy<mux_pol>, "muxify<asio_policy> must satisfy Policy");
 static_assert(pio::transport_backend<minimal_mux, mux_pol>,
-    "the minimal unix+tcp multiplexer must satisfy transport_backend");
+              "the minimal unix+tcp multiplexer must satisfy transport_backend");
 
-TEST_CASE("mux_minimal: a unix+tcp multiplexer composes, constructs, and routes by scheme without the secure member",
+TEST_CASE("mux_minimal: a unix+tcp multiplexer composes, constructs, and routes by scheme without "
+          "the secure member",
           "[integration][mux][minimal]")
 {
     ::asio::io_context io;

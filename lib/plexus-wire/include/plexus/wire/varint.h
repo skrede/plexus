@@ -36,13 +36,13 @@ namespace plexus::wire {
 //     varint from a partial-buffer underrun.
 constexpr std::size_t k_max_varint_bytes = 10;
 
-[[nodiscard]] inline std::optional<std::uint64_t>
-read_varint(std::span<const std::byte> data, std::size_t &consumed) noexcept
+[[nodiscard]] inline std::optional<std::uint64_t> read_varint(std::span<const std::byte> data,
+                                                              std::size_t &consumed) noexcept
 {
     if(consumed > data.size())
         return std::nullopt;
 
-    std::uint64_t value = 0;
+    std::uint64_t value  = 0;
     std::size_t   offset = consumed;
     for(std::size_t i = 0; i < k_max_varint_bytes; ++i)
     {

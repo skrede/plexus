@@ -58,8 +58,12 @@ struct stub_registry
 struct fake_channel
 {
     std::vector<std::size_t> sent;
-    int *live = nullptr;
-    explicit fake_channel(int *counter) : live(counter) { ++*live; }
+    int                     *live = nullptr;
+    explicit fake_channel(int *counter)
+            : live(counter)
+    {
+        ++*live;
+    }
     ~fake_channel() { --*live; }
     void send(std::span<const std::byte> b) { sent.push_back(b.size()); }
 };
@@ -72,11 +76,11 @@ using coordinator = medium_coordinator<stub_registry, fake_channel>;
 // broker-failure / no-shm path).
 struct gate_recorder
 {
-    std::vector<std::string>   minted;
-    bool                       accept        = true;
-    ring_geometry_mode         mode          = ring_geometry_mode::reliable_preserving;
-    std::uint64_t              slot_capacity = 0;
-    int                        live          = 0;
+    std::vector<std::string> minted;
+    bool                     accept        = true;
+    ring_geometry_mode       mode          = ring_geometry_mode::reliable_preserving;
+    std::uint64_t            slot_capacity = 0;
+    int                      live          = 0;
 
     companion_mint<fake_channel> mint(std::string_view fqn)
     {
@@ -102,8 +106,8 @@ void install_gate(coordinator &c, gate_recorder &gate)
 struct receive_recorder
 {
     std::vector<std::pair<std::string, std::string>> attached;
-    bool accept = true;
-    int  live   = 0;
+    bool                                             accept = true;
+    int                                              live   = 0;
 
     // The RAII stand-in for the concrete shm_companion_consumer: ++live on construction,
     // --live on destruction. The owner closure captures one by move and is NEVER called —
@@ -112,10 +116,22 @@ struct receive_recorder
     struct handle
     {
         int *live;
-        explicit handle(int *l) : live(l) { ++*live; }
+        explicit handle(int *l)
+                : live(l)
+        {
+            ++*live;
+        }
         handle(const handle &) = delete;
-        handle(handle &&o) noexcept : live(o.live) { o.live = nullptr; }
-        ~handle() { if(live) --*live; }
+        handle(handle &&o) noexcept
+                : live(o.live)
+        {
+            o.live = nullptr;
+        }
+        ~handle()
+        {
+            if(live)
+                --*live;
+        }
     };
 
     companion_receive mint(std::string_view node_name, std::string_view fqn)
@@ -137,20 +153,21 @@ void install_receive_gate(coordinator &c, receive_recorder &gate)
 
 }
 
-TEST_CASE("shm.coordinator a co-host qualifying 0->1 mints THROUGH the gate, never a direct registry acquire",
+TEST_CASE("shm.coordinator a co-host qualifying 0->1 mints THROUGH the gate, never a direct "
+          "registry acquire",
           "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator c{reg};
+    coordinator   c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
 
-    REQUIRE(gate.mints() == 1);   // exactly one mint, routed through the gate
-    REQUIRE(gate.live == 1);      // the companion is retained by the coordinator
+    REQUIRE(gate.mints() == 1); // exactly one mint, routed through the gate
+    REQUIRE(gate.live == 1);    // the companion is retained by the coordinator
 }
 
 TEST_CASE("shm.coordinator an off-host 0->1 mints NOTHING and keeps the wire", "[shm][coordinator]")
@@ -158,7 +175,7 @@ TEST_CASE("shm.coordinator an off-host 0->1 mints NOTHING and keeps the wire", "
     stub_registry reg;
     reg.verdicts["node-a"] = false; // off-host
     gate_recorder gate;
-    coordinator c{reg};
+    coordinator   c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
@@ -172,7 +189,7 @@ TEST_CASE("shm.coordinator a hint-less co-host 0->1 mints NOTHING", "[shm][coord
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator c{reg};
+    coordinator   c{reg};
     install_gate(c, gate);
     // no set_topic_hint -> dispatch_hint::none -> shm_eligible false
 
@@ -199,13 +216,14 @@ TEST_CASE("shm.coordinator a gate decline (broker failure) falls back to the wir
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
 
-TEST_CASE("shm.coordinator the per-message companion route: a fitting message rides the ring, over-cap the wire",
+TEST_CASE("shm.coordinator the per-message companion route: a fitting message rides the ring, "
+          "over-cap the wire",
           "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    gate.mode = ring_geometry_mode::wire_fallback;
+    gate.mode          = ring_geometry_mode::wire_fallback;
     gate.slot_capacity = 4096;
     coordinator c{reg};
     install_gate(c, gate);
@@ -224,13 +242,14 @@ TEST_CASE("shm.coordinator the per-message companion route: a fitting message ri
     REQUIRE(c.companion_for("node-z", "alpha", 1) == nullptr);
 }
 
-TEST_CASE("shm.coordinator a reliable_preserving companion carries every fitting message (no cap gate)",
+TEST_CASE("shm.coordinator a reliable_preserving companion carries every fitting message (no cap "
+          "gate)",
           "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate; // reliable_preserving: route_message_medium is always shm
-    coordinator c{reg};
+    coordinator   c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
@@ -245,26 +264,29 @@ TEST_CASE("shm.coordinator the 1->0 edge drops the companion; intermediate edges
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator c{reg};
+    coordinator   c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::priority);
 
-    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);   // 0->1: mint
-    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);   // 1->2: no-op (already held)
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher); // 0->1: mint
+    c.on_edge("node-a", "alpha", demand_transition::up,
+              demand_role::publisher); // 1->2: no-op (already held)
     REQUIRE(gate.mints() == 1);
     REQUIRE(gate.live == 1);
 
-    c.on_edge("node-a", "alpha", demand_transition::down, demand_role::publisher); // 1->0: drop (the forwarder gates the count)
-    REQUIRE(gate.live == 0);                                // the companion ring released
+    c.on_edge("node-a", "alpha", demand_transition::down,
+              demand_role::publisher); // 1->0: drop (the forwarder gates the count)
+    REQUIRE(gate.live == 0);           // the companion ring released
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
 
-TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that peer", "[shm][coordinator]")
+TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that peer",
+          "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator c{reg};
+    coordinator   c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
     c.set_topic_hint("beta", dispatch_hint::large);
@@ -278,8 +300,9 @@ TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
 
-TEST_CASE("shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive companion, not a send mint",
-          "[shm][coordinator]")
+TEST_CASE(
+        "shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive companion, not a send mint",
+        "[shm][coordinator]")
 {
     // The receive lane (gap-closure): a subscriber-role edge routes THROUGH the receive gate
     // (attach the co-host ring as a consumer) and NOT the send mint gate — a subscriber node
@@ -287,19 +310,19 @@ TEST_CASE("shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive compan
     // nullptr for it (it has no send channel); the wire send path is irrelevant on this side.
     stub_registry reg;
     reg.verdicts["node-a"] = true;
-    gate_recorder gate;
+    gate_recorder    gate;
     receive_recorder rgate;
-    coordinator c{reg};
+    coordinator      c{reg};
     install_gate(c, gate);
     install_receive_gate(c, rgate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber);
 
-    REQUIRE(rgate.attaches() == 1);                    // the receive companion attached
-    REQUIRE(rgate.live == 1);                          // and is retained by the coordinator
-    REQUIRE(gate.mints() == 0);                        // NO send companion on the subscriber side
-    REQUIRE(rgate.attached[0].first == "node-a");      // keyed by the peer node_name
+    REQUIRE(rgate.attaches() == 1);               // the receive companion attached
+    REQUIRE(rgate.live == 1);                     // and is retained by the coordinator
+    REQUIRE(gate.mints() == 0);                   // NO send companion on the subscriber side
+    REQUIRE(rgate.attached[0].first == "node-a"); // keyed by the peer node_name
     REQUIRE(rgate.attached[0].second == "alpha");
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr); // no send channel for a receive ring
 }
@@ -313,7 +336,7 @@ TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     receive_recorder rgate;
-    coordinator c{reg};
+    coordinator      c{reg};
     install_receive_gate(c, rgate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
     c.set_topic_hint("beta", dispatch_hint::large);
@@ -357,7 +380,7 @@ TEST_CASE("shm.coordinator the default policy auto-engages; an override can disa
     // Default (no on_policy): a co-host qualifying edge auto-engages.
     {
         gate_recorder gate;
-        coordinator c{reg};
+        coordinator   c{reg};
         install_gate(c, gate);
         c.set_topic_hint("alpha", dispatch_hint::frequent);
         c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
@@ -366,7 +389,7 @@ TEST_CASE("shm.coordinator the default policy auto-engages; an override can disa
     // An override returning false disables the upgrade (the consumer-sovereign disable).
     {
         gate_recorder gate;
-        coordinator c{reg};
+        coordinator   c{reg};
         install_gate(c, gate);
         c.on_policy([](bool, dispatch_hint) { return false; });
         c.set_topic_hint("alpha", dispatch_hint::frequent);
@@ -381,7 +404,7 @@ TEST_CASE("shm.coordinator the bilateral OR: a subscriber-side hint upgrades a h
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator c{reg};
+    coordinator   c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::none);     // publisher: no hint
     c.set_topic_hint("alpha", dispatch_hint::frequent); // subscriber: a qualifying hint
@@ -401,7 +424,7 @@ TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the top
     reg.verdicts["node-a"] = true;
     reg.verdicts["node-b"] = true;
     gate_recorder gate;
-    coordinator c{reg};
+    coordinator   c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
@@ -423,7 +446,8 @@ TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the top
     REQUIRE(gate.mints() == 3); // the pruned hint resolves to none: no upgrade
 }
 
-TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once per boundary; absent = no-op",
+TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once per boundary; "
+          "absent = no-op",
           "[shm][coordinator][forwarder]")
 {
     using forwarder = plexus::io::message_forwarder<plexus::inproc::inproc_policy>;
@@ -432,23 +456,27 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
     using plexus::inproc::inproc_channel;
 
     // The forwarder's REAL emit seam: drive attach/detach edges and record the transitions.
-    inproc_bus<> bus;
+    inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    inproc_channel<> ch(ex);
-    inproc_channel<> sink(ex);
+    inproc_channel<>  ch(ex);
+    inproc_channel<>  sink(ex);
     ch.connect_to(sink.local_endpoint());
     forwarder::peer peer{ch, "node-a"};
 
-    struct edge { std::string fqn; demand_transition dir; demand_role role; };
+    struct edge
+    {
+        std::string       fqn;
+        demand_transition dir;
+        demand_role       role;
+    };
     std::vector<edge> edges;
 
     SECTION("with a hook installed, only the boundary crossings fire, carrying the subscriber role")
     {
         forwarder fwd{};
-        fwd.on_demand_transition([&edges](std::string_view, std::string_view fqn, demand_transition d,
-                                          demand_role r) {
-            edges.push_back({std::string{fqn}, d, r});
-        });
+        fwd.on_demand_transition(
+                [&edges](std::string_view, std::string_view fqn, demand_transition d, demand_role r)
+                { edges.push_back({std::string{fqn}, d, r}); });
 
         REQUIRE(fwd.attach(peer, "alpha"));       // 0->1: up
         REQUIRE_FALSE(fwd.attach(peer, "alpha")); // 1->2: no emit
@@ -474,7 +502,8 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
     }
 }
 
-TEST_CASE("shm.coordinator peer_session::same_host reads the recorded verdict (a pure fail-closed read)",
+TEST_CASE("shm.coordinator peer_session::same_host reads the recorded verdict (a pure fail-closed "
+          "read)",
           "[shm][coordinator][session]")
 {
     // The verdict lives on peer_context (fail-closed default false). The coordinator reads

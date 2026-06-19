@@ -63,15 +63,15 @@ struct test_policy
 
 struct coord
 {
-    std::atomic<std::uint32_t> regions_ready{0};  // consumer: regions mapped + ring stamped + armed
-    std::atomic<std::uint32_t> published{0};       // producer: value committed + signaled
-    std::atomic<std::uint32_t> value_seen{0};      // consumer: drain delivered the value
+    std::atomic<std::uint32_t> regions_ready{0}; // consumer: regions mapped + ring stamped + armed
+    std::atomic<std::uint32_t> published{0};     // producer: value committed + signaled
+    std::atomic<std::uint32_t> value_seen{0};    // consumer: drain delivered the value
 };
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
+                     0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -92,7 +92,7 @@ constexpr std::uint32_t k_payload = 0xBEEF1234u;
 bool produce(const std::string &fqn)
 {
     posix_shm_region_broker broker;
-    region_handle ctrl, slab;
+    region_handle           ctrl, slab;
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
        broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
@@ -120,7 +120,7 @@ bool produce(const std::string &fqn)
 bool produce_gated(const std::string &fqn)
 {
     posix_shm_region_broker broker;
-    region_handle ctrl, slab;
+    region_handle           ctrl, slab;
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
        broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
@@ -146,7 +146,7 @@ bool produce_gated(const std::string &fqn)
 TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor and drains",
           "[shm][notifier_bridge]")
 {
-    const std::string fqn = "topic.bridge." + std::to_string(::getpid());
+    const std::string        fqn  = "topic.bridge." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -170,7 +170,7 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         // registers a cursor at the tail), arm the bridge on a user-owned
         // io_context bound to the ring's notify word, then drive ONLY that reactor.
         posix_shm_region_broker broker;
-        region_handle ctrl, slab;
+        region_handle           ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
                               pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn),
@@ -181,27 +181,30 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count,
                                             geom.slot_capacity, ring) == pio::loan_status::ok);
 
-        ::asio::io_context io;
+        ::asio::io_context                            io;
         plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
 
         // The channel's subscriber registers its cursor at the producer's tail at
         // construction; build it BEFORE announcing ready so the cursor is fixed
         // before the producer publishes (no publish-before-arm race).
         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(
-            ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
+                ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t got = 0;
         // The arm()'d drain runs on a posted reactor turn: drain the channel and
         // capture the delivered value. This is the registry's drain-this-channel
         // callback shape (drain over the live subscriber).
-        bridge.arm([&] {
-            pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver =
-                [&](plexus::wire_bytes<pio::shm_slot_owner> wb) {
-                    std::memcpy(&got, wb.data(), sizeof(got));
-                    c->value_seen.store(1u, std::memory_order_release);
-                };
-            channel.drain(deliver);
-        });
+        bridge.arm(
+                [&]
+                {
+                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn
+                            deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
+                    {
+                        std::memcpy(&got, wb.data(), sizeof(got));
+                        c->value_seen.store(1u, std::memory_order_release);
+                    };
+                    channel.drain(deliver);
+                });
 
         c->regions_ready.store(1, std::memory_order_release);
 
@@ -226,7 +229,8 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
     }
 }
 
-TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (submit-time registration)",
+TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (submit-time "
+          "registration)",
           "[shm][notifier_bridge][wake_gating][submit_futex]")
 {
     // The A2 proof: the io_uring submit-time waiter registration closes the lost-wake
@@ -237,7 +241,7 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
     // producer could read a stale non-PARKED state, skip the wake, and the consumer
     // would never drain — surfacing as the deadline timeout below, never a silent hang.
     // Looped N>=100; the parked consumer drives the REAL submit_futex_wait path.
-    const std::string fqn = "topic.bridgegate." + std::to_string(::getpid());
+    const std::string        fqn  = "topic.bridgegate." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -257,7 +261,7 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
         }
 
         posix_shm_region_broker broker;
-        region_handle ctrl, slab;
+        region_handle           ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
                               pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn),
@@ -276,17 +280,20 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
                                                              ring.park_state());
 
         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(
-            ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
+                ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t got = 0;
-        bridge.arm([&] {
-            pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver =
-                [&](plexus::wire_bytes<pio::shm_slot_owner> wb) {
-                    std::memcpy(&got, wb.data(), sizeof(got));
-                    c->value_seen.store(1u, std::memory_order_release);
-                };
-            channel.drain(deliver);
-        });
+        bridge.arm(
+                [&]
+                {
+                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn
+                            deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
+                    {
+                        std::memcpy(&got, wb.data(), sizeof(got));
+                        c->value_seen.store(1u, std::memory_order_release);
+                    };
+                    channel.drain(deliver);
+                });
 
         // arm() ran submit_futex_wait: the consumer is now PARKED (the store preceded
         // the io_uring submit). Release the producer only now so its gated signal must

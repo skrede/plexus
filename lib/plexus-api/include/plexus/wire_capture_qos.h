@@ -9,7 +9,7 @@ namespace plexus {
 // sealed bytes as they cross the network).
 enum class wire_crypto_position
 {
-    cleartext = 0,
+    cleartext  = 0,
     ciphertext = 1,
 };
 

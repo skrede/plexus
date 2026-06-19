@@ -49,10 +49,7 @@ constexpr dispatch_hint operator&(dispatch_hint a, dispatch_hint b) noexcept
 // iff ANY hint bit is set. none -> false (the topic stays on the local stream).
 // This is the dispatch half of the selector decision; the locality (same-host)
 // half is the other factor the transport_selector composes with it.
-constexpr bool shm_eligible(dispatch_hint h) noexcept
-{
-    return static_cast<std::uint8_t>(h) != 0u;
-}
+constexpr bool shm_eligible(dispatch_hint h) noexcept { return static_cast<std::uint8_t>(h) != 0u; }
 
 }
 

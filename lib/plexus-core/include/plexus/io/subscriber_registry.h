@@ -31,15 +31,15 @@ namespace plexus::io {
 // channel pointer plus a node-name key for fast identity comparison; the public
 // forwarder API stays const&-only — the pointer is an internal storage detail,
 // never surfaced.
-template <typename Channel>
+template<typename Channel>
 class subscriber_registry
 {
 public:
     struct subscriber
     {
-        Channel *channel;
+        Channel    *channel;
         std::string node_name;
-        locality tier;   // the delivery tier, classified ONCE at attach (never per fan-out hop)
+        locality    tier; // the delivery tier, classified ONCE at attach (never per fan-out hop)
         // The subscriber's QoS choice, stored ONCE at attach alongside the tier and
         // read at replay — never mutated on the hot path. An absent wire region
         // lands here as the friendly default (a real choice, not a sentinel).
@@ -63,9 +63,9 @@ public:
 
     struct topic_entry
     {
-        std::string fqn;
+        std::string             fqn;
         std::vector<subscriber> subscribers;
-        topic_qos qos{};
+        topic_qos               qos{};
         // The per-band drop tallies for this topic (fixed k_egress_bands array — no map, no
         // alloc at drop). The operator's per-topic-per-band statistics ask; read on demand.
         std::array<band_drop_counters, detail::k_egress_bands> drops{};
@@ -83,7 +83,7 @@ public:
         // such declare (std::nullopt until then) and is STABLE thereafter — it does
         // NOT change on re-declare or across reconnect (the registry record persists),
         // so an endpoint's gid is stable per IDENT-02.
-        bool emit_source_identity{false};
+        bool                         emit_source_identity{false};
         std::optional<std::uint64_t> endpoint_counter;
         // The per-topic stamp-demand latch: true iff ANY attached subscriber wants
         // message_info (the OR-reduce over subscribers' qos.wants_message_info). The hot
@@ -118,9 +118,8 @@ public:
     // local monitor reads it back via qos_for_subscriber to arm the deadline/lease),
     // and the producer-side attach_for_fanout passes the subscriber's request it
     // learned off the wire for fan-out — the same slot, two callers.
-    void add_subscriber(std::uint64_t topic_hash, std::string_view fqn,
-                        Channel &channel, std::string_view node_name,
-                        const subscriber_qos &qos = subscriber_qos{},
+    void add_subscriber(std::uint64_t topic_hash, std::string_view fqn, Channel &channel,
+                        std::string_view node_name, const subscriber_qos &qos = subscriber_qos{},
                         std::optional<std::uint64_t> type_id = std::nullopt)
     {
         auto &entry = m_topics[topic_hash];
@@ -128,13 +127,14 @@ public:
             entry.fqn = std::string{fqn};
         for(const auto &sub : entry.subscribers)
             if(sub.channel == &channel)
-                return;   // idempotent re-add keeps the first qos
+                return; // idempotent re-add keeps the first qos
         // Classify the delivery tier ONCE here from the channel's OWN endpoint scheme
         // (the transport that minted it, never peer-supplied data). remote_endpoint() is
         // a syscall on a real socket channel, so it is read at attach and cached — the
         // fan-out loop only reads the stored tier. The qos is stored the same way: once.
         const locality tier = tier_of(channel.remote_endpoint().scheme);
-        entry.subscribers.push_back(subscriber{&channel, std::string{node_name}, tier, qos, type_id});
+        entry.subscribers.push_back(
+                subscriber{&channel, std::string{node_name}, tier, qos, type_id});
         recompute_wants_info(entry);
     }
 
@@ -158,14 +158,14 @@ public:
     // producer type_id (std::nullopt = undeclared) is recorded alongside the qos —
     // the subscribe-time match authority.
     void declare(std::uint64_t topic_hash, std::string_view fqn, topic_qos qos,
-                 std::optional<std::uint64_t> producer_type_id = std::nullopt,
-                 bool emit_source_identity = false)
+                 std::optional<std::uint64_t> producer_type_id     = std::nullopt,
+                 bool                         emit_source_identity = false)
     {
         auto &entry = m_topics[topic_hash];
         if(entry.fqn.empty())
             entry.fqn = std::string{fqn};
-        entry.qos = qos;
-        entry.producer_type_id = producer_type_id;
+        entry.qos                  = qos;
+        entry.producer_type_id     = producer_type_id;
         entry.emit_source_identity = emit_source_identity;
         // Mint the endpoint counter ONCE, the first time this topic declares source
         // identity. A re-declare keeps the existing counter so the endpoint's gid is
@@ -262,12 +262,12 @@ public:
         auto &c = it->second.drops[band];
         switch(cause)
         {
-        case detail::drop_cause::drop_oldest: ++c.dropped_oldest; return;
-        case detail::drop_cause::drop_newest: ++c.dropped_newest; return;
-        case detail::drop_cause::blocked:     ++c.blocked;        return;
-        // The receive-side datagram causes carry their own occupancy counters at the
-        // datagram sites — this per-(topic,band) egress table holds the overflow trio only.
-        default:                                                 return;
+            case detail::drop_cause::drop_oldest: ++c.dropped_oldest; return;
+            case detail::drop_cause::drop_newest: ++c.dropped_newest; return;
+            case detail::drop_cause::blocked:     ++c.blocked; return;
+            // The receive-side datagram causes carry their own occupancy counters at the
+            // datagram sites — this per-(topic,band) egress table holds the overflow trio only.
+            default: return;
         }
     }
 
@@ -281,10 +281,10 @@ public:
         const auto &c = it->second.drops[band];
         switch(cause)
         {
-        case detail::drop_cause::drop_oldest: return c.dropped_oldest;
-        case detail::drop_cause::drop_newest: return c.dropped_newest;
-        case detail::drop_cause::blocked:     return c.blocked;
-        default:                              return 0;
+            case detail::drop_cause::drop_oldest: return c.dropped_oldest;
+            case detail::drop_cause::drop_newest: return c.dropped_newest;
+            case detail::drop_cause::blocked:     return c.blocked;
+            default:                              return 0;
         }
     }
 
@@ -306,7 +306,7 @@ public:
         if(it == m_topics.end())
             return {};
         m_last_fqn_hash = topic_hash;
-        m_last_fqn = &it->second.fqn;
+        m_last_fqn      = &it->second.fqn;
         return *m_last_fqn;
     }
 
@@ -322,14 +322,14 @@ private:
             return;
         }
         entry.any_subscriber_wants_info =
-            std::any_of(entry.subscribers.begin(), entry.subscribers.end(),
-                        [](const subscriber &s) { return s.qos.wants_message_info; });
+                std::any_of(entry.subscribers.begin(), entry.subscribers.end(),
+                            [](const subscriber &s) { return s.qos.wants_message_info; });
     }
 
     std::unordered_map<std::uint64_t, topic_entry> m_topics;
-    mutable std::uint64_t m_last_fqn_hash{0};
-    mutable const std::string *m_last_fqn{nullptr};
-    detail::keyed_refcount m_refcount;
+    mutable std::uint64_t                          m_last_fqn_hash{0};
+    mutable const std::string                     *m_last_fqn{nullptr};
+    detail::keyed_refcount                         m_refcount;
     // The per-node monotonic source-identity endpoint-counter allocator. Minted at
     // declare (cold path), never on the hot path. Starts at 1 so 0 stays free as an
     // "unminted" value if ever needed; gid uniqueness comes from node_id ‖ counter.

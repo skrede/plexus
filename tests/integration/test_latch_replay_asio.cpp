@@ -22,8 +22,8 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace wire = plexus::wire;
-namespace pio = plexus::io;
+namespace wire  = plexus::wire;
+namespace pio   = plexus::io;
 
 namespace {
 
@@ -56,26 +56,25 @@ late_join one_late_join(std::span<const std::byte> payload, std::string_view fqn
 {
     ::asio::io_context io;
 
-    pasio::asio_listener listener(io);
+    pasio::asio_listener                 listener(io);
     std::unique_ptr<pasio::asio_channel> server_channel;
     listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch)
-    {
-        server_channel = std::move(ch);
-    });
+                         { server_channel = std::move(ch); });
     listener.start({"tcp", "127.0.0.1:0"});
     auto port = listener.port();
 
     // The late subscriber: it routes received frames through a frame_router whose
     // on_unidirectional decodes the inner payload — the production receive contract.
-    pasio::asio_channel client(io);
+    pasio::asio_channel                   client(io);
     std::optional<std::vector<std::byte>> received;
-    pio::frame_router router;
-    router.on_unidirectional([&](const wire::frame_header &, std::span<const std::byte> inner)
-    {
-        auto decoded = wire::decode_unidirectional(inner);
-        if(decoded)
-            received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
-    });
+    pio::frame_router                     router;
+    router.on_unidirectional(
+            [&](const wire::frame_header &, std::span<const std::byte> inner)
+            {
+                auto decoded = wire::decode_unidirectional(inner);
+                if(decoded)
+                    received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
+            });
     client.on_data([&](std::span<const std::byte> frame) { router.route(frame); });
 
     ::asio::ip::tcp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), port);
@@ -90,7 +89,7 @@ late_join one_late_join(std::span<const std::byte> payload, std::string_view fqn
     // here with zero subscribers (a non-latched publish with no subscriber is a
     // no-op — demand-driven). The MEASURED second client then subscribes and its
     // attach_for_fanout drives the replay of the retained frame.
-    pio::message_forwarder<pasio::asio_policy> fwd{};
+    pio::message_forwarder<pasio::asio_policy>       fwd{};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "late-node"};
     if(latched)
         fwd.latch(fqn);
@@ -129,21 +128,21 @@ late_join one_late_join(std::span<const std::byte> payload, std::string_view fqn
 TEST_CASE("asio latch replay delivers a late client the retained value over real TCP, looped",
           "[integration][latch][asio]")
 {
-    const auto payload = bytes_of("plexus-latched-retained-value");
-    const std::string fqn = "demo._plexus._tcp.local.";
+    const auto        payload = bytes_of("plexus-latched-retained-value");
+    const std::string fqn     = "demo._plexus._tcp.local.";
 
     // Loop the FULL live roundtrip >=100 times in-body: a live networking claim is
     // proven reproducible, never from a single run. Each iteration is an
     // independent listener+client+io_context, so a flaky frame surfaces as a
     // mismatch on some iteration rather than a one-off pass.
     constexpr int k_iterations = 100;
-    int delivered = 0;
+    int           delivered    = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         auto out = one_late_join(payload, fqn, /*latched=*/true);
-        REQUIRE(out.replayed.has_value());        // the retained value reached the late joiner
-        REQUIRE(*out.replayed == payload);        // byte-identical to the published frame
-        REQUIRE(out.after_live == payload);        // and live publishing still works
+        REQUIRE(out.replayed.has_value());  // the retained value reached the late joiner
+        REQUIRE(*out.replayed == payload);  // byte-identical to the published frame
+        REQUIRE(out.after_live == payload); // and live publishing still works
         ++delivered;
     }
     REQUIRE(delivered == k_iterations);
@@ -152,19 +151,19 @@ TEST_CASE("asio latch replay delivers a late client the retained value over real
 TEST_CASE("asio non-latched topic does not replay on a late subscribe, looped",
           "[integration][latch][asio]")
 {
-    const auto payload = bytes_of("plexus-live-only-no-replay");
-    const std::string fqn = "demo._plexus._tcp.local.";
+    const auto        payload = bytes_of("plexus-live-only-no-replay");
+    const std::string fqn     = "demo._plexus._tcp.local.";
 
     // The non-latched NEGATIVE over real TCP (guards against an accidental
     // always-replay): the late subscriber receives NOTHING within the bounded
     // grace window, then a live publish IS received. Looped for reproducibility.
     constexpr int k_iterations = 100;
-    int held = 0;
+    int           held         = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         auto out = one_late_join(payload, fqn, /*latched=*/false);
-        REQUIRE_FALSE(out.replayed.has_value());   // no replay on a non-latched topic
-        REQUIRE(out.after_live == payload);         // but the next live publish arrives
+        REQUIRE_FALSE(out.replayed.has_value()); // no replay on a non-latched topic
+        REQUIRE(out.after_live == payload);      // but the next live publish arrives
         ++held;
     }
     REQUIRE(held == k_iterations);

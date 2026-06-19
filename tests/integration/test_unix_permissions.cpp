@@ -30,7 +30,7 @@
 #include <cstdlib>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 namespace {
 
@@ -43,10 +43,10 @@ struct temp_dir
 
     temp_dir()
     {
-        char tmpl[] = "/tmp/pxperm-XXXXXX";
-        const char *made = ::mkdtemp(tmpl);   // mkdtemp creates the dir 0700 owner-only
-        dir = made ? made : "";
-        path = dir + "/s";
+        char        tmpl[] = "/tmp/pxperm-XXXXXX";
+        const char *made   = ::mkdtemp(tmpl); // mkdtemp creates the dir 0700 owner-only
+        dir                = made ? made : "";
+        path               = dir + "/s";
     }
 
     ~temp_dir()
@@ -67,7 +67,7 @@ struct temp_dir
     return st.st_mode & 07777;
 }
 
-template <typename Pred>
+template<typename Pred>
 void pump_until(::asio::io_context &io, Pred pred)
 {
     auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -78,7 +78,10 @@ void pump_until(::asio::io_context &io, Pred pred)
 // A peer-credential policy that refuses every local peer (the restrictive end of the seam).
 struct deny_all_peer_cred final : public pio::security::peer_cred_policy
 {
-    [[nodiscard]] bool decide(const pio::security::peer_cred &) const noexcept override { return false; }
+    [[nodiscard]] bool decide(const pio::security::peer_cred &) const noexcept override
+    {
+        return false;
+    }
     [[nodiscard]] bool accepts_without_credentials() const noexcept override { return false; }
 };
 
@@ -87,23 +90,22 @@ struct deny_all_peer_cred final : public pio::security::peer_cred_policy
 TEST_CASE("unix_permissions: the socket file is created owner-only 0700 by default",
           "[integration][unix][permissions]")
 {
-    temp_dir t;
-    ::asio::io_context io;
+    temp_dir             t;
+    ::asio::io_context   io;
     pasio::unix_listener listener{io};
     listener.start(pio::endpoint{"unix", t.path});
 
     pump_until(io, [&] { return mode_of(t.path) != 0; });
-    REQUIRE((mode_of(t.path) & 0777) == 0700);   // owner-only fail-closed default
+    REQUIRE((mode_of(t.path) & 0777) == 0700); // owner-only fail-closed default
 }
 
-TEST_CASE("unix_permissions: a widened socket mode is honored",
-          "[integration][unix][permissions]")
+TEST_CASE("unix_permissions: a widened socket mode is honored", "[integration][unix][permissions]")
 {
-    temp_dir t;
+    temp_dir           t;
     ::asio::io_context io;
     // A deliberately widened mode (group access) passed through the mode knob: the listener
     // applies it at bind so the on-disk socket carries the widened bits.
-    constexpr ::mode_t widened = 0770;
+    constexpr ::mode_t   widened = 0770;
     pasio::unix_listener listener{io, {}, widened};
     listener.start(pio::endpoint{"unix", t.path});
 
@@ -118,18 +120,19 @@ TEST_CASE("unix_permissions: the unlink-before-bind window is closed under a res
     // world-accessible socket inode before the chmod), the listener binds under a
     // restrictive umask so the inode is never momentarily world-accessible: the final
     // 0700 mode holds and no broader bits ever appear.
-    temp_dir t;
-    const ::mode_t prev = ::umask(0);   // maximally permissive: bind would create 0777 if unguarded
-    ::asio::io_context io;
+    temp_dir       t;
+    const ::mode_t prev = ::umask(0); // maximally permissive: bind would create 0777 if unguarded
+    ::asio::io_context   io;
     pasio::unix_listener listener{io};
     listener.start(pio::endpoint{"unix", t.path});
     pump_until(io, [&] { return mode_of(t.path) != 0; });
     (void)::umask(prev);
 
-    REQUIRE((mode_of(t.path) & 0777) == 0700);   // never widened by the permissive umask
+    REQUIRE((mode_of(t.path) & 0777) == 0700); // never widened by the permissive umask
 }
 
-TEST_CASE("unix_permissions: accept_any admits a local peer while a deny-all policy refuses fail-closed",
+TEST_CASE("unix_permissions: accept_any admits a local peer while a deny-all policy refuses "
+          "fail-closed",
           "[integration][unix][permissions]")
 {
     // accept_any (the default) admits the local peer — a channel is handed up. A deny-all
@@ -137,9 +140,9 @@ TEST_CASE("unix_permissions: accept_any admits a local peer while a deny-all pol
     // channel is handed up, the session stays unestablished.
     SECTION("accept_any admits")
     {
-        temp_dir t;
-        ::asio::io_context io;
-        int accepted = 0;
+        temp_dir             t;
+        ::asio::io_context   io;
+        int                  accepted = 0;
         pasio::unix_listener listener{io};
         listener.on_accepted([&](std::unique_ptr<pasio::unix_channel>) { ++accepted; });
         listener.start(pio::endpoint{"unix", t.path});
@@ -152,10 +155,10 @@ TEST_CASE("unix_permissions: accept_any admits a local peer while a deny-all pol
 
     SECTION("deny-all refuses fail-closed")
     {
-        temp_dir t;
-        ::asio::io_context io;
-        int accepted = 0;
-        deny_all_peer_cred deny;
+        temp_dir             t;
+        ::asio::io_context   io;
+        int                  accepted = 0;
+        deny_all_peer_cred   deny;
         pasio::unix_listener listener{io, {}, pasio::unix_listener::default_socket_mode, deny};
         listener.on_accepted([&](std::unique_ptr<pasio::unix_channel>) { ++accepted; });
         listener.start(pio::endpoint{"unix", t.path});
@@ -166,6 +169,6 @@ TEST_CASE("unix_permissions: accept_any admits a local peer while a deny-all pol
         auto bound = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
         while(std::chrono::steady_clock::now() < bound)
             io.poll();
-        REQUIRE(accepted == 0);   // refused fail-closed: no channel handed up
+        REQUIRE(accepted == 0); // refused fail-closed: no channel handed up
     }
 }

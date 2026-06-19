@@ -45,7 +45,11 @@ namespace {
 class fixed_capacity_sink final : public byte_sink
 {
 public:
-    explicit fixed_capacity_sink(std::size_t capacity) : m_buf(capacity), m_at(0) {}
+    explicit fixed_capacity_sink(std::size_t capacity)
+            : m_buf(capacity)
+            , m_at(0)
+    {
+    }
 
     void write(std::span<const std::byte> bytes) override
     {
@@ -70,11 +74,12 @@ std::uint64_t monotonic_clock()
 
 }
 
-TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after attach", "[integration]")
+TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after attach",
+          "[integration]")
 {
-    constexpr int      warm = 256;
-    constexpr int      K    = 8192;
-    const std::size_t  ring = 1u << 20;
+    constexpr int     warm = 256;
+    constexpr int     K    = 8192;
+    const std::size_t ring = 1u << 20;
 
     const std::vector<std::byte> body(64, std::byte{0x5A});
 
@@ -83,11 +88,13 @@ TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after
         fixed_capacity_sink sink{1u << 20};
         flat_recorder       rec{sink, ring, [] { return monotonic_clock(); }};
 
-        auto push = [&](std::uint64_t i) {
+        auto push = [&](std::uint64_t i)
+        {
             message_info info{};
             info.publication_sequence = i;
             rec.record_sample(0x1234, info, 0, false, capture_fidelity::payload, body);
-            rec.pump(); // drain on the same turn (the cooperative discipline), into the pre-grown sink
+            rec.pump(); // drain on the same turn (the cooperative discipline), into the pre-grown
+                        // sink
         };
 
         // Warm: grow the ring backing store + the encoder scratch (both grown ONCE here).
@@ -104,7 +111,8 @@ TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after
     }
 }
 
-TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after attach", "[integration]")
+TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after attach",
+          "[integration]")
 {
     // The wire tier rides the SAME grown-once ring + reused encoder scratch as every other
     // record, so a warmed saturating record_wire -> ring -> drain loop touches no heap. The
@@ -113,9 +121,9 @@ TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after att
     // the recorder's own write/drain path with the frame bytes already in hand (the fidelity is
     // capture_fidelity::wire, so an overflow would shed at the wire tier). Mirrors the
     // recorder-attached sample gate exactly. Loops >=3x (medians).
-    constexpr int      warm = 256;
-    constexpr int      K    = 8192;
-    const std::size_t  ring = 1u << 20;
+    constexpr int     warm = 256;
+    constexpr int     K    = 8192;
+    const std::size_t ring = 1u << 20;
 
     const std::vector<std::byte> frame(128, std::byte{0xC7});
     const node_id                peer{};
@@ -125,7 +133,8 @@ TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after att
         fixed_capacity_sink sink{1u << 20};
         flat_recorder       rec{sink, ring, [] { return monotonic_clock(); }};
 
-        auto push = [&](std::uint64_t seq) {
+        auto push = [&](std::uint64_t seq)
+        {
             rec.record_wire(wire_direction::out, seq, peer, frame);
             rec.pump();
         };
@@ -139,7 +148,8 @@ TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after att
             push(0xF0000000ull + static_cast<std::uint64_t>(i));
         const auto after = plexus::testing::alloc_count();
 
-        REQUIRE(after - before == 0); // grown-once: the saturating wire producer + drain touched no heap
+        REQUIRE(after - before ==
+                0); // grown-once: the saturating wire producer + drain touched no heap
     }
 }
 
@@ -150,7 +160,7 @@ TEST_CASE("the inert baseline (no recorder) is itself zero on the same loop", "[
     // attached gate's zero is attributable to the recorder being grown-once, not to an empty
     // loop. (The full no-recorder hot-path inert baseline lives in test_hot_path_alloc /
     // test_typed_inproc_alloc; this cell is the local contrast.)
-    constexpr int     K = 8192;
+    constexpr int                K = 8192;
     const std::vector<std::byte> body(64, std::byte{0x5A});
     std::vector<std::byte>       buf(body.size());
 

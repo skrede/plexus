@@ -22,48 +22,47 @@ handshake_request sample_request()
 {
     std::array<std::byte, 16> id{};
     id.fill(std::byte{0xA5});
-    return handshake_request{
-            .id                       = id,
-            .version_major            = 1,
-            .version_minor            = 2,
-            .compatible_version_major = 3,
-            .compatible_version_minor = 4,
-            .protocol_version         = 5,
-            .fingerprint              = 0xA5A5A5A5A5A5A5A5ull,
-            .key_id                   = {},
-            .own_nonce                = {},
-            .cipher_offer             = 0,
-            .chosen_cipher            = 0,
-            .proof                    = {}};
+    return handshake_request{.id                       = id,
+                             .version_major            = 1,
+                             .version_minor            = 2,
+                             .compatible_version_major = 3,
+                             .compatible_version_minor = 4,
+                             .protocol_version         = 5,
+                             .fingerprint              = 0xA5A5A5A5A5A5A5A5ull,
+                             .key_id                   = {},
+                             .own_nonce                = {},
+                             .cipher_offer             = 0,
+                             .chosen_cipher            = 0,
+                             .proof                    = {}};
 }
 
 handshake_response sample_response()
 {
     std::array<std::byte, 16> id{};
     id.fill(std::byte{0x5A});
-    return handshake_response{
-            .id                       = id,
-            .version_major            = 1,
-            .version_minor            = 2,
-            .compatible_version_major = 3,
-            .compatible_version_minor = 4,
-            .protocol_version         = 5,
-            .fingerprint              = 0x5A5A5A5A5A5A5A5Aull,
-            .key_id                   = {},
-            .own_nonce                = {},
-            .cipher_offer             = 0,
-            .chosen_cipher            = 0,
-            .proof                    = {},
-            .status                   = handshake_status::accepted};
+    return handshake_response{.id                       = id,
+                              .version_major            = 1,
+                              .version_minor            = 2,
+                              .compatible_version_major = 3,
+                              .compatible_version_minor = 4,
+                              .protocol_version         = 5,
+                              .fingerprint              = 0x5A5A5A5A5A5A5A5Aull,
+                              .key_id                   = {},
+                              .own_nonce                = {},
+                              .cipher_offer             = 0,
+                              .chosen_cipher            = 0,
+                              .proof                    = {},
+                              .status                   = handshake_status::accepted};
 }
 
 }
 
-TEST_CASE("Handshake encode-into: zero allocation across a steady-state loop", "[wire][handshake][noalloc]")
+TEST_CASE("Handshake encode-into: zero allocation across a steady-state loop",
+          "[wire][handshake][noalloc]")
 {
-    constexpr int K = 1024;
-    const auto req = sample_request();
-    const auto resp = sample_response();
+    constexpr int K    = 1024;
+    const auto    req  = sample_request();
+    const auto    resp = sample_response();
 
     std::vector<std::byte> req_buf;
     std::vector<std::byte> resp_buf;

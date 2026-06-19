@@ -34,15 +34,19 @@
 
 using plexus::inproc::inproc_policy;
 using transport_t = plexus::inproc::inproc_transport<>;
-using node_t = plexus::node<inproc_policy, transport_t>;
+using node_t      = plexus::node<inproc_policy, transport_t>;
 
-struct reading { std::uint32_t sensor{}; std::uint32_t value{}; };
+struct reading
+{
+    std::uint32_t sensor{};
+    std::uint32_t value{};
+};
 
 // The encode counter is shared so the test body sees a publisher's encode activity
 // regardless of which codec copy the endpoint holds.
 struct reading_codec
 {
-    using value_type = reading;
+    using value_type                          = reading;
     std::shared_ptr<std::atomic<int>> encodes = std::make_shared<std::atomic<int>>(0);
 
     plexus::wire_bytes<> encode(const reading &r) const
@@ -61,8 +65,9 @@ struct reading_codec
     {
         if(b.size() != 8)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
-        auto u32 = [&](int o) {
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+        auto u32 = [&](int o)
+        {
             std::uint32_t v = 0;
             for(int i = 0; i < 4; ++i)
                 v |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(b[o + i])) << (8 * i);
@@ -78,10 +83,10 @@ struct reading_codec
 plexus::node_options opts(std::uint64_t seed, bool eager)
 {
     plexus::node_options o;
-    o.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                               std::chrono::milliseconds(2000),
-                                               std::nullopt, std::nullopt};
-    o.redial_seed = seed;
+    o.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                  std::chrono::milliseconds(2000), std::nullopt,
+                                                  std::nullopt};
+    o.redial_seed  = seed;
     o.dial_eagerly = eager;
     return o;
 }
@@ -97,10 +102,10 @@ plexus::node_id id_of(std::uint8_t seed)
 // subscriber node is the single eager dialer (the canonical inproc topology).
 struct net
 {
-    plexus::inproc::inproc_bus<> bus;
-    plexus::inproc::inproc_executor<> ex{bus};
-    transport_t ta{ex, bus};
-    transport_t tb{ex, bus};
+    plexus::inproc::inproc_bus<>        bus;
+    plexus::inproc::inproc_executor<>   ex{bus};
+    transport_t                         ta{ex, bus};
+    transport_t                         tb{ex, bus};
     plexus::discovery::static_discovery disc{{}};
 
     node_t pub_node{ex, disc, id_of(0x0A), ta, opts(0xA, /*eager=*/false)};
@@ -119,24 +124,25 @@ struct net
 void fast_path()
 {
     std::cout << "== fast path: in-process typed subscriber ==\n";
-    net n;
+    net           n;
     reading_codec codec;
-    auto encodes = codec.encodes;
+    auto          encodes = codec.encodes;
 
-    const reading *received = nullptr;
+    const reading                    *received = nullptr;
     plexus::subscriber<reading_codec> typed_sub{
-        n.sub_node, "telemetry",
-        [&](const reading &r, const plexus::io::message_info &info) {
-            received = &r;
-            std::cout << "  delivered value=" << r.value
-                      << "  from_intra_process=" << std::boolalpha << info.from_intra_process << '\n';
-        }};
-    plexus::publisher<reading_codec> pub{
-        n.pub_node, "telemetry", plexus::typed_publisher_options{}, codec};
+            n.sub_node, "telemetry", [&](const reading &r, const plexus::io::message_info &info)
+            {
+                received = &r;
+                std::cout << "  delivered value=" << r.value
+                          << "  from_intra_process=" << std::boolalpha << info.from_intra_process
+                          << '\n';
+            }};
+    plexus::publisher<reading_codec> pub{n.pub_node, "telemetry", plexus::typed_publisher_options{},
+                                         codec};
     n.ex.drain();
 
-    auto loan = pub.borrow();
-    loan->value = 42;
+    auto loan                = pub.borrow();
+    loan->value              = 42;
     const reading *published = &*loan;
     std::cout << "  published object @ " << static_cast<const void *>(published) << '\n';
     pub.publish(std::move(loan));
@@ -151,17 +157,17 @@ void fast_path()
 void fallback()
 {
     std::cout << "== fallback: a bytes-only subscriber ==\n";
-    net n;
+    net           n;
     reading_codec codec;
-    auto encodes = codec.encodes;
+    auto          encodes = codec.encodes;
 
-    plexus::subscriber<> bytes_sub{
-        n.sub_node, "telemetry",
-        [&](std::span<const std::byte> b) {
-            std::cout << "  bytes sub received " << b.size() << " bytes (the consumer decodes)\n";
-        }};
-    plexus::publisher<reading_codec> pub{
-        n.pub_node, "telemetry", plexus::typed_publisher_options{}, codec};
+    plexus::subscriber<> bytes_sub{n.sub_node, "telemetry", [&](std::span<const std::byte> b)
+                                   {
+                                       std::cout << "  bytes sub received " << b.size()
+                                                 << " bytes (the consumer decodes)\n";
+                                   }};
+    plexus::publisher<reading_codec> pub{n.pub_node, "telemetry", plexus::typed_publisher_options{},
+                                         codec};
     n.ex.drain();
 
     pub.publish(reading{1, 99});

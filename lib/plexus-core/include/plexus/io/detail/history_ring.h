@@ -42,7 +42,7 @@ public:
         m_count = std::min(m_count + 1, m_slots.size());
     }
 
-    bool empty() const { return m_count == 0; }
+    bool        empty() const { return m_count == 0; }
     std::size_t count() const { return m_count; }
     std::size_t capacity() const { return m_slots.size(); }
 
@@ -62,8 +62,8 @@ public:
 
 private:
     std::vector<std::vector<std::byte>> m_slots;
-    std::size_t m_head  = 0;
-    std::size_t m_count = 0;
+    std::size_t                         m_head  = 0;
+    std::size_t                         m_count = 0;
 };
 
 }

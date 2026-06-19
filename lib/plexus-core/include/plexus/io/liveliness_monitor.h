@@ -45,19 +45,19 @@ constexpr std::chrono::milliseconds k_tick_granularity{100};
 // AND ensures the per-endpoint lease entry; deregister_endpoint erases every deadline
 // entry for the endpoint AND its lease entry (peer death tears the whole endpoint
 // down). A scan iterates only the live maps, so a fire never touches a removed key.
-template <typename Policy, typename Clock = std::chrono::steady_clock>
+template<typename Policy, typename Clock = std::chrono::steady_clock>
     requires plexus::Policy<Policy>
 class liveliness_monitor
 {
 public:
     using executor_type = typename Policy::executor_type;
-    using timer_type = typename Policy::timer_type;
-    using deadline_key = std::pair<node_id, std::uint64_t>;
+    using timer_type    = typename Policy::timer_type;
+    using deadline_key  = std::pair<node_id, std::uint64_t>;
 
     explicit liveliness_monitor(executor_type executor)
-        : m_executor(executor)
-        , m_tick(m_executor)
-        , m_granularity(k_tick_granularity)
+            : m_executor(executor)
+            , m_tick(m_executor)
+            , m_granularity(k_tick_granularity)
     {
     }
 
@@ -70,14 +70,14 @@ public:
                            std::uint64_t deadline_period_ns, std::uint64_t lease_ns)
     {
         const std::uint64_t now = now_ns();
-        auto &d = m_deadlines[deadline_key{id, topic_hash}];
-        d.deadline_period_ns = deadline_period_ns;
-        d.last_data_seen_ns = now;
-        d.deadline_violated = false;
-        auto &l = m_leases[id];
-        l.lease_ns = lease_ns;
-        l.last_seen_ns = now;
-        l.lease_expired = false;
+        auto               &d   = m_deadlines[deadline_key{id, topic_hash}];
+        d.deadline_period_ns    = deadline_period_ns;
+        d.last_data_seen_ns     = now;
+        d.deadline_violated     = false;
+        auto &l                 = m_leases[id];
+        l.lease_ns              = lease_ns;
+        l.last_seen_ns          = now;
+        l.lease_expired         = false;
     }
 
     // Erase ALL of this endpoint's deadline entries and its lease entry (peer death).
@@ -110,7 +110,7 @@ public:
     {
         if(auto it = m_leases.find(id); it != m_leases.end())
         {
-            it->second.last_seen_ns = now_ns();
+            it->second.last_seen_ns  = now_ns();
             it->second.lease_expired = false;
         }
     }
@@ -135,19 +135,20 @@ private:
     // tick expiry is the same elapsed gap the scan reads.
     std::uint64_t now_ns() const
     {
-        return static_cast<std::uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                Clock::now().time_since_epoch()).count());
+        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                  Clock::now().time_since_epoch())
+                                                  .count());
     }
 
     void arm_tick()
     {
-        m_tick.expires_after(
-            std::chrono::duration_cast<std::chrono::milliseconds>(m_granularity));
-        m_tick.async_wait([this](std::error_code ec) {
-            if(!ec)
-                on_tick();
-        });
+        m_tick.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(m_granularity));
+        m_tick.async_wait(
+                [this](std::error_code ec)
+                {
+                    if(!ec)
+                        on_tick();
+                });
     }
 
     // The edge-latched scan + the single re-arm. Each axis fires exactly once per
@@ -169,7 +170,7 @@ private:
 
     // Edge-latched deadline check: fire once when the data gap first exceeds the
     // period; clear the latch when the gap falls back under it.
-    std::optional<liveness_event> check_deadline(const deadline_key &key,
+    std::optional<liveness_event> check_deadline(const deadline_key        &key,
                                                  detail::endpoint_liveness &s, std::uint64_t now)
     {
         if(s.deadline_period_ns == 0)
@@ -188,8 +189,8 @@ private:
 
     // Edge-latched lease check: fire once when the presence gap first exceeds the
     // lease; clear the latch when presence resumes.
-    std::optional<liveness_event> check_lease(const node_id &id,
-                                              detail::endpoint_liveness &s, std::uint64_t now)
+    std::optional<liveness_event> check_lease(const node_id &id, detail::endpoint_liveness &s,
+                                              std::uint64_t now)
     {
         if(s.lease_ns == 0)
             return std::nullopt;
@@ -210,13 +211,13 @@ private:
             m_on_liveness(ev);
     }
 
-    executor_type m_executor;
-    timer_type m_tick;
-    std::chrono::nanoseconds m_granularity;
-    std::map<deadline_key, detail::endpoint_liveness> m_deadlines;
-    std::map<node_id, detail::endpoint_liveness> m_leases;
+    executor_type                                                    m_executor;
+    timer_type                                                       m_tick;
+    std::chrono::nanoseconds                                         m_granularity;
+    std::map<deadline_key, detail::endpoint_liveness>                m_deadlines;
+    std::map<node_id, detail::endpoint_liveness>                     m_leases;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
-    plexus::detail::move_only_function<void()> m_on_tick_action;
+    plexus::detail::move_only_function<void()>                       m_on_tick_action;
 };
 
 }

@@ -31,24 +31,24 @@ std::vector<std::byte> make_payload(std::size_t n)
 std::vector<std::byte> framed(const std::vector<std::byte> &payload)
 {
     wire::frame_header hdr{};
-    hdr.type = wire::msg_type::unidirectional;
-    hdr.flags = 0;
-    hdr.session_id = 1;
+    hdr.type         = wire::msg_type::unidirectional;
+    hdr.flags        = 0;
+    hdr.session_id   = 1;
     hdr.timestamp_ns = 0;
-    hdr.payload_len = payload.size();
+    hdr.payload_len  = payload.size();
     return wire::encode_frame(hdr, payload);
 }
 
 // Feed `wire` to `r` in fixed-size chunks; return every complete_frame that emerged
 // across the whole split.
-std::vector<wire::complete_frame> feed_in_chunks(wire::frame_reassembler &r,
-                                                 std::span<const std::byte> bytes, std::size_t chunk)
+std::vector<wire::complete_frame>
+feed_in_chunks(wire::frame_reassembler &r, std::span<const std::byte> bytes, std::size_t chunk)
 {
     std::vector<wire::complete_frame> out;
     for(std::size_t off = 0; off < bytes.size(); off += chunk)
     {
-        const auto len = std::min(chunk, bytes.size() - off);
-        auto result = r.feed(bytes.subspan(off, len));
+        const auto len    = std::min(chunk, bytes.size() - off);
+        auto       result = r.feed(bytes.subspan(off, len));
         REQUIRE(result.error == wire::feed_error::none);
         for(auto &f : result.frames)
             out.push_back(std::move(f));
@@ -58,14 +58,15 @@ std::vector<wire::complete_frame> feed_in_chunks(wire::frame_reassembler &r,
 
 }
 
-TEST_CASE("one framed message split one byte at a time reassembles to a single byte-identical frame",
-          "[integration][partial-read][copy]")
+TEST_CASE(
+        "one framed message split one byte at a time reassembles to a single byte-identical frame",
+        "[integration][partial-read][copy]")
 {
-    const auto payload = make_payload(300);
+    const auto payload    = make_payload(300);
     const auto wire_bytes = framed(payload);
 
     wire::frame_reassembler r;
-    auto frames = feed_in_chunks(r, wire_bytes, 1);   // sub-header AND mid-payload splits
+    auto frames = feed_in_chunks(r, wire_bytes, 1); // sub-header AND mid-payload splits
 
     REQUIRE(frames.size() == 1);
     REQUIRE(frames.front().payload.size() == wire_bytes.size());
@@ -76,7 +77,7 @@ TEST_CASE("one framed message split one byte at a time reassembles to a single b
 TEST_CASE("a framed message split at the header/payload boundary reassembles intact",
           "[integration][partial-read][copy]")
 {
-    const auto payload = make_payload(500);
+    const auto payload    = make_payload(500);
     const auto wire_bytes = framed(payload);
 
     wire::frame_reassembler r;
@@ -93,8 +94,8 @@ TEST_CASE("a framed message split at the header/payload boundary reassembles int
     CHECK(second.frames.empty());
 
     // Feed the remaining payload bytes: the single frame now emerges intact.
-    const std::size_t fed = wire::header_size - 3 + 10;
-    auto third = r.feed(std::span<const std::byte>(wire_bytes).subspan(fed));
+    const std::size_t fed   = wire::header_size - 3 + 10;
+    auto              third = r.feed(std::span<const std::byte>(wire_bytes).subspan(fed));
     REQUIRE(third.error == wire::feed_error::none);
     REQUIRE(third.frames.size() == 1);
     REQUIRE(third.frames.front().payload.size() == wire_bytes.size());

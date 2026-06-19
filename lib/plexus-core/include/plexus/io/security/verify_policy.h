@@ -35,7 +35,7 @@ class spki_pin_policy final : public verify_policy
 {
 public:
     explicit spki_pin_policy(std::vector<std::array<std::byte, 32>> pinned) noexcept
-        : m_pinned(std::move(pinned))
+            : m_pinned(std::move(pinned))
     {
     }
 

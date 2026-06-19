@@ -41,11 +41,11 @@ enum class record_category : std::uint8_t
 // never exposed here: a freeze fires on an edge's shape, not its bytes.
 struct record_envelope
 {
-    record_category   category{record_category::sample};
-    std::uint64_t     capture_ts{};
-    std::uint64_t     topic_hash{};
+    record_category        category{record_category::sample};
+    std::uint64_t          capture_ts{};
+    std::uint64_t          topic_hash{};
     io::detail::drop_cause cause{io::detail::drop_cause::none};
-    std::uint8_t      verdict{};
+    std::uint8_t           verdict{};
 };
 
 }

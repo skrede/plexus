@@ -69,28 +69,28 @@ namespace {
 // inproc_timer over it, not the routing engine.
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 using executor_t = inproc_executor<manual_clock>;
-using timer_t = inproc_timer<manual_clock>;
-using stream_t = stream_inbound<timer_t, executor_t &>;
+using timer_t    = inproc_timer<manual_clock>;
+using stream_t   = stream_inbound<timer_t, executor_t &>;
 
 // Test config: a 500 ms floor and a deliberately low 1024 B/s throughput floor so
 // that payload_deadline(N) = N ms (N/1024 s) is directly legible — small frames
 // (N below 512) clamp to the 500 ms floor, larger frames get a proportionally
 // longer deadline. These are test tunables, not the production defaults.
-constexpr auto k_floor = std::chrono::milliseconds(500);
-constexpr std::size_t k_throughput = 1024;   // bytes/sec -> 1 ns per byte * 1e6
+constexpr auto        k_floor      = std::chrono::milliseconds(500);
+constexpr std::size_t k_throughput = 1024; // bytes/sec -> 1 ns per byte * 1e6
 
 stream_inbound_config test_config()
 {
@@ -102,14 +102,17 @@ stream_inbound_config test_config()
 // payload_deadline(N) = N / throughput, in nanoseconds (mirrors the component).
 std::chrono::nanoseconds payload_deadline(std::size_t n)
 {
-    return std::chrono::nanoseconds{static_cast<std::int64_t>(n) * 1'000'000'000
-                                    / static_cast<std::int64_t>(k_throughput)};
+    return std::chrono::nanoseconds{static_cast<std::int64_t>(n) * 1'000'000'000 /
+                                    static_cast<std::int64_t>(k_throughput)};
 }
 
 frame_header make_header(std::uint64_t payload_len)
 {
-    return frame_header{.type = msg_type::unidirectional, .flags = 0, .session_id = 1,
-                        .timestamp_ns = 0, .payload_len = payload_len};
+    return frame_header{.type         = msg_type::unidirectional,
+                        .flags        = 0,
+                        .session_id   = 1,
+                        .timestamp_ns = 0,
+                        .payload_len  = payload_len};
 }
 
 // A complete frame minted by the production codec path.
@@ -121,8 +124,8 @@ std::vector<std::byte> encode_complete(std::size_t payload_size)
 
 struct counters
 {
-    int frames{0};
-    int closes{0};
+    int                        frames{0};
+    int                        closes{0};
     std::optional<close_cause> last_cause;
 };
 
@@ -131,23 +134,33 @@ struct counters
 struct fixture
 {
     inproc_bus<manual_clock> bus;
-    executor_t ex{bus};
-    counters c;
-    stream_t stream{ex, test_config()};
+    executor_t               ex{bus};
+    counters                 c;
+    stream_t                 stream{ex, test_config()};
 
     fixture()
     {
         stream.on_frame([this](const complete_frame &) { ++c.frames; });
-        stream.on_protocol_close([this](close_cause cause) { ++c.closes; c.last_cause = cause; });
+        stream.on_protocol_close(
+                [this](close_cause cause)
+                {
+                    ++c.closes;
+                    c.last_cause = cause;
+                });
     }
 
     void feed(std::span<const std::byte> bytes) { stream.feed(bytes); }
-    void advance(std::chrono::nanoseconds d) { manual_clock::advance(d); ex.drain(); }
+    void advance(std::chrono::nanoseconds d)
+    {
+        manual_clock::advance(d);
+        ex.drain();
+    }
 };
 
 }
 
-TEST_CASE("wire stream_inbound: a complete header with its payload withheld closes once on the floor deadline",
+TEST_CASE("wire stream_inbound: a complete header with its payload withheld closes once on the "
+          "floor deadline",
           "[wire][stream_inbound]")
 {
     constexpr int k_iterations = 100;
@@ -189,8 +202,8 @@ TEST_CASE("wire stream_inbound: a slow byte-dribble does not reset the deadline 
         // each, never completing the header. While the size is unknown the deadline
         // is the floor; a fresh frame arms it ONCE (idle->frame) and the continuing
         // dribble must NOT re-arm it. Cumulative advance crosses the floor -> close.
-        auto frame = encode_complete(64);
-        const auto step = std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor) / 8;
+        auto       frame = encode_complete(64);
+        const auto step  = std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor) / 8;
 
         for(std::size_t i = 0; i < header_size - 4; ++i)
         {
@@ -224,8 +237,8 @@ TEST_CASE("wire stream_inbound: a sub-throughput large frame closes on the throu
         // 4 s deadline), then deliver the payload in slices whose cumulative
         // virtual time exceeds 4 s before the last byte lands -> close fires.
         constexpr std::size_t k_payload = 4096;
-        auto frame = encode_complete(k_payload);
-        const auto deadline = payload_deadline(k_payload);
+        auto                  frame     = encode_complete(k_payload);
+        const auto            deadline  = payload_deadline(k_payload);
 
         // Header arms the size-based deadline.
         f.feed(std::span<const std::byte>{frame}.subspan(0, header_size));
@@ -233,9 +246,9 @@ TEST_CASE("wire stream_inbound: a sub-throughput large frame closes on the throu
 
         // Deliver the payload slower than the floor: advance past the deadline
         // across slices, NEVER completing in time. The dribble must not re-arm.
-        std::size_t offset = header_size;
-        const std::size_t chunk = 256;
-        const auto step = deadline / 4;   // 4 slices * step = deadline; we overrun it
+        std::size_t       offset = header_size;
+        const std::size_t chunk  = 256;
+        const auto        step   = deadline / 4; // 4 slices * step = deadline; we overrun it
         while(offset + chunk < frame.size() && f.c.closes == 0)
         {
             f.feed(std::span<const std::byte>{frame}.subspan(offset, chunk));
@@ -249,7 +262,8 @@ TEST_CASE("wire stream_inbound: a sub-throughput large frame closes on the throu
     }
 }
 
-TEST_CASE("wire stream_inbound: a frame that completes within its size-proportional deadline is never closed",
+TEST_CASE("wire stream_inbound: a frame that completes within its size-proportional deadline is "
+          "never closed",
           "[wire][stream_inbound]")
 {
     constexpr int k_iterations = 100;
@@ -263,13 +277,13 @@ TEST_CASE("wire stream_inbound: a frame that completes within its size-proportio
         // allowance). Feed it in slices whose cumulative time stays UNDER 8 s and
         // complete it -> on_frame, zero closes.
         constexpr std::size_t k_payload = 8192;
-        auto frame = encode_complete(k_payload);
-        const auto deadline = payload_deadline(k_payload);
+        auto                  frame     = encode_complete(k_payload);
+        const auto            deadline  = payload_deadline(k_payload);
         REQUIRE(deadline > std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor));
 
-        const auto step = deadline / 16;   // many slices, each tiny
-        std::size_t offset = 0;
-        const std::size_t chunk = 1024;
+        const auto        step   = deadline / 16; // many slices, each tiny
+        std::size_t       offset = 0;
+        const std::size_t chunk  = 1024;
         while(offset + chunk < frame.size())
         {
             f.feed(std::span<const std::byte>{frame}.subspan(offset, chunk));
@@ -289,7 +303,8 @@ TEST_CASE("wire stream_inbound: a frame that completes within its size-proportio
     }
 }
 
-TEST_CASE("wire stream_inbound: a normal back-to-back complete-frame stream raises no close and disarms the timer",
+TEST_CASE("wire stream_inbound: a normal back-to-back complete-frame stream raises no close and "
+          "disarms the timer",
           "[wire][stream_inbound]")
 {
     constexpr int k_iterations = 100;
@@ -299,7 +314,7 @@ TEST_CASE("wire stream_inbound: a normal back-to-back complete-frame stream rais
         fixture f;
 
         std::vector<std::byte> stream_bytes;
-        constexpr int k_frames = 5;
+        constexpr int          k_frames = 5;
         for(int n = 0; n < k_frames; ++n)
         {
             auto frame = encode_complete(32 + static_cast<std::size_t>(n) * 16);
@@ -327,7 +342,7 @@ TEST_CASE("wire stream_inbound: bad magic raises invalid_magic once and cancels 
         fixture f;
 
         std::array<std::byte, header_size> garbage{};
-        garbage.fill(std::byte{0xFF});   // first two bytes are not the magic
+        garbage.fill(std::byte{0xFF}); // first two bytes are not the magic
         f.feed(garbage);
 
         REQUIRE(f.c.closes == 1);
@@ -339,7 +354,8 @@ TEST_CASE("wire stream_inbound: bad magic raises invalid_magic once and cancels 
     }
 }
 
-TEST_CASE("wire stream_inbound: an over-cap payload_len raises payload_too_large once and cancels the timer",
+TEST_CASE("wire stream_inbound: an over-cap payload_len raises payload_too_large once and cancels "
+          "the timer",
           "[wire][stream_inbound]")
 {
     constexpr int k_iterations = 100;
@@ -362,11 +378,13 @@ TEST_CASE("wire stream_inbound: an over-cap payload_len raises payload_too_large
     }
 }
 
-TEST_CASE("wire stream_inbound: a span past the buffered-bytes cap raises buffer_overflow once and cancels the timer",
+TEST_CASE("wire stream_inbound: a span past the buffered-bytes cap raises buffer_overflow once and "
+          "cancels the timer",
           "[wire][stream_inbound]")
 {
     // The over-cap span is large; allocate it once and reuse it across iterations.
-    const std::vector<std::byte> flood(k_max_reassembler_payload_bytes + header_size + 1, std::byte{0x00});
+    const std::vector<std::byte> flood(k_max_reassembler_payload_bytes + header_size + 1,
+                                       std::byte{0x00});
 
     constexpr int k_iterations = 100;
     for(int iter = 0; iter < k_iterations; ++iter)

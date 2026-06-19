@@ -36,10 +36,9 @@ struct type_identity
 // through expected<void, std::error_code>. A view-type value_type (one that aliases the
 // passed span rather than copying) is valid for the delivery callback's duration ONLY;
 // deferred consumption must copy the value out before the callback returns.
-template <typename C>
+template<typename C>
 concept typed_codec = requires(C &c, const typename C::value_type &v,
-                               std::span<const std::byte> bytes,
-                               typename C::value_type &slot) {
+                               std::span<const std::byte> bytes, typename C::value_type &slot) {
     typename C::value_type;
     { c.encode(v) } -> std::convertible_to<wire_bytes<>>;
     { c.decode(bytes, slot) } -> std::same_as<expected<void, std::error_code>>;
@@ -47,7 +46,7 @@ concept typed_codec = requires(C &c, const typename C::value_type &v,
 
 // A codec that also publishes its value type's wire identity. When present it supplies
 // the type_id a typed endpoint gates on without the consumer restating it.
-template <typename C>
+template<typename C>
 concept identity_bearing = requires(const C &c) {
     { c.type_info() } -> std::convertible_to<type_identity>;
 };
@@ -58,13 +57,13 @@ concept identity_bearing = requires(const C &c) {
 // identity_bearing nor handed an explicit identity is a COMPILE ERROR naming both
 // remedies. There is NEVER a typeid / RTTI fallback — an unresolved identity is a
 // contract gap the consumer must close, not a runtime accident.
-template <typename Codec>
+template<typename Codec>
 constexpr type_identity resolve_identity(const Codec &, type_identity explicit_identity)
 {
     return explicit_identity;
 }
 
-template <typename Codec>
+template<typename Codec>
 constexpr type_identity resolve_identity(const Codec &codec)
 {
     static_assert(identity_bearing<Codec>,
@@ -82,8 +81,8 @@ constexpr type_identity resolve_identity(const Codec &codec)
 // codec). The branch is resolved at runtime ONLY when the codec is identity_bearing — a
 // non-identity-bearing codec instantiates only the explicit path, so the empty-optional
 // case never compiles its (ill-formed) type_info read.
-template <typename Codec>
-constexpr type_identity resolve_identity(const Codec &codec,
+template<typename Codec>
+constexpr type_identity resolve_identity(const Codec                 &codec,
                                          std::optional<type_identity> explicit_identity)
 {
     if constexpr(identity_bearing<Codec>)

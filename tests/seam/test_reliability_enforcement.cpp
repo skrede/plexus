@@ -61,40 +61,46 @@ using plexus::inproc::inproc_transport;
 
 struct manual_clock
 {
-    using duration = std::chrono::steady_clock::duration;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::steady_clock::duration;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
+    static time_point        now() noexcept { return current; }
 };
 
 struct manual_policy
 {
-    using executor_type = inproc_executor<manual_clock> &;
+    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
-    using timer_type = inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using transport_t = inproc_transport<manual_clock>;
-using engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
+using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu;
 
 handshake_fsm_config make_cfg(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -118,28 +124,33 @@ reconnect_config forever_cfg()
 // the engines so teardown unwinds the engines' channels first.
 struct rendezvous
 {
-    inproc_bus<manual_clock> bus;
+    inproc_bus<manual_clock>      bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t dialer_tp{ex, bus};
-    transport_t responder_tp{ex, bus};
+    transport_t                   dialer_tp{ex, bus};
+    transport_t                   responder_tp{ex, bus};
 
     engine dialer{dialer_tp, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, false};
-    engine responder{responder_tp, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, false};
+    engine responder{responder_tp,  ex,     make_cfg(0xB2), k_long_timeout,
+                     forever_cfg(), k_seed, false};
 
     plexus::node_id peer{make_id(0xB2)};
-    endpoint peer_ep;
+    endpoint        peer_ep;
 
     // Stand the responder up under `scheme` so the bus keys its listener there and the
     // gate classifies the peer's reliability from it; teach the dialer the same endpoint.
     explicit rendezvous(const std::string &scheme)
-        : peer_ep{scheme, "responder"}
+            : peer_ep{scheme, "responder"}
     {
         responder.listen(peer_ep);
         dialer.note_peer(peer, peer_ep);
     }
 
     void drive() { ex.drain(); }
-    bool connected() { drive(); return dialer.has_session(peer); }
+    bool connected()
+    {
+        drive();
+        return dialer.has_session(peer);
+    }
 };
 
 }
@@ -148,24 +159,26 @@ TEST_CASE("reliability enforcement: the permissive default admits a best_effort 
           "[udp][enforcement][permissive]")
 {
     rendezvous r{"udp"};
-    r.dialer.subscribe(r.peer, "topic/x");          // no requirement -> permissive default
-    REQUIRE(r.connected());                          // admitted: reach -> dial -> session
+    r.dialer.subscribe(r.peer, "topic/x"); // no requirement -> permissive default
+    REQUIRE(r.connected());                // admitted: reach -> dial -> session
 }
 
-TEST_CASE("reliability enforcement: a strict-reliable demand toward a best_effort 'udp' peer is refused pre-dial",
+TEST_CASE("reliability enforcement: a strict-reliable demand toward a best_effort 'udp' peer is "
+          "refused pre-dial",
           "[udp][enforcement][strict]")
 {
     rendezvous r{"udp"};
     r.dialer.subscribe(r.peer, "topic/x", locality::any, reliability_requirement::reliable);
-    REQUIRE_FALSE(r.connected());                    // refused: NO slot, no demand, no dial
+    REQUIRE_FALSE(r.connected()); // refused: NO slot, no demand, no dial
 }
 
-TEST_CASE("reliability enforcement: a strict-reliable demand toward a 'udpr' reliable-datagram peer is admitted",
+TEST_CASE("reliability enforcement: a strict-reliable demand toward a 'udpr' reliable-datagram "
+          "peer is admitted",
           "[udp][enforcement][strict]")
 {
-    rendezvous r{"udpr"};                            // the reliable-datagram opt-in: a reliable class
+    rendezvous r{"udpr"}; // the reliable-datagram opt-in: a reliable class
     r.dialer.subscribe(r.peer, "topic/x", locality::any, reliability_requirement::reliable);
-    REQUIRE(r.connected());                          // admitted: udpr satisfies reliable
+    REQUIRE(r.connected()); // admitted: udpr satisfies reliable
 }
 
 TEST_CASE("reliability enforcement: a strict-reliable demand toward a 'tcp' peer is admitted",
@@ -173,16 +186,16 @@ TEST_CASE("reliability enforcement: a strict-reliable demand toward a 'tcp' peer
 {
     rendezvous r{"tcp"};
     r.dialer.subscribe(r.peer, "topic/x", locality::any, reliability_requirement::reliable);
-    REQUIRE(r.connected());                          // admitted: tcp is a reliable stream
+    REQUIRE(r.connected()); // admitted: tcp is a reliable stream
 }
 
 TEST_CASE("reliability enforcement: a strict-reliable demand toward an UNKNOWN peer fails closed",
           "[udp][enforcement][strict]")
 {
-    rendezvous r{"tcp"};                             // responder listens, but the dialer forgets it
+    rendezvous r{"tcp"}; // responder listens, but the dialer forgets it
     r.dialer.subscribe(make_id(0xCC), "topic/x", locality::any, reliability_requirement::reliable);
     r.drive();
-    REQUIRE_FALSE(r.dialer.has_session(make_id(0xCC)));   // fail-closed: unknown peer refused
+    REQUIRE_FALSE(r.dialer.has_session(make_id(0xCC))); // fail-closed: unknown peer refused
 }
 
 TEST_CASE("reliability enforcement: scheme_is_reliable mirrors the selector's classification",
@@ -198,5 +211,5 @@ TEST_CASE("reliability enforcement: scheme_is_reliable mirrors the selector's cl
     REQUIRE(scheme_is_reliable("tls"));
     REQUIRE(scheme_is_reliable("unix"));
     REQUIRE(scheme_is_reliable("inproc"));
-    REQUIRE_FALSE(scheme_is_reliable("ws"));         // unknown: fail-closed
+    REQUIRE_FALSE(scheme_is_reliable("ws")); // unknown: fail-closed
 }

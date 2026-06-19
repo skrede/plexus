@@ -40,19 +40,21 @@ std::string str_of(std::span<const std::byte> b)
 // A reorder buffer wired to record the in-order release sequence + payloads.
 struct recorder
 {
-    reorder buf;
+    reorder                    buf;
     std::vector<std::uint16_t> released_seq;
-    std::vector<std::string> released_payload;
-    std::vector<bool> released_fragmented;
+    std::vector<std::string>   released_payload;
+    std::vector<bool>          released_fragmented;
 
     explicit recorder(std::size_t window = reorder::default_window, std::uint16_t initial_seq = 0)
-        : buf(window, initial_seq)
+            : buf(window, initial_seq)
     {
-        buf.on_deliver([this](std::uint16_t seq, bool fragmented, std::span<const std::byte> b) {
-            released_seq.push_back(seq);
-            released_fragmented.push_back(fragmented);
-            released_payload.push_back(str_of(b));
-        });
+        buf.on_deliver(
+                [this](std::uint16_t seq, bool fragmented, std::span<const std::byte> b)
+                {
+                    released_seq.push_back(seq);
+                    released_fragmented.push_back(fragmented);
+                    released_payload.push_back(str_of(b));
+                });
     }
 };
 
@@ -82,10 +84,10 @@ TEST_CASE("udp reorder HOL (D-04): a gap holds all higher seqs until the gap fil
     REQUIRE(r.buf.feed(2, false, bytes_of("two")) == reorder::outcome::buffered);
     REQUIRE(r.buf.feed(3, false, bytes_of("three")) == reorder::outcome::buffered);
 
-    REQUIRE(r.released_seq == std::vector<std::uint16_t>{0});   // ONLY 0 so far
-    REQUIRE(r.buf.expected() == 1);                              // still waiting on 1
-    REQUIRE(r.buf.buffered_at(1));                               // hole offset 1 -> seq 2 buffered
-    REQUIRE(r.buf.buffered_at(2));                               // hole offset 2 -> seq 3 buffered
+    REQUIRE(r.released_seq == std::vector<std::uint16_t>{0}); // ONLY 0 so far
+    REQUIRE(r.buf.expected() == 1);                           // still waiting on 1
+    REQUIRE(r.buf.buffered_at(1));                            // hole offset 1 -> seq 2 buffered
+    REQUIRE(r.buf.buffered_at(2));                            // hole offset 2 -> seq 3 buffered
 
     // The missing seq 1 arrives (a retransmit): the contiguous run 1,2,3 releases in
     // order in a single drain.
@@ -117,11 +119,13 @@ TEST_CASE("udp reorder: a seq at or beyond expected+W is out of window and dropp
           "[udp][reorder]")
 {
     recorder r{/*window=*/4};
-    REQUIRE(r.buf.feed(0, false, bytes_of("a")) == reorder::outcome::delivered);   // expected -> 1
+    REQUIRE(r.buf.feed(0, false, bytes_of("a")) == reorder::outcome::delivered); // expected -> 1
 
     // Window is 4: holes at offsets [0,4) from expected=1 are admissible (seq 1..4).
-    REQUIRE(r.buf.feed(4, false, bytes_of("ok")) == reorder::outcome::buffered);   // offset 3, in window
-    REQUIRE(r.buf.feed(5, false, bytes_of("no")) == reorder::outcome::out_of_window);   // offset 4, past bound
+    REQUIRE(r.buf.feed(4, false, bytes_of("ok")) ==
+            reorder::outcome::buffered); // offset 3, in window
+    REQUIRE(r.buf.feed(5, false, bytes_of("no")) ==
+            reorder::outcome::out_of_window); // offset 4, past bound
     REQUIRE(r.released_seq == std::vector<std::uint16_t>{0});
 }
 
@@ -131,7 +135,8 @@ TEST_CASE("udp reorder: in-order delivery survives the uint16 65535 -> 0 wrap", 
 
     REQUIRE(r.buf.feed(65534, false, bytes_of("x")) == reorder::outcome::delivered);
     REQUIRE(r.buf.feed(65535, false, bytes_of("y")) == reorder::outcome::delivered);
-    REQUIRE(r.buf.feed(0, false, bytes_of("z")) == reorder::outcome::delivered);     // the wrap is a forward step
+    REQUIRE(r.buf.feed(0, false, bytes_of("z")) ==
+            reorder::outcome::delivered); // the wrap is a forward step
     REQUIRE(r.buf.feed(1, false, bytes_of("w")) == reorder::outcome::delivered);
 
     REQUIRE(r.released_seq == std::vector<std::uint16_t>{65534, 65535, 0, 1});
@@ -139,7 +144,7 @@ TEST_CASE("udp reorder: in-order delivery survives the uint16 65535 -> 0 wrap", 
 
     // A hole across the wrap is held then released in order: deliver up to 2, gap at 3,
     // buffer 4 across no wrap here — exercise a gap right after the wrap.
-    REQUIRE(r.buf.feed(3, false, bytes_of("ahead")) == reorder::outcome::buffered);  // gap at 2
+    REQUIRE(r.buf.feed(3, false, bytes_of("ahead")) == reorder::outcome::buffered); // gap at 2
     REQUIRE(r.released_seq.size() == 4);
     REQUIRE(r.buf.feed(2, false, bytes_of("fill")) == reorder::outcome::delivered);
     REQUIRE(r.released_seq == std::vector<std::uint16_t>{65534, 65535, 0, 1, 2, 3});

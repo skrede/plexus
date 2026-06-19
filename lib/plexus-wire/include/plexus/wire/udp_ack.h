@@ -23,7 +23,7 @@ namespace plexus::wire {
 enum class udp_arq_kind : std::uint8_t
 {
     segment = 2,
-    ack = 3,
+    ack     = 3,
 };
 
 // A cumulative + selective acknowledgment. `cumulative` is the highest in-order seq
@@ -40,11 +40,11 @@ struct udp_ack
     // retransmit (idempotent at the receiver). The reliable ARQ binds its window's upper
     // sweep bound to this constant via a static_assert (see udp_reliable_arq.h) so a future
     // window sweep cannot silently pick a width whose excess is undescribable by surprise.
-    static constexpr std::size_t bitmap_bytes = 32;          // 256 holes named per ack
-    static constexpr std::size_t bitmap_bits = bitmap_bytes * 8;
+    static constexpr std::size_t bitmap_bytes = 32; // 256 holes named per ack
+    static constexpr std::size_t bitmap_bits  = bitmap_bytes * 8;
 
-    std::uint16_t cumulative{0};
-    std::array<std::uint8_t, bitmap_bytes> selective{};      // bit i -> (cumulative+2+i) received
+    std::uint16_t                          cumulative{0};
+    std::array<std::uint8_t, bitmap_bytes> selective{}; // bit i -> (cumulative+2+i) received
 
     [[nodiscard]] bool hole_received(std::size_t i) const noexcept
     {
@@ -70,8 +70,8 @@ inline void encode_udp_ack_into(std::vector<std::byte> &out, const udp_ack &ack)
 
     w.u8(static_cast<std::uint8_t>(udp_arq_kind::ack));
     w.u16(ack.cumulative);
-    w.bytes(std::span<const std::byte>{
-            reinterpret_cast<const std::byte *>(ack.selective.data()), udp_ack::bitmap_bytes});
+    w.bytes(std::span<const std::byte>{reinterpret_cast<const std::byte *>(ack.selective.data()),
+                                       udp_ack::bitmap_bytes});
 }
 
 // Decode an untrusted ack control frame. Fail-closed: a frame that is not exactly the
@@ -105,7 +105,8 @@ inline void encode_udp_segment_into(std::vector<std::byte> &out, std::span<const
 
 // Strip the segment marker, returning the inner payload. Fail-closed: an empty frame
 // or a non-segment marker yields nullopt (the caller drops / dispatches elsewhere).
-inline std::optional<std::span<const std::byte>> decode_udp_segment(std::span<const std::byte> frame)
+inline std::optional<std::span<const std::byte>>
+decode_udp_segment(std::span<const std::byte> frame)
 {
     reader r{frame};
     if(r.u8() != static_cast<std::uint8_t>(udp_arq_kind::segment))
@@ -119,7 +120,7 @@ inline std::optional<std::span<const std::byte>> decode_udp_segment(std::span<co
 inline std::optional<udp_arq_kind> peek_udp_arq_kind(std::span<const std::byte> frame)
 {
     reader r{frame};
-    auto marker = r.u8();
+    auto   marker = r.u8();
     if(!r.ok())
         return std::nullopt;
     if(marker == static_cast<std::uint8_t>(udp_arq_kind::segment))

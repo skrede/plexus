@@ -22,9 +22,10 @@ namespace detail {
 // SAME discriminator node.h uses to decide its same-host preference hook — here it picks
 // the per-leaf construction recipe: an shm member builds from {io, broker}, every plain
 // stream/datagram leaf builds from {io}.
-template <typename T>
-concept has_can_acquire =
-    requires(T &t) { { t.can_acquire(std::declval<const io::endpoint &>()) } -> std::convertible_to<bool>; };
+template<typename T>
+concept has_can_acquire = requires(T &t) {
+    { t.can_acquire(std::declval<const io::endpoint &>()) } -> std::convertible_to<bool>;
+};
 
 // The owning storage for a pack of NON-MOVABLE leaves: every plexus transport deletes its
 // copy and declares no move (the stream base captures `this` in its accept/dial closures, so
@@ -32,33 +33,33 @@ concept has_can_acquire =
 // move/copy-constructibility. This recursive holder direct-initializes each member in place
 // from a per-leaf factory (guaranteed copy elision turns the factory's prvalue into the
 // member), so a leaf is constructed, never constructed-then-moved.
-template <typename... Ts>
+template<typename... Ts>
 struct leaf_storage;
 
-template <>
+template<>
 struct leaf_storage<>
 {
-    template <typename Factory>
+    template<typename Factory>
     explicit leaf_storage(Factory &&) noexcept
     {
     }
 };
 
-template <typename Head, typename... Rest>
+template<typename Head, typename... Rest>
 struct leaf_storage<Head, Rest...>
 {
-    Head head;
+    Head                  head;
     leaf_storage<Rest...> tail;
 
-    template <typename Factory>
+    template<typename Factory>
     explicit leaf_storage(Factory &&factory)
-        : head(factory.template make<Head>())
-        , tail(factory)
+            : head(factory.template make<Head>())
+            , tail(factory)
     {
     }
 };
 
-template <std::size_t I, typename Head, typename... Rest>
+template<std::size_t I, typename Head, typename... Rest>
 auto &leaf_at(leaf_storage<Head, Rest...> &storage) noexcept
 {
     if constexpr(I == 0)
@@ -86,7 +87,7 @@ auto &leaf_at(leaf_storage<Head, Rest...> &storage) noexcept
 // it (and the io_context/broker must outlive the set) — the same single-owner teardown
 // discipline node.h documents. Non-copyable / non-movable: the borrowed node leaves pin the
 // set's address.
-template <typename... Transports>
+template<typename... Transports>
     requires(sizeof...(Transports) >= 1)
 class transport_set
 {
@@ -97,7 +98,8 @@ public:
     // member — that pack needs the broker ctor below, and selecting this one is a clear error.
     explicit transport_set(::asio::io_context &io)
         requires(!has_shm_member)
-        : m_io(io), m_storage(no_broker_factory{io})
+            : m_io(io)
+            , m_storage(no_broker_factory{io})
     {
     }
 
@@ -106,25 +108,25 @@ public:
     // stray broker. region_ns is the static shm-region namespace forwarded to the shm leaf:
     // empty (the default) shares rings by topic, a distinct namespace isolates this set's
     // same-host shm from unrelated co-host apps.
-    template <typename Broker>
+    template<typename Broker>
     transport_set(::asio::io_context &io, Broker &broker, std::string region_ns = {})
         requires(has_shm_member)
-        : m_io(io), m_storage(broker_factory<Broker>{io, broker, std::move(region_ns)})
+            : m_io(io)
+            , m_storage(broker_factory<Broker>{io, broker, std::move(region_ns)})
     {
     }
 
-    transport_set(const transport_set &) = delete;
+    transport_set(const transport_set &)            = delete;
     transport_set &operator=(const transport_set &) = delete;
-    transport_set(transport_set &&) = delete;
-    transport_set &operator=(transport_set &&) = delete;
+    transport_set(transport_set &&)                 = delete;
+    transport_set &operator=(transport_set &&)      = delete;
 
     // Mint a node over the owned leaves. The leaves expand into the borrowing node ctor in
     // pack order; the node is returned as a prvalue, so guaranteed copy elision materializes
     // the non-movable node directly in the caller's storage (no move is required or attempted).
-    template <typename Policy>
-    [[nodiscard]] node<Policy, Transports...> make_node(discovery::discovery &disc,
-                                                        const plexus::node_id &id,
-                                                        const node_options &opts)
+    template<typename Policy>
+    [[nodiscard]] node<Policy, Transports...>
+    make_node(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts)
     {
         return make_node_impl<Policy>(disc, id, opts, std::index_sequence_for<Transports...>{});
     }
@@ -133,20 +135,20 @@ private:
     struct no_broker_factory
     {
         ::asio::io_context &io;
-        template <typename T>
+        template<typename T>
         T make()
         {
             return T{io};
         }
     };
 
-    template <typename Broker>
+    template<typename Broker>
     struct broker_factory
     {
         ::asio::io_context &io;
-        Broker &broker;
-        std::string region_ns;
-        template <typename T>
+        Broker             &broker;
+        std::string         region_ns;
+        template<typename T>
         T make()
         {
             if constexpr(detail::has_can_acquire<T>)
@@ -156,15 +158,15 @@ private:
         }
     };
 
-    template <typename Policy, std::size_t... Is>
-    node<Policy, Transports...> make_node_impl(discovery::discovery &disc, const plexus::node_id &id,
-                                               const node_options &opts, std::index_sequence<Is...>)
+    template<typename Policy, std::size_t... Is>
+    node<Policy, Transports...> make_node_impl(discovery::discovery  &disc,
+                                               const plexus::node_id &id, const node_options &opts,
+                                               std::index_sequence<Is...>)
     {
-        return node<Policy, Transports...>{m_io, disc, id,
-                                           detail::leaf_at<Is>(m_storage)..., opts};
+        return node<Policy, Transports...>{m_io, disc, id, detail::leaf_at<Is>(m_storage)..., opts};
     }
 
-    ::asio::io_context &m_io;
+    ::asio::io_context                 &m_io;
     detail::leaf_storage<Transports...> m_storage;
 };
 

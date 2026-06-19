@@ -33,15 +33,15 @@ namespace plexus::io::detail {
 class udp_reorder_buffer
 {
 public:
-    static constexpr std::uint16_t half_space = 32768;
-    static constexpr std::size_t default_window = 512;
+    static constexpr std::uint16_t half_space     = 32768;
+    static constexpr std::size_t   default_window = 512;
 
     enum class outcome : std::uint8_t
     {
-        delivered,       // fed seq was contiguous (drove an in-order release run)
-        buffered,        // fed seq was ahead of a gap -> held (HOL)
-        duplicate,       // fed seq was below expected -> already delivered, dropped
-        out_of_window    // fed seq was at/beyond expected+W -> dropped (bound enforced)
+        delivered,    // fed seq was contiguous (drove an in-order release run)
+        buffered,     // fed seq was ahead of a gap -> held (HOL)
+        duplicate,    // fed seq was below expected -> already delivered, dropped
+        out_of_window // fed seq was at/beyond expected+W -> dropped (bound enforced)
     };
 
     // The initial expected seq is a STRUCTURAL ctor argument (defaulting to 0), NOT an
@@ -50,9 +50,9 @@ public:
     // cumulative-ack edge meaningful from segment one, since the handshake negotiates no
     // initial sequence). A test that exercises the uint16 wrap binds a non-zero start here.
     explicit udp_reorder_buffer(std::size_t window = default_window, std::uint16_t initial_seq = 0)
-        : m_window(window == 0 ? default_window : window)
-        , m_slots(m_window)
-        , m_expected(initial_seq)
+            : m_window(window == 0 ? default_window : window)
+            , m_slots(m_window)
+            , m_expected(initial_seq)
     {
     }
 
@@ -61,7 +61,9 @@ public:
     // the slot so the channel routes a reliable fragment to the reassembler on release
     // (it is bound to acceptance and freed with the slot — no parallel per-seq side-set to
     // prune). The channel posts on on_data around it (the buffer is sans-IO).
-    void on_deliver(plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> cb)
+    void on_deliver(plexus::detail::move_only_function<void(std::uint16_t, bool,
+                                                            std::span<const std::byte>)>
+                            cb)
     {
         m_on_deliver = std::move(cb);
     }
@@ -74,20 +76,21 @@ public:
     {
         auto adv = static_cast<std::uint16_t>(seq - m_expected);
         if(adv >= half_space)
-            return outcome::duplicate;          // behind expected: already delivered
+            return outcome::duplicate; // behind expected: already delivered
         if(adv >= m_window)
-            return outcome::out_of_window;       // at/beyond the bound: drop, do not grow
+            return outcome::out_of_window; // at/beyond the bound: drop, do not grow
 
-        auto &slot = m_slots[(m_base + adv) % m_window];
+        auto      &slot    = m_slots[(m_base + adv) % m_window];
         const bool was_gap = (adv != 0);
         if(slot.present)
-            return was_gap ? outcome::buffered : outcome::duplicate;  // re-buffered hole / dup at edge
+            return was_gap ? outcome::buffered
+                           : outcome::duplicate; // re-buffered hole / dup at edge
 
         slot.bytes.assign(bytes.begin(), bytes.end());
         slot.fragmented = fragmented;
-        slot.present = true;
+        slot.present    = true;
         if(adv != 0)
-            return outcome::buffered;             // a hole remains at expected -> HOL hold
+            return outcome::buffered; // a hole remains at expected -> HOL hold
 
         drain_contiguous();
         return outcome::delivered;
@@ -114,8 +117,8 @@ private:
     struct slot
     {
         std::vector<std::byte> bytes;
-        bool present{false};
-        bool fragmented{false};
+        bool                   present{false};
+        bool                   fragmented{false};
     };
 
     // Release the run of contiguous present slots starting at the base, advancing
@@ -135,11 +138,12 @@ private:
         }
     }
 
-    std::size_t m_window;
-    std::vector<slot> m_slots;            // a ring of W slots, allocated at setup
-    std::size_t m_base{0};                // ring index of `expected`
-    std::uint16_t m_expected{0};          // the next seq to deliver in order
-    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver;
+    std::size_t       m_window;
+    std::vector<slot> m_slots;       // a ring of W slots, allocated at setup
+    std::size_t       m_base{0};     // ring index of `expected`
+    std::uint16_t     m_expected{0}; // the next seq to deliver in order
+    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)>
+            m_on_deliver;
 };
 
 }

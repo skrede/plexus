@@ -48,11 +48,12 @@ public:
     // The send-sink: given the block-owned bytes view + the destination, perform the
     // irreducible async op and invoke the completion with ok once it finishes.
     using completion = plexus::detail::move_only_function<void(bool)>;
-    using send_sink = plexus::detail::move_only_function<void(std::span<const std::byte>, const Endpoint &, completion)>;
+    using send_sink  = plexus::detail::move_only_function<void(std::span<const std::byte>,
+                                                               const Endpoint &, completion)>;
 
     explicit send_queue(send_sink sink, std::size_t byte_cap = unbounded)
-        : m_sink(std::move(sink))
-        , m_byte_cap(byte_cap)
+            : m_sink(std::move(sink))
+            , m_byte_cap(byte_cap)
     {
     }
 
@@ -89,7 +90,7 @@ public:
     // capacity with no reuse left after close, and dropping it returns the memory promptly.
     void close()
     {
-        m_open = false;
+        m_open    = false;
         m_sending = false;
         m_queue.clear();
         m_free_buffers.clear();
@@ -100,7 +101,7 @@ private:
     struct node
     {
         std::vector<std::byte> bytes;
-        Endpoint dest;
+        Endpoint               dest;
     };
 
     // Compare-before-add admission: a frame fits only when the cap is not already met AND
@@ -146,18 +147,18 @@ private:
             m_sending = false;
             return;
         }
-        m_sending = true;
+        m_sending         = true;
         const auto &front = m_queue.front();
         m_sink(std::span<const std::byte>{front.bytes}, front.dest,
-            [this](bool /*ok*/)
-            {
-                if(!m_open)
-                    return;
-                m_bytes -= m_queue.front().bytes.size();
-                recycle_buffer(std::move(m_queue.front().bytes));
-                m_queue.pop_front();
-                drive();
-            });
+               [this](bool /*ok*/)
+               {
+                   if(!m_open)
+                       return;
+                   m_bytes -= m_queue.front().bytes.size();
+                   recycle_buffer(std::move(m_queue.front().bytes));
+                   m_queue.pop_front();
+                   drive();
+               });
     }
 
     // The spare-buffer pool's node-count ceiling: a small fixed bound so a momentary deep
@@ -166,13 +167,13 @@ private:
     // pool every one. The byte cap bounds the LIVE queue; this independently bounds the idle pool.
     static constexpr std::size_t k_max_free_buffers = 64;
 
-    send_sink m_sink;
-    std::size_t m_byte_cap;
-    std::deque<node> m_queue;
-    std::vector<std::vector<std::byte>> m_free_buffers;   // recycled buffer pool (capacity reused)
-    std::size_t m_bytes{0};
-    bool m_open{true};
-    bool m_sending{false};
+    send_sink                           m_sink;
+    std::size_t                         m_byte_cap;
+    std::deque<node>                    m_queue;
+    std::vector<std::vector<std::byte>> m_free_buffers; // recycled buffer pool (capacity reused)
+    std::size_t                         m_bytes{0};
+    bool                                m_open{true};
+    bool                                m_sending{false};
 };
 
 }

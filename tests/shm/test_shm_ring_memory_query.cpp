@@ -47,12 +47,12 @@ struct recording_store
     };
 
     std::map<std::string, std::shared_ptr<region>> regions;
-    std::vector<std::size_t>                        slab_requests;
-    std::size_t                                     last_total = 0;
+    std::vector<std::size_t>                       slab_requests;
+    std::size_t                                    last_total = 0;
 
     std::shared_ptr<region> make(const std::string &name, std::size_t bytes)
     {
-        auto r        = std::make_shared<region>();
+        auto r = std::make_shared<region>();
         r->storage.assign(bytes + k_cache_line, std::byte{});
         auto raw      = reinterpret_cast<std::uintptr_t>(r->storage.data());
         auto algn     = (raw + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
@@ -71,17 +71,21 @@ public:
 
     recording_handle(recording_store *store, std::string name,
                      std::shared_ptr<recording_store::region> region) noexcept
-        : m_store(store), m_name(std::move(name)), m_region(std::move(region))
+            : m_store(store)
+            , m_name(std::move(name))
+            , m_region(std::move(region))
     {
     }
 
     ~recording_handle() { reclaim(); }
 
-    recording_handle(const recording_handle &) = delete;
+    recording_handle(const recording_handle &)            = delete;
     recording_handle &operator=(const recording_handle &) = delete;
 
     recording_handle(recording_handle &&o) noexcept
-        : m_store(o.m_store), m_name(std::move(o.m_name)), m_region(std::move(o.m_region))
+            : m_store(o.m_store)
+            , m_name(std::move(o.m_name))
+            , m_region(std::move(o.m_region))
     {
         o.m_store = nullptr;
     }
@@ -114,9 +118,9 @@ private:
         m_region.reset();
     }
 
-    recording_store                          *m_store = nullptr;
-    std::string                               m_name;
-    std::shared_ptr<recording_store::region>  m_region;
+    recording_store                         *m_store = nullptr;
+    std::string                              m_name;
+    std::shared_ptr<recording_store::region> m_region;
 };
 
 class recording_broker
@@ -124,7 +128,10 @@ class recording_broker
 public:
     using region_handle = recording_handle;
 
-    explicit recording_broker(recording_store &store) noexcept : m_store(store) {}
+    explicit recording_broker(recording_store &store) noexcept
+            : m_store(store)
+    {
+    }
 
     region_status create(std::string_view name, std::size_t bytes, const create_options &,
                          region_handle &out)
@@ -141,7 +148,7 @@ public:
     region_status attach(std::string_view name, region_handle &out)
     {
         const std::string key{name};
-        auto it = m_store.regions.find(key);
+        auto              it = m_store.regions.find(key);
         if(it == m_store.regions.end() || !it->second->live)
             return region_status::not_found;
         out = recording_handle(&m_store, key, it->second);
@@ -154,7 +161,8 @@ private:
     recording_store &m_store;
 };
 
-static_assert(region_broker<recording_broker>, "recording_broker must satisfy the region_broker seam");
+static_assert(region_broker<recording_broker>,
+              "recording_broker must satisfy the region_broker seam");
 
 struct silent_notifier
 {
@@ -172,37 +180,37 @@ using test_registry = shm_topic_registry<recording_broker, silent_notifier>;
 TEST_CASE("shm.ring_memory_query ring_memory_for equals the layout helpers for a (P,C) table",
           "[shm][ring_memory_query]")
 {
-    for(std::uint32_t payload : {static_cast<std::uint32_t>(512 * k_kib),
-                                 static_cast<std::uint32_t>(k_mib)})
+    for(std::uint32_t payload :
+        {static_cast<std::uint32_t>(512 * k_kib), static_cast<std::uint32_t>(k_mib)})
         for(std::uint32_t capacity : {1u, 2u, 16u})
         {
             const ring_geometry g =
-                ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
+                    ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
             const std::size_t expected = control_region_bytes(g.cell_count) +
-                                         slab_region_bytes(g.cell_count, g.slot_capacity);
+                    slab_region_bytes(g.cell_count, g.slot_capacity);
             REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, capacity) ==
                     expected);
         }
 }
 
-TEST_CASE("shm.ring_memory_query the 16 MiB reliable_preserving cost at C=16 is the depth-32 figure",
-          "[shm][ring_memory_query]")
+TEST_CASE(
+        "shm.ring_memory_query the 16 MiB reliable_preserving cost at C=16 is the depth-32 figure",
+        "[shm][ring_memory_query]")
 {
     // The expensive corner: a 16 MiB payload at the full 16-consumer capacity is a
     // depth-32 ring (next power of two STRICTLY above 16, never depth-17). slab = 32 *
     // round_up_8(16 MiB) = 512 MiB; control = 1344 + 32*64 = 3392 bytes. This pins the
     // corrected math so a future depth-17 (or deep-tier) regression is caught.
-    const std::uint32_t payload  = static_cast<std::uint32_t>(16 * k_mib);
+    const std::uint32_t payload = static_cast<std::uint32_t>(16 * k_mib);
     const ring_geometry g =
-        ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 16u);
+            ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 16u);
     REQUIRE(g.cell_count == 32u);
     REQUIRE(g.slot_capacity == 16 * k_mib);
 
     const std::size_t slab = slab_region_bytes(g.cell_count, g.slot_capacity);
     REQUIRE(slab == static_cast<std::size_t>(512) * k_mib);
 
-    const std::size_t expected =
-        control_region_bytes(g.cell_count) + slab; // 512 MiB + 3392 bytes
+    const std::size_t expected = control_region_bytes(g.cell_count) + slab; // 512 MiB + 3392 bytes
     REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, 16u) == expected);
 }
 
@@ -211,7 +219,7 @@ TEST_CASE("shm.ring_memory_query ring_memory_for matches the bytes the registry 
 {
     // The query and the registry's mint must agree: the slab the registry asks the
     // broker to create equals ring_memory_for's slab term for the same (P, mode, C).
-    recording_store store;
+    recording_store  store;
     recording_broker broker{store};
     test_registry    registry(broker, plexus::io::reliability::reliable,
                               plexus::io::congestion::block);
@@ -219,12 +227,12 @@ TEST_CASE("shm.ring_memory_query ring_memory_for matches the bytes the registry 
     const std::uint32_t payload  = static_cast<std::uint32_t>(512 * k_kib);
     const std::uint32_t capacity = 2u;
     const ring_geometry g =
-        ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
+            ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
     const std::size_t expected_slab = slab_region_bytes(g.cell_count, g.slot_capacity);
 
     REQUIRE(registry.acquire("topic.query", ring_direction::request, payload,
-                             ring_geometry_mode::reliable_preserving, capacity) ==
-            acquire_result::created);
+                             ring_geometry_mode::reliable_preserving,
+                             capacity) == acquire_result::created);
 
     REQUIRE(store.slab_requests.size() == 1);
     REQUIRE(store.slab_requests.front() == expected_slab);

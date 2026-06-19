@@ -28,7 +28,8 @@ namespace plexus::detail {
 struct object_entry
 {
     const void *native_key{};
-    plexus::detail::move_only_function<void(const io::object_carrier &, const io::message_info &)> dispatch;
+    plexus::detail::move_only_function<void(const io::object_carrier &, const io::message_info &)>
+            dispatch;
 };
 
 struct subscription
@@ -38,7 +39,8 @@ struct subscription
     // The subscriber-declared type identity (std::nullopt = undeclared), stored so a
     // late-discovered peer gets the typed demand fanned with the gate intact.
     std::optional<std::uint64_t> type_id;
-    plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb;
+    plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)>
+                 cb;
     object_entry obj{};
 };
 
@@ -47,11 +49,14 @@ struct subscription
 // dedups per (peer, fqn)). The fan-out runs POSTED on the borrowed executor, so this
 // bookkeeping needs no locking. node_id is recovered from the node_name key the edge
 // carries; an unparsable name is skipped (it never matched a known peer anyway).
-template <typename Node>
+template<typename Node>
 struct peer_watch : io::observer
 {
     Node &owner;
-    explicit peer_watch(Node &n) : owner(n) {}
+    explicit peer_watch(Node &n)
+            : owner(n)
+    {
+    }
     void on_peer_ready(const plexus::node_id &id, std::string_view, io::peer_kind) override
     {
         owner.note_known_peer(id);

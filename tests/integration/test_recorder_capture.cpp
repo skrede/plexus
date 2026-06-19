@@ -209,16 +209,15 @@ TEST_CASE("a manual trigger freezes and drains the held window to the byte_sink 
         REQUIRE(rec.category == record_category::sample);
 }
 
-TEST_CASE("an armed anomaly predicate freezes on a synthetic drop edge",
-          "[recorder_capture][fdr]")
+TEST_CASE("an armed anomaly predicate freezes on a synthetic drop edge", "[recorder_capture][fdr]")
 {
     in_memory_byte_sink   sink;
     manual_clock          clk;
     pre_buffer_controller pre{sink, 4096, [&clk] { return clk(); }};
 
-    pre.on_anomaly([](const record_envelope &env) {
-        return env.category == record_category::drop && env.cause == drop_cause::arq_shed;
-    });
+    pre.on_anomaly(
+            [](const record_envelope &env)
+            { return env.category == record_category::drop && env.cause == drop_cause::arq_shed; });
 
     const auto body = payload_of(16, std::byte{0x22});
     for(int i = 0; i < 4; ++i)
@@ -244,9 +243,9 @@ TEST_CASE("a deadline-miss edge rides the drop surface and freezes via the predi
     pre_buffer_controller pre{sink, 4096, [&clk] { return clk(); }};
 
     // A deadline-miss is an observable drop edge; the predicate matches it like any anomaly.
-    pre.on_anomaly([](const record_envelope &env) {
-        return env.category == record_category::drop && env.cause == drop_cause::blocked;
-    });
+    pre.on_anomaly(
+            [](const record_envelope &env)
+            { return env.category == record_category::drop && env.cause == drop_cause::blocked; });
 
     const auto body = payload_of(16, std::byte{0x33});
     pre.record_sample(0x9, message_info{}, 0, false, capture_fidelity::payload, body);
@@ -312,10 +311,10 @@ plexus::node_id make_id(std::uint8_t seed)
 // that proves the deregister-before-teardown discipline.
 struct session_fixture
 {
-    inproc_bus<>        bus;
-    inproc_executor<>   ex{bus};
-    inproc_transport<>  ta{ex, bus};
-    static_discovery    disc{{}};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
+    inproc_transport<> ta{ex, bus};
+    static_discovery   disc{{}};
 
     void drive() { ex.drain(); }
 };
@@ -343,8 +342,8 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
         session_fixture fx;
         const auto      id = make_id(0x4C);
 
-        in_memory_byte_sink sink;
-        const int           per_topic = 16;
+        in_memory_byte_sink    sink;
+        const int              per_topic = 16;
         std::vector<std::byte> recovered_samples;
 
         {
@@ -356,7 +355,7 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
             // produced, no dropouts) this run.
             plexus::recorder_options ro;
             ro.ring_bytes = 1u << 20;
-            auto rec = n.make_recorder(sink, std::move(ro));
+            auto rec      = n.make_recorder(sink, std::move(ro));
 
             // The endpoints live in an INNER scope so their declaration-drop edges (posted
             // capturing the engine `this`) are drained while the node is still alive — the
@@ -364,12 +363,12 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
             {
                 plexus::topic_qos qos;
                 qos.latch = true;
-                plexus::publisher<> pub_a{n, "topic.a", qos};
-                plexus::publisher<> pub_b{n, "topic.b", qos};
+                plexus::publisher<>  pub_a{n, "topic.a", qos};
+                plexus::publisher<>  pub_b{n, "topic.b", qos};
                 plexus::subscriber<> sub_a{n, "topic.a",
-                    [](std::span<const std::byte>, const message_info &) {}};
+                                           [](std::span<const std::byte>, const message_info &) {}};
                 plexus::subscriber<> sub_b{n, "topic.b",
-                    [](std::span<const std::byte>, const message_info &) {}};
+                                           [](std::span<const std::byte>, const message_info &) {}};
                 fx.drive();
 
                 for(int i = 0; i < per_topic; ++i)
@@ -403,9 +402,9 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
         const recovery_result       res = reader.recover(records);
         REQUIRE(res.header_ok);
 
-        std::uint64_t produced = 0;
-        std::uint64_t dropped  = 0;
-        std::size_t   samples  = 0;
+        std::uint64_t produced    = 0;
+        std::uint64_t dropped     = 0;
+        std::size_t   samples     = 0;
         bool          saw_topic_a = false;
         bool          saw_topic_b = false;
         for(const auto &r : records)
@@ -415,8 +414,10 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
             if(r.category != record_category::sample)
                 continue;
             ++samples;
-            if(r.topic_hash == plexus::wire::fqn_topic_hash("topic.a")) saw_topic_a = true;
-            if(r.topic_hash == plexus::wire::fqn_topic_hash("topic.b")) saw_topic_b = true;
+            if(r.topic_hash == plexus::wire::fqn_topic_hash("topic.a"))
+                saw_topic_a = true;
+            if(r.topic_hash == plexus::wire::fqn_topic_hash("topic.b"))
+                saw_topic_b = true;
             // The framed sample's tail is the published marker (decoded offline, no tap codec).
             const std::array<std::byte, 2> tail{std::byte{0xBE}, std::byte{0xEF}};
             REQUIRE(payload_ends_with(r.payload, tail));
@@ -435,7 +436,8 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
     }
 }
 
-TEST_CASE("a recorder destroyed mid-session deregisters before teardown and survives a post-dtor pump",
+TEST_CASE("a recorder destroyed mid-session deregisters before teardown and survives a post-dtor "
+          "pump",
           "[recorder_capture][e2e][teardown]")
 {
     // The load-bearing teardown-UAF section: build a node + recorder, run a partial session,
@@ -459,12 +461,13 @@ TEST_CASE("a recorder destroyed mid-session deregisters before teardown and surv
             {
                 plexus::topic_qos qos;
                 qos.latch = true;
-                plexus::publisher<> pub{n, "teardown.topic", qos};
+                plexus::publisher<>  pub{n, "teardown.topic", qos};
                 plexus::subscriber<> sub{n, "teardown.topic",
-                    [](std::span<const std::byte>, const message_info &) {}};
+                                         [](std::span<const std::byte>, const message_info &) {}};
                 for(int i = 0; i < 8; ++i)
                 {
-                    const std::array<std::byte, 3> mk{std::byte{0x01}, std::byte(i), std::byte{0x02}};
+                    const std::array<std::byte, 3> mk{std::byte{0x01}, std::byte(i),
+                                                      std::byte{0x02}};
                     pub.publish(mk);
                     fx.drive();
                 }

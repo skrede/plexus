@@ -48,31 +48,34 @@ namespace plexus::io::shm {
 // concept -- the compiled futex primitive or the asio reactor bridge), NOT an asio
 // type: the channel never pulls an asio or POSIX header into core. Borrows the ring + notifier
 // BY REFERENCE; non-copy/non-move owning facade.
-template <typename Notifier>
+template<typename Notifier>
     requires notifier<Notifier>
 class shm_channel
 {
 public:
-    using deliver_fn = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
+    using deliver_fn =
+            plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
     // spin_budget is the consumer-sovereign adaptive spin-then-park knob threaded to the
     // slot_subscriber (required-WITH-default — the swept knee): the subscriber spins up to
     // the budget on an empty take before this drain returns and the notifier parks.
     shm_channel(broadcast_ring &ring, Notifier &notify, reliability rel, congestion cong,
                 std::uint32_t spin_budget = slot_subscriber::default_spin_budget) noexcept
-        : m_publisher(ring, rel, cong), m_subscriber(ring, spin_budget), m_notifier(notify)
+            : m_publisher(ring, rel, cong)
+            , m_subscriber(ring, spin_budget)
+            , m_notifier(notify)
     {
     }
 
-    shm_channel(const shm_channel &) = delete;
+    shm_channel(const shm_channel &)            = delete;
     shm_channel &operator=(const shm_channel &) = delete;
-    shm_channel(shm_channel &&) = delete;
-    shm_channel &operator=(shm_channel &&) = delete;
+    shm_channel(shm_channel &&)                 = delete;
+    shm_channel &operator=(shm_channel &&)      = delete;
 
     // Loan -> one memcpy -> publish -> signal. The notifier fires ONLY on ok.
     loan_status send(std::span<const std::byte> payload) noexcept
     {
-        loaned_buffer slot;
+        loaned_buffer     slot;
         const loan_status loaned = loan_blocking(payload.size(), slot);
         if(loaned != loan_status::ok)
             return loaned; // rejected (oversize) or congested: no signal either way
@@ -126,7 +129,8 @@ private:
             return st; // best_effort / non-block: surface the status as-is (no blocking)
 
         std::uint64_t last_seen = m_publisher.slowest_consumer_position();
-        for(int stalled = 0; st == loan_status::congested && stalled < k_no_progress_budget; ++stalled)
+        for(int stalled = 0; st == loan_status::congested && stalled < k_no_progress_budget;
+            ++stalled)
         {
             std::this_thread::yield(); // allocation-free back-pressure spin
             st = m_publisher.loan(size, out);
@@ -135,7 +139,7 @@ private:
             if(now != last_seen)
             {
                 last_seen = now; // a live consumer freed a slot: keep blocking losslessly
-                stalled    = -1; // reset the no-progress window (++ on loop returns it to 0)
+                stalled   = -1;  // reset the no-progress window (++ on loop returns it to 0)
             }
         }
         return st;

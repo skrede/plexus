@@ -53,8 +53,9 @@ struct reading_codec
     {
         if(b.size() != 8)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
-        auto u32 = [&](int o) {
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+        auto u32 = [&](int o)
+        {
             std::uint32_t v = 0;
             for(int i = 0; i < 4; ++i)
                 v |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(b[o + i])) << (8 * i);
@@ -69,26 +70,26 @@ struct reading_codec
 
 int main()
 {
-    asio::io_context io;
-    plexus::asio::asio_transport transport{io};
+    asio::io_context                 io;
+    plexus::asio::asio_transport     transport{io};
     plexus::mdnspp::mdnspp_discovery disc{io, "_plexus._tcp.local."};
 
     plexus::node_options opts;
-    opts.name = "telemetry-publisher";
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(200),
-                                                  std::chrono::seconds(5),
-                                                  std::nullopt, std::nullopt};
+    opts.name      = "telemetry-publisher";
+    opts.reconnect = plexus::io::reconnect_config{
+            std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     opts.redial_seed = 0x7E1E1;
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
-        io, disc, "telemetry-publisher", transport, opts};
+            io, disc, "telemetry-publisher", transport, opts};
     node.listen({"tcp", "127.0.0.1:5574"});
 
     plexus::publisher<reading_codec> topic{node, "telemetry"};
 
-    std::uint32_t value = 100;
-    asio::steady_timer tick{io};
-    std::function<void()> publish = [&] {
+    std::uint32_t         value = 100;
+    asio::steady_timer    tick{io};
+    std::function<void()> publish = [&]
+    {
         topic.publish(reading{1, value++});
         tick.expires_after(std::chrono::seconds(1));
         tick.async_wait([&](auto) { publish(); });

@@ -28,15 +28,16 @@ struct recorder
     struct sent
     {
         std::vector<std::byte> bytes;
-        int dest;
+        int                    dest;
     };
 
-    std::vector<sent> calls;
+    std::vector<sent>                   calls;
     std::vector<send_queue::completion> pending;
 
     send_queue::send_sink sink()
     {
-        return [this](std::span<const std::byte> bytes, const int &dest, send_queue::completion done)
+        return [this](std::span<const std::byte> bytes, const int &dest,
+                      send_queue::completion done)
         {
             calls.push_back(sent{std::vector<std::byte>(bytes.begin(), bytes.end()), dest});
             pending.push_back(std::move(done));
@@ -63,7 +64,7 @@ std::vector<std::byte> bytes_of(std::initializer_list<int> vals)
 
 TEST_CASE("send_queue copies caller bytes into an owned node on enqueue", "[io][send_queue]")
 {
-    recorder rec;
+    recorder   rec;
     send_queue q{rec.sink()};
 
     auto scratch = bytes_of({1, 2, 3});
@@ -80,7 +81,7 @@ TEST_CASE("send_queue copies caller bytes into an owned node on enqueue", "[io][
 
 TEST_CASE("send_queue keeps at most one send-sink invocation outstanding", "[io][send_queue]")
 {
-    recorder rec;
+    recorder   rec;
     send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({1}), 1);
@@ -100,7 +101,7 @@ TEST_CASE("send_queue keeps at most one send-sink invocation outstanding", "[io]
 
 TEST_CASE("send_queue drains in FIFO order across a burst", "[io][send_queue]")
 {
-    recorder rec;
+    recorder   rec;
     send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({10}), 100);
@@ -121,9 +122,10 @@ TEST_CASE("send_queue drains in FIFO order across a burst", "[io][send_queue]")
     REQUIRE_FALSE(q.sending());
 }
 
-TEST_CASE("send_queue close() clears a pending queue and guards a late completion", "[io][send_queue]")
+TEST_CASE("send_queue close() clears a pending queue and guards a late completion",
+          "[io][send_queue]")
 {
-    recorder rec;
+    recorder   rec;
     send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({1}), 1);
@@ -137,13 +139,14 @@ TEST_CASE("send_queue close() clears a pending queue and guards a late completio
     // A completion arriving after close is a guarded no-op: it must not chain or pop.
     rec.complete_front();
     REQUIRE(q.size() == 0);
-    REQUIRE(rec.calls.size() == 1);          // no further sink invocation chained
+    REQUIRE(rec.calls.size() == 1); // no further sink invocation chained
 }
 
-TEST_CASE("send_queue default capacity is unbounded — the at-capacity signal is inert", "[io][send_queue]")
+TEST_CASE("send_queue default capacity is unbounded — the at-capacity signal is inert",
+          "[io][send_queue]")
 {
-    recorder rec;
-    send_queue q{rec.sink()};                // default capacity
+    recorder   rec;
+    send_queue q{rec.sink()}; // default capacity
 
     REQUIRE(q.full() == false);
     for(int i = 0; i < 1000; ++i)
@@ -152,13 +155,14 @@ TEST_CASE("send_queue default capacity is unbounded — the at-capacity signal i
     REQUIRE(q.size() == 1000);
 }
 
-TEST_CASE("send_queue bounded capacity fires the at-capacity signal and refuses past the cap", "[io][send_queue]")
+TEST_CASE("send_queue bounded capacity fires the at-capacity signal and refuses past the cap",
+          "[io][send_queue]")
 {
-    recorder rec;
-    send_queue q{rec.sink(), 2};             // finite BYTE budget of two (single-byte frames)
+    recorder   rec;
+    send_queue q{rec.sink(), 2}; // finite BYTE budget of two (single-byte frames)
 
-    REQUIRE(q.enqueue(bytes_of({1}), 1));    // admitted, now in flight (1 byte)
-    REQUIRE(q.enqueue(bytes_of({2}), 2));    // admitted, parked behind the front (2 bytes)
+    REQUIRE(q.enqueue(bytes_of({1}), 1)); // admitted, now in flight (1 byte)
+    REQUIRE(q.enqueue(bytes_of({2}), 2)); // admitted, parked behind the front (2 bytes)
     REQUIRE(q.full());
 
     // At capacity: a further enqueue is refused (the backpressure signal), no node added.
@@ -174,21 +178,22 @@ TEST_CASE("send_queue bounded capacity fires the at-capacity signal and refuses 
     REQUIRE(q.size() == 2);
 }
 
-TEST_CASE("send_queue caps on summed BYTES, not entry count — one large frame trips a byte budget", "[io][send_queue]")
+TEST_CASE("send_queue caps on summed BYTES, not entry count — one large frame trips a byte budget",
+          "[io][send_queue]")
 {
-    recorder rec;
-    send_queue q{rec.sink(), 8};             // an 8-byte budget
+    recorder   rec;
+    send_queue q{rec.sink(), 8}; // an 8-byte budget
 
     // A single 5-byte frame is one ENTRY (count==1) but consumes 5 of 8 bytes.
     REQUIRE(q.enqueue(bytes_of({1, 2, 3, 4, 5}), 1));
     REQUIRE(q.size() == 1);
     REQUIRE(q.queued_bytes() == 5);
-    REQUIRE_FALSE(q.full());                 // count==1, but bytes (5) < cap (8)
+    REQUIRE_FALSE(q.full()); // count==1, but bytes (5) < cap (8)
 
     // A 3-byte frame fits exactly to the byte cap (5 + 3 == 8).
     REQUIRE(q.enqueue(bytes_of({6, 7, 8}), 2));
     REQUIRE(q.queued_bytes() == 8);
-    REQUIRE(q.full());                       // byte budget reached at count==2
+    REQUIRE(q.full()); // byte budget reached at count==2
 
     // A further 1-byte frame is refused on BYTES even though count is small.
     REQUIRE_FALSE(q.enqueue(bytes_of({9}), 3));
@@ -196,22 +201,23 @@ TEST_CASE("send_queue caps on summed BYTES, not entry count — one large frame 
     REQUIRE(q.queued_bytes() == 8);
 }
 
-TEST_CASE("send_queue near-cap boundary: byte accounting does not wrap and refuses correctly", "[io][send_queue]")
+TEST_CASE("send_queue near-cap boundary: byte accounting does not wrap and refuses correctly",
+          "[io][send_queue]")
 {
     // W1 overflow boundary: a frame at cap-1 bytes followed by a small frame whose sum
     // exceeds the cap must be refused (compare-before-add), and the running total must NOT
     // wrap below the cap and re-admit. Cap = 16; first frame = 15 bytes (cap-1).
-    recorder rec;
+    recorder   rec;
     send_queue q{rec.sink(), 16};
 
-    REQUIRE(q.enqueue(std::vector<std::byte>(15), 1));   // 15 of 16 bytes
+    REQUIRE(q.enqueue(std::vector<std::byte>(15), 1)); // 15 of 16 bytes
     REQUIRE(q.queued_bytes() == 15);
-    REQUIRE_FALSE(q.full());                             // one byte of headroom remains
+    REQUIRE_FALSE(q.full()); // one byte of headroom remains
 
     // A 2-byte frame would carry the total to 17 > 16 — refused, no wrap, nothing admitted.
     REQUIRE_FALSE(q.enqueue(std::vector<std::byte>(2), 2));
     REQUIRE(q.size() == 1);
-    REQUIRE(q.queued_bytes() == 15);                     // unchanged — did NOT wrap or admit
+    REQUIRE(q.queued_bytes() == 15); // unchanged — did NOT wrap or admit
 
     // The remaining one byte still admits exactly (15 + 1 == 16).
     REQUIRE(q.enqueue(std::vector<std::byte>(1), 3));

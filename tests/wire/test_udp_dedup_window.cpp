@@ -11,10 +11,11 @@
 
 #include <cstdint>
 
-using window = plexus::wire::udp_dedup_window;
+using window  = plexus::wire::udp_dedup_window;
 using outcome = plexus::wire::udp_dedup_window::outcome;
 
-TEST_CASE("dedup window: a never-seen seq is fresh, a re-presented seq is duplicate", "[udp][dedup]")
+TEST_CASE("dedup window: a never-seen seq is fresh, a re-presented seq is duplicate",
+          "[udp][dedup]")
 {
     window w;
     REQUIRE(w.admit(0) == outcome::fresh);
@@ -23,7 +24,8 @@ TEST_CASE("dedup window: a never-seen seq is fresh, a re-presented seq is duplic
     REQUIRE(w.admit(1) == outcome::duplicate);
 }
 
-TEST_CASE("dedup window: a forward run is all fresh and in-window reorder is admitted once", "[udp][dedup]")
+TEST_CASE("dedup window: a forward run is all fresh and in-window reorder is admitted once",
+          "[udp][dedup]")
 {
     window w;
     REQUIRE(w.admit(10) == outcome::fresh);
@@ -55,12 +57,13 @@ TEST_CASE("dedup window: depth_max is 32 and the seq-width invariant holds", "[u
     REQUIRE(w.depth() == 32u);
 }
 
-TEST_CASE("dedup window: wrap-safe across 65535 -> 0, with a post-wrap replay still duplicate", "[udp][dedup]")
+TEST_CASE("dedup window: wrap-safe across 65535 -> 0, with a post-wrap replay still duplicate",
+          "[udp][dedup]")
 {
     window w;
     REQUIRE(w.admit(65534) == outcome::fresh);
     REQUIRE(w.admit(65535) == outcome::fresh);
-    REQUIRE(w.admit(0) == outcome::fresh);   // 65535 -> 0 is a forward step of 1, not a blackout
+    REQUIRE(w.admit(0) == outcome::fresh); // 65535 -> 0 is a forward step of 1, not a blackout
     REQUIRE(w.admit(1) == outcome::fresh);
     // A replay of a pre-wrap seq that is still inside the window is a duplicate.
     REQUIRE(w.admit(65535) == outcome::duplicate);
@@ -78,13 +81,14 @@ TEST_CASE("dedup window: a large forward jump clears the bitmap and stays fresh"
     REQUIRE(w.admit(0) == outcome::too_old);
 }
 
-TEST_CASE("dedup window: reset re-freshes seq=0 (the handshake/session-id transition)", "[udp][dedup]")
+TEST_CASE("dedup window: reset re-freshes seq=0 (the handshake/session-id transition)",
+          "[udp][dedup]")
 {
     window w;
     REQUIRE(w.admit(0) == outcome::fresh);
     REQUIRE(w.admit(1) == outcome::fresh);
     REQUIRE(w.admit(2) == outcome::fresh);
-    REQUIRE(w.admit(0) == outcome::duplicate);   // still in-window before the reset
+    REQUIRE(w.admit(0) == outcome::duplicate); // still in-window before the reset
 
     w.reset();
 

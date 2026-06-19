@@ -52,7 +52,9 @@ public:
     // buffer — no copy). The rpc taps surface the borrowed call/serve/reply views, and
     // on_qos_change reports a subscriber attach's resolved verdict. All default-empty.
     virtual void on_message_published(std::string_view, const message_view &) {}
-    virtual void on_message_delivered(std::string_view, const message_info &, const message_view &) {}
+    virtual void on_message_delivered(std::string_view, const message_info &, const message_view &)
+    {
+    }
     virtual void on_rpc_call(std::string_view, const rpc_view &) {}
     virtual void on_rpc_serve(std::string_view, const rpc_view &) {}
     virtual void on_rpc_reply(std::string_view, const rpc_reply_view &) {}

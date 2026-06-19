@@ -28,7 +28,7 @@ namespace plexus::io {
 // only), and the durable-demand ledger (message-only reconnect resurrection)
 // genuinely differ, so the verbs compose these endpoint primitives rather than being
 // lifted wholesale.
-template <typename Channel>
+template<typename Channel>
 class subscription_endpoint
 {
 public:
@@ -37,10 +37,10 @@ public:
     struct peer
     {
         channel_type &channel;
-        std::string node_name;
+        std::string   node_name;
     };
 
-    subscriber_registry<channel_type> &registry() noexcept { return m_registry; }
+    subscriber_registry<channel_type>       &registry() noexcept { return m_registry; }
     const subscriber_registry<channel_type> &registry() const noexcept { return m_registry; }
 
     std::uint64_t next_sequence() noexcept { return m_next_sequence++; }
@@ -72,21 +72,19 @@ public:
     // frame. Reuses a member scratch to stay allocation-light.
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
-        wire::frame_header fhdr{
-                .type         = type,
-                .flags        = 0,
-                .session_id   = 0,
-                .timestamp_ns = wire::now_timestamp_ns(),
-                .payload_len  = inner.size()
-        };
+        wire::frame_header fhdr{.type         = type,
+                                .flags        = 0,
+                                .session_id   = 0,
+                                .timestamp_ns = wire::now_timestamp_ns(),
+                                .payload_len  = inner.size()};
         wire::encode_frame_into(m_control_scratch, fhdr, inner);
         channel.send(m_control_scratch);
     }
 
 private:
     subscriber_registry<channel_type> m_registry;
-    std::vector<std::byte> m_control_scratch;
-    std::uint64_t m_next_sequence{0};
+    std::vector<std::byte>            m_control_scratch;
+    std::uint64_t                     m_next_sequence{0};
 };
 
 }

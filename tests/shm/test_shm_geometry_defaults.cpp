@@ -47,11 +47,11 @@ struct region_store
     };
 
     std::map<std::string, std::shared_ptr<region>> regions;
-    bool                                            fail_slab_create = false;
+    bool                                           fail_slab_create = false;
 
     std::shared_ptr<region> make(const std::string &name, std::size_t bytes)
     {
-        auto r        = std::make_shared<region>();
+        auto r = std::make_shared<region>();
         r->storage.assign(bytes + k_cache_line, std::byte{});
         auto raw      = reinterpret_cast<std::uintptr_t>(r->storage.data());
         auto algn     = (raw + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
@@ -70,17 +70,21 @@ public:
 
     stub_handle(region_store *store, std::string name,
                 std::shared_ptr<region_store::region> region) noexcept
-        : m_store(store), m_name(std::move(name)), m_region(std::move(region))
+            : m_store(store)
+            , m_name(std::move(name))
+            , m_region(std::move(region))
     {
     }
 
     ~stub_handle() { reclaim(); }
 
-    stub_handle(const stub_handle &) = delete;
+    stub_handle(const stub_handle &)            = delete;
     stub_handle &operator=(const stub_handle &) = delete;
 
     stub_handle(stub_handle &&o) noexcept
-        : m_store(o.m_store), m_name(std::move(o.m_name)), m_region(std::move(o.m_region))
+            : m_store(o.m_store)
+            , m_name(std::move(o.m_name))
+            , m_region(std::move(o.m_region))
     {
         o.m_store = nullptr;
     }
@@ -123,13 +127,16 @@ class stub_broker
 public:
     using region_handle = stub_handle;
 
-    explicit stub_broker(region_store &store) noexcept : m_store(store) {}
+    explicit stub_broker(region_store &store) noexcept
+            : m_store(store)
+    {
+    }
 
     region_status create(std::string_view name, std::size_t bytes, const create_options &,
                          region_handle &out)
     {
         const std::string key{name};
-        const bool is_slab = key.size() >= 2 && key.compare(key.size() - 2, 2, ".s") == 0;
+        const bool        is_slab = key.size() >= 2 && key.compare(key.size() - 2, 2, ".s") == 0;
         if(is_slab && m_store.fail_slab_create)
             return region_status::failed;
         if(auto it = m_store.regions.find(key); it != m_store.regions.end() && it->second->live)
@@ -141,7 +148,7 @@ public:
     region_status attach(std::string_view name, region_handle &out)
     {
         const std::string key{name};
-        auto it = m_store.regions.find(key);
+        auto              it = m_store.regions.find(key);
         if(it == m_store.regions.end() || !it->second->live)
             return region_status::not_found;
         out = stub_handle(&m_store, key, it->second);
@@ -178,21 +185,22 @@ TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-iden
     REQUIRE(unset.slot_capacity == 4096u);
 
     // And the explicit reliable_preserving / shipped-floor form agrees byte-for-byte.
-    const ring_geometry explicit_default =
-        ring_geometry_for(std::nullopt, ring_geometry_mode::reliable_preserving, k_max_consumers);
+    const ring_geometry explicit_default = ring_geometry_for(
+            std::nullopt, ring_geometry_mode::reliable_preserving, k_max_consumers);
     REQUIRE(explicit_default.cell_count == 256u);
     REQUIRE(explicit_default.slot_capacity == 4096u);
 
     // A small (<=4096) declared payload still lands in the default deep-but-narrow ring.
     const ring_geometry small =
-        ring_geometry_for(std::optional<std::uint32_t>{4096u},
-                          ring_geometry_mode::reliable_preserving, k_max_consumers);
+            ring_geometry_for(std::optional<std::uint32_t>{4096u},
+                              ring_geometry_mode::reliable_preserving, k_max_consumers);
     REQUIRE(small.cell_count == 256u);
     REQUIRE(small.slot_capacity == 4096u);
 }
 
-TEST_CASE("shm.geometry_defaults an over-ceiling registration fails closed naming the ceiling bound",
-          "[shm][geometry_defaults]")
+TEST_CASE(
+        "shm.geometry_defaults an over-ceiling registration fails closed naming the ceiling bound",
+        "[shm][geometry_defaults]")
 {
     region_store store;
     stub_broker  broker{store};
@@ -201,14 +209,13 @@ TEST_CASE("shm.geometry_defaults an over-ceiling registration fails closed namin
     // exceeds it, so the registration must fail closed against the CEILING bound rather
     // than mint a downgraded or shrunk ring.
     constexpr std::uint64_t tiny_ceiling = 64 * 1024; // 64 KiB
-    test_registry registry(broker, plexus::io::reliability::reliable,
-                           plexus::io::congestion::block,
+    test_registry registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block,
                            test_registry::default_notifier_binder(), tiny_ceiling);
 
     const std::uint32_t payload = static_cast<std::uint32_t>(k_mib); // 1 MiB ring slab >> 64 KiB
     REQUIRE(registry.acquire("topic.over_ceiling", ring_direction::request, payload,
-                             ring_geometry_mode::reliable_preserving, 1u) ==
-            acquire_result::failed);
+                             ring_geometry_mode::reliable_preserving,
+                             1u) == acquire_result::failed);
 
     // The diagnostic names the CEILING bound with the exact ask vs the ceiling, and the
     // ring was never minted (no live entry, no silent downgrade).
@@ -219,12 +226,13 @@ TEST_CASE("shm.geometry_defaults an over-ceiling registration fails closed namin
     REQUIRE(registry.live_count() == 0);
 }
 
-TEST_CASE("shm.geometry_defaults an OS-allocation-failed registration fails closed naming the OS bound",
+TEST_CASE("shm.geometry_defaults an OS-allocation-failed registration fails closed naming the OS "
+          "bound",
           "[shm][geometry_defaults]")
 {
     region_store store;
     store.fail_slab_create = true; // the broker/OS cannot map the slab the ceiling admitted
-    stub_broker  broker{store};
+    stub_broker broker{store};
 
     // A generous (default) ceiling: the ceiling leg passes, so the failure can ONLY be the
     // OS-allocator leg — the second fail-closed path.
@@ -232,13 +240,12 @@ TEST_CASE("shm.geometry_defaults an OS-allocation-failed registration fails clos
                            plexus::io::congestion::block);
 
     const std::uint32_t payload = static_cast<std::uint32_t>(512 * 1024);
-    const ring_geometry g =
-        ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 1u);
-    const std::size_t expected_ask = slab_region_bytes(g.cell_count, g.slot_capacity);
+    const ring_geometry g = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 1u);
+    const std::size_t   expected_ask = slab_region_bytes(g.cell_count, g.slot_capacity);
 
     REQUIRE(registry.acquire("topic.os_fail", ring_direction::request, payload,
-                             ring_geometry_mode::reliable_preserving, 1u) ==
-            acquire_result::failed);
+                             ring_geometry_mode::reliable_preserving,
+                             1u) == acquire_result::failed);
 
     // The diagnostic names the OS-ALLOCATOR bound, carries the exact slab ask and the
     // broker's verdict, and the ring was not minted (no silent best-effort path).

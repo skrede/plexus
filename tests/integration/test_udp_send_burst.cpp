@@ -39,8 +39,8 @@
 #include <algorithm>
 
 namespace pasio = plexus::asio;
-namespace wire = plexus::wire;
-namespace pio = plexus::io;
+namespace wire  = plexus::wire;
+namespace pio   = plexus::io;
 
 namespace {
 
@@ -50,8 +50,11 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 
 inline pio::detail::udp_arq_config fast_arq()
 {
-    return pio::detail::udp_arq_config{
-        .window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{80}, .max_retransmit = 12};
+    return pio::detail::udp_arq_config{.window         = 64,
+                                       .initial_rto    = ms{20},
+                                       .min_rto        = ms{10},
+                                       .max_rto        = ms{80},
+                                       .max_retransmit = 12};
 }
 
 std::vector<std::byte> bytes_of(const std::string &s)
@@ -70,7 +73,7 @@ std::string str_of(std::span<const std::byte> b)
     return s;
 }
 
-template <typename Pred>
+template<typename Pred>
 void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
 {
     auto bound = std::chrono::steady_clock::now() + timeout;
@@ -85,23 +88,27 @@ void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
 // A listen+dial best_effort pair on one io_context (handshake established).
 struct pair_fixture
 {
-    ::asio::io_context io;
+    ::asio::io_context   io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs};
 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
-    std::vector<std::string> received;
+    std::vector<std::string>            received;
 
     pair_fixture()
     {
-        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch) {
-            accepted = std::move(ch);
-            accepted->on_data([this](std::span<const std::byte> b) { received.push_back(str_of(b)); });
-        });
+        server.on_accepted(
+                [this](std::unique_ptr<pasio::udp_channel> ch)
+                {
+                    accepted = std::move(ch);
+                    accepted->on_data([this](std::span<const std::byte> b)
+                                      { received.push_back(str_of(b)); });
+                });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [this] { return server.port() != 0; });
 
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
+        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
+                         { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
         pump_until(io, [this] { return dialed && accepted; });
     }
@@ -113,8 +120,8 @@ TEST_CASE("udp burst: N best_effort datagrams queued in one turn each arrive int
           "[udp][burst][reproducibility]")
 {
     constexpr int k_iterations = 100;
-    constexpr int k_burst = 8;
-    int proven = 0;
+    constexpr int k_burst      = 8;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         pair_fixture h;
@@ -129,14 +136,14 @@ TEST_CASE("udp burst: N best_effort datagrams queued in one turn each arrive int
         std::vector<std::string> sent;
         for(int i = 0; i < k_burst; ++i)
         {
-            std::string p = "burst-" + std::to_string(iter) + "-" + std::to_string(i)
-                            + std::string(static_cast<std::size_t>(i) * 7, 'x');   // size varies per leg
+            std::string p = "burst-" + std::to_string(iter) + "-" + std::to_string(i) +
+                    std::string(static_cast<std::size_t>(i) * 7, 'x'); // size varies per leg
             sent.push_back(p);
-            h.dialed->send(bytes_of(p));   // queued; the scratch is reused on the next iteration
+            h.dialed->send(bytes_of(p)); // queued; the scratch is reused on the next iteration
         }
 
         pump_until(h.io, [&] { return h.received.size() == sent.size(); });
-        REQUIRE(h.received == sent);       // each distinct payload, intact, in publish order
+        REQUIRE(h.received == sent); // each distinct payload, intact, in publish order
         ++proven;
     }
     REQUIRE(proven == k_iterations);
@@ -146,34 +153,41 @@ TEST_CASE("udp burst: two channels over one server each send in the same turn wi
           "[udp][burst][reproducibility]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // One listening server, TWO dialing clients (each its own transport/server), so
         // two DISTINCT accepted channels share the listening server's ONE outbound socket
         // for their handshake responses and any sends. The interest is the listening
         // server's send path: it must keep each in-flight datagram alive.
-        ::asio::io_context io;
+        ::asio::io_context   io;
         pasio::udp_transport server{io};
         pasio::udp_transport client_a{io, pasio::udp_channel::default_max_payload, fast_hs};
         pasio::udp_transport client_b{io, pasio::udp_channel::default_max_payload, fast_hs};
 
         std::vector<std::unique_ptr<pasio::udp_channel>> accepted;
-        std::unique_ptr<pasio::udp_channel> dia_a, dia_b;
-        std::vector<std::string> dialer_seen;          // every payload the two dialers receive
-        server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted.push_back(std::move(ch)); });
+        std::unique_ptr<pasio::udp_channel>              dia_a, dia_b;
+        std::vector<std::string> dialer_seen; // every payload the two dialers receive
+        server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch)
+                           { accepted.push_back(std::move(ch)); });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
         const std::string ep = "udp", host = "127.0.0.1:" + std::to_string(server.port());
-        client_a.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) {
-            dia_a = std::move(ch);
-            dia_a->on_data([&](std::span<const std::byte> b) { dialer_seen.push_back(str_of(b)); });
-        });
-        client_b.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) {
-            dia_b = std::move(ch);
-            dia_b->on_data([&](std::span<const std::byte> b) { dialer_seen.push_back(str_of(b)); });
-        });
+        client_a.on_dialed(
+                [&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
+                {
+                    dia_a = std::move(ch);
+                    dia_a->on_data([&](std::span<const std::byte> b)
+                                   { dialer_seen.push_back(str_of(b)); });
+                });
+        client_b.on_dialed(
+                [&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
+                {
+                    dia_b = std::move(ch);
+                    dia_b->on_data([&](std::span<const std::byte> b)
+                                   { dialer_seen.push_back(str_of(b)); });
+                });
         client_a.dial({ep, host});
         client_b.dial({ep, host});
         pump_until(io, [&] { return accepted.size() == 2 && dia_a && dia_b; });
@@ -202,28 +216,32 @@ TEST_CASE("udp burst: two channels over one server each send in the same turn wi
 
 namespace {
 
-enum class action { pass, drop };
+enum class action
+{
+    pass,
+    drop
+};
 
 // A drop-scripting relay (acks + handshake always pass; a scripted data seq drops once
 // then retransmits) — the same shape as the reproducibility relay, reused here to force
 // a retransmit to interleave with fresh sends.
 struct relay
 {
-    ::asio::io_context &io;
-    ::asio::ip::udp::socket front;
-    ::asio::ip::udp::socket back;
-    ::asio::ip::udp::endpoint server_ep;
-    ::asio::ip::udp::endpoint client_ep;
-    ::asio::ip::udp::endpoint from;
+    ::asio::io_context         &io;
+    ::asio::ip::udp::socket     front;
+    ::asio::ip::udp::socket     back;
+    ::asio::ip::udp::endpoint   server_ep;
+    ::asio::ip::udp::endpoint   client_ep;
+    ::asio::ip::udp::endpoint   from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
-    std::deque<action> data_script;
+    std::deque<action>          data_script;
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
-        : io(ctx)
-        , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            : io(ctx)
+            , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
     {
         recv_front();
         recv_back();
@@ -234,8 +252,8 @@ struct relay
     [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
-        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq
-               && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
+        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq &&
+                wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
     }
 
     void to_server(std::span<const std::byte> dg)
@@ -246,29 +264,42 @@ struct relay
 
     void recv_front()
     {
-        front.async_receive_from(::asio::buffer(front_buf), from, [this](std::error_code ec, std::size_t n) {
-            if(ec) return;
-            client_ep = from;
-            std::span<const std::byte> dg{front_buf.data(), n};
-            if(is_data(dg))
-            {
-                action a = action::pass;
-                if(!data_script.empty()) { a = data_script.front(); data_script.pop_front(); }
-                if(a == action::pass) to_server(dg);
-            }
-            else to_server(dg);
-            recv_front();
-        });
+        front.async_receive_from(::asio::buffer(front_buf), from,
+                                 [this](std::error_code ec, std::size_t n)
+                                 {
+                                     if(ec)
+                                         return;
+                                     client_ep = from;
+                                     std::span<const std::byte> dg{front_buf.data(), n};
+                                     if(is_data(dg))
+                                     {
+                                         action a = action::pass;
+                                         if(!data_script.empty())
+                                         {
+                                             a = data_script.front();
+                                             data_script.pop_front();
+                                         }
+                                         if(a == action::pass)
+                                             to_server(dg);
+                                     }
+                                     else
+                                         to_server(dg);
+                                     recv_front();
+                                 });
     }
 
     void recv_back()
     {
-        back.async_receive_from(::asio::buffer(back_buf), from, [this](std::error_code ec, std::size_t n) {
-            if(ec) return;
-            if(client_ep.port() != 0)
-                front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
-            recv_back();
-        });
+        back.async_receive_from(::asio::buffer(back_buf), from,
+                                [this](std::error_code ec, std::size_t n)
+                                {
+                                    if(ec)
+                                        return;
+                                    if(client_ep.port() != 0)
+                                        front.send_to(::asio::buffer(back_buf.data(), n),
+                                                      client_ep);
+                                    recv_back();
+                                });
     }
 };
 
@@ -278,25 +309,30 @@ TEST_CASE("udp burst: a reliable retransmit interleaved with fresh sends deliver
           "[udp][burst][reliable][reproducibility]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context io;
+        ::asio::io_context   io;
         pasio::udp_transport server{io, pasio::udp_channel::default_max_payload,
                                     pasio::udp_transport::arq_type::default_ladder, fast_arq()};
-        pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
+        pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs,
+                                    fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
-        std::vector<std::string> delivered;
-        server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) {
-            accepted = std::move(ch);
-            accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
-        });
+        std::vector<std::string>            delivered;
+        server.on_accepted(
+                [&](std::unique_ptr<pasio::udp_channel> ch)
+                {
+                    accepted = std::move(ch);
+                    accepted->on_data([&](std::span<const std::byte> b)
+                                      { delivered.push_back(str_of(b)); });
+                });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
         relay link{io, server.port()};
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
+                         { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
@@ -312,10 +348,10 @@ TEST_CASE("udp burst: a reliable retransmit interleaved with fresh sends deliver
         {
             const std::string p = "rtx-" + std::to_string(iter) + "-" + std::to_string(i);
             sent.push_back(p);
-            dialed->send(bytes_of(p));   // reliable mode: a burst of submits in one turn
+            dialed->send(bytes_of(p)); // reliable mode: a burst of submits in one turn
         }
         pump_until(io, [&] { return delivered.size() == sent.size(); });
-        REQUIRE(delivered == sent);      // in order, complete, retransmit-interleaved
+        REQUIRE(delivered == sent); // in order, complete, retransmit-interleaved
         ++proven;
     }
     REQUIRE(proven == k_iterations);

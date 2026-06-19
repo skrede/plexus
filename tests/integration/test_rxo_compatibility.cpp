@@ -51,7 +51,7 @@ using plexus::io::rxo_mode;
 using plexus::io::subscriber_qos;
 using plexus::io::handshake_fsm_config;
 using plexus::wire::subscribe_status;
-using session = plexus::io::peer_session<inproc_policy>;
+using session       = plexus::io::peer_session<inproc_policy>;
 using msg_forwarder = plexus::io::message_forwarder<inproc_policy>;
 using rpc_forwarder = plexus::io::procedure_forwarder<inproc_policy>;
 using plexus::io::k_rxo_field_reliability;
@@ -62,7 +62,7 @@ using plexus::io::k_rxo_field_max_message_bytes;
 namespace {
 
 constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr int k_loops = 50;
+constexpr int  k_loops        = 50;
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -78,8 +78,11 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 // A two-node inproc link: the dialer (the SUBSCRIBER) and the accepted end (the
@@ -90,51 +93,52 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // the bus so destruction unwinds the channels first).
 struct link
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> transport{ex, bus};
 
-    msg_forwarder sub_messages{};    // the subscriber's forwarder
-    msg_forwarder prod_messages{};   // the producer's forwarder
+    msg_forwarder sub_messages{};  // the subscriber's forwarder
+    msg_forwarder prod_messages{}; // the producer's forwarder
     rpc_forwarder sub_procedures{ex, k_long_timeout};
     rpc_forwarder prod_procedures{ex, k_long_timeout};
 
     plexus::io::peer_context<inproc_policy> sub_ctx;
     plexus::io::peer_context<inproc_policy> prod_ctx;
-    std::optional<session> subscriber;
-    std::optional<session> producer;
+    std::optional<session>                  subscriber;
+    std::optional<session>                  producer;
 
-    std::vector<std::string> received;                          // data delivered to the subscriber
-    std::vector<subscribe_status> refusals;                     // on_subscribe_refused statuses
-    std::vector<std::uint8_t> degraded;                         // on_subscribe_degraded bitmasks
+    std::vector<std::string>      received; // data delivered to the subscriber
+    std::vector<subscribe_status> refusals; // on_subscribe_refused statuses
+    std::vector<std::uint8_t>     degraded; // on_subscribe_degraded bitmasks
 
     explicit link()
     {
-        transport.on_accepted([this](std::unique_ptr<inproc_channel<>> ch) {
-            prod_ctx.channel = std::move(ch);
-            prod_ctx.node_name = "subscriber-node";
-            prod_ctx.peer_id = make_cfg(0x02).self_id;   // the subscriber's node_id
-            producer.emplace(prod_ctx, ex, make_cfg(0x01), k_long_timeout,
-                             prod_messages, prod_procedures, true);
-            producer->start();
-        });
-        transport.on_dialed([this](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &) {
-            sub_ctx.channel = std::move(ch);
-            sub_ctx.node_name = "producer-node";
-            sub_ctx.peer_id = make_cfg(0x01).self_id;    // the producer's node_id
-            subscriber.emplace(sub_ctx, ex, make_cfg(0x02), k_long_timeout,
-                               sub_messages, sub_procedures, false);
-            subscriber->on_message([this](std::string_view, std::span<const std::byte> d) {
-                received.emplace_back(to_string(d));
-            });
-            subscriber->on_subscribe_refused([this](std::uint64_t, subscribe_status s) {
-                refusals.push_back(s);
-            });
-            subscriber->on_subscribe_degraded([this](std::uint64_t, std::uint8_t bits) {
-                degraded.push_back(bits);
-            });
-            subscriber->start();
-        });
+        transport.on_accepted(
+                [this](std::unique_ptr<inproc_channel<>> ch)
+                {
+                    prod_ctx.channel   = std::move(ch);
+                    prod_ctx.node_name = "subscriber-node";
+                    prod_ctx.peer_id   = make_cfg(0x02).self_id; // the subscriber's node_id
+                    producer.emplace(prod_ctx, ex, make_cfg(0x01), k_long_timeout, prod_messages,
+                                     prod_procedures, true);
+                    producer->start();
+                });
+        transport.on_dialed(
+                [this](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &)
+                {
+                    sub_ctx.channel   = std::move(ch);
+                    sub_ctx.node_name = "producer-node";
+                    sub_ctx.peer_id   = make_cfg(0x01).self_id; // the producer's node_id
+                    subscriber.emplace(sub_ctx, ex, make_cfg(0x02), k_long_timeout, sub_messages,
+                                       sub_procedures, false);
+                    subscriber->on_message([this](std::string_view, std::span<const std::byte> d)
+                                           { received.emplace_back(to_string(d)); });
+                    subscriber->on_subscribe_refused([this](std::uint64_t, subscribe_status s)
+                                                     { refusals.push_back(s); });
+                    subscriber->on_subscribe_degraded([this](std::uint64_t, std::uint8_t bits)
+                                                      { degraded.push_back(bits); });
+                    subscriber->start();
+                });
 
         transport.listen({"inproc", "svc"});
         transport.dial({"inproc", "svc"});
@@ -147,7 +151,8 @@ struct link
 
 }
 
-TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused, a compatible pair communicates")
+TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused, a compatible pair "
+          "communicates")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
@@ -158,10 +163,12 @@ TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused,
             link l;
             l.drive();
             REQUIRE(l.complete());
-            l.prod_messages.declare("topic", plexus::topic_qos{.reliability = reliability::best_effort});
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none,
-                                                            .requested_reliability_reliable = true,
-                                                            .rxo = rxo_mode::strict});
+            l.prod_messages.declare("topic",
+                                    plexus::topic_qos{.reliability = reliability::best_effort});
+            l.subscriber->subscribe("topic",
+                                    subscriber_qos{.durability_mode = durability::none,
+                                                   .requested_reliability_reliable = true,
+                                                   .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.size() == 1);
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
@@ -169,7 +176,7 @@ TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused,
 
             l.prod_messages.publish("topic", as_bytes("payload"), l.producer->session_id());
             l.drive();
-            REQUIRE(l.received.empty());   // refused: no fan-out entry, no data
+            REQUIRE(l.received.empty()); // refused: no fan-out entry, no data
         }
         // The compatible leg: the producer offers reliable, the same strict subscriber
         // is admitted and a publish DELIVERS, with no refusal/degraded fire.
@@ -177,10 +184,12 @@ TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused,
             link l;
             l.drive();
             REQUIRE(l.complete());
-            l.prod_messages.declare("topic", plexus::topic_qos{.reliability = reliability::reliable});
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none,
-                                                            .requested_reliability_reliable = true,
-                                                            .rxo = rxo_mode::strict});
+            l.prod_messages.declare("topic",
+                                    plexus::topic_qos{.reliability = reliability::reliable});
+            l.subscriber->subscribe("topic",
+                                    subscriber_qos{.durability_mode = durability::none,
+                                                   .requested_reliability_reliable = true,
+                                                   .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());
@@ -195,7 +204,8 @@ TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused,
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("rxo compatibility: the same incompatible reliability pair connects under permissive and surfaces the degraded field")
+TEST_CASE("rxo compatibility: the same incompatible reliability pair connects under permissive and "
+          "surfaces the degraded field")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
@@ -203,27 +213,30 @@ TEST_CASE("rxo compatibility: the same incompatible reliability pair connects un
         link l;
         l.drive();
         REQUIRE(l.complete());
-        l.prod_messages.declare("topic", plexus::topic_qos{.reliability = reliability::best_effort});
+        l.prod_messages.declare("topic",
+                                plexus::topic_qos{.reliability = reliability::best_effort});
         // The SAME best_effort/reliable mismatch under permissive: connect + surface.
-        l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none,
-                                                        .requested_reliability_reliable = true,
-                                                        .rxo = rxo_mode::permissive});
+        l.subscriber->subscribe("topic",
+                                subscriber_qos{.durability_mode                = durability::none,
+                                               .requested_reliability_reliable = true,
+                                               .rxo = rxo_mode::permissive});
         l.drive();
         REQUIRE(l.refusals.empty());
-        REQUIRE(l.degraded.size() == 1);                                    // the observable FIRED
-        REQUIRE(l.degraded[0] != 0);                                        // NON-EMPTY (non-silent)
-        REQUIRE((l.degraded[0] & k_rxo_field_reliability) != 0);            // names the right field
+        REQUIRE(l.degraded.size() == 1);                         // the observable FIRED
+        REQUIRE(l.degraded[0] != 0);                             // NON-EMPTY (non-silent)
+        REQUIRE((l.degraded[0] & k_rxo_field_reliability) != 0); // names the right field
 
         l.prod_messages.publish("topic", as_bytes("payload"), l.producer->session_id());
         l.drive();
-        REQUIRE(l.received.size() == 1);   // permissive: data flows
+        REQUIRE(l.received.size() == 1); // permissive: data flows
         REQUIRE(l.received[0] == "payload");
         ++proven;
     }
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused and permissive surfaces it")
+TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused and permissive "
+          "surfaces it")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
@@ -234,8 +247,9 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = false});
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::all,
-                                                            .rxo = rxo_mode::strict});
+            l.subscriber->subscribe(
+                    "topic",
+                    subscriber_qos{.durability_mode = durability::all, .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.size() == 1);
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
@@ -245,8 +259,9 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = false});
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::all,
-                                                            .rxo = rxo_mode::permissive});
+            l.subscriber->subscribe("topic",
+                                    subscriber_qos{.durability_mode = durability::all,
+                                                   .rxo             = rxo_mode::permissive});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.size() == 1);
@@ -258,8 +273,9 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = true});
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::all,
-                                                            .rxo = rxo_mode::permissive});
+            l.subscriber->subscribe("topic",
+                                    subscriber_qos{.durability_mode = durability::all,
+                                                   .rxo             = rxo_mode::permissive});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());
@@ -269,7 +285,8 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested ceiling refuses under strict and surfaces under permissive")
+TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested ceiling refuses under "
+          "strict and surfaces under permissive")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
@@ -282,11 +299,12 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic",
-                plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
-            l.subscriber->subscribe("topic",
-                subscriber_qos{.durability_mode = durability::none,
-                               .requested_max_message_bytes = 4u * 1024u * 1024u,
-                               .rxo = rxo_mode::strict});
+                                    plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
+            l.subscriber->subscribe(
+                    "topic",
+                    subscriber_qos{.durability_mode             = durability::none,
+                                   .requested_max_message_bytes = 4u * 1024u * 1024u,
+                                   .rxo                         = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.size() == 1);
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
@@ -294,7 +312,7 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
 
             l.prod_messages.publish("topic", as_bytes("payload"), l.producer->session_id());
             l.drive();
-            REQUIRE(l.received.empty());   // refused: no fan-out entry, no data
+            REQUIRE(l.received.empty()); // refused: no fan-out entry, no data
         }
         // The SAME pair under permissive connects, data flows, and the size bit surfaces.
         {
@@ -302,11 +320,12 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic",
-                plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
-            l.subscriber->subscribe("topic",
-                subscriber_qos{.durability_mode = durability::none,
-                               .requested_max_message_bytes = 4u * 1024u * 1024u,
-                               .rxo = rxo_mode::permissive});
+                                    plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
+            l.subscriber->subscribe(
+                    "topic",
+                    subscriber_qos{.durability_mode             = durability::none,
+                                   .requested_max_message_bytes = 4u * 1024u * 1024u,
+                                   .rxo                         = rxo_mode::permissive});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.size() == 1);
@@ -324,11 +343,12 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic",
-                plexus::topic_qos{.max_message_bytes = 4u * 1024u * 1024u});
-            l.subscriber->subscribe("topic",
-                subscriber_qos{.durability_mode = durability::none,
-                               .requested_max_message_bytes = 16u * 1024u * 1024u,
-                               .rxo = rxo_mode::strict});
+                                    plexus::topic_qos{.max_message_bytes = 4u * 1024u * 1024u});
+            l.subscriber->subscribe(
+                    "topic",
+                    subscriber_qos{.durability_mode             = durability::none,
+                                   .requested_max_message_bytes = 16u * 1024u * 1024u,
+                                   .rxo                         = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());
@@ -338,7 +358,8 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("rxo compatibility: a requires source identity subscriber is refused against a non-offering producer regardless of mode")
+TEST_CASE("rxo compatibility: a requires source identity subscriber is refused against a "
+          "non-offering producer regardless of mode")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
@@ -350,9 +371,10 @@ TEST_CASE("rxo compatibility: a requires source identity subscriber is refused a
             REQUIRE(l.complete());
             // The producer declares WITHOUT emit_source_identity (the 4th arg defaults false).
             l.prod_messages.declare("topic", plexus::topic_qos{});
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none,
-                                                            .requires_source_identity = true,
-                                                            .rxo = mode});
+            l.subscriber->subscribe("topic",
+                                    subscriber_qos{.durability_mode          = durability::none,
+                                                   .requires_source_identity = true,
+                                                   .rxo                      = mode});
             l.drive();
             // The always-hard floor: refused regardless of mode, and the degraded
             // observable must NOT fire (it is not a degradable field).
@@ -365,10 +387,12 @@ TEST_CASE("rxo compatibility: a requires source identity subscriber is refused a
             link l;
             l.drive();
             REQUIRE(l.complete());
-            l.prod_messages.declare("topic", plexus::topic_qos{}, std::nullopt, /*emit_source_identity=*/true);
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none,
-                                                            .requires_source_identity = true,
-                                                            .rxo = rxo_mode::strict});
+            l.prod_messages.declare("topic", plexus::topic_qos{}, std::nullopt,
+                                    /*emit_source_identity=*/true);
+            l.subscriber->subscribe("topic",
+                                    subscriber_qos{.durability_mode          = durability::none,
+                                                   .requires_source_identity = true,
+                                                   .rxo                      = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());
@@ -378,7 +402,8 @@ TEST_CASE("rxo compatibility: a requires source identity subscriber is refused a
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under strict and surfaces under permissive")
+TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under strict and surfaces "
+          "under permissive")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
@@ -390,9 +415,10 @@ TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under st
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.offered_deadline_ns = 200});
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none,
-                                                            .requested_deadline_ns = 100,
-                                                            .rxo = rxo_mode::strict});
+            l.subscriber->subscribe("topic",
+                                    subscriber_qos{.durability_mode       = durability::none,
+                                                   .requested_deadline_ns = 100,
+                                                   .rxo                   = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.size() == 1);
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
@@ -402,9 +428,10 @@ TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under st
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.offered_deadline_ns = 200});
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none,
-                                                            .requested_deadline_ns = 100,
-                                                            .rxo = rxo_mode::permissive});
+            l.subscriber->subscribe("topic",
+                                    subscriber_qos{.durability_mode       = durability::none,
+                                                   .requested_deadline_ns = 100,
+                                                   .rxo                   = rxo_mode::permissive});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.size() == 1);
@@ -416,9 +443,10 @@ TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under st
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.offered_deadline_ns = 0});
-            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none,
-                                                            .requested_deadline_ns = 100,
-                                                            .rxo = rxo_mode::strict});
+            l.subscriber->subscribe("topic",
+                                    subscriber_qos{.durability_mode       = durability::none,
+                                                   .requested_deadline_ns = 100,
+                                                   .rxo                   = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());

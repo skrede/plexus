@@ -22,26 +22,27 @@
 // down — no flow is driven.
 int main()
 {
-    using policy = plexus::inproc::inproc_policy;
+    using policy    = plexus::inproc::inproc_policy;
     using transport = plexus::inproc::inproc_transport<>;
 
-    plexus::inproc::inproc_bus<> bus;
+    plexus::inproc::inproc_bus<>      bus;
     plexus::inproc::inproc_executor<> executor{bus};
-    transport tr{executor, bus};
+    transport                         tr{executor, bus};
 
     plexus::node_id self{};
     self[0] = std::byte{0x01};
-    const plexus::io::handshake_fsm_config fsm_cfg{
-        .self_id = self, .version_major = 1, .version_minor = 0,
-        .compatible_version_major = 1, .compatible_version_minor = 0};
-    const plexus::io::reconnect_config redial{
-        .min_delay = std::chrono::milliseconds{10},
-        .max_delay = std::chrono::milliseconds{100},
-        .max_attempts = std::nullopt,
-        .max_elapsed = std::nullopt};
+    const plexus::io::handshake_fsm_config fsm_cfg{.self_id                  = self,
+                                                   .version_major            = 1,
+                                                   .version_minor            = 0,
+                                                   .compatible_version_major = 1,
+                                                   .compatible_version_minor = 0};
+    const plexus::io::reconnect_config     redial{.min_delay    = std::chrono::milliseconds{10},
+                                                  .max_delay    = std::chrono::milliseconds{100},
+                                                  .max_attempts = std::nullopt,
+                                                  .max_elapsed  = std::nullopt};
 
     plexus::io::routing_engine<policy, transport> engine{
-        tr, executor, fsm_cfg, std::chrono::seconds{1}, redial, 0x1u};
+            tr, executor, fsm_cfg, std::chrono::seconds{1}, redial, 0x1u};
 
     (void)engine.messages();
     return 0;

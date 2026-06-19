@@ -53,8 +53,8 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
+                     0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -75,7 +75,7 @@ std::string slab_name(const std::string &fqn)
 bool subscribe_shm(const std::string &fqn, coord *c, std::uint32_t want_payload)
 {
     posix_shm_region_broker broker;
-    region_handle ctrl, slab;
+    region_handle           ctrl, slab;
 
     // Wait for the publisher to mint the ring, then attach the SAME names.
     while(c->publisher_ready.load(std::memory_order_acquire) == 0)
@@ -97,7 +97,7 @@ bool subscribe_shm(const std::string &fqn, coord *c, std::uint32_t want_payload)
     for(;;)
     {
         pio::broadcast_ring::consume_result out;
-        const auto st = ring.consume(cursor, out);
+        const auto                          st = ring.consume(cursor, out);
         if(st == pio::loan_status::ok)
         {
             std::uint32_t got = 0;
@@ -138,11 +138,12 @@ bool run_shm_roundtrip(const std::string &fqn, std::uint32_t publisher_max_paylo
     // region_name_for naming + max_payload geometry the shm_topic_registry::acquire
     // uses internally (0 -> the default geometry). The direction is request (a pub/sub
     // topic). Both ends derive the names from the fqn alone — the convergence.
-    posix_shm_region_broker broker;
-    region_handle ctrl, slab;
-    const std::optional<std::uint32_t> want =
-        publisher_max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{publisher_max_payload};
-    const pio::ring_geometry geom = pio::ring_geometry_for(want);
+    posix_shm_region_broker            broker;
+    region_handle                      ctrl, slab;
+    const std::optional<std::uint32_t> want = publisher_max_payload == 0
+            ? std::nullopt
+            : std::optional<std::uint32_t>{publisher_max_payload};
+    const pio::ring_geometry           geom = pio::ring_geometry_for(want);
     REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
                           pio::create_options{}, ctrl) == pio::region_status::ok);
     REQUIRE(broker.create(slab_name(fqn),
@@ -173,7 +174,8 @@ bool run_shm_roundtrip(const std::string &fqn, std::uint32_t publisher_max_paylo
 
 }
 
-TEST_CASE("shm.bilateral demand-driven convergence: the hint gates each side's acquire attempt, no wire exchange",
+TEST_CASE("shm.bilateral demand-driven convergence: the hint gates each side's acquire attempt, no "
+          "wire exchange",
           "[shm][bilateral]")
 {
     using pio::attempt_shm_upgrade;
@@ -187,7 +189,8 @@ TEST_CASE("shm.bilateral demand-driven convergence: the hint gates each side's a
         // (a) a PUBLISHER end with a qualifying hint attempts the acquire (it drives
         // the create/size); (b) a SUBSCRIBER end with a qualifying hint attempts it
         // (the consumer-sovereign self-rescue) -- EITHER end's hint upgrades that end.
-        CHECK(attempt_shm_upgrade(true, dispatch_hint::frequent));   // publisher OR subscriber, hinted
+        CHECK(attempt_shm_upgrade(true,
+                                  dispatch_hint::frequent)); // publisher OR subscriber, hinted
         CHECK(attempt_shm_upgrade(true, dispatch_hint::large));
         // (c) neither end hinted -> neither attempts (stays on the wire).
         CHECK_FALSE(attempt_shm_upgrade(true, dispatch_hint::none));
@@ -198,7 +201,8 @@ TEST_CASE("shm.bilateral demand-driven convergence: the hint gates each side's a
     // The ring-sizing authority: the publisher direction (request) carries the
     // max_payload; a subscriber-only upgrade (response direction here standing in for
     // the no-publisher-sizing case) gets 0 -> the default geometry.
-    SECTION("ring-sizing authority: publisher sizes via max_payload, subscriber-only falls back to default")
+    SECTION("ring-sizing authority: publisher sizes via max_payload, subscriber-only falls back to "
+            "default")
     {
         CHECK(pio::upgrade_ring_max_payload(pio::ring_direction::request, 8192u) == 8192u);
         CHECK(pio::upgrade_ring_max_payload(pio::ring_direction::response, 8192u) == 0u);
@@ -210,18 +214,20 @@ TEST_CASE("shm.bilateral a publisher-sized ring lets a wide value cross over sha
 {
     // The publisher declares max_payload; the ring is sized to it; a value at that
     // width fits and crosses to the converged subscriber. Looped + reproduced.
-    const std::string fqn = "topic.bilateral.sized." + std::to_string(::getpid());
+    const std::string       fqn       = "topic.bilateral.sized." + std::to_string(::getpid());
     constexpr std::uint32_t k_payload = 0xBADC0FFEu;
     for(int iter = 0; iter < 3; ++iter)
-        REQUIRE(run_shm_roundtrip(fqn + "." + std::to_string(iter), /*max_payload=*/8192u, k_payload));
+        REQUIRE(run_shm_roundtrip(fqn + "." + std::to_string(iter), /*max_payload=*/8192u,
+                                  k_payload));
 }
 
-TEST_CASE("shm.bilateral a subscriber-only upgrade with no max_payload uses the default geometry (xproc)",
+TEST_CASE("shm.bilateral a subscriber-only upgrade with no max_payload uses the default geometry "
+          "(xproc)",
           "[shm][bilateral]")
 {
     // No publisher max_payload (0) -> the default ring geometry. The value still
     // crosses: the consumer-sovereign upgrade does not need the publisher to size.
-    const std::string fqn = "topic.bilateral.default." + std::to_string(::getpid());
+    const std::string       fqn       = "topic.bilateral.default." + std::to_string(::getpid());
     constexpr std::uint32_t k_payload = 0x5AFE5A1Du;
     for(int iter = 0; iter < 3; ++iter)
         REQUIRE(run_shm_roundtrip(fqn + "." + std::to_string(iter), /*max_payload=*/0u, k_payload));

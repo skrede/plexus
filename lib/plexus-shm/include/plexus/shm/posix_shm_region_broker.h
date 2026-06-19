@@ -36,10 +36,10 @@ public:
 
     posix_shm_region_broker() = default;
 
-    posix_shm_region_broker(const posix_shm_region_broker &) = delete;
+    posix_shm_region_broker(const posix_shm_region_broker &)            = delete;
     posix_shm_region_broker &operator=(const posix_shm_region_broker &) = delete;
-    posix_shm_region_broker(posix_shm_region_broker &&) = delete;
-    posix_shm_region_broker &operator=(posix_shm_region_broker &&) = delete;
+    posix_shm_region_broker(posix_shm_region_broker &&)                 = delete;
+    posix_shm_region_broker &operator=(posix_shm_region_broker &&)      = delete;
 
     // Allocates a named region of at least `bytes` usable bytes (page-rounded)
     // and maps it writable. bytes==0 returns failed; a request above
@@ -49,7 +49,7 @@ public:
     // ok, `out` owns the name and unlinks it on release.
     plexus::io::shm::region_status create(std::string_view name, std::size_t bytes,
                                           const plexus::io::shm::create_options &opts,
-                                          region_handle &out);
+                                          region_handle                         &out);
 
     // Maps an existing named region writable. The returned handle is an
     // attacher: it munmaps on release but never unlinks. The attach path is the
@@ -63,8 +63,8 @@ public:
     void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)> policy);
 
 private:
-    plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{
-        [](std::string_view) { return true; }};
+    plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{[](std::string_view)
+                                                                               { return true; }};
 };
 
 }

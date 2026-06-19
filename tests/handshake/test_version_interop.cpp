@@ -38,35 +38,34 @@ constexpr node_id id_with_tail(std::uint8_t tail) noexcept
 
 handshake_fsm_config config_for(node_id self) noexcept
 {
-    return handshake_fsm_config{
-        .self_id                  = self,
-        .version_major            = 1,
-        .version_minor            = 0,
-        .compatible_version_major = 1,
-        .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = self,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 // A request that passes every gate EXCEPT for the protocol_version the caller sets.
 handshake_request request_with_protocol(node_id peer, std::uint8_t protocol) noexcept
 {
-    return handshake_request{
-        .id                       = peer,
-        .version_major            = 1,
-        .version_minor            = 0,
-        .compatible_version_major = 1,
-        .compatible_version_minor = 0,
-        .protocol_version         = protocol,
-        .fingerprint              = 0,
-        .key_id                   = {},
-        .own_nonce                = {},
-        .cipher_offer             = 0,
-        .chosen_cipher            = 0,
-        .proof                    = {}};
+    return handshake_request{.id                       = peer,
+                             .version_major            = 1,
+                             .version_minor            = 0,
+                             .compatible_version_major = 1,
+                             .compatible_version_minor = 0,
+                             .protocol_version         = protocol,
+                             .fingerprint              = 0,
+                             .key_id                   = {},
+                             .own_nonce                = {},
+                             .cipher_offer             = 0,
+                             .chosen_cipher            = 0,
+                             .proof                    = {}};
 }
 
 }
 
-TEST_CASE("interop: a mismatched-protocol peer is aborted with reject_version", "[handshake][interop]")
+TEST_CASE("interop: a mismatched-protocol peer is aborted with reject_version",
+          "[handshake][interop]")
 {
     handshake_fsm fsm(config_for(id_with_tail(0xAA)));
 
@@ -74,7 +73,7 @@ TEST_CASE("interop: a mismatched-protocol peer is aborted with reject_version", 
     // rejects it regardless of the absolute value of k_protocol_version, so the
     // pin survives a future bump.
     const auto skewed = static_cast<std::uint8_t>(k_protocol_version - 1);
-    const auto req = request_with_protocol(id_with_tail(0xBB), skewed);
+    const auto req    = request_with_protocol(id_with_tail(0xBB), skewed);
 
     const auto result = fsm.on_request(req, /*inbound_is_bootstrap=*/true);
 
@@ -85,7 +84,7 @@ TEST_CASE("interop: a mismatched-protocol peer is aborted with reject_version", 
 TEST_CASE("interop: a matching-protocol peer clears the version gate", "[handshake][interop]")
 {
     handshake_fsm fsm(config_for(id_with_tail(0xAA)));
-    const auto req = request_with_protocol(id_with_tail(0xBB), k_protocol_version);
+    const auto    req = request_with_protocol(id_with_tail(0xBB), k_protocol_version);
 
     const auto result = fsm.on_request(req, /*inbound_is_bootstrap=*/true);
 

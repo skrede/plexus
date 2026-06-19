@@ -29,10 +29,17 @@
 #include <functional>
 #include <system_error>
 
-struct div_request  { std::int32_t numerator{}; std::int32_t denominator{}; };
-struct div_response { std::int32_t quotient{}; };
+struct div_request
+{
+    std::int32_t numerator{};
+    std::int32_t denominator{};
+};
+struct div_response
+{
+    std::int32_t quotient{};
+};
 
-template <typename T>
+template<typename T>
 struct pair_codec
 {
     using value_type = T;
@@ -48,7 +55,7 @@ struct pair_codec
     {
         if(b.size() != sizeof(T))
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::memcpy(&out, b.data(), sizeof(T));
         return {};
     }
@@ -56,26 +63,26 @@ struct pair_codec
 
 int main()
 {
-    asio::io_context io;
-    plexus::asio::asio_transport transport{io};
+    asio::io_context                 io;
+    plexus::asio::asio_transport     transport{io};
     plexus::mdnspp::mdnspp_discovery disc{io, "_plexus._tcp.local."};
 
     plexus::node_options opts;
-    opts.name = "divide-client";
+    opts.name         = "divide-client";
     opts.dial_eagerly = true;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(200),
-                                                  std::chrono::seconds(5),
-                                                  std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{
+            std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     opts.redial_seed = 0xC11D1;
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
-        io, disc, "divide-client", transport, opts};
+            io, disc, "divide-client", transport, opts};
     node.listen({"tcp", "127.0.0.1:5577"});
 
     using divide_caller = plexus::caller<div_response(div_request), pair_codec>;
     divide_caller divide{node, "divide"};
 
-    auto print = [](const char *label, plexus::expected<div_response, std::error_code> r) {
+    auto print = [](const char *label, plexus::expected<div_response, std::error_code> r)
+    {
         if(r)
             std::cout << label << ": quotient " << r->quotient << '\n';
         else
@@ -84,27 +91,33 @@ int main()
 
     // The divide-by-zero leg fires once the provider is up (its error reply is the
     // visible error path).
-    auto by_zero = [&] {
-        divide.call(div_request{1, 0}, [&](plexus::expected<div_response, std::error_code> r) {
-            print("1 / 0", std::move(r));
-            io.stop();
-        });
+    auto by_zero = [&]
+    {
+        divide.call(div_request{1, 0},
+                    [&](plexus::expected<div_response, std::error_code> r)
+                    {
+                        print("1 / 0", std::move(r));
+                        io.stop();
+                    });
     };
 
     // Retry the valid divide until a provider answers (no_provider while mDNS converges
     // re-arms); on the first real answer, the session is up, so fire the error leg too.
-    asio::steady_timer retry{io};
-    std::function<void()> attempt = [&] {
-        divide.call(div_request{42, 7}, [&](plexus::expected<div_response, std::error_code> r) {
-            if(!r && r.error() == plexus::call_errc::no_provider)
-            {
-                retry.expires_after(std::chrono::seconds(1));
-                retry.async_wait([&](auto) { attempt(); });
-                return;
-            }
-            print("42 / 7", std::move(r));
-            by_zero();
-        });
+    asio::steady_timer    retry{io};
+    std::function<void()> attempt = [&]
+    {
+        divide.call(div_request{42, 7},
+                    [&](plexus::expected<div_response, std::error_code> r)
+                    {
+                        if(!r && r.error() == plexus::call_errc::no_provider)
+                        {
+                            retry.expires_after(std::chrono::seconds(1));
+                            retry.async_wait([&](auto) { attempt(); });
+                            return;
+                        }
+                        print("42 / 7", std::move(r));
+                        by_zero();
+                    });
     };
     attempt();
 

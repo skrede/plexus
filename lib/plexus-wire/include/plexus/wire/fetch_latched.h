@@ -46,14 +46,14 @@ inline std::vector<std::byte> encode_fetch_latched_request(const fetch_latched_r
 // Decode a fetch_latched_request from an untrusted payload. The size guard is the
 // bounds-safe gate: a payload shorter than the fixed 12 bytes is rejected to nullopt
 // before any read (fixed-width, no length prefix => no over-read, no allocation).
-inline std::optional<fetch_latched_request> decode_fetch_latched_request(std::span<const std::byte> payload)
+inline std::optional<fetch_latched_request>
+decode_fetch_latched_request(std::span<const std::byte> payload)
 {
     if(payload.size() < detail::fetch_latched_request_size)
         return std::nullopt;
 
-    return fetch_latched_request{
-            .topic_hash  = wire::detail::read_u64(payload.data()),
-            .max_samples = wire::detail::read_u32(payload.data() + 8)};
+    return fetch_latched_request{.topic_hash  = wire::detail::read_u64(payload.data()),
+                                 .max_samples = wire::detail::read_u32(payload.data() + 8)};
 }
 
 }

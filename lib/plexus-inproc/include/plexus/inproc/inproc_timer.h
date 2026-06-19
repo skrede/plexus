@@ -17,18 +17,18 @@ namespace plexus::inproc {
 // the handler once the clock has reached the expiry. cancel() and re-arming both
 // complete any pending handler with operation_canceled, mirroring the steady-timer
 // contract the Policy's timer concept is written against.
-template <typename Clock = std::chrono::steady_clock>
+template<typename Clock = std::chrono::steady_clock>
 class inproc_timer
 {
 public:
     explicit inproc_timer(inproc_executor<Clock> &ex)
-        : m_exec(&ex)
+            : m_exec(&ex)
     {
         m_exec->register_timer(this);
     }
 
     inproc_timer(inproc_executor<Clock> &ex, std::error_code &)
-        : inproc_timer(ex)
+            : inproc_timer(ex)
     {
     }
 
@@ -38,10 +38,10 @@ public:
             m_exec->deregister_timer(this);
     }
 
-    inproc_timer(const inproc_timer &) = delete;
+    inproc_timer(const inproc_timer &)            = delete;
     inproc_timer &operator=(const inproc_timer &) = delete;
-    inproc_timer(inproc_timer &&) = delete;
-    inproc_timer &operator=(inproc_timer &&) = delete;
+    inproc_timer(inproc_timer &&)                 = delete;
+    inproc_timer &operator=(inproc_timer &&)      = delete;
 
     void expires_after(std::chrono::milliseconds d)
     {
@@ -84,10 +84,10 @@ private:
         }
     }
 
-    inproc_executor<Clock> *m_exec;
-    typename Clock::time_point m_expiry{};
+    inproc_executor<Clock>                           *m_exec;
+    typename Clock::time_point                        m_expiry{};
     detail::move_only_function<void(std::error_code)> m_handler;
-    bool m_active{false};
+    bool                                              m_active{false};
 };
 
 }

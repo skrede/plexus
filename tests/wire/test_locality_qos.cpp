@@ -24,12 +24,13 @@ constexpr std::uint8_t bits(locality l) { return static_cast<std::uint8_t>(l); }
 
 }
 
-TEST_CASE("locality: each tier is a distinct power-of-two bit and any composes all three", "[wire][locality]")
+TEST_CASE("locality: each tier is a distinct power-of-two bit and any composes all three",
+          "[wire][locality]")
 {
     REQUIRE(bits(locality::process) == 1u);
-    REQUIRE(bits(locality::local)   == 2u);
-    REQUIRE(bits(locality::remote)  == 4u);
-    REQUIRE(bits(locality::any)     == 7u);
+    REQUIRE(bits(locality::local) == 2u);
+    REQUIRE(bits(locality::remote) == 4u);
+    REQUIRE(bits(locality::any) == 7u);
     REQUIRE((locality::process | locality::local | locality::remote) == locality::any);
 }
 
@@ -47,7 +48,8 @@ TEST_CASE("locality: operator& intersects the tier bits", "[wire][locality]")
     REQUIRE(bits(locality::process & locality::remote) == 0u);
 }
 
-TEST_CASE("locality: operator~ masks back to any's three bits only (no high bits set)", "[wire][locality]")
+TEST_CASE("locality: operator~ masks back to any's three bits only (no high bits set)",
+          "[wire][locality]")
 {
     REQUIRE((~locality::process) == (locality::local | locality::remote));
     REQUIRE((~locality::local) == (locality::process | locality::remote));
@@ -65,18 +67,20 @@ TEST_CASE("locality: any_set is true iff the mask and the tier share a bit", "[w
     REQUIRE_FALSE(any_set(locality::remote, locality::local));
 }
 
-TEST_CASE("locality: tier_of classifies the transport scheme, fail-closed to remote on the unknown", "[wire][locality]")
+TEST_CASE("locality: tier_of classifies the transport scheme, fail-closed to remote on the unknown",
+          "[wire][locality]")
 {
     REQUIRE(tier_of("inproc") == locality::process);
-    REQUIRE(tier_of("unix")   == locality::local);
-    REQUIRE(tier_of("tcp")    == locality::remote);
-    REQUIRE(tier_of("tls")    == locality::remote);
-    REQUIRE(tier_of("udp")    == locality::remote);
-    REQUIRE(tier_of("bogus")  == locality::remote);   // fail-closed: never leak an unknown transport
-    REQUIRE(tier_of("")       == locality::remote);
+    REQUIRE(tier_of("unix") == locality::local);
+    REQUIRE(tier_of("tcp") == locality::remote);
+    REQUIRE(tier_of("tls") == locality::remote);
+    REQUIRE(tier_of("udp") == locality::remote);
+    REQUIRE(tier_of("bogus") == locality::remote); // fail-closed: never leak an unknown transport
+    REQUIRE(tier_of("") == locality::remote);
 }
 
-TEST_CASE("locality: topic_qos.reach defaults to any so an undeclared topic reaches every tier", "[wire][locality]")
+TEST_CASE("locality: topic_qos.reach defaults to any so an undeclared topic reaches every tier",
+          "[wire][locality]")
 {
     plexus::topic_qos qos{};
     REQUIRE(qos.reach == locality::any);
@@ -89,14 +93,18 @@ namespace {
 
 // A do-nothing channel type to instantiate the registry template — declare/qos_for
 // never touch the channel, so only the type is needed for the round-trip.
-struct stub_channel {};
+struct stub_channel
+{
+};
 
 }
 
-TEST_CASE("locality: a non-default reach survives the declare -> qos_for round-trip (the field is not truncated)", "[wire][locality]")
+TEST_CASE("locality: a non-default reach survives the declare -> qos_for round-trip (the field is "
+          "not truncated)",
+          "[wire][locality]")
 {
     plexus::io::subscriber_registry<stub_channel> registry;
-    const std::uint64_t hash = 0xABCDEF01u;
+    const std::uint64_t                           hash = 0xABCDEF01u;
 
     // An undeclared topic reports the default any (no confinement).
     REQUIRE(registry.qos_for(hash).reach == locality::any);
@@ -108,27 +116,28 @@ TEST_CASE("locality: a non-default reach survives the declare -> qos_for round-t
     REQUIRE(registry.qos_for(hash).reach != locality::any);
 }
 
-TEST_CASE("subscriber_registry: record_drop for an undeclared topic mints no entry — fqn_for stays empty (no cached empty-fqn)",
+TEST_CASE("subscriber_registry: record_drop for an undeclared topic mints no entry — fqn_for stays "
+          "empty (no cached empty-fqn)",
           "[wire][locality]")
 {
     namespace pdetail = plexus::io::detail;
     plexus::io::subscriber_registry<stub_channel> registry;
-    const std::uint64_t unknown = 0xDEADBEEFu;
-    const std::size_t band = 0;
+    const std::uint64_t                           unknown = 0xDEADBEEFu;
+    const std::size_t                             band    = 0;
 
     // A drop bumped for a never-declared topic must not create a record: it would let
     // fqn_for memoize an empty fqn as a "resolved" view, conflating unknown with unnamed.
     registry.record_drop(unknown, band, pdetail::drop_cause::drop_newest);
 
-    REQUIRE(registry.fqn_for(unknown).empty());                                  // unknown stays unresolved
-    REQUIRE(registry.entry_for(unknown) == nullptr);                             // no entry was minted
+    REQUIRE(registry.fqn_for(unknown).empty());      // unknown stays unresolved
+    REQUIRE(registry.entry_for(unknown) == nullptr); // no entry was minted
     REQUIRE(registry.dropped(unknown, band, pdetail::drop_cause::drop_newest) == 0);
 
     // And a real entry's fqn still resolves (the find-only path never disturbs the memo).
     const std::uint64_t known = 0x01020304u;
     registry.declare(known, "real.topic", plexus::topic_qos{});
     REQUIRE(registry.fqn_for(known) == "real.topic");
-    registry.record_drop(known, band, pdetail::drop_cause::drop_newest);         // a declared topic counts
+    registry.record_drop(known, band, pdetail::drop_cause::drop_newest); // a declared topic counts
     REQUIRE(registry.dropped(known, band, pdetail::drop_cause::drop_newest) == 1);
-    REQUIRE(registry.fqn_for(unknown).empty());                                  // still unresolved after a real drop
+    REQUIRE(registry.fqn_for(unknown).empty()); // still unresolved after a real drop
 }

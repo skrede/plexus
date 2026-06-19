@@ -34,9 +34,9 @@ using namespace std::chrono_literals;
 
 namespace {
 
-using test_reassembler =
-        plexus::io::detail::reassembler<plexus::inproc::inproc_executor<plexus::testing::test_clock> &,
-                                        plexus::inproc::inproc_timer<plexus::testing::test_clock>>;
+using test_reassembler = plexus::io::detail::reassembler<
+        plexus::inproc::inproc_executor<plexus::testing::test_clock> &,
+        plexus::inproc::inproc_timer<plexus::testing::test_clock>>;
 
 std::vector<std::byte> filler(std::size_t n)
 {
@@ -48,20 +48,21 @@ std::vector<std::byte> filler(std::size_t n)
 
 }
 
-TEST_CASE("integration.reassembler_dos a total-memory-cap flood is rejected and stays bounded", "[reassembler][dos][cap]")
+TEST_CASE("integration.reassembler_dos a total-memory-cap flood is rejected and stays bounded",
+          "[reassembler][dos][cap]")
 {
-    constexpr std::size_t frag = 256;
+    constexpr std::size_t   frag     = 256;
     constexpr std::uint16_t frag_cnt = 2;
     // The cap counts payload AND the per-entry slot/present metadata, so a 2-fragment entry
     // costs its payload plus the structural overhead of two slots and a 2-bit present map.
-    const std::size_t overhead = frag_cnt * sizeof(std::vector<std::byte>) + (frag_cnt + 7u) / 8u;
+    const std::size_t overhead  = frag_cnt * sizeof(std::vector<std::byte>) + (frag_cnt + 7u) / 8u;
     const std::size_t per_entry = frag + overhead;
-    const std::size_t cap = 4 * per_entry;   // room for at most four such partials
+    const std::size_t cap       = 4 * per_entry; // room for at most four such partials
 
     for(int loop = 0; loop < 8; ++loop)
     {
         plexus::testing::harness h;
-        test_reassembler r{h.ex, {.total_memory_cap = cap}};
+        test_reassembler         r{h.ex, {.total_memory_cap = cap}};
 
         bool delivered = false;
         r.on_deliver([&](std::span<const std::byte>) { delivered = true; });
@@ -77,16 +78,18 @@ TEST_CASE("integration.reassembler_dos a total-memory-cap flood is rejected and 
                 ++admitted;
             else if(out == test_reassembler::outcome::dropped_cap)
                 ++capped;
-            REQUIRE(r.held_bytes() <= cap);          // the hard bound holds under the flood
+            REQUIRE(r.held_bytes() <= cap); // the hard bound holds under the flood
         }
-        REQUIRE(admitted == 4);                       // exactly the cap's worth opened
-        REQUIRE(capped == 196);                       // the rest refused, no growth
+        REQUIRE(admitted == 4); // exactly the cap's worth opened
+        REQUIRE(capped == 196); // the rest refused, no growth
         REQUIRE(r.in_flight() == 4);
-        REQUIRE_FALSE(delivered);                     // no message completed
+        REQUIRE_FALSE(delivered); // no message completed
     }
 }
 
-TEST_CASE("integration.reassembler_dos a metadata-amplification flood (tiny datagrams claiming a huge frag_cnt) is refused", "[reassembler][dos][cap][amplification]")
+TEST_CASE("integration.reassembler_dos a metadata-amplification flood (tiny datagrams claiming a "
+          "huge frag_cnt) is refused",
+          "[reassembler][dos][cap][amplification]")
 {
     // The amplification attack the payload-only cap let through: a ~1-byte datagram claiming
     // the maximum frag_cnt forces ~786 KB of slot/present metadata while charging one payload
@@ -94,15 +97,15 @@ TEST_CASE("integration.reassembler_dos a metadata-amplification flood (tiny data
     // bounded handful of such entries and refuses the rest — the cap is a true memory bound,
     // not a payload-only bound. Without the fix this loop would mint thousands of entries and
     // exhaust gigabytes while held_bytes reported only a few kilobytes.
-    constexpr std::uint16_t huge_cnt = plexus::io::max_fragment_count;   // 32768
+    constexpr std::uint16_t huge_cnt = plexus::io::max_fragment_count; // 32768
     const std::size_t structural = huge_cnt * sizeof(std::vector<std::byte>) + (huge_cnt + 7u) / 8u;
-    constexpr std::size_t cap = 16u * 1024u * 1024u;
-    const std::size_t expected_admit = cap / (structural + 1u);   // +1 for the single payload byte
+    constexpr std::size_t cap    = 16u * 1024u * 1024u;
+    const std::size_t expected_admit = cap / (structural + 1u); // +1 for the single payload byte
 
     for(int loop = 0; loop < 4; ++loop)
     {
         plexus::testing::harness h;
-        test_reassembler r{h.ex, {.total_memory_cap = cap}};
+        test_reassembler         r{h.ex, {.total_memory_cap = cap}};
 
         std::size_t admitted = 0, capped = 0;
         for(std::uint16_t id = 1; id <= 2000; ++id)
@@ -112,24 +115,24 @@ TEST_CASE("integration.reassembler_dos a metadata-amplification flood (tiny data
                 ++admitted;
             else if(out == test_reassembler::outcome::dropped_cap)
                 ++capped;
-            REQUIRE(r.held_bytes() <= cap);          // structural cost counts: never past the cap
+            REQUIRE(r.held_bytes() <= cap); // structural cost counts: never past the cap
         }
-        REQUIRE(admitted == expected_admit);          // only the cap's worth of slot tables opened
-        REQUIRE(admitted < 25);                       // a true bound — not thousands of entries
-        REQUIRE(capped == 2000 - admitted);           // every further amplification attempt refused
+        REQUIRE(admitted == expected_admit); // only the cap's worth of slot tables opened
+        REQUIRE(admitted < 25);              // a true bound — not thousands of entries
+        REQUIRE(capped == 2000 - admitted);  // every further amplification attempt refused
         REQUIRE(r.in_flight() == admitted);
     }
 }
 
-TEST_CASE("integration.reassembler_dos a per-message-ceiling overrun is dropped", "[reassembler][dos][ceiling]")
+TEST_CASE("integration.reassembler_dos a per-message-ceiling overrun is dropped",
+          "[reassembler][dos][ceiling]")
 {
     constexpr std::size_t ceiling = 1024;
 
     for(int loop = 0; loop < 8; ++loop)
     {
         plexus::testing::harness h;
-        test_reassembler r{h.ex, {.max_message_size = ceiling,
-                                  .total_memory_cap = 64u * 1024u}};
+        test_reassembler r{h.ex, {.max_message_size = ceiling, .total_memory_cap = 64u * 1024u}};
 
         // Two fragments that fit, then a third whose bytes would push the entry past the
         // per-message ceiling: the third is dropped_malformed, the entry stays bounded.
@@ -138,23 +141,28 @@ TEST_CASE("integration.reassembler_dos a per-message-ceiling overrun is dropped"
         REQUIRE(r.feed(1, 0, 4, filler(512)) == test_reassembler::outcome::admitted);
         REQUIRE(r.feed(1, 1, 4, filler(512)) == test_reassembler::outcome::admitted);
         REQUIRE(r.feed(1, 2, 4, filler(512)) == test_reassembler::outcome::dropped_malformed);
-        REQUIRE(r.held_bytes() == 1024 + overhead);   // the over-ceiling fragment added nothing
+        REQUIRE(r.held_bytes() == 1024 + overhead); // the over-ceiling fragment added nothing
         REQUIRE(r.in_flight() == 1);
     }
 }
 
-TEST_CASE("integration.reassembler_dos malformed fragments are rejected without indexing past the span", "[reassembler][dos][malformed]")
+TEST_CASE("integration.reassembler_dos malformed fragments are rejected without indexing past the "
+          "span",
+          "[reassembler][dos][malformed]")
 {
     for(int loop = 0; loop < 8; ++loop)
     {
         plexus::testing::harness h;
-        test_reassembler r{h.ex};
+        test_reassembler         r{h.ex};
 
         // idx >= cnt, cnt == 0, and cnt past the max_fragment_count ceiling are each rejected
         // before any indexing — looped so a state-carrying regression is caught.
-        REQUIRE(r.feed(1, 5, 3, filler(64)) == test_reassembler::outcome::dropped_malformed);   // idx >= cnt
-        REQUIRE(r.feed(1, 0, 0, filler(64)) == test_reassembler::outcome::dropped_malformed);   // cnt == 0
-        REQUIRE(r.feed(1, 0, 0xFFFF, filler(64)) == test_reassembler::outcome::dropped_malformed); // cnt over max
+        REQUIRE(r.feed(1, 5, 3, filler(64)) ==
+                test_reassembler::outcome::dropped_malformed); // idx >= cnt
+        REQUIRE(r.feed(1, 0, 0, filler(64)) ==
+                test_reassembler::outcome::dropped_malformed); // cnt == 0
+        REQUIRE(r.feed(1, 0, 0xFFFF, filler(64)) ==
+                test_reassembler::outcome::dropped_malformed); // cnt over max
         REQUIRE(r.in_flight() == 0);
         REQUIRE(r.held_bytes() == 0);
 
@@ -164,8 +172,10 @@ TEST_CASE("integration.reassembler_dos malformed fragments are rejected without 
         // field cannot be turned into a metadata-amplification allocation. structural_cost itself
         // casts to size_t before the multiply, so even the rejected count cannot overflow the
         // cost computation on the path that does evaluate it.
-        REQUIRE(r.feed(1, 0, 0xFFFFFFFFu, filler(64)) == test_reassembler::outcome::dropped_malformed);
-        REQUIRE(r.feed(1, 0, 0xFFFFFFF0u, filler(64)) == test_reassembler::outcome::dropped_malformed);
+        REQUIRE(r.feed(1, 0, 0xFFFFFFFFu, filler(64)) ==
+                test_reassembler::outcome::dropped_malformed);
+        REQUIRE(r.feed(1, 0, 0xFFFFFFF0u, filler(64)) ==
+                test_reassembler::outcome::dropped_malformed);
         REQUIRE(r.in_flight() == 0);
         REQUIRE(r.held_bytes() == 0);
 
@@ -177,14 +187,15 @@ TEST_CASE("integration.reassembler_dos malformed fragments are rejected without 
     }
 }
 
-TEST_CASE("integration.reassembler_dos a stalled partial is evicted on the per-message timeout", "[reassembler][dos][timeout]")
+TEST_CASE("integration.reassembler_dos a stalled partial is evicted on the per-message timeout",
+          "[reassembler][dos][timeout]")
 {
     constexpr auto timeout = 1000ms;
 
     for(int loop = 0; loop < 8; ++loop)
     {
         plexus::testing::harness h;
-        test_reassembler r{h.ex, {.per_message_timeout = timeout}};
+        test_reassembler         r{h.ex, {.per_message_timeout = timeout}};
 
         bool delivered = false;
         r.on_deliver([&](std::span<const std::byte>) { delivered = true; });
@@ -196,7 +207,7 @@ TEST_CASE("integration.reassembler_dos a stalled partial is evicted on the per-m
         for(std::uint16_t id = 1; id <= 32; ++id)
             REQUIRE(r.feed(id, 0, 4, filler(128)) == test_reassembler::outcome::admitted);
         REQUIRE(r.in_flight() == 32);
-        REQUIRE(r.held_bytes() == 32u * (128u + overhead));   // payload + per-entry slot metadata
+        REQUIRE(r.held_bytes() == 32u * (128u + overhead)); // payload + per-entry slot metadata
 
         // Cross the timeout: every stalled partial is evicted, the state returns to zero,
         // and nothing was delivered (best-effort drop-whole: a lost-fragment message is gone).
@@ -212,16 +223,18 @@ TEST_CASE("integration.reassembler_dos a stalled partial is evicted on the per-m
     }
 }
 
-TEST_CASE("integration.reassembler_dos the demux cap bounds the spoofed-source channel count", "[reassembler][dos][demux]")
+TEST_CASE("integration.reassembler_dos the demux cap bounds the spoofed-source channel count",
+          "[reassembler][dos][demux]")
 {
     // Each datagram channel is per-peer and owns one reassembler, so the demux peer cap
     // bounds how many reassemblers a spoofed-source flood can mint — the aggregate
     // reassembly-memory bound is (demux cap × per-reassembler cap), not unbounded.
-    using demux = plexus::io::detail::basic_inbound_demux<int, std::uint32_t, std::hash<std::uint32_t>>;
+    using demux =
+            plexus::io::detail::basic_inbound_demux<int, std::uint32_t, std::hash<std::uint32_t>>;
 
     constexpr std::size_t cap = 8;
-    demux d{cap};
-    int channels[cap];
+    demux                 d{cap};
+    int                   channels[cap];
 
     // A spoofed-source flood of distinct endpoints fills exactly the cap, then every
     // further NEW source is refused (insert returns false) so the caller drops it rather
@@ -234,8 +247,8 @@ TEST_CASE("integration.reassembler_dos the demux cap bounds the spoofed-source c
     for(std::uint32_t ep = 100; ep < 100 + 50; ++ep)
         if(!d.insert(ep, &channels[0]))
             ++refused;
-    REQUIRE(refused == 50);                 // every new source past the cap is refused
-    REQUIRE(d.size() == cap);               // the live peer count never grows past the cap
+    REQUIRE(refused == 50);   // every new source past the cap is refused
+    REQUIRE(d.size() == cap); // the live peer count never grows past the cap
 
     // An OVERWRITE of an already-mapped source does not grow the map (a re-dial reuses the
     // slot), so a same-source re-accept cannot bypass the cap.

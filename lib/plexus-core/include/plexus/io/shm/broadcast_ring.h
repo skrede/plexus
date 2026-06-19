@@ -100,7 +100,7 @@ public:
     // writable, 8-aligned slab span the caller fills before committing.
     struct claim_result
     {
-        std::uint64_t position{0};
+        std::uint64_t        position{0};
         std::span<std::byte> slab;
     };
 
@@ -108,16 +108,16 @@ public:
     // and the cell position it was read from.
     struct consume_result
     {
-        std::uint64_t position{0};
+        std::uint64_t              position{0};
         std::span<const std::byte> slab;
     };
 
     broadcast_ring() = default;
 
-    broadcast_ring(const broadcast_ring &) = delete;
+    broadcast_ring(const broadcast_ring &)            = delete;
     broadcast_ring &operator=(const broadcast_ring &) = delete;
-    broadcast_ring(broadcast_ring &&) = delete;
-    broadcast_ring &operator=(broadcast_ring &&) = delete;
+    broadcast_ring(broadcast_ring &&)                 = delete;
+    broadcast_ring &operator=(broadcast_ring &&)      = delete;
 
     // Places the control header + cells over `control` and initializes every
     // cell's sequence to its index per the Vyukov init. cell_count must be a
@@ -126,7 +126,7 @@ public:
     static loan_status create(std::span<std::byte> control, std::span<std::byte> slab,
                               std::uint64_t cell_count, std::uint64_t slot_capacity,
                               broadcast_ring &out,
-                              std::uint64_t consumer_capacity = k_max_consumers) noexcept
+                              std::uint64_t   consumer_capacity = k_max_consumers) noexcept
     {
         if(!is_power_of_two(cell_count) || slot_capacity == 0)
             return loan_status::rejected;
@@ -190,9 +190,10 @@ public:
            slab.size() < header->cell_count * stride)
             return loan_status::rejected;
 
-        auto *cells = std::launder(reinterpret_cast<cell_t *>(control.data() + sizeof(control_header_t)));
-        out.bind(control, slab, header, cells, header->cell_count, header->slot_capacity, header->mask,
-                 header->consumer_capacity);
+        auto *cells =
+                std::launder(reinterpret_cast<cell_t *>(control.data() + sizeof(control_header_t)));
+        out.bind(control, slab, header, cells, header->cell_count, header->slot_capacity,
+                 header->mask, header->consumer_capacity);
         return loan_status::ok;
     }
 
@@ -207,12 +208,14 @@ public:
         std::uint64_t pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
         for(;;)
         {
-            cell_t &c               = cell_at(pos);
+            cell_t             &c   = cell_at(pos);
             const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-            const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(pos);
+            const std::int64_t  dif =
+                    static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(pos);
             if(dif == 0)
             {
-                if(m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+                if(m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1,
+                                                               std::memory_order_relaxed))
                     break;
             }
             else if(dif < 0)
@@ -230,7 +233,8 @@ public:
     // reliable -> congested when the slowest registered cursor has not passed the
     // cell (and spins out a transient pin); best-effort -> overwrite-latest,
     // skipping pinned cells, congested only when a full lap is pinned.
-    loan_status claim_with_policy(std::size_t size, reliability rel, congestion, claim_result &out) noexcept
+    loan_status claim_with_policy(std::size_t size, reliability rel, congestion,
+                                  claim_result &out) noexcept
     {
         if(size > m_slot_capacity)
             return loan_status::rejected;
@@ -265,9 +269,10 @@ public:
     // congested (the caller steps its cursor forward by one without delivering).
     loan_status consume(std::uint64_t cursor, consume_result &out) noexcept
     {
-        cell_t &c               = cell_at(cursor);
+        cell_t             &c   = cell_at(cursor);
         const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-        const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(cursor + 1);
+        const std::int64_t  dif =
+                static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(cursor + 1);
         if(dif < 0)
             return loan_status::empty;
         if(dif > 0)
@@ -286,7 +291,7 @@ public:
 
         out.position = cursor;
         out.slab     = const_slot_span(cursor).subspan(
-            0, static_cast<std::size_t>(len > m_slot_capacity ? m_slot_capacity : len));
+                0, static_cast<std::size_t>(len > m_slot_capacity ? m_slot_capacity : len));
         return loan_status::ok;
     }
 
@@ -299,7 +304,8 @@ public:
         for(std::uint32_t i = 0; i < capacity; ++i)
         {
             std::uint32_t expected = 0;
-            if(m_header->cursors[i].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
+            if(m_header->cursors[i].active.compare_exchange_strong(expected, 1,
+                                                                   std::memory_order_acq_rel))
             {
                 m_header->cursors[i].position.store(k_cursor_idle, std::memory_order_release);
                 raise_high_water(i + 1);
@@ -364,8 +370,8 @@ public:
     // (the position moved) from a wedged/dead one (it did not).
     std::uint64_t slowest_consumer_position() const noexcept
     {
-        std::uint64_t slowest = k_cursor_idle;
-        const std::uint32_t scan = m_header->high_water.load(std::memory_order_acquire);
+        std::uint64_t       slowest = k_cursor_idle;
+        const std::uint32_t scan    = m_header->high_water.load(std::memory_order_acquire);
         for(std::uint32_t i = 0; i < scan; ++i)
         {
             if(m_header->cursors[i].active.load(std::memory_order_acquire) == 0)
@@ -381,20 +387,14 @@ public:
     // shared memory). A producer in ANY process attached to this ring bumps it and
     // wakes a consumer blocked on it by address; the consumer's notifier
     // FUTEX_WAITs on this same word.
-    std::atomic<std::uint32_t> &notify_generation() noexcept
-    {
-        return m_header->notify_generation;
-    }
+    std::atomic<std::uint32_t> &notify_generation() noexcept { return m_header->notify_generation; }
 
     // The parked-waiter 3-state word in this ring's control header (in mapped
     // shared memory). A consumer's notifier park boundary toggles it
     // EMPTY/PARKED/NOTIFIED across processes; the producer's gated wake reads it to
     // skip the FUTEX_WAKE syscall when no waiter is parked. Mirrors
     // notify_generation()'s cross-process word accessor.
-    std::atomic<std::uint32_t> &park_state() noexcept
-    {
-        return m_header->park_state;
-    }
+    std::atomic<std::uint32_t> &park_state() noexcept { return m_header->park_state; }
 
     std::uint64_t cell_count() const noexcept { return m_cell_count; }
     std::uint64_t slot_capacity() const noexcept { return m_slot_capacity; }
@@ -407,10 +407,7 @@ public:
     }
 
 private:
-    static bool is_power_of_two(std::uint64_t v) noexcept
-    {
-        return v != 0 && (v & (v - 1)) == 0;
-    }
+    static bool is_power_of_two(std::uint64_t v) noexcept { return v != 0 && (v & (v - 1)) == 0; }
 
     void bind(std::span<std::byte> control, std::span<std::byte> slab, control_header_t *header,
               cell_t *cells, std::uint64_t cell_count, std::uint64_t slot_capacity,
@@ -462,7 +459,7 @@ private:
         if(position < m_cell_count)
             return true; // first lap: no prior occupant to free
         const std::uint64_t occupant = position - m_cell_count;
-        const std::uint32_t scan = m_header->high_water.load(std::memory_order_acquire);
+        const std::uint32_t scan     = m_header->high_water.load(std::memory_order_acquire);
         for(std::uint32_t i = 0; i < scan; ++i)
         {
             if(m_header->cursors[i].active.load(std::memory_order_acquire) == 0)
@@ -480,8 +477,10 @@ private:
     // filled-and-lapped (stale bytes); dif==-cell_count is an in-flight peer.
     bool occupant_committed(std::uint64_t position) const noexcept
     {
-        const std::uint64_t seq = m_cells[position & m_mask].sequence.load(std::memory_order_acquire);
-        const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(position);
+        const std::uint64_t seq =
+                m_cells[position & m_mask].sequence.load(std::memory_order_acquire);
+        const std::int64_t dif =
+                static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(position);
         return dif == 0 || dif == 1 - static_cast<std::int64_t>(m_cell_count);
     }
 
@@ -514,7 +513,8 @@ private:
             // cannot fill: the slowest cursor must have drained the prior occupant.
             if(!consumers_passed(pos))
                 return loan_status::congested;
-            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1,
+                                                            std::memory_order_relaxed))
                 continue;
 
             // The position is now ours and contiguous. A consumer may still hold a
@@ -568,7 +568,8 @@ private:
                 pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
                 continue;
             }
-            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1,
+                                                            std::memory_order_relaxed))
                 continue;
 
             // Won the head; announce the claim and check the pin. Unpinned -> write.
@@ -590,13 +591,13 @@ private:
 
     std::span<std::byte> m_control;
     std::span<std::byte> m_slab;
-    control_header_t *m_header{nullptr};
-    cell_t *m_cells{nullptr};
-    std::uint64_t m_cell_count{0};
-    std::uint64_t m_slot_capacity{0};
-    std::uint64_t m_mask{0};
-    std::uint64_t m_stride{0};
-    std::uint64_t m_consumer_capacity{0};
+    control_header_t    *m_header{nullptr};
+    cell_t              *m_cells{nullptr};
+    std::uint64_t        m_cell_count{0};
+    std::uint64_t        m_slot_capacity{0};
+    std::uint64_t        m_mask{0};
+    std::uint64_t        m_stride{0};
+    std::uint64_t        m_consumer_capacity{0};
 };
 
 static_assert(broadcast_ring::k_cursor_idle == UINT64_MAX,

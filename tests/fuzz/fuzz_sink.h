@@ -5,7 +5,7 @@
 // leaving the harness a single straight-line edge that fuzzes nothing. Escaping the
 // result's address through an opaque asm barrier forces full materialization
 // (the same technique as benchmark::DoNotOptimize).
-template <typename T>
+template<typename T>
 inline void fuzz_consume(const T &value)
 {
     __asm__ volatile("" : : "g"(&value) : "memory");

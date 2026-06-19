@@ -44,14 +44,16 @@ class slot_publisher
 {
 public:
     slot_publisher(broadcast_ring &ring, reliability rel, congestion cong) noexcept
-        : m_ring(ring), m_reliability(rel), m_congestion(cong)
+            : m_ring(ring)
+            , m_reliability(rel)
+            , m_congestion(cong)
     {
     }
 
-    slot_publisher(const slot_publisher &) = delete;
+    slot_publisher(const slot_publisher &)            = delete;
     slot_publisher &operator=(const slot_publisher &) = delete;
-    slot_publisher(slot_publisher &&) = delete;
-    slot_publisher &operator=(slot_publisher &&) = delete;
+    slot_publisher(slot_publisher &&)                 = delete;
+    slot_publisher &operator=(slot_publisher &&)      = delete;
 
     // Claims a slot for `size` bytes under the construction-derived policy. ok
     // hands back a writable window through `out`; rejected when size exceeds the
@@ -77,7 +79,7 @@ public:
     }
 
     reliability delivery() const noexcept { return m_reliability; }
-    congestion overflow() const noexcept { return m_congestion; }
+    congestion  overflow() const noexcept { return m_congestion; }
 
     // The slowest registered consumer cursor -- the back-pressure progress signal a
     // blocking reliable producer watches to tell a live-but-slow consumer from a

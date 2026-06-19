@@ -28,19 +28,19 @@ namespace plexus::inproc {
 // handler can call back into the channel with no re-entrancy hazard. close() posts
 // a broken-pipe error to the partner through the same step-loop. Satisfies
 // plexus::io::byte_channel.
-template <typename Clock = std::chrono::steady_clock>
+template<typename Clock = std::chrono::steady_clock>
 class inproc_channel
 {
 public:
     explicit inproc_channel(inproc_executor<Clock> &ex)
-        : m_exec(&ex)
-        , m_bus(&ex.bus())
-        , m_local(m_bus->register_channel(this))
+            : m_exec(&ex)
+            , m_bus(&ex.bus())
+            , m_local(m_bus->register_channel(this))
     {
     }
 
     inproc_channel(inproc_executor<Clock> &ex, std::error_code &)
-        : inproc_channel(ex)
+            : inproc_channel(ex)
     {
     }
 
@@ -50,10 +50,10 @@ public:
             m_bus->deregister_channel(this);
     }
 
-    inproc_channel(const inproc_channel &) = delete;
+    inproc_channel(const inproc_channel &)            = delete;
     inproc_channel &operator=(const inproc_channel &) = delete;
-    inproc_channel(inproc_channel &&) = delete;
-    inproc_channel &operator=(inproc_channel &&) = delete;
+    inproc_channel(inproc_channel &&)                 = delete;
+    inproc_channel &operator=(inproc_channel &&)      = delete;
 
     // Name the partner this channel sends toward. Pairing is a post-construction
     // step because the Policy requires construction from the executor alone. The
@@ -63,7 +63,7 @@ public:
     // drop in deliver_one exactly as an unmatched endpoint did.
     void connect_to(const io::endpoint &partner)
     {
-        m_partner = partner;
+        m_partner     = partner;
         m_partner_key = m_bus ? m_bus->key_for(partner) : 0;
     }
 
@@ -98,17 +98,29 @@ public:
 
     [[nodiscard]] io::endpoint remote_endpoint() const { return m_partner; }
 
-    void on_data(detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
-    void on_object(detail::move_only_function<void(const io::object_carrier &)> cb) { m_on_object = std::move(cb); }
+    void on_data(detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
+    void on_object(detail::move_only_function<void(const io::object_carrier &)> cb)
+    {
+        m_on_object = std::move(cb);
+    }
     void on_closed(detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
     void on_error(detail::move_only_function<void(io::io_error)> cb) { m_on_error = std::move(cb); }
-    void on_drop(detail::move_only_function<void(const io::detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
+    void on_drop(detail::move_only_function<void(const io::detail::drop_event &)> cb)
+    {
+        m_on_drop = std::move(cb);
+    }
 
     // The non-stream opt-out: inproc moves whole pre-framed packets, so no partial
     // frame — and thus no framing violation or slowloris stall — can ever exist on
     // it. The callback is stored to satisfy the uniform channel seam and is NEVER
     // fired (a protocol-close is meaningless without a byte stream to misbehave on).
-    void on_protocol_close(detail::move_only_function<void(wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_protocol_close(detail::move_only_function<void(wire::close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
 
     // Bus callbacks: invoked only from inproc_bus::deliver_one(), i.e. from
     // inside the executor's step(). Never reached synchronously from a peer's
@@ -148,7 +160,7 @@ public:
     void report_unroutable()
     {
         if(m_on_drop)
-            m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::unroutable,
+            m_on_drop(io::detail::drop_event{.cause     = io::detail::drop_cause::unroutable,
                                              .transport = io::locality::process});
     }
 
@@ -163,18 +175,18 @@ public:
     }
 
 private:
-    inproc_executor<Clock> *m_exec;
-    inproc_bus<Clock> *m_bus;
-    io::endpoint m_local;
-    io::endpoint m_partner;
-    std::uint64_t m_partner_key{0};
-    detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    detail::move_only_function<void(const io::object_carrier &)> m_on_object;
-    detail::move_only_function<void()> m_on_closed;
-    detail::move_only_function<void(io::io_error)> m_on_error;
+    inproc_executor<Clock>                                          *m_exec;
+    inproc_bus<Clock>                                               *m_bus;
+    io::endpoint                                                     m_local;
+    io::endpoint                                                     m_partner;
+    std::uint64_t                                                    m_partner_key{0};
+    detail::move_only_function<void(std::span<const std::byte>)>     m_on_data;
+    detail::move_only_function<void(const io::object_carrier &)>     m_on_object;
+    detail::move_only_function<void()>                               m_on_closed;
+    detail::move_only_function<void(io::io_error)>                   m_on_error;
     detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
-    detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
-    bool m_closed{false};
+    detail::move_only_function<void(wire::close_cause)>              m_on_protocol_close;
+    bool                                                             m_closed{false};
 };
 
 }

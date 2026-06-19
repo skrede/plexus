@@ -50,47 +50,49 @@ namespace {
 
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 struct manual_policy
 {
-    using executor_type = inproc_executor<manual_clock> &;
+    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
-    using timer_type = inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using transport_t = inproc_transport<manual_clock>;
-using engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
+using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
 // Periods pinned above the tick granularity so an advance crosses a tick expiry (M1).
-constexpr auto k_period = k_tick_granularity * 3;   // 300ms deadline
-constexpr auto k_lease  = k_tick_granularity * 8;   // 800ms lease
-static_assert(k_period >= k_tick_granularity, "a deadline period below the tick granularity never crosses a tick");
-static_assert(k_lease >= k_tick_granularity, "a lease below the tick granularity never crosses a tick");
+constexpr auto k_period = k_tick_granularity * 3; // 300ms deadline
+constexpr auto k_lease  = k_tick_granularity * 8; // 800ms lease
+static_assert(k_period >= k_tick_granularity,
+              "a deadline period below the tick granularity never crosses a tick");
+static_assert(k_lease >= k_tick_granularity,
+              "a lease below the tick granularity never crosses a tick");
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;
-constexpr int k_loops = 50;
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr int           k_loops        = 50;
 
-std::uint64_t ns_of(std::chrono::nanoseconds d)
-{
-    return static_cast<std::uint64_t>(d.count());
-}
+std::uint64_t ns_of(std::chrono::nanoseconds d) { return static_cast<std::uint64_t>(d.count()); }
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -101,8 +103,11 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -122,24 +127,26 @@ reconnect_config forever_cfg()
 // periods; B fans the topic back to A. The monitor lives on A (the receiving engine).
 struct net
 {
-    inproc_bus<manual_clock> bus;
+    inproc_bus<manual_clock>      bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
-    transport_t transport_b{ex, bus};
+    transport_t                   transport_a{ex, bus};
+    transport_t                   transport_b{ex, bus};
 
     engine a;
     engine b;
 
     plexus::node_id id_a{make_id(0xA1)};
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint ep_a{"inproc", "node-a"};
-    endpoint ep_b{"inproc", "node-b"};
+    endpoint        ep_a{"inproc", "node-a"};
+    endpoint        ep_b{"inproc", "node-b"};
 
     std::vector<liveness_event> events;
 
     net()
-        : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, /*eager=*/false)
-        , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, /*eager=*/false)
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed,
+                /*eager=*/false)
+            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed,
+                /*eager=*/false)
     {
         a.listen(ep_a);
         b.listen(ep_b);
@@ -148,7 +155,11 @@ struct net
     }
 
     void drive() { ex.drain(); }
-    void advance(std::chrono::nanoseconds d) { manual_clock::advance(d); drive(); }
+    void advance(std::chrono::nanoseconds d)
+    {
+        manual_clock::advance(d);
+        drive();
+    }
 
     int count(liveness_kind kind) const
     {
@@ -162,7 +173,8 @@ struct net
 
 }
 
-TEST_CASE("deadline liveliness: a data gap beyond the requested deadline fires exactly one missed-deadline")
+TEST_CASE("deadline liveliness: a data gap beyond the requested deadline fires exactly one "
+          "missed-deadline")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
@@ -177,7 +189,12 @@ TEST_CASE("deadline liveliness: a data gap beyond the requested deadline fires e
 
         // A's subscribe already drove B's on_subscribe -> attach_for_fanout, so B fans
         // "topic" back to A. Resolve B's accepted slot to drive the publishes.
-        const plexus::node_id b_inbound = [] { auto id = make_id(0x00); id[15] = std::byte{1}; return id; }();
+        const plexus::node_id b_inbound = []
+        {
+            auto id = make_id(0x00);
+            id[15]  = std::byte{1};
+            return id;
+        }();
         auto *b_to_a = n.b.session_for(b_inbound);
         REQUIRE(b_to_a != nullptr);
 
@@ -210,7 +227,8 @@ TEST_CASE("deadline liveliness: a data gap beyond the requested deadline fires e
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("deadline liveliness: a heartbeat lapse beyond the lease fires exactly one lease-expiry; a continuing heartbeat keeps it alive")
+TEST_CASE("deadline liveliness: a heartbeat lapse beyond the lease fires exactly one lease-expiry; "
+          "a continuing heartbeat keeps it alive")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
@@ -235,7 +253,12 @@ TEST_CASE("deadline liveliness: a heartbeat lapse beyond the lease fires exactly
 
         // Now silence the peer: tear B's accepted slot down so no heartbeat AND no data
         // reaches A. (A's own tick keeps firing but stamps nothing for B once silent.)
-        const plexus::node_id b_inbound = [] { auto id = make_id(0x00); id[15] = std::byte{1}; return id; }();
+        const plexus::node_id b_inbound = []
+        {
+            auto id = make_id(0x00);
+            id[15]  = std::byte{1};
+            return id;
+        }();
         auto *b_to_a = n.b.session_for(b_inbound);
         REQUIRE(b_to_a != nullptr);
         b_to_a->tear_down();
@@ -252,7 +275,8 @@ TEST_CASE("deadline liveliness: a heartbeat lapse beyond the lease fires exactly
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("deadline liveliness: a heartbeat refreshes the lease but not the deadline (the two-stamp end-to-end)")
+TEST_CASE("deadline liveliness: a heartbeat refreshes the lease but not the deadline (the "
+          "two-stamp end-to-end)")
 {
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
@@ -264,11 +288,16 @@ TEST_CASE("deadline liveliness: a heartbeat refreshes the lease but not the dead
         // heartbeats keep presence alive while data lapses past the deadline.
         n.a.subscribe(n.id_b, "topic",
                       subscriber_qos{.requested_deadline_ns = ns_of(k_period),
-                                     .requested_lease_ns = ns_of(k_lease)});
+                                     .requested_lease_ns    = ns_of(k_lease)});
         n.drive();
         REQUIRE(n.a.is_connected(n.id_b));
 
-        const plexus::node_id b_inbound = [] { auto id = make_id(0x00); id[15] = std::byte{1}; return id; }();
+        const plexus::node_id b_inbound = []
+        {
+            auto id = make_id(0x00);
+            id[15]  = std::byte{1};
+            return id;
+        }();
         auto *b_to_a = n.b.session_for(b_inbound);
         REQUIRE(b_to_a != nullptr);
 
@@ -281,8 +310,8 @@ TEST_CASE("deadline liveliness: a heartbeat refreshes the lease but not the dead
         // keepalive heartbeats kept presence.
         n.advance(k_period + k_tick_granularity);
 
-        REQUIRE(n.count(liveness_kind::missed_deadline) == 1);   // data lapsed
-        REQUIRE(n.count(liveness_kind::lease_expired) == 0);     // heartbeat kept presence
+        REQUIRE(n.count(liveness_kind::missed_deadline) == 1); // data lapsed
+        REQUIRE(n.count(liveness_kind::lease_expired) == 0);   // heartbeat kept presence
 
         ++proven;
     }

@@ -43,20 +43,29 @@ public:
         if(m_sink)
             m_sink(std::span<const std::byte>{m_last});
     }
-    void close() {}
+    void                               close() {}
     [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"wire", ""}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb) { m_on_error = std::move(cb); }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
     [[nodiscard]] std::size_t backpressured() const { return 0; }
 
-    std::function<void(std::span<const std::byte>)> m_sink;
-    std::vector<std::byte> m_last;
+    std::function<void(std::span<const std::byte>)>                      m_sink;
+    std::vector<std::byte>                                               m_last;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()> m_on_closed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close;
+    plexus::detail::move_only_function<void()>                           m_on_closed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
 
 // Each session derives keys from a salt that varies per (run, session-instance): a
@@ -85,11 +94,11 @@ derived_keys keys_for(std::uint32_t session_salt)
 std::vector<std::byte> make_frame(std::uint64_t session_id, std::string_view payload)
 {
     plexus::wire::frame_header hdr{};
-    hdr.type = plexus::wire::msg_type::unidirectional;
-    hdr.flags = 0;
-    hdr.session_id = session_id;
+    hdr.type         = plexus::wire::msg_type::unidirectional;
+    hdr.flags        = 0;
+    hdr.session_id   = session_id;
     hdr.timestamp_ns = 1;
-    hdr.payload_len = payload.size();
+    hdr.payload_len  = payload.size();
     std::vector<std::byte> pt;
     for(char c : payload)
         pt.push_back(static_cast<std::byte>(static_cast<unsigned char>(c)));
@@ -106,37 +115,38 @@ std::uint64_t key_fingerprint(std::uint32_t session_salt, std::uint32_t epoch, i
     // Each (session, epoch, direction) names a distinct derived key in the construction
     // under test; fold them into one value so the uniqueness set keys on key identity.
     return (static_cast<std::uint64_t>(session_salt) << 40) ^
-           (static_cast<std::uint64_t>(epoch) << 8) ^ static_cast<std::uint64_t>(direction);
+            (static_cast<std::uint64_t>(epoch) << 8) ^ static_cast<std::uint64_t>(direction);
 }
 
 // Drive `count` sends through a sender keyed by `session_salt`, recording each emitted
 // (key, epoch, sequence, direction) tuple into `seen`. The pre-send (epoch, sequence)
 // reads ARE the nonce the decorator constructs for that frame.
-void drive_flow(std::set<nonce_tuple> &seen, std::uint32_t session_salt,
-                std::uint64_t count, std::uint64_t rekey_threshold)
+void drive_flow(std::set<nonce_tuple> &seen, std::uint32_t session_salt, std::uint64_t count,
+                std::uint64_t rekey_threshold)
 {
-    wire_lower wire;
+    wire_lower                        wire;
     authenticated_channel<wire_lower> sender(wire, aead_cipher_id::chacha20_poly1305,
                                              keys_for(session_salt), 0, rekey_threshold);
-    const auto frame = make_frame(session_salt, "n");
+    const auto                        frame = make_frame(session_salt, "n");
     for(std::uint64_t i = 0; i < count; ++i)
     {
         const auto epoch = sender.send_epoch();
-        const auto seq = sender.send_sequence();
-        const auto fp = key_fingerprint(session_salt, epoch, /*direction=*/0);
+        const auto seq   = sender.send_sequence();
+        const auto fp    = key_fingerprint(session_salt, epoch, /*direction=*/0);
         const bool fresh = seen.insert(nonce_tuple{fp, epoch, seq, 0}).second;
-        REQUIRE(fresh);   // no (key, nonce) reuse, ever
+        REQUIRE(fresh); // no (key, nonce) reuse, ever
         sender.send(frame);
     }
 }
 
 }
 
-TEST_CASE("crypto.nonce_uniqueness holds across flow, reconnect, and restart (looped)", "[crypto][nonce]")
+TEST_CASE("crypto.nonce_uniqueness holds across flow, reconnect, and restart (looped)",
+          "[crypto][nonce]")
 {
     std::set<nonce_tuple> seen;
-    const std::uint64_t rekey_threshold = 64;     // exercise several rekeys per session
-    const std::uint64_t per_session = 500;
+    const std::uint64_t   rekey_threshold = 64; // exercise several rekeys per session
+    const std::uint64_t   per_session     = 500;
 
     // N looped runs of the three-scenario set with a deterministic, RNG-free
     // construction — a second ctest invocation reproduces the identical pass.
@@ -144,15 +154,17 @@ TEST_CASE("crypto.nonce_uniqueness holds across flow, reconnect, and restart (lo
     for(int run = 0; run < loops; ++run)
     {
         const std::uint32_t base = static_cast<std::uint32_t>(run * 10);
-        drive_flow(seen, base + 1, per_session, rekey_threshold);   // steady-state flow
-        drive_flow(seen, base + 2, per_session, rekey_threshold);   // reconnect: fresh session/keys
-        drive_flow(seen, base + 3, per_session, rekey_threshold);   // forced restart: fresh session/keys
+        drive_flow(seen, base + 1, per_session, rekey_threshold); // steady-state flow
+        drive_flow(seen, base + 2, per_session, rekey_threshold); // reconnect: fresh session/keys
+        drive_flow(seen, base + 3, per_session,
+                   rekey_threshold); // forced restart: fresh session/keys
     }
 
     REQUIRE(seen.size() == static_cast<std::size_t>(loops) * 3u * per_session);
 }
 
-TEST_CASE("crypto.nonce_uniqueness holds across a > 256-rekey session (epoch byte wrap)", "[crypto][nonce]")
+TEST_CASE("crypto.nonce_uniqueness holds across a > 256-rekey session (epoch byte wrap)",
+          "[crypto][nonce]")
 {
     // Force > 256 rekeys in one session (a rekey every frame) so the 8-bit wire epoch
     // byte wraps 0xff -> 0x00. Each epoch installs a FRESH key (a distinct fingerprint),
@@ -160,7 +172,7 @@ TEST_CASE("crypto.nonce_uniqueness holds across a > 256-rekey session (epoch byt
     // wrap — the wire-byte collision (epoch 5 and 261 share byte 5) never reuses a
     // (key,nonce) pair because the keys differ.
     std::set<nonce_tuple> seen;
-    const std::uint64_t frames = 600;   // well past 256 rekeys at threshold 1
+    const std::uint64_t   frames = 600; // well past 256 rekeys at threshold 1
     drive_flow(seen, /*session_salt=*/77, frames, /*rekey_threshold=*/1);
     REQUIRE(seen.size() == static_cast<std::size_t>(frames));
 
@@ -171,11 +183,12 @@ TEST_CASE("crypto.nonce_uniqueness holds across a > 256-rekey session (epoch byt
     REQUIRE(seen_again == seen);
 }
 
-TEST_CASE("crypto.nonce_uniqueness the AEAD nonce is independent of the ARQ sequence", "[crypto][nonce]")
+TEST_CASE("crypto.nonce_uniqueness the AEAD nonce is independent of the ARQ sequence",
+          "[crypto][nonce]")
 {
-    wire_lower wire;
-    authenticated_channel<wire_lower> sender(wire, aead_cipher_id::chacha20_poly1305,
-                                             keys_for(99), 0, /*rekey_threshold=*/1ull << 20);
+    wire_lower                        wire;
+    authenticated_channel<wire_lower> sender(wire, aead_cipher_id::chacha20_poly1305, keys_for(99),
+                                             0, /*rekey_threshold=*/1ull << 20);
 
     // Drive frames whose header carries a RETRANSMIT-REUSED session/ARQ-style value
     // (the same number rides every frame); the AEAD nonce must still advance monotonically.
@@ -197,14 +210,17 @@ TEST_CASE("crypto.nonce_uniqueness the AEAD nonce is independent of the ARQ sequ
     REQUIRE(nonces.back().second == 99);
 }
 
-TEST_CASE("crypto.nonce_uniqueness the nonce is a deterministic counter, never a CSPRNG draw", "[crypto][nonce]")
+TEST_CASE("crypto.nonce_uniqueness the nonce is a deterministic counter, never a CSPRNG draw",
+          "[crypto][nonce]")
 {
     // Two independently-constructed senders over the same keys emit the IDENTICAL nonce
     // sequence — a CSPRNG-drawn nonce could not be reproduced, a counter is.
-    wire_lower wire_a;
-    wire_lower wire_b;
-    authenticated_channel<wire_lower> a(wire_a, aead_cipher_id::chacha20_poly1305, keys_for(7), 0, 16);
-    authenticated_channel<wire_lower> b(wire_b, aead_cipher_id::chacha20_poly1305, keys_for(7), 0, 16);
+    wire_lower                        wire_a;
+    wire_lower                        wire_b;
+    authenticated_channel<wire_lower> a(wire_a, aead_cipher_id::chacha20_poly1305, keys_for(7), 0,
+                                        16);
+    authenticated_channel<wire_lower> b(wire_b, aead_cipher_id::chacha20_poly1305, keys_for(7), 0,
+                                        16);
 
     const auto frame = make_frame(7, "deterministic");
     for(int i = 0; i < 50; ++i)

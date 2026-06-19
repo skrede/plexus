@@ -51,9 +51,8 @@ struct response_t
 
 // The positive case: a concrete, non-generic handler with a single deducible signature.
 using concrete_handler =
-    decltype([](const request_t &) -> plexus::expected<response_t, std::error_code> {
-        return response_t{0};
-    });
+        decltype([](const request_t &) -> plexus::expected<response_t, std::error_code>
+                 { return response_t{0}; });
 
 // Negative case 1: a generic lambda — operator() is a template, nothing to deduce.
 using generic_handler = decltype([](auto) {});
@@ -84,7 +83,7 @@ using plexus::inproc::inproc_policy;
 using plexus::inproc::inproc_transport;
 using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
 
-template <typename T>
+template<typename T>
 struct echo_codec
 {
     using value_type = T;
@@ -102,7 +101,7 @@ struct echo_codec
     {
         if(b.size() != 4)
             return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(b[i])) << (8 * i);
@@ -125,21 +124,21 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0x5E14Eu;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0x5E14Eu;
     opts.dial_eagerly = eager;
     return opts;
 }
 
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -160,7 +159,8 @@ struct net
 
 }
 
-TEST_CASE("serve deduction: concrete handlers deduce, generic and overloaded do not", "[node][typed]")
+TEST_CASE("serve deduction: concrete handlers deduce, generic and overloaded do not",
+          "[node][typed]")
 {
     STATIC_REQUIRE(deducible_handler<concrete_handler>);
     STATIC_REQUIRE_FALSE(deducible_handler<generic_handler>);
@@ -173,17 +173,18 @@ TEST_CASE("serve deduction: the deduced serve/caller pair round-trips", "[node][
     n.connect();
 
     auto proc = n.b.serve<echo_codec>(
-        "rpc", [](const request_t &req) -> plexus::expected<response_t, std::error_code> {
-            return response_t{req.value + 1};
-        });
+            "rpc", [](const request_t &req) -> plexus::expected<response_t, std::error_code>
+            { return response_t{req.value + 1}; });
     auto call = n.a.caller<response_t(request_t), echo_codec>("rpc");
     n.drive();
 
     std::optional<std::uint32_t> got;
-    call.call(request_t{41}, [&](plexus::expected<response_t, std::error_code> r) {
-        REQUIRE(static_cast<bool>(r));
-        got = r.value().value;
-    });
+    call.call(request_t{41},
+              [&](plexus::expected<response_t, std::error_code> r)
+              {
+                  REQUIRE(static_cast<bool>(r));
+                  got = r.value().value;
+              });
     n.drive();
     REQUIRE(got == 42u);
 }

@@ -15,20 +15,20 @@
 namespace plexus::wire {
 
 constexpr std::size_t unidirectional_header_size = 17;
-constexpr std::size_t bidirectional_header_size = 41;
+constexpr std::size_t bidirectional_header_size  = 41;
 
 struct unidirectional_header
 {
     endpoint_source_type source;
-    uint64_t sequence;
-    uint64_t topic_hash;
+    uint64_t             sequence;
+    uint64_t             topic_hash;
 };
 
 struct bidirectional_header
 {
     endpoint_source_type source;
-    uint64_t sequence;
-    uint64_t topic_hash;
+    uint64_t             sequence;
+    uint64_t             topic_hash;
     // A pair of structural reservation words, kept ZEROED on the data path. They
     // carry NO type-matching authority: type matching is settled at subscribe-time
     // discovery (subscribe_request.type_hash), not per data frame. They also carry
@@ -49,12 +49,12 @@ struct unidirectional_decode_result
     // with the session peer's node_id to reconstruct the publisher_gid; absent leaves
     // message_info.source_identity unset.
     std::optional<std::uint64_t> endpoint_counter;
-    std::span<const std::byte> data;
+    std::span<const std::byte>   data;
 };
 
 struct bidirectional_decode_result
 {
-    bidirectional_header header;
+    bidirectional_header       header;
     std::span<const std::byte> data;
 };
 
@@ -68,9 +68,9 @@ struct bidirectional_decode_result
 // payload_len), and the caller sets frame_header.flags |= k_flag_source_identity.
 // Absent → byte-identical to a v3-no-flag frame. write_varint/insert reuse the
 // buffer's existing capacity, so the no-alloc property holds in both shapes.
-inline void encode_unidirectional_into(std::vector<std::byte> &out,
+inline void encode_unidirectional_into(std::vector<std::byte>      &out,
                                        const unidirectional_header &hdr,
-                                       std::span<const std::byte> data,
+                                       std::span<const std::byte>   data,
                                        std::optional<std::uint64_t> endpoint_counter = std::nullopt)
 {
     out.resize(unidirectional_header_size);
@@ -87,9 +87,9 @@ inline void encode_unidirectional_into(std::vector<std::byte> &out,
 
 // One-shot allocating overload for callers that do not reuse a buffer; delegates to
 // the reusing _into form so the layout (incl. the flag-gated counter) lives in ONE place.
-inline std::vector<std::byte> encode_unidirectional(const unidirectional_header &hdr,
-                                                    std::span<const std::byte> data,
-                                                    std::optional<std::uint64_t> endpoint_counter = std::nullopt)
+inline std::vector<std::byte>
+encode_unidirectional(const unidirectional_header &hdr, std::span<const std::byte> data,
+                      std::optional<std::uint64_t> endpoint_counter = std::nullopt)
 {
     std::vector<std::byte> out;
     encode_unidirectional_into(out, hdr, data, endpoint_counter);
@@ -102,16 +102,17 @@ inline std::vector<std::byte> encode_unidirectional(const unidirectional_header 
 // header carries is the inner region's size), but without the intermediate inner buffer
 // and its second payload copy. resize() reuses capacity, so a steady-state publish loop
 // allocates nothing after warm-up.
-inline void encode_unidirectional_frame_into(std::vector<std::byte> &out, const frame_header &fhdr,
-                                             const unidirectional_header &uhdr,
-                                             std::span<const std::byte> payload,
-                                             std::optional<std::uint64_t> endpoint_counter = std::nullopt)
+inline void
+encode_unidirectional_frame_into(std::vector<std::byte> &out, const frame_header &fhdr,
+                                 const unidirectional_header &uhdr,
+                                 std::span<const std::byte>   payload,
+                                 std::optional<std::uint64_t> endpoint_counter = std::nullopt)
 {
     const std::size_t counter_len = endpoint_counter ? varint_size(*endpoint_counter) : 0;
     const std::size_t payload_len = unidirectional_header_size + counter_len + payload.size();
 
-    auto adjusted = fhdr;
-    adjusted.payload_len = payload_len;
+    auto adjusted           = fhdr;
+    adjusted.payload_len    = payload_len;
     const auto header_bytes = encode_header(adjusted);
 
     out.resize(header_size + payload_len);
@@ -138,34 +139,27 @@ decode_unidirectional(std::span<const std::byte> payload, bool has_source_identi
     if(payload.size() < unidirectional_header_size)
         return std::nullopt;
 
-    reader r{payload};
-    unidirectional_header hdr{
-            .source     = static_cast<endpoint_source_type>(r.u8()),
-            .sequence   = r.u64(),
-            .topic_hash = r.u64()
-    };
+    reader                r{payload};
+    unidirectional_header hdr{.source     = static_cast<endpoint_source_type>(r.u8()),
+                              .sequence   = r.u64(),
+                              .topic_hash = r.u64()};
 
     if(!has_source_identity)
         return unidirectional_decode_result{
-                .header           = hdr,
-                .endpoint_counter = std::nullopt,
-                .data             = r.rest()
-        };
+                .header = hdr, .endpoint_counter = std::nullopt, .data = r.rest()};
 
     auto counter = r.varint();
     if(!counter)
         return std::nullopt;
     return unidirectional_decode_result{
-            .header           = hdr,
-            .endpoint_counter = counter,
-            .data             = r.rest()
-    };
+            .header = hdr, .endpoint_counter = counter, .data = r.rest()};
 }
 
-inline std::vector<std::byte> encode_bidirectional(const bidirectional_header &hdr, std::span<const std::byte> data)
+inline std::vector<std::byte> encode_bidirectional(const bidirectional_header &hdr,
+                                                   std::span<const std::byte>  data)
 {
     std::vector<std::byte> buf(bidirectional_header_size + data.size());
-    writer w{buf};
+    writer                 w{buf};
 
     w.u8(static_cast<uint8_t>(hdr.source));
     w.u64(hdr.sequence);
@@ -183,8 +177,7 @@ inline std::vector<std::byte> encode_bidirectional(const bidirectional_header &h
 // frames into the same out vector allocates nothing after the warm-up grow —
 // the rpc encoders' zero-alloc path builds on this (the allocating return
 // overload above stays for one-shot callers).
-inline void encode_bidirectional_into(std::vector<std::byte> &out,
-                                      const bidirectional_header &hdr,
+inline void encode_bidirectional_into(std::vector<std::byte> &out, const bidirectional_header &hdr,
                                       std::span<const std::byte> data)
 {
     out.resize(bidirectional_header_size + data.size());
@@ -199,25 +192,21 @@ inline void encode_bidirectional_into(std::vector<std::byte> &out,
     w.bytes(data);
 }
 
-inline std::optional<bidirectional_decode_result> decode_bidirectional(std::span<const std::byte> payload)
+inline std::optional<bidirectional_decode_result>
+decode_bidirectional(std::span<const std::byte> payload)
 {
     if(payload.size() < bidirectional_header_size)
         return std::nullopt;
 
-    reader r{payload};
-    bidirectional_header hdr{
-            .source         = static_cast<endpoint_source_type>(r.u8()),
-            .sequence       = r.u64(),
-            .topic_hash     = r.u64(),
-            .type_hash_1    = r.u64(),
-            .type_hash_2    = r.u64(),
-            .correlation_id = r.u64()
-    };
+    reader               r{payload};
+    bidirectional_header hdr{.source         = static_cast<endpoint_source_type>(r.u8()),
+                             .sequence       = r.u64(),
+                             .topic_hash     = r.u64(),
+                             .type_hash_1    = r.u64(),
+                             .type_hash_2    = r.u64(),
+                             .correlation_id = r.u64()};
 
-    return bidirectional_decode_result{
-            .header = hdr,
-            .data   = r.rest()
-    };
+    return bidirectional_decode_result{.header = hdr, .data = r.rest()};
 }
 
 }

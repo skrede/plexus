@@ -49,16 +49,18 @@ std::string to_string(std::span<const std::byte> b)
 struct receive_sink
 {
     explicit receive_sink(inproc_executor<> &ex)
-        : channel(ex)
+            : channel(ex)
     {
-        router.on_unidirectional([this](const plexus::wire::frame_header &, std::span<const std::byte> inner) {
-            if(auto decoded = plexus::wire::decode_unidirectional(inner))
-                bodies.emplace_back(to_string(decoded->data));
-        });
+        router.on_unidirectional(
+                [this](const plexus::wire::frame_header &, std::span<const std::byte> inner)
+                {
+                    if(auto decoded = plexus::wire::decode_unidirectional(inner))
+                        bodies.emplace_back(to_string(decoded->data));
+                });
         channel.on_data([this](std::span<const std::byte> f) { router.route(f); });
     }
 
-    inproc_channel<> channel;
+    inproc_channel<>         channel;
     plexus::io::frame_router router;
     std::vector<std::string> bodies;
 };
@@ -71,7 +73,8 @@ forwarder::peer make_peer(inproc_channel<> &fwd_channel, receive_sink &sink, std
 
 }
 
-TEST_CASE("inproc latch replay delivers the late joiner the retained value through frame_router, looped",
+TEST_CASE("inproc latch replay delivers the late joiner the retained value through frame_router, "
+          "looped",
           "[integration][latch][inproc]")
 {
     // Deterministic by construction (virtual clock + drain): a fresh
@@ -79,32 +82,33 @@ TEST_CASE("inproc latch replay delivers the late joiner the retained value throu
     // iteration rather than a one-off pass. The subscriber routes the replayed frame
     // through a real frame_router::on_unidirectional, so the assertion proves the
     // retained bytes survive the production demux byte-identical, not a hand-strip.
-    constexpr int k_iterations = 100;
-    const std::string payload = "retained-opaque-value";
-    int delivered = 0;
+    constexpr int     k_iterations = 100;
+    const std::string payload      = "retained-opaque-value";
+    int               delivered    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        inproc_bus<> bus;
+        inproc_bus<>      bus;
         inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        receive_sink sink(ex);
-        auto peer = make_peer(ch, sink, "late-node");
+        inproc_channel<>  ch(ex);
+        receive_sink      sink(ex);
+        auto              peer = make_peer(ch, sink, "late-node");
 
         forwarder fwd{};
         fwd.latch("topic");
-        fwd.publish("topic", as_bytes(payload));   // retained with ZERO subscribers
+        fwd.publish("topic", as_bytes(payload)); // retained with ZERO subscribers
         ex.drain();
-        REQUIRE(sink.bodies.empty());   // nothing fanned out before the late join
+        REQUIRE(sink.bodies.empty()); // nothing fanned out before the late join
 
         // The late joiner explicitly requests single-newest replay; latch retention is
         // delivered only to a subscriber that declares the durability that asks for it.
         plexus::io::subscriber_qos sub_qos;
         sub_qos.durability_mode = plexus::io::durability::latest;
-        REQUIRE(fwd.attach_for_fanout(peer, "topic", std::nullopt, sub_qos));   // the late join drives the replay
+        REQUIRE(fwd.attach_for_fanout(peer, "topic", std::nullopt,
+                                      sub_qos)); // the late join drives the replay
         ex.drain();
 
         REQUIRE(sink.bodies.size() == 1);
-        REQUIRE(sink.bodies[0] == payload);   // the EXACT retained bytes, every iteration
+        REQUIRE(sink.bodies[0] == payload); // the EXACT retained bytes, every iteration
         ++delivered;
     }
     REQUIRE(delivered == k_iterations);
@@ -118,24 +122,24 @@ TEST_CASE("inproc non-latched topic does not replay on a late subscribe, looped"
     // live publish arrives. Deterministic over inproc — this is the authoritative
     // negative guard (no grace window needed; the drain is exhaustive).
     constexpr int k_iterations = 100;
-    int held = 0;
+    int           held         = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        inproc_bus<> bus;
+        inproc_bus<>      bus;
         inproc_executor<> ex(bus);
-        inproc_channel<> ch(ex);
-        receive_sink sink(ex);
-        auto peer = make_peer(ch, sink, "late-node");
+        inproc_channel<>  ch(ex);
+        receive_sink      sink(ex);
+        auto              peer = make_peer(ch, sink, "late-node");
 
         forwarder fwd{};
-        fwd.publish("topic", as_bytes(std::string{"live-only"}));   // not latched, no subscriber
+        fwd.publish("topic", as_bytes(std::string{"live-only"})); // not latched, no subscriber
         ex.drain();
 
-        REQUIRE(fwd.attach_for_fanout(peer, "topic"));   // late join: NO replay
+        REQUIRE(fwd.attach_for_fanout(peer, "topic")); // late join: NO replay
         ex.drain();
-        REQUIRE(sink.bodies.empty());   // nothing replayed
+        REQUIRE(sink.bodies.empty()); // nothing replayed
 
-        fwd.publish("topic", as_bytes(std::string{"first-live"}));   // now a live publish arrives
+        fwd.publish("topic", as_bytes(std::string{"first-live"})); // now a live publish arrives
         ex.drain();
         REQUIRE(sink.bodies.size() == 1);
         REQUIRE(sink.bodies[0] == "first-live");
@@ -160,8 +164,12 @@ struct sink_channel
     explicit sink_channel(sink_executor &) {}
     sink_channel(sink_executor &, std::error_code &) {}
 
-    void send(std::span<const std::byte> d) { total_bytes += d.size(); ++sends; }
-    void close() {}
+    void send(std::span<const std::byte> d)
+    {
+        total_bytes += d.size();
+        ++sends;
+    }
+    void                 close() {}
     plexus::io::endpoint remote_endpoint() const { return {}; }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(plexus::detail::move_only_function<void()>) {}
@@ -183,10 +191,10 @@ struct sink_timer
 
 struct sink_policy
 {
-    using executor_type = sink_executor &;
+    using executor_type     = sink_executor &;
     using byte_channel_type = sink_channel;
-    using timer_type = sink_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = sink_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
 };
@@ -195,34 +203,36 @@ static_assert(plexus::Policy<sink_policy>);
 
 }
 
-TEST_CASE("inproc LATCH-NOALLOC: steady-state latched publishing adds no retention allocation beyond the frame-once publish",
+TEST_CASE("inproc LATCH-NOALLOC: steady-state latched publishing adds no retention allocation "
+          "beyond the frame-once publish",
           "[integration][latch][inproc]")
 {
     using sink_forwarder = plexus::io::message_forwarder<sink_policy>;
 
     const std::string payload = "steady-state-latched-body";
-    constexpr int K = 256;
+    constexpr int     K       = 256;
 
     // The per-publish allocation count over a single subscriber, with the topic either
     // latched (per-topic slot retains in the loop) or not (publish + fan-out only). The
     // replay path is NOT in the measured loop (it fires only on subscribe), so this gate
     // isolates the per-publish RETENTION cost: the slot retains the already-framed shared
     // owner by addref, so it adds nothing beyond the frame-once publish owner.
-    const auto allocs_per_publish = [&](bool latched) {
-        sink_executor ex;
-        sink_channel ch(ex);
-        sink_forwarder fwd{};
+    const auto allocs_per_publish = [&](bool latched)
+    {
+        sink_executor        ex;
+        sink_channel         ch(ex);
+        sink_forwarder       fwd{};
         sink_forwarder::peer peer{ch, "node-a"};
         if(latched)
             fwd.latch("topic");
         fwd.attach_for_fanout(peer, "topic");
-        fwd.publish("topic", as_bytes(payload));   // warm-up: grow scratch AND first-touch the slot
+        fwd.publish("topic", as_bytes(payload)); // warm-up: grow scratch AND first-touch the slot
         plexus::testing::reset_alloc_count();
         const auto before = plexus::testing::alloc_count();
         for(int i = 0; i < K; ++i)
             fwd.publish("topic", as_bytes(payload));
         const auto after = plexus::testing::alloc_count();
-        REQUIRE(ch.sends >= static_cast<std::size_t>(K));   // every latched publish fanned out
+        REQUIRE(ch.sends >= static_cast<std::size_t>(K)); // every latched publish fanned out
         return after - before;
     };
 

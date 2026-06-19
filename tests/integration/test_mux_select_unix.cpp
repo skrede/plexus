@@ -27,10 +27,11 @@
 #include <optional>
 
 namespace pasio = plexus::asio;
-namespace ptls = plexus::tls;
-namespace pio = plexus::io;
+namespace ptls  = plexus::tls;
+namespace pio   = plexus::io;
 
-static_assert(plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
+static_assert(
+        plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
 
 namespace {
 
@@ -44,10 +45,10 @@ struct temp_sock
 
     temp_sock()
     {
-        char tmpl[] = "/tmp/pxm-XXXXXX";
-        const char *made = ::mkdtemp(tmpl);
-        dir = made ? made : "";
-        path = dir + "/s";
+        char        tmpl[] = "/tmp/pxm-XXXXXX";
+        const char *made   = ::mkdtemp(tmpl);
+        dir                = made ? made : "";
+        path               = dir + "/s";
     }
 
     ~temp_sock()
@@ -67,42 +68,43 @@ struct temp_sock
 // are independent.
 struct local_dial_link
 {
-    temp_sock sock;
+    temp_sock          sock;
     ::asio::io_context io;
     // The secure member is never exercised on this same-host route: its credential
     // stays a default (invalid) one — the SSL_CTX is only ever touched when a "tls"
     // channel is actually dialed/accepted, which this link never does.
-    ptls::tls_credential no_tls;
+    ptls::tls_credential  no_tls;
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
-    ptls::tls_transport secure{io, no_tls};
+    ptls::tls_transport   secure{io, no_tls};
     // The datagram member stays inert on this same-host route — its socket is only ever
     // bound when a "udp" channel is actually dialed/accepted, which this link never does.
     pasio::udp_transport datagram{io};
     // The secure-datagram (DTLS) member is likewise inert here: it reuses the same default
     // (invalid) credential and binds no socket unless a "dtls" channel is dialed/accepted.
-    ptls::dtls_transport secure_datagram{io, no_tls};
+    ptls::dtls_transport    secure_datagram{io, no_tls};
     pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
-    std::optional<pio::endpoint> dialed_ep;
+    std::optional<pio::endpoint>                   dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     local_dial_link()
     {
-        mux.on_dialed([this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep) {
-            dialed = std::move(ch);
-            dialed_ep.emplace(ep);
-        });
-        mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) {
-            accepted = std::move(ch);
-        });
+        mux.on_dialed(
+                [this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep)
+                {
+                    dialed = std::move(ch);
+                    dialed_ep.emplace(ep);
+                });
+        mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch)
+                        { accepted = std::move(ch); });
 
         mux.listen({"unix", sock.path});
         mux.dial({"unix", sock.path});
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -117,7 +119,7 @@ TEST_CASE("mux select: a same-host endpoint dials over AF_UNIX through the erase
           "[integration][mux][select][unix]")
 {
     constexpr int k_iterations = 100;
-    int completed = 0;
+    int           completed    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         local_dial_link l;
@@ -137,11 +139,12 @@ TEST_CASE("mux select: a same-host endpoint dials over AF_UNIX through the erase
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("mux select: an ACCEPTED AF_UNIX connection carries the unix scheme through the erasure, looped",
+TEST_CASE("mux select: an ACCEPTED AF_UNIX connection carries the unix scheme through the erasure, "
+          "looped",
           "[integration][mux][select][unix]")
 {
     constexpr int k_iterations = 100;
-    int completed = 0;
+    int           completed    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         local_dial_link l;

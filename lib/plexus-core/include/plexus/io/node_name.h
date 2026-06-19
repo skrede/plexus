@@ -17,7 +17,7 @@ namespace plexus::io {
 inline std::string node_name_of(const node_id &id)
 {
     static constexpr char k_hex[] = "0123456789abcdef";
-    std::string name = "peer-";
+    std::string           name    = "peer-";
     name.reserve(name.size() + id.size() * 2);
     for(auto b : id)
     {

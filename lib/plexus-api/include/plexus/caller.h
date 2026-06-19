@@ -80,7 +80,7 @@ struct call_options
 // defaulted parameters (the defaults live in node.h's forward declaration, seen first), so
 // every bytes spelling keeps compiling. no_codec is a sentinel family that names the bytes
 // default and is never instantiated.
-template <typename Sig, template <typename> class CReq, template <typename> class CRes>
+template<typename Sig, template<typename> class CReq, template<typename> class CRes>
 class caller;
 
 // The bytes calling endpoint: the CONSTRUCTOR binds the node and fqn; the handle owns
@@ -103,7 +103,7 @@ class caller;
 // to the forwarder runs to its resolution (the asio convention — the operation owns its
 // completion, not the initiating handle). Cancellation sugar is seeded, not invented
 // here. A moved-from handle is inert.
-template <>
+template<>
 class caller<void, no_codec, no_codec>
 {
 public:
@@ -113,10 +113,10 @@ public:
     // on the no_provider leg). The Policy-free shape lifted into endpoint_seam.h.
     using on_reply_fn = io::on_reply_fn;
 
-    template <typename Policy, typename... NodeTs>
+    template<typename Policy, typename... NodeTs>
     caller(node<Policy, NodeTs...> &n, std::string_view fqn)
-        : m_seam(n.endpoint_seam_for())
-        , m_fqn(fqn)
+            : m_seam(n.endpoint_seam_for())
+            , m_fqn(fqn)
     {
     }
 
@@ -124,51 +124,53 @@ public:
     // provider, POST the no_provider completion (never inline). The completion is
     // adapted from the forwarder's (rpc_status, bytes) into expected<reply, error_code>:
     // a success status yields reply{bytes, info}; every failure maps via from_rpc_status.
-    template <typename Completion>
+    template<typename Completion>
     void call(std::span<const std::byte> param, Completion &&completion)
     {
         dispatch(param, std::forward<Completion>(completion), std::nullopt);
     }
 
-    template <typename Completion>
+    template<typename Completion>
     void call(std::span<const std::byte> param, const call_options &opts, Completion &&completion)
     {
         dispatch(param, std::forward<Completion>(completion), opts.deadline);
     }
 
-    caller(caller &&) noexcept = default;
+    caller(caller &&) noexcept            = default;
     caller &operator=(caller &&) noexcept = default;
 
-    caller(const caller &) = delete;
+    caller(const caller &)            = delete;
     caller &operator=(const caller &) = delete;
 
     ~caller() = default;
 
 private:
-    template <typename Completion>
+    template<typename Completion>
     void dispatch(std::span<const std::byte> param, Completion &&completion,
                   std::optional<std::chrono::nanoseconds> deadline)
     {
-        m_seam.call(m_seam.ctx, m_fqn, param,
-               [completion = std::forward<Completion>(completion)](
-                   std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
-                   const std::optional<publisher_gid> &provider) mutable {
-                   if(!status)
-                   {
-                       completion(expected<reply, std::error_code>{
-                           unexpect, make_error_code(call_errc::no_provider)});
-                       return;
-                   }
-                   if(*status == wire::rpc_status::success)
-                   {
-                       reply r{bytes, reply_info{provider, 0, wire::now_timestamp_ns(), false}};
-                       completion(expected<reply, std::error_code>{std::move(r)});
-                       return;
-                   }
-                   completion(expected<reply, std::error_code>{
-                       unexpect, make_error_code(from_rpc_status(*status))});
-               },
-               deadline);
+        m_seam.call(
+                m_seam.ctx, m_fqn, param,
+                [completion = std::forward<Completion>(completion)](
+                        std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
+                        const std::optional<publisher_gid> &provider) mutable
+                {
+                    if(!status)
+                    {
+                        completion(expected<reply, std::error_code>{
+                                unexpect, make_error_code(call_errc::no_provider)});
+                        return;
+                    }
+                    if(*status == wire::rpc_status::success)
+                    {
+                        reply r{bytes, reply_info{provider, 0, wire::now_timestamp_ns(), false}};
+                        completion(expected<reply, std::error_code>{std::move(r)});
+                        return;
+                    }
+                    completion(expected<reply, std::error_code>{
+                            unexpect, make_error_code(from_rpc_status(*status))});
+                },
+                deadline);
     }
 
     io::endpoint_seam m_seam{};
@@ -192,96 +194,98 @@ private:
 //     procedure replying a bare error completes this typed caller with call_errc::error
 //     (the interop fallback: a hostile varint never crashes, never half-decodes);
 //   - every other failure leg passes through from_rpc_status unchanged.
-template <typename Res, typename Req,
-          template <typename> class CReq, template <typename> class CRes>
+template<typename Res, typename Req, template<typename> class CReq, template<typename> class CRes>
     requires typed_codec<CReq<Req>> && typed_codec<CRes<Res>>
 class caller<Res(Req), CReq, CRes>
 {
 public:
-    using on_reply_fn = io::on_reply_fn;
-    using request_codec = CReq<Req>;
+    using on_reply_fn    = io::on_reply_fn;
+    using request_codec  = CReq<Req>;
     using response_codec = CRes<Res>;
 
-    template <typename Policy, typename... NodeTs>
-    caller(node<Policy, NodeTs...> &n, std::string_view fqn,
-           request_codec req_codec = {}, response_codec res_codec = {})
-        : m_seam(n.endpoint_seam_for())
-        , m_req_codec(std::move(req_codec))
-        , m_res_codec(std::move(res_codec))
-        , m_fqn(fqn)
+    template<typename Policy, typename... NodeTs>
+    caller(node<Policy, NodeTs...> &n, std::string_view fqn, request_codec req_codec = {},
+           response_codec res_codec = {})
+            : m_seam(n.endpoint_seam_for())
+            , m_req_codec(std::move(req_codec))
+            , m_res_codec(std::move(res_codec))
+            , m_fqn(fqn)
     {
     }
 
-    template <typename Completion>
+    template<typename Completion>
     void call(const Req &request, Completion &&completion)
     {
         dispatch(request, std::forward<Completion>(completion), std::nullopt);
     }
 
-    template <typename Completion>
+    template<typename Completion>
     void call(const Req &request, const call_options &opts, Completion &&completion)
     {
         dispatch(request, std::forward<Completion>(completion), opts.deadline);
     }
 
-    caller(caller &&) noexcept = default;
+    caller(caller &&) noexcept            = default;
     caller &operator=(caller &&) noexcept = default;
 
-    caller(const caller &) = delete;
+    caller(const caller &)            = delete;
     caller &operator=(const caller &) = delete;
 
     ~caller() = default;
 
 private:
-    template <typename Completion>
+    template<typename Completion>
     void dispatch(const Req &request, Completion &&completion,
                   std::optional<std::chrono::nanoseconds> deadline)
     {
         const wire_bytes<> encoded = m_req_codec.encode(request);
         // The codec is copied so the completion stays self-contained: a mid-flight move of
         // this handle must not dangle a captured this/member reference.
-        m_seam.call(m_seam.ctx, m_fqn, static_cast<std::span<const std::byte>>(encoded),
-               [completion = std::forward<Completion>(completion), res_codec = m_res_codec](
-                   std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
-                   const std::optional<publisher_gid> &) mutable {
-                   if(!status)
-                   {
-                       completion(expected<Res, std::error_code>{
-                           unexpect, make_error_code(call_errc::no_provider)});
-                       return;
-                   }
-                   if(*status == wire::rpc_status::success)
-                   {
-                       Res value{};
-                       if(res_codec.decode(bytes, value))
-                           completion(expected<Res, std::error_code>{std::move(value)});
-                       else
-                           completion(expected<Res, std::error_code>{
-                               unexpect, make_error_code(call_errc::deserialize_failed)});
-                       return;
-                   }
-                   if(*status == wire::rpc_status::error)
-                   {
-                       std::size_t consumed = 0;
-                       if(const auto provider_value = wire::read_varint(bytes, consumed);
-                          provider_value && consumed == bytes.size())
-                       {
-                           completion(expected<Res, std::error_code>{
-                               unexpect,
-                               std::error_code{static_cast<int>(*provider_value), provider_category()}});
-                           return;
-                       }
-                   }
-                   completion(expected<Res, std::error_code>{
-                       unexpect, make_error_code(from_rpc_status(*status))});
-               },
-               deadline);
+        m_seam.call(
+                m_seam.ctx, m_fqn, static_cast<std::span<const std::byte>>(encoded),
+                [completion = std::forward<Completion>(completion), res_codec = m_res_codec](
+                        std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
+                        const std::optional<publisher_gid> &) mutable
+                {
+                    if(!status)
+                    {
+                        completion(expected<Res, std::error_code>{
+                                unexpect, make_error_code(call_errc::no_provider)});
+                        return;
+                    }
+                    if(*status == wire::rpc_status::success)
+                    {
+                        Res value{};
+                        if(res_codec.decode(bytes, value))
+                            completion(expected<Res, std::error_code>{std::move(value)});
+                        else
+                            completion(expected<Res, std::error_code>{
+                                    unexpect, make_error_code(call_errc::deserialize_failed)});
+                        return;
+                    }
+                    if(*status == wire::rpc_status::error)
+                    {
+                        std::size_t consumed = 0;
+                        if(const auto provider_value = wire::read_varint(bytes, consumed);
+                           provider_value && consumed == bytes.size())
+                        {
+                            completion(expected<Res, std::error_code>{
+                                    unexpect,
+                                    std::error_code{static_cast<int>(*provider_value),
+                                                    provider_category()}});
+                            return;
+                        }
+                    }
+                    completion(expected<Res, std::error_code>{
+                            unexpect, make_error_code(from_rpc_status(*status))});
+                },
+                deadline);
     }
 
     io::endpoint_seam m_seam{};
-    request_codec  m_req_codec;
-    response_codec m_res_codec;
-    std::string    m_fqn;
+    request_codec     m_req_codec;
+    response_codec    m_res_codec;
+    std::string       m_fqn;
 };
 
 }

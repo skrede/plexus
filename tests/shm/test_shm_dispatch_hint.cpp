@@ -41,7 +41,8 @@ TEST_CASE("dispatch_hint: the operators compose like locality's bitflags", "[shm
     REQUIRE(shm_eligible(both & dispatch_hint::frequent));
 }
 
-TEST_CASE("topic_qos default-constructs with dispatch == none and max_message_bytes == 0", "[shm][dispatch_hint]")
+TEST_CASE("topic_qos default-constructs with dispatch == none and max_message_bytes == 0",
+          "[shm][dispatch_hint]")
 {
     plexus::topic_qos qos{};
 
@@ -73,7 +74,7 @@ TEST_CASE("selector: same-host x qualifying hint is SHM-eligible", "[shm][dispat
 TEST_CASE("selector: a topic_qos.dispatch drives the eligibility decision", "[shm][dispatch_hint]")
 {
     plexus::io::transport_selector selector;
-    const plexus::io::endpoint same_host{"unix", "/tmp/sock"};
+    const plexus::io::endpoint     same_host{"unix", "/tmp/sock"};
 
     const plexus::topic_qos hinted{.dispatch = dispatch_hint::frequent};
     const plexus::topic_qos plain{};

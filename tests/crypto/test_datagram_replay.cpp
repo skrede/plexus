@@ -43,12 +43,21 @@ public:
         if(m_sink)
             m_sink(std::span<const std::byte>{m_last});
     }
-    void close() { m_closed = true; }
+    void                               close() { m_closed = true; }
     [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"wire", ""}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb) { m_on_error = std::move(cb); }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb) { m_on_protocol_close = std::move(cb); }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
+    {
+        m_on_error = std::move(cb);
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb)
+    {
+        m_on_protocol_close = std::move(cb);
+    }
     [[nodiscard]] std::size_t backpressured() const { return 0; }
 
     void feed(std::span<const std::byte> bytes)
@@ -57,17 +66,17 @@ public:
             m_on_data(bytes);
     }
 
-    std::function<void(std::span<const std::byte>)> m_sink;
-    std::vector<std::byte> m_last;
-    bool m_closed{false};
+    std::function<void(std::span<const std::byte>)>                      m_sink;
+    std::vector<std::byte>                                               m_last;
+    bool                                                                 m_closed{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()> m_on_closed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close;
+    plexus::detail::move_only_function<void()>                           m_on_closed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
 
 static_assert(plexus::io::byte_channel<wire_lower>,
-    "wire_lower must satisfy byte_channel for the decorator test");
+              "wire_lower must satisfy byte_channel for the decorator test");
 
 derived_keys fixed_keys()
 {
@@ -97,11 +106,11 @@ derived_keys swapped(const derived_keys &k)
 std::vector<std::byte> make_frame(std::uint64_t session_id, std::string_view payload)
 {
     plexus::wire::frame_header hdr{};
-    hdr.type = plexus::wire::msg_type::unidirectional;
-    hdr.flags = 0;
-    hdr.session_id = session_id;
+    hdr.type         = plexus::wire::msg_type::unidirectional;
+    hdr.flags        = 0;
+    hdr.session_id   = session_id;
     hdr.timestamp_ns = 7777;
-    hdr.payload_len = payload.size();
+    hdr.payload_len  = payload.size();
     std::vector<std::byte> pt;
     for(char c : payload)
         pt.push_back(static_cast<std::byte>(static_cast<unsigned char>(c)));
@@ -112,10 +121,12 @@ std::vector<std::byte> make_frame(std::uint64_t session_id, std::string_view pay
 // test can reorder/replay them into the receiver at will.
 std::vector<std::vector<std::byte>> seal_datagrams(const derived_keys &keys, std::size_t count)
 {
-    wire_lower send_wire;
-    datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys);
-    std::vector<std::vector<std::byte>> on_wire;
-    send_wire.m_sink = [&](std::span<const std::byte> b) { on_wire.emplace_back(b.begin(), b.end()); };
+    wire_lower                                 send_wire;
+    datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305,
+                                                      keys);
+    std::vector<std::vector<std::byte>>        on_wire;
+    send_wire.m_sink = [&](std::span<const std::byte> b)
+    { on_wire.emplace_back(b.begin(), b.end()); };
     for(std::size_t i = 0; i < count; ++i)
         sender.send(make_frame(7, "datagram-payload-" + std::to_string(i)));
     return on_wire;
@@ -127,7 +138,7 @@ plexus::crypto::aead_key step_forward(const plexus::crypto::aead_key &from)
 {
     std::array<std::byte, 16> nonce{};
     std::array<std::byte, 32> transcript{};
-    derived_keys d{};
+    derived_keys              d{};
     REQUIRE(derive_keys(std::span<const std::byte>{from}, nonce, nonce, transcript, d));
     return d.k_send;
 }
@@ -141,7 +152,8 @@ void set_wire_seq(std::vector<std::byte> &dg, std::uint64_t seq)
 
 }
 
-TEST_CASE("crypto.anti_replay_window would_accept predicts check_and_set without mutating", "[crypto][anti_replay]")
+TEST_CASE("crypto.anti_replay_window would_accept predicts check_and_set without mutating",
+          "[crypto][anti_replay]")
 {
     // would_accept must return the SAME verdict check_and_set would, while leaving the
     // window untouched (so a pre-auth probe cannot itself slide the window).
@@ -162,7 +174,8 @@ TEST_CASE("crypto.anti_replay_window would_accept predicts check_and_set without
     REQUIRE(window.highest() == 200);
 }
 
-TEST_CASE("crypto.datagram_replay a forged huge-sequence datagram does not wedge the window", "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay a forged huge-sequence datagram does not wedge the window",
+          "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
 
@@ -171,14 +184,16 @@ TEST_CASE("crypto.datagram_replay a forged huge-sequence datagram does not wedge
     {
         auto wire = seal_datagrams(keys, 2);
 
-        wire_lower recv_wire;
-        datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+        wire_lower                                 recv_wire;
+        datagram_authenticated_channel<wire_lower> receiver(
+                recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
         bool protocol_closed = false;
         receiver.on_protocol_close([&](plexus::wire::close_cause) { protocol_closed = true; });
 
         std::vector<std::vector<std::byte>> delivered;
-        receiver.on_data([&](std::span<const std::byte> f) { delivered.emplace_back(f.begin(), f.end()); });
+        receiver.on_data([&](std::span<const std::byte> f)
+                         { delivered.emplace_back(f.begin(), f.end()); });
 
         // Forge a datagram in the current epoch with seq = 2^64-1 and a corrupted tag.
         // Pre-fix, would_accept's slide ran before the tag check, advancing the window
@@ -201,7 +216,8 @@ TEST_CASE("crypto.datagram_replay a forged huge-sequence datagram does not wedge
     }
 }
 
-TEST_CASE("crypto.datagram_replay a forged next-epoch datagram does not desync the key", "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay a forged next-epoch datagram does not desync the key",
+          "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
 
@@ -209,18 +225,20 @@ TEST_CASE("crypto.datagram_replay a forged next-epoch datagram does not desync t
     {
         auto wire = seal_datagrams(keys, 3);
 
-        wire_lower recv_wire;
-        datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+        wire_lower                                 recv_wire;
+        datagram_authenticated_channel<wire_lower> receiver(
+                recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
         std::vector<std::vector<std::byte>> delivered;
-        receiver.on_data([&](std::span<const std::byte> f) { delivered.emplace_back(f.begin(), f.end()); });
+        receiver.on_data([&](std::span<const std::byte> f)
+                         { delivered.emplace_back(f.begin(), f.end()); });
 
         // Forge a datagram carrying the NEXT epoch byte (current is 0) with a corrupted
         // tag. Pre-fix, select_recv_epoch derived/advanced the recv key and reset the
         // window before open, discarding the only key that opens real current-epoch
         // traffic — one packet permanently desynced the session.
         auto forged = wire[0];
-        forged[8] = static_cast<std::byte>(0x01);   // next epoch byte
+        forged[8]   = static_cast<std::byte>(0x01); // next epoch byte
         forged.back() ^= std::byte{0xff};
 
         recv_wire.feed(std::span<const std::byte>{forged});
@@ -236,19 +254,23 @@ TEST_CASE("crypto.datagram_replay a forged next-epoch datagram does not desync t
     }
 }
 
-TEST_CASE("crypto.datagram_replay delivers an out-of-order but fresh datagram", "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay delivers an out-of-order but fresh datagram",
+          "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
     const auto wire = seal_datagrams(keys, 5);
 
-    wire_lower recv_wire;
-    datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+    wire_lower                                 recv_wire;
+    datagram_authenticated_channel<wire_lower> receiver(
+            recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     std::vector<std::vector<std::byte>> delivered;
-    receiver.on_data([&](std::span<const std::byte> f) { delivered.emplace_back(f.begin(), f.end()); });
+    receiver.on_data([&](std::span<const std::byte> f)
+                     { delivered.emplace_back(f.begin(), f.end()); });
 
     // Reordered arrival: 2, 0, 4, 1, 3 — every fresh datagram opens within the window.
-    for(std::size_t i : {std::size_t{2}, std::size_t{0}, std::size_t{4}, std::size_t{1}, std::size_t{3}})
+    for(std::size_t i :
+        {std::size_t{2}, std::size_t{0}, std::size_t{4}, std::size_t{1}, std::size_t{3}})
         recv_wire.feed(std::span<const std::byte>{wire[i]});
 
     REQUIRE(delivered.size() == 5);
@@ -257,13 +279,15 @@ TEST_CASE("crypto.datagram_replay delivers an out-of-order but fresh datagram", 
     REQUIRE(delivered[3] == make_frame(7, "datagram-payload-1"));
 }
 
-TEST_CASE("crypto.datagram_replay drops and counts a replayed datagram with no event", "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay drops and counts a replayed datagram with no event",
+          "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
     const auto wire = seal_datagrams(keys, 3);
 
-    wire_lower recv_wire;
-    datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+    wire_lower                                 recv_wire;
+    datagram_authenticated_channel<wire_lower> receiver(
+            recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     bool protocol_closed = false;
     receiver.on_protocol_close([&](plexus::wire::close_cause) { protocol_closed = true; });
@@ -273,8 +297,8 @@ TEST_CASE("crypto.datagram_replay drops and counts a replayed datagram with no e
 
     recv_wire.feed(std::span<const std::byte>{wire[0]});
     recv_wire.feed(std::span<const std::byte>{wire[1]});
-    recv_wire.feed(std::span<const std::byte>{wire[0]});   // replay of seq 0
-    recv_wire.feed(std::span<const std::byte>{wire[1]});   // replay of seq 1
+    recv_wire.feed(std::span<const std::byte>{wire[0]}); // replay of seq 0
+    recv_wire.feed(std::span<const std::byte>{wire[1]}); // replay of seq 1
 
     REQUIRE(delivered == 2);
     REQUIRE(receiver.replay_count() == 2);
@@ -283,16 +307,18 @@ TEST_CASE("crypto.datagram_replay drops and counts a replayed datagram with no e
     REQUIRE_FALSE(recv_wire.m_closed);
 }
 
-TEST_CASE("crypto.datagram_replay drops and counts a bad-tag datagram without teardown", "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay drops and counts a bad-tag datagram without teardown",
+          "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
-    auto wire = seal_datagrams(keys, 2);
+    auto       wire = seal_datagrams(keys, 2);
 
-    wire_lower recv_wire;
-    datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+    wire_lower                                 recv_wire;
+    datagram_authenticated_channel<wire_lower> receiver(
+            recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     bool protocol_closed = false;
-    bool errored = false;
+    bool errored         = false;
     receiver.on_protocol_close([&](plexus::wire::close_cause) { protocol_closed = true; });
     recv_wire.on_error([&](plexus::io::io_error) { errored = true; });
 
@@ -302,7 +328,7 @@ TEST_CASE("crypto.datagram_replay drops and counts a bad-tag datagram without te
     // Flip a byte in the sealed ciphertext+tag region of the first datagram.
     wire[0].back() ^= std::byte{0xff};
     recv_wire.feed(std::span<const std::byte>{wire[0]});
-    recv_wire.feed(std::span<const std::byte>{wire[1]});   // the honest datagram still opens
+    recv_wire.feed(std::span<const std::byte>{wire[1]}); // the honest datagram still opens
 
     REQUIRE(delivered == 1);
     REQUIRE(receiver.tamper_dropped_count() == 1);
@@ -311,12 +337,14 @@ TEST_CASE("crypto.datagram_replay drops and counts a bad-tag datagram without te
     REQUIRE_FALSE(recv_wire.m_closed);
 }
 
-TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary", "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary",
+          "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
 
-    wire_lower recv_wire;
-    datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+    wire_lower                                 recv_wire;
+    datagram_authenticated_channel<wire_lower> receiver(
+            recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     std::vector<std::byte> delivered;
     receiver.on_data([&](std::span<const std::byte> f) { delivered.assign(f.begin(), f.end()); });
@@ -325,22 +353,24 @@ TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary", "[
     // (forward-deriving the key). Drive a sender forward through > 256 epochs — each
     // epoch sealed with the matching forward-derived key at initial_epoch = e — so the
     // wire epoch byte wraps 0xff -> 0x00 and the seal/open nonce epoch field must agree.
-    plexus::crypto::aead_key send_key = keys.k_send;   // epoch 0 send key
-    const std::uint32_t epochs = 600;
+    plexus::crypto::aead_key send_key = keys.k_send; // epoch 0 send key
+    const std::uint32_t      epochs   = 600;
     for(std::uint32_t e = 0; e < epochs; ++e)
     {
-        wire_lower send_wire;
-        derived_keys ek{.k_send = send_key, .k_recv = keys.k_recv};
-        datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, ek, e);
+        wire_lower                                 send_wire;
+        derived_keys                               ek{.k_send = send_key, .k_recv = keys.k_recv};
+        datagram_authenticated_channel<wire_lower> sender(send_wire,
+                                                          aead_cipher_id::chacha20_poly1305, ek, e);
 
         std::vector<std::byte> on_wire;
-        send_wire.m_sink = [&](std::span<const std::byte> b) { on_wire.assign(b.begin(), b.end()); };
+        send_wire.m_sink = [&](std::span<const std::byte> b)
+        { on_wire.assign(b.begin(), b.end()); };
         const auto frame = make_frame(7, "datagram-epoch-" + std::to_string(e));
         sender.send(frame);
 
         delivered.clear();
         recv_wire.feed(std::span<const std::byte>{on_wire});
-        REQUIRE(delivered == frame);   // opens at every epoch, including across the 0xff->0x00 wrap
+        REQUIRE(delivered == frame); // opens at every epoch, including across the 0xff->0x00 wrap
 
         send_key = step_forward(send_key);
     }
@@ -348,14 +378,16 @@ TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary", "[
     REQUIRE(receiver.replay_count() == 0);
 }
 
-TEST_CASE("crypto.datagram_replay drops a datagram below the window floor as too-old", "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay drops a datagram below the window floor as too-old",
+          "[crypto][datagram_replay]")
 {
-    const auto keys = fixed_keys();
+    const auto        keys        = fixed_keys();
     const std::size_t past_window = plexus::crypto::k_anti_replay_window_bits + 8;
-    const auto wire = seal_datagrams(keys, past_window + 1);
+    const auto        wire        = seal_datagrams(keys, past_window + 1);
 
-    wire_lower recv_wire;
-    datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+    wire_lower                                 recv_wire;
+    datagram_authenticated_channel<wire_lower> receiver(
+            recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     int delivered = 0;
     receiver.on_data([&](std::span<const std::byte>) { ++delivered; });

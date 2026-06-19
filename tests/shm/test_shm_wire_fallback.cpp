@@ -111,7 +111,9 @@ class tap_channel
 {
 public:
     tap_channel(medium kind, std::string scheme, shm_channel *ring = nullptr)
-        : m_kind(kind), m_scheme(std::move(scheme)), m_ring(ring)
+            : m_kind(kind)
+            , m_scheme(std::move(scheme))
+            , m_ring(ring)
     {
     }
 
@@ -124,7 +126,7 @@ public:
             m_ring->send(data);
     }
 
-    void close() {}
+    void                   close() {}
     [[nodiscard]] endpoint remote_endpoint() const { return endpoint{m_scheme, "peer"}; }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(plexus::detail::move_only_function<void()>) {}
@@ -139,8 +141,8 @@ public:
                 ++n;
         return n;
     }
-    [[nodiscard]] std::size_t total() const { return m_carried.size(); }
-    [[nodiscard]] std::size_t last_len() const { return m_last_len; }
+    [[nodiscard]] std::size_t   total() const { return m_carried.size(); }
+    [[nodiscard]] std::size_t   last_len() const { return m_last_len; }
     [[nodiscard]] std::uint64_t last_hash() const { return m_last_hash; }
 
     // Forget pre-publish control traffic (the subscribe_response the attach emits over
@@ -148,12 +150,12 @@ public:
     void reset() { m_carried.clear(); }
 
 private:
-    medium                m_kind;
-    std::string           m_scheme;
-    shm_channel          *m_ring;
-    std::vector<medium>   m_carried;
-    std::size_t           m_last_len  = 0;
-    std::uint64_t         m_last_hash = 0;
+    medium              m_kind;
+    std::string         m_scheme;
+    shm_channel        *m_ring;
+    std::vector<medium> m_carried;
+    std::size_t         m_last_len  = 0;
+    std::uint64_t       m_last_hash = 0;
 };
 
 static_assert(plexus::io::byte_channel<tap_channel>, "tap_channel must satisfy byte_channel");
@@ -189,8 +191,8 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
+                     0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -230,7 +232,7 @@ bool subscribe_and_check(const std::string &fqn, coord *c)
     for(;;)
     {
         pio::broadcast_ring::consume_result out;
-        const auto st = ring.consume(cursor, out);
+        const auto                          st = ring.consume(cursor, out);
         if(st == pio::loan_status::ok)
         {
             ok = out.slab.size() == want_len && fnv1a(out.slab) == want_hash;
@@ -251,9 +253,9 @@ bool subscribe_and_check(const std::string &fqn, coord *c)
 // the per-message medium.
 struct route_result
 {
-    std::size_t shm_carried   = 0;   // messages the SHM-companion tap took
-    std::size_t wire_carried  = 0;   // messages the wire tap took
-    bool        shm_byte_exact = false;
+    std::size_t shm_carried             = 0; // messages the SHM-companion tap took
+    std::size_t wire_carried            = 0; // messages the wire tap took
+    bool        shm_byte_exact          = false;
     bool        subscriber_exited_clean = false;
 };
 
@@ -279,8 +281,8 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
 
     posix_shm_region_broker broker;
     member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
-    member.set_topic_geometry(fqn, declared_payload, pio::shm_geometry{capacity,
-                                                                       pio::ring_geometry_mode::wire_fallback});
+    member.set_topic_geometry(fqn, declared_payload,
+                              pio::shm_geometry{capacity, pio::ring_geometry_mode::wire_fallback});
 
     std::unique_ptr<shm_channel> companion_ring;
     member.on_accepted([&](std::unique_ptr<shm_channel> ch) { companion_ring = std::move(ch); });
@@ -302,17 +304,18 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     // is the recommended reversible default from the plan: the wire stays the recorded
     // channel, the ring is an additive consult.
     fwd.on_companion_route(
-        [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel * {
-            const auto g = member.resolved_geometry_for(std::string{route_fqn});
-            return pio::route_message_medium(g.mode, bytes, g.slot_capacity) ==
-                           pio::same_host_medium::shm
-                       ? &shm_tap
-                       : nullptr;
-        });
+            [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel *
+            {
+                const auto g = member.resolved_geometry_for(std::string{route_fqn});
+                return pio::route_message_medium(g.mode, bytes, g.slot_capacity) ==
+                                pio::same_host_medium::shm
+                        ? &shm_tap
+                        : nullptr;
+            });
 
     forwarder::peer p{wire_tap, "peer-node"};
     fwd.attach_for_fanout(p, fqn);
-    wire_tap.reset();   // drop the attach's subscribe_response; count only data publishes
+    wire_tap.reset(); // drop the attach's subscribe_response; count only data publishes
 
     // Publish the SMALL message first: it fits the cap, so the route picks the ring; the
     // tap records the framed bytes it forwarded so the child can fingerprint them.
@@ -384,12 +387,12 @@ TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over 
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
     // The companion is ABSENT: the hook always declines (nullptr), so the forwarder keeps
     // every message on the recorded wire sub.channel — never a dropped large message.
-    fwd.on_companion_route(
-        [](std::string_view, std::string_view, std::size_t) -> tap_channel * { return nullptr; });
+    fwd.on_companion_route([](std::string_view, std::string_view, std::size_t) -> tap_channel *
+                           { return nullptr; });
 
     forwarder::peer p{wire_tap, "peer-node"};
     fwd.attach_for_fanout(p, fqn);
-    wire_tap.reset();   // drop the attach's subscribe_response; count only data publishes
+    wire_tap.reset(); // drop the attach's subscribe_response; count only data publishes
 
     fwd.publish(fqn, std::span<const std::byte>{small.data(), small.size()});
     fwd.publish(fqn, std::span<const std::byte>{large.data(), large.size()});
@@ -398,7 +401,8 @@ TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over 
     REQUIRE(wire_tap.count(medium::shm) == 0);
 }
 
-TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the wire, not a dropped ring",
+TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the wire, not a "
+          "dropped ring",
           "[shm][wire_fallback]")
 {
     // Regression: the per-message gate must see the FRAMED size, not the bare payload. A bare
@@ -423,13 +427,14 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
     forwarder fwd;
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
     fwd.on_companion_route(
-        [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel * {
-            const auto g = member.resolved_geometry_for(std::string{route_fqn});
-            return pio::route_message_medium(g.mode, bytes, g.slot_capacity) ==
-                           pio::same_host_medium::shm
-                       ? &shm_tap
-                       : nullptr;
-        });
+            [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel *
+            {
+                const auto g = member.resolved_geometry_for(std::string{route_fqn});
+                return pio::route_message_medium(g.mode, bytes, g.slot_capacity) ==
+                                pio::same_host_medium::shm
+                        ? &shm_tap
+                        : nullptr;
+            });
 
     forwarder::peer p{wire_tap, "peer-node"};
     fwd.attach_for_fanout(p, fqn);

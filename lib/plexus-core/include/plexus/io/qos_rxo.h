@@ -37,7 +37,8 @@ inline bool durability_compatible(bool offered_latch, durability requested) noex
 // Deadline period: the offered period must be no slower than the requested one
 // (offered <= requested). 0 on either side is "not offered / not requested" and is
 // always compatible.
-inline bool deadline_compatible(std::uint64_t offered_period, std::uint64_t requested_period) noexcept
+inline bool deadline_compatible(std::uint64_t offered_period,
+                                std::uint64_t requested_period) noexcept
 {
     return offered_period == 0 || requested_period == 0 || offered_period <= requested_period;
 }
@@ -64,7 +65,7 @@ inline bool source_identity_compatible(bool offered_emit, bool requires_sid) noe
 // direction is a publisher that can emit past what the subscriber accepts. A 0
 // requested ceiling is "not requested" and is always compatible (the offered side is
 // already resolved through effective_max at the call site, so its 0=unset is gone).
-inline bool max_message_bytes_compatible(std::size_t offered_effective_max,
+inline bool max_message_bytes_compatible(std::size_t   offered_effective_max,
                                          std::uint32_t requested_max) noexcept
 {
     return requested_max == 0 || offered_effective_max <= requested_max;
@@ -98,8 +99,8 @@ enum class rxo_verdict : std::uint8_t
 // always-hard source-identity refusal (which is not a degradable field).
 struct rxo_result
 {
-    rxo_verdict   verdict;
-    std::uint8_t  degraded_fields = 0;
+    rxo_verdict  verdict;
+    std::uint8_t degraded_fields = 0;
 };
 
 // Compose the per-field relations into a single verdict. Source identity is the one
@@ -110,8 +111,7 @@ struct rxo_result
 // surfaced so the accept is never silent. global_default resolves the offered topic's
 // 0=unset max into the publisher's effective-max for the size relation.
 inline rxo_result rxo_check(const topic_qos &offered, bool offers_source_identity,
-                            std::size_t global_default,
-                            const subscriber_qos &requested) noexcept
+                            std::size_t global_default, const subscriber_qos &requested) noexcept
 {
     if(!source_identity_compatible(offers_source_identity, requested.requires_source_identity))
         return {rxo_verdict::source_identity_incompatible, 0};

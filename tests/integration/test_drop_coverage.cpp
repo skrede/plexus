@@ -75,32 +75,35 @@ namespace {
 // the same manual_clock the routing oracle uses.
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 struct manual_policy
 {
-    using executor_type = plexus::inproc::inproc_executor<manual_clock> &;
+    using executor_type     = plexus::inproc::inproc_executor<manual_clock> &;
     using byte_channel_type = plexus::inproc::inproc_channel<manual_clock>;
-    using timer_type = plexus::inproc::inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = plexus::inproc::inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using transport_t = plexus::inproc::inproc_transport<manual_clock>;
-using engine_t = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
+using engine_t    = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 using test_reassembler =
         plexus::io::detail::reassembler<plexus::inproc::inproc_executor<manual_clock> &,
                                         plexus::inproc::inproc_timer<manual_clock>>;
@@ -125,27 +128,39 @@ plexus::io::handshake_fsm_config make_cfg(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{seed};
-    return plexus::io::handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                            .compatible_version_major = 1, .compatible_version_minor = 0};
+    return plexus::io::handshake_fsm_config{.self_id                  = id,
+                                            .version_major            = 1,
+                                            .version_minor            = 0,
+                                            .compatible_version_major = 1,
+                                            .compatible_version_minor = 0};
 }
 
 // The engine exists only as the posted drop-observer registry + executor here — it dials
 // nothing. Member ORDER: bus/executor/transport BEFORE the engine.
 struct drop_fixture
 {
-    plexus::inproc::inproc_bus<manual_clock> bus;
+    plexus::inproc::inproc_bus<manual_clock>      bus;
     plexus::inproc::inproc_executor<manual_clock> ex{bus};
-    transport_t transport{ex, bus};
-    engine_t engine{transport, ex, make_cfg(0xA1), std::chrono::hours(1),
-                    plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                                                 std::nullopt, std::nullopt},
-                    0xC0FFEEu, false};
+    transport_t                                   transport{ex, bus};
+    engine_t engine{transport,
+                    ex,
+                    make_cfg(0xA1),
+                    std::chrono::hours(1),
+                    plexus::io::reconnect_config{std::chrono::milliseconds(100),
+                                                 std::chrono::milliseconds(10000), std::nullopt,
+                                                 std::nullopt},
+                    0xC0FFEEu,
+                    false};
     recording_drop_observer observer;
 
-    drop_fixture() { manual_clock::reset(); engine.add_observer(observer); }
+    drop_fixture()
+    {
+        manual_clock::reset();
+        engine.add_observer(observer);
+    }
 
     [[nodiscard]] auto sink() { return engine.drop_sink(); }
-    void drain() { ex.drain(); }
+    void               drain() { ex.drain(); }
 };
 
 // --- the crypto datagram-channel scaffold (replay / too_old / tamper) ---
@@ -159,18 +174,28 @@ public:
         if(m_sink)
             m_sink(std::span<const std::byte>{m_last});
     }
-    void close() {}
+    void                               close() {}
     [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"wire", ""}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
     void on_closed(plexus::detail::move_only_function<void()> cb) { (void)cb; }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb) { (void)cb; }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb) { (void)cb; }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb)
+    {
+        (void)cb;
+    }
     [[nodiscard]] std::size_t backpressured() const { return 0; }
 
-    void feed(std::span<const std::byte> bytes) { if(m_on_data) m_on_data(bytes); }
+    void feed(std::span<const std::byte> bytes)
+    {
+        if(m_on_data)
+            m_on_data(bytes);
+    }
 
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_sink;
-    std::vector<std::byte> m_last;
+    std::vector<std::byte>                                               m_last;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
 };
 
@@ -202,23 +227,25 @@ plexus::crypto::derived_keys swapped(const plexus::crypto::derived_keys &k)
 std::vector<std::byte> make_frame(std::uint64_t session_id, std::string_view payload)
 {
     plexus::wire::frame_header hdr{};
-    hdr.type = plexus::wire::msg_type::unidirectional;
-    hdr.session_id = session_id;
+    hdr.type         = plexus::wire::msg_type::unidirectional;
+    hdr.session_id   = session_id;
     hdr.timestamp_ns = 7777;
-    hdr.payload_len = payload.size();
+    hdr.payload_len  = payload.size();
     std::vector<std::byte> pt;
     for(char c : payload)
         pt.push_back(static_cast<std::byte>(static_cast<unsigned char>(c)));
     return plexus::wire::encode_frame(hdr, pt);
 }
 
-std::vector<std::vector<std::byte>> seal_datagrams(const plexus::crypto::derived_keys &keys, std::size_t count)
+std::vector<std::vector<std::byte>> seal_datagrams(const plexus::crypto::derived_keys &keys,
+                                                   std::size_t                         count)
 {
-    wire_lower send_wire;
+    wire_lower                                                 send_wire;
     plexus::crypto::datagram_authenticated_channel<wire_lower> sender(
             send_wire, plexus::crypto::aead_cipher_id::chacha20_poly1305, keys);
     std::vector<std::vector<std::byte>> on_wire;
-    send_wire.m_sink = [&](std::span<const std::byte> b) { on_wire.emplace_back(b.begin(), b.end()); };
+    send_wire.m_sink = [&](std::span<const std::byte> b)
+    { on_wire.emplace_back(b.begin(), b.end()); };
     for(std::size_t i = 0; i < count; ++i)
         sender.send(make_frame(7, "dg-" + std::to_string(i)));
     return on_wire;
@@ -236,16 +263,21 @@ std::vector<std::byte> filler(std::size_t n)
 // scheduler bands every publish instead of draining: a flood past the band depth then
 // sheds under the topic's congestion policy (the egress shed the observer must see). It
 // records nothing — the shed never reaches send().
-struct stall_executor {};
+struct stall_executor
+{
+};
 
 struct stall_channel
 {
-    explicit stall_channel(std::size_t &reported) : m_reported(&reported) {}
+    explicit stall_channel(std::size_t &reported)
+            : m_reported(&reported)
+    {
+    }
     stall_channel(stall_executor &) {}
     stall_channel(stall_executor &, std::error_code &) {}
 
-    void send(std::span<const std::byte>) {}
-    void close() {}
+    void                               send(std::span<const std::byte>) {}
+    void                               close() {}
     [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"tcp", "127.0.0.1:0"}; }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(plexus::detail::move_only_function<void()>) {}
@@ -267,10 +299,10 @@ struct stall_timer
 
 struct stall_policy
 {
-    using executor_type = stall_executor &;
+    using executor_type     = stall_executor &;
     using byte_channel_type = stall_channel;
-    using timer_type = stall_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = stall_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
 };
@@ -284,12 +316,15 @@ static_assert(plexus::Policy<stall_policy>);
 // the band ABOVE the channel, transport-agnostically).
 struct inproc_stall_channel
 {
-    explicit inproc_stall_channel(std::size_t &reported) : m_reported(&reported) {}
+    explicit inproc_stall_channel(std::size_t &reported)
+            : m_reported(&reported)
+    {
+    }
     inproc_stall_channel(stall_executor &) {}
     inproc_stall_channel(stall_executor &, std::error_code &) {}
 
-    void send(std::span<const std::byte>) {}
-    void close() {}
+    void                               send(std::span<const std::byte>) {}
+    void                               close() {}
     [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"inproc", "node-x"}; }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(plexus::detail::move_only_function<void()>) {}
@@ -302,10 +337,10 @@ struct inproc_stall_channel
 
 struct inproc_stall_policy
 {
-    using executor_type = stall_executor &;
+    using executor_type     = stall_executor &;
     using byte_channel_type = inproc_stall_channel;
-    using timer_type = stall_timer;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = stall_timer;
+    using byte_owner        = std::shared_ptr<const void>;
 
     static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
 };
@@ -314,20 +349,21 @@ static_assert(plexus::Policy<inproc_stall_policy>);
 
 }
 
-TEST_CASE("integration.drop_coverage replay / too_old / tamper post through the engine hook with their counters",
+TEST_CASE("integration.drop_coverage replay / too_old / tamper post through the engine hook with "
+          "their counters",
           "[integration][drop_coverage][datagram]")
 {
     for(int loop = 0; loop < 4; ++loop)
     {
         drop_fixture fx;
-        const auto keys = fixed_keys();
+        const auto   keys = fixed_keys();
 
         // The window width: deliver a sequence this far ahead, then a low one falls below
         // the floor as too_old rather than replay.
         const std::size_t batch = plexus::crypto::k_anti_replay_window_bits + 4;
-        const auto wire = seal_datagrams(keys, batch);
+        const auto        wire  = seal_datagrams(keys, batch);
 
-        wire_lower recv_wire;
+        wire_lower                                                 recv_wire;
         plexus::crypto::datagram_authenticated_channel<wire_lower> receiver(
                 recv_wire, plexus::crypto::aead_cipher_id::chacha20_poly1305, swapped(keys));
         receiver.on_drop(fx.sink());
@@ -351,24 +387,25 @@ TEST_CASE("integration.drop_coverage replay / too_old / tamper post through the 
         REQUIRE(fx.observer.count(cause::drop_cause::replay) == 1);
         REQUIRE(fx.observer.count(cause::drop_cause::tamper) == 1);
         REQUIRE(fx.observer.count(cause::drop_cause::too_old) == 1);
-        REQUIRE(receiver.replay_count() == 2);          // replay + too_old share the replay counter
+        REQUIRE(receiver.replay_count() == 2); // replay + too_old share the replay counter
         REQUIRE(receiver.tamper_dropped_count() == 1);
     }
 }
 
-TEST_CASE("integration.drop_coverage a too-small datagram send surfaces a local malformed drop instead of silent loss",
+TEST_CASE("integration.drop_coverage a too-small datagram send surfaces a local malformed drop "
+          "instead of silent loss",
           "[integration][drop_coverage][datagram]")
 {
     for(int loop = 0; loop < 4; ++loop)
     {
-        const auto keys = fixed_keys();
-        wire_lower send_wire;
+        const auto                                                 keys = fixed_keys();
+        wire_lower                                                 send_wire;
         plexus::crypto::datagram_authenticated_channel<wire_lower> sender(
                 send_wire, plexus::crypto::aead_cipher_id::chacha20_poly1305, keys);
 
         std::vector<cause::drop_event> drops;
-        std::size_t on_wire = 0;
-        send_wire.m_sink = [&](std::span<const std::byte>) { ++on_wire; };
+        std::size_t                    on_wire = 0;
+        send_wire.m_sink                       = [&](std::span<const std::byte>) { ++on_wire; };
         sender.on_drop([&](const cause::drop_event &ev) { drops.push_back(ev); });
 
         // A frame shorter than the AEAD-AAD wire header cannot be sealed. Pre-fix send()
@@ -388,19 +425,22 @@ TEST_CASE("integration.drop_coverage a too-small datagram send surfaces a local 
     }
 }
 
-TEST_CASE("integration.drop_coverage malformed / reassembly_cap / reassembly_evicted post through the engine hook",
+TEST_CASE("integration.drop_coverage malformed / reassembly_cap / reassembly_evicted post through "
+          "the engine hook",
           "[integration][drop_coverage][reassembler]")
 {
     for(int loop = 0; loop < 4; ++loop)
     {
-        drop_fixture fx;
+        drop_fixture          fx;
         constexpr std::size_t frag = 256;
         // The cap counts payload AND each entry's slot/present metadata, so size the budget
         // for exactly two 2-fragment partials' payload plus their structural overhead.
         constexpr std::size_t overhead = 2 * sizeof(std::vector<std::byte>) + (2u + 7u) / 8u;
-        constexpr std::size_t capbytes = 2 * (frag + overhead);   // room for two single-fragment partials
-        test_reassembler r{fx.ex, {.total_memory_cap = capbytes,
-                                   .per_message_timeout = std::chrono::milliseconds(1000)}};
+        constexpr std::size_t capbytes =
+                2 * (frag + overhead); // room for two single-fragment partials
+        test_reassembler r{fx.ex,
+                           {.total_memory_cap    = capbytes,
+                            .per_message_timeout = std::chrono::milliseconds(1000)}};
         r.on_drop(fx.sink());
 
         // malformed: frag_idx >= frag_cnt.
@@ -423,17 +463,18 @@ TEST_CASE("integration.drop_coverage malformed / reassembly_cap / reassembly_evi
     }
 }
 
-TEST_CASE("integration.drop_coverage arq_shed posts through the engine hook when a reliable window-full frame is shed",
+TEST_CASE("integration.drop_coverage arq_shed posts through the engine hook when a reliable "
+          "window-full frame is shed",
           "[integration][drop_coverage][udp]")
 {
     using plexus::asio::udp_channel;
 
     for(int loop = 0; loop < 4; ++loop)
     {
-        drop_fixture fx;
-        ::asio::io_context io;
+        drop_fixture              fx;
+        ::asio::io_context        io;
         ::asio::ip::udp::endpoint dest(::asio::ip::make_address_v4("127.0.0.1"), 9);
-        plexus::asio::udp_server server(io);
+        plexus::asio::udp_server  server(io);
 
         // A reliable_datagram channel with congestion=drop_newest: once the ARQ window is
         // full, each further reliable send is SHED at the publisher (arq_shed) rather than
@@ -443,8 +484,8 @@ TEST_CASE("integration.drop_coverage arq_shed posts through the engine hook when
                        plexus::io::detail::udp_channel_mode::reliable_datagram);
         ch.on_drop(fx.sink());
 
-        const auto payload = filler(64);
-        std::size_t shed = 0;
+        const auto  payload = filler(64);
+        std::size_t shed    = 0;
         for(int i = 0; i < 4096; ++i)
             if(ch.send_reliable(payload) == udp_channel::submit_result::window_full)
                 ++shed;
@@ -458,19 +499,20 @@ TEST_CASE("integration.drop_coverage arq_shed posts through the engine hook when
     }
 }
 
-TEST_CASE("integration.drop_coverage demux_refused posts through the engine hook when the per-peer cap rejects an accept",
+TEST_CASE("integration.drop_coverage demux_refused posts through the engine hook when the per-peer "
+          "cap rejects an accept",
           "[integration][drop_coverage][udp]")
 {
     for(int loop = 0; loop < 4; ++loop)
     {
-        drop_fixture fx;
+        drop_fixture       fx;
         ::asio::io_context io;
 
         // A transport whose per-peer demux cap is ZERO: the first handshake-request accept
         // mints a channel but the demux insert is refused → demux_refused.
         plexus::asio::udp_transport acceptor(io, plexus::asio::udp_channel::default_max_payload,
-                                             plexus::asio::udp_transport::arq_type::default_ladder, {},
-                                             plexus::io::congestion::block, 0);
+                                             plexus::asio::udp_transport::arq_type::default_ladder,
+                                             {}, plexus::io::congestion::block, 0);
         acceptor.on_drop(fx.sink());
         acceptor.listen({"udp", "127.0.0.1:0"});
 
@@ -480,10 +522,11 @@ TEST_CASE("integration.drop_coverage demux_refused posts through the engine hook
         // Craft a best_effort handshake-request datagram (encode_handshake_into already
         // wraps the UDP envelope) and send it from a client socket.
         std::vector<std::byte> datagram;
-        plexus::io::detail::encode_handshake_into(datagram, plexus::io::detail::udp_hs_type::request,
-                                                  plexus::io::detail::udp_channel_mode::best_effort);
+        plexus::io::detail::encode_handshake_into(
+                datagram, plexus::io::detail::udp_hs_type::request,
+                plexus::io::detail::udp_channel_mode::best_effort);
 
-        ::asio::ip::udp::socket client(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
+        ::asio::ip::udp::socket   client(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         ::asio::ip::udp::endpoint to(::asio::ip::make_address_v4("127.0.0.1"), port);
 
         for(int i = 0; i < 200 && fx.observer.count(cause::drop_cause::demux_refused) == 0; ++i)
@@ -497,16 +540,17 @@ TEST_CASE("integration.drop_coverage demux_refused posts through the engine hook
     }
 }
 
-TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter AND must reach an installed observer",
+TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter AND must reach an "
+          "installed observer",
           "[integration][drop_coverage][egress]")
 {
     using forwarder = plexus::io::message_forwarder<stall_policy>;
 
     for(int loop = 0; loop < 4; ++loop)
     {
-        std::size_t reported = 0;
-        stall_channel ch{reported};
-        forwarder fwd{};
+        std::size_t             reported = 0;
+        stall_channel           ch{reported};
+        forwarder               fwd{};
         recording_drop_observer observer;
 
         // A bounded band under congestion=drop_newest: stall the destination so every
@@ -515,8 +559,8 @@ TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter A
         fwd.declare("shed", plexus::topic_qos{.congestion = plexus::io::congestion::drop_newest});
         REQUIRE(fwd.attach_for_fanout(forwarder::peer{ch, "node-a"}, "shed"));
 
-        reported = plexus::io::detail::k_low_water + 1;
-        const int flood = static_cast<int>(plexus::io::detail::k_band_depth) + 16;
+        reported           = plexus::io::detail::k_low_water + 1;
+        const int  flood   = static_cast<int>(plexus::io::detail::k_band_depth) + 16;
         const auto payload = filler(64);
         for(int i = 0; i < flood; ++i)
             fwd.publish("shed", std::span<const std::byte>{payload});
@@ -533,7 +577,8 @@ TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter A
     }
 }
 
-TEST_CASE("integration.drop_coverage an inproc subscriber's egress shed reaches the observer with transport=process",
+TEST_CASE("integration.drop_coverage an inproc subscriber's egress shed reaches the observer with "
+          "transport=process",
           "[integration][drop_coverage][inproc]")
 {
     using forwarder = plexus::io::message_forwarder<inproc_stall_policy>;
@@ -544,17 +589,18 @@ TEST_CASE("integration.drop_coverage an inproc subscriber's egress shed reaches 
     // a single-run fluke cannot pass.
     for(int loop = 0; loop < 4; ++loop)
     {
-        std::size_t reported = 0;
-        inproc_stall_channel ch{reported};
-        forwarder fwd{};
+        std::size_t                    reported = 0;
+        inproc_stall_channel           ch{reported};
+        forwarder                      fwd{};
         std::vector<cause::drop_event> drops;
 
         fwd.on_drop([&drops](const cause::drop_event &ev) { drops.push_back(ev); });
-        fwd.declare("inproc-shed", plexus::topic_qos{.congestion = plexus::io::congestion::drop_newest});
+        fwd.declare("inproc-shed",
+                    plexus::topic_qos{.congestion = plexus::io::congestion::drop_newest});
         REQUIRE(fwd.attach_for_fanout(forwarder::peer{ch, "node-x"}, "inproc-shed"));
 
-        reported = plexus::io::detail::k_low_water + 1;
-        const int flood = static_cast<int>(plexus::io::detail::k_band_depth) + 16;
+        reported           = plexus::io::detail::k_low_water + 1;
+        const int  flood   = static_cast<int>(plexus::io::detail::k_band_depth) + 16;
         const auto payload = filler(64);
         for(int i = 0; i < flood; ++i)
             fwd.publish("inproc-shed", std::span<const std::byte>{payload});

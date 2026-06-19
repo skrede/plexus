@@ -44,8 +44,8 @@
 #include <functional>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
-namespace wire = plexus::wire;
+namespace pio   = plexus::io;
+namespace wire  = plexus::wire;
 
 namespace {
 
@@ -59,15 +59,21 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 // mutable setter — bound at construction via the same structural seam production uses.
 inline pio::detail::udp_arq_config fast_arq()
 {
-    return pio::detail::udp_arq_config{
-        .window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{80}, .max_retransmit = 10};
+    return pio::detail::udp_arq_config{.window         = 64,
+                                       .initial_rto    = ms{20},
+                                       .min_rto        = ms{10},
+                                       .max_rto        = ms{80},
+                                       .max_retransmit = 10};
 }
 
 // The exhaustion leg wants a LOW cap (and fast RTO) so the budget runs out sub-second.
 inline pio::detail::udp_arq_config exhaust_arq()
 {
-    return pio::detail::udp_arq_config{
-        .window = 64, .initial_rto = ms{15}, .min_rto = ms{5}, .max_rto = ms{40}, .max_retransmit = 4};
+    return pio::detail::udp_arq_config{.window         = 64,
+                                       .initial_rto    = ms{15},
+                                       .min_rto        = ms{5},
+                                       .max_rto        = ms{40},
+                                       .max_retransmit = 4};
 }
 
 std::vector<std::byte> bytes_of(const std::string &s)
@@ -88,26 +94,32 @@ std::string str_of(std::span<const std::byte> b)
 
 // What the relay should do to one inbound data segment (kind=1, segment marker). The
 // relay always passes handshakes and acks; only data segments are scripted.
-enum class action { pass, drop, duplicate, hold };
+enum class action
+{
+    pass,
+    drop,
+    duplicate,
+    hold
+};
 
 // A programmable loss-injecting relay between a dialing client and a real server. It
 // forwards every datagram both ways; for client->server DATA segments it consults a
 // scripted action queue (drop one, duplicate one, hold-then-release to reorder).
 struct relay
 {
-    ::asio::io_context &io;
-    ::asio::ip::udp::socket front;       // faces the client
-    ::asio::ip::udp::socket back;        // faces the server
-    ::asio::ip::udp::endpoint server_ep;
-    ::asio::ip::udp::endpoint client_ep;
-    ::asio::ip::udp::endpoint from;
+    ::asio::io_context         &io;
+    ::asio::ip::udp::socket     front; // faces the client
+    ::asio::ip::udp::socket     back;  // faces the server
+    ::asio::ip::udp::endpoint   server_ep;
+    ::asio::ip::udp::endpoint   client_ep;
+    ::asio::ip::udp::endpoint   from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
 
-    std::deque<action> data_script;                       // consumed per client->server data segment
-    std::vector<std::vector<std::byte>> held;             // held segments to release out of order
-    std::vector<std::uint16_t> held_seqs;                 // seqs to keep holding (incl. retransmits)
-    int data_seen{0};
+    std::deque<action>                  data_script; // consumed per client->server data segment
+    std::vector<std::vector<std::byte>> held;        // held segments to release out of order
+    std::vector<std::uint16_t>          held_seqs;   // seqs to keep holding (incl. retransmits)
+    int                                 data_seen{0};
 
     [[nodiscard]] static std::uint16_t seq_of(std::span<const std::byte> dg)
     {
@@ -116,10 +128,10 @@ struct relay
     }
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
-        : io(ctx)
-        , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            : io(ctx)
+            , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
     {
         recv_front();
         recv_back();
@@ -145,18 +157,18 @@ struct relay
     void recv_front()
     {
         front.async_receive_from(::asio::buffer(front_buf), from,
-            [this](std::error_code ec, std::size_t n)
-            {
-                if(ec)
-                    return;
-                client_ep = from;
-                std::span<const std::byte> dg{front_buf.data(), n};
-                if(is_data_segment(dg))
-                    handle_data(dg);
-                else
-                    send_to_server(dg);              // handshake + (client-side) acks pass
-                recv_front();
-            });
+                                 [this](std::error_code ec, std::size_t n)
+                                 {
+                                     if(ec)
+                                         return;
+                                     client_ep = from;
+                                     std::span<const std::byte> dg{front_buf.data(), n};
+                                     if(is_data_segment(dg))
+                                         handle_data(dg);
+                                     else
+                                         send_to_server(dg); // handshake + (client-side) acks pass
+                                     recv_front();
+                                 });
     }
 
     void handle_data(std::span<const std::byte> dg)
@@ -177,10 +189,16 @@ struct relay
         }
         switch(a)
         {
-        case action::pass:      send_to_server(dg); break;
-        case action::drop:      break;                                  // lost: the ARQ retransmits
-        case action::duplicate: send_to_server(dg); send_to_server(dg); break;
-        case action::hold:      held.emplace_back(dg.begin(), dg.end()); held_seqs.push_back(seq); break;
+            case action::pass: send_to_server(dg); break;
+            case action::drop: break; // lost: the ARQ retransmits
+            case action::duplicate:
+                send_to_server(dg);
+                send_to_server(dg);
+                break;
+            case action::hold:
+                held.emplace_back(dg.begin(), dg.end());
+                held_seqs.push_back(seq);
+                break;
         }
     }
 
@@ -197,19 +215,20 @@ struct relay
 
     void recv_back()
     {
-        back.async_receive_from(::asio::buffer(back_buf), from,
-            [this](std::error_code ec, std::size_t n)
-            {
-                if(ec)
-                    return;
-                if(client_ep.port() != 0)            // server->client (acks, hs_response) always pass
-                    front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
-                recv_back();
-            });
+        back.async_receive_from(
+                ::asio::buffer(back_buf), from,
+                [this](std::error_code ec, std::size_t n)
+                {
+                    if(ec)
+                        return;
+                    if(client_ep.port() != 0) // server->client (acks, hs_response) always pass
+                        front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
+                    recv_back();
+                });
     }
 };
 
-template <typename Pred>
+template<typename Pred>
 void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
 {
     auto bound = std::chrono::steady_clock::now() + timeout;
@@ -225,32 +244,38 @@ void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
 // established. The accepted channel records in-order reliable deliveries.
 struct fixture
 {
-    ::asio::io_context io;
-    pasio::udp_transport server;
-    pasio::udp_transport client;
+    ::asio::io_context                  io;
+    pasio::udp_transport                server;
+    pasio::udp_transport                client;
     std::unique_ptr<pasio::udp_channel> accepted;
     std::unique_ptr<pasio::udp_channel> dialed;
-    std::unique_ptr<relay> link;
-    std::vector<std::string> delivered;
+    std::unique_ptr<relay>              link;
+    std::vector<std::string>            delivered;
     std::optional<plexus::io::io_error> dialed_error;
 
     explicit fixture(pio::detail::udp_arq_config cfg = fast_arq())
-        : server(io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, cfg)
-        , client(io, pasio::udp_channel::default_max_payload, fast_hs, cfg)
+            : server(io, pasio::udp_channel::default_max_payload,
+                     pasio::udp_transport::arq_type::default_ladder, cfg)
+            , client(io, pasio::udp_channel::default_max_payload, fast_hs, cfg)
     {
-        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch) {
-            accepted = std::move(ch);
-            accepted->on_data([this](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
-        });
+        server.on_accepted(
+                [this](std::unique_ptr<pasio::udp_channel> ch)
+                {
+                    accepted = std::move(ch);
+                    accepted->on_data([this](std::span<const std::byte> b)
+                                      { delivered.push_back(str_of(b)); });
+                });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [this] { return server.port() != 0; });
 
         link = std::make_unique<relay>(io, server.port());
 
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &) {
-            dialed = std::move(ch);
-            dialed->on_error([this](plexus::io::io_error e) { dialed_error = e; });
-        });
+        client.on_dialed(
+                [this](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &)
+                {
+                    dialed = std::move(ch);
+                    dialed->on_error([this](plexus::io::io_error e) { dialed_error = e; });
+                });
         // Dial "udpr" so BOTH ends are reliable_datagram mode: the accepted channel must
         // be reliable-mode to deliver the kind=1 ARQ segments (a best_effort channel drops
         // them — the mode, not the envelope kind alone, gates the reliable path).
@@ -265,7 +290,7 @@ TEST_CASE("udp reliable_arq: a single lost data segment retransmits and delivers
           "[udp][reliable_arq]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         fixture f;
@@ -281,22 +306,24 @@ TEST_CASE("udp reliable_arq: a single lost data segment retransmits and delivers
         {
             const std::string p = "seg-" + std::to_string(iter) + "-" + std::to_string(i);
             sent.push_back(p);
-            REQUIRE(f.dialed->send_reliable(bytes_of(p)) == pasio::udp_channel::submit_result::admitted);
+            REQUIRE(f.dialed->send_reliable(bytes_of(p)) ==
+                    pasio::udp_channel::submit_result::admitted);
         }
         pump_until(f.io, [&] { return f.delivered.size() == 4; });
 
-        REQUIRE(f.delivered == sent);                 // exactly once, in publish order
-        REQUIRE(f.link->data_seen >= 5);              // 4 originals + >=1 retransmit (genuinely lossy)
+        REQUIRE(f.delivered == sent);    // exactly once, in publish order
+        REQUIRE(f.link->data_seen >= 5); // 4 originals + >=1 retransmit (genuinely lossy)
         ++proven;
     }
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp reliable_arq: out-of-order arrival behind a gap is held then released in order (HOL)",
-          "[udp][reliable_arq]")
+TEST_CASE(
+        "udp reliable_arq: out-of-order arrival behind a gap is held then released in order (HOL)",
+        "[udp][reliable_arq]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         fixture f;
@@ -312,16 +339,17 @@ TEST_CASE("udp reliable_arq: out-of-order arrival behind a gap is held then rele
         {
             const std::string p = "hol-" + std::to_string(iter) + "-" + std::to_string(i);
             sent.push_back(p);
-            REQUIRE(f.dialed->send_reliable(bytes_of(p)) == pasio::udp_channel::submit_result::admitted);
+            REQUIRE(f.dialed->send_reliable(bytes_of(p)) ==
+                    pasio::udp_channel::submit_result::admitted);
         }
         // Let 1,2,3 arrive and be buffered (HOL: nothing delivers behind the gap at 0).
         pump_until(f.io, [&] { return f.link->data_seen >= 4; });
         pump_until(f.io, [&] { return false; }, ms{40});
-        REQUIRE(f.delivered.empty());                 // HOL: gap at 0 blocks every successor
+        REQUIRE(f.delivered.empty()); // HOL: gap at 0 blocks every successor
 
-        f.link->release_held();                       // 0 arrives (out of order)
+        f.link->release_held(); // 0 arrives (out of order)
         pump_until(f.io, [&] { return f.delivered.size() == 4; });
-        REQUIRE(f.delivered == sent);                 // released strictly in publish order
+        REQUIRE(f.delivered == sent); // released strictly in publish order
         ++proven;
     }
     REQUIRE(proven == k_iterations);
@@ -330,7 +358,7 @@ TEST_CASE("udp reliable_arq: out-of-order arrival behind a gap is held then rele
 TEST_CASE("udp reliable_arq: a duplicated segment is delivered exactly once", "[udp][reliable_arq]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         fixture f;
@@ -346,12 +374,14 @@ TEST_CASE("udp reliable_arq: a duplicated segment is delivered exactly once", "[
         {
             const std::string p = "dup-" + std::to_string(iter) + "-" + std::to_string(i);
             sent.push_back(p);
-            REQUIRE(f.dialed->send_reliable(bytes_of(p)) == pasio::udp_channel::submit_result::admitted);
+            REQUIRE(f.dialed->send_reliable(bytes_of(p)) ==
+                    pasio::udp_channel::submit_result::admitted);
         }
         pump_until(f.io, [&] { return f.delivered.size() == 3; });
-        pump_until(f.io, [&] { return false; }, ms{40});   // give any duplicate time to (wrongly) arrive
+        pump_until(
+                f.io, [&] { return false; }, ms{40}); // give any duplicate time to (wrongly) arrive
 
-        REQUIRE(f.delivered == sent);                 // exactly once despite duplication
+        REQUIRE(f.delivered == sent); // exactly once despite duplication
         REQUIRE(f.delivered.size() == 3);
         ++proven;
     }
@@ -362,7 +392,7 @@ TEST_CASE("udp reliable_arq: exhausting the retransmit cap surfaces a connection
           "[udp][reliable_arq]")
 {
     constexpr int k_iterations = 20;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         fixture f{exhaust_arq()};
@@ -372,13 +402,13 @@ TEST_CASE("udp reliable_arq: exhausting the retransmit cap surfaces a connection
         // exhausts its budget and surfaces a connection-fatal error, not a silent hang.
         f.link->data_script = std::deque<action>(64, action::drop);
 
-        REQUIRE(f.dialed->send_reliable(bytes_of("never-" + std::to_string(iter)))
-                == pasio::udp_channel::submit_result::admitted);
+        REQUIRE(f.dialed->send_reliable(bytes_of("never-" + std::to_string(iter))) ==
+                pasio::udp_channel::submit_result::admitted);
         pump_until(f.io, [&] { return f.dialed_error.has_value(); });
 
         REQUIRE(f.dialed_error.has_value());
         REQUIRE(*f.dialed_error == plexus::io::io_error::timed_out);
-        REQUIRE(f.delivered.empty());                 // the dropped segment never delivered
+        REQUIRE(f.delivered.empty()); // the dropped segment never delivered
         ++proven;
     }
     REQUIRE(proven == k_iterations);
@@ -392,7 +422,7 @@ TEST_CASE("udp reliable_arq: the bounded send window admits up to W then reports
     ::asio::io_context io;
     using engine = pio::detail::udp_reliable_arq<::asio::io_context &, pasio::asio_timer>;
     engine arq{io, pio::detail::udp_arq_config{.window = 4}};
-    int transmits = 0;
+    int    transmits = 0;
     arq.on_transmit([&](std::uint16_t, std::span<const std::byte>, bool) { ++transmits; });
 
     auto one = bytes_of("x");
@@ -401,7 +431,7 @@ TEST_CASE("udp reliable_arq: the bounded send window admits up to W then reports
     REQUIRE(arq.submit(one) == engine::submit_result::window_full);
     REQUIRE(arq.in_flight() == 4);
     REQUIRE(transmits == 4);
-    arq.cancel();                                     // single-owner teardown cancels pending timers
+    arq.cancel(); // single-owner teardown cancels pending timers
     io.poll();
     SUCCEED();
 }

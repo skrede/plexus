@@ -64,7 +64,7 @@ enum class ring_direction : std::uint8_t
 [[nodiscard]] inline std::string bare_hex(std::uint64_t h)
 {
     static constexpr char k_digits[] = "0123456789abcdef";
-    std::string out(16, '0');
+    std::string           out(16, '0');
     for(int i = 15; i >= 0; --i)
     {
         out[static_cast<std::size_t>(i)] = k_digits[h & 0xfu];

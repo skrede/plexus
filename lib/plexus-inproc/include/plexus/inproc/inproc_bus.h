@@ -17,7 +17,7 @@
 
 namespace plexus::inproc {
 
-template <typename Clock>
+template<typename Clock>
 class inproc_channel;
 
 // In-process byte-packet delivery between registered channels. A channel
@@ -27,7 +27,7 @@ class inproc_channel;
 // exactly one queued packet to its target channel. Delivery is pull-driven by
 // the executor's step-loop, never invoked from the producing send() — that
 // posted-only discipline is what keeps the re-entrancy invariant structural.
-template <typename Clock = std::chrono::steady_clock>
+template<typename Clock = std::chrono::steady_clock>
 class inproc_bus
 {
 public:
@@ -35,21 +35,21 @@ public:
     // the accepted channel end. Public so inproc_transport can hold the lookup.
     struct listener_entry
     {
-        io::endpoint ep;
+        io::endpoint                                                             ep;
         detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted;
     };
 
     inproc_bus() = default;
 
-    inproc_bus(const inproc_bus &) = delete;
+    inproc_bus(const inproc_bus &)            = delete;
     inproc_bus &operator=(const inproc_bus &) = delete;
-    inproc_bus(inproc_bus &&) = delete;
-    inproc_bus &operator=(inproc_bus &&) = delete;
+    inproc_bus(inproc_bus &&)                 = delete;
+    inproc_bus &operator=(inproc_bus &&)      = delete;
 
     io::endpoint register_channel(inproc_channel<Clock> *chan)
     {
         const std::uint64_t key = m_next_addr++;
-        io::endpoint assigned{"inproc", std::to_string(key)};
+        io::endpoint        assigned{"inproc", std::to_string(key)};
         m_channels.push_back(channel_entry{chan, assigned, key});
         return assigned;
     }
@@ -73,8 +73,9 @@ public:
     // The accepting-endpoint registry (distinct from the synthetic per-channel
     // addresses above): a listen() names an endpoint and supplies the on_accepted
     // callback a dial() to that endpoint fires with the accepted channel end.
-    void register_listener(const io::endpoint &ep,
-                           detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted)
+    void register_listener(
+            const io::endpoint                                                      &ep,
+            detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted)
     {
         m_listeners.push_back(listener_entry{ep, std::move(on_accepted)});
     }
@@ -95,19 +96,19 @@ public:
     void enqueue(std::uint64_t to_key, std::span<const std::byte> data, inproc_channel<Clock> *from)
     {
         queued_packet &slot = push_slot();
-        slot.to_key = to_key;
-        slot.kind = packet_kind::data;
-        slot.from = from;
-        slot.data.assign(data.begin(), data.end());   // reuse the slot's grown capacity
+        slot.to_key         = to_key;
+        slot.kind           = packet_kind::data;
+        slot.from           = from;
+        slot.data.assign(data.begin(), data.end()); // reuse the slot's grown capacity
         slot.carrier = {};
     }
 
     void enqueue_close(std::uint64_t to_key)
     {
         queued_packet &slot = push_slot();
-        slot.to_key = to_key;
-        slot.kind = packet_kind::close;
-        slot.from = nullptr;
+        slot.to_key         = to_key;
+        slot.kind           = packet_kind::close;
+        slot.from           = nullptr;
         slot.data.clear();
         slot.carrier = {};
     }
@@ -121,9 +122,9 @@ public:
     {
         io::addref(carrier);
         queued_packet &slot = push_slot();
-        slot.to_key = to_key;
-        slot.kind = packet_kind::object;
-        slot.from = nullptr;
+        slot.to_key         = to_key;
+        slot.kind           = packet_kind::object;
+        slot.from           = nullptr;
         slot.data.clear();
         slot.carrier = carrier;
     }
@@ -134,7 +135,7 @@ public:
             return false;
 
         queued_packet &pkt = m_ring[m_head];
-        m_head = (m_head + 1) % m_ring.size();
+        m_head             = (m_head + 1) % m_ring.size();
         --m_size;
 
         bool delivered = false;
@@ -144,7 +145,7 @@ public:
                 if(pkt.kind == packet_kind::close)
                     entry.chan->deliver_close();
                 else if(pkt.kind == packet_kind::object)
-                    entry.chan->deliver_object(pkt.carrier);   // the channel releases on its own path
+                    entry.chan->deliver_object(pkt.carrier); // the channel releases on its own path
                 else
                     entry.chan->deliver(std::span<const std::byte>(pkt.data));
                 delivered = true;
@@ -162,8 +163,8 @@ public:
         // step-loop, so the report is already off the synchronous send() path.
         if(pkt.kind == packet_kind::data && !delivered && pkt.from && sender_live(pkt.from))
             pkt.from->report_unroutable();
-        pkt.carrier = {};   // drop the dangling slot pointer so a re-read never re-releases
-        pkt.from = nullptr;
+        pkt.carrier = {}; // drop the dangling slot pointer so a re-read never re-releases
+        pkt.from    = nullptr;
 
         return true;
     }
@@ -182,7 +183,12 @@ private:
         return false;
     }
 
-    enum class packet_kind : uint8_t { data, close, object };
+    enum class packet_kind : uint8_t
+    {
+        data,
+        close,
+        object
+    };
 
     // Packets address their target by the registration key, never the endpoint
     // value: two string assigns per enqueue (and a string compare per channel per
@@ -190,18 +196,18 @@ private:
     // strings stay cold — minted at registration, compared only in key_for.
     struct queued_packet
     {
-        std::uint64_t to_key{0};
-        packet_kind kind{packet_kind::data};
-        inproc_channel<Clock> *from{nullptr};   // the sender, for the unmatched-partner drop report
+        std::uint64_t          to_key{0};
+        packet_kind            kind{packet_kind::data};
+        inproc_channel<Clock> *from{nullptr}; // the sender, for the unmatched-partner drop report
         std::vector<std::byte> data;
-        io::object_carrier carrier{};
+        io::object_carrier     carrier{};
     };
 
     struct channel_entry
     {
         inproc_channel<Clock> *chan;
-        io::endpoint assigned_ep;
-        std::uint64_t key;
+        io::endpoint           assigned_ep;
+        std::uint64_t          key;
     };
 
     // The FIFO rides a grown-once ring of reusable packet slots rather than a deque:
@@ -221,8 +227,8 @@ private:
 
     void grow()
     {
-        const std::size_t old_cap = m_ring.size();
-        const std::size_t new_cap = old_cap == 0 ? 8 : old_cap * 2;
+        const std::size_t          old_cap = m_ring.size();
+        const std::size_t          new_cap = old_cap == 0 ? 8 : old_cap * 2;
         std::vector<queued_packet> next(new_cap);
         for(std::size_t i = 0; i < m_size; ++i)
             next[i] = std::move(m_ring[(m_head + i) % old_cap]);
@@ -230,12 +236,12 @@ private:
         m_head = 0;
     }
 
-    std::vector<channel_entry> m_channels;
+    std::vector<channel_entry>  m_channels;
     std::vector<listener_entry> m_listeners;
-    std::vector<queued_packet> m_ring;
-    std::size_t m_head{0};
-    std::size_t m_size{0};
-    std::uint64_t m_next_addr{1};   // key 0 stays "unconnected": it matches no registration
+    std::vector<queued_packet>  m_ring;
+    std::size_t                 m_head{0};
+    std::size_t                 m_size{0};
+    std::uint64_t m_next_addr{1}; // key 0 stays "unconnected": it matches no registration
 };
 
 }

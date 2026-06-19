@@ -42,26 +42,26 @@ namespace plexus::crypto {
 // readable on demand. This is the AEAD-required datagram path: an auth-only datagram
 // configuration is refused at the wiring layer, so this decorator is never installed
 // without AEAD.
-template <typename Lower>
+template<typename Lower>
 class datagram_authenticated_channel
 {
 public:
-    datagram_authenticated_channel(Lower &lower, aead_cipher_id cipher,
-                                   const derived_keys &keys, std::uint32_t initial_epoch = 0)
-        : m_lower(lower)
-        , m_cipher(cipher)
-        , m_send_key(keys.k_send)
-        , m_recv_key(keys.k_recv)
-        , m_send_epoch(initial_epoch)
-        , m_recv_epoch(initial_epoch)
+    datagram_authenticated_channel(Lower &lower, aead_cipher_id cipher, const derived_keys &keys,
+                                   std::uint32_t initial_epoch = 0)
+            : m_lower(lower)
+            , m_cipher(cipher)
+            , m_send_key(keys.k_send)
+            , m_recv_key(keys.k_recv)
+            , m_send_epoch(initial_epoch)
+            , m_recv_epoch(initial_epoch)
     {
         wire_lower();
     }
 
-    datagram_authenticated_channel(const datagram_authenticated_channel &) = delete;
+    datagram_authenticated_channel(const datagram_authenticated_channel &)            = delete;
     datagram_authenticated_channel &operator=(const datagram_authenticated_channel &) = delete;
-    datagram_authenticated_channel(datagram_authenticated_channel &&) = delete;
-    datagram_authenticated_channel &operator=(datagram_authenticated_channel &&) = delete;
+    datagram_authenticated_channel(datagram_authenticated_channel &&)                 = delete;
+    datagram_authenticated_channel &operator=(datagram_authenticated_channel &&)      = delete;
 
     void send(std::span<const std::byte> data)
     {
@@ -73,7 +73,7 @@ public:
             emit_drop(io::detail::drop_cause::malformed, io::locality::local);
             return;
         }
-        const auto header = data.first(wire::header_size);
+        const auto header  = data.first(wire::header_size);
         const auto payload = data.subspan(wire::header_size);
 
         const std::uint64_t seq = m_send_seq++;
@@ -96,10 +96,22 @@ public:
 
     [[nodiscard]] io::endpoint remote_endpoint() const { return m_lower.remote_endpoint(); }
 
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb) { m_on_data = std::move(cb); }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_lower.on_closed(std::move(cb)); }
-    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb) { m_lower.on_error(std::move(cb)); }
-    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) { m_lower.on_protocol_close(std::move(cb)); }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    {
+        m_on_data = std::move(cb);
+    }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_lower.on_closed(std::move(cb));
+    }
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
+    {
+        m_lower.on_error(std::move(cb));
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
+    {
+        m_lower.on_protocol_close(std::move(cb));
+    }
 
     // The drop-observability seam (null by default — zero cost when unobserved). The
     // owner installs the engine's posted drop_sink; this decorator increments its
@@ -107,16 +119,23 @@ public:
     // sink POSTS, so the per-packet site never fires the observer synchronously (the DoS
     // guard). peer/topic are left default here — this decorator sits below the demux that
     // knows them; the cause is the load-bearing field.
-    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb) { m_on_drop = std::move(cb); }
+    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
+    {
+        m_on_drop = std::move(cb);
+    }
 
-    [[nodiscard]] std::size_t dropped_count() const noexcept { return m_replay_dropped + m_tamper_dropped; }
+    [[nodiscard]] std::size_t dropped_count() const noexcept
+    {
+        return m_replay_dropped + m_tamper_dropped;
+    }
     [[nodiscard]] std::size_t replay_count() const noexcept { return m_replay_dropped; }
     [[nodiscard]] std::size_t tamper_dropped_count() const noexcept { return m_tamper_dropped; }
     [[nodiscard]] std::size_t backpressured() const { return m_lower.backpressured(); }
 
 private:
     static constexpr std::size_t k_seq_len = 8;
-    static constexpr std::size_t k_frame_overhead = k_seq_len + 1 + wire::header_size + k_aead_tag_len;
+    static constexpr std::size_t k_frame_overhead =
+            k_seq_len + 1 + wire::header_size + k_aead_tag_len;
 
     void wire_lower()
     {
@@ -137,10 +156,10 @@ private:
             emit_drop(io::detail::drop_cause::tamper);
             return;
         }
-        const std::uint64_t seq = read_seq(bytes.data());
-        const auto epoch_byte = static_cast<std::uint8_t>(bytes[k_seq_len]);
-        const auto header = bytes.subspan(k_seq_len + 1, wire::header_size);
-        const auto sealed = bytes.subspan(k_seq_len + 1 + wire::header_size);
+        const std::uint64_t seq        = read_seq(bytes.data());
+        const auto          epoch_byte = static_cast<std::uint8_t>(bytes[k_seq_len]);
+        const auto          header     = bytes.subspan(k_seq_len + 1, wire::header_size);
+        const auto          sealed     = bytes.subspan(k_seq_len + 1 + wire::header_size);
 
         // RFC 4303 §3.4.3 order: verify the tag BEFORE committing any replay/epoch state.
         // The candidate key is resolved without advancing the epoch; a non-mutating probe
@@ -148,7 +167,7 @@ private:
         // open commits the epoch advance and marks the sequence seen — so a forged
         // datagram can neither wedge the window nor desync the key.
         aead_key candidate{};
-        bool advances_epoch = false;
+        bool     advances_epoch = false;
         if(!candidate_key_for(epoch_byte, candidate, advances_epoch))
         {
             ++m_tamper_dropped;
@@ -209,7 +228,7 @@ private:
         const auto current_low = static_cast<std::uint8_t>(m_recv_epoch & 0xffu);
         if(epoch_byte == current_low)
         {
-            out = m_recv_key;
+            out      = m_recv_key;
             advances = false;
             return true;
         }
@@ -242,27 +261,28 @@ private:
         return seq;
     }
 
-    Lower &m_lower;
-    aead_cipher_id m_cipher;
-    aead_key m_send_key;
-    aead_key m_recv_key;
-    std::uint32_t m_send_epoch;
-    std::uint32_t m_recv_epoch;
-    std::uint64_t m_send_seq{0};
-    anti_replay_window<> m_window;
-    std::size_t m_replay_dropped{0};
-    std::size_t m_tamper_dropped{0};
-    std::vector<std::byte> m_seal_scratch;
-    std::vector<std::byte> m_open_scratch;
-    std::vector<std::byte> m_send_frame;
-    std::vector<std::byte> m_recv_frame;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
+    Lower                                                                   &m_lower;
+    aead_cipher_id                                                           m_cipher;
+    aead_key                                                                 m_send_key;
+    aead_key                                                                 m_recv_key;
+    std::uint32_t                                                            m_send_epoch;
+    std::uint32_t                                                            m_recv_epoch;
+    std::uint64_t                                                            m_send_seq{0};
+    anti_replay_window<>                                                     m_window;
+    std::size_t                                                              m_replay_dropped{0};
+    std::size_t                                                              m_tamper_dropped{0};
+    std::vector<std::byte>                                                   m_seal_scratch;
+    std::vector<std::byte>                                                   m_open_scratch;
+    std::vector<std::byte>                                                   m_send_frame;
+    std::vector<std::byte>                                                   m_recv_frame;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)>     m_on_data;
     plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
 };
 
 }
 
-static_assert(plexus::io::byte_channel<plexus::crypto::datagram_authenticated_channel<plexus::io::polymorphic_byte_channel>>,
-    "datagram_authenticated_channel must satisfy byte_channel — check the seven verbs");
+static_assert(plexus::io::byte_channel<plexus::crypto::datagram_authenticated_channel<
+                      plexus::io::polymorphic_byte_channel>>,
+              "datagram_authenticated_channel must satisfy byte_channel — check the seven verbs");
 
 #endif

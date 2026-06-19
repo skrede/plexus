@@ -46,7 +46,7 @@
 #include <algorithm>
 
 namespace pasio = plexus::asio;
-namespace wire = plexus::wire;
+namespace wire  = plexus::wire;
 
 namespace {
 
@@ -55,9 +55,8 @@ namespace {
 // stays short. Passed EXPLICITLY — the 30s default would make the leg glacial.
 wire::stream_inbound_config short_cfg()
 {
-    return wire::stream_inbound_config{
-        .no_progress_floor = std::chrono::milliseconds(200),
-        .min_throughput_bytes_per_sec = 64};
+    return wire::stream_inbound_config{.no_progress_floor = std::chrono::milliseconds(200),
+                                       .min_throughput_bytes_per_sec = 64};
 }
 
 // A per-instance owner-only temp directory + a SHORT socket path within it.
@@ -68,10 +67,10 @@ struct temp_sock
 
     temp_sock()
     {
-        char tmpl[] = "/tmp/pxu-XXXXXX";
-        const char *made = ::mkdtemp(tmpl);
-        dir = made ? made : "";
-        path = dir + "/s";
+        char        tmpl[] = "/tmp/pxu-XXXXXX";
+        const char *made   = ::mkdtemp(tmpl);
+        dir                = made ? made : "";
+        path               = dir + "/s";
     }
 
     ~temp_sock()
@@ -88,28 +87,35 @@ struct temp_sock
 // ends and pumps one io_context.
 struct loopback
 {
-    temp_sock sock;
-    ::asio::io_context io;
-    pasio::unix_listener listener{io, short_cfg()};
-    std::unique_ptr<pasio::unix_channel> server;
+    temp_sock                              sock;
+    ::asio::io_context                     io;
+    pasio::unix_listener                   listener{io, short_cfg()};
+    std::unique_ptr<pasio::unix_channel>   server;
     ::asio::local::stream_protocol::socket client{io};
 
     std::optional<wire::close_cause> caused;
-    int closes{0};
+    int                              closes{0};
 
     loopback()
     {
-        listener.on_accepted([this](std::unique_ptr<pasio::unix_channel> ch) {
-            server = std::move(ch);
-            server->on_protocol_close([this](wire::close_cause c) { caused = c; ++closes; });
-        });
+        listener.on_accepted(
+                [this](std::unique_ptr<pasio::unix_channel> ch)
+                {
+                    server = std::move(ch);
+                    server->on_protocol_close(
+                            [this](wire::close_cause c)
+                            {
+                                caused = c;
+                                ++closes;
+                            });
+                });
         listener.start({"unix", sock.path});
 
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         pump_until([this] { return server != nullptr; });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -129,11 +135,11 @@ struct loopback
 std::array<std::byte, wire::header_size> withholding_header(std::uint64_t payload_len)
 {
     wire::frame_header hdr{};
-    hdr.type = wire::msg_type::unidirectional;
-    hdr.flags = 0;
-    hdr.session_id = 0;
+    hdr.type         = wire::msg_type::unidirectional;
+    hdr.flags        = 0;
+    hdr.session_id   = 0;
     hdr.timestamp_ns = 0;
-    hdr.payload_len = payload_len;
+    hdr.payload_len  = payload_len;
     return wire::encode_header(hdr);
 }
 
@@ -143,7 +149,7 @@ TEST_CASE("unix stream channel: a bad-magic byte run fires on_protocol_close(inv
           "[integration][unix][hardening]")
 {
     constexpr int k_iterations = 20;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;
@@ -167,11 +173,12 @@ TEST_CASE("unix stream channel: a bad-magic byte run fires on_protocol_close(inv
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("unix stream channel: a header with a withheld payload fires on_protocol_close(no_progress_timeout)",
+TEST_CASE("unix stream channel: a header with a withheld payload fires "
+          "on_protocol_close(no_progress_timeout)",
           "[integration][unix][hardening]")
 {
     constexpr int k_iterations = 20;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;
@@ -204,18 +211,20 @@ TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to 
     // block surfaces would_block — the SAME edge asio_channel proves, and the outbox NEVER
     // grows past the cap.
     namespace pio = plexus::io;
-    auto run = [](pio::congestion mode) {
-        constexpr std::size_t cap = 4096;
-        temp_sock sock;
-        ::asio::io_context io;
+    auto run      = [](pio::congestion mode)
+    {
+        constexpr std::size_t                    cap = 4096;
+        temp_sock                                sock;
+        ::asio::io_context                       io;
         ::asio::local::stream_protocol::acceptor acc{
-            io, ::asio::local::stream_protocol::endpoint(sock.path)};
+                io, ::asio::local::stream_protocol::endpoint(sock.path)};
         ::asio::local::stream_protocol::socket peer{io};
         ::asio::local::stream_protocol::socket client{io};
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));
-        acc.accept(peer);                               // peer adopts but NEVER reads
+        acc.accept(peer); // peer adopts but NEVER reads
 
-        pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
+        pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode,
+                               pio::egress_capacity::of_bytes(cap)};
         REQUIRE(ch.congestion_mode() == mode);
 
         std::optional<pio::io_error> err;
@@ -226,7 +235,7 @@ TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to 
         {
             ch.send(kib);
             io.poll();
-            REQUIRE(ch.backpressured() <= cap);         // NEVER grows past the cap
+            REQUIRE(ch.backpressured() <= cap); // NEVER grows past the cap
             if(mode == pio::congestion::drop_newest && ch.dropped_count() > 0)
                 break;
             if(mode == pio::congestion::block && err.has_value())
@@ -234,7 +243,7 @@ TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to 
         }
 
         if(mode == pio::congestion::drop_newest)
-            REQUIRE(ch.dropped_count() > 0);            // shed at the publisher (the asio verdict)
+            REQUIRE(ch.dropped_count() > 0); // shed at the publisher (the asio verdict)
         else
         {
             REQUIRE(err.has_value());
@@ -260,7 +269,8 @@ std::vector<std::byte> ramp_payload(std::size_t n)
 
 }
 
-TEST_CASE("unix stream channel: a 16 MB single frame round-trips byte-identically over a real local-socket pair, looped",
+TEST_CASE("unix stream channel: a 16 MB single frame round-trips byte-identically over a real "
+          "local-socket pair, looped",
           "[integration][unix][envelope16]")
 {
     // The lifted message-size envelope on the AF_UNIX stream path: one 16 MiB frame over a
@@ -269,39 +279,41 @@ TEST_CASE("unix stream channel: a 16 MB single frame round-trips byte-identicall
     // byte cap holds the whole framed message under congestion=block. Looped in-body and
     // re-run across process runs (a transport claim is never made from one run); a position
     // ramp in the body catches a reorder/corruption, not just a size mismatch.
-    namespace pio = plexus::io;
-    constexpr std::size_t k_payload = 16u * 1024u * 1024u;
-    constexpr std::size_t k_ceiling = 20u * 1024u * 1024u;
+    namespace pio                         = plexus::io;
+    constexpr std::size_t       k_payload = 16u * 1024u * 1024u;
+    constexpr std::size_t       k_ceiling = 20u * 1024u * 1024u;
     wire::stream_inbound_config cfg{};
-    cfg.max_payload_size = k_ceiling;
-    cfg.buffered_bytes_cap = k_ceiling + wire::header_size;
+    cfg.max_payload_size          = k_ceiling;
+    cfg.buffered_bytes_cap        = k_ceiling + wire::header_size;
     constexpr std::size_t k_queue = k_ceiling + 4u * 1024u * 1024u;
 
     constexpr int k_iterations = 3;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        temp_sock sock;
-        ::asio::io_context io;
+        temp_sock                                sock;
+        ::asio::io_context                       io;
         ::asio::local::stream_protocol::acceptor acc{
-            io, ::asio::local::stream_protocol::endpoint(sock.path)};
+                io, ::asio::local::stream_protocol::endpoint(sock.path)};
         ::asio::local::stream_protocol::socket raw_server{io};
         ::asio::local::stream_protocol::socket raw_client{io};
         raw_client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         acc.accept(raw_server);
 
-        pasio::unix_channel server{io, std::move(raw_server), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
-        pasio::unix_channel client{io, std::move(raw_client), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
+        pasio::unix_channel server{io, std::move(raw_server), cfg, pio::congestion::block,
+                                   pio::egress_capacity::of_bytes(k_queue)};
+        pasio::unix_channel client{io, std::move(raw_client), cfg, pio::congestion::block,
+                                   pio::egress_capacity::of_bytes(k_queue)};
 
-        std::vector<std::byte> got;
+        std::vector<std::byte>           got;
         std::optional<wire::close_cause> closed;
         server.on_data([&](std::span<const std::byte> d) { got.assign(d.begin(), d.end()); });
         server.on_protocol_close([&](wire::close_cause c) { closed = c; });
 
-        const auto body = ramp_payload(k_payload);
+        const auto         body = ramp_payload(k_payload);
         wire::frame_header hdr{};
-        hdr.type = wire::msg_type::unidirectional;
-        hdr.payload_len = body.size();
+        hdr.type         = wire::msg_type::unidirectional;
+        hdr.payload_len  = body.size();
         const auto frame = wire::encode_frame(hdr, std::span<const std::byte>{body});
         client.send(std::span<const std::byte>{frame});
 
@@ -309,9 +321,9 @@ TEST_CASE("unix stream channel: a 16 MB single frame round-trips byte-identicall
         while(got.size() < frame.size() && !closed && std::chrono::steady_clock::now() < bound)
             io.poll();
 
-        REQUIRE_FALSE(closed.has_value());          // the receive ceiling admitted the 16 MB frame
+        REQUIRE_FALSE(closed.has_value()); // the receive ceiling admitted the 16 MB frame
         REQUIRE(got.size() == frame.size());
-        REQUIRE(got == frame);                       // byte-equal reassembly, no reorder/corruption
+        REQUIRE(got == frame); // byte-equal reassembly, no reorder/corruption
         const auto delivered_body = std::span<const std::byte>{got}.subspan(wire::header_size);
         REQUIRE(std::equal(delivered_body.begin(), delivered_body.end(), body.begin()));
 

@@ -34,7 +34,7 @@ struct projection_input
 // this is an offline host seam, never the producer hot path.
 inline std::optional<projection_input> read_projection_input(std::span<const std::byte> stream)
 {
-    projection_input in;
+    projection_input     in;
     record_stream_reader reader{stream};
     if(!reader.read_definitions(in.defs))
         return std::nullopt;

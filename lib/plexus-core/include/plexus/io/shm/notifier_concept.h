@@ -28,12 +28,11 @@ namespace plexus::io::shm {
 //
 // The verbs are bare-call-expression typed (the byte_channel / transport_backend
 // idiom): the void verbs are constrained, arm() takes the drain by move.
-template <typename T>
-concept notifier = requires(T &n, plexus::detail::move_only_function<void()> drain)
-{
-    { n.signal() }  -> std::same_as<void>;
+template<typename T>
+concept notifier = requires(T &n, plexus::detail::move_only_function<void()> drain) {
+    { n.signal() } -> std::same_as<void>;
     n.arm(std::move(drain));
-    { n.disarm() }  -> std::same_as<void>;
+    { n.disarm() } -> std::same_as<void>;
 };
 
 }

@@ -52,35 +52,38 @@ namespace {
 
 struct manual_clock
 {
-    using duration = std::chrono::nanoseconds;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<manual_clock>;
+    using duration                  = std::chrono::nanoseconds;
+    using rep                       = duration::rep;
+    using period                    = duration::period;
+    using time_point                = std::chrono::time_point<manual_clock>;
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point now() noexcept { return current; }
-    static void reset() noexcept { current = time_point{}; }
-    static void advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept { return current; }
+    static void              reset() noexcept { current = time_point{}; }
+    static void              advance(duration d) noexcept { current += d; }
 };
 
 struct manual_policy
 {
-    using executor_type = inproc_executor<manual_clock> &;
+    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
-    using timer_type = inproc_timer<manual_clock>;
-    using byte_owner = std::shared_ptr<const void>;
+    using timer_type        = inproc_timer<manual_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); }
+    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        ex.post(std::move(fn));
+    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
 
 using transport_t = inproc_transport<manual_clock>;
-using engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
+using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu;
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -96,8 +99,11 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -119,21 +125,23 @@ reconnect_config forever_cfg()
 // engines so destruction unwinds the engines' channels before the bus.
 struct route_net
 {
-    inproc_bus<manual_clock> bus;
+    inproc_bus<manual_clock>      bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
-    transport_t transport_b{ex, bus};
+    transport_t                   transport_a{ex, bus};
+    transport_t                   transport_b{ex, bus};
 
     engine a;
     engine b;
 
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint ep_a{"inproc", "node-a"};
-    endpoint ep_b{"inproc", "node-b"};
+    endpoint        ep_a{"inproc", "node-a"};
+    endpoint        ep_b{"inproc", "node-b"};
 
     route_net()
-        : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, /*eager=*/true)
-        , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, /*eager=*/true)
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed,
+                /*eager=*/true)
+            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed,
+                /*eager=*/true)
     {
         a.listen(ep_a);
         b.listen(ep_b);
@@ -147,10 +155,9 @@ struct route_net
     plexus::io::peer_session<manual_policy> *b_live_inbound()
     {
         plexus::io::peer_session<manual_policy> *found = nullptr;
-        b.registry().for_each_connected([&](const plexus::node_id &,
-                                            plexus::io::peer_session<manual_policy> &s) {
-            found = &s;
-        });
+        b.registry().for_each_connected(
+                [&](const plexus::node_id &, plexus::io::peer_session<manual_policy> &s)
+                { found = &s; });
         return found;
     }
 
@@ -169,7 +176,7 @@ struct route_net
     // route under test, so it is re-established for the freshly built sessions.
     void rewire_fanout(const std::string &topic)
     {
-        auto *a_to_b = a.session_for(id_b);
+        auto *a_to_b    = a.session_for(id_b);
         auto *b_inbound = b_live_inbound();
         REQUIRE(a_to_b != nullptr);
         REQUIRE(b_inbound != nullptr);
@@ -190,25 +197,27 @@ struct route_net
 
 }
 
-TEST_CASE("shared receive route: a route installed via the engine delivers a published message with a populated message_info",
+TEST_CASE("shared receive route: a route installed via the engine delivers a published message "
+          "with a populated message_info",
           "[integration][routing][inproc]")
 {
-    constexpr int k_iterations = 100;
-    const std::string topic = "topic";
-    const std::string payload = "routed-through-the-shared-route";
-    int delivered = 0;
+    constexpr int     k_iterations = 100;
+    const std::string topic        = "topic";
+    const std::string payload      = "routed-through-the-shared-route";
+    int               delivered    = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
         route_net net;
 
-        std::vector<std::string> received;
+        std::vector<std::string>  received;
         std::vector<message_info> infos;
-        net.a.on_message_route([&](std::string_view, std::span<const std::byte> d,
-                                   const message_info &mi) {
-            received.emplace_back(to_string(d));
-            infos.push_back(mi);
-        });
+        net.a.on_message_route(
+                [&](std::string_view, std::span<const std::byte> d, const message_info &mi)
+                {
+                    received.emplace_back(to_string(d));
+                    infos.push_back(mi);
+                });
 
         net.connect_and_wire(topic);
         net.publish(topic, payload);
@@ -224,19 +233,19 @@ TEST_CASE("shared receive route: a route installed via the engine delivers a pub
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("shared receive route: the route survives a forced reconnect rebuild without re-install (looped)",
+TEST_CASE("shared receive route: the route survives a forced reconnect rebuild without re-install "
+          "(looped)",
           "[integration][routing][inproc]")
 {
-    constexpr int k_reconnects = 6;
-    const std::string topic = "topic";
+    constexpr int     k_reconnects = 6;
+    const std::string topic        = "topic";
     manual_clock::reset();
     route_net net;
 
     // Install the shared route ONCE, before any session exists.
     std::vector<std::string> received;
-    net.a.on_message_route([&](std::string_view, std::span<const std::byte> d, const message_info &) {
-        received.emplace_back(to_string(d));
-    });
+    net.a.on_message_route([&](std::string_view, std::span<const std::byte> d, const message_info &)
+                           { received.emplace_back(to_string(d)); });
 
     net.connect_and_wire(topic);
     net.publish(topic, "before-reconnect");
@@ -271,33 +280,31 @@ TEST_CASE("shared receive route: the route survives a forced reconnect rebuild w
 TEST_CASE("shared receive route: a per-session on_message takes precedence over the shared route",
           "[integration][routing][inproc]")
 {
-    constexpr int k_iterations = 100;
-    const std::string topic = "topic";
-    const std::string payload = "precedence-payload";
-    int proven = 0;
+    constexpr int     k_iterations = 100;
+    const std::string topic        = "topic";
+    const std::string payload      = "precedence-payload";
+    int               proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
         route_net net;
 
         std::vector<std::string> via_route;
-        net.a.on_message_route([&](std::string_view, std::span<const std::byte> d, const message_info &) {
-            via_route.emplace_back(to_string(d));
-        });
+        net.a.on_message_route([&](std::string_view, std::span<const std::byte> d,
+                                   const message_info &) { via_route.emplace_back(to_string(d)); });
 
         net.connect_and_wire(topic);
 
         // Install a per-session seam on the live A->B session: it must win.
         std::vector<std::string> via_session;
-        net.a.session_for(net.id_b)->on_message([&](std::string_view, std::span<const std::byte> d) {
-            via_session.emplace_back(to_string(d));
-        });
+        net.a.session_for(net.id_b)->on_message([&](std::string_view, std::span<const std::byte> d)
+                                                { via_session.emplace_back(to_string(d)); });
 
         net.publish(topic, payload);
 
         REQUIRE(via_session.size() == 1);
         REQUIRE(via_session.front() == payload);
-        REQUIRE(via_route.empty());   // the shared route did NOT also fire
+        REQUIRE(via_route.empty()); // the shared route did NOT also fire
         ++proven;
     }
     REQUIRE(proven == k_iterations);

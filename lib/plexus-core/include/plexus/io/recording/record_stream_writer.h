@@ -53,15 +53,14 @@ class record_stream_writer
 {
 public:
     explicit record_stream_writer(std::size_t scratch_bytes = 64u * 1024u)
-        : m_scratch(scratch_bytes)
+            : m_scratch(scratch_bytes)
     {
     }
 
-    std::span<const std::byte> begin_stream(std::uint64_t clock_epoch,
-                                            const node_id &node,
-                                            topic_capture_rule rule,
-                                            std::span<const type_schema_entry> schema,
-                                            capture_crypto_position crypto = capture_crypto_position::cleartext)
+    std::span<const std::byte>
+    begin_stream(std::uint64_t clock_epoch, const node_id &node, topic_capture_rule rule,
+                 std::span<const type_schema_entry> schema,
+                 capture_crypto_position            crypto = capture_crypto_position::cleartext)
     {
         wire::writer w{m_scratch};
         w.u32(k_stream_magic);
@@ -100,12 +99,9 @@ public:
     // A sample (a captured message): topic identity + the metadata floor + an optional
     // type_id + the raw payload bytes at the recorded fidelity. A metadata-only record
     // passes an empty payload; the encoder never invokes a codec — payload is opaque.
-    std::span<const std::byte> sample(std::uint64_t capture_ts,
-                                      std::uint64_t topic_hash,
-                                      const message_info &info,
-                                      std::uint64_t type_id,
-                                      bool type_id_present,
-                                      capture_fidelity fidelity,
+    std::span<const std::byte> sample(std::uint64_t capture_ts, std::uint64_t topic_hash,
+                                      const message_info &info, std::uint64_t type_id,
+                                      bool type_id_present, capture_fidelity fidelity,
                                       std::span<const std::byte> payload)
     {
         wire::writer w{m_scratch};
@@ -159,8 +155,7 @@ public:
         return seal(w.offset());
     }
 
-    std::span<const std::byte> endpoint(std::uint64_t capture_ts,
-                                        std::string_view fqn,
+    std::span<const std::byte> endpoint(std::uint64_t capture_ts, std::string_view fqn,
                                         const endpoint_event &e)
     {
         wire::writer w{m_scratch};

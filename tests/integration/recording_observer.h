@@ -30,13 +30,13 @@ class recording_observer final : public plexus::io::observer
 public:
     struct counts
     {
-        int connected{0};
-        int disconnected{0};
-        int reconnected{0};
-        int dead{0};
-        int ready{0};
-        int rejected{0};
-        plexus::io::peer_kind last_kind{plexus::io::peer_kind::dialed};
+        int                           connected{0};
+        int                           disconnected{0};
+        int                           reconnected{0};
+        int                           dead{0};
+        int                           ready{0};
+        int                           rejected{0};
+        plexus::io::peer_kind         last_kind{plexus::io::peer_kind::dialed};
         plexus::io::handshake_outcome last_reason{plexus::io::handshake_outcome::none};
     };
 
@@ -67,21 +67,24 @@ public:
         int destroyed{0};
     };
 
-    void on_peer_connected(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
+    void on_peer_connected(const plexus::node_id &id, std::string_view,
+                           plexus::io::peer_kind  k) override
     {
         auto &c = m_peers[id];
         ++c.connected;
         c.last_kind = k;
     }
 
-    void on_peer_disconnected(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
+    void on_peer_disconnected(const plexus::node_id &id, std::string_view,
+                              plexus::io::peer_kind  k) override
     {
         auto &c = m_peers[id];
         ++c.disconnected;
         c.last_kind = k;
     }
 
-    void on_peer_reconnected(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
+    void on_peer_reconnected(const plexus::node_id &id, std::string_view,
+                             plexus::io::peer_kind  k) override
     {
         auto &c = m_peers[id];
         ++c.reconnected;
@@ -95,14 +98,16 @@ public:
         c.last_kind = k;
     }
 
-    void on_peer_ready(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
+    void on_peer_ready(const plexus::node_id &id, std::string_view,
+                       plexus::io::peer_kind  k) override
     {
         auto &c = m_peers[id];
         ++c.ready;
         c.last_kind = k;
     }
 
-    void on_peer_rejected(const plexus::node_id &id, std::string_view, plexus::io::handshake_outcome reason) override
+    void on_peer_rejected(const plexus::node_id        &id, std::string_view,
+                          plexus::io::handshake_outcome reason) override
     {
         auto &c = m_peers[id];
         ++c.rejected;
@@ -114,12 +119,12 @@ public:
         ++m_topics[std::string{fqn}].published;
     }
 
-    void on_message_delivered(std::string_view fqn, const plexus::io::message_info &,
+    void on_message_delivered(std::string_view                fqn, const plexus::io::message_info &,
                               const plexus::io::message_view &view) override
     {
         auto &t = m_topics[std::string{fqn}];
         ++t.delivered;
-        t.last_view_owner = view.owner();
+        t.last_view_owner     = view.owner();
         t.last_view_use_count = view.owner().use_count();
     }
 
@@ -189,10 +194,7 @@ public:
 
     // The single accepted peer is keyed by a synthetic inbound identity the test does
     // not pre-compute; expose the sole recorded peer for the accepting-node suites.
-    const counts &only_peer() const
-    {
-        return m_peers.empty() ? m_empty : m_peers.begin()->second;
-    }
+    const counts &only_peer() const { return m_peers.empty() ? m_empty : m_peers.begin()->second; }
 
     // Per-participant accessor: an unseen node_id reads as all-zero, mirroring for_peer.
     const participant_counts &for_participant(const plexus::node_id &id) const
@@ -212,13 +214,13 @@ public:
     std::size_t recorded_peers() const { return m_peers.size(); }
 
 private:
-    std::map<plexus::node_id, counts> m_peers;
+    std::map<plexus::node_id, counts>             m_peers;
     std::map<plexus::node_id, participant_counts> m_participants;
-    std::map<std::string, topic_counts> m_topics;
-    std::map<std::uint64_t, int> m_unsubscribed_by_hash;
-    counts m_empty{};
-    participant_counts m_empty_participant{};
-    topic_counts m_empty_topic{};
+    std::map<std::string, topic_counts>           m_topics;
+    std::map<std::uint64_t, int>                  m_unsubscribed_by_hash;
+    counts                                        m_empty{};
+    participant_counts                            m_empty_participant{};
+    topic_counts                                  m_empty_topic{};
 };
 
 #endif

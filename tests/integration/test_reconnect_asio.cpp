@@ -39,26 +39,30 @@
 #include <string_view>
 
 namespace pasio = plexus::asio;
-namespace pio = plexus::io;
+namespace pio   = plexus::io;
 
 using pio::handshake_fsm_config;
 using pio::reconnect_config;
-using session = pio::peer_session<pasio::asio_policy>;
+using session       = pio::peer_session<pasio::asio_policy>;
 using msg_forwarder = pio::message_forwarder<pasio::asio_policy>;
 using rpc_forwarder = pio::procedure_forwarder<pasio::asio_policy>;
-using driver_t = pio::reconnect<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
+using driver_t =
+        pio::reconnect<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
 
 namespace {
 
-constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr auto          k_long_timeout = std::chrono::hours(1);
+constexpr std::uint64_t k_seed         = 0xC0FFEEu;
 
 handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0,
-                                .compatible_version_major = 1, .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id                  = id,
+                                .version_major            = 1,
+                                .version_minor            = 0,
+                                .compatible_version_major = 1,
+                                .compatible_version_minor = 0};
 }
 
 // One reconnecting dialer over real TCP loopback. The listener stays up for the
@@ -70,7 +74,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // destruction unwinds channels before the io_context.
 struct tcp_reconnect
 {
-    ::asio::io_context io;
+    ::asio::io_context    io;
     pasio::asio_transport transport{io};
 
     msg_forwarder req_messages{};
@@ -85,37 +89,46 @@ struct tcp_reconnect
     // std::optional sessions so destruction unwinds the session first.
     plexus::io::peer_context<pasio::asio_policy> req_ctx;
     plexus::io::peer_context<pasio::asio_policy> resp_ctx;
-    std::optional<driver_t> driver;
-    std::optional<session> requester;
-    std::optional<session> responder;
+    std::optional<driver_t>                      driver;
+    std::optional<session>                       requester;
+    std::optional<session>                       responder;
 
     std::uint16_t port{0};
-    int drops_seen{0};
+    int           drops_seen{0};
 
     // listen_first: bind the listener on an ephemeral port BEFORE the driver so the
     // driver dials the real port. When false the caller supplies a (closed) port to
     // exercise the initial-refused path and brings the listener up later.
     tcp_reconnect(const reconnect_config &cfg, bool listen_first, std::uint16_t closed_port = 0)
     {
-        transport.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) {
-            resp_ctx.channel = std::move(ch);
-            resp_ctx.node_name = "requester-node";
-            responder.emplace(resp_ctx, io, make_cfg(0x01), k_long_timeout,
-                              resp_messages, resp_procedures, true);
-            responder->start();
-        });
-        transport.on_dialed([this](std::unique_ptr<pasio::asio_channel> ch, const pio::endpoint &) {
-            req_ctx.channel = std::move(ch);
-            req_ctx.node_name = "responder-node";
-            requester.emplace(req_ctx, io, make_cfg(0x02), k_long_timeout,
-                              req_messages, req_procedures, false);
-            requester->start();
-            // Route a transport DROP (broken_pipe/connection_reset) — not a clean
-            // close — to the driver through the session's production drop seam. The
-            // seam is set AFTER start() (start() owns the channel's on_error); a clean
-            // tear_down sets m_torn_down first, so it does not fire here.
-            requester->on_transport_drop([this] { ++drops_seen; driver->on_channel_dropped(); });
-        });
+        transport.on_accepted(
+                [this](std::unique_ptr<pasio::asio_channel> ch)
+                {
+                    resp_ctx.channel   = std::move(ch);
+                    resp_ctx.node_name = "requester-node";
+                    responder.emplace(resp_ctx, io, make_cfg(0x01), k_long_timeout, resp_messages,
+                                      resp_procedures, true);
+                    responder->start();
+                });
+        transport.on_dialed(
+                [this](std::unique_ptr<pasio::asio_channel> ch, const pio::endpoint &)
+                {
+                    req_ctx.channel   = std::move(ch);
+                    req_ctx.node_name = "responder-node";
+                    requester.emplace(req_ctx, io, make_cfg(0x02), k_long_timeout, req_messages,
+                                      req_procedures, false);
+                    requester->start();
+                    // Route a transport DROP (broken_pipe/connection_reset) — not a clean
+                    // close — to the driver through the session's production drop seam. The
+                    // seam is set AFTER start() (start() owns the channel's on_error); a clean
+                    // tear_down sets m_torn_down first, so it does not fire here.
+                    requester->on_transport_drop(
+                            [this]
+                            {
+                                ++drops_seen;
+                                driver->on_channel_dropped();
+                            });
+                });
 
         if(listen_first)
         {
@@ -126,19 +139,22 @@ struct tcp_reconnect
         {
             port = closed_port;
         }
-        driver.emplace(transport, io, cfg, pio::endpoint{"tcp", "127.0.0.1:" + std::to_string(port)}, k_seed);
+        driver.emplace(transport, io, cfg,
+                       pio::endpoint{"tcp", "127.0.0.1:" + std::to_string(port)}, k_seed);
         // The driver no longer self-wires the transport's dial-failure callback (a
         // shared transport's single callback cannot belong to one of many drivers);
         // the owner routes a failure to its sole driver.
-        transport.on_dial_failed([this](const pio::endpoint &, pio::io_error) {
-            driver->notify_dial_failed();
-        });
-        driver->on_redial([this] {
-            if(requester) requester->tear_down();
-        });
+        transport.on_dial_failed([this](const pio::endpoint &, pio::io_error)
+                                 { driver->notify_dial_failed(); });
+        driver->on_redial(
+                [this]
+                {
+                    if(requester)
+                        requester->tear_down();
+                });
     }
 
-    template <typename Pred>
+    template<typename Pred>
     void pump_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -167,11 +183,12 @@ reconnect_config fast_cfg()
 
 }
 
-TEST_CASE("asio reconnect: an established session whose channel drops re-dials and re-handshakes over real TCP",
+TEST_CASE("asio reconnect: an established session whose channel drops re-dials and re-handshakes "
+          "over real TCP",
           "[integration][reconnect][asio]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_reconnect h(fast_cfg(), /*listen_first=*/true);
@@ -198,19 +215,20 @@ TEST_CASE("asio reconnect: an established session whose channel drops re-dials a
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("asio reconnect: a dial to a closed port re-dials until a listener appears, then completes over real TCP",
+TEST_CASE("asio reconnect: a dial to a closed port re-dials until a listener appears, then "
+          "completes over real TCP",
           "[integration][reconnect][asio]")
 {
     constexpr int k_iterations = 30;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // Bind a listener to learn a free port, then stop it so the port is CLOSED.
-        ::asio::io_context probe_io;
+        ::asio::io_context    probe_io;
         pasio::asio_transport probe{probe_io};
         probe.listen({"tcp", "127.0.0.1:0"});
         const auto port = probe.port();
-        probe.close();   // the port is now closed → a dial there is refused
+        probe.close(); // the port is now closed → a dial there is refused
 
         tcp_reconnect h(fast_cfg(), /*listen_first=*/false, port);
         h.driver->start();

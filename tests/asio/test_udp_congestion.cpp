@@ -42,8 +42,8 @@
 #include <algorithm>
 
 namespace pasio = plexus::asio;
-namespace wire = plexus::wire;
-namespace pio = plexus::io;
+namespace wire  = plexus::wire;
+namespace pio   = plexus::io;
 
 namespace {
 
@@ -56,8 +56,11 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 // production uses) — not a mutable setter.
 inline pio::detail::udp_arq_config small_window_arq(std::size_t window)
 {
-    return pio::detail::udp_arq_config{
-        .window = window, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{120}, .max_retransmit = 12};
+    return pio::detail::udp_arq_config{.window         = window,
+                                       .initial_rto    = ms{20},
+                                       .min_rto        = ms{10},
+                                       .max_rto        = ms{120},
+                                       .max_retransmit = 12};
 }
 
 std::vector<std::byte> bytes_of(const std::string &s)
@@ -76,7 +79,11 @@ std::string str_of(std::span<const std::byte> b)
     return s;
 }
 
-enum class action { pass, drop };
+enum class action
+{
+    pass,
+    drop
+};
 
 // A programmable relay between a dialing client and a real server: it forwards every
 // datagram both ways and scripts per-data-segment drops so the test controls the loss
@@ -84,22 +91,22 @@ enum class action { pass, drop };
 // is consumed once), so the ARQ recovers under its RTO.
 struct relay
 {
-    ::asio::io_context &io;
-    ::asio::ip::udp::socket front;
-    ::asio::ip::udp::socket back;
-    ::asio::ip::udp::endpoint server_ep;
-    ::asio::ip::udp::endpoint client_ep;
-    ::asio::ip::udp::endpoint from;
+    ::asio::io_context         &io;
+    ::asio::ip::udp::socket     front;
+    ::asio::ip::udp::socket     back;
+    ::asio::ip::udp::endpoint   server_ep;
+    ::asio::ip::udp::endpoint   client_ep;
+    ::asio::ip::udp::endpoint   from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
-    std::deque<action> data_script;
-    int data_seen{0};
+    std::deque<action>          data_script;
+    int                         data_seen{0};
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
-        : io(ctx)
-        , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-        , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            : io(ctx)
+            , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
     {
         recv_front();
         recv_back();
@@ -110,8 +117,8 @@ struct relay
     [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
-        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq
-               && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
+        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq &&
+                wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
     }
 
     void to_server(std::span<const std::byte> dg)
@@ -122,34 +129,47 @@ struct relay
 
     void recv_front()
     {
-        front.async_receive_from(::asio::buffer(front_buf), from, [this](std::error_code ec, std::size_t n) {
-            if(ec) return;
-            client_ep = from;
-            std::span<const std::byte> dg{front_buf.data(), n};
-            if(is_data(dg))
-            {
-                ++data_seen;
-                action a = action::pass;
-                if(!data_script.empty()) { a = data_script.front(); data_script.pop_front(); }
-                if(a == action::pass) to_server(dg);
-            }
-            else to_server(dg);
-            recv_front();
-        });
+        front.async_receive_from(::asio::buffer(front_buf), from,
+                                 [this](std::error_code ec, std::size_t n)
+                                 {
+                                     if(ec)
+                                         return;
+                                     client_ep = from;
+                                     std::span<const std::byte> dg{front_buf.data(), n};
+                                     if(is_data(dg))
+                                     {
+                                         ++data_seen;
+                                         action a = action::pass;
+                                         if(!data_script.empty())
+                                         {
+                                             a = data_script.front();
+                                             data_script.pop_front();
+                                         }
+                                         if(a == action::pass)
+                                             to_server(dg);
+                                     }
+                                     else
+                                         to_server(dg);
+                                     recv_front();
+                                 });
     }
 
     void recv_back()
     {
-        back.async_receive_from(::asio::buffer(back_buf), from, [this](std::error_code ec, std::size_t n) {
-            if(ec) return;
-            if(client_ep.port() != 0)
-                front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
-            recv_back();
-        });
+        back.async_receive_from(::asio::buffer(back_buf), from,
+                                [this](std::error_code ec, std::size_t n)
+                                {
+                                    if(ec)
+                                        return;
+                                    if(client_ep.port() != 0)
+                                        front.send_to(::asio::buffer(back_buf.data(), n),
+                                                      client_ep);
+                                    recv_back();
+                                });
     }
 };
 
-template <typename Pred>
+template<typename Pred>
 void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
 {
     auto bound = std::chrono::steady_clock::now() + timeout;
@@ -166,29 +186,35 @@ void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
 // and window depth are configurable so the congestion path is exercised deterministically.
 struct fixture
 {
-    ::asio::io_context io;
-    pasio::udp_transport server;
-    pasio::udp_transport client;
+    ::asio::io_context                  io;
+    pasio::udp_transport                server;
+    pasio::udp_transport                client;
     std::unique_ptr<pasio::udp_channel> accepted;
     std::unique_ptr<pasio::udp_channel> dialed;
-    std::unique_ptr<relay> link;
-    std::vector<std::string> delivered;
+    std::unique_ptr<relay>              link;
+    std::vector<std::string>            delivered;
 
     fixture(pio::congestion cong, std::size_t window)
-        : server(io, pasio::udp_channel::default_max_payload,
-                 pasio::udp_transport::arq_type::default_ladder, small_window_arq(window), cong)
-        , client(io, pasio::udp_channel::default_max_payload, fast_hs, small_window_arq(window), cong)
+            : server(io, pasio::udp_channel::default_max_payload,
+                     pasio::udp_transport::arq_type::default_ladder, small_window_arq(window), cong)
+            , client(io, pasio::udp_channel::default_max_payload, fast_hs, small_window_arq(window),
+                     cong)
     {
-        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch) {
-            accepted = std::move(ch);
-            accepted->on_data([this](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
-        });
+        server.on_accepted(
+                [this](std::unique_ptr<pasio::udp_channel> ch)
+                {
+                    accepted = std::move(ch);
+                    accepted->on_data([this](std::span<const std::byte> b)
+                                      { delivered.push_back(str_of(b)); });
+                });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [this] { return server.port() != 0; });
 
         link = std::make_unique<relay>(io, server.port());
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
-        client.dial({"udpr", "127.0.0.1:" + std::to_string(link->port())});   // reliable-datagram mode
+        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
+                         { dialed = std::move(ch); });
+        client.dial(
+                {"udpr", "127.0.0.1:" + std::to_string(link->port())}); // reliable-datagram mode
         pump_until(io, [this] { return dialed && accepted; });
     }
 };
@@ -199,7 +225,7 @@ TEST_CASE("udp congestion block: a full window back-pressures and every frame ar
           "[udp][congestion]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         fixture f{pio::congestion::block, /*window=*/4};
@@ -215,21 +241,21 @@ TEST_CASE("udp congestion block: a full window back-pressures and every frame ar
         // Publish 12 frames into a window of 4: 8 of them overrun the window and are
         // back-pressured into the bounded queue. send() (reliable mode) is non-blocking;
         // the acks drain the queue and ALL 12 must arrive in publish order.
-        constexpr int n = 12;
+        constexpr int            n = 12;
         std::vector<std::string> sent;
         for(int i = 0; i < n; ++i)
         {
             const std::string p = "block-" + std::to_string(iter) + "-" + std::to_string(i);
             sent.push_back(p);
-            f.dialed->send(bytes_of(p));     // never blocks even when the window is full
+            f.dialed->send(bytes_of(p)); // never blocks even when the window is full
         }
         // The queue must have absorbed the overrun (more than the window was published).
         REQUIRE(f.dialed->backpressured() > 0);
 
         pump_until(f.io, [&] { return f.delivered.size() == static_cast<std::size_t>(n); });
-        REQUIRE(f.delivered == sent);                       // ALL arrive, in publish order
-        REQUIRE(f.dialed->backpressured() == 0);            // the queue fully drained
-        REQUIRE(f.dialed->dropped_count() == 0);            // block sheds NOTHING
+        REQUIRE(f.delivered == sent);            // ALL arrive, in publish order
+        REQUIRE(f.dialed->backpressured() == 0); // the queue fully drained
+        REQUIRE(f.dialed->dropped_count() == 0); // block sheds NOTHING
         ++proven;
     }
     REQUIRE(proven == k_iterations);
@@ -239,7 +265,7 @@ TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow
           "[udp][congestion]")
 {
     constexpr int k_iterations = 30;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // The reliable channel pair on a TINY window (1) so it is back-pressured the
@@ -253,14 +279,17 @@ TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow
         pasio::udp_transport be_server{f.io};
         pasio::udp_transport be_client{f.io, pasio::udp_channel::default_max_payload, fast_hs};
         std::unique_ptr<pasio::udp_channel> be_acc, be_dialed;
-        std::optional<std::string> be_got;
-        be_server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) {
-            be_acc = std::move(ch);
-            be_acc->on_data([&](std::span<const std::byte> b) { be_got = str_of(b); });
-        });
+        std::optional<std::string>          be_got;
+        be_server.on_accepted(
+                [&](std::unique_ptr<pasio::udp_channel> ch)
+                {
+                    be_acc = std::move(ch);
+                    be_acc->on_data([&](std::span<const std::byte> b) { be_got = str_of(b); });
+                });
         be_server.listen({"udp", "127.0.0.1:0"});
         pump_until(f.io, [&] { return be_server.port() != 0; });
-        be_client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { be_dialed = std::move(ch); });
+        be_client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
+                            { be_dialed = std::move(ch); });
         be_client.dial({"udp", "127.0.0.1:" + std::to_string(be_server.port())});
         pump_until(f.io, [&] { return be_dialed && be_acc; });
         REQUIRE(be_dialed != nullptr);
@@ -269,13 +298,13 @@ TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow
         // the first are back-pressured. publish() returns immediately (no block).
         for(int i = 0; i < 16; ++i)
             f.dialed->send(bytes_of("rel-" + std::to_string(iter) + "-" + std::to_string(i)));
-        REQUIRE(f.dialed->backpressured() > 0);             // genuinely back-pressured
+        REQUIRE(f.dialed->backpressured() > 0); // genuinely back-pressured
 
         // WHILE the reliable channel is saturated, the best_effort flow must complete —
         // if congestion=block had blocked the io_context, this would never be serviced.
         be_dialed->send(bytes_of("concurrent-alive"));
         pump_until(f.io, [&] { return be_got.has_value(); });
-        REQUIRE(be_got.has_value());                        // the loop kept servicing other work
+        REQUIRE(be_got.has_value()); // the loop kept servicing other work
         REQUIRE(*be_got == "concurrent-alive");
 
         // And the reliable flow still completes (back-pressure delivers, never deadlocks).
@@ -289,7 +318,7 @@ TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow
 TEST_CASE("udp congestion drop: a window-full frame is shed at the publisher", "[udp][congestion]")
 {
     constexpr int k_iterations = 100;
-    int proven = 0;
+    int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // A window of 2, congestion=drop: publish 5 frames. The first 2 fill the window;
@@ -306,15 +335,16 @@ TEST_CASE("udp congestion drop: a window-full frame is shed at the publisher", "
 
         // drop never enqueues — the backpressure queue stays empty; the overrun is shed.
         REQUIRE(f.dialed->backpressured() == 0);
-        REQUIRE(f.dialed->dropped_count() == static_cast<std::size_t>(n - 2));   // 3 shed past the window of 2
+        REQUIRE(f.dialed->dropped_count() ==
+                static_cast<std::size_t>(n - 2)); // 3 shed past the window of 2
 
         // The admitted (windowed) frames still deliver; the shed ones never arrive. Give
         // the path time to settle, then assert fewer than n were delivered (the guarantee
         // was opted out of for the shed segments).
         pump_until(f.io, [&] { return f.delivered.size() >= 2; });
         pump_until(f.io, [&] { return false; }, ms{60});
-        REQUIRE(f.delivered.size() < static_cast<std::size_t>(n));   // the shed frames are gone
-        REQUIRE(f.delivered.size() >= 2);                            // the windowed frames delivered
+        REQUIRE(f.delivered.size() < static_cast<std::size_t>(n)); // the shed frames are gone
+        REQUIRE(f.delivered.size() >= 2);                          // the windowed frames delivered
         ++proven;
     }
     REQUIRE(proven == k_iterations);
@@ -331,16 +361,22 @@ TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_b
     // The per-message ceiling is set to the byte cap so the back-pressure floor (which keeps a
     // single within-ceiling message always admissible) does not lift this deliberately small
     // cap — the stall edge being proven here is for BACKLOG beyond one within-ceiling message.
-    ::asio::io_context io;
-    pasio::udp_server server{io};                 // unbound: send_to is a no-op sink, the window never drains
-    constexpr std::size_t window = 2;
-    constexpr std::size_t frame_bytes = 3;        // "q-N" is three bytes
-    constexpr std::size_t queued = 3;             // frames that fit in the byte cap
-    constexpr std::size_t byte_cap = queued * frame_bytes;
-    pasio::udp_channel ch{io, server, ::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 9},
-                          pasio::udp_channel::default_max_payload, small_window_arq(window),
-                          pio::congestion::block, byte_cap, pio::detail::udp_channel_mode::reliable_datagram,
-                          /*initial_seq=*/0, /*max_message_bytes=*/byte_cap};
+    ::asio::io_context    io;
+    pasio::udp_server     server{io}; // unbound: send_to is a no-op sink, the window never drains
+    constexpr std::size_t window      = 2;
+    constexpr std::size_t frame_bytes = 3; // "q-N" is three bytes
+    constexpr std::size_t queued      = 3; // frames that fit in the byte cap
+    constexpr std::size_t byte_cap    = queued * frame_bytes;
+    pasio::udp_channel    ch{io,
+                             server,
+                             ::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 9},
+                             pasio::udp_channel::default_max_payload,
+                             small_window_arq(window),
+                             pio::congestion::block,
+                             byte_cap,
+                             pio::detail::udp_channel_mode::reliable_datagram,
+                             /*initial_seq=*/0,
+                             /*max_message_bytes=*/byte_cap};
 
     std::optional<pio::io_error> err;
     ch.on_error([&](pio::io_error e) { err = e; });
@@ -349,17 +385,18 @@ TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_b
     // the next window-full publish overflows the byte cap -> would_block.
     for(std::size_t i = 0; i < window + queued; ++i)
         ch.send(bytes_of("q-" + std::to_string(i)));
-    REQUIRE(ch.backpressured() == byte_cap);      // the queue holds 3 frames = the full byte cap
-    REQUIRE_FALSE(err.has_value());               // no stall yet — the byte cap is not exceeded
+    REQUIRE(ch.backpressured() == byte_cap); // the queue holds 3 frames = the full byte cap
+    REQUIRE_FALSE(err.has_value());          // no stall yet — the byte cap is not exceeded
 
-    ch.send(bytes_of("over"));                    // past window + byte cap -> the stall edge
+    ch.send(bytes_of("over")); // past window + byte cap -> the stall edge
     REQUIRE(err.has_value());
     REQUIRE(*err == pio::io_error::would_block);
-    REQUIRE(ch.backpressured() == byte_cap);      // still bounded at the byte cap (never grew)
-    REQUIRE(ch.dropped_count() == 0);             // block does not shed — it stalls
+    REQUIRE(ch.backpressured() == byte_cap); // still bounded at the byte cap (never grew)
+    REQUIRE(ch.dropped_count() == 0);        // block does not shed — it stalls
 }
 
-TEST_CASE("udp_congestion server bound: the shared outbound send queue is byte-bounded under a saturating burst",
+TEST_CASE("udp_congestion server bound: the shared outbound send queue is byte-bounded under a "
+          "saturating burst",
           "[udp][congestion][bound]")
 {
     // The ONE shared udp_server send queue is byte-capped, so a saturating publisher cannot
@@ -369,22 +406,23 @@ TEST_CASE("udp_congestion server bound: the shared outbound send queue is byte-b
     // the burst's summed bytes far exceed the default cap. The byte-capped queue refuses
     // past the cap so queued_send_bytes() holds at or below the cap throughout.
     ::asio::io_context io;
-    pasio::udp_server server{io};
+    pasio::udp_server  server{io};
     server.start(::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 0});
 
     const ::asio::ip::udp::endpoint dest{::asio::ip::make_address_v4("127.0.0.1"), 9};
-    std::vector<std::byte> kib(1024, std::byte{0x5A});
-    const std::size_t cap = pasio::udp_server::default_send_queue_bytes;
-    const std::size_t bursts = (cap / kib.size()) + 64;     // overshoot the cap
+    std::vector<std::byte>          kib(1024, std::byte{0x5A});
+    const std::size_t               cap    = pasio::udp_server::default_send_queue_bytes;
+    const std::size_t               bursts = (cap / kib.size()) + 64; // overshoot the cap
     for(std::size_t i = 0; i < bursts; ++i)
     {
-        server.send_to(kib, dest);                          // synchronous enqueue; NO poll between
-        REQUIRE(server.queued_send_bytes() <= cap);         // the structural memory bound
+        server.send_to(kib, dest);                  // synchronous enqueue; NO poll between
+        REQUIRE(server.queued_send_bytes() <= cap); // the structural memory bound
     }
     REQUIRE(server.queued_send_bytes() <= cap);
 }
 
-TEST_CASE("udp_server send: a transient per-datagram send error is counted, never storms on_error, and the drain continues",
+TEST_CASE("udp_server send: a transient per-datagram send error is counted, never storms on_error, "
+          "and the drain continues",
           "[udp][congestion][bound]")
 {
     // A best-effort UDP send failure must NOT fire on_error per datagram (an unreachable
@@ -399,27 +437,29 @@ TEST_CASE("udp_server send: a transient per-datagram send error is counted, neve
         ::asio::io_context io;
         // A byte cap large enough to admit the oversized datagrams (the queue must not
         // refuse them first — the failure under test is the send sink's, not the cap's).
-        pasio::udp_server server{io, pio::congestion::block, 1u << 20};
+        pasio::udp_server            server{io, pio::congestion::block, 1u << 20};
         std::optional<pio::io_error> err;
         server.on_error([&](pio::io_error e) { err = e; });
         server.start(::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 0});
 
         const ::asio::ip::udp::endpoint dest{::asio::ip::make_address_v4("127.0.0.1"), 9};
-        std::vector<std::byte> oversized(70000, std::byte{0x5A});   // past the 65507 IPv4 UDP max
-        constexpr int n = 4;
+        std::vector<std::byte> oversized(70000, std::byte{0x5A}); // past the 65507 IPv4 UDP max
+        constexpr int          n = 4;
         for(int i = 0; i < n; ++i)
             server.send_to(oversized, dest);
 
         pump_until(io, [&] { return server.send_error_count() == static_cast<std::size_t>(n); });
 
-        REQUIRE(server.send_error_count() == static_cast<std::size_t>(n));   // every oversized send counted
-        REQUIRE_FALSE(err.has_value());                                      // on_error NEVER fired per datagram
-        REQUIRE(server.queued_send_bytes() == 0);                            // the drain chained past every failure
-        REQUIRE(server.is_open());                                           // a transient error never closes the socket
+        REQUIRE(server.send_error_count() ==
+                static_cast<std::size_t>(n));     // every oversized send counted
+        REQUIRE_FALSE(err.has_value());           // on_error NEVER fired per datagram
+        REQUIRE(server.queued_send_bytes() == 0); // the drain chained past every failure
+        REQUIRE(server.is_open());                // a transient error never closes the socket
     }
 }
 
-TEST_CASE("udp congestion block: a sustained reliable load completes within a bounded budget (no freeze)",
+TEST_CASE("udp congestion block: a sustained reliable load completes within a bounded budget (no "
+          "freeze)",
           "[udp][congestion]")
 {
     // A sustained burst far exceeding the window must complete (the node does not freeze):
@@ -435,7 +475,7 @@ TEST_CASE("udp congestion block: a sustained reliable load completes within a bo
         script.push_back((i % 7 == 6) ? action::drop : action::pass);
     f.link->data_script = script;
 
-    constexpr int n = 200;
+    constexpr int            n = 200;
     std::vector<std::string> sent;
     for(int i = 0; i < n; ++i)
     {
@@ -448,13 +488,14 @@ TEST_CASE("udp congestion block: a sustained reliable load completes within a bo
     pump_until(f.io, [&] { return f.delivered.size() == static_cast<std::size_t>(n); }, ms{8000});
     const auto elapsed = std::chrono::steady_clock::now() - start;
 
-    REQUIRE(f.delivered.size() == static_cast<std::size_t>(n));   // every frame arrived
-    REQUIRE(f.delivered == sent);                                 // in publish order
-    REQUIRE(f.dialed->backpressured() == 0);                      // queue fully drained
-    REQUIRE(elapsed < std::chrono::seconds(8));                   // within the bounded budget (no freeze)
+    REQUIRE(f.delivered.size() == static_cast<std::size_t>(n)); // every frame arrived
+    REQUIRE(f.delivered == sent);                               // in publish order
+    REQUIRE(f.dialed->backpressured() == 0);                    // queue fully drained
+    REQUIRE(elapsed < std::chrono::seconds(8)); // within the bounded budget (no freeze)
 }
 
-TEST_CASE("udp congestion block: a windowed reliable burst stays byte-bounded and DRAINS on ack (E-001)",
+TEST_CASE("udp congestion block: a windowed reliable burst stays byte-bounded and DRAINS on ack "
+          "(E-001)",
           "[udp][congestion]")
 {
     // The E-001 drain-on-ack behavioral proof: a reliable burst far exceeding the ARQ
@@ -468,30 +509,32 @@ TEST_CASE("udp congestion block: a windowed reliable burst stays byte-bounded an
 
     // Observe the peak backpressure occupancy across the whole drain so we can assert it
     // stayed bounded (never grew without limit) yet was genuinely engaged (peaked > 0).
-    std::size_t peak_queued = 0;
+    std::size_t                  peak_queued = 0;
     std::optional<pio::io_error> err;
     f.dialed->on_error([&](pio::io_error e) { err = e; });
 
-    constexpr int n = 60;                          // 60 frames into a window of 4 -> ~56 parked
+    constexpr int            n = 60; // 60 frames into a window of 4 -> ~56 parked
     std::vector<std::string> sent;
     for(int i = 0; i < n; ++i)
     {
         const std::string p = "drain-" + std::to_string(i);
         sent.push_back(p);
-        f.dialed->send(bytes_of(p));               // non-blocking; overrun parks in the byte queue
+        f.dialed->send(bytes_of(p)); // non-blocking; overrun parks in the byte queue
         peak_queued = std::max(peak_queued, f.dialed->backpressured());
     }
-    REQUIRE(peak_queued > 0);                       // the queue genuinely absorbed the overrun
+    REQUIRE(peak_queued > 0); // the queue genuinely absorbed the overrun
 
     // Drive the io_context: each ack advances the window and drains the byte queue by
     // re-submitting admissible parked frames, observing the occupancy stays bounded.
-    pump_until(f.io, [&] {
-        peak_queued = std::max(peak_queued, f.dialed->backpressured());
-        return f.delivered.size() == static_cast<std::size_t>(n);
-    });
+    pump_until(f.io,
+               [&]
+               {
+                   peak_queued = std::max(peak_queued, f.dialed->backpressured());
+                   return f.delivered.size() == static_cast<std::size_t>(n);
+               });
 
-    REQUIRE_FALSE(err.has_value());                 // the bounded byte budget never overflowed
-    REQUIRE(f.delivered.size() == static_cast<std::size_t>(n));   // FULL delivery, never partial
-    REQUIRE(f.delivered == sent);                   // in publish order
-    REQUIRE(f.dialed->backpressured() == 0);        // the queue fully DRAINED on ack
+    REQUIRE_FALSE(err.has_value()); // the bounded byte budget never overflowed
+    REQUIRE(f.delivered.size() == static_cast<std::size_t>(n)); // FULL delivery, never partial
+    REQUIRE(f.delivered == sent);                               // in publish order
+    REQUIRE(f.dialed->backpressured() == 0);                    // the queue fully DRAINED on ack
 }

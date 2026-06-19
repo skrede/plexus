@@ -37,7 +37,7 @@ namespace plexus::io {
 // The flood cap stays in the transport demux (insert is called only on an admitted
 // entry), so the registry holds only admitted entries and never grows unbounded.
 // Single-owner, no shared lifetime — the owner clears the block before it dies.
-template <typename Channel, typename Payload = std::monostate>
+template<typename Channel, typename Payload = std::monostate>
 class pending_dial_registry
 {
 public:
@@ -47,7 +47,7 @@ public:
     using defer_destroy = plexus::detail::move_only_function<void(std::unique_ptr<Channel>)>;
 
     explicit pending_dial_registry(defer_destroy defer)
-        : m_defer(std::move(defer))
+            : m_defer(std::move(defer))
     {
     }
 
@@ -143,11 +143,11 @@ private:
     struct entry
     {
         std::unique_ptr<Channel> channel;
-        Payload payload;
+        Payload                  payload;
     };
 
-    defer_destroy m_defer;
-    std::unordered_map<Channel *, entry> m_pending;
+    defer_destroy                                           m_defer;
+    std::unordered_map<Channel *, entry>                    m_pending;
     std::unordered_map<Channel *, std::unique_ptr<Channel>> m_accepted;
 };
 

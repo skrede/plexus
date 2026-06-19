@@ -58,10 +58,10 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts()
 {
     plexus::node_options opts;
-    opts.reconnect = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000),
-                                                  std::nullopt, std::nullopt};
-    opts.redial_seed = 0x57A11Du;
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
+                                                     std::chrono::milliseconds(2000), std::nullopt,
+                                                     std::nullopt};
+    opts.redial_seed  = 0x57A11Du;
     opts.dial_eagerly = false;
     return opts;
 }
@@ -69,7 +69,7 @@ plexus::node_options make_opts()
 plexus::node_options make_eager_opts()
 {
     plexus::node_options opts = make_opts();
-    opts.dial_eagerly = true;
+    opts.dial_eagerly         = true;
     return opts;
 }
 
@@ -78,10 +78,10 @@ plexus::node_options make_eager_opts()
 // pumped after the node's dtor returns.
 struct fixture
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     void drive() { ex.drain(); }
 };
@@ -91,11 +91,11 @@ struct fixture
 // unsubscribe that drives the producer's detach -> on_qos_change{unsubscribed}.
 struct pair_fixture
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_bus<>       bus;
+    inproc_executor<>  ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    static_discovery   disc{{}};
 
     plexus::node_id id_a{make_id(0xA1)};
     plexus::node_id id_b{make_id(0xB1)};
@@ -122,8 +122,8 @@ struct pair_fixture
 TEST_CASE("integration.spine a custom observer reconstructs the ordered node/endpoint timeline",
           "[integration][inproc][spine]")
 {
-    fixture fx;
-    recording_observer rec;
+    fixture               fx;
+    recording_observer    rec;
     const plexus::node_id id = make_id(0x0A);
 
     {
@@ -133,9 +133,10 @@ TEST_CASE("integration.spine a custom observer reconstructs the ordered node/end
         // The create edge is posted from the ctor — but the observer registered after the
         // ctor returned, so this run witnesses create via the same pump as the rest.
         {
-            plexus::publisher<> pub{n, "topic"};
-            plexus::subscriber<> sub{n, "topic",
-                [](std::span<const std::byte>, const plexus::io::message_info &) {}};
+            plexus::publisher<>  pub{n, "topic"};
+            plexus::subscriber<> sub{
+                    n, "topic",
+                    [](std::span<const std::byte>, const plexus::io::message_info &) {}};
             fx.drive();
 
             // The declare + register edges surface after the pump (the handles still live).
@@ -160,8 +161,8 @@ TEST_CASE("integration.spine a custom observer reconstructs the ordered node/end
 TEST_CASE("integration.spine a moved-from publisher handle fires no drop edge",
           "[integration][inproc][spine]")
 {
-    fixture fx;
-    recording_observer rec;
+    fixture               fx;
+    recording_observer    rec;
     const plexus::node_id id = make_id(0x0B);
 
     inproc_node n{fx.ex, fx.disc, id, fx.ta, make_opts()};
@@ -182,12 +183,13 @@ TEST_CASE("integration.spine a moved-from publisher handle fires no drop edge",
     REQUIRE(rec.for_topic("moved").publisher_dropped == 1);
 }
 
-TEST_CASE("integration.spine the wire unsubscribe (refcount 1->0) surfaces on_qos_change unsubscribed",
+TEST_CASE("integration.spine the wire unsubscribe (refcount 1->0) surfaces on_qos_change "
+          "unsubscribed",
           "[integration][inproc][spine]")
 {
-    pair_fixture fx;
+    pair_fixture       fx;
     recording_observer rec;
-    fx.b.router().add_observer(rec);   // the subscriber node owns the demand-side wire edge
+    fx.b.router().add_observer(rec); // the subscriber node owns the demand-side wire edge
     fx.connect();
     REQUIRE(fx.b.router().is_connected(fx.id_a));
 
@@ -195,8 +197,9 @@ TEST_CASE("integration.spine the wire unsubscribe (refcount 1->0) surfaces on_qo
         // The subscriber lives on B; its demand emits a wire subscribe toward A (the
         // demand-side attach). Retiring it (scope exit) is the last local sub, so B's
         // session detach fires the wire unsubscribe and its 1->0 on_qos_change edge.
-        plexus::subscriber<> sub{fx.b, "wire-topic",
-            [](std::span<const std::byte>, const plexus::io::message_info &) {}};
+        plexus::subscriber<> sub{
+                fx.b, "wire-topic",
+                [](std::span<const std::byte>, const plexus::io::message_info &) {}};
         fx.drive();
         REQUIRE(rec.unsubscribed_for("wire-topic") == 0);
     }

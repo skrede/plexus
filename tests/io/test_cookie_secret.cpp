@@ -28,7 +28,8 @@ namespace {
 // rides in msg). No OpenSSL.
 hmac_fn fake_hmac()
 {
-    return [](std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out)
+    return [](std::span<const std::byte> key, std::span<const std::byte> msg,
+              std::span<std::byte> out)
     {
         if(out.size() != 32)
             return false;
@@ -38,9 +39,11 @@ hmac_fn fake_hmac()
             // message can cancel two distinct nonces). Deterministic over key||msg||i.
             unsigned acc = 0x811c9dc5u + static_cast<unsigned>(i);
             for(std::size_t k = 0; k < key.size(); ++k)
-                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u + static_cast<unsigned>(k);
+                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u +
+                        static_cast<unsigned>(k);
             for(std::size_t m = 0; m < msg.size(); ++m)
-                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u + static_cast<unsigned>(m + i);
+                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u +
+                        static_cast<unsigned>(m + i);
             out[i] = static_cast<std::byte>(acc & 0xffu);
         }
         return true;
@@ -74,7 +77,7 @@ TEST_CASE("io.cookie_secret mint then validate round-trips against the current n
           "[io][cookie_secret]")
 {
     cookie_secret secret{fake_hmac(), counter_rand()};
-    const auto addr = addr_of({127, 0, 0, 1, 0x1f, 0x90});
+    const auto    addr = addr_of({127, 0, 0, 1, 0x1f, 0x90});
 
     std::array<std::byte, cookie_secret::k_cookie_len> cookie{};
     REQUIRE(secret.mint(addr, cookie));
@@ -89,7 +92,7 @@ TEST_CASE("io.cookie_secret accepts a cookie minted before one rotation (two-non
           "[io][cookie_secret]")
 {
     cookie_secret secret{fake_hmac(), counter_rand()};
-    const auto addr = addr_of({192, 0, 2, 5, 0x04, 0xd2});
+    const auto    addr = addr_of({192, 0, 2, 5, 0x04, 0xd2});
 
     std::array<std::byte, cookie_secret::k_cookie_len> cookie{};
     REQUIRE(secret.mint(addr, cookie));
@@ -108,7 +111,7 @@ TEST_CASE("io.cookie_secret accepts a cookie minted before one rotation (two-non
 TEST_CASE("io.cookie_secret rejects a forged / near-miss cookie", "[io][cookie_secret]")
 {
     cookie_secret secret{fake_hmac(), counter_rand()};
-    const auto addr = addr_of({127, 0, 0, 1, 0x1f, 0x90});
+    const auto    addr = addr_of({127, 0, 0, 1, 0x1f, 0x90});
 
     std::array<std::byte, cookie_secret::k_cookie_len> cookie{};
     REQUIRE(secret.mint(addr, cookie));
@@ -134,7 +137,7 @@ TEST_CASE("io.cookie_secret retains the prior nonces when a rotation's rand_fn f
 {
     // A rand that succeeds for the ctor fills then fails: the rotation must RETAIN the prior
     // good nonces (the window does not advance), so a current cookie still validates.
-    auto fills = std::make_shared<int>(0);
+    auto    fills = std::make_shared<int>(0);
     rand_fn flaky = [fills](std::span<std::byte> out)
     {
         if(*fills >= 3) // key + cur + prev succeed; any rotation fill fails
@@ -146,7 +149,7 @@ TEST_CASE("io.cookie_secret retains the prior nonces when a rotation's rand_fn f
     };
 
     cookie_secret secret{fake_hmac(), std::move(flaky)};
-    const auto addr = addr_of({203, 0, 113, 9, 0x00, 0x35});
+    const auto    addr = addr_of({203, 0, 113, 9, 0x00, 0x35});
 
     std::array<std::byte, cookie_secret::k_cookie_len> cookie{};
     REQUIRE(secret.mint(addr, cookie));

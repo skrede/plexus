@@ -56,7 +56,7 @@
 // contracts. The forwarder-side mechanism (route_message_medium + the on_companion_route
 // hook) stays built + unit-proven in test_shm_wire_fallback.cpp for that future lift.
 
-namespace pio = plexus::io::shm;
+namespace pio   = plexus::io::shm;
 namespace pcore = plexus::io;
 using plexus::io::endpoint;
 using plexus::shm::posix_shm_region_broker;
@@ -85,16 +85,16 @@ using member_t = pio::shm_mux_member<posix_shm_region_broker, spin_notifier>;
 // memory). It records whether the mux routed the dial to it.
 struct stream_channel
 {
-    endpoint      ep;
-    std::uint64_t key = plexus::io::detail::next_scheduler_key();
-    void send(std::span<const std::byte>) {}
-    void close() {}
+    endpoint               ep;
+    std::uint64_t          key = plexus::io::detail::next_scheduler_key();
+    void                   send(std::span<const std::byte>) {}
+    void                   close() {}
     [[nodiscard]] endpoint remote_endpoint() const { return ep; }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
     void on_closed(plexus::detail::move_only_function<void()>) {}
     void on_error(plexus::detail::move_only_function<void(pcore::io_error)>) {}
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
-    [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+    [[nodiscard]] std::size_t   backpressured() const noexcept { return 0; }
     [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return key; }
 };
 
@@ -104,7 +104,7 @@ struct stream_member
 {
     using channel_type = stream_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
-    static constexpr pcore::transport_kind mux_tier = pcore::transport_kind::local;
+    static constexpr pcore::transport_kind           mux_tier = pcore::transport_kind::local;
 
     bool dialed = false;
 
@@ -112,8 +112,13 @@ struct stream_member
     void dial(const endpoint &) { dialed = true; }
     void close() {}
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<stream_channel>)>) {}
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<stream_channel>, const endpoint &)>) {}
-    void on_dial_failed(plexus::detail::move_only_function<void(const endpoint &, pcore::io_error)>) {}
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<stream_channel>,
+                                                           const endpoint &)>)
+    {
+    }
+    void on_dial_failed(plexus::detail::move_only_function<void(const endpoint &, pcore::io_error)>)
+    {
+    }
     void on_error(plexus::detail::move_only_function<void(pcore::io_error)>) {}
 };
 
@@ -128,21 +133,20 @@ using mux_t = pcore::multiplexing_transport<member_t, stream_member>;
 std::string route_for_mode(const std::string &fqn, pio::ring_geometry_mode mode)
 {
     posix_shm_region_broker broker;
-    member_t member{broker, pcore::reliability::reliable, pcore::congestion::block};
+    member_t                member{broker, pcore::reliability::reliable, pcore::congestion::block};
     member.set_topic_geometry(fqn, 4 * k_kib, pio::shm_geometry{2u, mode});
 
     stream_member stream;
-    mux_t mux{member, stream, {}, pio::prefer_shm_hook(member)};
+    mux_t         mux{member, stream, {}, pio::prefer_shm_hook(member)};
 
     std::string dialed_scheme;
-    mux.on_dialed([&](std::unique_ptr<pcore::polymorphic_byte_channel> ch, const endpoint &) {
-        dialed_scheme = ch->remote_endpoint().scheme;
-    });
+    mux.on_dialed([&](std::unique_ptr<pcore::polymorphic_byte_channel> ch, const endpoint &)
+                  { dialed_scheme = ch->remote_endpoint().scheme; });
 
     mux.dial(endpoint{"shm", fqn});
 
     if(dialed_scheme == "shm")
-        return "shm";   // the ring acquired and the hook preferred it
+        return "shm"; // the ring acquired and the hook preferred it
     if(stream.dialed)
         return "stream"; // the hook declined the ring and fell back to the wire member
     return "none";
@@ -170,8 +174,8 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
+                     0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -187,8 +191,8 @@ bool wire_leg_roundtrip(std::size_t over_cap_bytes)
         return false;
 
     const std::size_t region_bytes = over_cap_bytes + sizeof(std::uint64_t);
-    void *shared = ::mmap(nullptr, region_bytes, PROT_READ | PROT_WRITE,
-                          MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *shared = ::mmap(nullptr, region_bytes, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS,
+                          -1, 0);
     if(shared == MAP_FAILED)
     {
         ::munmap(c, sizeof(coord));
@@ -207,16 +211,16 @@ bool wire_leg_roundtrip(std::size_t over_cap_bytes)
         while(c->regions_ready.load(std::memory_order_acquire) == 0)
             ;
         const std::uint64_t len = c->expect_len.load(std::memory_order_acquire);
-        const auto *payload = static_cast<const std::byte *>(shared) + sizeof(std::uint64_t);
+        const auto *payload     = static_cast<const std::byte *>(shared) + sizeof(std::uint64_t);
         const std::uint64_t got = fnv1a(std::span<const std::byte>{payload, len});
-        const bool ok = got == c->expect_hash.load(std::memory_order_acquire);
+        const bool          ok  = got == c->expect_hash.load(std::memory_order_acquire);
         c->bytes_ok.store(ok ? 1u : 0u, std::memory_order_release);
         c->child_done.store(1u, std::memory_order_release);
         ::_exit(ok ? 0 : 1);
     }
 
     std::vector<std::byte> payload(over_cap_bytes, std::byte{0xCD});
-    auto *dst = static_cast<std::byte *>(shared) + sizeof(std::uint64_t);
+    auto                  *dst = static_cast<std::byte *>(shared) + sizeof(std::uint64_t);
     std::memcpy(dst, payload.data(), payload.size());
     c->expect_len.store(payload.size(), std::memory_order_release);
     c->expect_hash.store(fnv1a(std::span<const std::byte>{payload.data(), payload.size()}),
@@ -229,7 +233,7 @@ bool wire_leg_roundtrip(std::size_t over_cap_bytes)
     while(::waitpid(pid, &status, 0) < 0)
         ;
     const bool ok = WIFEXITED(status) && WEXITSTATUS(status) == 0 &&
-                    c->bytes_ok.load(std::memory_order_acquire) == 1u;
+            c->bytes_ok.load(std::memory_order_acquire) == 1u;
     ::munmap(shared, region_bytes);
     ::munmap(c, sizeof(coord));
     return ok;
@@ -237,7 +241,8 @@ bool wire_leg_roundtrip(std::size_t over_cap_bytes)
 
 }
 
-TEST_CASE("shm.wire_fallback_node a wire_fallback topic's same-host channel is the WIRE, the ring modes prefer SHM",
+TEST_CASE("shm.wire_fallback_node a wire_fallback topic's same-host channel is the WIRE, the ring "
+          "modes prefer SHM",
           "[shm][wire_fallback][node]")
 {
     // The medium asserted at the production selection seam: the SAME prefer_shm_hook the
@@ -251,8 +256,9 @@ TEST_CASE("shm.wire_fallback_node a wire_fallback topic's same-host channel is t
     REQUIRE(route_for_mode(base + ".bel", pio::ring_geometry_mode::best_effort_large) == "shm");
 }
 
-TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without holding a ring refcount",
-          "[shm][wire_fallback][node]")
+TEST_CASE(
+        "shm.wire_fallback_node can_acquire declines wire_fallback without holding a ring refcount",
+        "[shm][wire_fallback][node]")
 {
     // The fail-safe decline is also refcount-honest: a declined wire_fallback probe never
     // acquires the ring, so it holds NO bump to abandon (the probe/abandon discipline
@@ -261,9 +267,10 @@ TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without hol
     const std::string fqn = "topic.wfbn.refcount." + std::to_string(::getpid());
 
     posix_shm_region_broker broker;
-    member_t member{broker, pcore::reliability::reliable, pcore::congestion::block};
+    member_t                member{broker, pcore::reliability::reliable, pcore::congestion::block};
 
-    member.set_topic_geometry(fqn, 4 * k_kib, pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback});
+    member.set_topic_geometry(fqn, 4 * k_kib,
+                              pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback});
     REQUIRE_FALSE(member.can_acquire(endpoint{"shm", fqn}));
     // No bump was held: a release of an unheld pair is a no-op (the registry's 1->0 gate is
     // never crossed), and the slot for the fqn is absent — proven by a fresh probe still
@@ -274,10 +281,11 @@ TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without hol
     member.set_topic_geometry(rel_fqn, 4 * k_kib,
                               pio::shm_geometry{2u, pio::ring_geometry_mode::reliable_preserving});
     REQUIRE(member.can_acquire(endpoint{"shm", rel_fqn}));
-    member.abandon(endpoint{"shm", rel_fqn});   // drop the held probe bump (the hook chose otherwise)
+    member.abandon(endpoint{"shm", rel_fqn}); // drop the held probe bump (the hook chose otherwise)
 }
 
-TEST_CASE("shm.wire_fallback_node an over-cap message crosses the same-host wire byte-exact, repeated",
+TEST_CASE("shm.wire_fallback_node an over-cap message crosses the same-host wire byte-exact, "
+          "repeated",
           "[shm][wire_fallback][node]")
 {
     // The rescue / never-dropped guarantee: a wire_fallback message larger than the cap
