@@ -16,6 +16,8 @@
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
 
+#include "plexus/io/detail/procedure_fanout.h"
+
 #include "plexus/detail/compat.h"
 
 #include <span>
@@ -57,6 +59,10 @@ namespace plexus::io {
 // frame_router owns the type switch and hands each the inner header-off payload.
 // The wire_forwarder maintainability gate is asserted in the oracle over a
 // concrete Policy (the class is templated), mirroring message_forwarder.
+//
+// over-limit: one cohesive req/res correlation engine; splitting scatters the per-peer outstanding
+// table + the reused scratch/active-request state (the rpc fan + send-frame helpers already
+// extracted to detail/).
 template<typename Policy>
     requires plexus::Policy<Policy>
 class procedure_forwarder
@@ -169,8 +175,8 @@ public:
                                        .type_hash_2    = 0,
                                        .correlation_id = corr_id};
         wire::encode_rpc_request_into(m_req_scratch, hdr, param);
-        send_data(p.channel, wire::msg_type::rpc_request, m_req_scratch, session_id);
-        emit_rpc_call(fqn, corr_id);
+        detail::send_data(*this, p.channel, wire::msg_type::rpc_request, m_req_scratch, session_id);
+        detail::emit_rpc_call(*this, fqn, corr_id);
 
         auto [it, _] = per_peer.emplace(corr_id,
                                         pending_rpc{std::string{fqn}, std::move(on_response),
@@ -189,7 +195,7 @@ public:
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
         m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name);
-        send_subscribe(p.channel, fqn, hash);
+        detail::send_subscribe(*this, p.channel, fqn, hash);
         return true;
     }
 
@@ -260,7 +266,7 @@ public:
             auto status = m_endpoint.registry().fqn_for(req_hdr.topic_hash).empty()
                     ? wire::rpc_status::no_handler
                     : wire::rpc_status::topic_not_found;
-            return reply_status(p.channel, req_hdr, status, {}, session_id);
+            return detail::reply_status(*this, p.channel, req_hdr, status, {}, session_id);
         }
 
         // Stage the active request context, then hand the handler the forwarder's
@@ -270,7 +276,7 @@ public:
         m_active_req_hdr    = req_hdr;
         m_active_session_id = session_id;
         ensure_reply_ready();
-        emit_rpc_serve(hash_it->second, req_hdr.correlation_id);
+        detail::emit_rpc_serve(*this, hash_it->second, req_hdr.correlation_id);
         m_providers.find(hash_it->second)->second(decoded->param_data, m_reply);
     }
 
@@ -295,11 +301,26 @@ public:
         pending_rpc pending = std::move(entry_it->second);
         peer_it->second.erase(entry_it);
         pending.timer->cancel(); // cancel-on-match: no late timeout for a resolved call
-        emit_rpc_reply(pending.fqn, decoded->header.correlation_id, decoded->status);
+        detail::emit_rpc_reply(*this, pending.fqn, decoded->header.correlation_id, decoded->status);
         pending.on_response(decoded->status, decoded->return_data);
     }
 
 private:
+    template<typename F>
+    friend void detail::emit_rpc_call(F &, std::string_view, std::uint64_t);
+    template<typename F>
+    friend void detail::emit_rpc_serve(F &, std::string_view, std::uint64_t);
+    template<typename F>
+    friend void detail::emit_rpc_reply(F &, std::string_view, std::uint64_t, wire::rpc_status);
+    template<typename F, typename C>
+    friend void detail::reply_status(F &, C &, const wire::bidirectional_header &, wire::rpc_status,
+                                     std::span<const std::byte>, std::uint64_t);
+    template<typename F, typename C>
+    friend void detail::send_data(F &, C &, wire::msg_type, std::span<const std::byte>,
+                                  std::uint64_t);
+    template<typename F, typename C>
+    friend void detail::send_subscribe(F &, C &, std::string_view, std::uint64_t);
+
     // A registered outstanding request. Owns its deadline timer (one heap node per
     // outstanding call, consistent with the bounded per-call map cost — NOT a
     // dispatch-path allocation) so the entry stays movable on a matched response.
@@ -352,44 +373,9 @@ private:
             return;
         m_reply = [this](wire::rpc_status status, std::span<const std::byte> return_data)
         {
-            reply_status(*m_active_channel, m_active_req_hdr, status, return_data,
-                         m_active_session_id);
+            detail::reply_status(*this, *m_active_channel, m_active_req_hdr, status, return_data,
+                                 m_active_session_id);
         };
-    }
-
-    // reply_status: frame an rpc_response carrying the request's correlation_id back
-    // to the peer (source = procedure) and send it through reused scratch. The
-    // correlation_id alone matches the response to its pending request; the type tag
-    // words are reserved zeroes carrying no type-matching authority (matching is
-    // subscribe-time discovery), so the response writes them 0 rather than echoing.
-    void reply_status(channel_type &channel, const wire::bidirectional_header &req_hdr,
-                      wire::rpc_status status, std::span<const std::byte> return_data,
-                      std::uint64_t session_id)
-    {
-        wire::bidirectional_header resp_hdr{.source         = wire::endpoint_source_type::procedure,
-                                            .sequence       = m_endpoint.next_sequence(),
-                                            .topic_hash     = req_hdr.topic_hash,
-                                            .type_hash_1    = 0,
-                                            .type_hash_2    = 0,
-                                            .correlation_id = req_hdr.correlation_id};
-        wire::encode_rpc_response_into(m_resp_scratch, resp_hdr, status, return_data);
-        send_data(channel, wire::msg_type::rpc_response, m_resp_scratch, session_id);
-    }
-
-    // send_data: emit a DATA frame (rpc_request / rpc_response) carrying the per-send
-    // session_id epoch so the receive-side staleness gate can fire. Absence keeps the
-    // unestablished sentinel 0 — the epoch is per-peer, passed per send (a node-shared
-    // forwarder fans to many peers), never a forwarder-wide member.
-    void send_data(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner,
-                   std::uint64_t session_id)
-    {
-        wire::frame_header fhdr{.type         = type,
-                                .flags        = 0,
-                                .session_id   = session_id,
-                                .timestamp_ns = wire::now_timestamp_ns(),
-                                .payload_len  = inner.size()};
-        wire::encode_frame_into(m_frame_scratch, fhdr, inner);
-        channel.send(m_frame_scratch);
     }
 
     // send_control: wrap an inner CONTROL payload (subscribe / unsubscribe /
@@ -398,38 +384,6 @@ private:
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
         m_endpoint.send_control(channel, type, inner);
-    }
-
-    void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash)
-    {
-        wire::subscribe_request req{.fqn        = std::string{fqn},
-                                    .type_name  = {},
-                                    .topic_hash = hash,
-                                    .type_hash  = 0,
-                                    .source     = wire::endpoint_source_type::caller};
-        m_endpoint.send_subscribe(channel, req);
-    }
-
-    // Hand the call/serve/reply edge to the engine sink (which posts a snapshot to the
-    // observer fan-out); absent = one branch. The surfaced view is envelope-only (the
-    // correlation_id, and status for a reply) — the param/return spans are transient, so
-    // no borrowed-span dangles into the deferred turn and no per-call copy is imposed.
-    void emit_rpc_call(std::string_view fqn, std::uint64_t corr_id)
-    {
-        if(m_on_rpc_call)
-            m_on_rpc_call(fqn, rpc_view{.correlation_id = corr_id});
-    }
-
-    void emit_rpc_serve(std::string_view fqn, std::uint64_t corr_id)
-    {
-        if(m_on_rpc_serve)
-            m_on_rpc_serve(fqn, rpc_view{.correlation_id = corr_id});
-    }
-
-    void emit_rpc_reply(std::string_view fqn, std::uint64_t corr_id, wire::rpc_status status)
-    {
-        if(m_on_rpc_reply)
-            m_on_rpc_reply(fqn, rpc_reply_view{.correlation_id = corr_id, .status = status});
     }
 
     void drop(std::string_view message) { m_logger.warn(message); }

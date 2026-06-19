@@ -18,6 +18,9 @@
 #include "plexus/io/peer_session_registry.h"
 #include "plexus/io/session_build_context.h"
 #include "plexus/io/shm/medium_coordinator.h"
+#include "plexus/io/detail/routing_sinks.h"
+#include "plexus/io/detail/routing_dispatch.h"
+#include "plexus/io/detail/routing_sink_install.h"
 
 #include "plexus/wire/topic_hash.h"
 #include "plexus/wire/frame_codec.h"
@@ -52,11 +55,16 @@ namespace plexus::io {
 // and captures `this`. The executor MUST be drained (or quiesced) before the engine is
 // destroyed — the structural single-owner discipline. There is no per-post liveness guard (a
 // guard reading a member would itself touch dead `this`); the owner sequences teardown.
+//
+// over-limit: one cohesive node-level engine; the demand-driven public verbs share the borrowed
+// substrate members and the posted observer fan-out, so splitting the API scatters that shared
+// state (the sink-install, sink-maker, and posted-dispatch clusters already extracted to detail/).
 template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
 {
 public:
+    using policy_type   = Policy;
     using executor_type = typename Policy::executor_type;
     using channel_type  = typename Policy::byte_channel_type;
     using registry_type = peer_session_registry<Policy, Transport, Clock>;
@@ -94,55 +102,7 @@ public:
             , m_coordinator(m_registry)
             , m_dial_eagerly(dial_eagerly)
     {
-        m_transport.on_dialed([this](std::unique_ptr<channel_type> ch, const endpoint &ep)
-                              { on_dialed(std::move(ch), ep); });
-        m_transport.on_accepted([this](std::unique_ptr<channel_type> ch)
-                                { on_accepted(std::move(ch)); });
-        m_transport.on_dial_failed([this](const endpoint &ep, io_error)
-                                   { m_registry.notify_dial_failed(ep); });
-        m_build.on_lifecycle = [this](const lifecycle_event &ev) { dispatch_lifecycle(ev); };
-        m_messages.on_drop(drop_sink());
-        // The data-path observation sinks post a snapshot to the observer fan-out on the
-        // borrowed executor, never inline from the per-publish loop (the DoS-amplifier guard);
-        // the posted closure addrefs the framed owner so the buffer outlives the deferred turn.
-        m_messages.on_published(publish_sink());
-        m_messages.on_delivered(deliver_sink());
-        m_messages.on_qos_change(qos_change_sink());
-        // The forwarder's demand transition drives the coordinator (read same_host, run the
-        // upgrade policy, acquire/release the additive ring through the injected gate).
-        m_messages.on_demand_transition([this](std::string_view node_name, std::string_view fqn,
-                                               demand_transition dir, demand_role role)
-                                        { m_coordinator.on_edge(node_name, fqn, dir, role); });
-        // A fitting same-host message rides the minted companion ring (zero-copy); an over-cap
-        // / off-host / un-minted message keeps the wire sub.channel (the dual-delivery fail-safe).
-        m_messages.on_companion_route(
-                [this](std::string_view node_name, std::string_view fqn,
-                       std::size_t bytes) -> channel_type *
-                { return m_coordinator.companion_for(node_name, fqn, bytes); });
-        // The typed fast path forces its lazy encode ONLY for a topic the policy selects at
-        // payload fidelity and admits this tick, reusing the publish path's now_ns (no extra
-        // clock read). An unset hook keeps the fast path zero-encode.
-        m_messages.set_capture_wants_payload(
-                [this](std::uint64_t hash)
-                { return m_capture.wants_payload(hash, wire::now_timestamp_ns()); });
-        m_procedures.on_rpc_call(rpc_call_sink());
-        m_procedures.on_rpc_serve(rpc_serve_sink());
-        m_procedures.on_rpc_reply(rpc_reply_sink());
-        // A data frame stamps deadline + presence; a heartbeat stamps presence only. Both stores.
-        m_messages.set_on_data_stamp([this](const node_id &ep, std::uint64_t topic_hash)
-                                     { m_monitor.stamp_data(ep, topic_hash); });
-        m_build.on_stamp_seen = [this](const node_id &ep) { m_monitor.stamp_seen(ep); };
-        m_monitor.on_liveness([this](const liveness_event &ev)
-                              { Policy::post(m_executor, [this, ev] { fan_liveness(ev); }); });
-        // An additional per-tick action, NOT a second timer: emit a heartbeat to every
-        // connected peer so a silent-but-alive publisher still asserts presence.
-        m_monitor.on_tick_action(
-                [this]
-                {
-                    m_registry.for_each_connected([](const node_id &, session_type &s)
-                                                  { s.emit_heartbeat(); });
-                });
-        m_monitor.start();
+        detail::install_routing_sinks(*this);
     }
 
     // Operator-driven cold-path registration — no remote peer can grow the list.
@@ -159,104 +119,9 @@ public:
             m_capture.remove_observer();
     }
 
-    // A value-capturing, engine-posted callable: every drop fans out on the BORROWED executor
-    // over a snapshot, never synchronously from the site (the per-packet-inline-fire DoS guard).
-    [[nodiscard]] plexus::detail::move_only_function<void(const detail::drop_event &)> drop_sink()
-    {
-        return [this](const detail::drop_event &ev) { post_drop(ev); };
-    }
-
-    // The on_wire tap, shaped like drop_sink so the decorator stays recorder-agnostic. Each
-    // frame posts via post_wire — the io→executor crossing that keeps the ring single-writer.
-    // The decorator stamps the per-direction sequence; the peer identity is bound at the
-    // channel-mint point, so the wire_record carries both offline cross-node loss-join keys.
-    [[nodiscard]] plexus::detail::move_only_function<void(recording::wire_direction, std::uint64_t,
-                                                          std::span<const std::byte>)>
-    wire_sink(const node_id &peer)
-    {
-        return [this, peer](recording::wire_direction dir, std::uint64_t seq,
-                            std::span<const std::byte> bytes) { post_wire(dir, seq, peer, bytes); };
-    }
-
-    // The data-path observation sinks, shaped like drop_sink. The fqn-copy + posted closure
-    // are a per-publish heap cost, so each SHORT-CIRCUITS through the capture gate before
-    // posting: the payload sinks consult should_emit(hash) (selection AND observer-presence
-    // behind one branch), the event-record sinks read observers_present() directly. An
-    // unobserved/unselected node pays one branch and allocates nothing (zero-alloc fast path).
-    [[nodiscard]] plexus::detail::move_only_function<void(std::uint64_t, std::string_view,
-                                                          const message_view &)>
-    publish_sink()
-    {
-        return [this](std::uint64_t hash, std::string_view fqn, const message_view &v)
-        {
-            if(!m_capture.should_emit(hash))
-                return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, v]
-                         { fan_out([&](observer &o) { o.on_message_published(fqn, v); }); });
-        };
-    }
-
-    [[nodiscard]] plexus::detail::move_only_function<
-            void(std::uint64_t, std::string_view, const message_info &, const message_view &)>
-    deliver_sink()
-    {
-        return [this](std::uint64_t hash, std::string_view fqn, const message_info &info,
-                      const message_view &v)
-        {
-            if(!m_capture.should_emit(hash))
-                return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, info, v]
-                         { fan_out([&](observer &o) { o.on_message_delivered(fqn, info, v); }); });
-        };
-    }
-
-    [[nodiscard]] plexus::detail::move_only_function<void(const qos_change_event &)>
-    qos_change_sink()
-    {
-        return [this](const qos_change_event &ev)
-        {
-            if(m_capture.observers_present() == 0)
-                return;
-            Policy::post(m_executor,
-                         [this, ev] { fan_out([&](observer &o) { o.on_qos_change(ev); }); });
-        };
-    }
-
-    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)>
-    rpc_call_sink()
-    {
-        return [this](std::string_view fqn, const rpc_view &v)
-        {
-            if(m_capture.observers_present() == 0)
-                return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, v]
-                         { fan_out([&](observer &o) { o.on_rpc_call(fqn, v); }); });
-        };
-    }
-
-    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_view &)>
-    rpc_serve_sink()
-    {
-        return [this](std::string_view fqn, const rpc_view &v)
-        {
-            if(m_capture.observers_present() == 0)
-                return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, v]
-                         { fan_out([&](observer &o) { o.on_rpc_serve(fqn, v); }); });
-        };
-    }
-
-    [[nodiscard]] plexus::detail::move_only_function<void(std::string_view, const rpc_reply_view &)>
-    rpc_reply_sink()
-    {
-        return [this](std::string_view fqn, const rpc_reply_view &v)
-        {
-            if(m_capture.observers_present() == 0)
-                return;
-            Policy::post(m_executor, [this, fqn = std::string{fqn}, v]
-                         { fan_out([&](observer &o) { o.on_rpc_reply(fqn, v); }); });
-        };
-    }
+    // The engine's posted drop sink, for an external component that routes drops through the
+    // engine's fan-out via an erased on_drop verb. The maker lives in detail/.
+    [[nodiscard]] auto drop_sink() { return detail::make_drop_sink(*this); }
 
     // NOT folded into the observer lifecycle surface — a timing lapse is a distinct event from
     // a connection edge. Fired POSTED on a missed-deadline / lease-expiry. Absent = dormant.
@@ -440,14 +305,14 @@ public:
     // after the node ctor still sees the created/declared edges posted before its registration.
     void post_participant(const participant_event &ev)
     {
-        Policy::post(m_executor,
-                     [this, ev] { fan_out([&](observer &o) { o.on_participant(ev); }); });
+        Policy::post(m_executor, [this, ev]
+                     { detail::fan_out(*this, [&](observer &o) { o.on_participant(ev); }); });
     }
 
     void post_endpoint(std::string_view fqn, const endpoint_event &ev)
     {
         Policy::post(m_executor, [this, fqn = std::string{fqn}, ev]
-                     { fan_out([&](observer &o) { o.on_endpoint(fqn, ev); }); });
+                     { detail::fan_out(*this, [&](observer &o) { o.on_endpoint(fqn, ev); }); });
     }
 
     // The destroy edge from ~node. UNLIKE the in-life edges, the engine is destroyed right
@@ -465,6 +330,35 @@ public:
     }
 
 private:
+    template<typename E>
+    friend void detail::install_routing_sinks(E &);
+    template<typename E>
+    friend auto detail::make_drop_sink(E &);
+    template<typename E>
+    friend auto detail::make_wire_sink(E &, const node_id &);
+    template<typename E>
+    friend auto detail::make_publish_sink(E &);
+    template<typename E>
+    friend auto detail::make_deliver_sink(E &);
+    template<typename E>
+    friend auto detail::make_qos_change_sink(E &);
+    template<typename E, typename Edge>
+    friend auto detail::make_rpc_sink(E &, Edge);
+    template<typename E, typename Deliver>
+    friend void detail::fan_out(E &, Deliver);
+    template<typename E>
+    friend void detail::post_edge(E &, const lifecycle_event &,
+                                  void (observer::*)(const node_id &, std::string_view, peer_kind));
+    template<typename E>
+    friend void detail::post_rejected(E &, const lifecycle_event &);
+    template<typename E>
+    friend void detail::post_drop(E &, const detail::drop_event &);
+    template<typename E>
+    friend void detail::post_security(E &, const security_event &);
+    template<typename E>
+    friend void detail::post_wire(E &, recording::wire_direction, std::uint64_t, const node_id &,
+                                  std::span<const std::byte>);
+
     // Forwards each session's security edge into the engine's posted fan-out. Installed by
     // reference — the engine outlives every session built from the context.
     struct security_fanout : observer
@@ -474,7 +368,7 @@ private:
                 : engine(e)
         {
         }
-        void on_security(const security_event &ev) override { engine.post_security(ev); }
+        void on_security(const security_event &ev) override { detail::post_security(engine, ev); }
     };
 
     // Does the reach mask admit the peer's delivery tier? The default any admits every peer; a
@@ -531,8 +425,8 @@ private:
     // policy the engine owns, not a per-backend obligation. The drop stays POSTED.
     void wire_channel_drop(channel_type &channel)
     {
-        if constexpr(requires { channel.on_drop(drop_sink()); })
-            channel.on_drop(drop_sink());
+        if constexpr(requires { channel.on_drop(detail::make_drop_sink(*this)); })
+            channel.on_drop(detail::make_drop_sink(*this));
     }
 
     // Install the posted wire-capture sink onto a channel that carries the on_wire edge. A bare
@@ -541,8 +435,8 @@ private:
     // identity — the wire_record's cross-node join key.
     void wire_channel_capture(channel_type &channel, const node_id &peer)
     {
-        if constexpr(requires { channel.on_wire(wire_sink(peer)); })
-            channel.on_wire(wire_sink(peer));
+        if constexpr(requires { channel.on_wire(detail::make_wire_sink(*this, peer)); })
+            channel.on_wire(detail::make_wire_sink(*this, peer));
     }
 
     // Fans over a SNAPSHOT of m_observers so a callback that (un)registers an observer mutates
@@ -566,13 +460,16 @@ private:
 
         switch(ev.edge)
         {
-            case lifecycle_edge::connected: return post_edge(ev, &observer::on_peer_connected);
+            case lifecycle_edge::connected:
+                return detail::post_edge(*this, ev, &observer::on_peer_connected);
             case lifecycle_edge::disconnected:
-                return post_edge(ev, &observer::on_peer_disconnected);
-            case lifecycle_edge::reconnected: return post_edge(ev, &observer::on_peer_reconnected);
-            case lifecycle_edge::dead:        return post_edge(ev, &observer::on_peer_dead);
-            case lifecycle_edge::ready:       return post_edge(ev, &observer::on_peer_ready);
-            case lifecycle_edge::rejected:    return post_rejected(ev);
+                return detail::post_edge(*this, ev, &observer::on_peer_disconnected);
+            case lifecycle_edge::reconnected:
+                return detail::post_edge(*this, ev, &observer::on_peer_reconnected);
+            case lifecycle_edge::dead: return detail::post_edge(*this, ev, &observer::on_peer_dead);
+            case lifecycle_edge::ready:
+                return detail::post_edge(*this, ev, &observer::on_peer_ready);
+            case lifecycle_edge::rejected: return detail::post_rejected(*this, ev);
         }
     }
 
@@ -590,63 +487,6 @@ private:
     {
         if(m_on_liveness)
             m_on_liveness(ev);
-    }
-
-    // Skip any observer unregistered mid-turn so a callback may safely (un)register without
-    // corrupting the fan-out.
-    template<class Deliver>
-    void fan_out(Deliver deliver)
-    {
-        const auto snapshot = m_observers;
-        for(auto *o : snapshot)
-            if(std::find(m_observers.begin(), m_observers.end(), o) != m_observers.end())
-                deliver(*o);
-    }
-
-    void post_edge(const lifecycle_event &ev,
-                   void (observer::*edge)(const node_id &, std::string_view, peer_kind))
-    {
-        Policy::post(m_executor, [this, ev, edge]
-                     { fan_out([&](observer &o) { (o.*edge)(ev.id, ev.node_name, ev.kind); }); });
-    }
-
-    void post_rejected(const lifecycle_event &ev)
-    {
-        Policy::post(m_executor,
-                     [this, ev]
-                     {
-                         fan_out([&](observer &o)
-                                 { o.on_peer_rejected(ev.id, ev.node_name, ev.reason); });
-                     });
-    }
-
-    // The indirection that keeps a per-packet drop site off the synchronous observer path.
-    void post_drop(const detail::drop_event &ev)
-    {
-        Policy::post(m_executor, [this, ev] { fan_out([&](observer &o) { o.on_drop(ev); }); });
-    }
-
-    // Never inline from the session's teardown/refusal frame.
-    void post_security(const security_event &ev)
-    {
-        Policy::post(m_executor, [this, ev] { fan_out([&](observer &o) { o.on_security(ev); }); });
-    }
-
-    // Keeps the single-writer ring discipline (push only on the executor turn, never the io
-    // thread). The span into io-thread-owned bytes does NOT survive the post, so the frame is
-    // COPIED into an owned buffer carried BY MOVE into the turn and the span rebuilt over it.
-    // This copy-into-turn is the inherent every-packet cost of wire capture.
-    void post_wire(recording::wire_direction dir, std::uint64_t seq, const node_id &peer,
-                   std::span<const std::byte> bytes)
-    {
-        std::vector<std::byte> owned(bytes.begin(), bytes.end());
-        Policy::post(m_executor,
-                     [this, dir, seq, peer, owned = std::move(owned)]
-                     {
-                         const recording::wire_record rec{dir, seq, peer, 0u,
-                                                          std::span<const std::byte>{owned}};
-                         fan_out([&](observer &o) { o.on_wire(rec); });
-                     });
     }
 
     Transport                                           &m_transport;
