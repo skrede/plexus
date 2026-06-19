@@ -397,3 +397,50 @@ TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over 
     REQUIRE(wire_tap.count(medium::wire) == 2);
     REQUIRE(wire_tap.count(medium::shm) == 0);
 }
+
+TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the wire, not a dropped ring",
+          "[shm][wire_fallback]")
+{
+    // Regression: the per-message gate must see the FRAMED size, not the bare payload. A bare
+    // payload equal to the slot (4096) frames to slot+prefix > slot. A bare-size gate routed it
+    // to the companion ring only, where the oversize send was rejected and dropped while the
+    // wire was bypassed — a both-lanes loss. The framed-size gate keeps it on the wire.
+    const std::string fqn = "topic.wfb.frameover." + std::to_string(::getpid());
+
+    posix_shm_region_broker broker;
+    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    member.set_topic_geometry(fqn, 2 * k_kib,
+                              pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback});
+
+    std::unique_ptr<shm_channel> companion_ring;
+    member.on_accepted([&](std::unique_ptr<shm_channel> ch) { companion_ring = std::move(ch); });
+    member.listen(endpoint{"shm", fqn});
+    REQUIRE(companion_ring);
+
+    tap_channel wire_tap{medium::wire, "unix"};
+    tap_channel shm_tap{medium::shm, "unix", companion_ring.get()};
+
+    forwarder fwd;
+    fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
+    fwd.on_companion_route(
+        [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel * {
+            const auto g = member.resolved_geometry_for(std::string{route_fqn});
+            return pio::route_message_medium(g.mode, bytes, g.slot_capacity) ==
+                           pio::same_host_medium::shm
+                       ? &shm_tap
+                       : nullptr;
+        });
+
+    forwarder::peer p{wire_tap, "peer-node"};
+    fwd.attach_for_fanout(p, fqn);
+    wire_tap.reset();
+
+    // A bare payload exactly at the slot stride (4096): its frame prefix pushes the framed
+    // buffer past the slot, so the framed-size gate must keep it on the wire (delivered), not
+    // drop it to the undersized ring.
+    std::vector<std::byte> boundary(4 * k_kib, std::byte{0xEE});
+    fwd.publish(fqn, std::span<const std::byte>{boundary.data(), boundary.size()});
+
+    REQUIRE(wire_tap.count(medium::wire) == 1); // delivered over the wire fail-safe
+    REQUIRE(shm_tap.count(medium::shm) == 0);   // never routed to the undersized ring
+}

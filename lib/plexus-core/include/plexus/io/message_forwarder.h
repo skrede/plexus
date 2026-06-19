@@ -283,10 +283,15 @@ public:
                     // either non-wire-fallback mode all route over sub.channel with no
                     // change. The hook is UNSET when no such companion exists, so the two
                     // other modes (and every SHM-off build) take the byte-identical path.
+                    // Gate the companion route on the FRAMED size, not the bare payload: the
+                    // ring slot is sized in and carries framed bytes, so a bare-size gate would
+                    // route a near-cap message whose frame overflows the slot to SHM only, where
+                    // the oversize send is dropped and the wire fail-safe never runs (a loss on
+                    // both lanes).
                     channel_type *route = sub.channel;
                     if(m_companion_route)
                         if(channel_type *companion =
-                               m_companion_route(sub.node_name, fqn, payload.size()))
+                               m_companion_route(sub.node_name, fqn, framed.size()))
                             route = companion;
                     const detail::drop_cause cause =
                         m_egress.enqueue(*route, band, qos.congestion, framed);
