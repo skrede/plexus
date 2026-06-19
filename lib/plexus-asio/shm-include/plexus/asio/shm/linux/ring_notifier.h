@@ -28,6 +28,10 @@
 
 namespace plexus::asio::shm {
 
+// over-limit: one cohesive futex/eventfd wake protocol; the signal/arm/disarm/park steps share
+// the cross-process generation + park-state words and the eventfd/reactor descriptor, so
+// splitting them scatters the wake/wait/seq state across files.
+
 // The wakeup -> reactor bridge: the one asio-coupled shared-memory piece. It
 // satisfies the core notifier seam (signal / arm(drain) / disarm) and lands a
 // cross-process futex wake in the USER'S existing asio reactor turn without

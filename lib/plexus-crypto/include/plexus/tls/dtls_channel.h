@@ -44,23 +44,18 @@ struct ssl_st;
 
 namespace plexus::tls {
 
-// byte_channel for the secure-best_effort DTLS datagram transport: a per-peer
-// facade over the shared UDP socket (udp_channel's single-owner lifetime), driving
-// an OpenSSL DTLS 1.2 state machine through a BIO pair (there is no asio DTLS stream
-// wrapper, so the record pump lives in the .cpp with raw OpenSSL). Single-owner,
-// bare `this`, posted on_data — NO shared_from_this, NO strand.
+// over-limit: one cohesive DTLS channel surface; the byte_channel verbs + the OpenSSL/BIO/gate/
+// reassembler member state are one whole and the record-pump bodies already live in the .cpp
+// exception (no inline body remains to relocate), so the declaration surface + its member
+// invariants cannot be split without scattering the channel's shared SSL/fragment state.
 //
-//   Inbound:  deliver_inbound(datagram) -> BIO_write(external) -> SSL_read drain;
-//             each decrypted app frame posts on_data only after init-finished.
-//   Outbound: SSL_write -> BIO_read(external) drain -> server.send_to(span, dest);
-//             drain_outbound is called UNCONDITIONALLY after every SSL_write/SSL_read.
-//   Complete: fires ONCE on SSL_is_init_finished AND verify_result==X509_V_OK AND a
-//             non-null peer cert -> on_external_complete; else fail-closed.
-//   Retransmit: DTLSv1_get_timeout arms one asio_timer; on fire
-//             DTLSv1_handle_timeout + drain + re-arm; the dtor cancels it FIRST.
-//
-// Identity: after completion the peer SPKI digest is node_id and the cert
-// subject is node_name. NO plexus wire frame crosses the datagram channel.
+// byte_channel for the secure-best_effort DTLS datagram transport: a per-peer facade over the
+// shared UDP socket, driving an OpenSSL DTLS 1.2 state machine through a BIO pair (the record pump
+// lives in the .cpp with raw OpenSSL). Single-owner, bare `this`, posted on_data. Inbound
+// BIO_write+SSL_read drain; outbound SSL_write+BIO_read drain to server.send_to; complete fires
+// ONCE on init-finished AND verify_result==X509_V_OK AND a non-null peer cert (else fail-closed);
+// DTLSv1_get_timeout arms the retransmit timer. After completion the peer SPKI digest is node_id
+// and the cert subject node_name — NO plexus wire frame crosses the datagram channel.
 class dtls_channel
 {
 public:
@@ -73,32 +68,21 @@ public:
     using reassembler_type =
             io::detail::reassembler<::asio::io_context &, plexus::asio::asio_timer>;
 
-    // The per-channel LOGICAL payload ceiling — the upper term of the
-    // min(max_payload, DTLS_get_data_mtu) oversize cap. A caller MAY raise it above the
-    // single-datagram budget so the fragment path carries large messages; the default is
-    // the conservative single-Ethernet-datagram floor (parity with the pre-fragment cap).
+    // The per-channel LOGICAL payload ceiling — the upper term of min(max_payload,
+    // DTLS_get_data_mtu). A caller MAY raise it above the single-datagram budget so the fragment
+    // path carries large messages; the default is the single-Ethernet floor.
     static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
 
-    // The per-channel DTLS RECORD MTU handed to SSL_set_mtu at BOTH set-points (the
-    // construction edge AND the post-handshake completion re-assert). Unpinned from
-    // the former fixed k_dtls_mtu to a configurable per-channel value; the default stays the
-    // single-Ethernet-datagram floor so DTLS_get_data_mtu reports the real per-record fit
-    // (the encrypted budget the fragmenter splits against). It is DECOUPLED from max_payload:
-    // raising the logical ceiling (max_payload) lets a large message fragment, while each
-    // fragment still rides one DTLS record bounded by this MTU.
+    // The per-channel DTLS RECORD MTU handed to SSL_set_mtu (the encrypted budget the fragmenter
+    // splits against). DECOUPLED from max_payload: raising the logical ceiling lets a message
+    // fragment while each fragment still rides one DTLS record bounded by this MTU.
     static constexpr std::size_t default_record_mtu = io::mtu_budget{}.max_payload;
 
-    // Build over the shared udp_server: own NO socket, share the credential's
-    // SSL_CTX (up_ref'd), publish the per-instance peer-addr + the transport's
-    // cookie state into the SSL ex_data, and set accept/connect state per role. The
-    // cookie_state is borrowed from the transport (one HMAC key per node); the
-    // peer-addr block is this channel's own member.
-    // max_message_bytes is the per-MESSAGE size ceiling (the send-side oversize-reject AND the
-    // receive reassembler's per-message ceiling) — distinct from max_payload (the logical
-    // ceiling capping min(max_payload, record budget)). reassembly_budget is the always-on
-    // aggregate reassembly-memory cap, and reassembly_timeout the per-message reclaim window
-    // (a slow large message over best-effort DTLS needs it raised above the 5 s default).
-    // All required-WITH-default, bound to the shipped node-options constants.
+    // Build over the shared udp_server: own NO socket, share the credential's SSL_CTX (up_ref'd),
+    // publish the per-instance peer-addr + the transport's borrowed cookie state into the SSL
+    // ex_data, and set accept/connect state per role. max_message_bytes is the per-MESSAGE ceiling
+    // (send-side oversize-reject + the reassembler's ceiling); reassembly_budget the aggregate
+    // memory cap; reassembly_timeout the per-message reclaim window. All required-WITH-default.
     dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
                  ::asio::ip::udp::endpoint dest, const tls_credential &cred,
                  io::security::cookie_secret &cookie_state, role r,
@@ -114,9 +98,8 @@ public:
     dtls_channel(dtls_channel &&)                 = delete;
     dtls_channel &operator=(dtls_channel &&)      = delete;
 
-    // The dtor cancels the retransmit timer FIRST, then frees the external BIO
-    // (SSL_free frees the internal BIO). No on_closed post (a this-capturing post
-    // could outlive the channel — the owner quiesces the executor first).
+    // The dtor cancels the retransmit timer FIRST, then frees the external BIO (SSL_free frees the
+    // internal BIO). No on_closed post (a this-capturing post could outlive the channel).
     ~dtls_channel();
 
     // The seven byte_channel verbs.
@@ -139,26 +122,20 @@ public:
         m_on_protocol_close = std::move(cb);
     }
 
-    // The transport's private teardown seam, fired from the dtor — distinct from the
-    // consumer-facing on_closed/on_error the engine claims. The transport demuxes inbound
-    // by endpoint to a NON-owning raw ref; this lets it erase that ref when the engine
-    // (the channel's owner) destroys the channel, so a later datagram is a clean MISS
-    // rather than a freed-pointer deref.
+    // The transport's private teardown seam, fired from the dtor (distinct from on_closed/on_error
+    // the engine claims): it lets the transport erase its non-owning demux ref when the owner
+    // destroys the channel, so a later datagram is a clean MISS not a freed-pointer deref.
     void on_teardown(plexus::detail::move_only_function<void()> cb)
     {
         m_on_teardown = std::move(cb);
     }
 
-    // DTLS owns no socket and keeps no bounded userspace egress queue: the post-ready
-    // path fires application bytes straight through SSL_write -> drain_outbound to the
-    // shared UDP server (the handshake_gate buffers only DURING the handshake and stays
-    // empty after ready). It therefore reports 0 — "always accepts" — the accurate
-    // saturation signal for a fire-through datagram channel, NOT a short-circuit dodge.
+    // A fire-through datagram channel keeps no bounded egress queue (the handshake_gate buffers
+    // only during the handshake), so it reports 0 — "always accepts".
     [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
 
-    // The stable per-construction id the egress scheduler keys its band map on (read via a
-    // capability probe): unique per object, so a reused heap address cannot bleed a stale
-    // band entry across — the same minted-once key every byte channel carries.
+    // The stable per-construction egress-scheduler key (unique per object so a reused heap address
+    // cannot bleed a stale band entry across).
     [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return m_scheduler_key; }
 
     // Fires ONCE on a verified mutual completion (the transport resolves the FSM
@@ -191,16 +168,14 @@ private:
     [[nodiscard]] long dtls_mtu() const noexcept { return static_cast<long>(m_record_mtu); }
 
     void secure_send(std::span<const std::byte> bytes);
-    // The post-handshake encrypted per-record budget DTLS_get_data_mtu reports (the real
-    // per-record fit), capped by the configured logical ceiling. The fragmenter splits
-    // against THIS, not the configured ceiling (so each fragment rides one DTLS record).
+    // The post-handshake encrypted per-record budget (DTLS_get_data_mtu, capped by the logical
+    // ceiling); the fragmenter splits against THIS so each fragment rides one DTLS record.
     [[nodiscard]] std::size_t record_budget() const noexcept;
-    // Split an oversize-but-fragmentable frame across numbered records: each fragment is one
-    // FRAGMENTED-bit envelope (the 9-byte sub-header + slice), submitted through the gate to
-    // secure_send. A frame beyond the bounded max-message size is rejected, not fragmented.
+    // Split an oversize-but-fragmentable frame across numbered records (each one FRAGMENTED-bit
+    // envelope); a frame beyond the bounded max-message size is rejected, not fragmented.
     void send_large(std::span<const std::byte> bytes);
-    // A decrypted inbound record carrying the FRAGMENTED envelope: decode its sub-header
-    // (fail-closed) and feed the bounded reassembler; a completed message posts on_data.
+    // A decrypted inbound FRAGMENTED record: decode its sub-header (fail-closed) and feed the
+    // bounded reassembler; a completed message posts on_data.
     void feed_fragment(std::span<const std::byte> frame);
     void ensure_reassembler();
     void drain_outbound();
@@ -231,36 +206,29 @@ private:
     void                    *m_external_bio{nullptr}; // BIO* (opaque in the header)
     plexus::asio::asio_timer m_retransmit;
 
-    // The open-before-data gate, composed in DROP-PRESERVING / ready-edge mode: a
-    // pre-ready send is DROPPED (send() never submits before the ready edge), so the
-    // gate's buffer always stays empty here — it is NOT the enqueue-then-drain variant.
-    // try_complete() flips the ready edge via mark_ready; after that send() forwards
-    // straight through the gate to the post-ready SSL_write -> drain_outbound egress
-    // (the drain installed at construction).
+    // The open-before-data gate, in DROP-PRESERVING / ready-edge mode: a pre-ready send is
+    // DROPPED (send() never submits before the ready edge), so the gate's buffer stays empty here.
+    // try_complete() flips the ready edge; after that send() forwards straight through to the
+    // post-ready SSL_write -> drain_outbound egress.
     io::detail::handshake_gate m_gate;
 
     std::vector<unsigned char> m_peer_addr_block; // [len][addr bytes] for the cookie cb
-    // Sized at construction from m_record_mtu (+ DTLS record framing/cipher-expansion
-    // headroom), NOT a fixed constant: SSL_read is message-oriented (a record larger than
-    // the buffer is DISCARDED) and BIO_read chunks one record across reads (a record larger
-    // than the buffer would split across datagrams). A fixed buffer truncated/split records
-    // once record_mtu rose above it; sizing it from the knob keeps one record == one buffer.
+    // Sized at construction from m_record_mtu (+ record framing/cipher headroom), NOT a fixed
+    // constant: SSL_read is message-oriented (an over-buffer record is DISCARDED) and BIO_read
+    // chunks one record across reads — sizing from the knob keeps one record == one buffer.
     std::vector<unsigned char> m_drain_buf;
 
-    // The fragment/reassemble blocks, composed as owned members the channel drives directly
-    // (the assembly pattern): the splitter encodes each fragment into m_frag_scratch (reused,
-    // no per-send alloc); the bounded reassembler (built lazily on the first inbound fragment)
-    // sits on the decrypted drain_inbound path. Its per-message timeout timer is cancelled in
-    // the dtor FIRST (before m_gate.reset() / the OpenSSL teardown) so a timer firing after
-    // teardown is a guarded no-op (single-owner, no use-after-free, no shared_from_this).
+    // The fragment/reassemble blocks, owned members the channel drives directly: the splitter
+    // encodes into m_frag_scratch (reused); the bounded reassembler (built lazily on the first
+    // inbound fragment) sits on the decrypted drain_inbound path. Its timeout timer is cancelled
+    // in the dtor FIRST so a post-teardown fire is a guarded no-op.
     std::vector<std::byte>            m_frag_scratch;  // reused fragment-encode buffer
     std::uint16_t                     m_out_msg_id{0}; // per-message fragment grouping id (sender)
     std::unique_ptr<reassembler_type> m_reassembler;
 
-    // The verify-time depth-0 leaf facts the verify callback stashes here through the
-    // per-instance SSL ex_data slot (the ONE cert extraction per handshake). The
-    // completion edge derives node_id (first 16 bytes of spki_sha256) + node_name
-    // (subject) from this value — no second SPKI digest at the capture site.
+    // The verify-time depth-0 leaf facts the verify callback stashes through the per-instance SSL
+    // ex_data slot (the ONE cert extraction per handshake). The completion edge derives node_id
+    // (first 16 bytes of spki_sha256) + node_name (subject) from it.
     io::security::cert_facts m_peer_facts;
     node_id                  m_node_id{};
     std::string              m_node_name;

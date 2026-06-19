@@ -22,6 +22,10 @@
 
 namespace plexus::io::detail {
 
+// over-limit: one cohesive ARQ state machine; the selective-repeat sender window, the reorder
+// receiver, and the RFC-6298 RTO timer all advance the shared sequence/window/ack state, so
+// splitting them scatters the seq/window state across files.
+
 // The reliable-data ARQ engine: a selective-repeat sliding-window sender + a head-of-
 // line reorder receiver + an adaptive RFC-6298 RTO (Karn's algorithm), designed fresh
 // from standard selective-repeat literature (no prior-art port — the proven core

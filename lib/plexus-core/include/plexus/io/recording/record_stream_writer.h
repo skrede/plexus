@@ -10,6 +10,7 @@
 #include "plexus/io/recording/dropout_record.h"
 #include "plexus/io/recording/record_envelope.h"
 #include "plexus/io/recording/wire_record.h"
+#include "plexus/io/recording/detail/record_frame.h"
 
 #include "plexus/wire/cursor.h"
 #include "plexus/wire/crc32c.h"
@@ -38,17 +39,17 @@ struct type_schema_entry
     std::span<const std::byte> schema_data{};
 };
 
-// Encodes the flat append-only record stream into a caller-supplied scratch and returns
-// each piece as a contiguous span the caller frames (the byte_ring's [varint len][bytes]
-// IS the stream's per-record length prefix, so the writer emits the record PAYLOAD and
-// never re-frames). begin_stream emits the header (magic + format version + capture-clock
-// epoch) and the Definitions preamble (node identity + the recording-QoS in force + the
-// type_id->type_name table). Each record payload is [u8 category][fields...][crc32c],
-// the CRC-32C covering the category+fields so a recovery scan validates each record and
-// drops only a corrupt/truncated tail. A separately-pushed sync_marker record lets the
-// scan resynchronize the record boundary after skipping a corrupt span. Every field goes
-// through the reused wire::writer cursor — no hand-rolled offsets. The scratch is grown
-// ONCE and reused across records, so the steady-state encode allocates nothing.
+// over-limit: one cohesive record encoder; the per-category encode verbs (sample/drop/qos/
+// participant/endpoint/security/wire_frame/dropout) all write through the ONE reused wire::writer
+// over the shared m_scratch and finish through seal()/m_aux, so splitting them scatters that shared
+// scratch + CRC-seal discipline (the framing/CRC helpers are extracted to detail/record_frame.h).
+//
+// Encodes the flat append-only record stream into a caller-supplied scratch, returning each piece
+// as a contiguous span the caller frames (the byte_ring varint IS the per-record length prefix).
+// begin_stream emits the header + Definitions preamble; each record payload is
+// [u8 category][fields][crc32c] (the CRC covers category+fields so a recovery scan validates each
+// record). A sync_marker record lets the scan resync after a corrupt span. The scratch is grown
+// ONCE and reused, so the steady-state encode allocates nothing.
 class record_stream_writer
 {
 public:
@@ -76,11 +77,11 @@ public:
         for(const type_schema_entry &e : schema)
         {
             w.varint(e.type_id);
-            blob(w, as_bytes(e.type_name));
-            blob(w, as_bytes(e.message_encoding));
-            blob(w, as_bytes(e.schema_name));
-            blob(w, as_bytes(e.schema_encoding));
-            blob(w, e.schema_data);
+            detail::blob(w, detail::as_bytes(e.type_name));
+            detail::blob(w, detail::as_bytes(e.message_encoding));
+            detail::blob(w, detail::as_bytes(e.schema_name));
+            detail::blob(w, detail::as_bytes(e.schema_encoding));
+            detail::blob(w, e.schema_data);
         }
         w.u8(static_cast<std::uint8_t>(crypto));
         return {m_scratch.data(), w.offset()};
@@ -166,7 +167,7 @@ public:
         w.u8(e.type_id ? 1u : 0u);
         w.varint(e.type_id ? *e.type_id : 0u);
         w.varint(fqn.size());
-        w.bytes(as_bytes(fqn));
+        w.bytes(detail::as_bytes(fqn));
         return seal(w.offset());
     }
 
@@ -212,33 +213,15 @@ public:
         w.varint(r.count);
         w.varint(r.bytes);
         w.u8(static_cast<std::uint8_t>(r.max_fidelity));
-        return seal_in(m_aux, w.offset());
+        return detail::seal_in(m_aux, w.offset());
     }
 
 private:
-    static std::span<const std::byte> as_bytes(std::string_view s) noexcept
+    // Append the CRC over the record scratch front and return the [body][crc] payload (the
+    // recover-validated unit). The framing/CRC helpers live in detail/record_frame.h.
+    std::span<const std::byte> seal(std::size_t body_len)
     {
-        return {reinterpret_cast<const std::byte *>(s.data()), s.size()};
-    }
-
-    static void blob(wire::writer &w, std::span<const std::byte> b) noexcept
-    {
-        w.varint(b.size());
-        w.bytes(b);
-    }
-
-    // Append the CRC-32C over the [category][fields] already written at the record scratch
-    // front and return the contiguous [body][crc] record payload. The caller frames it (the
-    // ring varint), so this is the recover-validated unit: the scan recomputes the CRC over
-    // the payload minus its trailing 4 bytes.
-    std::span<const std::byte> seal(std::size_t body_len) { return seal_in(m_scratch, body_len); }
-
-    static std::span<const std::byte> seal_in(std::vector<std::byte> &buf, std::size_t body_len)
-    {
-        const std::uint32_t crc = wire::crc32c({buf.data(), body_len});
-        wire::writer        cw{{buf.data() + body_len, sizeof(std::uint32_t)}};
-        cw.u32(crc);
-        return {buf.data(), body_len + sizeof(std::uint32_t)};
+        return detail::seal_in(m_scratch, body_len);
     }
 
     std::vector<std::byte> m_scratch;

@@ -13,6 +13,10 @@
 
 namespace plexus::tls {
 
+// over-limit: one cohesive DTLS BIO/handshake pump; the memory-BIO feed/drain, the SSL_do_handshake
+// drive, and the read/write paths share the one SSL state machine, so splitting them scatters the
+// SSL state across files with no readability gain.
+
 namespace {
 
 void free_bio(BIO *b)

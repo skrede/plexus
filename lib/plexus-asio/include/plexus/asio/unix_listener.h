@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_UNIX_LISTENER_H
 
 #include "plexus/asio/unix_channel.h"
+#include "plexus/asio/detail/unix_accept.h"
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_unix_endpoint_parse.h"
 
@@ -100,18 +101,18 @@ public:
         std::error_code ec;
         auto            ep = detail::parse_unix(bind_ep.address, ec);
         if(ec)
-            return report(ec);
+            return detail::report(*this, ec);
 #if !defined(__linux__) && !defined(__APPLE__) && !defined(__FreeBSD__)
         // Windows AF_UNIX exposes no peer credentials. A non-accept_any policy cannot be
         // honored, so refuse at listen (fail-closed) rather than silently admit every peer.
         if(!m_peer_policy->accepts_without_credentials())
-            return report(std::make_error_code(std::errc::operation_not_supported));
+            return detail::report(*this, std::make_error_code(std::errc::operation_not_supported));
 #endif
         const auto &path = bind_ep.address;
-        unlink_path(path); // clear a stale socket file before bind
+        detail::unlink_path(path); // clear a stale socket file before bind
         m_acceptor.open(ep.protocol(), ec);
         if(ec)
-            return report(ec);
+            return detail::report(*this, ec);
         // Bind under a restrictive umask so the socket inode is created with NO access for
         // group/other from the outset — this closes the TOCTOU window between bind (which
         // would otherwise create a world-accessible inode) and the mode application. The
@@ -120,16 +121,16 @@ public:
         m_acceptor.bind(ep, ec); // NO reuse_address for AF_UNIX
         (void)::umask(prev_umask);
         if(ec)
-            return abort_start(ec); // close the opened acceptor
+            return detail::abort_start(*this, ec); // close the opened acceptor
         m_bound_path = path; // bind created the inode — own it so any later failure unlinks it
         if(::chmod(path.c_str(), m_mode) !=
            0) // apply the configured mode (0700 default, or a widened knob)
-            return abort_start(std::error_code(errno, std::generic_category()));
+            return detail::abort_start(*this, std::error_code(errno, std::generic_category()));
         m_acceptor.listen(::asio::socket_base::max_listen_connections, ec);
         if(ec)
-            return abort_start(ec);
+            return detail::abort_start(*this, ec);
         m_running = true;
-        do_accept();
+        detail::do_accept(*this);
     }
 
     void stop()
@@ -140,96 +141,24 @@ public:
         (void)m_acceptor.close(ec);
         if(!m_bound_path.empty()) // only unlink a path THIS listener bound
         {
-            unlink_path(m_bound_path);
+            detail::unlink_path(m_bound_path);
             m_bound_path.clear();
         }
     }
 
 private:
-    // Unwind a partially-started listener: close the opened acceptor and unlink the
-    // socket file bind() already created, so a failed start leaks neither the open
-    // acceptor (a retry would wedge at already_open) nor the on-disk inode.
-    void abort_start(const std::error_code &ec)
-    {
-        std::error_code ignore;
-        (void)m_acceptor.close(ignore);
-        if(!m_bound_path.empty())
-        {
-            unlink_path(m_bound_path);
-            m_bound_path.clear();
-        }
-        report(ec);
-    }
-
-    // Best-effort remove of a socket file: ENOENT (nothing there) is success, and any
-    // real conflict surfaces at the subsequent bind rather than here.
-    static void unlink_path(const std::string &path) { (void)::unlink(path.c_str()); }
-
-    void do_accept()
-    {
-        m_acceptor.async_accept(
-                [this](std::error_code ec, ::asio::local::stream_protocol::socket peer)
-                {
-                    if(ec)
-                    {
-                        if(ec != ::asio::error::operation_aborted)
-                            report(ec);
-                        return;
-                    }
-                    // Consult the borrowed peer-credential policy BEFORE adopting the channel.
-                    // A reject closes the accepted socket fail-closed (no channel handed up),
-                    // the session stays unestablished, and the accept loop continues.
-                    if(!admit_peer(peer))
-                    {
-                        std::error_code ic;
-                        (void)peer.close(ic);
-                    }
-                    else
-                    {
-                        auto channel = std::make_unique<unix_channel>(
-                                m_io, std::move(peer), m_cfg, m_congestion, m_egress_capacity,
-                                m_socket_options);
-                        if(m_on_accepted)
-                            m_on_accepted(std::move(channel));
-                    }
-                    if(m_running)
-                        do_accept();
-                });
-    }
-
-    // Read the accepted peer's local credentials and run them past the injected policy. The
-    // credential read is per-platform (Linux SO_PEERCRED, macOS/BSD getpeereid with pid=0).
-    // A read failure is itself a refusal (fail-closed — an unidentifiable peer is not
-    // admitted). NOTE: the macOS/BSD path is unverified on this Linux host (flagged for CI).
-    bool admit_peer(::asio::local::stream_protocol::socket &peer) const
-    {
-#if defined(__linux__)
-        ::ucred     cred{};
-        ::socklen_t len = sizeof(cred);
-        if(::getsockopt(peer.native_handle(), SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0)
-            return false;
-        return m_peer_policy->decide(io::security::peer_cred{static_cast<std::uint32_t>(cred.uid),
-                                                             static_cast<std::uint32_t>(cred.gid),
-                                                             static_cast<std::uint32_t>(cred.pid)});
-#elif defined(__APPLE__) || defined(__FreeBSD__)
-        ::uid_t uid = 0;
-        ::gid_t gid = 0;
-        if(::getpeereid(peer.native_handle(), &uid, &gid) != 0) // no pid on Darwin/BSD => pid=0
-            return false;
-        return m_peer_policy->decide(io::security::peer_cred{static_cast<std::uint32_t>(uid),
-                                                             static_cast<std::uint32_t>(gid), 0});
-#else
-        (void)peer;
-        return m_peer_policy
-                ->accepts_without_credentials(); // Windows AF_UNIX: no creds (refused at listen)
-#endif
-    }
-
-    void report(const std::error_code &ec)
-    {
-        if(m_on_error)
-            m_on_error(detail::map_error(ec));
-    }
+    // The bind/accept-loop glue is relocated to detail/unix_accept.h (relocation by friendship):
+    // each helper reaches the acceptor/policy/sink members below through the listener reference.
+    template<typename L>
+    friend void detail::report(L &, const std::error_code &);
+    template<typename L>
+    friend void detail::abort_start(L &, const std::error_code &);
+    template<typename L>
+    friend bool detail::admit_peer(const L &, ::asio::local::stream_protocol::socket &);
+    template<typename L>
+    friend void detail::adopt_peer(L &, ::asio::local::stream_protocol::socket);
+    template<typename L>
+    friend void detail::do_accept(L &);
 
     ::asio::io_context                      &m_io;
     ::asio::local::stream_protocol::acceptor m_acceptor;

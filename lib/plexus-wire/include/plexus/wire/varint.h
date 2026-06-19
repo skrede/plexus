@@ -36,6 +36,26 @@ namespace plexus::wire {
 //     varint from a partial-buffer underrun.
 constexpr std::size_t k_max_varint_bytes = 10;
 
+namespace detail {
+
+// Accumulate one LEB128 byte at index i into value. Returns true when the terminator (no
+// continuation bit) was seen. On the 10th (last permitted) byte only bit 63 may be set — any
+// higher payload bit would overflow u64 — so the overflow guard runs BEFORE the accumulate.
+[[nodiscard]] inline bool varint_step(std::uint8_t byte, std::size_t i, std::uint64_t &value,
+                                      bool &overflow) noexcept
+{
+    const std::uint64_t payload = byte & 0x7Fu;
+    if(i == k_max_varint_bytes - 1 && payload > 0x01u)
+    {
+        overflow = true;
+        return true;
+    }
+    value |= payload << (7u * i);
+    return (byte & 0x80u) == 0;
+}
+
+}
+
 [[nodiscard]] inline std::optional<std::uint64_t> read_varint(std::span<const std::byte> data,
                                                               std::size_t &consumed) noexcept
 {
@@ -51,15 +71,11 @@ constexpr std::size_t k_max_varint_bytes = 10;
         const auto byte = static_cast<std::uint8_t>(data[offset]);
         ++offset;
 
-        const std::uint64_t payload = byte & 0x7Fu;
-        // On the 10th (last permitted) byte only bit 63 may be set; any higher
-        // payload bit would overflow u64. Guard BEFORE the accumulate.
-        if(i == k_max_varint_bytes - 1 && payload > 0x01u)
-            return std::nullopt;
-        value |= payload << (7u * i);
-
-        if((byte & 0x80u) == 0)
+        bool overflow = false;
+        if(detail::varint_step(byte, i, value, overflow))
         {
+            if(overflow)
+                return std::nullopt;
             consumed = offset;
             return value;
         }

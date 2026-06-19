@@ -5,6 +5,7 @@
 #include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
 #include "plexus/crypto/aead_epoch.h"
+#include "plexus/crypto/detail/datagram_aead_path.h"
 
 #include "plexus/wire/stream_inbound.h"
 #include "plexus/wire/frame.h"
@@ -63,34 +64,7 @@ public:
     datagram_authenticated_channel(datagram_authenticated_channel &&)                 = delete;
     datagram_authenticated_channel &operator=(datagram_authenticated_channel &&)      = delete;
 
-    void send(std::span<const std::byte> data)
-    {
-        if(data.size() < wire::header_size)
-        {
-            // A frame too small to carry the AEAD-AAD header is a local malformed input, not
-            // ambient remote garbage — surface it through the drop seam (the locally-sourced
-            // tier) instead of returning silently, so the caller can observe the dropped send.
-            emit_drop(io::detail::drop_cause::malformed, io::locality::local);
-            return;
-        }
-        const auto header  = data.first(wire::header_size);
-        const auto payload = data.subspan(wire::header_size);
-
-        const std::uint64_t seq = m_send_seq++;
-        // The nonce epoch field is the 8-bit wire epoch byte (only 8 bits of epoch ride
-        // the wire), so seal masks to that domain to match the receiver's open.
-        const auto nonce = make_nonce(m_send_epoch & 0xffu, seq);
-        if(!seal(m_cipher, m_send_key, nonce, header, payload, m_seal_scratch))
-            return;
-
-        m_send_frame.resize(k_seq_len + 1 + wire::header_size + m_seal_scratch.size());
-        write_seq(m_send_frame.data(), seq);
-        m_send_frame[k_seq_len] = static_cast<std::byte>(m_send_epoch & 0xffu);
-        std::copy(header.begin(), header.end(), m_send_frame.begin() + k_seq_len + 1);
-        std::copy(m_seal_scratch.begin(), m_seal_scratch.end(),
-                  m_send_frame.begin() + k_seq_len + 1 + wire::header_size);
-        m_lower.send(m_send_frame);
-    }
+    void send(std::span<const std::byte> data) { detail::datagram_send(*this, data); }
 
     void close() { m_lower.close(); }
 
@@ -133,118 +107,23 @@ public:
     [[nodiscard]] std::size_t backpressured() const { return m_lower.backpressured(); }
 
 private:
+    template<typename C>
+    friend void detail::emit_drop(C &, io::detail::drop_cause, io::locality);
+    template<typename C>
+    friend void detail::datagram_send(C &, std::span<const std::byte>);
+    template<typename C>
+    friend bool detail::candidate_key_for(C &, std::uint8_t, aead_key &, bool &) noexcept;
+    template<typename C>
+    friend void detail::datagram_on_lower_data(C &, std::span<const std::byte>);
+
     static constexpr std::size_t k_seq_len = 8;
     static constexpr std::size_t k_frame_overhead =
             k_seq_len + 1 + wire::header_size + k_aead_tag_len;
 
     void wire_lower()
     {
-        m_lower.on_data([this](std::span<const std::byte> bytes) { on_lower_data(bytes); });
-    }
-
-    void emit_drop(io::detail::drop_cause cause, io::locality transport = io::locality::remote)
-    {
-        if(m_on_drop)
-            m_on_drop(io::detail::drop_event{.cause = cause, .transport = transport});
-    }
-
-    void on_lower_data(std::span<const std::byte> bytes)
-    {
-        if(bytes.size() < k_frame_overhead)
-        {
-            ++m_tamper_dropped;
-            emit_drop(io::detail::drop_cause::tamper);
-            return;
-        }
-        const std::uint64_t seq        = read_seq(bytes.data());
-        const auto          epoch_byte = static_cast<std::uint8_t>(bytes[k_seq_len]);
-        const auto          header     = bytes.subspan(k_seq_len + 1, wire::header_size);
-        const auto          sealed     = bytes.subspan(k_seq_len + 1 + wire::header_size);
-
-        // RFC 4303 §3.4.3 order: verify the tag BEFORE committing any replay/epoch state.
-        // The candidate key is resolved without advancing the epoch; a non-mutating probe
-        // rejects an obvious replay/too-old without sliding the window; only a successful
-        // open commits the epoch advance and marks the sequence seen — so a forged
-        // datagram can neither wedge the window nor desync the key.
-        aead_key candidate{};
-        bool     advances_epoch = false;
-        if(!candidate_key_for(epoch_byte, candidate, advances_epoch))
-        {
-            ++m_tamper_dropped;
-            emit_drop(io::detail::drop_cause::tamper);
-            return;
-        }
-
-        // A next-epoch datagram targets a window that the epoch advance resets, so the
-        // replay check only applies within the current epoch. Probe (not commit) so a
-        // forged current-epoch sequence cannot slide the window before authentication.
-        if(!advances_epoch)
-        {
-            const auto verdict = m_window.would_accept(seq);
-            if(verdict != replay_verdict::accept)
-            {
-                ++m_replay_dropped;
-                emit_drop(verdict == replay_verdict::reject_old ? io::detail::drop_cause::too_old
-                                                                : io::detail::drop_cause::replay);
-                return;
-            }
-        }
-
-        const auto nonce = make_nonce(epoch_byte, seq);
-        if(!open(m_cipher, candidate, nonce, header, sealed, m_open_scratch))
-        {
-            ++m_tamper_dropped;
-            emit_drop(io::detail::drop_cause::tamper);
-            return;
-        }
-
-        if(advances_epoch)
-        {
-            m_recv_key = candidate;
-            ++m_recv_epoch;
-            m_window.reset();
-        }
-        // The probe already accepted; this commits the slide/set now that the tag is
-        // verified. The verdict is necessarily accept (no reordering between probe and
-        // commit on this single-threaded path), so it is intentionally discarded.
-        (void)m_window.check_and_set(seq);
-
-        m_recv_frame.resize(wire::header_size + m_open_scratch.size());
-        std::copy(header.begin(), header.end(), m_recv_frame.begin());
-        std::copy(m_open_scratch.begin(), m_open_scratch.end(),
-                  m_recv_frame.begin() + wire::header_size);
-        if(m_on_data)
-            m_on_data(std::span<const std::byte>{m_recv_frame});
-    }
-
-    // Resolve the recv key that epoch_byte names WITHOUT committing any state: the
-    // current epoch returns the current key (advances=false); the next epoch derives the
-    // forward key into out (advances=true) but does NOT assign m_recv_key / ++m_recv_epoch
-    // / reset the window — the caller commits that only after open() verifies the tag, so
-    // a forged next-epoch datagram cannot roll the receiver's key past the sender (RFC
-    // 9147 per-epoch reset is gated on authentication). Anything else reports failure.
-    bool candidate_key_for(std::uint8_t epoch_byte, aead_key &out, bool &advances) noexcept
-    {
-        const auto current_low = static_cast<std::uint8_t>(m_recv_epoch & 0xffu);
-        if(epoch_byte == current_low)
-        {
-            out      = m_recv_key;
-            advances = false;
-            return true;
-        }
-        const auto next_low = static_cast<std::uint8_t>((m_recv_epoch + 1) & 0xffu);
-        if(epoch_byte == next_low)
-        {
-            // BOUNDED WORK: a next-epoch datagram runs one forward-KDF before the tag check,
-            // and the replay window cannot gate it (the advance resets that window). There is
-            // no SOUND cheaper pre-check — authenticating a next-epoch datagram requires the
-            // derived key — but the cost is exactly one HKDF per inbound datagram (the
-            // size gate already ran), so it is bounded by the link's datagram rate with no
-            // amplification; weakening it with a pre-auth seq filter is declined deliberately.
-            advances = true;
-            return derive_forward(m_recv_key, out);
-        }
-        return false;
+        m_lower.on_data([this](std::span<const std::byte> bytes)
+                        { detail::datagram_on_lower_data(*this, bytes); });
     }
 
     static void write_seq(std::byte *p, std::uint64_t seq) noexcept

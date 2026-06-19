@@ -3,6 +3,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/object_carrier.h"
+#include "plexus/inproc/detail/inproc_dispatch.h"
 #include "plexus/detail/compat.h"
 
 #include <span>
@@ -20,13 +21,16 @@ namespace plexus::inproc {
 template<typename Clock>
 class inproc_channel;
 
-// In-process byte-packet delivery between registered channels. A channel
-// registers on construction and is handed a synthetic endpoint plus a never-
-// reused integer key; send() enqueues a packet addressed by the peer's key
-// (resolved from its endpoint once, at connect_to), and deliver_one() hands
-// exactly one queued packet to its target channel. Delivery is pull-driven by
-// the executor's step-loop, never invoked from the producing send() — that
-// posted-only discipline is what keeps the re-entrancy invariant structural.
+// over-limit: one cohesive in-process delivery bus; the register/listener/enqueue/deliver verbs +
+// the grown-once packet ring all share the m_channels/m_listeners/m_ring state under the
+// posted-only re-entrancy invariant, so splitting the surface scatters that shared bus state (the
+// per-packet match/dispatch tail is extracted to detail/inproc_dispatch.h).
+//
+// In-process byte-packet delivery between registered channels: a channel registers on construction
+// and is handed a synthetic endpoint + a never-reused integer key; send() enqueues a packet
+// addressed by the peer's key, and deliver_one() hands exactly one queued packet to its target.
+// Delivery is pull-driven by the executor's step-loop, never from the producing send() — the
+// posted-only discipline that keeps the re-entrancy invariant structural.
 template<typename Clock = std::chrono::steady_clock>
 class inproc_bus
 {
@@ -54,9 +58,8 @@ public:
         return assigned;
     }
 
-    // Resolve a bus-minted endpoint back to its channel key (0 = unregistered).
-    // Keys are never reused, so a key resolved once at connect_to stays bound to
-    // exactly that registration — a deregistered partner simply stops matching.
+    // Resolve a bus-minted endpoint back to its channel key (0 = unregistered). Keys are never
+    // reused, so a key resolved once at connect_to stays bound to that registration.
     [[nodiscard]] std::uint64_t key_for(const io::endpoint &ep) const noexcept
     {
         for(const auto &entry : m_channels)
@@ -70,9 +73,8 @@ public:
         std::erase_if(m_channels, [chan](const channel_entry &e) { return e.chan == chan; });
     }
 
-    // The accepting-endpoint registry (distinct from the synthetic per-channel
-    // addresses above): a listen() names an endpoint and supplies the on_accepted
-    // callback a dial() to that endpoint fires with the accepted channel end.
+    // The accepting-endpoint registry (distinct from the synthetic per-channel addresses): a
+    // listen() names an endpoint + the on_accepted callback a dial() to it fires.
     void register_listener(
             const io::endpoint                                                      &ep,
             detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted)
@@ -113,11 +115,9 @@ public:
         slot.carrier = {};
     }
 
-    // Queue a process-tier object handle to a peer, sharing the same FIFO as byte
-    // packets so per-pair ordering between bytes and objects is preserved. The
-    // carrier rides inline (no payload vector — no per-packet copy alloc). The bus
-    // takes a reference (addref); deliver_one releases it after handing it on, and
-    // the not-found path below releases it too so a vanished target never leaks.
+    // Queue a process-tier object handle to a peer, sharing the byte FIFO so per-pair ordering
+    // holds. The carrier rides inline (no payload copy). The bus addrefs; deliver_one releases it
+    // after handing it on, and the not-found path releases it too so a vanished target never leaks.
     void enqueue_object(std::uint64_t to_key, const io::object_carrier &carrier)
     {
         io::addref(carrier);
@@ -133,48 +133,24 @@ public:
     {
         if(m_size == 0)
             return false;
-
         queued_packet &pkt = m_ring[m_head];
         m_head             = (m_head + 1) % m_ring.size();
         --m_size;
-
-        bool delivered = false;
-        for(auto &entry : m_channels)
-            if(pkt.to_key == entry.key)
-            {
-                if(pkt.kind == packet_kind::close)
-                    entry.chan->deliver_close();
-                else if(pkt.kind == packet_kind::object)
-                    entry.chan->deliver_object(pkt.carrier); // the channel releases on its own path
-                else
-                    entry.chan->deliver(std::span<const std::byte>(pkt.data));
-                delivered = true;
-                break;
-            }
-
-        // The bus's own reference is balanced here: an object handed to a live
-        // channel released it inside deliver_object; an object whose target had
-        // vanished (the loop fell through) MUST still release or its slot leaks.
-        if(pkt.kind == packet_kind::object && !delivered)
-            io::release(pkt.carrier);
-        // A data packet that matched no live partner is an unmatched-partner drop: report
-        // it on the sender (if it is still registered — a deregistered sender's report is
-        // skipped, its pointer is no longer dereferenceable). This delivery runs inside the
-        // step-loop, so the report is already off the synchronous send() path.
-        if(pkt.kind == packet_kind::data && !delivered && pkt.from && sender_live(pkt.from))
-            pkt.from->report_unroutable();
-        pkt.carrier = {}; // drop the dangling slot pointer so a re-read never re-releases
-        pkt.from    = nullptr;
-
+        detail::dispatch_packet(*this, pkt); // match, deliver, and balance the bus reference
         return true;
     }
 
     [[nodiscard]] bool has_pending_packets() const noexcept { return m_size != 0; }
 
 private:
-    // Whether a queued packet's sender is still a registered channel (so its
-    // report_unroutable target is live): a sender that deregistered between send and
-    // delivery is skipped rather than dereferenced.
+    // The per-packet match + dispatch tail is relocated to detail/inproc_dispatch.h (a friend, so
+    // it reaches the channel table + the packet_kind/sender_live members through the bus
+    // reference).
+    template<typename B, typename P>
+    friend void detail::dispatch_packet(B &, P &);
+
+    // Whether a queued packet's sender is still a registered channel (so its report_unroutable
+    // target is live): a sender that deregistered between send and delivery is skipped.
     [[nodiscard]] bool sender_live(inproc_channel<Clock> *from) const noexcept
     {
         for(const auto &entry : m_channels)
@@ -190,10 +166,9 @@ private:
         object
     };
 
-    // Packets address their target by the registration key, never the endpoint
-    // value: two string assigns per enqueue (and a string compare per channel per
-    // delivery) were measurable on the in-process publish loop. The endpoint
-    // strings stay cold — minted at registration, compared only in key_for.
+    // Packets address their target by the registration key, never the endpoint value: per-enqueue
+    // string assigns + a per-channel string compare were measurable on the publish loop. The
+    // endpoint strings stay cold (minted at registration, compared only in key_for).
     struct queued_packet
     {
         std::uint64_t          to_key{0};
@@ -210,12 +185,9 @@ private:
         std::uint64_t          key;
     };
 
-    // The FIFO rides a grown-once ring of reusable packet slots rather than a deque:
-    // a deque churns block allocations as the FIFO head/tail advance, but the steady
-    // in-process publish loop must be alloc-free (the determinism invariant). The ring
-    // doubles its slot count only when it would overflow (never shrinks), and each slot
-    // reuses its data vector's grown capacity via assign — so a warmed steady state
-    // touches no heap.
+    // The FIFO rides a grown-once ring of reusable packet slots (not a deque, which churns block
+    // allocations): the steady publish loop must be alloc-free. The ring doubles only on overflow
+    // (never shrinks) and each slot reuses its data vector's capacity via assign — no steady heap.
     queued_packet &push_slot()
     {
         if(m_size == m_ring.size())

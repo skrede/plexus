@@ -6,6 +6,7 @@
 #include "plexus/tls/tls_listener.h"
 #include "plexus/tls/tls_credential.h"
 #include "plexus/tls/detail/tls_context.h"
+#include "plexus/tls/detail/tls_transport_accept.h"
 
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_endpoint_parse.h"
@@ -36,31 +37,22 @@
 
 namespace plexus::tls {
 
-// The TLS connector: a protocol-type swap of the plaintext transport with a
-// handshake hop. wraps tls_listener for listen + accept and adds an
-// async-connect-then-client-handshake dial over the ssl::stream. listen(ep)
-// starts the acceptor and forwards each accepted (server-handshaking) channel
-// through on_accepted; dial(ep) parses the host:port target, async-connects a
-// fresh client channel, then runs the client handshake and hands the live
-// channel to on_dialed ONLY POST-handshake — so a verify-rejected peer never
-// yields a live channel (fail-closed). Each half-open dial is owned by the
-// transport's pending_dial_registry (copy-before-erase resolve, deferred-destroy
-// fail) — never by the channel's own readiness closure — so a fail edge firing
-// from inside the channel's async stack frees it OFF that stack. A handshake/verify
-// failure surfaces as on_dial_failed via the channel's own error path. The credential is REQUIRED,
-// non-defaultable (first after io); cfg stays required-WITH-default. The dialed
-// endpoint rides the async closure so on_dialed / on_dial_failed CARRY it back
-// (the engine correlates each completion to its slot by endpoint).
+// The TLS connector: a protocol-type swap of the plaintext transport with a handshake hop. It
+// wraps tls_listener for listen + accept and adds an async-connect-then-client-handshake dial over
+// the ssl::stream. dial(ep) async-connects a fresh client channel then runs the client handshake,
+// handing the live channel to on_dialed ONLY POST-handshake (a verify-rejected peer never yields a
+// live channel — fail-closed). Each half-open dial is owned by the transport's
+// pending_dial_registry (copy-before-erase resolve, deferred-destroy fail), so a fail edge firing
+// from inside the channel's async stack frees it OFF that stack. The credential is REQUIRED
+// (non-defaultable, first after io); the dialed endpoint rides the async closure so on_dialed /
+// on_dial_failed carry it back for the engine's by-endpoint correlation.
 class tls_transport
 {
 public:
-    // no_delay disables Nagle on every dialed + accepted TCP lowest layer (required-WITH-
-    // default true — the latency-MW default; overridable for a Nagle use-case). Threaded to
-    // the listener for the accept side and set on the dial socket post-connect below.
-    // global_default is the node-level per-MESSAGE receive ceiling and reassembly_budget the
-    // aggregate reassembly-memory cap — the two operator-facing message-size node options
-    // (required-WITH-default, bound to the shipped named constants). Stamped onto every
-    // minted channel's inbound config; a per-topic override resolves through io::effective_max.
+    // no_delay disables Nagle on every dialed + accepted TCP lowest layer (required-WITH-default
+    // true). global_default is the per-MESSAGE receive ceiling and reassembly_budget the aggregate
+    // reassembly-memory cap (the two operator-facing message-size node options, stamped onto every
+    // minted channel's inbound config). All required-WITH-default.
     tls_transport(::asio::io_context &io, const tls_credential &cred,
                   wire::stream_inbound_config cfg = {}, bool no_delay = true,
                   io::congestion      congestion = io::congestion::block,
@@ -78,7 +70,11 @@ public:
             , m_congestion(congestion)
             , m_egress_capacity(egress)
             , m_socket_options(socket_options)
-            , m_pending([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
+            // Destroy a freed channel OFF the current stack: a posted continuation owns it until
+            // it runs, so teardown follows the channel's own async-completion unwind.
+            , m_pending(
+                      [this](std::unique_ptr<tls_channel> ch)
+                      { ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); }); })
     {
         m_listener.on_accepted(
                 [this](std::unique_ptr<tls_channel> ch)
@@ -97,10 +93,8 @@ public:
     tls_transport(const tls_transport &)            = delete;
     tls_transport &operator=(const tls_transport &) = delete;
 
-    // The concrete channel this member's completions deliver + its routing identity: the
-    // schemes it serves and the locality tier. TLS-over-TCP is a remote (encrypted stream)
-    // member serving the "tls" scheme — it rides a network path, so locality confinement
-    // still excludes it. A generic multiplexer reads these at compile time to route over a pack.
+    // The concrete channel + routing identity: TLS-over-TCP is a remote member serving the "tls"
+    // scheme (a network path, so locality confinement excludes it). Read at compile time to route.
     using channel_type = tls_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"tls"};
     static constexpr io::transport_kind              mux_tier = io::transport_kind::remote;
@@ -134,7 +128,7 @@ public:
         std::error_code pec;
         auto            target = plexus::asio::detail::parse(ep.address, pec);
         if(pec)
-            return report_dial_fail(ep, plexus::asio::detail::map_error(pec));
+            return detail::tls_report_dial_fail(*this, ep, plexus::asio::detail::map_error(pec));
         auto  ch  = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion,
                                                   m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
@@ -143,14 +137,15 @@ public:
                 [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable
                 {
                     if(ec)
-                        return report_dial_fail(ep, plexus::asio::detail::map_error(ec));
+                        return detail::tls_report_dial_fail(*this, ep,
+                                                            plexus::asio::detail::map_error(ec));
                     if(m_no_delay)
                     {
                         std::error_code nec;
                         (void)raw->socket().set_option(::asio::ip::tcp::no_delay(true),
                                                        nec); // disable Nagle pre-handshake
                     }
-                    run_handshake(std::move(ch), raw, ep);
+                    detail::tls_run_handshake(*this, std::move(ch), raw, ep);
                 });
     }
 
@@ -161,52 +156,18 @@ public:
     }
 
 private:
-    // Run the client handshake; deliver to on_dialed only on success. The minted
-    // channel is owned by the registry (transport-owned) across the handshake — no
-    // self-owning readiness closure. A handshake/verify failure routes through the
-    // channel's on_error to fail_dial (deferred-destroy + on_dial_failed, fail-closed).
-    void run_handshake(std::unique_ptr<tls_channel> ch, tls_channel *raw, const io::endpoint &ep)
-    {
-        m_pending.insert(raw, std::move(ch));
-        raw->on_error([this, ep, raw](io::io_error e) { fail_dial(ep, raw, e); });
-        auto host = detail::sni_host(ep.address);
-        raw->start_client_handshake(host, [this, ep, raw]() mutable { resolve_dial(ep, raw); });
-    }
-
-    // The handshake succeeded: resolve the channel OUT of the registry and deliver it.
-    // Copy ep before resolve()/erase — ep is bound to the readiness closure capture the
-    // erase destroys (copy-before-erase). The consumer re-wires on_error when it adopts
-    // the channel from on_dialed (the established adopt-then-wire contract).
-    void resolve_dial(const io::endpoint &ep, tls_channel *raw)
-    {
-        const io::endpoint dialed = ep;
-        auto               ch     = m_pending.resolve(raw);
-        if(ch && m_on_dialed)
-            m_on_dialed(std::move(ch), dialed);
-    }
-
-    // A handshake/verify failure: drop the dial through the registry's deferred-destroy
-    // (the channel is freed OFF its own async stack, not synchronously mid-call), then
-    // report on_dial_failed. Copy ep before fail()/erase (copy-before-erase).
-    void fail_dial(const io::endpoint &ep, tls_channel *raw, io::io_error e)
-    {
-        const io::endpoint failed = ep;
-        m_pending.fail(raw);
-        report_dial_fail(failed, e);
-    }
-
-    // Destroy a freed channel OFF the current stack: a posted continuation owns it until
-    // it runs, so it is torn down after the channel's own async-completion call unwinds.
-    void defer_destroy(std::unique_ptr<tls_channel> ch)
-    {
-        ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); });
-    }
-
-    void report_dial_fail(const io::endpoint &ep, io::io_error e)
-    {
-        if(m_on_dial_failed)
-            m_on_dial_failed(ep, e);
-    }
+    // The connect/handshake-pump + dial-resolution glue is relocated to
+    // detail/tls_transport_accept.h (relocation by friendship): each helper reaches the
+    // listener/credential/pending-dial members below through the transport reference.
+    template<typename U>
+    friend void detail::tls_report_dial_fail(U &, const io::endpoint &, io::io_error);
+    template<typename U>
+    friend void detail::tls_resolve_dial(U &, const io::endpoint &, tls_channel *);
+    template<typename U>
+    friend void detail::tls_fail_dial(U &, const io::endpoint &, tls_channel *, io::io_error);
+    template<typename U>
+    friend void detail::tls_run_handshake(U &, std::unique_ptr<tls_channel>, tls_channel *,
+                                          const io::endpoint &);
 
     ::asio::io_context                 &m_io;
     const tls_credential               &m_cred;

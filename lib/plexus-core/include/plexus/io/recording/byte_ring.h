@@ -25,18 +25,18 @@ enum class ring_policy : std::uint8_t
     drop_oldest = 1,
 };
 
-// A bounded, grown-once, single-producer/single-consumer byte ring carrying
-// length-prefixed records [varint len][bytes]. The backing store is allocated ONCE
-// (an owned vector sized to the byte budget, or a caller-provided span for the MCU
-// "statically provided" path) and never reallocates while pushing — the no-hot-
-// path-alloc invariant. The producer (the recorder's executor turn) never blocks:
-// try_push admits iff the frame fits (drop_newest) or after evicting whole oldest
-// records (drop_oldest). head/tail are monotonic absolute byte counters mapped into
-// the store by modulo; release on the producer publishes a frame the acquiring
-// consumer then reads. The byte budget is a construction parameter and a documented
-// PLACEHOLDER — no tuned default is baked here (the empirical sweep is a later
-// milestone). Record framing reuses the wire cursor's varint; the index arithmetic
-// and the wrapping copy are the only ring-specific logic.
+// over-limit: one cohesive SPSC byte ring; the try_push/drain/evict/peek/copy verbs all advance
+// the shared m_store/m_head/m_tail cursor protocol with release/acquire publication, so splitting
+// them scatters that single-producer/single-consumer cursor state across files.
+//
+// A bounded, grown-once, single-producer/single-consumer byte ring carrying length-prefixed
+// records [varint len][bytes]. The backing store is allocated ONCE (an owned vector, or a
+// caller-provided span for the MCU "statically provided" path) and never reallocates while pushing
+// (the no-hot-path-alloc invariant). The producer never blocks: try_push admits iff the frame fits
+// (drop_newest) or after evicting whole oldest records (drop_oldest). head/tail are monotonic
+// absolute byte counters mapped into the store by modulo; the producer's release publishes a frame
+// the acquiring consumer reads. The byte budget is a PLACEHOLDER construction parameter (no tuned
+// default — the empirical sweep is a later milestone).
 class byte_ring
 {
 public:
@@ -86,11 +86,9 @@ public:
         return true;
     }
 
-    // The monotonic absolute byte counters. A freeze snapshots these two indices to
-    // bound a frozen window over the held records — no buffer copy, no allocation (the
-    // pre-buffer/FDR snapshot is exactly {head, tail}). The producer publishes at head;
-    // the consumer advances tail; both are absolute (never wrapped) so a snapshot stays
-    // meaningful while overwrite continues past it.
+    // The monotonic absolute byte counters. A freeze snapshots {head, tail} to bound a frozen
+    // window over the held records (no copy, no alloc); both are absolute (never wrapped) so a
+    // snapshot stays meaningful while overwrite continues past it.
     [[nodiscard]] std::uint64_t head() const noexcept
     {
         return m_head.load(std::memory_order_acquire);
@@ -128,12 +126,10 @@ public:
         return used() != 0;
     }
 
-    // Drain only the frozen window: pop complete framed records whose frame ends at or
-    // before frozen_head, up to a byte budget, and report whether the window still holds
-    // unread records. A continuing overwrite under drop_oldest may have already evicted the
-    // oldest part of the snapshot (tail advanced past the frozen tail); that part is simply
-    // gone — the window drains what is still resident below the frozen head, never reading
-    // past it into records admitted after the freeze.
+    // Drain only the frozen window: pop complete framed records whose frame ends at or before
+    // frozen_head, and report whether the window still holds unread records. A continuing overwrite
+    // under drop_oldest may have evicted the oldest part of the snapshot — that part is simply
+    // gone; the window drains what is still resident below the frozen head, never past it.
     bool drain_window(byte_sink &sink, std::uint64_t frozen_head, std::size_t max_bytes)
     {
         std::size_t moved = 0;

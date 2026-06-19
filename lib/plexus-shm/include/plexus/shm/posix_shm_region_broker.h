@@ -63,6 +63,15 @@ public:
     void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)> policy);
 
 private:
+    // Size the just-created region and map it, assembling the owning handle; on failure the fd is
+    // closed AND the region unlinked (the creator owns the name). The attach mirror maps an
+    // existing region's stat'd size and never unlinks. Both relocated out of create()/attach() so
+    // each verb stays within the function ceiling.
+    static plexus::io::shm::region_status finish_create(int fd, std::size_t length,
+                                                        std::string canonical, region_handle &out);
+    static plexus::io::shm::region_status finish_attach(int fd, std::string canonical,
+                                                        region_handle &out);
+
     plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{[](std::string_view)
                                                                                { return true; }};
 };
