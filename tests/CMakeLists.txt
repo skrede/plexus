@@ -29,6 +29,7 @@ if(PLEXUS_BUILD_TESTS)
     # the allowlisted backend dirs are excluded either way, so its result does
     # not depend on PLEXUS_ENABLE_SHM_BACKEND.
     include(${PROJECT_SOURCE_DIR}/cmake/shm_leak_gate.cmake)
+    include(${PROJECT_SOURCE_DIR}/cmake/size_gate.cmake)
 
     # Auto-discover each per-area unit-test fragment (excluding fuzz, gated
     # above). New test areas register by adding their own fragment.
