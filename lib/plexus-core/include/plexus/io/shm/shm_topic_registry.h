@@ -40,6 +40,23 @@ enum class acquire_result : std::uint8_t
     failed,
 };
 
+// How an acquire resolves a name collision with an existing region.
+//
+// reclaim_stale is the per-peer dial/listen default: a create that races an existing
+// name reclaims it via unlink-then-create, on the assumption the name is a crashed prior
+// creator's orphan (the single-owner dial ring has exactly one creator, so a live
+// collision is not expected). join_live is the demand-driven COMPANION-convergence policy:
+// two LIVE co-host peers independently acquire the SAME deterministically-named ring, so a
+// create must NEVER unlink (clobbering the peer's live region would split the pair onto two
+// physical rings — one keeps writing the orphaned mapping, the other drains an empty fresh
+// one). join_live attaches FIRST when the region exists, and mints the ring itself only
+// when none does yet; whichever peer arrives second JOINs, so both converge on the one ring.
+enum class acquire_mode : std::uint8_t
+{
+    reclaim_stale,
+    join_live,
+};
+
 // Which bound a fail-closed acquire hit. A reliable_preserving ring that cannot be
 // provisioned NEVER silently downgrades to best_effort and NEVER silently sizes an
 // unbounded region: the registration fails closed and names the bound here so the
@@ -158,7 +175,8 @@ public:
     acquire_result acquire(const std::string &fqn, ring_direction direction,
                            std::uint32_t max_payload,
                            ring_geometry_mode mode = ring_geometry_mode::reliable_preserving,
-                           std::uint32_t consumer_capacity = 0)
+                           std::uint32_t consumer_capacity = 0,
+                           acquire_mode amode = acquire_mode::reclaim_stale)
     {
         const key k{fqn, direction};
         if(auto it = m_entries.find(k); it != m_entries.end())
@@ -169,7 +187,8 @@ public:
 
         auto e = std::make_unique<entry>();
         m_last_failure = acquire_failure{};
-        const acquire_result verdict = open_ring(*e, fqn, direction, max_payload, mode, consumer_capacity);
+        const acquire_result verdict =
+            open_ring(*e, fqn, direction, max_payload, mode, consumer_capacity, amode);
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
 
@@ -184,10 +203,14 @@ public:
         e->verdict  = verdict;
         e->refcount = 1;
         entry *raw  = e.get();
-        e->notify->arm([raw] {
-            deliver_fn discard = [](::plexus::wire_bytes<shm_slot_owner>) {};
-            raw->channel->drain(discard);
-        });
+        // The ONE drain authority for this ring's single consumer cursor: on each
+        // cross-process wake the bridge posts this onto the user's executor. It DELIVERS
+        // to the entry's consumer sink when a consumer has attached (the same-host receive
+        // companion), else it DISCARDS — byte-identical to the send-only path. Routing both
+        // through the one armed drain keeps the single cursor un-raced (a second cursor
+        // draining the same entry would steal messages); the sink is the only thing that
+        // varies, never a competing take().
+        e->notify->arm([raw] { raw->deliver_pending(); });
         m_entries.emplace(k, std::move(e));
         return verdict;
     }
@@ -206,6 +229,31 @@ public:
             return;
         teardown(*it->second);
         m_entries.erase(it);
+    }
+
+    // Install a consumer sink for (fqn, direction): the entry's armed wake-drain hands
+    // each pending framed message here (zero-copy) instead of discarding, and any message
+    // already queued is delivered NOW so a consumer attaching after the producer published
+    // misses nothing. Used by the same-host receive companion to drain the co-host ring into
+    // the node receive path. A no-op for an unheld key. The sink is destroyed with the entry
+    // at 1->0/teardown, so a release drops it — no dangling drain registration.
+    void set_consumer_sink(const std::string &fqn, ring_direction direction, deliver_fn sink)
+    {
+        auto it = m_entries.find(key{fqn, direction});
+        if(it == m_entries.end())
+            return;
+        it->second->sink = std::move(sink);
+        it->second->deliver_pending();
+    }
+
+    // Drop the consumer sink for (fqn, direction): the entry's wake-drain returns to
+    // discarding. A no-op for an unheld key or one with no sink. Called on the receive
+    // companion's teardown BEFORE its ring release, mirroring the disarm-before-destroy order.
+    void clear_consumer_sink(const std::string &fqn, ring_direction direction)
+    {
+        auto it = m_entries.find(key{fqn, direction});
+        if(it != m_entries.end())
+            it->second->sink = {};
     }
 
     // The live channel for a key, or nullptr if none is acquired.
@@ -287,15 +335,42 @@ private:
         acquire_result                  verdict  = acquire_result::failed;
         int                             refcount = 0;
         bool                            creator  = false;
+        // The consumer delivery sink. Unset = the wake-drain discards (the send-only
+        // default). Set by set_consumer_sink when a same-host receive companion attaches;
+        // destroyed with the entry at teardown, so no wake can deliver onto a freed sink.
+        deliver_fn                      sink;
+
+        // Drain every pending message off the single consumer cursor into the sink (or
+        // discard when no sink is set). The ONE place the cursor is taken, so the armed
+        // wake and the attach-time catch-up share it without racing a second drainer.
+        void deliver_pending()
+        {
+            if(!channel)
+                return;
+            if(sink)
+                channel->drain(sink);
+            else
+            {
+                deliver_fn discard = [](::plexus::wire_bytes<shm_slot_owner>) {};
+                channel->drain(discard);
+            }
+        }
     };
 
     // Mints or attaches the two regions for (fqn, direction) and binds the entry's
     // ring over them. A create that finds a live name re-issues as attach (the
-    // demand-driven collision probe); unlink_stale_on_create reclaims a crashed
-    // creator's orphan. The geometry comes from max_payload (0 -> default).
+    // demand-driven collision probe). The geometry comes from max_payload (0 -> default).
+    //
+    // amode decides the collision policy. reclaim_stale unlinks an existing name on create
+    // (the single-owner dial ring reclaims a crashed creator's orphan). join_live NEVER
+    // unlinks: a live co-host peer already mapped this companion ring, so clobbering it would
+    // split the pair onto two physical rings (one keeps writing the orphaned mapping, the
+    // other drains an empty fresh one). join_live attaches FIRST when the region exists, and
+    // mints the ring itself only when none does yet; the peer arriving second JOINs, so both
+    // converge on the one ring (demand-driven convergence with no clobber).
     acquire_result open_ring(entry &e, const std::string &fqn, ring_direction direction,
                              std::uint32_t max_payload, ring_geometry_mode mode,
-                             std::uint32_t consumer_capacity)
+                             std::uint32_t consumer_capacity, acquire_mode amode)
     {
         const std::string ctrl_name = region_name_for(fqn, direction, m_region_ns);
         const std::string slab_name = ctrl_name + ".s";
@@ -316,8 +391,14 @@ private:
             return acquire_result::failed;
         }
 
+        // join_live attaches FIRST: when a co-host peer already mapped the ring, JOIN it
+        // outright (never even attempt a create that could clobber). Only when no region
+        // exists yet does it fall through to a non-unlinking create.
+        if(amode == acquire_mode::join_live && region_exists(ctrl_name))
+            return join(e, ctrl_name, slab_name);
+
         create_options opts;
-        opts.unlink_stale_on_create = true;
+        opts.unlink_stale_on_create = amode == acquire_mode::reclaim_stale;
         const region_status cs =
             m_broker.create(ctrl_name, control_region_bytes(geom.cell_count), opts, e.control);
         if(cs == region_status::ok)
@@ -327,6 +408,15 @@ private:
         m_last_failure = acquire_failure{acquire_bound::os_allocator,
                                          control_region_bytes(geom.cell_count), 0, cs};
         return acquire_result::failed;
+    }
+
+    // A cheap existence probe for the consumer attach-first path: a successful read-only
+    // attach proves the region is live (the handle is discarded — the real join re-attaches
+    // both regions and binds the ring). A miss returns false (the consumer then mints).
+    [[nodiscard]] bool region_exists(const std::string &ctrl_name)
+    {
+        typename Broker::region_handle probe;
+        return m_broker.attach(ctrl_name, probe) == region_status::ok;
     }
 
     // The creator path: it owns both regions, stamps a fresh ring at the resolved

@@ -250,6 +250,17 @@ public:
         m_router.route(frame);
     }
 
+    // The same-host receive companion's injection point: a framed message drained off the
+    // co-host shared-memory ring enters the SAME receive path a wire frame does — the header
+    // decode, the session_id staleness gate, then the router to deliver_data and the user
+    // callback. The publisher's send wrote a complete wire frame onto the ring (frame_owned),
+    // so the bytes are header-on and decode identically. The companion drain is posted on the
+    // node executor (the notifier->executor bridge), so this is never called inline from a
+    // wake — the on_data-posted model. A fitting message rides THIS path (SHM), an over-cap
+    // message the wire path; each is delivered exactly once (the send side routed it to one
+    // lane only), so no dedup is needed. A torn-down session ignores it (on_receive's guard).
+    void inject_receive(std::span<const std::byte> frame) { on_receive(frame); }
+
     // Cancel the timer, detach the forwarders for this peer, reset the epoch latch
     // and the FSM for a fresh cycle, and close the channel.
     void tear_down()

@@ -19,6 +19,7 @@
 #include <linux/futex.h>
 
 #include <atomic>
+#include <memory>
 #include <cstdint>
 #include <optional>
 #include <system_error>
@@ -110,8 +111,16 @@ public:
     // cancel the asio wait, tear down the io_uring (which drops the in-flight
     // futex SQE), then close the eventfd. After disarm no posted drain or CQE can
     // touch this notifier — the teardown-race proof gate.
+    //
+    // The asio wait cancel does NOT un-post a drain a PRIOR on_doorbell already
+    // handed to Policy::post: that closure sits on the executor queue and runs on
+    // the next poll, AFTER this notifier may have been freed. Clearing the alive
+    // token (set false here, checked by value in the posted closure) makes that
+    // trailing post a no-op without dereferencing freed `this` — the post-after-free
+    // gate the asio-cancel alone cannot close.
     void disarm() noexcept
     {
+        m_alive->store(false, std::memory_order_release);
         if(m_doorbell)
         {
             std::error_code ignore;
@@ -208,12 +217,17 @@ private:
     // The drain is posted by VALUE-copying the user's drain into a fresh
     // move_only_function each turn, so the long-lived m_drain stays armed across
     // re-submits. The user's drain is the registry's drain-this-channel callback.
+    // The closure also captures the alive token by value: a post that outlives a
+    // disarm (the token went false) runs the no-op branch instead of touching freed
+    // `this`. The token is a tiny liveness flag, NOT shared ownership of the notifier
+    // (the entry remains the single owner; the owner sequences teardown).
     drain_fn drain_post() noexcept
     {
-        return [this] { if(m_drain) m_drain(); };
+        return [this, alive = m_alive] { if(alive->load(std::memory_order_acquire) && m_drain) m_drain(); };
     }
 
     std::atomic<std::uint32_t>     m_park_fallback{::plexus::io::shm::k_park_empty};
+    std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
 
     typename Policy::executor_type m_executor;
     std::atomic<std::uint32_t>    &m_word;
@@ -283,6 +297,11 @@ public:
     // closed fd; cancelling the asio wait before close drops the in-flight handler.
     void disarm() noexcept
     {
+        // Clear the alive token first: a drain already handed to Policy::post by a prior
+        // on_doorbell runs on the next poll AFTER this notifier may be freed, so the posted
+        // closure (which captures the token by value) must see it false and no-op. The asio
+        // cancel below stops only FUTURE waits, not an already-queued post.
+        m_alive->store(false, std::memory_order_release);
         if(m_waiter.joinable())
         {
             m_stop.store(true, std::memory_order_release);
@@ -355,10 +374,11 @@ private:
 
     drain_fn drain_post() noexcept
     {
-        return [this] { if(m_drain) m_drain(); };
+        return [this, alive = m_alive] { if(alive->load(std::memory_order_acquire) && m_drain) m_drain(); };
     }
 
     std::atomic<std::uint32_t>     m_park_fallback{::plexus::io::shm::k_park_empty};
+    std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
 
     typename Policy::executor_type m_executor;
     std::atomic<std::uint32_t>    &m_word;

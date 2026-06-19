@@ -155,6 +155,18 @@ public:
         return &*it->second->session;
     }
 
+    // The session for a peer keyed by the forwarder node_name (the coordinator keys its
+    // companion lanes by node_name, not node_id). The same-host receive companion routes a
+    // drained framed message to this session's inject_receive. nullptr for an unknown name or
+    // a slot whose session is not built — a drained frame for a vanished peer is then dropped.
+    session_type *session_for_name(std::string_view node_name)
+    {
+        for(auto &[id, slot] : m_slots)
+            if(slot->record.node_name == node_name)
+                return slot->session.has_value() ? &*slot->session : nullptr;
+        return nullptr;
+    }
+
     // The same-host verdict for a peer keyed by the forwarder node_name (the
     // coordinator's verdict-read on a demand edge). Fail-closed: an unknown name, or a
     // slot whose session is not yet built, is NOT same-host (no ring acquire).
