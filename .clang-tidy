@@ -144,4 +144,13 @@ readability-static-accessed-through-instance,
 readability-static-definition-in-anonymous-namespace,
 readability-string-compare,
 readability-uniqueptr-delete-release,
-readability-use-anyofallof'
+readability-use-anyofallof,
+readability-function-size,
+readability-function-cognitive-complexity'
+CheckOptions:
+  - { key: readability-function-size.LineThreshold,                value: 25 }
+  - { key: readability-function-size.StatementThreshold,           value: 0 }
+  - { key: readability-function-size.BranchThreshold,              value: 0 }
+  - { key: readability-function-size.NestingThreshold,             value: 0 }
+  - { key: readability-function-cognitive-complexity.Threshold,    value: 25 }
+  - { key: readability-function-cognitive-complexity.IgnoreMacros, value: true }
