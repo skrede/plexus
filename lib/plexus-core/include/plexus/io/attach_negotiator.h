@@ -22,26 +22,18 @@
 
 namespace plexus::io {
 
-// >200 LOC: the security-contract documentation (the nonce-once / anti-reflection /
-// transcript-downgrade / fail-closed-posture invariants) is the bulk; the code is ~145 lines.
-//
-// The security/transcript/proof orchestrator the peer_session owns BY VALUE and drives
-// (composition — no inheritance, no shared_from_this, no static state). It owns the
-// per-session attach credentials and the pending attach context, borrows the node-level
-// security_seam, and runs the PSK attach-proof assembly, the transcript-bound downgrade
-// digest, the role-mirrored anti-reflection nonce assignment, the fail-closed posture
-// gate, and the security-engaged AEAD install. It computes no crypto itself: the digest
-// folds through the injected seam and the proof through the injected prover, so the core
-// bridge stays OpenSSL-free. The bridge forwards its security setters here and feeds the
-// negotiator the few bridge facts each step needs (self_id, policy engagement, the
-// channel scheme); the wire assembly of the request/response stays in the bridge.
+// The security/transcript/proof orchestrator the peer_session owns BY VALUE (composition — no
+// inheritance, no shared_from_this, no static state). It runs the PSK attach-proof assembly,
+// the transcript-bound downgrade digest, the role-mirrored anti-reflection nonce assignment,
+// the fail-closed posture gate, and the AEAD install. It computes no crypto itself — the digest
+// folds through the injected seam and the proof through the injected prover, so the core bridge
+// stays OpenSSL-free.
 template<typename Policy>
 class attach_negotiator
 {
 public:
-    // The bridge-assembled attach context: the facts the gate decides on plus the
-    // negotiation the AEAD key schedule needs. Both are filled from the SAME decoded
-    // wire region so the digest the gate bound is the digest the keys derive from.
+    // Facts + negotiation filled from the SAME decoded wire region, so the digest the gate
+    // bound is the digest the keys derive from.
     struct pending_attach
     {
         security::attach_facts facts{};
@@ -63,13 +55,10 @@ public:
         return m_authenticated_host_identity;
     }
 
-    // Mint this session's own_nonce ONCE (a fresh per-session salt for the key schedule)
-    // and adopt the prover's key_id when an attach prover is engaged. Idempotent: a second
-    // start() (a reconnect cycle) re-mints a fresh nonce, but a single cycle fills exactly
-    // once so the SAME value feeds self_request, the transcript, and the proof. A degraded
-    // RNG (rand_fn returns false) leaves the nonce zeroed on a best-effort basis — the
-    // engaged crypto path additionally depends on the seam being installed, which the
-    // deployment owns. The accept-any path (no rand_fn) leaves the nonce zero unchanged.
+    // Mint this session's own_nonce ONCE (a fresh key-schedule salt) so the SAME value feeds
+    // self_request, the transcript, and the proof; adopt the prover's key_id when engaged. A
+    // reconnect re-mints. A degraded RNG leaves the nonce zeroed (the engaged crypto path also
+    // needs the seam installed, which the deployment owns).
     void prime() noexcept
     {
         if(m_rand)
@@ -107,15 +96,10 @@ public:
                                         : security_kind::unauthorized_attach;
     }
 
-    // Assemble the attach facts + negotiation from a decoded handshake frame (request or
-    // response — both carry the identical attach region) and latch them as the pending
-    // attach. The peer's own_nonce is THIS side's verifier challenge in reverse: the peer
-    // chose it, so from the local node's standpoint it is the peer_nonce the proof must
-    // cover (anti-reflection). The transcript digest folds the negotiation through the
-    // injected (OpenSSL-free) seam; a disengaged seam leaves the digest zeroed and the
-    // accept-any path unchanged. The initiator/responder ids are pinned by role: the local
-    // node is one, the peer the other. No crypto runs here — the proof recompute lives in
-    // the policy, the key derivation behind the install hook.
+    // Assemble facts + negotiation from a decoded handshake frame (request or response — both
+    // carry the identical attach region). The peer's own_nonce is, from the local standpoint,
+    // the peer_nonce the proof must cover (anti-reflection); initiator/responder ids and nonces
+    // are pinned by local role. No crypto runs here.
     template<typename Frame>
     void assemble(const Frame &frame, security::attach_role local_role, const node_id &peer_id,
                   const node_id &self_id, bool policy_engaged)
@@ -125,8 +109,6 @@ public:
         out.negotiation.key_id        = frame.key_id;
         out.negotiation.role          = local_role;
         out.negotiation.chosen_cipher = frame.chosen_cipher;
-        // The local node's own challenge rides own_nonce; the peer's rides the decoded
-        // frame. initiator/responder nonces are assigned by the local role.
         out.negotiation.initiator_nonce =
                 local_role == security::attach_role::initiator ? m_own_nonce : frame.own_nonce;
         out.negotiation.responder_nonce =
@@ -143,11 +125,8 @@ public:
         m_pending_attach                  = out;
     }
 
-    // Latch the decoded wire proof into a stable member buffer and point facts.proof at
-    // it: the policy's ct_equal reads the span THROUGH the gate's decide() call, and a span
-    // into the transient decoded frame would dangle. The buffer is the negotiator's, so it
-    // outlives the synchronous gate. Called from the receive handlers AFTER the facts are
-    // assembled, before the FSM gate runs.
+    // Latch the wire proof into a stable member buffer (a span into the transient decoded frame
+    // would dangle through the gate's decide() call). Called after assemble, before the FSM gate.
     template<typename Frame>
     void latch_peer_proof(const Frame &frame)
     {
@@ -155,12 +134,8 @@ public:
         m_pending_attach.facts.proof = m_peer_proof;
     }
 
-    // The posture gate: a secured node (an engaged seam) and a plain peer (no
-    // cipher offered) are a hard mismatch BOTH ways — a secured local meeting a plain
-    // offer, OR a plain local meeting a secured offer — refused fail-closed with no
-    // silent plaintext fallback. The peer's posture is read from cipher_offer (a non-zero
-    // offer means it proposes AEAD). This runs ahead of the FSM accept so a mismatched
-    // pair never resolves.
+    // A secured node and a plain peer are a hard mismatch BOTH ways, refused fail-closed with no
+    // silent plaintext fallback. Runs ahead of the FSM accept so a mismatched pair never resolves.
     template<typename Frame>
     bool posture_mismatched(const Frame &frame) const noexcept
     {
@@ -169,13 +144,9 @@ public:
         return local_secured != peer_secured;
     }
 
-    // Compute the proof the dialer verifies: the responder reconstructs the DIALER's
-    // attach_facts view (the dialer is the initiator, so its own_nonce is the responder's
-    // peer_nonce and vice-versa) and MACs the canonical attach_proof_input under the shared
-    // PSK. The pending attach (assembled on this side's on_request) already carries the
-    // role-mirrored ids/nonces/transcript for the peer, so the dialer-view facts are that
-    // value with the role and nonces swapped to the dialer's standpoint. A disengaged
-    // prover returns a zero proof (the accept-any path leaves the field unused).
+    // Compute the proof the dialer verifies: reconstruct the DIALER's attach_facts view (the
+    // pending attach with role and nonces swapped to the dialer's standpoint) and MAC it under
+    // the shared PSK. A disengaged prover returns a zero proof (the accept-any path).
     std::array<std::byte, wire::k_handshake_proof_len> response_proof() const
     {
         std::array<std::byte, wire::k_handshake_proof_len> proof{};
@@ -188,18 +159,11 @@ public:
         return proof;
     }
 
-    // On a security-engaged accept, latch the authenticated host identity from the
-    // VERIFIED facts (never a wire claim) and install the AEAD decorator over a plaintext
-    // network channel. A transport that already authenticates-encrypts (a TLS/DTLS
-    // channel) is NOT double-wrapped — the attach still bound the identity, but no AEAD
-    // decorator is installed. The install hook runs before the forwarders so subsequent
-    // frames are sealed; the bridge holds the erased channel and the gated layer owns the
-    // EVP instantiation.
+    // Latch the authenticated host identity from the VERIFIED facts (never a wire claim) and
+    // install the AEAD decorator. A self-securing transport (TLS/DTLS) is NOT double-wrapped.
     // Returns false on a fail-closed posture refusal: a security-engaged accept over ANY
-    // plaintext network channel (stream OR datagram) with no AEAD install hook is refused,
-    // never silently proceeded — without the decorator a secured posture would transmit
-    // cleartext while reporting a latched authenticated identity. The two transports fail
-    // the same way; there is no stream-only fail-open exception.
+    // plaintext channel with no install hook is refused, never silently proceeded — without the
+    // decorator a secured posture would transmit cleartext under a latched identity.
     bool install_on_accept(bool channel_is_self_securing)
     {
         if(!m_pending_attach.engaged)
@@ -217,11 +181,9 @@ public:
     bool engaged() const noexcept { return m_pending_attach.engaged; }
 
 private:
-    // Fold the negotiation transcript (cipher_offer ‖ chosen ‖ protocol_version ‖ both
-    // nonces) into the facts' digest via the seam's injected hash. The transcript bytes
-    // are assembled in a fixed order both ends agree on; a stripped/forced offer changes
-    // the digest, so the gate's recomputed proof — and the derived keys — differ
-    // (downgrade refusal).
+    // Fold the transcript (cipher_offer ‖ chosen ‖ protocol_version ‖ both nonces, fixed order)
+    // into the digest. A stripped/forced offer changes the digest, so the recomputed proof — and
+    // the derived keys — differ (downgrade refusal).
     template<typename Frame>
     void compute_transcript(pending_attach &out, const Frame &frame) const
     {
@@ -243,10 +205,8 @@ private:
     const security_seam   *m_install_security_seam{nullptr};
     pending_attach         m_pending_attach;
     std::optional<node_id> m_authenticated_host_identity;
-    // The per-session attach credentials: own_nonce is minted once from the rand_fn seam
-    // (a fresh key-schedule salt per session — no all-zero nonce), key_id is adopted from
-    // the engaged prover. m_peer_proof is the stable backing buffer the decoded wire proof
-    // is latched into so the facts.proof span outlives the synchronous gate decide().
+    // m_peer_proof is the stable backing buffer the wire proof is latched into so the
+    // facts.proof span outlives the synchronous gate decide().
     std::array<std::byte, 16>                           m_own_nonce{};
     std::array<std::byte, wire::k_handshake_key_id_len> m_key_id{};
     std::array<std::byte, wire::k_handshake_proof_len>  m_peer_proof{};

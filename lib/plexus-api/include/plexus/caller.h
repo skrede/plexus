@@ -28,24 +28,11 @@
 
 namespace plexus {
 
-// The wire+local attribution split for a reply, mirroring io::message_info.
-// Populated honestly: a field carries data ONLY when the caller seam genuinely holds
-// it, and a field the response leg does not surface stays in its documented absent
-// state rather than a fabricated value.
-//
-// provider_identity is std::optional<publisher_gid>: it is engaged with the RESOLVED
-// provider node's node_id (the peer the call was deterministically targeted to), so
-// attribution is genuine at node granularity. The endpoint_counter half is the
-// documented absent state (0): the procedure provider's endpoint counter is not echoed
-// on the rpc_response wire, so it is never fabricated.
-//
-// source_timestamp is the absent state (0): the rpc_response frame carries a
-// frame-header timestamp, but the procedure_forwarder's on_response seam delivers only
-// the status and the return bytes, so it is not fabricated here.
-//
-// reception_timestamp is receiver-stamped at completion from the codec's clock.
-// from_intra_process is the absent state (false): the locality tier of the answering
-// channel is not surfaced through the on_response seam.
+// The wire+local attribution split for a reply, mirroring io::message_info. Populated
+// honestly: a field the response leg does not surface stays in its documented absent state
+// rather than a fabricated value. Only provider_identity (the resolved provider node_id) and
+// reception_timestamp (receiver-stamped) are genuine; the rest are not echoed on the
+// rpc_response wire / on_response seam, so they stay absent (0 / false).
 struct reply_info
 {
     std::optional<publisher_gid> provider_identity{};
@@ -54,63 +41,47 @@ struct reply_info
     bool                         from_intra_process{};
 };
 
-// The successful reply handed to the completion: a VIEW into the response frame's
-// return bytes (valid for the completion invocation only — never retained) plus the
-// reply_info attribution.
+// A VIEW into the response frame's return bytes (valid for the completion invocation only,
+// never retained) plus the reply_info attribution.
 struct reply
 {
     std::span<const std::byte> bytes;
     reply_info                 info;
 };
 
-// Per-call options, an extensible designated-initializer aggregate. deadline is
-// std::optional because its ABSENCE is meaningful — absent means "use the forwarder's
-// construction-time default deadline", a distinct state from any concrete override.
+// deadline is optional because ABSENCE is meaningful: absent = use the forwarder's
+// construction-time default, distinct from any concrete override.
 struct call_options
 {
     std::optional<std::chrono::nanoseconds> deadline{};
 };
 
-// The calling endpoint family. The codec slots are template-template parameters: a slot
-// takes a codec FAMILY (a class template over one value type), not a finished codec, and
-// the typed specialization applies CReq<request_t> / CRes<response_t>. The response family
-// defaults to the request family (the symmetric form), so caller<Res(Req), pair_codec>
-// expands to pair_codec<request_t> / pair_codec<response_t>. The bytes endpoint is the
-// caller<void, no_codec, no_codec> specialization below — caller<> selects it via the
-// defaulted parameters (the defaults live in node.h's forward declaration, seen first), so
-// every bytes spelling keeps compiling. no_codec is a sentinel family that names the bytes
-// default and is never instantiated.
+// The codec slots are template-template parameters (a codec FAMILY over one value type, not a
+// finished codec); the response family defaults to the request family (the symmetric form).
+// The bytes endpoint is the caller<void, no_codec, no_codec> specialization; caller<> selects
+// it via the defaulted parameters (the defaults live in node.h's forward declaration, seen
+// first). no_codec is a sentinel family, never instantiated.
 template<typename Sig, template<typename> class CReq, template<typename> class CRes>
 class caller;
 
-// The bytes calling endpoint: the CONSTRUCTOR binds the node and fqn; the handle owns
-// the call verb. The caller is CALLBACK-ONLY — there is no blocking/future form (a
-// blocking call on the borrowed single-thread loop is a deadlock by construction; a
-// consumer owning threads wraps the callback in a few lines). The completion is exactly
-// void(plexus::expected<reply, std::error_code>): a success carries reply{bytes, info};
-// every failure carries a call_errc.
+// The bytes calling endpoint. CALLBACK-ONLY — there is no blocking/future form (a blocking
+// call on the borrowed single-thread loop is a deadlock by construction). The completion is
+// void(expected<reply, std::error_code>).
 //
-// PROVIDER RESOLUTION (single-provider): a call targets the FIRST connection-order peer
-// with a complete session. A node REFUSES a second LOCAL procedure registration on one
-// fqn (procedure.h), so within a process the provider is unique; global multi-provider
-// arbitration is structurally out of scope. A call with NO connected provider does NOT
-// hang, buffer, or queue: the completion is POSTED on the borrowed executor carrying
-// call_errc::no_provider. A wrong-aim (a peer that does not serve the fqn) resolves
-// no_handler through the existing per-call deadline path.
+// PROVIDER RESOLUTION (single-provider): a call targets the FIRST connection-order peer with a
+// complete session (a node refuses a second LOCAL registration on one fqn, so in-process the
+// provider is unique). A call with NO connected provider does NOT hang/buffer/queue — the
+// completion is POSTED carrying call_errc::no_provider; a wrong-aim resolves no_handler through
+// the per-call deadline path.
 //
-// LIFETIME: a caller must NOT outlive its node. Dropping the handle is
-// bookkeeping-only — it does NOT cancel an in-flight call: a completion already handed
-// to the forwarder runs to its resolution (the asio convention — the operation owns its
-// completion, not the initiating handle). Cancellation sugar is seeded, not invented
-// here. A moved-from handle is inert.
+// LIFETIME: a caller must NOT outlive its node. Dropping the handle does NOT cancel an in-flight
+// call — a completion already handed to the forwarder runs to resolution (the asio convention:
+// the operation owns its completion). A moved-from handle is inert.
 template<>
 class caller<void, no_codec, no_codec>
 {
 public:
-    // The completion-side callback the node seam fans: the wire status (ENGAGED on a
-    // routed call, ABSENT = the facade no_provider verdict that never rode the wire),
-    // the return bytes, and the RESOLVED provider gid (engaged on a routed call, absent
-    // on the no_provider leg). The Policy-free shape lifted into endpoint_seam.h.
+    // An ABSENT wire status is the facade no_provider verdict that never rode the wire.
     using on_reply_fn = io::on_reply_fn;
 
     template<typename Policy, typename... NodeTs>
@@ -120,10 +91,8 @@ public:
     {
     }
 
-    // The hot verb: resolve the first connected provider and dispatch the call; on no
-    // provider, POST the no_provider completion (never inline). The completion is
-    // adapted from the forwarder's (rpc_status, bytes) into expected<reply, error_code>:
-    // a success status yields reply{bytes, info}; every failure maps via from_rpc_status.
+    // Resolve the first connected provider and dispatch; on no provider, POST the no_provider
+    // completion (never inline).
     template<typename Completion>
     void call(std::span<const std::byte> param, Completion &&completion)
     {
@@ -177,23 +146,14 @@ private:
     std::string       m_fqn;
 };
 
-// The typed calling endpoint: an encode/decode adaptation around the bytes caller. The
-// codec slots are FAMILIES — CReq<Req> encodes the request, CRes<Res> decodes the reply —
-// and each expansion must satisfy typed_codec (the requires-clause enforces it at the point
-// of expansion, so a family that does not model a codec for a half names that half plainly).
-// call(const Req&, completion[, options]) encodes the request via CReq<Req> and completes the
-// caller with void(expected<Res, std::error_code>). There is NO inproc fast path for RPC
-// by design — a request/response always rides bytes.
+// The typed calling endpoint: an encode/decode adaptation around the bytes caller. There is NO
+// inproc fast path for RPC by design — a request/response always rides bytes.
 //
-// The completion adapter:
-//   - an ABSENT wire status is the facade no_provider verdict (call_errc::no_provider);
-//   - rpc_status::success decodes Res via CRes (a decode failure → deserialize_failed);
-//   - rpc_status::error with a well-formed varint error-leg payload reconstructs the
-//     provider's error VALUE under provider_category (value preserved, category erased);
-//   - an empty or MALFORMED error-leg payload falls back to from_rpc_status — so a bytes
-//     procedure replying a bare error completes this typed caller with call_errc::error
-//     (the interop fallback: a hostile varint never crashes, never half-decodes);
-//   - every other failure leg passes through from_rpc_status unchanged.
+// The completion adapter maps the wire reply: success decodes Res via CRes (a decode failure →
+// deserialize_failed); a well-formed varint error-leg reconstructs the provider's error VALUE
+// under provider_category (value preserved, category erased); an empty/MALFORMED error-leg
+// falls back to from_rpc_status (the interop fallback — a hostile varint never crashes nor
+// half-decodes).
 template<typename Res, typename Req, template<typename> class CReq, template<typename> class CRes>
     requires typed_codec<CReq<Req>> && typed_codec<CRes<Res>>
 class caller<Res(Req), CReq, CRes>

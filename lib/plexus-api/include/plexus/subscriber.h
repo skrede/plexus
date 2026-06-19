@@ -25,18 +25,14 @@
 
 namespace plexus {
 
-// The subscribing endpoint family. The primary template names the typed endpoint
-// (subscriber<Codec> below); the bytes endpoint is the subscriber<void> specialization —
-// subscriber<> selects it via the defaulted Codec (the default lives in node.h's forward
-// declaration, seen first), so every bytes spelling keeps compiling unchanged.
+// The bytes endpoint is the subscriber<void> specialization; subscriber<> selects it via the
+// defaulted Codec (the default lives in node.h's forward declaration, seen first).
 template<typename Codec>
 class subscriber;
 
-// The typed subscriber's construction-time options. posture is the typed attach gate
-// (lenient default attaches to an untyped producer; strict refuses it). on_decode_failure
-// is the opt-in escape callback receiving the raw bytes + errc instead of a dropped frame
-// — std::optional because absence is meaningful (the default is drop+count+warn alone).
-// An explicit type identity overrides the codec's own.
+// posture is the typed attach gate (lenient attaches to an untyped producer; strict refuses).
+// on_decode_failure is optional because absence is meaningful: the default is drop+count+warn,
+// present hands the raw bytes + errc instead. An explicit type_id overrides the codec's own.
 struct typed_subscriber_options
 {
     io::subscriber_qos           qos{};
@@ -45,26 +41,20 @@ struct typed_subscriber_options
     std::optional<std::function<void(std::span<const std::byte>, std::error_code)>>
             on_decode_failure{};
 
-    // The per-topic recording-QoS override. std::optional because ABSENCE is meaningful:
-    // unset falls back to the node-level recording_qos default, present overrides the
-    // recording fidelity for this topic alone (the shm_geometry/publisher precedent).
+    // optional because ABSENCE is meaningful (the shm_geometry/publisher precedent): unset
+    // falls back to the node-level recording_qos, present overrides this topic's fidelity.
     std::optional<recording_qos> capture{};
 };
 
-// The bytes subscribing endpoint: the CONSTRUCTOR is the registration — it installs a
-// STANDING topic-level demand on the node, which fans the per-peer subscribe to every
-// known peer now and to each later-discovered peer with no further user action. The
-// callback accepts EITHER a 2-arg `void(span<const std::byte>)` or a 3-arg
-// `void(span<const std::byte>, const message_info&)` callable, dispatched at
-// construction with if constexpr — a 2-arg callback costs nothing for the metadata it
-// ignores.
+// The bytes subscribing endpoint: the CONSTRUCTOR installs a STANDING topic-level demand,
+// fanning the per-peer subscribe to every known peer now and to each later-discovered peer.
+// The callback accepts a 2- or 3-arg form, dispatched at construction with if constexpr (a
+// 2-arg callback costs nothing for the metadata it ignores).
 //
-// LIFETIME: a subscriber must NOT outlive its node. The canonical usage is
-// member-init aggregation (node ref first, handles after), so reverse destruction
-// retires the demand before the node. Dropping the handle retires the demand: it stops
-// the callback and, when it was the last local subscriber for the fqn, unsubscribes the
-// topic from every fanned peer. A moved-from handle is inert (empty retire); its
-// destructor does nothing, so no callback ever fires through a dropped subscriber.
+// LIFETIME: a subscriber must NOT outlive its node (member-init aggregation, node ref first).
+// Dropping the handle retires the demand: it stops the callback and, when it was the last
+// local subscriber for the fqn, unsubscribes the topic from every fanned peer. A moved-from
+// handle is inert, so no callback ever fires through a dropped subscriber.
 template<>
 class subscriber<void>
 {
@@ -79,9 +69,8 @@ public:
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const io::subscriber_qos &qos,
                Cb cb)
     {
-        // The arity is the implicit stamp demand: a 2-arg callback provably consumes no
-        // message_info, so it never wants the receive-side clock read. Resolved once here
-        // (the same if constexpr adapt() keys on) and carried on the LOCAL qos only.
+        // A 2-arg callback consumes no message_info, so it never wants the receive-side clock
+        // read. Carried on the LOCAL qos only — never the subscribe wire region.
         io::subscriber_qos local_qos = qos;
         local_qos.wants_message_info =
                 std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>;
@@ -105,10 +94,8 @@ public:
     }
 
 private:
-    // Normalize the user callback to the node's 3-arg demux shape. A 3-arg callable is
-    // forwarded the message_info; a 2-arg callable is wrapped to drop it. The arity is
-    // resolved ONCE here (the cold registration path), so the hot demux fans a uniform
-    // signature with no per-frame branch.
+    // Normalize the user callback to the node's 3-arg demux shape, the arity resolved ONCE here
+    // (the cold path), so the hot demux fans a uniform signature with no per-frame branch.
     template<typename Cb>
     static plexus::detail::move_only_function<void(std::span<const std::byte>,
                                                    const io::message_info &)>
@@ -126,22 +113,17 @@ private:
     plexus::detail::move_only_function<void()> m_retire;
 };
 
-// The typed subscribing endpoint: the CONSTRUCTOR installs a standing typed demand. It
-// registers BOTH a bytes decode adapter (decode → typed callback; a decode failure is
-// dropped+counted+warned, with the opt-in escape callback handed the raw bytes + errc)
-// AND a process-tier object-dispatch entry (native-key-checked, recovering the concrete T
-// from the carrier and invoking the SAME normalized callback) under ONE registration id,
-// so retire is atomic. The callback accepts EITHER `void(const T&)` or
-// `void(const T&, const message_info&)`, the arity resolved ONCE at registration.
+// The typed subscribing endpoint: the CONSTRUCTOR installs a standing typed demand, registering
+// BOTH a bytes decode adapter and a process-tier object-dispatch entry (native-key-checked)
+// under ONE registration id, so retire is atomic. A decode failure is dropped+counted+warned.
+// The callback accepts a 1- or 2-arg form, the arity resolved ONCE at registration.
 //
-// VIEW-T LIFETIME: a view-type value_type (one aliasing the decode span / the carrier
-// slot rather than copying) is valid for the callback invocation ONLY; deferred
-// consumption must copy the value out before the callback returns.
+// VIEW-T LIFETIME: a view-type value_type (aliasing the decode span / carrier slot) is valid
+// for the callback invocation ONLY; deferred consumption must copy out before the return.
 //
-// LIFETIME: a subscriber must NOT outlive its node (member-init aggregation, node ref
-// first). The decode state lives in a heap block the handle owns; the node's stored
-// adapters reference it by raw pointer and are retired (removing both entries) before the
-// block is freed. A moved-from handle is inert; its destructor does nothing.
+// LIFETIME: a subscriber must NOT outlive its node. The decode state lives in a heap block the
+// handle owns; the node's adapters reference it by raw pointer and are retired before the block
+// is freed. A moved-from handle is inert.
 template<typename Codec>
 class subscriber
 {
@@ -170,8 +152,7 @@ public:
         const auto         identity = resolve_identity(m_state->codec, opts.type_id);
         io::subscriber_qos qos      = opts.qos;
         qos.posture                 = opts.posture;
-        // A 2-arg typed callback consumes no message_info, so it never wants the receive-
-        // side clock read; a 3-arg callback wants it UNLESS the qos explicitly opted out.
+        // A 1-arg callback wants no message_info; a 2-arg wants it UNLESS the qos opted out.
         // Carried on the LOCAL qos only — never the subscribe wire region.
         qos.wants_message_info =
                 std::is_invocable_v<Cb &, const value_type &, const io::message_info &> &&
@@ -193,8 +174,7 @@ public:
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
-    // The count of inbound frames whose decode failed — dropped, never a partial T. Read
-    // through the live handle.
+    // Inbound frames whose decode failed — dropped, never a partial T.
     [[nodiscard]] std::size_t decode_failed() const noexcept { return m_state->decode_failed; }
 
     subscriber(subscriber &&) noexcept            = default;
@@ -222,9 +202,8 @@ private:
             { cb(v); };
     }
 
-    // The heap-stable decode state the node's adapters reference by raw pointer. It owns
-    // the codec, the normalized callback, the reused decode slot, the failure counter, and
-    // the opt-in escape callback — all cold-path setup, no per-message allocation.
+    // The heap-stable decode state the node's adapters reference by raw pointer. The reused
+    // slot is per-handle, so there is no per-message allocation.
     struct state
     {
         Codec                                                                           codec;
@@ -241,9 +220,7 @@ private:
         {
         }
 
-        // The bytes path: decode into the reused slot. Success invokes the typed callback
-        // for its duration; failure increments the counter, hands the escape callback the
-        // raw bytes + errc if set, and drops — NEVER a partial T, never a teardown.
+        // Decode into the reused slot; failure drops — NEVER a partial T, never a teardown.
         void on_bytes(std::span<const std::byte> bytes, const io::message_info &info)
         {
             auto decoded = codec.decode(bytes, slot);
@@ -257,8 +234,7 @@ private:
                 (*on_failure)(bytes, decoded.error());
         }
 
-        // The object path: recover the concrete T from the carrier's slot (the demux has
-        // already native-key-matched) and invoke the SAME callback for its duration.
+        // The demux has already native-key-matched: recover the concrete T from the carrier.
         void on_object(const io::object_carrier &carrier, const io::message_info &info)
         {
             callback(*static_cast<const value_type *>(carrier.slot->object), info);

@@ -46,14 +46,14 @@
 
 namespace plexus::io {
 
-// Durable subscribe demand: stores the subscriber's OWN requested qos so a deferred
-// dial resurrects the real periods (not a default 0). The fqn is the key.
+// Durable subscribe demand: stores the subscriber's OWN requested qos so a deferred dial
+// resurrects the real periods (not a default 0). The fqn is the key.
 struct remembered_demand
 {
     std::string    fqn;
     subscriber_qos qos;
-    // std::nullopt = undeclared. Without it a typed subscriber surviving a reconnect
-    // would silently re-subscribe untyped.
+    // nullopt = undeclared — without it a typed subscriber surviving a reconnect would silently
+    // re-subscribe untyped.
     std::optional<std::uint64_t> type_id;
 };
 
@@ -65,13 +65,10 @@ constexpr std::size_t k_history_depth_cap = 1024;
 // min(max_samples, ring.count(), this) — never more than count owned ring frames.
 constexpr std::size_t k_fetch_cap = 1024;
 
-// >200 LOC: the attach/publish/deliver/replay verbs are one cohesive pub/sub engine over
-// a shared registry + scratch state; splitting them would scatter that state behind seams.
-//
-// Payload-opaque pub/sub engine. Refcount-gated (one subscribe per uninterrupted attach
-// run), frames each publish ONCE and shares the single owning buffer across subscribers,
-// and warn-and-drops a malformed frame on the receive tail through the injected cold-path
-// logger& (default shared null_logger). It never interprets the payload.
+// Payload-opaque pub/sub engine. Refcount-gated (one subscribe per uninterrupted attach run),
+// frames each publish ONCE and shares the single owning buffer across subscribers, and
+// warn-and-drops a malformed frame on the receive tail through the injected logger&. It never
+// interprets the payload.
 template<typename Policy>
     requires plexus::Policy<Policy>
 class message_forwarder
@@ -81,11 +78,9 @@ public:
     using endpoint_type = subscription_endpoint<channel_type>;
     using peer          = typename endpoint_type::peer;
 
-    // global_default is the node-level per-message size default the RxO size relation
-    // resolves an offered topic's 0=unset max against — the SAME node-level value the
-    // data-path transports resolve against, so a remote subscribe is admitted against
-    // one consistent ceiling rather than a forwarder-local constant that could drift.
-    // It is required-with-default: the shipped constant is the meaningful fallback.
+    // global_default is the node-level per-message size ceiling the RxO size relation resolves an
+    // offered topic's 0=unset max against — the SAME value the data-path transports use, so a
+    // remote subscribe is admitted against one consistent ceiling, not a drift-prone local one.
     explicit message_forwarder(std::size_t  global_default = io::global_default_max_message_bytes,
                                log::logger &logger         = shared_null_logger())
             : m_logger(logger)
@@ -93,9 +88,8 @@ public:
     {
     }
 
-    // Per-(peer, fqn) refcount gate: only the 0->1 transition registers the fan-out
-    // entry and emits the wire subscribe_request; later attaches just bump and return
-    // false. The subscriber's declared type_id rides the request for subscribe-time match.
+    // Per-(peer, fqn) refcount gate: only the 0->1 transition registers the fan-out entry and
+    // emits the wire subscribe_request; later attaches just bump and return false.
     bool attach(const peer &p, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{},
                 std::optional<std::uint64_t> type_id = std::nullopt)
     {
@@ -106,18 +100,16 @@ public:
         record_remote_topic(p.node_name, fqn, qos, type_id);
         send_subscribe(p.channel, fqn, hash, type_id, qos);
         emit_qos_change(qos_edge::accepted, hash, qos, rxo_verdict::compatible, type_id);
-        // The local node issued the subscribe: it is the SUBSCRIBER for this pair, so a
-        // co-host same-host upgrade DRAINS the companion ring into the receive path.
+        // The local node issued the subscribe — it is the SUBSCRIBER, so a co-host upgrade drains
+        // the companion ring into the receive path.
         emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::subscriber);
         return true;
     }
 
-    // The producer-side reaction to an arriving subscribe: matches the subscriber's
-    // declared type_id against this topic's producer type_id, then runs the full QoS
-    // compatibility gate. Each refusal replies a status, registers NO fan-out entry, and
-    // returns false (a per-topic refusal, never a peer teardown). Matching authority is
-    // the type_id alone; a forged type_id only yields a refusal (an equality compare, no
-    // parsing risk), and subscribe.h already caps the attacker-controlled string fields.
+    // The producer-side reaction to an arriving subscribe: match the subscriber's type_id, then
+    // run the full QoS compatibility gate. Each refusal replies a status, registers NO fan-out
+    // entry, returns false (a per-topic refusal, never a peer teardown). Matching authority is
+    // the type_id alone (an equality compare, no parsing risk; subscribe.h caps the string fields).
     bool attach_for_fanout(const peer &p, std::string_view fqn,
                            std::optional<std::uint64_t> subscriber_type_id = std::nullopt,
                            const subscriber_qos        &sub_qos            = subscriber_qos{})
@@ -130,8 +122,8 @@ public:
             send_control(p.channel, wire::msg_type::subscribe_response, resp);
             return false;
         }
-        // Strict typed posture: a typed-and-strict subscriber refuses an untyped producer.
-        // Ordered AFTER type_mismatch (a declared-vs-declared mismatch is more specific).
+        // A typed-and-strict subscriber refuses an untyped producer. Ordered AFTER type_mismatch
+        // (a declared-vs-declared mismatch is more specific).
         if(sub_qos.posture == attach_posture::strict && subscriber_type_id &&
            !m_endpoint.registry().producer_type_id(hash))
         {
@@ -140,9 +132,8 @@ public:
             send_control(p.channel, wire::msg_type::subscribe_response, resp);
             return false;
         }
-        // The request-vs-offered compatibility gate over the full QoS matrix: the
-        // subscriber's REQUESTED sub_qos arrived off the wire; the topic's OFFERED qos and
-        // source-identity offer are read locally.
+        // The request-vs-offered gate: the REQUESTED sub_qos arrived off the wire, the OFFERED
+        // qos + source-identity offer are read locally.
         const topic_qos offered    = m_endpoint.registry().qos_for(hash);
         const bool      offers_sid = m_endpoint.registry().offers_source_identity(hash);
         const auto      rxo        = io::rxo_check(offered, offers_sid, m_global_default, sub_qos);
@@ -174,15 +165,14 @@ public:
                           {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
         send_control(p.channel, wire::msg_type::subscribe_response, resp);
         replay_if_latched(p, hash);
-        // A remote subscribe arrived: the local node is the PUBLISHER for this pair, so a
-        // co-host same-host upgrade mints the send companion the publish fan routes over.
+        // A remote subscribe arrived — the local node is the PUBLISHER, so a co-host upgrade mints
+        // the send companion the publish fan routes over.
         emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::publisher);
         return true;
     }
 
-    // Record durable subscribe demand WITHOUT a wire emit — the engine calls this when
-    // subscribe is requested, possibly before the session exists (async dial pending), so
-    // the session resurrects it through the counted path on completion.
+    // Record durable subscribe demand WITHOUT a wire emit — possibly before the session exists
+    // (async dial pending), so the session resurrects it through the counted path on completion.
     void remember_demand(const std::string &node_name, std::string_view fqn,
                          const subscriber_qos        &qos     = subscriber_qos{},
                          std::optional<std::uint64_t> type_id = std::nullopt)
@@ -198,10 +188,9 @@ public:
         forget_remote_topic(node_name, fqn);
     }
 
-    // Mark a topic with a publisher-declared qos once. producer_type_id is the
-    // subscribe-time match authority. emit_source_identity opts the topic into per-frame
-    // source-identity carriage: publishes set the gid flag and carry a varint endpoint
-    // counter the receiver pairs with the session peer's node_id.
+    // producer_type_id is the subscribe-time match authority. emit_source_identity opts the topic
+    // into per-frame source-identity carriage (the gid flag + a varint endpoint counter the
+    // receiver pairs with the session peer's node_id).
     void declare(std::string_view fqn, topic_qos qos,
                  std::optional<std::uint64_t> producer_type_id     = std::nullopt,
                  bool                         emit_source_identity = false)
@@ -212,9 +201,9 @@ public:
 
     void latch(std::string_view fqn) { declare(fqn, topic_qos{.latch = true, .depth = 1}); }
 
-    // Frame ONCE and fan the single owning buffer to each subscribed channel; no
-    // subscriber means no send (demand-driven). session_id is passed per send (NOT a
-    // member) because a node-shared forwarder fans to many peers, each with its own epoch.
+    // Frame ONCE and fan the single owning buffer to each subscribed channel (no subscriber = no
+    // send). session_id is per-send, not a member: a node-shared forwarder fans to many peers,
+    // each with its own epoch.
     void publish(std::string_view fqn, std::span<const std::byte> payload,
                  std::uint64_t session_id = 0)
     {
@@ -233,10 +222,8 @@ public:
         wire::unidirectional_header uhdr{.source     = wire::endpoint_source_type::publisher,
                                          .sequence   = m_endpoint.next_sequence(),
                                          .topic_hash = hash};
-        // When the topic offers source identity, frame the gid flag + a varint endpoint
-        // counter the receiver pairs with the session node_id; absent yields a
-        // byte-identical no-flag frame. Decided once at framing time, so the
-        // frame-ONCE-fan-to-N invariant holds (one buffer for all subs).
+        // Decided once at framing time so the frame-ONCE-fan-to-N invariant holds; absent yields
+        // a byte-identical no-flag frame.
         const std::optional<std::uint64_t> counter =
                 topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
         wire::frame_header fhdr{
@@ -246,47 +233,34 @@ public:
                 .timestamp_ns = wire::now_timestamp_ns(),
                 .payload_len  = 0 // set inside the one-pass encode from the framed region size
         };
-        // Frame ONCE into a single owning buffer; the owner is addref-shared to each
-        // subscriber's band slot (frame-once-fan-to-N) and rides the band → channel send
-        // queue with no further copy.
+        // The owner is addref-shared to each subscriber's band slot (frame-once-fan-to-N) and
+        // rides the band → channel send queue with no further copy.
         const wire_bytes<> framed = frame_owned(fhdr, uhdr, payload, counter);
 
-        // The taps see the BARE codec bytes (the framed buffer minus the frame prefix),
-        // an aliasing subspan sharing the framed owner — the prefix size is known here at
-        // the framing site, so the offline projector never re-parses framing to strip it.
+        // The BARE codec bytes (the framed buffer minus the frame prefix), an aliasing subspan
+        // sharing the framed owner, so the offline projector never re-parses framing to strip it.
         const message_view bare = bare_of(framed, counter);
 
-        // The published tap fires ONCE after framing, borrowing the framed owner (an
-        // addref of the single per-publish buffer, never a copy); the delivered tap fires
-        // ONCE per fanned destination below. Both stay posted through the engine sink.
         emit_published(hash, fqn, bare);
 
         const message_info pub_info{.publication_sequence = uhdr.sequence,
                                     .source_timestamp     = fhdr.timestamp_ns};
 
-        // The fan-out confinement gate: send to a subscriber only when the topic's reach
-        // mask shares a bit with the subscriber's cached tier (fail-closed access control).
-        // The reach gate stays BEFORE the egress enqueue. The scheduler governs the LIVE
-        // fan-out only; control frames and latch replay take direct channel.send.
+        // The confinement gate: send only when the topic's reach mask shares a bit with the
+        // subscriber's cached tier (fail-closed access control), BEFORE the egress enqueue. The
+        // scheduler governs the LIVE fan-out only; control frames and latch replay take direct
+        // send.
         const std::size_t band = detail::band_of(qos.priority);
         if(subs != nullptr)
             for(const auto &sub : *subs)
                 if(any_set(reach, sub.tier))
                 {
-                    // The wire_fallback per-message size route, the ONLY place a medium
-                    // is chosen per message. m_companion_route is installed solely for a
-                    // wire_fallback subscriber that has a capped SHM companion ring; it
-                    // returns the SHM channel when this message fits the cap, else
-                    // nullptr. The recorded sub.channel STAYS the wire (the dual-delivery
-                    // fail-safe): a missing companion, an over-cap message, or a topic in
-                    // either non-wire-fallback mode all route over sub.channel with no
-                    // change. The hook is UNSET when no such companion exists, so the two
-                    // other modes (and every SHM-off build) take the byte-identical path.
-                    // Gate the companion route on the FRAMED size, not the bare payload: the
-                    // ring slot is sized in and carries framed bytes, so a bare-size gate would
-                    // route a near-cap message whose frame overflows the slot to SHM only, where
-                    // the oversize send is dropped and the wire fail-safe never runs (a loss on
-                    // both lanes).
+                    // The ONLY place a medium is chosen per message: the companion route returns
+                    // the SHM channel when this message fits the cap, else nullptr to keep the
+                    // wire sub.channel (the dual-delivery fail-safe). Gate on the FRAMED size, not
+                    // the bare payload: the ring slot carries framed bytes, so a bare-size gate
+                    // would route a near-cap message whose frame overflows the slot to SHM only,
+                    // where the oversize send is dropped and the wire fail-safe never runs.
                     channel_type *route = sub.channel;
                     if(m_companion_route)
                         if(channel_type *companion =
@@ -302,14 +276,13 @@ public:
         retain_if_latched(hash, qos, framed);
     }
 
-    // The zero-serialization sibling of publish: fans a refcounted object handle behind
-    // the SAME confinement gate, falling back to the byte path for any subscriber the fast
-    // path cannot serve. encode is invoked AT MOST ONCE, lazily, the first time any byte
-    // need appears. The carrier's sequence is stamped from the same counter publish uses.
+    // The zero-serialization sibling of publish: fans a refcounted object handle behind the SAME
+    // confinement gate, falling back to the byte path for any subscriber the fast path cannot
+    // serve. encode is invoked AT MOST ONCE, lazily, the first time any byte need appears.
     //
-    // Reference protocol: the CALLER owns one reference on entry; each fast-path
-    // send_object addrefs through the bus, and this verb releases the caller's reference
-    // once after the fan loop — so the slot is balanced on every path.
+    // Reference protocol: the CALLER owns one reference on entry; each fast-path send_object
+    // addrefs through the bus, and this verb releases the caller's reference once after the fan
+    // loop — so the slot is balanced on every path.
     template<typename EncodeFn>
     void publish_object(std::string_view fqn, object_carrier carrier, EncodeFn &&encode,
                         std::uint64_t session_id = 0)
@@ -324,15 +297,13 @@ public:
 
         carrier.topic_hash = hash;
         carrier.sequence   = m_endpoint.next_sequence();
-        // Skip the source-stamp clock read when no attached subscriber wants message_info,
-        // leaving source_timestamp == 0 (the "not stamped" sentinel the ==0 keying relies
-        // on). The latch is local-only, so a remote-decoded subscriber always reads true.
+        // Skip the clock read when no subscriber wants message_info, leaving source_timestamp ==
+        // 0 (the "not stamped" sentinel the ==0 keying relies on).
         if(carrier.source_timestamp == 0 && (topic == nullptr || topic->any_subscriber_wants_info))
             carrier.source_timestamp = wire::now_timestamp_ns();
 
-        // Framed lazily AT MOST ONCE into a single owning buffer the first time any byte
-        // need appears, then addref-shared across every byte-path subscriber + the latch
-        // ring (frame-once-fan-to-N).
+        // Framed lazily AT MOST ONCE, then addref-shared across every byte-path subscriber + the
+        // latch ring (frame-once-fan-to-N).
         wire_bytes<>                       framed;
         bool                               encoded = false;
         const std::optional<std::uint64_t> counter = topic != nullptr && topic->emit_source_identity
@@ -357,21 +328,17 @@ public:
             framed = frame_owned(fhdr, uhdr, bytes, counter);
         };
 
-        // The typed loan path carries NO payload, so its observation view is ENVELOPE-ONLY
-        // by default (the carrier's metadata, no payload encode): recording payload on the
-        // zero-serialization lane is a sovereign opt-in, never silently imposed. The capture
-        // gate decides BEFORE the encode — only a selected, non-decimated, payload-fidelity
-        // topic forces the lazy encode and hands the taps real bytes; everything else stays
-        // envelope-only and pays no encode. The published tap fires once, the delivered tap
-        // once per fanned destination below.
+        // The typed loan path carries NO payload, so its observation view is ENVELOPE-ONLY by
+        // default — recording payload here is a sovereign opt-in. The capture gate decides BEFORE
+        // the encode: only a selected, non-decimated, payload-fidelity topic forces the lazy
+        // encode; everything else stays envelope-only and pays no encode.
         const bool capture_payload = m_capture_wants_payload && m_capture_wants_payload(hash);
         const message_info obj_info{.publication_sequence = carrier.sequence,
                                     .source_timestamp     = carrier.source_timestamp};
         if(capture_payload)
             encode_once();
-        // The bare codec bytes (the framed buffer minus the frame prefix), an aliasing
-        // subspan sharing the framed owner — built only when the encode fired, so an
-        // unselected topic stays envelope-only (message_view{}) and pays no encode.
+        // Built only when the encode fired, so an unselected topic stays envelope-only and pays
+        // no encode.
         const message_view bare = capture_payload ? bare_of(framed, counter) : message_view{};
         emit_published(hash, fqn, bare);
 
@@ -381,9 +348,8 @@ public:
             {
                 if(!any_set(reach, sub.tier))
                     continue;
-                // Gated at COMPILE TIME: a channel without send_object (every remote/local
-                // stream channel — the lane is process-tier only) never instantiates the
-                // call and always takes the byte path here.
+                // Gated at COMPILE TIME: a channel without send_object (the lane is process-tier
+                // only) never instantiates the call and always takes the byte path.
                 if constexpr(requires(channel_type &c) { c.send_object(carrier); })
                 {
                     if(eligible_for_object(sub, carrier))
@@ -401,8 +367,8 @@ public:
                 emit_delivered(hash, fqn, obj_info, bare);
             }
 
-        // Force one encode even when every live subscriber fast-pathed, so a late bytes
-        // joiner replays a real frame from the history ring.
+        // Force one encode even when every live subscriber fast-pathed, so a late bytes joiner
+        // replays a real frame from the history ring.
         if(latched)
         {
             encode_once();
@@ -426,8 +392,8 @@ public:
         send_control(p.channel, wire::msg_type::unsubscribe, req);
         emit_qos_change(qos_edge::unsubscribed, hash, subscriber_qos{}, rxo_verdict::compatible,
                         std::nullopt);
-        // The mirror of attach (subscriber role); the down-edge drops whichever lane the
-        // pair held — the coordinator keys teardown by (peer, fqn), not by role.
+        // The down-edge drops whichever lane the pair held — the coordinator keys teardown by
+        // (peer, fqn), not by role.
         emit_demand_transition(p.node_name, fqn, demand_transition::down, demand_role::subscriber);
         return true;
     }
@@ -442,9 +408,8 @@ public:
         m_egress.remove(p.channel);
     }
 
-    // The durable subscribe demand for a peer's node_name (a pure read, no wire emit) so
-    // the forwarder stays readiness-agnostic: the session reads this to resurrect its
-    // counted subscribes on reconnect. Empty vector for an unknown node_name.
+    // A pure read so the forwarder stays readiness-agnostic: the session reads this to resurrect
+    // its counted subscribes on reconnect. Empty vector for an unknown node_name.
     const std::vector<remembered_demand> &remembered_topics(const std::string &node_name) const
     {
         static const std::vector<remembered_demand> empty;
@@ -452,19 +417,17 @@ public:
         return it == m_remote_topics.end() ? empty : it->second;
     }
 
-    // The receive tail: decode the INNER unidirectional payload (the frame_router owns the
-    // frame_header strip and the type switch), resolve the fqn by topic_hash, and hand the
-    // opaque wire_bytes up to on_message. A decode failure or unresolved topic_hash is
-    // warn-and-DROPPED through the injected logger&: never thrown, never propagated.
+    // Decode the INNER unidirectional payload, resolve the fqn by topic_hash, and hand the opaque
+    // wire_bytes up to on_message. A decode failure or unresolved topic_hash is warn-and-DROPPED
+    // through the injected logger&: never thrown, never propagated.
     template<typename OnMessage>
     void deliver(const peer &p, std::span<const std::byte> inner, const node_id &source_node_id,
                  bool has_source_identity, OnMessage &&on_message)
     {
         (void)p; // identity symmetry with the procedure receive tail; resolution is by topic_hash
-        // has_source_identity mirrors the frame's gid flag. The bytes-only tail discards
-        // the counter, but it MUST still pass the flag: the producer emits the varint per
-        // ITS topic declaration, independent of which receive callback is set, so the data
-        // span is only correct when the flag is honored on decode.
+        // The bytes-only tail discards the counter but MUST still pass the flag: the producer
+        // emits the varint per ITS topic declaration, so the data span is only correct when the
+        // flag is honored on decode.
         auto decoded = wire::decode_unidirectional(inner, has_source_identity);
         if(!decoded)
             return drop("plexus: forwarder unidirectional_decode_failed");
@@ -477,18 +440,14 @@ public:
         on_message(fqn, decoded->data);
     }
 
-    // The metadata-bearing receive tail: same resolution as the 2-arg deliver, but it
-    // finishes the message_info the session began at on_receive and fills
-    // publication_sequence and (when the gid flag rode the frame) source_identity.
+    // Same resolution as the 2-arg deliver, finishing the message_info the session began at
+    // on_receive (publication_sequence + source_identity when the gid flag rode the frame).
     //
-    // DIRECT-DELIVERY INVARIANT (the gid rests on it): the gid's node_id half is the
-    // PINNED session peer's node_id (source_node_id) — the peer at the other end of THIS
-    // channel — NOT a node_id taken from the frame. The forwarder fans to subscribed
-    // channels and never relays across peer boundaries, so source == the session peer;
-    // the wire therefore carries only the endpoint counter, and a peer can claim counters
-    // ONLY within its own node_id namespace (structural anti-spoof — a forged counter
-    // cannot impersonate another node). A future relay/bridge/store-and-forward topology
-    // would break this invariant and MUST carry full origin identity locally on those frames.
+    // DIRECT-DELIVERY INVARIANT (the gid rests on it): the gid's node_id half is the PINNED
+    // session peer's node_id (source_node_id), NOT one taken from the frame. The forwarder never
+    // relays across peer boundaries, so the wire carries only the endpoint counter and a peer can
+    // claim counters ONLY within its own node_id namespace (structural anti-spoof). A future
+    // relay/bridge topology would break this and MUST carry full origin identity on those frames.
     template<typename OnMessage>
     void deliver(const peer &p, std::span<const std::byte> inner, message_info info,
                  const node_id &source_node_id, bool has_source_identity, OnMessage &&on_message)
@@ -509,30 +468,25 @@ public:
         on_message(fqn, decoded->data, info);
     }
 
-    // The receive-path liveness stamp hook, wired by the engine to its liveliness
-    // monitor's stamp_data; absent = no stamp, so the forwarder stays monitor-agnostic.
+    // Absent = no stamp, so the forwarder stays monitor-agnostic.
     void
     set_on_data_stamp(plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> hook)
     {
         m_on_data_stamp = std::move(hook);
     }
 
-    // The egress-shed drop edge, wired by the engine to its posted drop_sink(): an egress
-    // overflow ALSO emits a drop_event here (additively — the per-band counter still
-    // moves). The sink posts, so the per-publish shed site never fires an observer inline.
-    // Absent = counter-only (the forwarder stays observer-agnostic when unwired).
+    // An egress overflow ALSO emits a drop_event here (additively — the per-band counter still
+    // moves). The sink posts, so the shed site never fires an observer inline. Absent =
+    // counter-only.
     void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> hook)
     {
         m_on_drop = std::move(hook);
     }
 
-    // The data-path observation sinks, wired by the engine to its posted fan-out (the
-    // drop_sink precedent): publish fires the published sink ONCE after framing and the
-    // delivered sink ONCE per fanned destination, both handing the framed buffer's view
-    // (a shared addref of the single per-publish owner — no copy); an attach/detach verdict
-    // fires the qos-change sink. Each sink posts, so a per-publish/per-destination fan never
-    // touches an observer inline. Absent = one predictable branch (the forwarder stays
-    // observer-agnostic when unwired).
+    // The data-path observation sinks (the drop_sink precedent): publish fires published ONCE
+    // after framing and delivered ONCE per fanned destination, both handing the framed view (a
+    // shared addref, no copy). Each posts, so a fan never touches an observer inline. Absent =
+    // one predictable branch.
     void on_published(plexus::detail::move_only_function<void(std::uint64_t, std::string_view,
                                                               const message_view &)>
                               hook)
@@ -558,15 +512,10 @@ public:
         m_capture_wants_payload = std::move(hook);
     }
 
-    // The wire_fallback per-message companion route, wired by the engine for a
-    // same-host topic that keeps a capped SHM ring alongside its wire channel. Given a
-    // (peer node_name, fqn, message size) it returns the companion SHM channel when the
-    // message fits the cap (route over the ring), or nullptr to keep it on the recorded
-    // wire sub.channel (a too-large message, a peer with no mapped ring, or a topic not
-    // in wire_fallback mode). Absent = the publish fan-out is byte-identical to a node
-    // with no SHM companion (the recommended fail-safe default: the wire is the standing
-    // channel, the ring an additive fast path). The hook owner consults
-    // route_message_medium against the SHM member's resolved_geometry_for(fqn).
+    // The wire_fallback per-message companion route: given (peer node_name, fqn, message size) it
+    // returns the SHM channel when the message fits the cap, else nullptr to keep the wire
+    // sub.channel. Absent = the fan-out is byte-identical to a node with no SHM companion (the
+    // fail-safe default: the wire is the standing channel, the ring an additive fast path).
     void on_companion_route(plexus::detail::move_only_function<
                             channel_type *(std::string_view, std::string_view, std::size_t)>
                                     hook)
@@ -574,10 +523,8 @@ public:
         m_companion_route = std::move(hook);
     }
 
-    // The per-(peer, fqn) demand-transition emit seam, wired by the engine to the
-    // medium coordinator's on_edge. The forwarder only ANNOUNCES the 0->1/1->0 edge it
-    // already knows from its refcount gate — it gains no same_host, no acquire, no
-    // transport. Absent = one predictable branch (no allocating observer list).
+    // The forwarder only ANNOUNCES the 0->1/1->0 edge it already knows from its refcount gate —
+    // it gains no same_host, no acquire, no transport. Absent = one predictable branch.
     void
     on_demand_transition(plexus::detail::move_only_function<void(std::string_view, std::string_view,
                                                                  demand_transition, demand_role)>
@@ -586,9 +533,8 @@ public:
         m_on_demand_transition = std::move(hook);
     }
 
-    // The consumer-paced PULL reply: replay up to min(max_samples, ring.count(),
-    // k_fetch_cap) retained frames to the REQUESTING peer's channel ONLY. max_samples is
-    // attacker-controlled, so the cap bounds the reply to owned ring frames.
+    // The consumer-paced PULL reply: replay up to min(max_samples, ring.count(), k_fetch_cap)
+    // retained frames to the REQUESTING peer ONLY (max_samples is attacker-controlled).
     void fetch_latched(const peer &p, std::uint64_t topic_hash, std::uint32_t max_samples)
     {
         auto it = m_retained.find(topic_hash);
@@ -599,8 +545,8 @@ public:
         replay_window(p, it->second, limit);
     }
 
-    // Resolve a topic_hash back to its fqn — the object-lane receive tail's analog of the
-    // resolution the bytes path does inside deliver. Empty when the hash names no topic.
+    // Resolve a topic_hash back to its fqn (the object-lane analog of deliver's resolution).
+    // Empty when the hash names no topic.
     std::string_view fqn_for(std::uint64_t topic_hash) const
     {
         return m_endpoint.registry().fqn_for(topic_hash);
@@ -634,10 +580,9 @@ private:
         m_endpoint.send_control(channel, type, inner);
     }
 
-    // Frame [frame_header][unidirectional_header][counter?][payload] ONCE into a freshly
-    // allocated owning buffer and return a wire_bytes whose view aliases it. The owner
-    // (shared_ptr<const vector>) is the single per-publish allocation that the fan-out
-    // shares by addref across every band slot + the latch ring — no per-destination copy.
+    // Frame [frame_header][unidirectional_header][counter?][payload] ONCE into an owning buffer.
+    // The owner is the single per-publish allocation the fan-out shares by addref across every
+    // band slot + the latch ring — no per-destination copy.
     wire_bytes<> frame_owned(const wire::frame_header          &fhdr,
                              const wire::unidirectional_header &uhdr,
                              std::span<const std::byte>         payload,
@@ -649,10 +594,9 @@ private:
         return wire_bytes<>{view, std::shared_ptr<const void>{std::move(buf)}};
     }
 
-    // The bare codec bytes of a just-framed buffer: an aliasing subspan past the frame
-    // prefix [frame_header][unidirectional_header][counter?], sharing the framed owner
-    // (an addref, no copy). The prefix size is the framing layout the producer just wrote
-    // (data_frame.h), so a payload-fidelity tap records bytes byte-identical to encode().
+    // An aliasing subspan past the frame prefix, sharing the framed owner. The prefix is the
+    // framing layout the producer just wrote, so a payload-fidelity tap records bytes
+    // byte-identical to encode().
     static message_view bare_of(const wire_bytes<> &framed, std::optional<std::uint64_t> counter)
     {
         const std::size_t prefix = wire::header_size + wire::unidirectional_header_size +
@@ -661,10 +605,9 @@ private:
         return message_view{view.subspan(prefix), framed.owner()};
     }
 
-    // Push the just-framed frame into the per-topic KEEP_LAST-N history ring, sized once
-    // from the declared depth (clamped to [1, k_history_depth_cap] so a hostile declare
-    // cannot drive N x max_payload to OOM). The ring slots OWN their bytes; they copy
-    // from the framed view (the publish's owner is released when the call returns).
+    // Push into the per-topic KEEP_LAST-N history ring, sized from the declared depth (clamped to
+    // [1, k_history_depth_cap] so a hostile declare cannot drive N x max_payload to OOM). The
+    // ring slots OWN their bytes (the publish's owner is released when the call returns).
     void retain_if_latched(std::uint64_t hash, const topic_qos &qos, const wire_bytes<> &framed)
     {
         if(!qos.latch)
@@ -674,9 +617,9 @@ private:
         ring.push(static_cast<std::span<const std::byte>>(framed));
     }
 
-    // Replay a latched topic's retained history to ONLY the new peer (not the fan-out
-    // loop). The subscriber's stored durability choice gates it: `none` declines, `latest`
-    // takes the newest frame, `all` takes the history oldest->newest capped to replay_depth.
+    // Replay a latched topic's history to ONLY the new peer. The subscriber's durability choice
+    // gates it: none declines, latest takes the newest, all takes oldest->newest capped to
+    // replay_depth.
     void replay_if_latched(const peer &p, std::uint64_t hash)
     {
         if(!m_endpoint.registry().qos_for(hash).latch)
@@ -710,9 +653,8 @@ private:
             p.channel.send(ring.oldest_to_newest(i));
     }
 
-    // The zero-serialization fast path is taken only on a same-process tier, over a
-    // channel that exposes the object lane (if-constexpr on the concrete channel type, not
-    // a concept verb), AND with a stored type_id matching the carrier's wire tag.
+    // The fast path is taken only on a same-process tier, over a channel exposing the object lane,
+    // AND with a stored type_id matching the carrier's wire tag.
     static bool
     eligible_for_object(const typename subscriber_registry<channel_type>::subscriber &sub,
                         const object_carrier                                         &carrier)
@@ -723,9 +665,8 @@ private:
             return false;
     }
 
-    // A mismatch only when BOTH sides declared a type_id and they differ. Either side
-    // undeclared (std::nullopt) is never a mismatch — absence is a distinct state, not a
-    // zero type_id that would false-refuse.
+    // A mismatch only when BOTH sides declared a type_id and they differ — either side undeclared
+    // is never a mismatch (absence is a distinct state, not a false-refusing zero).
     bool type_id_mismatch(std::uint64_t hash, std::optional<std::uint64_t> subscriber_type_id) const
     {
         const auto producer_type_id = m_endpoint.registry().producer_type_id(hash);
@@ -747,15 +688,14 @@ private:
                         std::optional<std::uint64_t> type_id = std::nullopt,
                         const subscriber_qos        &sub_qos = subscriber_qos{})
     {
-        // The type_id rides the type_hash field; 0 is the undeclared sentinel the producer
-        // reads back as "no type declared" — never a mismatch.
+        // 0 is the undeclared sentinel the producer reads back as "no type declared".
         wire::subscribe_request req{.fqn        = std::string{fqn},
                                     .type_name  = {},
                                     .topic_hash = hash,
                                     .type_hash  = type_id.value_or(0),
                                     .source     = wire::endpoint_source_type::publisher};
-        // Carry the choice OUT only when it differs from the friendly default, so a
-        // default subscribe stays byte-identical to the pre-region encoding.
+        // Carry the choice OUT only when it differs from the default, so a default subscribe
+        // stays byte-identical to the pre-region encoding.
         if(!(sub_qos == subscriber_qos{}))
         {
             req.has_qos = true;
@@ -775,8 +715,7 @@ private:
         topics.emplace_back(remembered_demand{std::string{fqn}, qos, type_id});
     }
 
-    // Forget a remembered topic on a genuine unsubscribe so the durable demand reflects
-    // only live demand — a dropped topic must not be resurrected on reconnect.
+    // Forget on a genuine unsubscribe so a dropped topic is not resurrected on reconnect.
     void forget_remote_topic(const std::string &node_name, std::string_view fqn)
     {
         auto it = m_remote_topics.find(node_name);
@@ -787,17 +726,15 @@ private:
             m_remote_topics.erase(it);
     }
 
-    // Stamp the endpoint's last-data-seen for this topic (deadline + presence), when
-    // the engine has wired the monitor. A plain store on the receive path — no timer.
+    // A plain store on the receive path — no timer. No-op until the engine wires the monitor.
     void stamp_received(const node_id &source_node_id, std::uint64_t topic_hash)
     {
         if(m_on_data_stamp)
             m_on_data_stamp(source_node_id, topic_hash);
     }
 
-    // Record the per-band shed counter (always on) AND, when the egress drop edge is
-    // wired, emit the posted drop_event. The subscriber struct carries no peer node_id,
-    // so the event is peer-less (node_id{}); tier is the subscriber's delivery locality.
+    // Record the per-band counter (always on) AND, when wired, emit the posted drop_event. The
+    // subscriber struct carries no peer node_id, so the event is peer-less (node_id{}).
     void shed(std::uint64_t hash, std::size_t band, detail::drop_cause cause, locality tier)
     {
         m_endpoint.registry().record_drop(hash, band, cause);
@@ -808,10 +745,8 @@ private:
                                          .topic_hash = hash});
     }
 
-    // Hand the published/delivered view to the engine sink (which posts a snapshot to the
-    // observer fan-out); absent = one branch. The view borrows the framed owner — the posted
-    // closure on the engine side captures it by value (a shared addref), so the buffer
-    // outlives the deferred turn (the owner-lifetime guarantee).
+    // The view borrows the framed owner; the engine-side posted closure addrefs it, so the buffer
+    // outlives the deferred turn. Absent = one branch.
     void emit_published(std::uint64_t hash, std::string_view fqn, const message_view &view)
     {
         if(m_on_published)
@@ -832,9 +767,8 @@ private:
             m_on_delivered(hash, fqn, info, view);
     }
 
-    // Hand a resolved attach/detach QoS verdict to the engine sink. The subscriber struct
-    // carries no peer node_id, so the event is peer-less (node_id{}) — consistent with the
-    // peer-less drop_event the shed site emits.
+    // The subscriber struct carries no peer node_id, so the event is peer-less (node_id{}) —
+    // consistent with the peer-less drop_event the shed site emits.
     void emit_qos_change(qos_edge edge, std::uint64_t hash, const subscriber_qos &requested,
                          rxo_verdict verdict, std::optional<std::uint64_t> type_id)
     {
@@ -850,10 +784,8 @@ private:
     void drop(std::string_view message) { m_logger.warn(message); }
 
     log::logger &m_logger;
-    // The node-level per-message size default the RxO size relation resolves an offered
-    // topic's 0=unset max against (effective_max). Set from the node-level default at
-    // construction (no independent constant default here) so the forwarder and the data
-    // path resolve against ONE value.
+    // The node-level per-message size ceiling the RxO size relation resolves an offered topic's
+    // 0=unset max against, so the forwarder and the data path resolve against ONE value.
     std::size_t                                                              m_global_default;
     endpoint_type                                                            m_endpoint;
     detail::egress_scheduler<channel_type, Policy>                           m_egress;
@@ -867,19 +799,17 @@ private:
                                             const message_view &)>
                                                                        m_on_delivered;
     plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change;
-    // The loan-path encode trigger: returns true when the topic wants a payload encode for
-    // this record (selected at payload fidelity AND admitted by decimation this tick). Unset
-    // on a node with no capture policy, so the typed fast path is one null-check and never
-    // encodes.
+    // Returns true when the topic wants a payload encode this record (selected at payload fidelity
+    // AND admitted by decimation). Unset on a node with no capture policy (one null-check, never
+    // encodes).
     plexus::detail::move_only_function<bool(std::uint64_t)> m_capture_wants_payload;
-    // The wire_fallback per-message companion route (size <= cap -> the returned SHM
-    // channel, else nullptr -> the recorded wire sub.channel). Unset on every node with
-    // no SHM wire_fallback companion, so the fan-out branch is never entered there.
+    // size <= cap -> the SHM channel, else nullptr -> the wire sub.channel. Unset on every node
+    // with no SHM wire_fallback companion (the fan-out branch is never entered there).
     plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view,
                                                       std::size_t)>
             m_companion_route;
-    // The demand-transition emit slot (the coordinator's on_edge). Unset on a node with no
-    // same-host upgrade coordinator, so the attach/detach gate fires one predictable branch.
+    // The coordinator's on_edge. Unset on a node with no same-host upgrade coordinator (one
+    // predictable branch at the attach/detach gate).
     plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition,
                                             demand_role)>
             m_on_demand_transition;
