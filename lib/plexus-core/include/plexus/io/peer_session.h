@@ -13,6 +13,7 @@
 #include "plexus/io/security_seam.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/security_event.h"
+#include "plexus/io/handshake_protocol.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/attach_negotiator.h"
@@ -20,6 +21,11 @@
 
 #include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/attach_policy.h"
+
+#include "plexus/io/detail/peer_session_deliver.h"
+#include "plexus/io/detail/peer_session_complete.h"
+#include "plexus/io/detail/peer_session_consumers.h"
+#include "plexus/io/detail/peer_session_handshake.h"
 
 #include "plexus/policy.h"
 
@@ -46,21 +52,25 @@
 
 namespace plexus::io {
 
-// >200 LOC: the FSM-drive + frame-route demux is one irreducible cohesive unit; the
-// security cluster is split out into the held attach_negotiator.
+// over-limit: one cohesive per-peer bridge; the public seam setters and the
+// receive/staleness/teardown lifecycle share the borrowed ctx/negotiator/fsm + the per-
+// incarnation counters and seam members, so splitting the surface scatters that shared state
+// (the FSM-drive, handshake-encode, consumer-register, and deliver helpers are extracted to
+// detail/peer_session_*.h).
 //
-// The per-peer bridge: one live connection turned into a session. It drives the
-// pure handshake_fsm over an ALREADY-LIVE channel (the ctor performs no dial or
-// listen so a future transport backend slots in unchanged), owns a per-peer
-// frame_router whose consumers decode handshake frames into the FSM and hand data
-// frames to the node-shared forwarders carrying THIS peer's identity, mints a
-// per-connection session_id epoch on completion by drawing the next value from the
-// per-peer record's epoch_source — the record OUTLIVES the incarnation (so a
-// reconnect's fresh session is automatically a strictly-later epoch), and runs the receive-path
-// staleness gate that latches the peer's first non-zero session_id and drops
-// mismatches. Re-entrancy safety is structural: on_data is always posted and the
-// lifetime is single-owner, so the bridge needs no synchronization wrapper and no
-// inbound reassembler (the channel already delivers complete header-on frames).
+// The per-peer bridge: one live connection turned into a session. It drives the pure
+// handshake_fsm over an ALREADY-LIVE channel (the ctor performs no dial or listen so a
+// future transport backend slots in unchanged), owns a per-peer frame_router whose
+// consumers decode handshake frames into the FSM and hand data frames to the node-shared
+// forwarders carrying THIS peer's identity, mints a per-connection session_id epoch on
+// completion by drawing the next value from the per-peer record's epoch_source (the record
+// OUTLIVES the incarnation, so a reconnect's fresh session is a strictly-later epoch), and
+// runs the receive-path staleness gate. Re-entrancy safety is structural: on_data is always
+// posted and the lifetime is single-owner, so the bridge needs no synchronization wrapper.
+//
+// The FSM-driving, install-glue, handshake-encode, consumer-register, and deliver helpers
+// are extracted to detail/peer_session_*.h (relocation by friend); the irreducible session
+// core — lifecycle wiring, the receive/staleness gate, the seams, teardown — stays here.
 template<typename Policy>
     requires plexus::Policy<Policy>
 class peer_session
@@ -70,13 +80,10 @@ public:
     using executor_type = typename Policy::executor_type;
     using timer_type    = typename Policy::timer_type;
 
-    // The per-peer record bundles the per-incarnation DATA the session draws from:
-    // ctx OWNS the live channel (the session borrows it), the peer node_name the
-    // forwarder peers are keyed on, and the epoch well. The record OUTLIVES this
-    // incarnation, so each successive session built against the same record mints a
-    // strictly-later epoch. handshake_timeout stays required with NO default — a
-    // session cannot arm a bound it was not told, and the value depends on the
-    // deployment.
+    // The per-peer record bundles the per-incarnation DATA the session draws from: ctx OWNS
+    // the live channel (the session borrows it), the peer node_name, and the epoch well. The
+    // record OUTLIVES this incarnation. handshake_timeout is required with NO default — a
+    // session cannot arm a bound it was not told, and the value depends on the deployment.
     peer_session(peer_context<Policy> &ctx, executor_type executor,
                  const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout,
                  message_forwarder<Policy> &messages, procedure_forwarder<Policy> &procedures,
@@ -97,9 +104,9 @@ public:
     {
     }
 
-    // Wire the receive path, register the router consumers, arm the handshake
-    // timer, and (for an outbound peer) begin the handshake. Two paired sessions
-    // both begin outbound: the simultaneous-connect path completes on both ends.
+    // Wire the receive path, register the router consumers, arm the handshake timer, and
+    // (for an outbound peer) begin the handshake. Two paired sessions both begin outbound:
+    // the simultaneous-connect path completes on both ends.
     void start()
     {
         m_torn_down                 = false;
@@ -110,10 +117,9 @@ public:
                 [this](io_error e)
                 {
                     // would_block is a TRANSIENT back-pressure stall (a full write queue under
-                    // congestion=block), NOT a broken channel — a within-ceiling large message in
-                    // flight legitimately fills the bounded queue and sheds interleaved frames as
-                    // would_block; tearing the session down on it would drop a live connection mid
-                    // transfer. Only a genuine channel break drives the transport-drop reconnect.
+                    // congestion=block), NOT a broken channel; tearing the session down on it
+                    // would drop a live connection mid-transfer. Only a genuine channel break
+                    // drives the transport-drop reconnect.
                     if(e == io_error::would_block)
                         return;
                     if(m_on_drop && !m_torn_down && !m_closed_for_protocol_error)
@@ -121,17 +127,17 @@ public:
                 });
         m_channel.on_protocol_close([this](wire::close_cause cause)
                                     { on_channel_protocol_close(cause); });
-        // The process-tier object lane, wired set-before-listen like on_data but only
-        // compiled when the concrete channel exposes it (the inproc lane). A remote
-        // channel structurally lacks on_object, so this branch vanishes for it.
+        // The process-tier object lane, compiled only when the concrete channel exposes it
+        // (the inproc lane). A remote channel structurally lacks on_object.
         if constexpr(requires(channel_type &c) { c.on_object([](const object_carrier &) {}); })
-            m_channel.on_object([this](const object_carrier &c) { on_receive_object(c); });
-        register_consumers();
+            m_channel.on_object([this](const object_carrier &c)
+                                { detail::deliver_session_object(*this, c); });
+        detail::register_session_consumers(*this);
         arm_handshake_timer();
         if(!m_is_inbound_bootstrap)
         {
-            execute(m_fsm.on_dial_started());
-            execute(m_fsm.on_outbound_connected());
+            detail::execute(*this, m_fsm.on_dial_started());
+            detail::execute(*this, m_fsm.on_outbound_connected());
         }
     }
 
@@ -142,21 +148,15 @@ public:
     }
 
     // The opt-in metadata seam: a second callback that ALSO receives the per-message
-    // message_info. Set ONCE at subscribe (the cold path), so the hot receive path
-    // never allocates a callable. When present it takes precedence over the 2-arg
-    // callback for delivered data; the 2-arg path is left entirely unchanged for a
-    // subscriber that did not opt in.
+    // message_info. When present it takes precedence over the 2-arg callback.
     template<typename OnMessageWithInfo>
     void on_message_with_info(OnMessageWithInfo cb)
     {
         m_on_message_with_info = std::move(cb);
     }
 
-    // The node-shared receive route, threaded in by the registry from the build
-    // context at construction so a reconnect slot REBUILD carries it (unlike the
-    // per-session on_message/on_message_with_info seams, which a rebuild loses). The
-    // per-session seams take precedence when set; otherwise data flows through this.
-    // Carries the message_info — a bytes-only consumer drops it. Absent = silent drop.
+    // The node-shared receive route, threaded in by the registry so a reconnect slot REBUILD
+    // carries it. The per-session seams take precedence; otherwise data flows through this.
     void on_message_route(plexus::detail::move_only_function<
                           void(std::string_view, std::span<const std::byte>, const message_info &)>
                                   cb)
@@ -164,106 +164,68 @@ public:
         m_on_message_route = std::move(cb);
     }
 
-    // The node-shared object-lane route, mirroring on_message_route: a process-tier
-    // object handle arriving on this session's channel is resolved to its fqn and
-    // handed up through this. Threaded in by the registry from the build context so a
-    // reconnect slot REBUILD carries it. Absent = the object is dropped (and released).
-    // The route is a READ-ONLY delivery — the carrier is valid for the callback
-    // duration only; on_receive_object owns the single release on every path.
+    // The node-shared object-lane route. READ-ONLY delivery — the carrier is valid for the
+    // callback duration only; the deliver tail owns the single release on every path.
     void on_object_route(
             plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> cb)
     {
         m_on_object_route = std::move(cb);
     }
 
-    // The transport-drop seam, mirroring on_message: a plain settable callback
-    // (absent = no routing) fired from start()'s on_error wiring when an
-    // already-live channel breaks. The registry routes a dialed slot's drop to its
-    // reconnect driver through this; a clean tear_down does not fire it.
+    // The transport-drop seam, fired from start()'s on_error wiring when an already-live
+    // channel breaks. A clean tear_down does not fire it.
     void on_transport_drop(plexus::detail::move_only_function<void()> cb)
     {
         m_on_drop = std::move(cb);
     }
 
-    // The lifecycle seam, mirroring on_transport_drop: a settable callback the
-    // registry wires to forward each edge up to the engine's posted fan-out. The
-    // session never includes routing_engine.h — it routes edges blindly through this
-    // seam (absent = no routing). Dormant until a fire-site calls fire_lifecycle.
     void on_lifecycle(plexus::detail::move_only_function<void(const lifecycle_event &)> cb)
     {
         m_on_lifecycle = std::move(cb);
     }
 
-    // The presence-stamp seam, mirroring on_lifecycle: a settable callback the engine
-    // wires to its liveliness monitor's stamp_seen. The session routes a decoded
-    // heartbeat through it carrying THIS peer's pinned node_id (absent = no stamp, so
-    // the session stays monitor-agnostic and includes no monitor header).
+    // The presence-stamp seam: the session routes a decoded heartbeat through it carrying THIS
+    // peer's pinned node_id (absent = no stamp, so the session stays monitor-agnostic).
     void on_stamp_seen(plexus::detail::move_only_function<void(const node_id &)> cb)
     {
         m_on_stamp_seen = std::move(cb);
     }
 
-    // The security-event seam, mirroring on_lifecycle: the registry wires it to forward
-    // each dedicated security event (unauthorized attach, downgrade/posture refusal,
-    // stream-tamper teardown) up to the engine's posted fan-out (absent = no routing).
     void on_security(plexus::detail::move_only_function<void(const security_event &)> cb)
     {
         m_on_security = std::move(cb);
     }
 
-    // The per-session AEAD-install hook, set by the registry from the node-level seam
-    // plus THIS session's just-built channel. It is invoked exactly once on a successful
-    // security-engaged attach over a plaintext network channel: the gated layer derives
-    // the keys from the negotiation and installs the decorator over the captured channel.
-    // Absent = no AEAD posture (the accept-any plaintext path is unchanged). It stays
-    // OpenSSL-free here — the session only stores and calls a type-erased callable.
     void
     on_install_security(plexus::detail::move_only_function<void(const security_negotiation &)> cb)
     {
         m_negotiator.on_install_security(std::move(cb));
     }
 
-    // Borrow the node-level security seam (the OpenSSL-free transcript digest), owned by
-    // the build context — ONE per node. Set once by the registry before start();
-    // null (the default) is the no-AEAD/accept-any posture. Borrowed, never owned: the
-    // move-only seam is shared by every session without a per-session copy.
+    // Borrow the node-level security seam (OpenSSL-free transcript digest), owned by the build
+    // context. Null (the default) is the no-AEAD/accept-any posture.
     void set_security_seam(const security_seam *seam) noexcept
     {
         m_negotiator.set_security_seam(seam);
     }
 
-    // The per-session entropy seam: the deployment's CSPRNG, used ONCE at start() to mint
-    // this session's own_nonce so the key schedule salt varies per session (no all-zero
-    // nonce, no cross-session keystream reuse). Absent on the accept-any plaintext path —
-    // own_nonce then stays zero and the unused proof field rides along harmlessly.
     void set_attach_entropy(security::rand_fn rand)
     {
         m_negotiator.set_attach_entropy(std::move(rand));
     }
 
-    // The attaching-side proof seam: this node's OWN keyed PSK plus the SAME hmac_fn the
-    // verifier holds. The key_id is stamped onto the outbound request/response, and the
-    // responder MACs the dialer's facts-view into the wire proof field. Absent = no proof
-    // stamped (the accept-any path). Set once at session build, mirroring set_security_seam.
     void set_attach_prover(security::attach_prover prover)
     {
         m_negotiator.set_attach_prover(std::move(prover));
     }
 
-    // The authenticated peer's host identity, bound to the security step (SPKI-derived
-    // for a TLS peer, attach-bound for a PSK peer) — never a self-asserted TXT/wire
-    // claim. Absent until the attach resolves; a security-engaged attach latches it from
-    // the verified facts at completion, so a spoofed external identity claim is ignored.
+    // The authenticated peer's host identity, bound to the security step — never a
+    // self-asserted wire claim. Absent until a security-engaged attach latches it.
     std::optional<node_id> authenticated_host_identity() const noexcept
     {
         return m_negotiator.authenticated_host_identity();
     }
 
-    // The subscribe-outcome seams, mirroring on_lifecycle: an arriving subscribe_response
-    // that REFUSES a match (type_mismatch / incompatible_qos / source_identity_incompatible)
-    // fires on_subscribe_refused; a permissive degraded-accept (subscribed_degraded) fires
-    // on_subscribe_degraded carrying the surfaced unsatisfied-field bitmask — the
-    // non-silent guarantee. Absent = no surfacing (the readiness decrement still runs).
     void on_subscribe_refused(
             plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> cb)
     {
@@ -275,10 +237,10 @@ public:
         m_on_subscribe_degraded = std::move(cb);
     }
 
-    // The staleness gate runs BEFORE the router: a frame whose non-zero session_id
-    // differs from the latched epoch is a previous-session straggler and is dropped;
-    // the first non-zero observation latches the peer's epoch. A frame already posted
-    // before tear_down is ignored (no phantom completion on a closed session).
+    // The staleness gate runs BEFORE the router: a frame whose non-zero session_id differs
+    // from the latched epoch is a previous-session straggler and is dropped; the first
+    // non-zero observation latches the peer's epoch. A frame already posted before tear_down
+    // is ignored (no phantom completion on a closed session).
     void on_receive(std::span<const std::byte> frame)
     {
         if(m_torn_down)
@@ -294,18 +256,14 @@ public:
     }
 
     // The same-host receive companion's injection point: a framed message drained off the
-    // co-host shared-memory ring enters the SAME receive path a wire frame does — the header
-    // decode, the session_id staleness gate, then the router to deliver_data and the user
-    // callback. The publisher's send wrote a complete wire frame onto the ring (frame_owned),
-    // so the bytes are header-on and decode identically. The companion drain is posted on the
-    // node executor (the notifier->executor bridge), so this is never called inline from a
-    // wake — the on_data-posted model. A fitting message rides THIS path (SHM), an over-cap
-    // message the wire path; each is delivered exactly once (the send side routed it to one
-    // lane only), so no dedup is needed. A torn-down session ignores it (on_receive's guard).
+    // co-host shared-memory ring enters the SAME receive path a wire frame does. The drain is
+    // posted on the node executor, so this is never called inline from a wake. A torn-down
+    // session ignores it (on_receive's guard).
     void inject_receive(std::span<const std::byte> frame) { on_receive(frame); }
 
-    // Cancel the timer, detach the forwarders for this peer, reset the epoch latch
-    // and the FSM for a fresh cycle, and close the channel.
+    // Cancel the timer, detach the forwarders for this peer, reset the epoch latch and the
+    // FSM for a fresh cycle, and close the channel. A teardown of a session that never
+    // completed is not a disconnect — the prior-complete guard suppresses the spurious fire.
     void tear_down()
     {
         const bool was_complete = m_forwarders_installed;
@@ -319,36 +277,28 @@ public:
         m_ready_latched_this_cycle = false;
         m_fsm.on_torn_down();
         m_channel.close();
-        // A teardown of a session that never completed is not a disconnect — the
-        // prior-complete guard suppresses the spurious fire (an un-established abort
-        // fires rejected only).
         if(was_complete)
-            fire_lifecycle(lifecycle_edge::disconnected);
+            detail::fire_lifecycle(*this, lifecycle_edge::disconnected);
     }
 
     // The channel's protocol-close funnel. On a security-engaged session this close is a
-    // stream-tamper teardown: the installed AEAD decorator routes a tag-verify failure
-    // through on_protocol_close (a bad tag on an ordered stream is wire misbehavior with
-    // no honest resync), so fire the dedicated stream_tamper_teardown event with
-    // its cause BEFORE the close. A plaintext (un-engaged) session takes the plain close
-    // funnel unchanged. Datagram drops never reach here — the datagram decorator counts
-    // them and never tears down.
+    // stream-tamper teardown: the installed AEAD decorator routes a tag-verify failure through
+    // here (a bad tag on an ordered stream is wire misbehavior with no honest resync), so fire
+    // the dedicated event BEFORE the close. A plaintext session takes the plain close funnel.
     void on_channel_protocol_close(wire::close_cause cause)
     {
         if(m_torn_down)
             return;
         if(m_negotiator.engaged() && m_forwarders_installed)
-            fire_security(security_kind::stream_tamper_teardown, security_cause::tag_verify_failed);
+            detail::fire_security(*this, security_kind::stream_tamper_teardown,
+                                  security_cause::tag_verify_failed);
         close_for_protocol_error(cause);
     }
 
-    // The uniform close funnel for a peer that misbehaved on the wire — BOTH the
-    // framing violation surfaced by the channel's on_protocol_close and the semantic
-    // violations the session detects on complete frames (a header that does not
-    // decode, an FSM abort). It latches the protocol-error disposition so the
-    // on_error wiring does NOT re-dial a peer we closed, emits exactly ONE warn
-    // (never per-byte), and tears down. Idempotent on m_torn_down, mirroring
-    // on_receive's guard.
+    // The uniform close funnel for a peer that misbehaved on the wire — BOTH the framing
+    // violation surfaced by on_protocol_close and the semantic violations the session detects
+    // on complete frames. It latches the protocol-error disposition so the on_error wiring
+    // does NOT re-dial a peer we closed, emits exactly ONE warn, and tears down. Idempotent.
     void close_for_protocol_error(wire::close_cause)
     {
         if(m_torn_down)
@@ -358,12 +308,9 @@ public:
         tear_down();
     }
 
-    // The counted subscribe emit: the session routes its OWN demand-subscribe so it
-    // observes the wire emit and owns the readiness count. attach() returns true only
-    // on the 0->1 refcount transition — the single transition that puts a
-    // wire::subscribe on the channel — so the counter tracks exactly the outstanding
-    // acks. The forwarder stays readiness-agnostic: it is told to attach (a byte fact)
-    // and learns nothing of the count.
+    // The counted subscribe emit: the session routes its OWN demand-subscribe so it observes
+    // the wire emit and owns the readiness count. attach() returns true only on the 0->1
+    // refcount transition — the single transition that puts a wire::subscribe on the channel.
     void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{},
                    std::optional<std::uint64_t> type_id = std::nullopt)
     {
@@ -371,20 +318,28 @@ public:
             ++m_outstanding_subscribes;
     }
 
-    // The counted retire of one topic demand: detach through the forwarder's per-(peer,
-    // fqn) gate, which emits the wire unsubscribe on its 1->0 transition. The mirror of
-    // subscribe — the readiness count is not decremented here (an outstanding subscribe
-    // ack and a retire are independent), and detach forgets the remembered demand.
+    // The counted retire of one topic demand: detach through the forwarder's per-(peer, fqn)
+    // gate, which emits the wire unsubscribe on its 1->0 transition.
     void unsubscribe(std::string_view fqn) { m_messages.detach(m_msg_peer, fqn); }
 
-    // Emit a session-level keepalive heartbeat: encode the fixed-width presence
-    // payload and frame it as msg_type::heartbeat onto this peer's channel (session_id
-    // 0, consistent with every control frame). Driven by the engine on the router tick
+    // Emit a session-level keepalive heartbeat. Driven by the engine on the router tick
     // cadence — NOT a per-session timer. Reuses the session's send scratch.
     void emit_heartbeat()
     {
         wire::encode_heartbeat_into(m_payload_scratch, wire::heartbeat{});
-        send_control(wire::msg_type::heartbeat);
+        detail::send_control(*this, wire::msg_type::heartbeat);
+    }
+
+    // The readiness latch: once the outstanding count reaches 0 with the latch unset, fire
+    // ready exactly once for this connection cycle. The latch and the counter both clear in
+    // tear_down. A late subscribe after ready bumps the counter but does NOT re-arm the latch.
+    void maybe_fire_ready()
+    {
+        if(m_outstanding_subscribes == 0 && !m_ready_latched_this_cycle)
+        {
+            m_ready_latched_this_cycle = true;
+            detail::fire_lifecycle(*this, lifecycle_edge::ready);
+        }
     }
 
     bool               is_complete() const noexcept { return m_forwarders_installed; }
@@ -398,471 +353,49 @@ public:
     }
 
 private:
-    void register_consumers()
-    {
-        m_router.on_handshake_req(
-                [this](std::span<const std::byte> inner)
-                {
-                    if(auto req = wire::decode_handshake_request(inner))
-                    {
-                        // Inbound request: the local node is the RESPONDER (it verifies the
-                        // dialer's attach proof). Assemble the facts from the decoded peer region.
-                        m_negotiator.assemble(*req, security::attach_role::responder, req->id,
-                                              m_fsm_cfg.self_id, m_fsm.attach_policy() != nullptr);
-                        m_negotiator.latch_peer_proof(*req);
-                        if(m_negotiator.posture_mismatched(*req))
-                            return refuse_posture();
-                        execute(m_fsm.on_request(*req, m_is_inbound_bootstrap,
-                                                 m_negotiator.facts()));
-                    }
-                });
-        m_router.on_handshake_resp(
-                [this](std::span<const std::byte> inner)
-                {
-                    if(auto resp = wire::decode_handshake_response(inner))
-                    {
-                        // Inbound response: the local node is the INITIATOR (it dialed out).
-                        m_negotiator.assemble(*resp, security::attach_role::initiator, resp->id,
-                                              m_fsm_cfg.self_id, m_fsm.attach_policy() != nullptr);
-                        m_negotiator.latch_peer_proof(*resp);
-                        if(m_negotiator.posture_mismatched(*resp))
-                            return refuse_posture();
-                        execute(m_fsm.on_response(*resp, m_negotiator.facts()));
-                    }
-                });
-        m_router.on_subscribe(
-                [this](std::span<const std::byte> inner)
-                {
-                    if(auto req = wire::decode_subscribe_request(inner))
-                    {
-                        // type_hash == 0 is the undeclared-type sentinel on the wire; lift it
-                        // to std::nullopt so an undeclared subscriber is never refused.
-                        std::optional<std::uint64_t> subscriber_type_id;
-                        if(req->type_hash != 0)
-                            subscriber_type_id = req->type_hash;
-                        // Lift the carried QoS region into the core choice; an absent region
-                        // (has_qos clear) lands as the friendly default.
-                        const subscriber_qos sub_qos =
-                                req->has_qos ? from_wire_region(req->qos) : subscriber_qos{};
-                        m_messages.attach_for_fanout(m_msg_peer, req->fqn, subscriber_type_id,
-                                                     sub_qos);
-                    }
-                });
-        m_router.on_fetch_latched(
-                [this](std::span<const std::byte> inner)
-                {
-                    // The consumer-paced PULL: decode the request and replay the capped
-                    // retained window to THIS requesting peer. The reply is the data frames
-                    // themselves, so no reply control frame is sent.
-                    if(auto req = wire::decode_fetch_latched_request(inner))
-                        m_messages.fetch_latched(m_msg_peer, req->topic_hash, req->max_samples);
-                });
-        m_router.on_subscribe_response([this](std::span<const std::byte> inner)
-                                       { on_subscribe_response_received(inner); });
-        m_router.on_unidirectional(
-                [this](const wire::frame_header &hdr, std::span<const std::byte> inner)
-                { deliver_data(hdr, inner); });
-        m_router.on_rpc_request([this](std::span<const std::byte> inner)
-                                { m_procedures.deliver_request(m_rpc_peer, inner, m_session_id); });
-        m_router.on_rpc_response([this](std::span<const std::byte> inner)
-                                 { m_procedures.deliver_response(m_rpc_peer, inner); });
-        // A heartbeat is a session-level presence assert: decode it (bounds-safe,
-        // untrusted input) and stamp THIS pinned peer's last-seen ONLY — presence,
-        // never a topic deadline. No periodic timer is armed here; the ONE ticker is
-        // the engine's monitor.
-        m_router.on_heartbeat(
-                [this](std::span<const std::byte> inner)
-                {
-                    if(wire::decode_heartbeat(inner) && m_on_stamp_seen)
-                        m_on_stamp_seen(m_ctx.peer_id);
-                });
-    }
-
-    // The message_info assembly seam: this is the ONLY place the decoded frame_header is
-    // still live alongside the data, because the router strips it before deliver. Stamp
-    // the header-derived metadata HERE — source_timestamp is the publisher's wire
-    // timestamp; reception_timestamp is receiver-stamped from the same clock the codec
-    // uses (so it is monotonic with respect to the publisher's stamp); from_intra_process
-    // is derived honestly from THIS channel's own endpoint scheme (true only on a genuine
-    // same-process inproc delivery, never from peer-supplied data). publication_sequence
-    // and source_identity are filled by the forwarder, which owns the inner-payload decode.
-    //
-    // has_source_identity is read from the gid flag and passed to BOTH deliver paths: the
-    // producer emits the varint counter per ITS topic declaration, so even the bytes-only
-    // 2-arg path must honor the flag to land the data span correctly. The gid's node_id
-    // half is m_ctx.peer_id — the PINNED session peer (the direct-delivery invariant) —
-    // never a node_id taken from the frame. When the opt-in 3-arg callback is set it takes
-    // precedence; otherwise the unchanged 2-arg path runs.
-    void deliver_data(const wire::frame_header &hdr, std::span<const std::byte> inner)
-    {
-        const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
-        // Precedence: a per-session info/bytes seam (the test/cold-path install) wins
-        // when set; otherwise the node-shared route (threaded by the registry, so it
-        // survives a reconnect rebuild) delivers. The shared route carries the
-        // message_info, so its delivery rides the same info-assembling path. None set
-        // = silent drop.
-        if(m_on_message_with_info)
-        {
-            const message_info info = assemble_message_info(hdr);
-            m_messages.deliver(m_msg_peer, inner, info, m_ctx.peer_id, has_source_identity,
-                               [this](std::string_view fqn, std::span<const std::byte> data,
-                                      const message_info &mi)
-                               { m_on_message_with_info(fqn, data, mi); });
-            return;
-        }
-        if(m_on_message)
-        {
-            m_messages.deliver(m_msg_peer, inner, m_ctx.peer_id, has_source_identity,
-                               [this](std::string_view fqn, std::span<const std::byte> data)
-                               { m_on_message(fqn, data); });
-            return;
-        }
-        if(m_on_message_route)
-        {
-            const message_info info = assemble_message_info(hdr);
-            m_messages.deliver(m_msg_peer, inner, info, m_ctx.peer_id, has_source_identity,
-                               [this](std::string_view fqn, std::span<const std::byte> data,
-                                      const message_info &mi)
-                               { m_on_message_route(fqn, data, mi); });
-            return;
-        }
-        m_messages.deliver(m_msg_peer, inner, m_ctx.peer_id, has_source_identity,
-                           [](std::string_view, std::span<const std::byte>) {});
-    }
-
-    // The object-lane receive tail: resolve the carrier's topic_hash to its fqn (the
-    // subscriber side recorded it at demand time), hand it up the route, then RELEASE
-    // the reference the channel delivered. An unresolvable hash is warn-and-dropped
-    // through the logger and still released — never delivered, never leaked. No
-    // session_id staleness gate: this lane never crosses a reconnect boundary (a
-    // torn-down channel drops and releases its queued packets).
-    void on_receive_object(const object_carrier &c)
-    {
-        auto fqn = m_messages.fqn_for(c.topic_hash);
-        if(fqn.empty())
-        {
-            m_logger.warn("plexus: peer_session object_topic_unknown");
-            return release(c);
-        }
-        if(m_on_object_route)
-            m_on_object_route(fqn, c);
-        release(c);
-    }
-
-    message_info assemble_message_info(const wire::frame_header &hdr)
-    {
-        message_info info{};
-        info.source_timestamp    = hdr.timestamp_ns;
-        info.reception_timestamp = wire::now_timestamp_ns();
-        info.from_intra_process  = m_from_intra_process;
-        return info;
-    }
-
-    // Map an FSM action to channel I/O. retry stays the FSM's intent as a log line:
-    // the reconnect driver lives outside the session and observes the transport's
-    // dial-failure directly, so the session is not reshaped to own a dialer.
-    void execute(const fsm_step_result &step)
-    {
-        switch(step.action)
-        {
-            case fsm_action::send_request:  return send_handshake_request();
-            case fsm_action::send_response: return send_handshake_response(step.outcome);
-            case fsm_action::complete:      return on_complete();
-            case fsm_action::retry:         return m_logger.warn("plexus: peer_session retry_no_dialer");
-            case fsm_action::abort:         return on_abort(step.outcome);
-            case fsm_action::none:          return;
-        }
-    }
-
-    // An FSM abort: fire rejected carrying the real refusal reason (reject_version /
-    // reject_identity) BEFORE the close. The abort path is an un-established session
-    // (m_forwarders_installed is false), so close_for_protocol_error's tear_down
-    // suppresses disconnected via its prior-complete guard — only rejected fires.
-    void on_abort(handshake_outcome reason)
-    {
-        fire_lifecycle(lifecycle_edge::rejected, reason);
-        if(reason == handshake_outcome::reject_unauthorized)
-            fire_security(m_negotiator.classify_unauthorized());
-        close_for_protocol_error(wire::close_cause::invalid_magic);
-    }
-
-    // The response reuses every request field and adds a status, so this is the one
-    // place the self identity/versions are stamped onto the wire. A secured node (an
-    // engaged seam) advertises its AEAD posture in the cipher offer/chosen so the peer's
-    // posture gate sees a secured-vs-secured pair; a plain node leaves them zero. This is
-    // what makes the posture mismatch observable both ways. The key_id/own_nonce/cipher
-    // bits are read from the held negotiator (minted once per start() by prime()).
-    wire::handshake_request self_request() const noexcept
-    {
-        const std::uint8_t offer = m_negotiator.cipher_offer();
-        return {.id                       = m_fsm_cfg.self_id,
-                .version_major            = m_fsm_cfg.version_major,
-                .version_minor            = m_fsm_cfg.version_minor,
-                .compatible_version_major = m_fsm_cfg.compatible_version_major,
-                .compatible_version_minor = m_fsm_cfg.compatible_version_minor,
-                .protocol_version         = wire::k_protocol_version,
-                .fingerprint              = m_fsm_cfg.local_fingerprint.value,
-                .key_id                   = m_negotiator.key_id(),
-                .own_nonce                = m_negotiator.own_nonce(),
-                .cipher_offer             = offer,
-                .chosen_cipher            = offer,
-                .proof                    = {}};
-    }
-
-    void send_handshake_request()
-    {
-        wire::encode_handshake_request_into(m_payload_scratch, self_request());
-        send_control(wire::msg_type::handshake_req);
-    }
-
-    // The response is the one leg the local node proves on: it is the responder for an
-    // inbound request, so it stamps the transcript-bound, reflection-resistant proof the
-    // dialer verifies on its on_response. The proof MACs the DIALER's facts-view (the
-    // dialer's role, its own_nonce as peer_nonce, the both-nonce transcript) so the
-    // dialer — recomputing under the shared PSK with its mirror view — matches byte for
-    // byte. A request carries no proof: a 1-RTT PSK dialer cannot prove before it has
-    // seen the responder's nonce, so the request leg stays accept-any (a known 1-RTT
-    // limitation). The proof is stamped only when the prover is engaged and the pending
-    // attach assembled a transcript-bound facts view for this peer.
-    void send_handshake_response(handshake_outcome outcome)
-    {
-        const auto               r = self_request();
-        wire::handshake_response resp{.id                       = r.id,
-                                      .version_major            = r.version_major,
-                                      .version_minor            = r.version_minor,
-                                      .compatible_version_major = r.compatible_version_major,
-                                      .compatible_version_minor = r.compatible_version_minor,
-                                      .protocol_version         = r.protocol_version,
-                                      .fingerprint              = r.fingerprint,
-                                      .key_id                   = r.key_id,
-                                      .own_nonce                = r.own_nonce,
-                                      .cipher_offer             = r.cipher_offer,
-                                      .chosen_cipher            = r.chosen_cipher,
-                                      .proof                    = m_negotiator.response_proof(),
-                                      .status                   = status_for(outcome)};
-        wire::encode_handshake_response_into(m_payload_scratch, resp);
-        send_control(wire::msg_type::handshake_resp);
-    }
-
-    static wire::handshake_status status_for(handshake_outcome outcome) noexcept
-    {
-        switch(outcome)
-        {
-            case handshake_outcome::reject_version:
-                return wire::handshake_status::version_incompatible;
-            case handshake_outcome::reject_identity:
-                return wire::handshake_status::identity_conflict;
-            case handshake_outcome::reject_unauthorized:
-                return wire::handshake_status::unauthorized;
-            default: return wire::handshake_status::accepted;
-        }
-    }
-
-    // Handshake control always carries session_id 0 (it is what mints the epoch).
-    void send_control(wire::msg_type type)
-    {
-        wire::frame_header fhdr{.type         = type,
-                                .flags        = 0,
-                                .session_id   = 0,
-                                .timestamp_ns = wire::now_timestamp_ns(),
-                                .payload_len  = m_payload_scratch.size()};
-        wire::encode_frame_into(m_frame_scratch, fhdr, m_payload_scratch);
-        m_channel.send(m_frame_scratch);
-    }
-
-    // Install-once: a second complete (the simultaneous-connect tail) no-ops. The
-    // dedup verdict's keep_outbound/keep_inbound channel drop is a registry-block
-    // concern — single-peer here, so it is read but not acted on.
-    //
-    // A bootstrap inbound completes with no counter-dial in flight (a peer dialed us
-    // before we had demand to dial back — the common path under demand-driven lazy
-    // dial), so it must still send the accept response: that is how the dialer learns
-    // it was accepted, completes, and mints its own epoch. The simultaneous-connect
-    // path (both ends dialed, is_inbound_bootstrap false) completes off the mutual
-    // requests and must send no redundant response — the same flag distinguishes them.
-    void on_complete()
-    {
-        if(m_forwarders_installed)
-            return;
-        if(m_is_inbound_bootstrap)
-            send_handshake_response(handshake_outcome::accept_inbound);
-        m_handshake_timer.cancel();
-        mint_session_id();
-        record_same_host();
-        if(!m_negotiator.install_on_accept(channel_is_self_securing()))
-            return refuse_posture();
-        m_forwarders_installed = true;
-        const bool reconnected = m_ctx.has_ever_connected;
-        fire_connect_edge();
-        // Reconnect resurrection: re-emit the remembered subscribes through the counted
-        // path BEFORE the readiness check, so the resurrected acks are outstanding and
-        // ready cannot fire until they return. On a first connect there is nothing
-        // remembered, so this is a no-op and the zero-subscribe path below fires ready
-        // immediately.
-        // Resurrect the durable subscribe demand on EVERY completion — both the first
-        // connect (the demand a lazy subscribe-that-triggered-the-dial recorded before
-        // the session existed) and a reconnect — through the counted path, so the
-        // demanded subscribes are outstanding when ready is evaluated. The forwarder is
-        // the durable demand ledger; (void)reconnected because the resurrection set is
-        // the same either way (empty for a true zero-subscribe peer, which fires ready
-        // immediately). This is the first-publish-loss guard: a subscribe issued before
-        // the connection completed is never lost.
-        (void)reconnected;
-        resubscribe_all();
-        maybe_fire_ready();
-    }
-
-    // Re-emit every remembered subscribe for this peer through the counted subscribe(),
-    // so each 0->1 wire-emit increments the outstanding count. The remembered topics
-    // are read from the node-shared forwarder by a pure-read accessor (the forwarder
-    // stays readiness-agnostic). The demand survives a teardown — only a genuine
-    // unsubscribe forgets it — and the engine records it the moment subscribe is called
-    // (even before the session exists), so this resurrects both a lazy first-connect
-    // subscribe and a reconnect's still-demanded set.
-    void resubscribe_all()
-    {
-        // Carry the remembered type_id through the resurrection so a typed subscriber
-        // surviving a reconnect re-subscribes with the SAME type gate (a bare
-        // subscribe would silently re-attach untyped, dropping the typed fast path).
-        for(const auto &demand : m_messages.remembered_topics(m_ctx.node_name))
-            subscribe(demand.fqn, demand.qos, demand.type_id);
-    }
-
-    void mint_session_id() noexcept { m_session_id = m_ctx.epochs.next(); }
-
-    // The same-host eligibility verdict: compare the peer's advertised
-    // fingerprint (learned by the FSM at the validated request/response) to our own
-    // via is_same_host — a null/absent peer fingerprint is conservatively NOT
-    // same-host (the fail-closed null-guard) — and record it on the per-peer record.
-    // This is the ELIGIBILITY gate the shared-memory upgrade reads: a pair that is
-    // not same-host never attempts a ring acquire, regardless of any dispatch hint.
-    void record_same_host() noexcept
-    {
-        m_ctx.same_host =
-                shm::is_same_host(m_fsm.last_seen_peer_fingerprint(), m_fsm.local_fingerprint());
-    }
-
-    // The fail-closed posture refusal: clear the latched identity, fire the posture
-    // security event + the lifecycle rejected edge, and tear down — no silent plaintext
-    // fallback. Mirrors on_abort's edge ordering for an un-established session.
-    void refuse_posture()
-    {
-        m_negotiator.clear_identity();
-        fire_lifecycle(lifecycle_edge::rejected, handshake_outcome::reject_unauthorized);
-        fire_security(security_kind::posture_mismatch);
-        close_for_protocol_error(wire::close_cause::invalid_magic);
-    }
-
-    // A transport that already provides authenticated encryption: its scheme names a
-    // crypto handshake. The AEAD decorator decorates ONLY plaintext network channels, so
-    // a self-securing channel is left undecorated (no double-wrap).
-    bool channel_is_self_securing() const
-    {
-        const auto scheme = m_channel.remote_endpoint().scheme;
-        return scheme == "tls" || scheme == "dtls";
-    }
-
-    // Fire connected on the first-ever complete, reconnected on every subsequent
-    // one. The discriminator is the long-lived has_ever_connected flag on the
-    // record (it survives teardown): read its PRIOR value, then latch it true so it
-    // never clears. The read MUST precede the set or every complete looks like a
-    // reconnect.
-    void fire_connect_edge()
-    {
-        const bool first         = !m_ctx.has_ever_connected;
-        m_ctx.has_ever_connected = true;
-        fire_lifecycle(first ? lifecycle_edge::connected : lifecycle_edge::reconnected);
-    }
-
-    // The peer_kind discriminator drawn from the one source of truth: an inbound
-    // bootstrap is an accepted peer, an outbound dial a dialed peer.
-    peer_kind kind() const noexcept
-    {
-        return m_is_inbound_bootstrap ? peer_kind::accepted : peer_kind::dialed;
-    }
-
-    // Route one lifecycle edge up the seam (if wired) as an owned-value carrier. No
-    // fire-site calls this yet — the seam is dormant in this increment; the edges
-    // land in a later increment.
-    void fire_lifecycle(lifecycle_edge edge, handshake_outcome reason = handshake_outcome::none)
-    {
-        if(!m_on_lifecycle)
-            return;
-        m_on_lifecycle(lifecycle_event{edge, m_ctx.peer_id, m_ctx.node_name, kind(), reason});
-    }
-
-    // Route one security event up the dedicated seam (if wired) carrying THIS peer's
-    // pinned id. The cause is meaningful only on the stream-tamper kind. Datagram
-    // replay/tamper drops never reach here — they are counted on the decorator and read
-    // on demand (the observer must not become the DoS).
-    void fire_security(security_kind kind, security_cause cause = security_cause::none)
-    {
-        if(!m_on_security)
-            return;
-        m_on_security(security_event{kind, m_ctx.peer_id, cause});
-    }
-
-    // The consumer half of the subscribe loop: an arriving subscribe_response drives
-    // the readiness decrement. A malformed frame is dropped without touching the
-    // counter. The underflow guard is input validation on an unauthenticated transport:
-    // a response with no outstanding match is warned-and-dropped BEFORE the decrement,
-    // so a stray or duplicate ack can never wrap the uint16_t (which would make ready
-    // unreachable for the cycle).
-    void on_subscribe_response_received(std::span<const std::byte> inner)
-    {
-        auto resp = wire::decode_subscribe_response(inner);
-        if(!resp)
-            return;
-        // The anti-wrap guard stays FIRST: a response with no outstanding match is a
-        // stray/duplicate/forged frame and is warned-and-dropped BEFORE anything else,
-        // so it can never fire a refusal/degraded callback (nor wrap the counter).
-        if(m_outstanding_subscribes == 0)
-            return m_logger.warn("plexus: subscribe_response with no outstanding match");
-        // Surface the match outcome to the subscriber (the response was previously
-        // silently swallowed). A refusal fires on_subscribe_refused; a permissive
-        // degraded-accept fires on_subscribe_degraded with the unsatisfied-field set.
-        surface_subscribe_outcome(*resp);
-        --m_outstanding_subscribes;
-        maybe_fire_ready();
-    }
-
-    // Fire the subscribe-outcome observables for a matched response. Kept separate so
-    // the handler reads as guard -> surface -> decrement.
-    void surface_subscribe_outcome(const wire::subscribe_response &resp)
-    {
-        if(is_refusal(resp.status))
-        {
-            if(m_on_subscribe_refused)
-                m_on_subscribe_refused(resp.topic_hash, resp.status);
-        }
-        else if(resp.status == wire::subscribe_status::subscribed_degraded)
-        {
-            if(m_on_subscribe_degraded)
-                m_on_subscribe_degraded(resp.topic_hash, resp.degraded_flags);
-        }
-    }
-
-    static bool is_refusal(wire::subscribe_status s)
-    {
-        return s == wire::subscribe_status::type_mismatch ||
-                s == wire::subscribe_status::incompatible_qos ||
-                s == wire::subscribe_status::source_identity_incompatible;
-    }
-
-    // The readiness latch: once the outstanding count reaches 0 with the latch unset,
-    // fire ready exactly once for this connection cycle. The latch and the counter
-    // both clear in tear_down, so the next incarnation re-arms. A late subscribe issued
-    // after ready fires bumps the counter but does NOT re-arm the latch, so it cannot
-    // fire a second ready this cycle. Driven from on_complete's tail (the zero-subscribe
-    // case) and from the subscribe_response decrement.
-    void maybe_fire_ready()
-    {
-        if(m_outstanding_subscribes == 0 && !m_ready_latched_this_cycle)
-        {
-            m_ready_latched_this_cycle = true;
-            fire_lifecycle(lifecycle_edge::ready);
-        }
-    }
+    template<typename S>
+    friend void detail::register_session_consumers(S &);
+    template<typename S>
+    friend void detail::deliver_session_data(S &, const wire::frame_header &,
+                                             std::span<const std::byte>);
+    template<typename S>
+    friend void detail::deliver_session_object(S &, const object_carrier &);
+    template<typename S>
+    friend message_info detail::assemble_message_info(S &, const wire::frame_header &);
+    template<typename S>
+    friend void detail::execute(S &, const fsm_step_result &);
+    template<typename S>
+    friend void detail::on_abort(S &, handshake_outcome);
+    template<typename S>
+    friend void detail::on_complete(S &);
+    template<typename S>
+    friend void detail::resubscribe_all(S &);
+    template<typename S>
+    friend void detail::record_same_host(S &) noexcept;
+    template<typename S>
+    friend void detail::refuse_posture(S &);
+    template<typename S>
+    friend bool detail::channel_is_self_securing(const S &);
+    template<typename S>
+    friend void detail::fire_connect_edge(S &);
+    template<typename S>
+    friend peer_kind detail::session_kind(const S &) noexcept;
+    template<typename S>
+    friend void detail::fire_lifecycle(S &, lifecycle_edge, handshake_outcome);
+    template<typename S>
+    friend void detail::fire_security(S &, security_kind, security_cause);
+    template<typename S>
+    friend void detail::surface_subscribe_outcome(S &, const wire::subscribe_response &);
+    template<typename S>
+    friend void detail::on_subscribe_response_received(S &, std::span<const std::byte>);
+    template<typename S>
+    friend wire::handshake_request detail::self_request(const S &) noexcept;
+    template<typename S>
+    friend void detail::send_control(S &, wire::msg_type);
+    template<typename S>
+    friend void detail::send_handshake_request(S &);
+    template<typename S>
+    friend void detail::send_handshake_response(S &, handshake_outcome);
 
     void arm_handshake_timer()
     {
@@ -873,7 +406,7 @@ private:
                 {
                     if(ec)
                         return; // cancelled by completion or teardown
-                    execute(m_fsm.on_timeout());
+                    detail::execute(*this, m_fsm.on_timeout());
                 });
     }
 
@@ -887,23 +420,19 @@ private:
     procedure_forwarder<Policy> &m_procedures;
     std::chrono::nanoseconds     m_handshake_timeout;
     bool                         m_is_inbound_bootstrap;
-    // A channel's delivery tier is fixed for the session's lifetime (a session is
-    // rebuilt, never re-pointed), so the intra-process verdict is latched once here:
-    // deriving it per delivered message cost a getpeername syscall plus the endpoint
-    // string formatting on every metadata-carrying delivery (seen at ~4% of the
+    // A channel's delivery tier is fixed for the session's lifetime, so the intra-process
+    // verdict is latched once here: deriving it per delivered message cost a getpeername
+    // syscall plus endpoint formatting on every metadata-carrying delivery (~4% of the
     // receive-window cycles in the loopback TCP profile).
     bool          m_from_intra_process;
     std::uint64_t m_session_id{0}, m_peer_session_id{0};
     bool          m_forwarders_installed{false}, m_torn_down{false};
-    // Latched true by close_for_protocol_error so the on_error wiring short-circuits
-    // the re-dial: a peer WE closed for misbehavior must not be re-dialed. A plain
-    // bool, mirroring m_torn_down — its absence is not meaningful, only its value.
+    // Latched true by close_for_protocol_error so the on_error wiring short-circuits the
+    // re-dial: a peer WE closed for misbehavior must not be re-dialed.
     bool m_closed_for_protocol_error{false};
-    // The readiness counter + fire-once latch, OWNED by the per-incarnation session
-    // (cleared in tear_down so reconnect re-arms — a fresh session is auto-rearmed at
-    // 0). The counter is the number of outstanding subscribe acks; the latch records
-    // whether ready already fired this cycle. Plain values, mirroring m_torn_down —
-    // their absence is not meaningful, only their value.
+    // The readiness counter + fire-once latch, OWNED by the per-incarnation session (cleared
+    // in tear_down so reconnect re-arms). The counter is the number of outstanding subscribe
+    // acks; the latch records whether ready already fired this cycle.
     std::uint16_t                              m_outstanding_subscribes{0};
     bool                                       m_ready_latched_this_cycle{false};
     log::logger                               &m_logger;
@@ -924,10 +453,9 @@ private:
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
     plexus::detail::move_only_function<void(const node_id &)>         m_on_stamp_seen;
     plexus::detail::move_only_function<void(const security_event &)>  m_on_security;
-    // The held-by-value security/transcript/proof orchestrator: owns the attach
-    // credentials + pending attach, borrows the node-level seam, runs the PSK proof /
-    // transcript / posture gate / AEAD install. The bridge forwards its security setters
-    // here and feeds it the bridge facts each step needs.
+    // The held-by-value security/transcript/proof orchestrator: owns the attach credentials +
+    // pending attach, borrows the node-level seam, runs the PSK proof / transcript / posture
+    // gate / AEAD install. The bridge forwards its security setters here.
     attach_negotiator<Policy> m_negotiator;
     plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)>
                                                                           m_on_subscribe_refused;

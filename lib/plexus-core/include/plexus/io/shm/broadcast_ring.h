@@ -17,63 +17,36 @@
 
 namespace plexus::io::shm {
 
-// Lock-free, cross-process, offset-based MPMC broadcast ring. It is the Vyukov
-// bounded MPMC queue adapted to DESCRIPTOR cells: each fixed cache-line cell
-// carries a slot descriptor (a payload-slab byte offset + length + the per-cell
-// sequence/generation), and the variable-size payload bytes live in a separate
-// fixed-stride slab keyed 1:1 to the cells (owning cell pos&mask grants exclusive
-// use of slab slot pos&mask, so there is no second allocator). It exposes the
-// low-level claim/commit/consume mechanism that the loan/publish/take endpoints
-// wrap, plus the broadcast overlay (per-consumer in-region cursors) and the two
-// backpressure modes reliability/congestion select.
+// over-limit: one Vyukov-sequenced lock-free ring; the claim/commit/consume cursor protocol
+// + the seq_cst overwrite-vs-pin Dekker handshake are one indivisible whole over the shared
+// header/cells/cursor atomics — the in-class index accessors only bind member state to the
+// layout (already in ring_layout.h) and pulling them out threads m_cells/m_slab/m_mask/
+// m_stride through every hot path, scattering the protocol without separating a responsibility.
 //
-// Header-only by design (no .cpp): the atomics + offset math are all inlineable,
-// so the ring is pure generic core with zero asio/POSIX dependency. It drives a
-// caller-supplied pair of mapped spans (a control+cells region and a payload
-// slab region); a test maps two anonymous spans and drives it directly, and a
-// backend maps two /dev/shm regions over the same seam. The ring never includes
-// a region broker -- the caller owns the mapping lifetime.
+// Lock-free, cross-process, offset-based MPMC broadcast ring: the Vyukov bounded MPMC queue
+// adapted to DESCRIPTOR cells (each fixed cache-line cell carries a slab byte offset + length
+// + the per-cell sequence; the variable-size payload lives in a separate fixed-stride slab
+// keyed 1:1 to the cells). It exposes the low-level claim/commit/consume mechanism the
+// loan/publish/take endpoints wrap, plus the broadcast overlay (per-consumer in-region
+// cursors) and the two backpressure modes reliability/congestion select. Header-only (the
+// atomics + offset math inline); it drives a caller-supplied control+cells span and a payload
+// slab span — the caller owns the mapping lifetime.
 //
-// Two mapped spans back one ring: a control+cells region (the header and the cell
-// array) and a payload slab region. The creator create()s over freshly-zeroed
-// spans and stamps the header; an attacher attach()es and re-reads + bounds-checks
-// the config (cell_count/slot_capacity/mask) from the SHM header rather than
-// trusting any separately-supplied value (the V5 input-validation control + the
-// foreign-region magic reject).
+// BROADCAST OVERLAY (the Disruptor gating idea over Vyukov): every subscriber must observe
+// every committed slot, so each owns its own read cursor in the header's fixed-bound cursor
+// array. The producer reclamation gate is "the slowest registered consumer has passed this
+// slot"; a sentinel (k_cursor_idle) cursor does not gate.
 //
-// BROADCAST OVERLAY (the Disruptor gating idea over Vyukov). Stock Vyukov is a
-// consume-once queue; here every subscriber must observe every committed slot.
-// Each subscriber owns its own read cursor in the header's fixed-bound, in-region
-// cursor array (register_cursor/unregister_cursor). A consumer reads cell
-// cursor&mask, checks sequence==cursor+1, reads, then advances ITS OWN cursor.
-// The producer reclamation gate is "the slowest registered consumer has passed
-// this slot": a registered cursor whose position is the sentinel (k_cursor_idle)
-// does not gate, so an unused-but-registered slot never wedges reclamation.
-// Exceeding k_max_consumers returns rejected.
+// BACKPRESSURE: claim_with_policy threads the publisher's delivery class — reliable blocks a
+// cell until take_refcount==0 AND the slowest non-sentinel cursor is strictly past it (the
+// publisher does a bounded spin+backoff, no kernel object); best-effort overwrites latest but
+// SKIPS any pinned cell, with a full-lap-pinned congested fallback. take_refcount is acq_rel;
+// the reclamation-gating cursor loads/stores are acquire/release.
 //
-// BACKPRESSURE (plexus::io::reliability + plexus::io::congestion). claim_with_policy
-// threads the publisher's delivery class:
-//   reliable     -> a cell is reusable only when take_refcount==0 AND the slowest
-//                   registered (non-sentinel) cursor is strictly past it; if the
-//                   gate blocks, claim returns congested (the publisher does the
-//                   bounded spin+backoff -- there is no kernel object).
-//   best-effort  -> overwrite-latest: claim never blocks on a slow cursor, but it
-//                   SKIPS any cell whose take_refcount>0 (overwrite RESPECTS a
-//                   live take so a consumer's aliased read is never stomped). At
-//                   most k_max_consumers cells can be pinned; if a full lap is all
-//                   pinned, claim returns congested as a bounded fallback. A
-//                   lapped consumer detects dif>0 and skips forward.
-// Memory ordering: take_refcount is acq_rel; the cursor loads/stores that gate
-// reclamation are acquire/release.
-//
-// CRASH STANCE (honest -- crash-SAFE, NOT crash-LIVE). No cross-process lock is
-// held by any verb, so a process dying mid-operation never corrupts the ring and
-// never leaves a held lock: atomics are all-or-nothing and survivors read a
-// consistent layout. It is NOT crash-LIVE: a producer that dies after the enqueue
-// CAS but before the release store of `sequence` leaves one cell whose sequence
-// never advances; a consumer that dies holding a take() leaves take_refcount>0 so
-// that cell never reclaims under reliable mode. Detect-and-reclaim is a DEFERRED
-// hardening item -- not solved here and not to be assumed.
+// CRASH STANCE (honest — crash-SAFE, NOT crash-LIVE): no cross-process lock is held, so a
+// dying process never corrupts the ring; but a producer that dies after the enqueue CAS
+// before the sequence release leaves a never-advancing cell, and a consumer that dies holding
+// a take() leaves take_refcount>0. Detect-and-reclaim is a DEFERRED hardening item.
 //
 // Non-copy/non-move owning service.
 class broadcast_ring

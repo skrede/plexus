@@ -8,6 +8,10 @@
 
 namespace plexus::io::shm {
 
+// over-limit: cited cross-process ring layout + named lock-free algorithms (std/parking_lot
+// 3-state word, Vyukov, Dekker mutual-announce) + the cross-process layout invariants; the why
+// is load-bearing (D-08 keep-list) and trimming the citations would lose the ABI/ordering record.
+
 // Cache-line size used to pad the hot atomics and the descriptor cells onto
 // their own lines, suppressing false sharing between producers and consumers.
 //

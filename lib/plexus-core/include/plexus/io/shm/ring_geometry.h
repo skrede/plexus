@@ -61,45 +61,43 @@ struct ring_geometry
     return p;
 }
 
-// Maps a topic's declared maximum payload, geometry mode, and per-ring consumer
-// capacity to a ring geometry, trading depth for width so per-ring memory stays
-// bounded as the slot grows. An unset or small declaration keeps the default
-// deep-but-narrow ring; a larger declaration gets a proportionally shallower ring
-// wide enough to fit the payload, with the deepest band's depth derived from the
-// declared capacity rather than a fixed floor. cell_count is always a power of two
-// and, under the two reliable-geometry modes (reliable_preserving, wire_fallback),
-// strictly exceeds the declared capacity; best_effort_large admits depth ==
-// capacity. This is a pure layout query: it never bounds the slab itself. An oversize
-// declaration that would exceed the per-ring ceiling is left for the caller to detect
-// via ring_memory_for — the fail-closed registration path owns that bound + diagnostic.
+// The depth/width tier selection: trade depth for width so per-ring memory stays bounded as
+// the slot grows. Beyond the fixed-depth tiers the slot dominates, so the depth pins to the
+// capacity floor (> capacity for reliable modes; best_effort_large admits depth == capacity).
+[[nodiscard]] inline ring_geometry ring_geometry_tier(std::uint64_t want, std::uint64_t slot,
+                                                      ring_geometry_mode mode,
+                                                      std::uint64_t      capacity) noexcept
+{
+    if(want > 131072)
+    {
+        const std::uint64_t depth = mode == ring_geometry_mode::best_effort_large
+                ? next_pow2_at_least(capacity)
+                : next_pow2_strictly_above(capacity);
+        return ring_geometry{depth, slot};
+    }
+    if(want > 65536)
+        return ring_geometry{64, slot};
+    if(want > 32768)
+        return ring_geometry{128, slot};
+    if(want > 4096)
+        return ring_geometry{256, slot};
+    return ring_geometry{256, 4096};
+}
+
+// Maps a topic's declared maximum payload, geometry mode, and per-ring consumer capacity to a
+// ring geometry. cell_count is always a power of two and, under the reliable-geometry modes,
+// strictly exceeds the declared capacity; best_effort_large admits depth == capacity. A pure
+// layout query: it never bounds the slab itself — an oversize declaration that exceeds the
+// per-ring ceiling is left for the caller to detect via ring_memory_for (the fail-closed
+// registration path owns that bound + diagnostic).
 [[nodiscard]] inline ring_geometry ring_geometry_for(std::optional<std::uint32_t> max_payload,
                                                      ring_geometry_mode           mode,
                                                      std::uint32_t consumer_capacity) noexcept
 {
     const std::uint64_t capacity = consumer_capacity == 0 ? k_max_consumers : consumer_capacity;
     const std::uint64_t want     = max_payload.value_or(0);
-    const std::uint64_t slot     = round_up_8(want);
-
-    ring_geometry geom{256, 4096};
-    if(want > 131072)
-    {
-        // Beyond the fixed-depth tiers the slot dominates the per-ring slab. The
-        // reliable-geometry modes pin the depth to the capacity floor (> capacity);
-        // best_effort_large admits depth == capacity for the same low memory the old
-        // depth-16 deep tier gave.
-        const std::uint64_t depth = mode == ring_geometry_mode::best_effort_large
-                ? next_pow2_at_least(capacity)
-                : next_pow2_strictly_above(capacity);
-        geom                      = ring_geometry{depth, slot};
-    }
-    else if(want > 65536)
-        geom = ring_geometry{64, slot};
-    else if(want > 32768)
-        geom = ring_geometry{128, slot};
-    else if(want > 4096)
-        geom = ring_geometry{256, slot};
-
-    geom.slot_capacity = round_up_8(geom.slot_capacity);
+    ring_geometry       geom     = ring_geometry_tier(want, round_up_8(want), mode, capacity);
+    geom.slot_capacity           = round_up_8(geom.slot_capacity);
     if(mode != ring_geometry_mode::best_effort_large)
         assert(geom.cell_count > capacity && "reliable ring depth not strictly above capacity");
     return geom;
