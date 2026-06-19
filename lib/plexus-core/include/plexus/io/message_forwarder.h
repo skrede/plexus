@@ -7,6 +7,7 @@
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/history_ring.h"
 #include "plexus/io/detail/egress_scheduler.h"
+#include "plexus/io/detail/forwarder_fanout.h"
 #include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/fragmentation.h"
@@ -69,6 +70,9 @@ constexpr std::size_t k_fetch_cap = 1024;
 // frames each publish ONCE and shares the single owning buffer across subscribers, and
 // warn-and-drops a malformed frame on the receive tail through the injected logger&. It never
 // interprets the payload.
+//
+// over-limit: one cohesive pub/sub engine; splitting scatters the shared registry + scratch state
+// (the attach gate and the publish/object fan steps already extracted to detail/).
 template<typename Policy>
     requires plexus::Policy<Policy>
 class message_forwarder
@@ -106,69 +110,14 @@ public:
         return true;
     }
 
-    // The producer-side reaction to an arriving subscribe: match the subscriber's type_id, then
-    // run the full QoS compatibility gate. Each refusal replies a status, registers NO fan-out
-    // entry, returns false (a per-topic refusal, never a peer teardown). Matching authority is
-    // the type_id alone (an equality compare, no parsing risk; subscribe.h caps the string fields).
+    // The producer-side reaction to an arriving subscribe (the full QoS gate); relocated to
+    // detail::attach_for_fanout, which reads this forwarder's registry/endpoint through a friend
+    // reference. A per-topic refusal replies a status and returns false, never a peer teardown.
     bool attach_for_fanout(const peer &p, std::string_view fqn,
                            std::optional<std::uint64_t> subscriber_type_id = std::nullopt,
                            const subscriber_qos        &sub_qos            = subscriber_qos{})
     {
-        auto hash = wire::fqn_topic_hash(fqn);
-        if(type_id_mismatch(hash, subscriber_type_id))
-        {
-            auto resp = wire::encode_subscribe_response(
-                    {.topic_hash = hash, .status = wire::subscribe_status::type_mismatch});
-            send_control(p.channel, wire::msg_type::subscribe_response, resp);
-            return false;
-        }
-        // A typed-and-strict subscriber refuses an untyped producer. Ordered AFTER type_mismatch
-        // (a declared-vs-declared mismatch is more specific).
-        if(sub_qos.posture == attach_posture::strict && subscriber_type_id &&
-           !m_endpoint.registry().producer_type_id(hash))
-        {
-            auto resp = wire::encode_subscribe_response(
-                    {.topic_hash = hash, .status = wire::subscribe_status::type_undeclared});
-            send_control(p.channel, wire::msg_type::subscribe_response, resp);
-            return false;
-        }
-        // The request-vs-offered gate: the REQUESTED sub_qos arrived off the wire, the OFFERED
-        // qos + source-identity offer are read locally.
-        const topic_qos offered    = m_endpoint.registry().qos_for(hash);
-        const bool      offers_sid = m_endpoint.registry().offers_source_identity(hash);
-        const auto      rxo        = io::rxo_check(offered, offers_sid, m_global_default, sub_qos);
-        if(rxo.verdict == io::rxo_verdict::incompatible_qos ||
-           rxo.verdict == io::rxo_verdict::source_identity_incompatible)
-        {
-            auto resp = wire::encode_subscribe_response(
-                    {.topic_hash = hash, .status = status_of(rxo.verdict)});
-            send_control(p.channel, wire::msg_type::subscribe_response, resp);
-            emit_qos_change(qos_edge::refused, hash, sub_qos, rxo.verdict, subscriber_type_id);
-            return false;
-        }
-        if(m_endpoint.registry().bump_refcount(p.node_name, fqn) != 1u)
-            return false;
-        m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos,
-                                             subscriber_type_id);
-        emit_qos_change(rxo.verdict == io::rxo_verdict::degraded ? qos_edge::degraded
-                                                                 : qos_edge::accepted,
-                        hash, sub_qos, rxo.verdict, subscriber_type_id);
-        // A degraded verdict ADMITS (the consumer chose permissive) but the reply carries
-        // the degraded-field set so the accept is non-silent.
-        auto resp = rxo.verdict == io::rxo_verdict::degraded
-                ? wire::encode_subscribe_response(
-                          {.topic_hash     = hash,
-                           .status         = wire::subscribe_status::subscribed_degraded,
-                           .has_degraded   = true,
-                           .degraded_flags = rxo.degraded_fields})
-                : wire::encode_subscribe_response(
-                          {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
-        send_control(p.channel, wire::msg_type::subscribe_response, resp);
-        replay_if_latched(p, hash);
-        // A remote subscribe arrived — the local node is the PUBLISHER, so a co-host upgrade mints
-        // the send companion the publish fan routes over.
-        emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::publisher);
-        return true;
+        return detail::attach_for_fanout(*this, p, fqn, subscriber_type_id, sub_qos);
     }
 
     // Record durable subscribe demand WITHOUT a wire emit — possibly before the session exists
@@ -211,69 +160,129 @@ public:
         const auto *topic = m_endpoint.registry().entry_for(hash);
         const auto *subs =
                 topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
-        const topic_qos qos     = topic != nullptr ? topic->qos : topic_qos{};
-        const bool      latched = qos.latch;
-        const locality  reach   = qos.reach;
+        const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
         // A null topic implies subs == nullptr and latched == false, so past this return
         // `topic` is always valid.
-        if(subs == nullptr && !latched)
+        if(subs == nullptr && !qos.latch)
             return;
 
+        const std::optional<std::uint64_t> counter =
+                topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
+        message_info       pub_info{};
+        const wire_bytes<> framed = frame_publish(hash, payload, counter, session_id, pub_info);
+        // The BARE codec bytes (the framed buffer minus the frame prefix), an aliasing subspan
+        // sharing the framed owner, so the offline projector never re-parses framing to strip it.
+        const message_view bare = bare_of(framed, counter);
+        emit_published(hash, fqn, bare);
+
+        if(subs != nullptr)
+            fan_published(*subs, hash, fqn, qos, framed, bare, pub_info);
+        retain_if_latched(hash, qos, framed);
+    }
+
+    // The typed-encode step of publish: stamp the unidirectional + frame headers and frame ONCE
+    // into an owning buffer (addref-shared across the fan + latch ring). The publication sequence
+    // and source timestamp it stamps are returned in pub_info for the delivered observation.
+    wire_bytes<> frame_publish(std::uint64_t hash, std::span<const std::byte> payload,
+                               std::optional<std::uint64_t> counter, std::uint64_t session_id,
+                               message_info &pub_info)
+    {
         wire::unidirectional_header uhdr{.source     = wire::endpoint_source_type::publisher,
                                          .sequence   = m_endpoint.next_sequence(),
                                          .topic_hash = hash};
-        // Decided once at framing time so the frame-ONCE-fan-to-N invariant holds; absent yields
-        // a byte-identical no-flag frame.
-        const std::optional<std::uint64_t> counter =
-                topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
-        wire::frame_header fhdr{
+        wire::frame_header          fhdr{
                 .type         = wire::msg_type::unidirectional,
                 .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
                 .session_id   = session_id,
                 .timestamp_ns = wire::now_timestamp_ns(),
                 .payload_len  = 0 // set inside the one-pass encode from the framed region size
         };
-        // The owner is addref-shared to each subscriber's band slot (frame-once-fan-to-N) and
-        // rides the band → channel send queue with no further copy.
-        const wire_bytes<> framed = frame_owned(fhdr, uhdr, payload, counter);
+        pub_info.publication_sequence = uhdr.sequence;
+        pub_info.source_timestamp     = fhdr.timestamp_ns;
+        return frame_owned(fhdr, uhdr, payload, counter);
+    }
 
-        // The BARE codec bytes (the framed buffer minus the frame prefix), an aliasing subspan
-        // sharing the framed owner, so the offline projector never re-parses framing to strip it.
-        const message_view bare = bare_of(framed, counter);
+    // The typed-encode step of publish_object: frame the just-encoded object bytes ONCE under the
+    // carrier's pinned sequence + source timestamp (the lazy encode already ran).
+    wire_bytes<> frame_object(const object_carrier &carrier, std::uint64_t hash,
+                              std::optional<std::uint64_t> counter, std::uint64_t session_id,
+                              std::span<const std::byte> bytes)
+    {
+        wire::unidirectional_header uhdr{.source     = wire::endpoint_source_type::publisher,
+                                         .sequence   = carrier.sequence,
+                                         .topic_hash = hash};
+        wire::frame_header          fhdr{
+                .type         = wire::msg_type::unidirectional,
+                .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
+                .session_id   = session_id,
+                .timestamp_ns = carrier.source_timestamp,
+                .payload_len  = 0 // set inside the one-pass encode from the framed region size
+        };
+        return frame_owned(fhdr, uhdr, bytes, counter);
+    }
 
-        emit_published(hash, fqn, bare);
-
-        const message_info pub_info{.publication_sequence = uhdr.sequence,
-                                    .source_timestamp     = fhdr.timestamp_ns};
-
-        // The confinement gate: send only when the topic's reach mask shares a bit with the
-        // subscriber's cached tier (fail-closed access control), BEFORE the egress enqueue. The
-        // scheduler governs the LIVE fan-out only; control frames and latch replay take direct
-        // send.
+    // The confinement-gated fan of one framed publish to its subscribers: send only when the
+    // topic's reach mask shares a bit with the subscriber's cached tier (fail-closed access
+    // control), BEFORE the egress enqueue. The scheduler governs the LIVE fan-out only; control
+    // frames and latch replay take direct send.
+    void
+    fan_published(const std::vector<typename subscriber_registry<channel_type>::subscriber> &subs,
+                  std::uint64_t hash, std::string_view fqn, const topic_qos &qos,
+                  const wire_bytes<> &framed, const message_view &bare,
+                  const message_info &pub_info)
+    {
         const std::size_t band = detail::band_of(qos.priority);
-        if(subs != nullptr)
-            for(const auto &sub : *subs)
-                if(any_set(reach, sub.tier))
-                {
-                    // The ONLY place a medium is chosen per message: the companion route returns
-                    // the SHM channel when this message fits the cap, else nullptr to keep the
-                    // wire sub.channel (the dual-delivery fail-safe). Gate on the FRAMED size, not
-                    // the bare payload: the ring slot carries framed bytes, so a bare-size gate
-                    // would route a near-cap message whose frame overflows the slot to SHM only,
-                    // where the oversize send is dropped and the wire fail-safe never runs.
-                    channel_type *route = sub.channel;
-                    if(m_companion_route)
-                        if(channel_type *companion =
-                                   m_companion_route(sub.node_name, fqn, framed.size()))
-                            route = companion;
-                    const detail::drop_cause cause =
-                            m_egress.enqueue(*route, band, qos.congestion, framed);
-                    if(cause != detail::drop_cause::none)
-                        shed(hash, band, cause, sub.tier);
-                    emit_delivered(hash, fqn, pub_info, bare);
-                }
+        for(const auto &sub : subs)
+        {
+            if(!any_set(qos.reach, sub.tier))
+                continue;
+            // The ONLY place a medium is chosen per message: the companion route returns the SHM
+            // channel when this message fits the cap, else nullptr to keep the wire sub.channel
+            // (the dual-delivery fail-safe). Gate on the FRAMED size, not the bare payload: the
+            // ring slot carries framed bytes, so a bare-size gate would route a near-cap message
+            // whose frame overflows the slot to SHM only, where the oversize send is dropped and
+            // the wire fail-safe never runs.
+            channel_type *route = sub.channel;
+            if(m_companion_route)
+                if(channel_type *companion = m_companion_route(sub.node_name, fqn, framed.size()))
+                    route = companion;
+            const detail::drop_cause cause = m_egress.enqueue(*route, band, qos.congestion, framed);
+            if(cause != detail::drop_cause::none)
+                shed(hash, band, cause, sub.tier);
+            emit_delivered(hash, fqn, pub_info, bare);
+        }
+    }
 
-        retain_if_latched(hash, qos, framed);
+    // The object-lane fan: a process-tier eligible subscriber takes the zero-serialization
+    // send_object fast path (gated at COMPILE TIME — a channel without send_object never
+    // instantiates the call); everyone else forces the lazy encode and rides the byte path.
+    template<typename EncodeOnce>
+    void fan_object(const std::vector<typename subscriber_registry<channel_type>::subscriber> &subs,
+                    std::uint64_t hash, std::string_view fqn, const topic_qos &qos,
+                    const object_carrier &carrier, const wire_bytes<> &framed,
+                    const message_view &bare, const message_info &obj_info, EncodeOnce &encode_once)
+    {
+        const std::size_t band = detail::band_of(qos.priority);
+        for(const auto &sub : subs)
+        {
+            if(!any_set(qos.reach, sub.tier))
+                continue;
+            if constexpr(requires(channel_type &c) { c.send_object(carrier); })
+            {
+                if(eligible_for_object(sub, carrier))
+                {
+                    sub.channel->send_object(carrier);
+                    emit_delivered(hash, fqn, obj_info, bare);
+                    continue;
+                }
+            }
+            encode_once();
+            const detail::drop_cause cause =
+                    m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
+            if(cause != detail::drop_cause::none)
+                shed(hash, band, cause, sub.tier);
+            emit_delivered(hash, fqn, obj_info, bare);
+        }
     }
 
     // The zero-serialization sibling of publish: fans a refcounted object handle behind the SAME
@@ -293,7 +302,6 @@ public:
                 topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
         const topic_qos qos     = topic != nullptr ? topic->qos : topic_qos{};
         const bool      latched = qos.latch;
-        const locality  reach   = qos.reach;
 
         carrier.topic_hash = hash;
         carrier.sequence   = m_endpoint.next_sequence();
@@ -313,19 +321,9 @@ public:
         {
             if(encoded)
                 return;
-            encoded                           = true;
-            std::span<const std::byte>  bytes = std::forward<EncodeFn>(encode)();
-            wire::unidirectional_header uhdr{.source     = wire::endpoint_source_type::publisher,
-                                             .sequence   = carrier.sequence,
-                                             .topic_hash = hash};
-            wire::frame_header          fhdr{
-                    .type         = wire::msg_type::unidirectional,
-                    .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
-                    .session_id   = session_id,
-                    .timestamp_ns = carrier.source_timestamp,
-                    .payload_len  = 0 // set inside the one-pass encode from the framed region size
-            };
-            framed = frame_owned(fhdr, uhdr, bytes, counter);
+            encoded = true;
+            framed  = frame_object(carrier, hash, counter, session_id,
+                                   std::forward<EncodeFn>(encode)());
         };
 
         // The typed loan path carries NO payload, so its observation view is ENVELOPE-ONLY by
@@ -342,30 +340,8 @@ public:
         const message_view bare = capture_payload ? bare_of(framed, counter) : message_view{};
         emit_published(hash, fqn, bare);
 
-        const std::size_t band = detail::band_of(qos.priority);
         if(subs != nullptr)
-            for(const auto &sub : *subs)
-            {
-                if(!any_set(reach, sub.tier))
-                    continue;
-                // Gated at COMPILE TIME: a channel without send_object (the lane is process-tier
-                // only) never instantiates the call and always takes the byte path.
-                if constexpr(requires(channel_type &c) { c.send_object(carrier); })
-                {
-                    if(eligible_for_object(sub, carrier))
-                    {
-                        sub.channel->send_object(carrier);
-                        emit_delivered(hash, fqn, obj_info, bare);
-                        continue;
-                    }
-                }
-                encode_once();
-                const detail::drop_cause cause =
-                        m_egress.enqueue(*sub.channel, band, qos.congestion, framed);
-                if(cause != detail::drop_cause::none)
-                    shed(hash, band, cause, sub.tier);
-                emit_delivered(hash, fqn, obj_info, bare);
-            }
+            fan_object(*subs, hash, fqn, qos, carrier, framed, bare, obj_info, encode_once);
 
         // Force one encode even when every live subscriber fast-pathed, so a late bytes joiner
         // replays a real frame from the history ring.
@@ -575,6 +551,10 @@ public:
     }
 
 private:
+    template<typename F, typename P>
+    friend bool detail::attach_for_fanout(F &, const P &, std::string_view,
+                                          std::optional<std::uint64_t>, const subscriber_qos &);
+
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
         m_endpoint.send_control(channel, type, inner);

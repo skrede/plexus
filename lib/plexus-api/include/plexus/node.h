@@ -33,6 +33,7 @@
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/address_parse.h"
+#include "plexus/detail/node_shm_wiring.h"
 #include "plexus/detail/function_traits.h"
 #include "plexus/detail/node_internals.h"
 
@@ -164,6 +165,10 @@ class procedure;
 // borrowed executor and captures `this`. The borrowed substrate MUST outlive the node, and the
 // executor MUST be drained before the node is destroyed — the structural single-owner
 // discipline. The node pins `this` into those callbacks, so it is non-copyable and non-movable.
+//
+// over-limit: one cohesive public facade; the typed member factories and the private endpoint
+// seams share the engine + subscription/peer/served-fqn state, so splitting the surface scatters
+// that shared state (the shm-wiring glue already extracted to detail/node_shm_wiring.h).
 template<typename Policy, typename... Transports>
     requires plexus::Policy<Policy> && (sizeof...(Transports) >= 1) &&
         (sizeof...(Transports) == 1
@@ -207,7 +212,7 @@ public:
             // The leaves are BORROWED three ways and never consumed (mux glue, resolve_hook's
             // by-ref capture, engine_leaf's re-read), so a future edit must NOT move into the mux
             // ctor — that would invalidate the subsequent engine_leaf/resolve_hook reads.
-            , m_glue(transports..., io::transport_selector{}, resolve_hook(transports...))
+            , m_glue(transports..., io::transport_selector{}, detail::resolve_hook(transports...))
             , m_leaf(engine_leaf(transports...))
             , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout,
                        opts.reconnect, opts.redial_seed, opts.dial_eagerly, resolve_logger(opts),
@@ -484,62 +489,11 @@ private:
     }
 
     // Pass the upgrade policy through and, when an shm member exists, install its companion-ring
-    // MINT as the coordinator's gate (capturing the member by reference, which outlives the
-    // node-owned glue, as prefer_shm_hook does). The minted concrete channel is wrapped into the
-    // engine's byte_channel before the coordinator retains it. No shm member = inert.
+    // MINT + RECEIVE gates (relocated to detail::install_same_host_upgrade). No shm member = inert.
     void install_upgrade_coordinator(upgrade_policy_fn policy)
     {
         m_engine.on_upgrade_policy(policy);
-        for_each_shm_member(
-                [this](auto &m)
-                {
-                    using member_t = std::remove_reference_t<decltype(m)>;
-                    m_engine.on_upgrade_gate(
-                            [&m](std::string_view fqn) -> io::shm::companion_mint<engine_channel>
-                            {
-                                const std::string                                key{fqn};
-                                std::unique_ptr<typename member_t::channel_type> ch =
-                                        m.mint_companion(key);
-                                if(!ch)
-                                    return {};
-                                const auto g = m.resolved_geometry_for(key);
-                                return {wrap_companion(std::move(ch)), g.mode, g.slot_capacity};
-                            });
-                    // The SUBSCRIBER-side receive gate: attach the co-host ring as a consumer and
-                    // route each drained frame into the matching peer session (resolved by
-                    // node_name). The drain is posted on this node's executor, so inject runs on an
-                    // executor turn — no drain thread. The returned owner is a closure holding the
-                    // concrete RAII handle by move (never called — dropping it on peer-dead runs
-                    // the dtor: clear sink, release ring). It captures the engine by reference (it
-                    // outlives the coordinator). A null handle declines: the subscriber keeps the
-                    // wire.
-                    m_engine.on_upgrade_receive_gate(
-                            [&m, this](std::string_view node_name,
-                                       std::string_view fqn) -> io::shm::companion_receive
-                            {
-                                const std::string key{fqn};
-                                const std::string peer{node_name};
-                                auto              handle = m.mint_receive_companion(
-                                        key, [this, peer](std::span<const std::byte> frame)
-                                        { m_engine.inject_companion_receive(peer, frame); });
-                                if(!handle)
-                                    return {};
-                                return {[h = std::move(handle)]() mutable { (void)h; }};
-                            });
-                });
-    }
-
-    // Wrap a minted concrete shm channel into the engine's byte_channel (the channel_adapter wrap,
-    // mirroring multiplexing_transport::wrap). The if-constexpr keeps a single-transport build
-    // from instantiating the erasure (no shm member reaches here).
-    template<typename C>
-    static std::unique_ptr<engine_channel> wrap_companion(std::unique_ptr<C> ch)
-    {
-        if constexpr(std::is_same_v<engine_channel, io::polymorphic_byte_channel>)
-            return std::make_unique<engine_channel>(
-                    std::make_unique<io::channel_adapter<C>>(std::move(ch)));
-        else
-            return ch;
+        for_each_shm_member([this](auto &m) { detail::install_same_host_upgrade(m_engine, m); });
     }
 
     // Apply fn to the shm member of the engine leaf, if one exists (the single borrowed transport
@@ -663,21 +617,30 @@ private:
                 m_logger.warn("plexus: node object_native_key_mismatch");
                 continue;
             }
-            io::message_info info{};
-            info.publication_sequence = carrier.sequence;
-            info.from_intra_process   = true;
-            if(sub.qos.wants_message_info)
-            {
-                if(!reception_read)
-                {
-                    reception      = wire::now_timestamp_ns();
-                    reception_read = true;
-                }
-                info.source_timestamp    = carrier.source_timestamp;
-                info.reception_timestamp = reception;
-            }
-            sub.obj.dispatch(carrier, info);
+            sub.obj.dispatch(carrier, object_info_for(sub, carrier, reception, reception_read));
         }
+    }
+
+    // The per-subscriber message_info for an object dispatch. A subscriber that wants no info gets
+    // a documented-0 stamp; one that wants it shares the at-most-once receive clock read across the
+    // fan (reception/reception_read are threaded by reference so the clock is read on first need).
+    io::message_info object_info_for(const subscription &sub, const io::object_carrier &carrier,
+                                     std::uint64_t &reception, bool &reception_read) const
+    {
+        io::message_info info{};
+        info.publication_sequence = carrier.sequence;
+        info.from_intra_process   = true;
+        if(sub.qos.wants_message_info)
+        {
+            if(!reception_read)
+            {
+                reception      = wire::now_timestamp_ns();
+                reception_read = true;
+            }
+            info.source_timestamp    = carrier.source_timestamp;
+            info.reception_timestamp = reception;
+        }
+        return info;
     }
 
     bool any_subscriber_for(std::string_view fqn) const
@@ -750,46 +713,6 @@ private:
     static log::logger &resolve_logger(const node_options &opts)
     {
         return opts.logger != nullptr ? *opts.logger : io::shared_null_logger();
-    }
-
-    // Whether a member exposes the same-host ring-acquire probe (the shm member).
-    template<typename M>
-    static constexpr bool has_can_acquire = requires(M &m) {
-        { m.can_acquire(std::declval<const io::endpoint &>()) } -> std::convertible_to<bool>;
-    };
-
-    static constexpr bool any_shm_member = (has_can_acquire<Transports> || ...);
-
-    // When the pack carries an shm member, install the same-host preference hook (prefer shm when
-    // the ring acquires, else AF_UNIX) so a >1-candidate local tier resolves by runtime acquire,
-    // not positional order. can_acquire is mode-aware: a wire_fallback topic declines the ring
-    // (its same-host channel is the wire — the too-large-message fail-safe). The if constexpr is
-    // load-bearing: shm_preference_hook only instantiates for an shm-bearing pack.
-    static io::selection_hook resolve_hook(Transports &...transports)
-    {
-        if constexpr(any_shm_member)
-            return shm_preference_hook(transports...);
-        else
-            return io::first_candidate{};
-    }
-
-    // Bind the hook over ONE leaf if it exposes the ring acquire probe. The if constexpr is
-    // load-bearing: prefer_shm_hook only INSTANTIATES for a can_acquire leaf, so a non-shm leaf
-    // (AF_UNIX, TCP) never forces an uncompilable prefer_shm_hook<that-leaf>.
-    template<typename M>
-    static void bind_shm_hook(io::selection_hook &hook, M &member)
-    {
-        if constexpr(has_can_acquire<M>)
-            hook = io::shm::prefer_shm_hook(member);
-    }
-
-    // Build the hook over whichever borrowed member exposes the ring acquire probe, capturing it
-    // by reference (it outlives the node-owned glue). Precondition: any_shm_member.
-    static io::selection_hook shm_preference_hook(Transports &...transports)
-    {
-        io::selection_hook hook = io::first_candidate{};
-        (bind_shm_hook(hook, transports), ...);
-        return hook;
     }
 
     // The engine's transport leaf: the one borrowed transport, or the node-owned mux glue when
