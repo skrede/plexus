@@ -9,6 +9,8 @@
 #include "plexus/shm/region_handle.h"
 #include "plexus/shm/machine_fingerprint.h"
 
+#include "plexus/io/shm/broadcast_ring.h"
+#include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/same_host.h"
 
 #include "plexus/discovery/static_discovery.h"
@@ -22,25 +24,33 @@
 #include <asio/io_context.hpp>
 
 #include <span>
+#include <atomic>
 #include <string>
 #include <vector>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
+#include <algorithm>
 
 #include <fcntl.h>
+#include <cerrno>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <sys/wait.h>
 
-// The whole-stack proof through the PUBLIC facade: two same_host_transports nodes,
-// forked onto one host and rendezvousing over static_discovery, auto-engage a co-host
-// shared-memory ring with NO platform conditional in the consumer code. The MEDIUM is
-// asserted, not just delivery: while the nodes are live the parent attaches to the
-// /dev/shm region named region_name_for(fqn) and REQUIREs it maps iff co-host. A
-// forced-distinct-fingerprint variant proves the cross-host fail-closed path — delivery
-// still crosses the TCP wire but no region exists. The byte-exact crossing is reproduced
-// over >=2 independent runs with distinct per-run payloads (no success from a single run).
+// The whole-stack proof through the PUBLIC facade that published data actually FLOWS over
+// the same-host shared-memory ring: two same_host_transports nodes, forked onto one host and
+// rendezvousing over static_discovery, auto-engage a co-host companion ring with NO platform
+// conditional in the consumer code, and the publisher's publish fan routes a fitting message
+// OVER THE SHM RING (not the wire). The medium is asserted at the BYTES level, not the region
+// presence: a forked raw consumer attaches the /dev/shm ring directly and observes the exact
+// fitting payload appear on the ring, while the subscriber node's TCP receive path carries the
+// over-cap message ONLY (the fitting message never crosses the wire — the dual-delivery medium
+// split). A forced-distinct-fingerprint variant proves the cross-host fail-closed path: no
+// region, delivery over the wire. The medium assertion holds across >=2 independent runs with
+// distinct per-run payloads (no success from a single run).
 
 namespace pasio = plexus::asio;
 namespace pio = plexus::io::shm;
@@ -48,6 +58,13 @@ using plexus::shm::posix_shm_region_broker;
 using plexus::shm::region_handle;
 
 namespace {
+
+constexpr std::size_t k_kib = 1024;
+
+// The wire_fallback companion cap: a topic provisioned at this per-message ceiling keeps a
+// capped SHM companion ring. A SMALL payload (< cap, framing included) rides the ring; a
+// LARGE payload (> cap) reroutes over the wire — the per-message medium split.
+constexpr std::uint32_t k_cap_bytes = 2 * k_kib;
 
 using same_host_node = decltype(std::declval<pasio::same_host_transports &>().make_node(
     std::declval<plexus::discovery::discovery &>(), std::declval<const plexus::node_id &>(),
@@ -71,6 +88,15 @@ plexus::node_options dial_opts(bool eager)
     return opts;
 }
 
+// Force a distinct local fingerprint on each end so is_same_host fails — the cross-host
+// fallback: the pair never reaches the shared-memory medium and stays on the wire.
+plexus::node_options distinct_fingerprint_opts(bool eager, std::uint64_t fp)
+{
+    plexus::node_options opts = dial_opts(eager);
+    opts.handshake.local_fingerprint = pio::host_fingerprint{fp};
+    return opts;
+}
+
 // The peer's contact card pre-seeded into one side's static_discovery table: each forked
 // process owns its OWN discovery, so the OTHER node's reachable tcp endpoint is supplied
 // verbatim (no live mDNS) — browse-to-awareness then dials it deterministically.
@@ -86,21 +112,15 @@ std::span<const std::byte> as_bytes(const std::string &s)
     return {reinterpret_cast<const std::byte *>(s.data()), s.size()};
 }
 
-// The control region the (fqn) request-direction ring maps over; the broker attach maps
-// it read-only iff the facade auto-engaged the ring, so its region_status IS the medium.
+// The control region the (fqn) request-direction ring maps over; the broker attach maps it
+// read-only iff the facade auto-engaged the companion ring, so its region_status IS the medium.
 std::string control_name(const std::string &fqn)
 {
     return pio::region_name_for(fqn, pio::ring_direction::request);
 }
-
-// Pump until the predicate holds or the wall-clock backstop expires (a generous bound, not
-// a tight deadline: the happy path returns the instant it converges).
-template <typename Pred>
-void pump_until(::asio::io_context &io, Pred pred, std::chrono::seconds bound)
+std::string slab_name(const std::string &fqn)
 {
-    const auto deadline = std::chrono::steady_clock::now() + bound;
-    while(!pred() && std::chrono::steady_clock::now() < deadline)
-        io.poll();
+    return pio::region_name_for(fqn, pio::ring_direction::request) + ".s";
 }
 
 bool region_maps(const std::string &fqn)
@@ -110,34 +130,131 @@ bool region_maps(const std::string &fqn)
     return broker.attach(control_name(fqn), ctrl) == pio::region_status::ok;
 }
 
-// Force a distinct local fingerprint on each end so is_same_host fails — the cross-host
-// fallback: the pair never reaches the shared-memory medium and stays on the wire.
-plexus::node_options distinct_fingerprint_opts(bool eager, std::uint64_t fp)
+// Whether a needle byte-sequence occurs anywhere in a haystack span — the companion ring
+// carries the FRAMED message ([frame prefix][payload]); the raw consumer cannot re-derive
+// the publisher's exact framing, so it proves the SHM ring carried THIS message by finding
+// the run's distinct payload bytes inside the framed slab the ring delivered.
+bool contains(std::span<const std::byte> hay, std::span<const std::byte> needle)
 {
-    plexus::node_options opts = dial_opts(eager);
-    opts.handshake.local_fingerprint = pio::host_fingerprint{fp};
-    return opts;
+    if(needle.empty() || needle.size() > hay.size())
+        return false;
+    const auto *h = reinterpret_cast<const unsigned char *>(hay.data());
+    const auto *n = reinterpret_cast<const unsigned char *>(needle.data());
+    return std::search(h, h + hay.size(), n, n + needle.size()) != h + hay.size();
 }
 
-// Fork two facade nodes over static_discovery and run ONE rendezvous. The child hosts the
-// subscriber (eager dialer); the parent hosts the publisher (lazy acceptor). The parent
-// drives demand to establish, observes the medium (the region maps iff co-host), publishes
-// the run's distinct payload, and confirms the child received it byte-exact. Returns
-// {delivered, region_observed}. `same_host` selects the co-host vs forced-distinct variant.
-struct run_result
+// Cross-process coordination over an anonymous shared page (the broadcast-ring fork idiom):
+// the publisher signals when its topic is provisioned + the demand has crossed 0->1 so the
+// raw consumer attaches at the right moment, and the consumer reports whether the fitting
+// payload appeared on the SHM ring.
+struct coord
 {
-    bool delivered = false;
+    std::atomic<std::uint32_t> ring_ready{0};   // the publisher minted the companion ring
+    std::atomic<std::uint32_t> shm_seen{0};     // the consumer saw the fitting payload on the ring
+    std::atomic<std::uint32_t> consumer_done{0};
+};
+
+coord *map_coord()
+{
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE,
+                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    return p == MAP_FAILED ? nullptr : ::new(p) coord{};
+}
+
+// The raw SHM consumer: attach the request-direction companion ring by its deterministic
+// name (both ends derive it from the fqn alone) and spin-consume until the run's distinct
+// fitting payload appears on the ring — proving the publisher's facade routed it over SHM,
+// byte-observable across the process boundary. Bounded by a deadline so a non-engaged ring
+// (a regression) fails rather than hangs.
+bool ring_carries(const std::string &fqn, std::span<const std::byte> needle,
+                  std::chrono::seconds bound)
+{
+    posix_shm_region_broker broker;
+    region_handle ctrl, slab;
+    const auto deadline = std::chrono::steady_clock::now() + bound;
+    while(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
+          broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
+    {
+        if(std::chrono::steady_clock::now() >= deadline)
+            return false;
+    }
+    pio::broadcast_ring ring;
+    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
+        return false;
+
+    std::uint64_t cursor = 0;
+    while(std::chrono::steady_clock::now() < deadline)
+    {
+        pio::broadcast_ring::consume_result out;
+        const auto st = ring.consume(cursor, out);
+        if(st == pio::loan_status::ok)
+        {
+            if(contains(out.slab, needle))
+                return true;
+            ++cursor;
+        }
+        else if(st == pio::loan_status::congested)
+            ++cursor;
+    }
+    return false;
+}
+
+// Pump until the predicate holds or the wall-clock backstop expires.
+template <typename Pred>
+void pump_until(::asio::io_context &io, Pred pred, std::chrono::seconds bound)
+{
+    const auto deadline = std::chrono::steady_clock::now() + bound;
+    while(!pred() && std::chrono::steady_clock::now() < deadline)
+        io.poll();
+}
+
+// Reap one child, retrying ONLY on EINTR (a non-EINTR waitpid failure — ECHILD, an invalid
+// pid — exits rather than spinning forever, the no-deadline hang WR-02 flagged).
+int reap(pid_t pid)
+{
+    int status = 0;
+    while(::waitpid(pid, &status, 0) < 0)
+        if(errno != EINTR)
+            return -1;
+    return status;
+}
+
+// The publisher topic QoS: a qualifying same-host hint (so the upgrade is eligible) and a
+// small per-message cap (so the companion ring is the wire_fallback bounded ring — the
+// small-message fast path with the wire fallback for over-cap).
+plexus::topic_qos companion_qos()
+{
+    plexus::topic_qos qos;
+    qos.dispatch = pio::dispatch_hint::frequent;
+    qos.max_message_bytes = k_cap_bytes;
+    return qos;
+}
+
+std::optional<pio::shm_geometry> companion_geometry()
+{
+    return pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback};
+}
+
+struct medium_result
+{
+    bool small_over_shm = false; // the fitting payload appeared on the SHM ring
+    bool large_over_wire = false; // the over-cap payload arrived at the subscriber over TCP
+    bool small_off_wire = true;   // the fitting payload did NOT arrive over TCP
     bool region_observed = false;
 };
 
-run_result one_run(const std::string &fqn, const std::string &payload, bool same_host)
+// Fork two facade nodes over static_discovery and prove the per-message MEDIUM. The child
+// hosts the subscriber node (eager dialer) AND runs the raw SHM consumer that observes the
+// fitting payload on the ring; it reports back over a pipe which messages reached its TCP
+// callback. The parent hosts the publisher node (lazy acceptor), drives demand, publishes a
+// SMALL (companion) and a LARGE (wire) message, and joins the child's observations.
+//
+// The small payload is distinct per run (so a stale ring cannot pass); the large payload is a
+// distinct marker the subscriber's wire callback reports separately. `same_host` selects the
+// co-host vs forced-distinct variant.
+medium_result one_run(const std::string &fqn, const std::string &small, const std::string &large,
+                      bool same_host)
 {
-    // Compute the shared identity (ports, ids, names) in the PARENT before the fork so both
-    // halves agree: the child inherits these via the forked address space (a post-fork
-    // ::getpid() would differ between parent and child and de-sync the rendezvous).
-    // Each process claims an even-aligned 2-port slot: concurrent ctest workers get
-    // near-consecutive pids, and a non-aligned adjacent pair would overlap a neighbor's
-    // pub_port and stall the rendezvous on a bind collision.
     const std::uint16_t sub_port = static_cast<std::uint16_t>(41000 + 2 * (::getpid() % 9000));
     const std::uint16_t pub_port = sub_port + 1;
     const plexus::node_id sub_id = make_id(0x51);
@@ -145,18 +262,30 @@ run_result one_run(const std::string &fqn, const std::string &payload, bool same
     const std::string sub_name = "node.sub." + std::to_string(::getpid());
     const std::string pub_name = "node.pub." + std::to_string(::getpid());
 
+    coord *c = map_coord();
+    if(c == nullptr)
+        return {};
+
+    // pipe[0] read by the parent; the child writes one tagged byte per arrival over TCP:
+    // 'S' = the small (fitting) payload reached the wire callback (a medium violation), 'L' =
+    // the large (over-cap) payload reached it (the expected wire delivery).
     int pipe_fd[2];
     if(::pipe(pipe_fd) != 0)
+    {
+        ::munmap(c, sizeof(coord));
         return {};
+    }
 
     const pid_t pid = ::fork();
     if(pid < 0)
+    {
+        ::munmap(c, sizeof(coord));
         return {};
+    }
 
     if(pid == 0)
     {
         ::close(pipe_fd[0]);
-        bool got = false;
         {
             ::asio::io_context io;
             plexus::discovery::static_discovery disc{{peer_card(pub_name, pub_id, pub_port)}};
@@ -165,30 +294,44 @@ run_result one_run(const std::string &fqn, const std::string &payload, bool same
                                      same_host ? dial_opts(true)
                                                : distinct_fingerprint_opts(true, 0xA1A1A1A1u));
 
-            std::string received;
+            // The subscriber's wire callback: a payload reaching HERE crossed the TCP wire.
+            // Tag which one so the parent can prove the fitting payload did NOT (it rode SHM).
             plexus::subscriber<> sub{node, fqn,
                                      [&](std::span<const std::byte> b) {
-                                         received.assign(reinterpret_cast<const char *>(b.data()),
-                                                         b.size());
+                                         const std::string got(reinterpret_cast<const char *>(b.data()),
+                                                               b.size());
+                                         const char tag = got == small ? 'S' : (got == large ? 'L' : '?');
+                                         const ssize_t w = ::write(pipe_fd[1], &tag, 1);
+                                         (void)w;
                                      }};
             node.listen({"tcp", "127.0.0.1:" + std::to_string(sub_port)});
             pump_until(io, [&] { return node.router().is_connected(pub_id); },
                        std::chrono::seconds(10));
-            pump_until(io, [&] { return received == payload; }, std::chrono::seconds(15));
-            got = (received == payload);
+
+            // Once the publisher has minted the companion ring (same-host only), run the raw
+            // SHM consumer to observe the fitting payload on the ring while pumping the node
+            // so the wire-side over-cap message still flows.
+            if(same_host)
+            {
+                pump_until(io, [&] { return c->ring_ready.load(std::memory_order_acquire) != 0; },
+                           std::chrono::seconds(10));
+                const bool seen = ring_carries(fqn, as_bytes(small), std::chrono::seconds(10));
+                c->shm_seen.store(seen ? 1u : 0u, std::memory_order_release);
+            }
+            // Drain the wire over-cap delivery for a bounded window (the parent republishes).
+            const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+            while(std::chrono::steady_clock::now() < until)
+                io.poll();
         }
-        const char b = got ? 1 : 0;
-        const ssize_t wrote = ::write(pipe_fd[1], &b, 1);
+        c->consumer_done.store(1u, std::memory_order_release);
         ::close(pipe_fd[1]);
-        ::_exit(wrote == 1 && got ? 0 : 1);
+        ::_exit(0);
     }
 
     ::close(pipe_fd[1]);
-    // Make the child's done-signal pipe non-blocking so the parent can poll it between
-    // republish turns without stalling on read.
     ::fcntl(pipe_fd[0], F_SETFL, ::fcntl(pipe_fd[0], F_GETFL, 0) | O_NONBLOCK);
 
-    run_result result;
+    medium_result result;
     {
         ::asio::io_context io;
         plexus::discovery::static_discovery disc{{peer_card(sub_name, sub_id, sub_port)}};
@@ -197,90 +340,110 @@ run_result one_run(const std::string &fqn, const std::string &payload, bool same
                                  same_host ? dial_opts(false)
                                            : distinct_fingerprint_opts(false, 0xB2B2B2B2u));
 
-        // The fingerprint default-fill at the facade is non-null on a real host (the
-        // null-guard convention) — only in the co-host variant where the default fill is in
-        // effect (the forced-distinct variant overrides it).
         if(same_host)
             REQUIRE_FALSE(node.router().local_fingerprint().is_null());
 
         node.listen({"tcp", "127.0.0.1:" + std::to_string(pub_port)});
 
-        plexus::topic_qos qos;
-        qos.dispatch = pio::dispatch_hint::frequent; // a qualifying hint so the upgrade is eligible
-        plexus::publisher<> pub{node, fqn, qos};
+        // The bytes publisher with the companion QoS (a qualifying same-host hint) + the
+        // wire_fallback geometry: the public declare path provisions the capped same-host
+        // ring geometry so the coordinator mints a bounded companion the publish fan splits
+        // per message (fitting -> SHM, over-cap -> wire).
+        plexus::publisher<> companion_pub{node, fqn, companion_qos(), /*emit_source_identity=*/false,
+                                          companion_geometry()};
 
-        // Drive to convergence: the accepting (publisher) side keys its inbound session by a
-        // synthetic id, so the subscribe demand's arrival is observed by the medium itself
-        // (the co-host ring maps once demand crosses 0->1) and by the child's delivery
-        // signal. Republish each turn — once the subscribe demand reaches the forwarder the
-        // fan delivers; the periodic republish closes the demand-arrival race deterministically.
-        bool child_done = false;
+        bool consumer_done = false;
+        bool ring_signaled = false;
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
-        while(!child_done && std::chrono::steady_clock::now() < deadline)
+        while(!consumer_done && std::chrono::steady_clock::now() < deadline)
         {
             io.poll();
             if(!result.region_observed && region_maps(fqn))
+            {
                 result.region_observed = true;
-            pub.publish(as_bytes(payload));
-            char b = 0;
-            if(::read(pipe_fd[0], &b, 1) == 1)
-                child_done = (b == 1);
+                if(!ring_signaled)
+                {
+                    c->ring_ready.store(1u, std::memory_order_release);
+                    ring_signaled = true;
+                }
+            }
+            // Publish the SMALL (fitting -> SHM companion) then the LARGE (over-cap -> wire).
+            // The republish each turn closes the demand-arrival race deterministically.
+            companion_pub.publish(as_bytes(small));
+            companion_pub.publish(as_bytes(large));
+            char tag = 0;
+            while(::read(pipe_fd[0], &tag, 1) == 1)
+            {
+                if(tag == 'S')
+                    result.small_off_wire = false; // the fitting payload crossed the wire (violation)
+                else if(tag == 'L')
+                    result.large_over_wire = true;  // the over-cap payload rode the wire (expected)
+            }
+            consumer_done = c->consumer_done.load(std::memory_order_acquire) != 0;
         }
-        // A final medium sample while both nodes are still live (the co-host ring stays
-        // mapped for the topic's life).
         if(!result.region_observed)
             result.region_observed = region_maps(fqn);
     }
 
-    int status = 0;
-    while(::waitpid(pid, &status, 0) < 0)
-        ;
-    char b = 0;
-    if(::read(pipe_fd[0], &b, 1) == 1)
-        result.delivered = (b == 1);
-    else
-        result.delivered = (WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    const int status = reap(pid);
+    // Drain any final tagged arrivals the child wrote before exit.
+    char tag = 0;
+    while(::read(pipe_fd[0], &tag, 1) == 1)
+    {
+        if(tag == 'S')
+            result.small_off_wire = false;
+        else if(tag == 'L')
+            result.large_over_wire = true;
+    }
     ::close(pipe_fd[0]);
+    result.small_over_shm = c->shm_seen.load(std::memory_order_acquire) == 1u;
+    (void)status;
+    ::munmap(c, sizeof(coord));
     return result;
 }
 
 }
 
-TEST_CASE("node_xproc_shm two co-host facade nodes auto-engage a shared-memory ring, the medium maps, looped",
+TEST_CASE("node_xproc_shm a fitting message FLOWS over the co-host shared-memory ring, the medium asserted, looped",
           "[integration][shm][node_xproc_shm]")
 {
-    // The MEDIUM + byte-exact delivery over >=2 independent runs with DISTINCT payloads so
-    // a stale region cannot pass: each run forks fresh and pid+run-scopes the fqn.
-    bool any_region = false;
+    // The MEDIUM proven at the bytes level over >=2 independent runs with DISTINCT payloads
+    // so a stale region cannot pass: each run forks fresh and pid+run-scopes the fqn. The
+    // fitting payload appears on the /dev/shm ring (the publisher facade routed it over SHM)
+    // and does NOT reach the subscriber's TCP callback; the over-cap payload rides the wire.
     for(int run = 0; run < 2; ++run)
     {
         const std::string fqn =
             "topic.xproc." + std::to_string(::getpid()) + "." + std::to_string(run);
-        const std::string payload = "xproc-shm-run-" + std::to_string(run) + "-" +
-                                    std::to_string(::getpid());
+        const std::string small = "xproc-shm-fit-" + std::to_string(run) + "-" +
+                                  std::to_string(::getpid());
+        const std::string large = std::string(64 * k_kib, 'L') + std::to_string(run);
 
-        const run_result r = one_run(fqn, payload, /*same_host=*/true);
+        const medium_result r = one_run(fqn, small, large, /*same_host=*/true);
 
-        REQUIRE(r.delivered);              // byte-exact receipt on the subscriber
-        REQUIRE(r.region_observed);        // the /dev/shm region mapped while the nodes were live
-        REQUIRE_FALSE(region_maps(fqn));   // and is gone once both nodes tore down (no leak)
-        any_region = any_region || r.region_observed;
+        REQUIRE(r.region_observed);        // the /dev/shm companion ring mapped while live
+        REQUIRE(r.small_over_shm);         // the fitting payload was observed on the SHM ring
+        REQUIRE(r.small_off_wire);         // and it never crossed the TCP wire (the medium split)
+        REQUIRE(r.large_over_wire);        // the over-cap payload rode the wire (dual-delivery fail-safe)
+        REQUIRE_FALSE(region_maps(fqn));   // the ring is gone once both nodes tore down (no leak)
     }
-    REQUIRE(any_region);
 }
 
 TEST_CASE("node_xproc_shm a forced-distinct-fingerprint pair delivers over the wire with no region",
           "[integration][shm][node_xproc_shm]")
 {
-    // The cross-host fail-closed fallback: distinct fingerprints -> is_same_host false ->
-    // no upgrade -> NO /dev/shm region, but the wire (TCP) still delivers byte-exact. The
-    // wire is the always-present path, never suppressed.
+    // The cross-host fail-closed fallback: distinct fingerprints -> is_same_host false -> no
+    // upgrade -> NO /dev/shm region, and EVERY message (fitting and over-cap) crosses the TCP
+    // wire byte-exact. The wire is the always-present path, never suppressed.
     const std::string fqn = "topic.xproc.distinct." + std::to_string(::getpid());
-    const std::string payload = "xproc-distinct-" + std::to_string(::getpid());
+    const std::string small = "xproc-distinct-fit-" + std::to_string(::getpid());
+    const std::string large = std::string(64 * k_kib, 'L');
 
-    const run_result r = one_run(fqn, payload, /*same_host=*/false);
+    const medium_result r = one_run(fqn, small, large, /*same_host=*/false);
 
-    REQUIRE(r.delivered);                 // delivery over the wire survives the distinct fingerprints
-    REQUIRE_FALSE(r.region_observed);     // and no co-host ring was engaged
+    REQUIRE_FALSE(r.region_observed);     // no co-host ring was engaged
+    REQUIRE_FALSE(r.small_over_shm);      // nothing rode SHM
+    REQUIRE_FALSE(r.small_off_wire);      // the fitting payload DID cross the wire (no companion)
+    REQUIRE(r.large_over_wire);           // the over-cap payload crossed the wire too
     REQUIRE_FALSE(region_maps(fqn));
 }

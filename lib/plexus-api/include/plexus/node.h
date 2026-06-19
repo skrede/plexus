@@ -17,6 +17,7 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
+#include "plexus/io/polymorphic_byte_channel.h"
 
 #include "plexus/io/shm/shm_mux_member.h"
 
@@ -210,6 +211,7 @@ public:
     using engine_transport = detail::node_engine_transport<Transports...>;
     using engine_type =
         io::routing_engine<engine_policy, engine_transport>;
+    using engine_channel = typename engine_type::channel_type;
 
     // The node_id is taken VERBATIM: plexus compares the identity, never mints or
     // interprets it.
@@ -224,6 +226,11 @@ public:
         , m_shm_geometry(opts.shm_geometry)
         , m_max_ring_slab_bytes(opts.max_ring_slab_bytes)
         , m_wire_crypto_position(opts.wire.position)
+        // The leaves are BORROWED three ways from this one pack and never consumed: the mux
+        // glue borrows them, resolve_hook captures the shm member by reference, and
+        // engine_leaf re-reads them. multiplexing_transport is borrow-only (its lifetime
+        // doc), so a future edit must NOT introduce a move into the mux ctor — that would
+        // invalidate the subsequent engine_leaf/resolve_hook reads of the same pack.
         , m_glue(transports..., io::transport_selector{}, resolve_hook(transports...))
         , m_leaf(engine_leaf(transports...))
         , m_engine(m_leaf, executor, make_fsm_cfg(id, opts),
@@ -257,9 +264,9 @@ public:
         // no-op (the capability check below fails).
         apply_shm_slab_ceiling(m_max_ring_slab_bytes);
         // Wire the same-host upgrade coordinator: pass the consumer's upgrade policy
-        // through and, when the composition carries an shm member, install its ring-
-        // acquire gate (can_acquire/abandon). A composition with no shm member installs
-        // no gate, so the coordinator stays inert.
+        // through and, when the composition carries an shm member, install its companion-
+        // ring mint gate (mint_companion). A composition with no shm member installs no
+        // gate, so the coordinator stays inert.
         install_upgrade_coordinator(opts.upgrade_policy);
         // Read the node-level recording-QoS default into the engine's capture policy once
         // (cold path, like apply_shm_slab_ceiling). The off default selects nothing, so a
@@ -544,17 +551,42 @@ private:
     }
 
     // Pass the consumer's upgrade policy to the engine coordinator and, when an shm member
-    // exists, install its can_acquire/abandon as the coordinator's ring gate. The probes
-    // capture the member by reference (it outlives the node-owned glue), exactly as
-    // prefer_shm_hook does. A composition with no shm member installs no gate (inert).
+    // exists, install its companion-ring MINT as the coordinator's gate. The mint captures
+    // the member by reference (it outlives the node-owned glue), exactly as prefer_shm_hook
+    // does. A composition with no shm member installs no gate (inert). The minted concrete
+    // shm channel is wrapped into the engine's byte_channel (the polymorphic erasure a
+    // multi-transport node binds) before it is retained by the coordinator, and the member's
+    // resolved {mode, cap} rides along for the publish fan's per-message companion route.
     void install_upgrade_coordinator(upgrade_policy_fn policy)
     {
         m_engine.on_upgrade_policy(policy);
         for_each_shm_member([this](auto &m) {
+            using member_t = std::remove_reference_t<decltype(m)>;
             m_engine.on_upgrade_gate(
-                [&m](std::string_view fqn) { return m.can_acquire(io::endpoint{"shm", std::string{fqn}}); },
-                [&m](std::string_view fqn) { m.abandon(io::endpoint{"shm", std::string{fqn}}); });
+                [&m](std::string_view fqn) -> io::shm::companion_mint<engine_channel> {
+                    const std::string key{fqn};
+                    std::unique_ptr<typename member_t::channel_type> ch = m.mint_companion(key);
+                    if(!ch)
+                        return {};
+                    const auto g = m.resolved_geometry_for(key);
+                    return {wrap_companion(std::move(ch)), g.mode, g.slot_capacity};
+                });
         });
+    }
+
+    // Wrap a minted concrete shm channel into the engine's byte_channel. A multi-transport
+    // node binds the polymorphic erasure (the channel_adapter wrap, mirroring
+    // multiplexing_transport::wrap); the shm member exists only in such a composition, so
+    // the engine channel is the erased type. The if-constexpr keeps a single-transport
+    // build (no shm member reaches here) from instantiating the erasure.
+    template <typename C>
+    static std::unique_ptr<engine_channel> wrap_companion(std::unique_ptr<C> ch)
+    {
+        if constexpr(std::is_same_v<engine_channel, io::polymorphic_byte_channel>)
+            return std::make_unique<engine_channel>(
+                std::make_unique<io::channel_adapter<C>>(std::move(ch)));
+        else
+            return ch;
     }
 
     // Apply fn to the shm member of the engine transport leaf, if one exists. The leaf is
