@@ -1,3 +1,6 @@
+// over-limit: one cohesive recording-observer class; every overridden edge method mutates the
+// shared per-peer/per-topic/per-participant tally maps, so the single class body cannot split
+// across files without scattering that shared member state.
 #ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_OBSERVER_H
 #define HPP_GUARD_TESTS_INTEGRATION_RECORDING_OBSERVER_H
 

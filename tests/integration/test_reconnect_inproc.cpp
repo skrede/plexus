@@ -1,4 +1,6 @@
-// Deterministic single-connection reconnect oracle on the manual virtual clock
+// over-limit: one cohesive single-connection reconnect matrix; the four reconnect-decision cells
+// share the one manual-clock + fixed-RNG backoff harness, so splitting them scatters that shared
+// clock/RNG fixture Deterministic single-connection reconnect oracle on the manual virtual clock
 // with a fixed RNG seed, so backoff intervals fire deterministically and surrender
 // is provable without wall-clock flakiness. Covers the four reconnect decisions:
 // an initial refused dial backs off and re-dials, then completes once the listener

@@ -1,7 +1,9 @@
-// The host-side flat-stream to pcapng transcode round-trip oracle. A live wire-capturing
-// inproc session is driven through the PUBLIC recording API into an in-memory flat stream;
-// the transcode maps every wire-frame record to an Enhanced Packet Block on a single
-// DLT_USER0 interface; the produced bytes are parsed back in-test (no external dependency)
+// over-limit: one cohesive flat-stream-to-pcapng transcode round-trip; the single end-to-end
+// capture-transcode-parse pipeline is one whole over a shared captured session, so it cannot split
+// without scattering that pipeline state The host-side flat-stream to pcapng transcode round-trip
+// oracle. A live wire-capturing inproc session is driven through the PUBLIC recording API into an
+// in-memory flat stream; the transcode maps every wire-frame record to an Enhanced Packet Block on
+// a single DLT_USER0 interface; the produced bytes are parsed back in-test (no external dependency)
 // and the structure is asserted: the SHB byte-order magic and crypto-position option, the
 // IDB link type, one EPB per wire frame with a valid direction flag, nanosecond timestamps,
 // and packet data byte-identical to the captured frame. The test also writes the captured

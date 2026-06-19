@@ -1,6 +1,8 @@
-// The gated real-TLS bounded-outbox hardening leg over asio loopback: the SECOND
-// composition of the shared io::detail::stream_send_queue block (the plaintext
-// asio_channel pins the first via test #225). A real mutual-TLS pair handshakes over a
+// over-limit: one cohesive real-TLS bounded-outbox hardening leg; the single congestion=drop/block
+// scenario drives the one shared mutual-TLS loopback + stalled-write harness, so it cannot split
+// without scattering that shared socket/TLS state The gated real-TLS bounded-outbox hardening leg
+// over asio loopback: the SECOND composition of the shared io::detail::stream_send_queue block (the
+// plaintext asio_channel pins the first via test #225). A real mutual-TLS pair handshakes over a
 // connected loopback socket; the server end NEVER reads, so the kernel send buffer fills
 // and the encrypted async_write stalls — the dialed channel's userspace outbox then
 // accumulates and the byte cap engages deterministically. A small cap (4 KiB) bounds the

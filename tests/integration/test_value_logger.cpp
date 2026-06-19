@@ -1,5 +1,7 @@
-// The public-API-only proof for the typed value_logger: the codec decodes one topic's
-// bytes at the handle, an opt-in projection formats the decoded value into CSV columns /
+// over-limit: one cohesive value_logger projection matrix; the CSV/JSON-Lines/text + alloc-gate
+// cells share the one decode+projection harness over the typed handle, so splitting them scatters
+// that shared fixture The public-API-only proof for the typed value_logger: the codec decodes one
+// topic's bytes at the handle, an opt-in projection formats the decoded value into CSV columns /
 // JSON-Lines fields, a projection-less streamable type falls back to the operator<< text
 // floor, a decode failure is counted and drops its line, and the warmed steady loop
 // formats into a reused buffer with zero per-sample heap allocation. PUBLIC includes only

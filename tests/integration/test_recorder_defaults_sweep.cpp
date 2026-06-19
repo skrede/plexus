@@ -1,6 +1,8 @@
-// The recorder defaults chosen-cell assertion (the recorded-sweep precedent,
-// tests/crypto/test_rekey_threshold_sweep). recorder_sweep measured the recall curve
-// recall = min(1, ring_bytes / (burst * framed_record)); this test pins the SHIPPED
+// over-limit: one cohesive recorder-defaults sweep; the per-payload recall cells and the decimation
+// guarantees share the one saturating-burst harness at the shipped ring budget, so splitting them
+// scatters that shared sweep fixture The recorder defaults chosen-cell assertion (the
+// recorded-sweep precedent, tests/crypto/test_rekey_threshold_sweep). recorder_sweep measured the
+// recall curve recall = min(1, ring_bytes / (burst * framed_record)); this test pins the SHIPPED
 // ring_bytes default to its conservative design point: a modest small-payload backlog
 // (the common case) is recovered in full at the default budget, while a saturating
 // large-payload burst that the default would shed is RECOVERED once ring_bytes is raised

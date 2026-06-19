@@ -1,10 +1,13 @@
-// The two-node cross-node loss-join: a sender's recording_channel stamps a per-direction OUT
-// sequence on every framed send; a receiver's recording_channel stamps a per-direction IN
-// sequence on every frame the lower channel delivers upward. A relay between them forwards
-// every frame EXCEPT one injected drop. Decoding both recorded streams offline and reading
-// ONLY the per-direction wire sequence + direction + peer (never a capture timestamp), the
-// dropped packet is identified structurally: it is present in the sender's OUT run and absent
-// (a sequence gap) in the receiver's IN run, found by sequence arithmetic over the two runs.
+// over-limit: one cohesive cross-node loss-join proof; the single sequence-arithmetic join over two
+// skewed-clock recorded streams is one end-to-end pipeline over a shared relay harness, so it
+// cannot split without scattering that shared state The two-node cross-node loss-join: a sender's
+// recording_channel stamps a per-direction OUT sequence on every framed send; a receiver's
+// recording_channel stamps a per-direction IN sequence on every frame the lower channel delivers
+// upward. A relay between them forwards every frame EXCEPT one injected drop. Decoding both
+// recorded streams offline and reading ONLY the per-direction wire sequence + direction + peer
+// (never a capture timestamp), the dropped packet is identified structurally: it is present in the
+// sender's OUT run and absent (a sequence gap) in the receiver's IN run, found by sequence
+// arithmetic over the two runs.
 //
 // The join is CLOCK-SKEW-IMMUNE by construction — the assertion never compares either node's
 // capture_ts; the two recorders run on INDEPENDENT, deliberately skewed clocks to make that

@@ -1,8 +1,10 @@
-// The host-side flat-stream to MCAP transcode round-trip oracle. A live wire-capturing
-// inproc session is driven through the PUBLIC recording API into an in-memory flat stream;
-// the transcode maps it to an MCAP file; the mcap reader reads it back and the channel /
-// schema / message mapping is asserted: a per-topic sample channel carries the captured
-// samples (payload bytes byte-identical), synthetic plexus-events channels carry the
+// over-limit: one cohesive flat-stream-to-MCAP transcode round-trip; the capture, transcode, and
+// read-back-mapping assertions share the one live-session-to-mcap-file pipeline, so splitting them
+// scatters that shared pipeline state The host-side flat-stream to MCAP transcode round-trip
+// oracle. A live wire-capturing inproc session is driven through the PUBLIC recording API into an
+// in-memory flat stream; the transcode maps it to an MCAP file; the mcap reader reads it back and
+// the channel / schema / message mapping is asserted: a per-topic sample channel carries the
+// captured samples (payload bytes byte-identical), synthetic plexus-events channels carry the
 // control-plane records, and — because this composition opts a transport into wire capture —
 // the wire channel carries the framed bytes. The transcode never decodes a payload (the bytes
 // round-trip verbatim), proving the serializer-agnostic contract end to end.

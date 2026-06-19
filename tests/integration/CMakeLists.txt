@@ -63,7 +63,9 @@ catch_discover_tests(test_recorder_defaults_sweep TEST_PREFIX "integration.")
 # facade alone (node_options.capture + typed_publisher_options.capture), a counting codec
 # witnessing the per-publish encode decision. Links the facade for the typed endpoints;
 # tests/ is on the include path (unused here, kept for the area convention).
-add_executable(test_recording_qos_api test_recording_qos_api.cpp)
+add_executable(test_recording_qos_api
+    test_recording_qos_api.cpp
+    test_recording_qos_api_override.cpp)
 target_link_libraries(test_recording_qos_api PRIVATE
     plexus::plexus
     plexus::inproc
@@ -90,7 +92,9 @@ catch_discover_tests(test_payload_fidelity_capture TEST_PREFIX "integration.")
 # and a schema blob larger than the writer's default scratch round-trips. Links the facade
 # for the typed endpoints; tests/ is on the include path for in_memory_byte_sink.h. Not gated
 # on mcap — it links plexus + inproc only.
-add_executable(test_self_describing_capture test_self_describing_capture.cpp)
+add_executable(test_self_describing_capture
+    test_self_describing_capture.cpp
+    test_self_describing_capture_schema.cpp)
 target_link_libraries(test_self_describing_capture PRIVATE
     plexus::plexus
     plexus::inproc
@@ -103,7 +107,9 @@ catch_discover_tests(test_self_describing_capture TEST_PREFIX "integration.")
 # timestamps; a 3-arg subscriber that opts out through subscriber_qos sees a documented 0;
 # the per-topic latch OR-reduces over local subscriber demand. Links the facade for the
 # typed endpoints; tests/ is on the include path for support headers.
-add_executable(test_inproc_stamp_demand test_inproc_stamp_demand.cpp)
+add_executable(test_inproc_stamp_demand
+    test_inproc_stamp_demand.cpp
+    test_inproc_stamp_demand_latch.cpp)
 target_link_libraries(test_inproc_stamp_demand PRIVATE
     plexus::plexus
     plexus::wire
@@ -118,7 +124,9 @@ catch_discover_tests(test_inproc_stamp_demand TEST_PREFIX "integration.")
 # state asserted bounded, plus the demux peer-cap bounding the spoofed-source channel
 # count. Deterministic (inproc test clock via plexus::testing, no backend); tests/ is on
 # the include path for support headers.
-add_executable(test_reassembler_dos test_reassembler_dos.cpp)
+add_executable(test_reassembler_dos
+    test_reassembler_dos.cpp
+    test_reassembler_dos_eviction.cpp)
 target_link_libraries(test_reassembler_dos PRIVATE
     plexus::core
     plexus::wire
@@ -130,7 +138,9 @@ catch_discover_tests(test_reassembler_dos TEST_PREFIX "integration.")
 
 # The deterministic inproc req/res roundtrip + concurrent-outstanding + zero-alloc
 # rpc-dispatch gate — always built (inproc Policy, no backend needed).
-add_executable(test_reqres_roundtrip_inproc test_reqres_roundtrip_inproc.cpp)
+add_executable(test_reqres_roundtrip_inproc
+    test_reqres_roundtrip_inproc.cpp
+    test_reqres_roundtrip_inproc_noalloc.cpp)
 target_link_libraries(test_reqres_roundtrip_inproc PRIVATE
     plexus::core
     plexus::wire
@@ -144,7 +154,9 @@ catch_discover_tests(test_reqres_roundtrip_inproc TEST_PREFIX "integration.")
 # retained value through a real frame_router::on_unidirectional, plus the
 # non-latched negative and the LATCH-NOALLOC retention gate — always built (inproc
 # Policy, no backend needed). tests/ is on the include path for support/alloc_counter.h.
-add_executable(test_latch_replay_inproc test_latch_replay_inproc.cpp)
+add_executable(test_latch_replay_inproc
+    test_latch_replay_inproc.cpp
+    test_latch_replay_inproc_noalloc.cpp)
 target_link_libraries(test_latch_replay_inproc PRIVATE
     plexus::core
     plexus::wire
@@ -159,7 +171,11 @@ catch_discover_tests(test_latch_replay_inproc TEST_PREFIX "integration.")
 # published message AND a real RPC, prove the data-path staleness gate fires on a
 # mismatched epoch, and prove the handshake timeout (virtual clock) aborts while a
 # completed handshake cancels the timer — always built (inproc Policy, no backend).
-add_executable(test_peer_session_inproc test_peer_session_inproc.cpp)
+add_executable(test_peer_session_inproc
+    test_peer_session_inproc.cpp
+    test_peer_session_inproc_flow.cpp
+    test_peer_session_inproc_staleness.cpp
+    test_peer_session_inproc_lifecycle.cpp)
 target_link_libraries(test_peer_session_inproc PRIVATE
     plexus::core
     plexus::wire
@@ -229,7 +245,9 @@ catch_discover_tests(test_reconnect_observer_inproc TEST_PREFIX "integration.")
 # one inproc bus prove lazy-no-dial-until-demand, eager-dial-on-awareness, awareness-
 # without-connect, receive-path identity, single-slot reconnect isolation, and
 # publish-does-not-dial — always built (inproc Policy, no backend needed).
-add_executable(test_routing_engine_inproc test_routing_engine_inproc.cpp)
+add_executable(test_routing_engine_inproc
+    test_routing_engine_inproc.cpp
+    test_routing_engine_inproc_isolation.cpp)
 target_link_libraries(test_routing_engine_inproc PRIVATE
     plexus::core
     plexus::wire
@@ -326,7 +344,9 @@ catch_discover_tests(test_peer_observer_inproc TEST_PREFIX "integration.")
 # once the data-path emit sites land; this target is BUILT as the compile gate but its ctest
 # discovery is intentionally withheld until the taps make it green. The shared
 # recording_observer.h resolves via the tests/integration include dir.
-add_executable(test_obs_tap_points test_obs_tap_points.cpp)
+add_executable(test_obs_tap_points
+    test_obs_tap_points.cpp
+    test_obs_tap_points_rpc.cpp)
 target_link_libraries(test_obs_tap_points PRIVATE
     plexus::core
     plexus::wire
@@ -342,7 +362,9 @@ catch_discover_tests(test_obs_tap_points TEST_PREFIX "integration.")
 # composition, witnessing the posted edges by pumping the fixture-owned executor. Uses the
 # node facade (plexus::plexus); the shared recording_observer.h resolves via the integration
 # include dir.
-add_executable(test_spine_lifecycle_inproc test_spine_lifecycle_inproc.cpp)
+add_executable(test_spine_lifecycle_inproc
+    test_spine_lifecycle_inproc.cpp
+    test_spine_lifecycle_inproc_edges.cpp)
 target_link_libraries(test_spine_lifecycle_inproc PRIVATE
     plexus::plexus
     plexus::wire
@@ -386,7 +408,10 @@ catch_discover_tests(test_read_buffer_partial_read TEST_PREFIX "integration.")
 # AF_UNIX/TCP confinement legs compile in only when the asio backend is on (guarded by
 # PLEXUS_HAVE_ASIO_MUX, wired below inside the asio gate). tests/ is on the include path
 # for support headers and the shared make_cfg helpers.
-add_executable(test_locality_confinement test_locality_confinement.cpp)
+add_executable(test_locality_confinement
+    test_locality_confinement.cpp
+    test_locality_confinement_wire.cpp
+    test_locality_confinement_live.cpp)
 target_link_libraries(test_locality_confinement PRIVATE
     plexus::core
     plexus::wire
@@ -428,7 +453,9 @@ catch_discover_tests(test_transport_steering TEST_PREFIX "integration.")
 # two-stamp distinction end-to-end). Each timing leg is looped over the virtual clock.
 # Always built (inproc Policy, no backend needed); the `integration.` ctest prefix and
 # the "deadline liveliness" case substrings let `ctest -R 'deadline liveliness'` match.
-add_executable(test_deadline_liveliness test_deadline_liveliness.cpp)
+add_executable(test_deadline_liveliness
+    test_deadline_liveliness.cpp
+    test_deadline_liveliness_lease.cpp)
 target_link_libraries(test_deadline_liveliness PRIVATE
     plexus::core
     plexus::wire
@@ -448,7 +475,9 @@ catch_discover_tests(test_deadline_liveliness TEST_PREFIX "integration.")
 # looped. Always built (inproc Policy, no backend needed); the `integration.` ctest
 # prefix and the "rxo compatibility" case substrings let `ctest -R 'rxo compatibility'`
 # match.
-add_executable(test_rxo_compatibility test_rxo_compatibility.cpp)
+add_executable(test_rxo_compatibility
+    test_rxo_compatibility.cpp
+    test_rxo_compatibility_soft.cpp)
 target_link_libraries(test_rxo_compatibility PRIVATE
     plexus::core
     plexus::wire
@@ -525,7 +554,10 @@ catch_discover_tests(test_byte_ring TEST_PREFIX "integration.")
 # flat_recorder -> byte_ring -> byte_sink chain captures synthetic observer edges that
 # decode offline. Deterministic header-only core (no backend). tests/ is on the include
 # path and the current dir for in_memory_byte_sink.h.
-add_executable(test_record_stream test_record_stream.cpp)
+add_executable(test_record_stream
+    test_record_stream.cpp
+    test_record_stream_offline.cpp
+    test_record_stream_schema.cpp)
 target_link_libraries(test_record_stream PRIVATE
     plexus::core
     plexus::wire
@@ -557,7 +589,9 @@ catch_discover_tests(test_record_projection TEST_PREFIX "integration.")
 # (no-tap) edge, and a captured frame reaching the recorder as a wire_frame record through
 # recording_sink. Deterministic header-only core (no backend). tests/ is on the include path
 # and the current dir for in_memory_byte_sink.h.
-add_executable(test_recording_channel test_recording_channel.cpp)
+add_executable(test_recording_channel
+    test_recording_channel.cpp
+    test_recording_channel_sink.cpp)
 target_link_libraries(test_recording_channel PRIVATE
     plexus::core
     plexus::wire
@@ -590,7 +624,9 @@ catch_discover_tests(test_wire_loss_join TEST_PREFIX "integration.")
 # channels and records none (the structural-absence witness holds). Public node facade only.
 # Links the facade for the typed endpoints + recorder; tests/ + the current dir on the include
 # path for in_memory_byte_sink.h.
-add_executable(test_wire_public_api test_wire_public_api.cpp)
+add_executable(test_wire_public_api
+    test_wire_public_api.cpp
+    test_wire_public_api_absence.cpp)
 target_link_libraries(test_wire_public_api PRIVATE
     plexus::plexus
     plexus::core
@@ -617,7 +653,11 @@ add_test(NAME integration.wire_inert_no_decorator_symbol
 # endpoint inproc session, offline recovery, dropout accounting closed, a post-dtor-pump
 # teardown section). Links the public facade + inproc for the end-to-end half. tests/ is on
 # the include path for support/alloc_counter.h and the current dir for in_memory_byte_sink.h.
-add_executable(test_recorder_capture test_recorder_capture.cpp)
+add_executable(test_recorder_capture
+    test_recorder_capture.cpp
+    test_recorder_capture_fdr.cpp
+    test_recorder_capture_endtoend.cpp
+    test_recorder_capture_teardown.cpp)
 target_link_libraries(test_recorder_capture PRIVATE
     plexus::plexus
     plexus::core
@@ -649,7 +689,9 @@ catch_discover_tests(test_recorder_attached_alloc TEST_PREFIX "integration.")
 # read from the security step (SPKI-derived for TLS, attach-bound for PSK), never a
 # self-asserted TXT/wire claim. Pure free-function legs + a bridge accessor leg — always
 # built (inproc Policy, no backend needed).
-add_executable(test_host_identity_inproc test_host_identity_inproc.cpp)
+add_executable(test_host_identity_inproc
+    test_host_identity_inproc.cpp
+    test_host_identity_inproc_plaintext.cpp)
 target_link_libraries(test_host_identity_inproc PRIVATE
     plexus::core
     plexus::wire
@@ -694,7 +736,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # Loops the FULL roundtrip N>=100 in-body; the ctest invocation is re-run
     # >=3 process runs for cross-process reproducibility. Includes the
     # concurrent-outstanding stress (distinct correlation_ids in flight at once).
-    add_executable(test_reqres_roundtrip_asio test_reqres_roundtrip_asio.cpp)
+    add_executable(test_reqres_roundtrip_asio
+        test_reqres_roundtrip_asio.cpp
+        test_reqres_roundtrip_asio_concurrent.cpp)
     target_link_libraries(test_reqres_roundtrip_asio PRIVATE
         plexus::core
         plexus::wire
@@ -740,7 +784,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # run). Links plexus::inproc too: the synthetic stale gate-frame is produced by
     # the production framing path over an inproc capture link, then fed verbatim to
     # the asio receiver's on_receive.
-    add_executable(test_peer_session_asio test_peer_session_asio.cpp)
+    add_executable(test_peer_session_asio
+        test_peer_session_asio.cpp
+        test_peer_session_asio_staleness.cpp)
     target_link_libraries(test_peer_session_asio PRIVATE
         plexus::core
         plexus::wire
@@ -774,7 +820,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # overlapping in-flight dials also exercise the dial-completion correlation).
     # Loops the behavioral paths N>=100 in-body; the ctest invocation is re-run >=3
     # process runs. Links plexus::inproc for the forwarder framing path.
-    add_executable(test_routing_engine_asio test_routing_engine_asio.cpp)
+    add_executable(test_routing_engine_asio
+        test_routing_engine_asio.cpp
+        test_routing_engine_asio_identity.cpp)
     target_link_libraries(test_routing_engine_asio PRIVATE
         plexus::core
         plexus::wire
@@ -792,7 +840,10 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # edge subset, posted re-entrant delivery). Reuses the shared recording_observer.h
     # via the tests/integration include dir. Loops N>=100 in-body; re-run >=3 process
     # runs. Links plexus::inproc for the forwarder framing path the peers reuse.
-    add_executable(test_peer_observer_asio test_peer_observer_asio.cpp)
+    add_executable(test_peer_observer_asio
+        test_peer_observer_asio.cpp
+        test_peer_observer_asio_readiness.cpp
+        test_peer_observer_asio_reentrancy.cpp)
     target_link_libraries(test_peer_observer_asio PRIVATE
         plexus::core
         plexus::wire
@@ -808,7 +859,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # The gated real-TCP reconnect oracle: an established session whose channel
     # drops re-dials + re-handshakes over real loopback; the initial-refused path
     # re-dials a closed port. Links plexus::inproc for the forwarder framing path.
-    add_executable(test_reconnect_asio test_reconnect_asio.cpp)
+    add_executable(test_reconnect_asio
+        test_reconnect_asio.cpp
+        test_reconnect_asio_coldstart.cpp)
     target_link_libraries(test_reconnect_asio PRIVATE
         plexus::core
         plexus::wire
@@ -824,7 +877,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # bound is is_dead with the live peers connected. Every drop is a real socket().close
     # on the accepted end (no injection). Loops in-body; re-run >=3 process runs. Links
     # plexus::inproc for the forwarder framing path the peers reuse.
-    add_executable(test_multipeer_reconnect_asio test_multipeer_reconnect_asio.cpp)
+    add_executable(test_multipeer_reconnect_asio
+        test_multipeer_reconnect_asio.cpp
+        test_multipeer_reconnect_asio_surrender.cpp)
     target_link_libraries(test_multipeer_reconnect_asio PRIVATE
         plexus::core
         plexus::wire
@@ -840,7 +895,10 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # channel's on_protocol_close fires with the matching close_cause (invalid_magic;
     # no_progress_timeout) — the byte-stream slowloris/garbage defense proven over a
     # real socket. Loops each path in-body; re-run >=3 process runs.
-    add_executable(test_stream_channel_asio test_stream_channel_asio.cpp)
+    add_executable(test_stream_channel_asio
+        test_stream_channel_asio.cpp
+        test_stream_channel_asio_backpressure.cpp
+        test_stream_channel_asio_largeframe.cpp)
     target_link_libraries(test_stream_channel_asio PRIVATE
         plexus::core
         plexus::wire
@@ -854,7 +912,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # invocation is re-run across >=3 process runs (a timing/transport claim is never made
     # from a single run). Header-only inside plexus::asio; the `udp.` ctest prefix selects
     # it alongside the asio-dir udp legs.
-    add_executable(test_udp_reproducibility test_udp_reproducibility.cpp)
+    add_executable(test_udp_reproducibility
+        test_udp_reproducibility.cpp
+        test_udp_reproducibility_reliable.cpp)
     target_link_libraries(test_udp_reproducibility PRIVATE
         plexus::asio
         Catch2::Catch2WithMain)
@@ -866,7 +926,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # reused caller scratch. Covers a best_effort burst, a two-peer same-turn overlap, and
     # a reliable retransmit interleaved with fresh sends. Looped 100x in-body; re-run >=3
     # process runs. Header-only inside plexus::asio; the `udp.` ctest prefix selects it.
-    add_executable(test_udp_send_burst test_udp_send_burst.cpp)
+    add_executable(test_udp_send_burst
+        test_udp_send_burst.cpp
+        test_udp_send_burst_relay.cpp)
     target_link_libraries(test_udp_send_burst PRIVATE
         plexus::asio
         Catch2::Catch2WithMain)
@@ -880,7 +942,11 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # loss policy (best-effort drops the whole message; reliable retransmit-reassembles); the
     # shim's own cross-run determinism is asserted first. Header-only inside plexus::asio;
     # tests/ is on the include path for support/loss_reorder_shim.h.
-    add_executable(test_udp_large_payload test_udp_large_payload.cpp)
+    add_executable(test_udp_large_payload
+        test_udp_large_payload.cpp
+        test_udp_large_payload_roundtrip.cpp
+        test_udp_large_payload_probe.cpp
+        test_udp_large_payload_fragment.cpp)
     target_link_libraries(test_udp_large_payload PRIVATE
         plexus::asio
         Catch2::Catch2WithMain)
@@ -894,7 +960,10 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # back-pressure caps can never silently strangle the shipped ceiling. The TLS leg is added
     # inside the crypto gate below (it needs the secure backend + OpenSSL). Looped in-body;
     # re-run >=3 process runs. tests/ is on the include path for shared headers.
-    add_executable(test_outofbox_message_ceiling test_outofbox_message_ceiling.cpp)
+    add_executable(test_outofbox_message_ceiling
+        test_outofbox_message_ceiling.cpp
+        test_outofbox_message_ceiling_udp.cpp
+        test_outofbox_message_ceiling_tls.cpp)
     target_link_libraries(test_outofbox_message_ceiling PRIVATE
         plexus::core
         plexus::wire
@@ -910,7 +979,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # handshake to completion, mint non-zero epochs, and flow a real published
     # message carrying the minted epoch. Loops N>=100 in-body; re-run >=3 process
     # runs. Links plexus::inproc for the forwarder framing path the oracle reuses.
-    add_executable(test_transport_dial_unix test_transport_dial_unix.cpp)
+    add_executable(test_transport_dial_unix
+        test_transport_dial_unix.cpp
+        test_transport_dial_unix_flow.cpp)
     target_link_libraries(test_transport_dial_unix PRIVATE
         plexus::core
         plexus::wire
@@ -923,7 +994,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # drops re-dials + re-handshakes over a real local socket; the cold-start
     # missing-socket path re-dials until a listener appears (the same-host demand
     # resurrection). Links plexus::inproc for the forwarder framing path.
-    add_executable(test_reconnect_unix test_reconnect_unix.cpp)
+    add_executable(test_reconnect_unix
+        test_reconnect_unix.cpp
+        test_reconnect_unix_coldstart.cpp)
     target_link_libraries(test_reconnect_unix PRIVATE
         plexus::core
         plexus::wire
@@ -938,7 +1011,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # channel's on_protocol_close fires with the matching close_cause (invalid_magic;
     # no_progress_timeout) — the byte-stream slowloris/garbage defense proven over a
     # real local socket. Loops each path in-body; re-run >=3 process runs.
-    add_executable(test_stream_channel_unix test_stream_channel_unix.cpp)
+    add_executable(test_stream_channel_unix
+        test_stream_channel_unix.cpp
+        test_stream_channel_unix_largeframe.cpp)
     target_link_libraries(test_stream_channel_unix PRIVATE
         plexus::core
         plexus::wire
@@ -1219,7 +1294,9 @@ endif()
 
 # The shared-executor proof needs both the asio backend and the mdnspp adapter.
 if(PLEXUS_ENABLE_ASIO_BACKEND AND PLEXUS_ENABLE_MDNSPP_DISCOVERY)
-    add_executable(test_shared_executor test_shared_executor.cpp)
+    add_executable(test_shared_executor
+        test_shared_executor.cpp
+        test_shared_executor_readvertise.cpp)
     target_link_libraries(test_shared_executor PRIVATE
         plexus::core
         plexus::wire

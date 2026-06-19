@@ -1,6 +1,8 @@
-// The drop-observability coverage oracle: every datagram-path drop cause is FORCED on a
-// real component, the engine's POSTED drop-observer hook delivers it, and the matching
-// per-cause occupancy counter is asserted to have moved. Coverage is proven by forcing
+// over-limit: one cohesive drop-observability matrix; every datagram-path drop cause is forced
+// against the one shared engine/reassembler/observer harness, so splitting the per-cause cells
+// scatters that shared fixture The drop-observability coverage oracle: every datagram-path drop
+// cause is FORCED on a real component, the engine's POSTED drop-observer hook delivers it, and the
+// matching per-cause occupancy counter is asserted to have moved. Coverage is proven by forcing
 // each cause, not by inspection: a drop site that silently failed to emit would leave its
 // cause unobserved and fail the run.
 //

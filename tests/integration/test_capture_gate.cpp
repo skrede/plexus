@@ -1,4 +1,6 @@
-// The per-topic capture-gate oracle on the manual virtual clock. The gate is exercised
+// over-limit: one cohesive capture-gate decision matrix; the per-mode/decimation cells all witness
+// the one shared counting-encode-thunk node-pair harness, so splitting them scatters that shared
+// fixture The per-topic capture-gate oracle on the manual virtual clock. The gate is exercised
 // through the typed loan path (publish_object) over a connected inproc node pair: a counting
 // encode thunk witnesses the encode-count WITHOUT any production-side counter (the encode
 // lambda the publisher already passes is the seam), and a recording observer's per-topic

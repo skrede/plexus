@@ -1,7 +1,9 @@
-// The node-shared receive-route oracle on the manual virtual clock. The per-session
-// receive seam (peer_session::on_message) is installed on the live session object and
-// is therefore LOST when a reconnect rebuilds the slot's session, and it is raced by
-// the engine's posted observer fan-out. The node-shared route threaded through the
+// over-limit: one cohesive node-shared receive-route matrix; the install-once, reconnect-survival,
+// and per-session-yield cells share the one routing_engine route harness, so splitting them
+// scatters that shared fixture The node-shared receive-route oracle on the manual virtual clock.
+// The per-session receive seam (peer_session::on_message) is installed on the live session object
+// and is therefore LOST when a reconnect rebuilds the slot's session, and it is raced by the
+// engine's posted observer fan-out. The node-shared route threaded through the
 // session_build_context fixes both: the registry re-threads it on every rebuild, so a
 // route installed ONCE before any session exists survives an unbounded number of
 // reconnects. This oracle proves, looped where behavioral:
