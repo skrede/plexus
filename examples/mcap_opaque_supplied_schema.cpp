@@ -1,15 +1,12 @@
-// Capture a session whose payload is OPAQUE to plexus — a raw byte blob plexus's store never
+// Capture a session whose payload is OPAQUE to plexus — a raw byte blob the store never
 // interprets — and convert it to MCAP that still decodes in Foxglove because the consumer
-// SUPPLIES a truthful schema. This is the contrast to mcap_basic_foxglove: there a typed codec
-// produces JSON; here the producer hands plexus a finished byte blob and separately declares,
-// via recorder_options.schemas, the encoding + JSON Schema those exact bytes satisfy.
+// SUPPLIES a truthful schema (the contrast to mcap_basic_foxglove's typed codec).
 //
-// HONESTY CAVEAT (load-bearing): "opaque" here means opaque to plexus's STORE, not undecodable.
-// The transcode validates NOTHING about whether the bytes match the declared schema — it is
-// serializer-agnostic, so the declaration's truthfulness is entirely the producer's contract.
-// NEVER declare an encoding/schema the bytes do not satisfy: this example's blob IS valid JSON
-// matching the declared jsonschema, so Foxglove decodes it. A blob that did not match would
-// produce a channel Foxglove fails to decode — a dishonest demo, not a plexus defect.
+// HONESTY CAVEAT (load-bearing): "opaque" means opaque to plexus's STORE, not undecodable. The
+// transcode validates NOTHING about whether the bytes match the declared schema (it is
+// serializer-agnostic), so the declaration's truthfulness is the producer's contract. NEVER
+// declare an encoding/schema the bytes do not satisfy — a mismatch produces a channel Foxglove
+// fails to decode, a dishonest demo, not a plexus defect.
 //
 // Single process, public API only, self-terminating (no backends, no mDNS).
 //
@@ -78,9 +75,7 @@ using plexus::inproc::inproc_policy;
 using transport_t = plexus::inproc::inproc_transport<>;
 using node_t      = plexus::node<inproc_policy, transport_t>;
 
-// The value type is a finished byte blob — plexus's store sees only opaque bytes, never a
-// structured field. The producer builds the blob (here, a JSON object) and the codec is a
-// pure passthrough: encode lays the bytes down, no plexus interpretation happens.
+// A finished byte blob — plexus's store sees only opaque bytes. The codec is a pure passthrough.
 struct opaque_blob
 {
     std::vector<std::byte> bytes;

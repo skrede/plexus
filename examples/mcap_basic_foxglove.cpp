@@ -35,10 +35,8 @@
 //     mcap list channels mcap_basic_foxglove.mcap # the channel ▸ schema mapping
 //     mcap cat mcap_basic_foxglove.mcap --json    # every message as JSON
 //
-//   The data topics decode because the stored bytes ARE the codec output (bare JSON, the
-//   payload-fidelity tier) and the preamble declares the matching json/jsonschema pair. The
-//   transcode validates nothing about the bytes — the honesty is the producer's contract: the
-//   codec emits exactly what the declared schema describes.
+//   The transcode validates nothing about the bytes — the honesty is the producer's contract:
+//   the codec emits exactly what the declared schema describes.
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
@@ -109,9 +107,8 @@ constexpr std::string_view k_reading_jsonschema =
         R"({"type":"object","title":"reading","properties":{)"
         R"("sensor":{"type":"integer"},"value":{"type":"integer"}}})";
 
-// A consumer-owned drain target over the public byte_sink seam: it accumulates the drained flat
-// stream in memory so the example can write it to a file and hand it to the transcode. A real
-// binding would drain straight to a file / serial / SD card — the seam is a raw byte drain.
+// Accumulates the drained flat stream in memory. A real binding would drain straight to a file /
+// serial / SD card — the seam is a raw byte drain.
 class buffer_sink final : public plexus::io::recording::byte_sink
 {
 public:

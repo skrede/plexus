@@ -39,30 +39,19 @@
 
 namespace plexus::io {
 
-// The single node-level object a future public facade drives (exercised here
-// through the oracle harness). It OWNS the node-shared substrate by value — one
-// message_forwarder + one procedure_forwarder (ownership lifted UP from the
-// per-connection harness; the forwarders are unchanged), the peer_session_registry
-// (the node_id -> slot map), and the known_peers awareness table — and BORROWS the
-// transport, executor, self identity, handshake bound and logger by reference.
+// The single node-level object a future public facade drives. It OWNS the node-shared
+// substrate by value (message_forwarder, procedure_forwarder, peer_session_registry,
+// known_peers) and BORROWS the transport, executor, self identity, handshake bound and logger.
 //
-// The dial trigger is demand-driven: reach(id) is the convergence verb both the
-// {subscribe, call} demand helpers and the eager knob funnel through. note_peer
-// records awareness and NEVER dials under the default LAZY knob; the opt-in EAGER
-// knob adds only an early reach off note_peer — it introduces NO second build
-// path, because both knobs share the registry's single on_dialed -> build-from-
-// record -> start() tail. A PUBLISH never dials: a remote subscribe is what
-// creates a topic's connection demand, so publish only fans to who is already
-// connected. transport.on_dialed / on_accepted / on_dial_failed are wired ONCE in
-// the constructor.
+// The dial trigger is demand-driven: reach(id) is the convergence verb both the {subscribe,
+// call} demand helpers and the eager knob funnel through — one build path, no second tail.
+// note_peer NEVER dials under the default LAZY knob; the EAGER knob adds only an early reach.
+// A PUBLISH never dials: a remote subscribe is what creates a topic's connection demand.
 //
-// LIFETIME: every observer fan-out and transport callback is POSTED on the BORROWED
-// executor and captures `this`; the engine does not own the executor. The executor
-// MUST be drained (or quiesced) before the engine is destroyed — the same structural
-// single-owner discipline every posted callback in plexus relies on. There is no
-// per-post liveness guard (a guard reading a member would itself touch dead `this`,
-// and a shared alive-token contradicts the no-shared-ownership model); the owner
-// sequences teardown.
+// LIFETIME: every observer fan-out and transport callback is POSTED on the BORROWED executor
+// and captures `this`. The executor MUST be drained (or quiesced) before the engine is
+// destroyed — the structural single-owner discipline. There is no per-post liveness guard (a
+// guard reading a member would itself touch dead `this`); the owner sequences teardown.
 template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
@@ -73,8 +62,7 @@ public:
     using registry_type = peer_session_registry<Policy, Transport, Clock>;
     using session_type  = peer_session<Policy>;
 
-    // dial_eagerly is required-with-default: false (LAZY) is the default the caller
-    // may override to true (EAGER). It is a bool, NOT a std::optional<bool> — its
+    // dial_eagerly is required-with-default: false (LAZY). A bool, NOT optional<bool> — its
     // absence is not meaningful, only its value is.
     routing_engine(Transport &transport, executor_type executor,
                    const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout,
@@ -113,57 +101,41 @@ public:
         m_transport.on_dial_failed([this](const endpoint &ep, io_error)
                                    { m_registry.notify_dial_failed(ep); });
         m_build.on_lifecycle = [this](const lifecycle_event &ev) { dispatch_lifecycle(ev); };
-        // The egress shed routes through the posted drop_sink (the receive-side causes
-        // already install it at their sites) so an egress overflow reaches the observer
-        // POSTED, never inline from the per-publish fan loop.
         m_messages.on_drop(drop_sink());
-        // The data-path observation sinks ride the SAME posted fan-out the drop sink uses:
-        // the forwarder invokes them at the publish/fan/attach sites and each posts a
-        // snapshot to the observer fan-out on the borrowed executor, never inline from the
-        // per-publish loop (the DoS-amplifier guard). The view borrows the framed owner; the
-        // posted closure captures it by value (a shared addref), so the buffer outlives the
-        // deferred turn.
+        // The data-path observation sinks post a snapshot to the observer fan-out on the
+        // borrowed executor, never inline from the per-publish loop (the DoS-amplifier guard);
+        // the posted closure addrefs the framed owner so the buffer outlives the deferred turn.
         m_messages.on_published(publish_sink());
         m_messages.on_delivered(deliver_sink());
         m_messages.on_qos_change(qos_change_sink());
-        // The same-host upgrade seam: the forwarder's per-(peer, fqn) demand transition
-        // drives the coordinator, which reads same_host, runs the upgrade policy, and
-        // acquires/releases the additive ring through the injected gate.
+        // The forwarder's demand transition drives the coordinator (read same_host, run the
+        // upgrade policy, acquire/release the additive ring through the injected gate).
         m_messages.on_demand_transition([this](std::string_view node_name, std::string_view fqn,
                                                demand_transition dir, demand_role role)
                                         { m_coordinator.on_edge(node_name, fqn, dir, role); });
-        // The publish fan's per-message companion route: a fitting message for a co-host
-        // (peer, topic) the coordinator minted a companion ring for rides that ring (zero-
-        // copy same-host), an over-cap / off-host / un-minted message keeps the recorded
-        // wire sub.channel (the dual-delivery fail-safe). Inert until the coordinator holds
-        // a companion (the node installs the mint gate only for an shm-bearing composition).
+        // A fitting same-host message rides the minted companion ring (zero-copy); an over-cap
+        // / off-host / un-minted message keeps the wire sub.channel (the dual-delivery fail-safe).
         m_messages.on_companion_route(
                 [this](std::string_view node_name, std::string_view fqn,
                        std::size_t bytes) -> channel_type *
                 { return m_coordinator.companion_for(node_name, fqn, bytes); });
-        // The loan-path encode trigger: the forwarder's typed fast path forces its lazy
-        // encode ONLY for a topic the policy selects at payload fidelity and admits this
-        // tick, passing the publish path's own now_ns so the time-window mechanism reads no
-        // extra clock. An unset hook (no capture) keeps the fast path zero-encode.
+        // The typed fast path forces its lazy encode ONLY for a topic the policy selects at
+        // payload fidelity and admits this tick, reusing the publish path's now_ns (no extra
+        // clock read). An unset hook keeps the fast path zero-encode.
         m_messages.set_capture_wants_payload(
                 [this](std::uint64_t hash)
                 { return m_capture.wants_payload(hash, wire::now_timestamp_ns()); });
         m_procedures.on_rpc_call(rpc_call_sink());
         m_procedures.on_rpc_serve(rpc_serve_sink());
         m_procedures.on_rpc_reply(rpc_reply_sink());
-        // The receive path stamps the one monitor: a data frame stamps deadline +
-        // presence (set_on_data_stamp), a heartbeat stamps presence only (on_stamp_seen
-        // routed through the build context to each session). Both are plain stores.
+        // A data frame stamps deadline + presence; a heartbeat stamps presence only. Both stores.
         m_messages.set_on_data_stamp([this](const node_id &ep, std::uint64_t topic_hash)
                                      { m_monitor.stamp_data(ep, topic_hash); });
         m_build.on_stamp_seen = [this](const node_id &ep) { m_monitor.stamp_seen(ep); };
-        // Route a fired timing event up the engine's own posted observer seam (mirrors
-        // dispatch_lifecycle's posted fan-out — the carrier copies by value into the turn).
         m_monitor.on_liveness([this](const liveness_event &ev)
                               { Policy::post(m_executor, [this, ev] { fan_liveness(ev); }); });
-        // The keepalive heartbeat emit rides the SAME single tick (an additional per-tick
-        // action, NOT a second timer): on each tick, emit a heartbeat to every connected
-        // peer so a silent-but-alive publisher still asserts presence.
+        // An additional per-tick action, NOT a second timer: emit a heartbeat to every
+        // connected peer so a silent-but-alive publisher still asserts presence.
         m_monitor.on_tick_action(
                 [this]
                 {
@@ -173,10 +145,7 @@ public:
         m_monitor.start();
     }
 
-    // Register/unregister a session observer (lifecycle, drop, and security edges). The
-    // list is the registry, not a wire-exposed param: the add/remove API takes a const&
-    // and stores the address. Operator-driven cold-path registration — no remote peer
-    // can grow it.
+    // Operator-driven cold-path registration — no remote peer can grow the list.
     void add_observer(observer &o)
     {
         m_observers.push_back(&o);
@@ -190,24 +159,17 @@ public:
             m_capture.remove_observer();
     }
 
-    // The seam a drop site posts a coalesced event into. It is a value-capturing,
-    // engine-posted callable: every drop fans out on the BORROWED executor over a
-    // snapshot, NEVER synchronously from the site — the per-packet-inline-fire DoS guard
-    // (a receive-side site holds this and increments its own occupancy counter, then
-    // hands the event here). The returned sink owns no lifetime; the engine outlives the
-    // channels it installs the sink into (the single-owner teardown discipline).
+    // A value-capturing, engine-posted callable: every drop fans out on the BORROWED executor
+    // over a snapshot, never synchronously from the site (the per-packet-inline-fire DoS guard).
     [[nodiscard]] plexus::detail::move_only_function<void(const detail::drop_event &)> drop_sink()
     {
         return [this](const detail::drop_event &ev) { post_drop(ev); };
     }
 
-    // The capture seam the recording_channel decorator's on_wire tap binds to: a value-
-    // capturing, engine-posted callable shaped like drop_sink, so the decorator stays
-    // recorder-agnostic (it knows nothing of the recorder or the ring). Each captured frame
-    // posts to the observer fan-out via post_wire — the io→executor crossing that keeps the
-    // ring single-writer. The decorator stamps the per-direction sequence; the peer identity
-    // is bound at the channel-mint point (the slot the channel belongs to), so the wire_record
-    // carries both offline cross-node loss-join keys.
+    // The on_wire tap, shaped like drop_sink so the decorator stays recorder-agnostic. Each
+    // frame posts via post_wire — the io→executor crossing that keeps the ring single-writer.
+    // The decorator stamps the per-direction sequence; the peer identity is bound at the
+    // channel-mint point, so the wire_record carries both offline cross-node loss-join keys.
     [[nodiscard]] plexus::detail::move_only_function<void(recording::wire_direction, std::uint64_t,
                                                           std::span<const std::byte>)>
     wire_sink(const node_id &peer)
@@ -216,19 +178,11 @@ public:
                             std::span<const std::byte> bytes) { post_wire(dir, seq, peer, bytes); };
     }
 
-    // The data-path observation sinks, shaped exactly like drop_sink: value-capturing,
-    // engine-posted callables the forwarders invoke at their located sites. Each posts a
-    // snapshot to the observer fan-out on the BORROWED executor, capturing the view (a
-    // shared addref of the framed owner) or the scalar POD by value — never synchronously
-    // from the per-publish/per-RPC site. The fqn is copied into the turn since the
-    // forwarder's borrowed view outlives only the synchronous call.
-    // The fqn-string copy + the posted closure are a per-publish heap cost, so each sink
-    // SHORT-CIRCUITS through the single capture gate (m_capture): the payload sinks consult
-    // should_emit(hash), which folds selection AND data-path observer presence behind one
-    // branch; the event-record sinks read observers_present() directly (an event is wholesale,
-    // never policy-selected this phase). An unobserved, unselected node pays one predictable
-    // branch and allocates nothing (the typed fast path stays zero-alloc). The post still rides
-    // the BORROWED executor — never inline from the per-publish/per-RPC site.
+    // The data-path observation sinks, shaped like drop_sink. The fqn-copy + posted closure
+    // are a per-publish heap cost, so each SHORT-CIRCUITS through the capture gate before
+    // posting: the payload sinks consult should_emit(hash) (selection AND observer-presence
+    // behind one branch), the event-record sinks read observers_present() directly. An
+    // unobserved/unselected node pays one branch and allocates nothing (zero-alloc fast path).
     [[nodiscard]] plexus::detail::move_only_function<void(std::uint64_t, std::string_view,
                                                           const message_view &)>
     publish_sink()
@@ -304,21 +258,16 @@ public:
         };
     }
 
-    // The subscriber-side timing-gate observable (FORK-B): a dedicated settable
-    // callback the engine fires (POSTED on the executor) when the one monitor reports a
-    // missed-deadline or a lease-expiry. It is NOT folded into the observer
-    // lifecycle surface — a timing lapse is a distinct event from a connection edge.
-    // Absent = dormant. Cold-path registration.
+    // NOT folded into the observer lifecycle surface — a timing lapse is a distinct event from
+    // a connection edge. Fired POSTED on a missed-deadline / lease-expiry. Absent = dormant.
     void on_liveness(plexus::detail::move_only_function<void(const liveness_event &)> cb)
     {
         m_on_liveness = std::move(cb);
     }
 
-    // The node-shared receive route: stored into the build context so EVERY
-    // subsequently built session (and every reconnect rebuild) delivers data through
-    // it. Set ONCE before listen/dial — a session built before the route is wired
-    // delivers nothing through it. The 3-arg shape carries the message_info; a
-    // bytes-only consumer drops it.
+    // Stored into the build context so every built session (and reconnect rebuild) delivers
+    // through it. Set ONCE before listen/dial — a session built before this is wired delivers
+    // nothing through it. The 3-arg shape carries the message_info; a bytes consumer drops it.
     void on_message_route(plexus::detail::move_only_function<
                           void(std::string_view, std::span<const std::byte>, const message_info &)>
                                   route)
@@ -326,10 +275,7 @@ public:
         m_build.on_message = std::move(route);
     }
 
-    // The node-shared object-lane route, mirroring on_message_route exactly: stored
-    // into the build context so EVERY subsequently built session (and every reconnect
-    // rebuild) delivers a process-tier object handle through it. Set ONCE before
-    // listen/dial.
+    // The object-lane route, mirroring on_message_route. Set ONCE before listen/dial.
     void on_object_route(
             plexus::detail::move_only_function<void(std::string_view, const object_carrier &)>
                     route)
@@ -339,8 +285,8 @@ public:
 
     void listen(const endpoint &ep) { m_transport.listen(ep); }
 
-    // Awareness: record the (id, endpoint) and, under the eager knob ONLY, reach it
-    // immediately. The lazy default inserts and waits for demand.
+    // Record the (id, endpoint); reach it immediately under the eager knob only. The lazy
+    // default inserts and waits for demand.
     void note_peer(const node_id &id, const endpoint &ep)
     {
         m_known.note_peer(id, ep);
@@ -348,9 +294,8 @@ public:
             reach(id);
     }
 
-    // The convergence verb: a connected peer is a no-op; otherwise look the endpoint
-    // up, ensure the slot exists, record this dial's target so on_dialed builds the
-    // right slot, and dial. Both demand and eager funnel here.
+    // The convergence verb both demand and eager funnel through: a connected peer is a no-op;
+    // otherwise look the endpoint up, ensure the slot exists (so on_dialed builds it), and dial.
     void reach(const node_id &id)
     {
         if(m_registry.is_connected(id))
@@ -362,43 +307,27 @@ public:
         m_registry.driver_for(id).start();
     }
 
-    // A demand verb: reach the named peer, then attach the topic through the COUNTED
-    // session path once connected (the attach is what makes a publish flow). Routing
-    // through session->subscribe lets the session observe its own wire emit and own
-    // the readiness count — the forwarder stays readiness-agnostic.
+    // Reach the peer, then attach the topic through the COUNTED session path once connected
+    // (routing through session->subscribe keeps the forwarder readiness-agnostic).
     //
-    // reach_mask is the SUBSCRIPTION's own locality confinement (a category-2 required-
-    // with-default: any = no confinement, existing callers unchanged). It is the demand-
-    // side half of the airtight guarantee: if the mask excludes the target peer's tier
-    // (classified from the endpoint scheme the engine already holds), the demand is
-    // REFUSED outright — no demand remembered, no reach(id)/dial, no subscribe over that
-    // out-of-scope transport. This needs NO transport_backend change; it reads the
-    // endpoint scheme via known_peers. (The fan-out gate reads the PUBLISHED topic's
-    // mask; this reads the SUBSCRIPTION's own mask — two independent gates.) A confined
-    // topic's hard delivery guarantee is enforced PRODUCER-side at the fan-out gate; this
-    // demand gate guards the subscriber's own scope, not the topic's confinement.
-    //
-    // require is the SUBSCRIPTION's own reliability requirement — a SECOND, INDEPENDENT
-    // required-with-default gate of the same shape (any = permissive, anything connects,
-    // the default; reliable = strict, refuse a demand whose peer transport is best_effort
-    // or unknown). Both gates run pre-dial; either refusal establishes NO path. This too
-    // reads only the endpoint scheme the engine already holds (NO transport_backend
-    // change). The scheme->reliability mapping is consistent with the asio selector's
-    // (scheme_is_reliable mirrors reliability_of_scheme).
+    // reach_mask and require are two INDEPENDENT pre-dial demand gates (both required-with-
+    // default any = permissive). The mask confines the subscription to the peer's delivery tier
+    // (the SUBSCRIPTION's mask, distinct from the fan-out gate's PUBLISHED-topic mask); require
+    // refuses a best_effort/unknown peer when reliable is demanded. Either refusal establishes
+    // NO path. Both read only the endpoint scheme via known_peers (no transport_backend change);
+    // a confined/strict demand toward an UNKNOWN peer is refused fail-closed (scheme_is_reliable
+    // mirrors the asio selector's reliability_of_scheme).
     void subscribe(const node_id &id, std::string_view fqn, locality reach_mask = locality::any,
                    reliability_requirement require = reliability_requirement::any)
     {
         subscribe(id, fqn, subscriber_qos{}, reach_mask, require);
     }
 
-    // The qos-carrying subscribe: the subscriber threads its OWN requested deadline /
-    // lease through the demand chain so the SUBSCRIBING node stores them locally
-    // (remember_demand carries the qos so a deferred dial resurrects the real periods;
-    // session->subscribe -> attach -> add_subscriber land them in the registry the
-    // local monitor reads via qos_for_subscriber at the register seam). The periods are
-    // requested-with-default: the 4-param overload delegates here with subscriber_qos{}
-    // (absence = no deadline/liveliness monitoring). The reach/reliability gates are
-    // orthogonal to the qos and unchanged.
+    // The subscriber threads its OWN requested deadline/lease through the demand chain so a
+    // deferred dial resurrects the real periods (remember_demand carries the qos; the register
+    // seam lands them where the local monitor reads them). Periods are requested-with-default
+    // (subscriber_qos{} = no deadline/liveliness monitoring); the reach/reliability gates are
+    // orthogonal.
     void subscribe(const node_id &id, std::string_view fqn, const subscriber_qos &qos,
                    locality                     reach_mask = locality::any,
                    reliability_requirement      require    = reliability_requirement::any,
@@ -409,23 +338,18 @@ public:
         if(!reliability_in_scope(id, require))
             return; // reliability-mismatched demand: establish NO path toward this peer
         reach(id);
-        // Record the durable demand FIRST — before any session may exist (an async
-        // dial completes later). The session resurrects the recorded demand through the
-        // counted path on completion, so a lazy subscribe that triggered the dial is
-        // never lost (the first-publish-loss guard). If the session is already complete,
-        // attach now so the demand takes effect immediately on the live connection.
+        // Record the durable demand FIRST — before any session may exist (the async dial
+        // completes later, then resurrects it through the counted path), so a lazy subscribe
+        // that triggered the dial is never lost (the first-publish-loss guard).
         m_messages.remember_demand(node_name_of(id), fqn, qos, type_id);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
             session->subscribe(fqn, qos, type_id);
     }
 
-    // A demand verb: reach then call through the owned procedure_forwarder.
-    // PRECONDITION: unlike subscribe (whose demand is remembered and resurrected on
-    // completion), a call has NO durable-demand mirror — a call issued before the
-    // session completes is dropped (no queue, no error callback). The caller must
-    // issue call on an already-connected peer; a deferred-call-demand queue is a
-    // tracked future concern, not silently free here.
+    // PRECONDITION: unlike subscribe, a call has NO durable-demand mirror — a call issued
+    // before the session completes is dropped (no queue, no error callback). The caller must
+    // issue call on an already-connected peer.
     void call(const node_id &id, std::string_view fqn, std::span<const std::byte> param,
               typename procedure_forwarder<Policy>::on_response_fn on_response)
     {
@@ -436,11 +360,9 @@ public:
                               session->session_id());
     }
 
-    // The peer-targeted retire of a topic demand, mirroring subscribe's shape: forget
-    // the durable demand and, when a live session carries it, detach through the
-    // counted session path so the forwarder's per-(peer, fqn) gate emits the wire
-    // unsubscribe on its 1->0 transition. A demand never established (no session, or a
-    // session that never completed the attach) forgets the remembered record only.
+    // Forget the durable demand and, when a live session carries it, detach through the counted
+    // session path so the forwarder emits the wire unsubscribe on its 1->0 transition. A demand
+    // never established forgets the remembered record only.
     void unsubscribe(const node_id &id, std::string_view fqn)
     {
         m_messages.forget_remembered_demand(node_name_of(id), fqn);
@@ -449,8 +371,8 @@ public:
             session->unsubscribe(fqn);
     }
 
-    // PUBLISH does NOT dial: it fans through the message_forwarder to whoever is
-    // already subscribed and triggers NO reach (the demand is the remote subscribe).
+    // PUBLISH does NOT dial: it fans to whoever is already subscribed (the demand is the
+    // remote subscribe).
     void publish(std::string_view fqn, std::span<const std::byte> payload)
     {
         m_messages.publish(fqn, payload);
@@ -475,17 +397,16 @@ public:
         return m_coordinator;
     }
 
-    // The node passes the consumer-sovereign upgrade-policy hook through to the
-    // coordinator once at construction (default-when-unset = attempt_shm_upgrade).
+    // Passes the consumer-sovereign upgrade-policy hook to the coordinator (default-when-unset
+    // = attempt_shm_upgrade).
     void
     on_upgrade_policy(plexus::detail::move_only_function<bool(bool, shm::dispatch_hint)> policy)
     {
         m_coordinator.on_policy(std::move(policy));
     }
 
-    // The node installs the same-host companion-ring MINT gate (over its shm member's
-    // mint_companion) into the coordinator — only when the composition carries an shm
-    // member. The mint returns the live companion channel + its per-message route inputs.
+    // Installs the send-companion MINT gate into the coordinator — only for an shm-bearing
+    // composition. The mint returns the live companion channel + its per-message route inputs.
     void on_upgrade_gate(
             plexus::detail::move_only_function<shm::companion_mint<channel_type>(std::string_view)>
                     mint)
@@ -493,9 +414,8 @@ public:
         m_coordinator.on_gate(std::move(mint));
     }
 
-    // The node installs the same-host RECEIVE-companion gate (over its shm member's
-    // mint_receive_companion) into the coordinator — only when the composition carries an
-    // shm member. The gate attaches the co-host ring as a consumer and routes drained framed
+    // Installs the RECEIVE-companion gate into the coordinator — only for an shm-bearing
+    // composition. The gate attaches the co-host ring as a consumer and routes drained framed
     // messages through inject_companion_receive to the matching peer session's receive path.
     void on_upgrade_receive_gate(plexus::detail::move_only_function<
                                  shm::companion_receive(std::string_view, std::string_view)>
@@ -504,13 +424,10 @@ public:
         m_coordinator.on_receive_gate(std::move(mint));
     }
 
-    // Route a framed message drained off a co-host companion ring into the receive path of
-    // the peer session named by node_name — the SAME entry the wire feeds (on_receive: header
-    // decode, staleness gate, router, deliver, user callback). Called POSTED on the executor
-    // (the notifier->executor bridge posts the drain), so it never fires inline from a wake.
-    // A vanished peer (no session) drops the frame. This is the receive lane the same-host
-    // companion model needs: a fitting message reaches the user callback over SHM, never the
-    // wire — exactly once (the send side put it on this lane alone).
+    // Route a drained companion-ring frame into node_name's receive path — the SAME entry the
+    // wire feeds. Called POSTED (the notifier->executor bridge posts the drain), never inline
+    // from a wake. A vanished peer drops the frame. A fitting message reaches the user callback
+    // over SHM exactly once — the send side put it on this lane alone, never the wire.
     void inject_companion_receive(std::string_view node_name, std::span<const std::byte> frame)
     {
         if(session_type *s = m_registry.session_for_name(node_name))
@@ -518,12 +435,9 @@ public:
     }
     capture_policy &capture() noexcept { return m_capture; }
 
-    // POST a node-declaration lifecycle edge on the borrowed executor over the observer
-    // snapshot, capturing the flat POD by value — never inline from the node ctor/seams
-    // (the same posted DoS-guard the drop/security edges use). The snapshot is taken at
-    // DRAIN time (fan_out), so an observer registered after the node ctor still sees the
-    // created/declared edges posted before its registration. on_endpoint copies the fqn
-    // into the turn (the fire-site view does not outlive the deferred fan-out).
+    // POST a node-declaration lifecycle edge over the observer snapshot, never inline from the
+    // node ctor/seams. The snapshot is taken at DRAIN time (fan_out), so an observer registered
+    // after the node ctor still sees the created/declared edges posted before its registration.
     void post_participant(const participant_event &ev)
     {
         Policy::post(m_executor,
@@ -536,12 +450,10 @@ public:
                      { fan_out([&](observer &o) { o.on_endpoint(fqn, ev); }); });
     }
 
-    // POST the node's destroy edge from ~node. UNLIKE the in-life edges above, this is
-    // posted as the engine is being torn down: the engine is destroyed immediately after
-    // ~node returns, BEFORE the executor drains, so the closure must NOT dereference the
-    // engine. It captures an observer SNAPSHOT by value (the pointers are externally owned
-    // and outlive the drain by the teardown contract — the owner pumps the executor after
-    // the node returns) and the flat POD, fanning directly with no engine touch.
+    // The destroy edge from ~node. UNLIKE the in-life edges, the engine is destroyed right
+    // after ~node returns, BEFORE the executor drains, so the closure must NOT dereference the
+    // engine: it captures an externally-owned observer SNAPSHOT by value and fans with no engine
+    // touch (the owner pumps the executor after the node returns, per the teardown contract).
     void post_participant_teardown(const participant_event &ev)
     {
         Policy::post(m_executor,
@@ -553,9 +465,8 @@ public:
     }
 
 private:
-    // The build-context observer the registry routes each session's security edge into:
-    // it forwards into the engine's posted fan-out, so the install is by reference (the
-    // engine outlives every session built from the context) and every emit stays posted.
+    // Forwards each session's security edge into the engine's posted fan-out. Installed by
+    // reference — the engine outlives every session built from the context.
     struct security_fanout : observer
     {
         routing_engine &engine;
@@ -566,12 +477,9 @@ private:
         void on_security(const security_event &ev) override { engine.post_security(ev); }
     };
 
-    // The demand-side confinement gate: does a subscription's reach mask admit the
-    // target peer's delivery tier? The default any admits every peer (existing callers
-    // are never refused). A confined mask classifies the tier from the endpoint scheme
-    // the engine already holds (known_peers) and refuses an out-of-scope peer; a confined
-    // demand toward an UNKNOWN peer is also refused (fail-closed — never establish a path
-    // we cannot prove is in scope).
+    // Does the reach mask admit the peer's delivery tier? The default any admits every peer; a
+    // confined mask classifies the tier from the endpoint scheme and refuses an out-of-scope or
+    // UNKNOWN peer (fail-closed — never establish a path we cannot prove is in scope).
     bool demand_in_scope(const node_id &id, locality reach_mask) const
     {
         if(reach_mask == locality::any)
@@ -582,14 +490,10 @@ private:
         return any_set(reach_mask, tier_of(ep->scheme));
     }
 
-    // The demand-side reliability gate: does a subscription's required reliability admit
-    // the target peer's transport class? The default `any` admits every peer (the
-    // permissive default — existing callers are never refused). A strict `reliable`
-    // requirement classifies the peer's reliability from the endpoint scheme the engine
-    // already holds (scheme_is_reliable, the engine-side mirror of the asio selector's
-    // reliability_of_scheme) and refuses a best_effort ("udp") peer; a strict demand
-    // toward an UNKNOWN peer is also refused (fail-closed — never admit a strict-reliable
-    // demand over a transport we cannot prove is reliable).
+    // Does the required reliability admit the peer's transport class? The default any admits
+    // every peer; a strict reliable classifies from the endpoint scheme (scheme_is_reliable
+    // mirrors the asio selector's reliability_of_scheme) and refuses a best_effort or UNKNOWN
+    // peer (fail-closed — never admit a strict demand over a transport we cannot prove reliable).
     bool reliability_in_scope(const node_id &id, reliability_requirement require) const
     {
         if(require == reliability_requirement::any)
@@ -600,18 +504,15 @@ private:
         return scheme_is_reliable(ep->scheme);
     }
 
-    // The single dial-success tail. CORRELATION by endpoint, NOT by arrival order:
-    // the transport hands back the endpoint THIS channel dialed, so it routes to the
-    // slot that dialed that endpoint. A real async transport completes concurrent
-    // dials OUT OF ORDER, so the arrival sequence is not the dial sequence — only the
-    // endpoint deterministically identifies the originating slot.
+    // CORRELATION by endpoint, NOT by arrival order: a real async transport completes
+    // concurrent dials OUT OF ORDER, so only the dialed endpoint deterministically identifies
+    // the originating slot.
     void on_dialed(std::unique_ptr<channel_type> channel, const endpoint &dialed)
     {
         wire_channel_drop(*channel);
-        // The slot the dial targets already exists (reach() created it before dialing), so
-        // the dialed endpoint resolves to the peer node_id this channel belongs to — the
-        // wire-capture join key. An unresolved endpoint binds the default id (capture still
-        // records, attribution is then the synthetic identity build_session supplies).
+        // The dialed endpoint resolves to the peer node_id (the wire-capture join key); an
+        // unresolved endpoint binds the default id (capture still records, attribution then
+        // comes from the synthetic identity build_session supplies).
         wire_channel_capture(*channel, m_registry.id_for_endpoint(dialed).value_or(node_id{}));
         m_registry.build_session_for_endpoint(dialed, std::move(channel));
     }
@@ -619,64 +520,47 @@ private:
     void on_accepted(std::unique_ptr<channel_type> channel)
     {
         wire_channel_drop(*channel);
-        // An accepted channel's slot is keyed by the synthetic inbound identity the registry
-        // mints at accept (the peer's real id arrives only in the handshake), so the capture
-        // install is threaded through accept_session, which binds that identity before the
-        // session is built.
+        // The peer's real id arrives only in the handshake, so the capture install is threaded
+        // through accept_session, which binds the synthetic inbound identity before the build.
         m_registry.accept_session(std::move(channel), [this](channel_type &ch, const node_id &peer)
                                   { wire_channel_capture(ch, peer); });
     }
 
-    // Install the posted drop_sink onto a freshly minted channel that carries the
-    // optional on_drop edge — the SAME edge m_messages.on_drop(drop_sink()) gives
-    // egress, threaded here at the single point every backend's dialed/accepted
-    // channel reaches the engine. A channel whose tier surfaces no drop edge (on_drop
-    // is not a byte_channel verb; the multiplexer's erased channel exposes none) is
-    // left untouched at compile time — the sink is routing policy the engine owns, not
-    // a per-backend obligation. The drop stays POSTED: the inproc unmatched-partner
-    // edge fires off the bus step-loop and the shm send-ring verdict reaches the
-    // observer through drop_sink(), never inline.
+    // Install the posted drop_sink onto a channel that carries the optional on_drop edge. A
+    // channel whose tier surfaces none is left untouched at compile time — the sink is routing
+    // policy the engine owns, not a per-backend obligation. The drop stays POSTED.
     void wire_channel_drop(channel_type &channel)
     {
         if constexpr(requires { channel.on_drop(drop_sink()); })
             channel.on_drop(drop_sink());
     }
 
-    // Install the posted wire-capture sink onto a channel that carries the on_wire edge —
-    // the SAME compile-time capability gate wire_channel_drop uses. A bare channel_type that
-    // never composed the recording_channel decorator has no on_wire edge, so this is a no-op
-    // the compiler elides: the wire tier is STRUCTURALLY absent, not a runtime branch. The
-    // decorated-vs-bare channel TYPE is fixed where the transport mints the channel. peer is
-    // the slot identity the channel belongs to — the wire_record's cross-node join key.
+    // Install the posted wire-capture sink onto a channel that carries the on_wire edge. A bare
+    // channel that never composed the recording_channel decorator has none, so the compiler
+    // elides this: the wire tier is STRUCTURALLY absent, not a runtime branch. peer is the slot
+    // identity — the wire_record's cross-node join key.
     void wire_channel_capture(channel_type &channel, const node_id &peer)
     {
         if constexpr(requires { channel.on_wire(wire_sink(peer)); })
             channel.on_wire(wire_sink(peer));
     }
 
-    // The session→observer fan-out. Every edge is delivered POSTED on the executor,
-    // never synchronously from the fire-site: the posted lambda captures the event
-    // BY VALUE (its owned node_name string copies into the turn). The delivery fans
-    // out over a SNAPSHOT of m_observers, so a callback that (un)registers an observer
-    // mutates the live list without invalidating the in-flight iteration: a same-turn
-    // remove is honored (the unregistered observer is skipped), and a same-turn add
-    // takes effect only on the next posted edge. rejected fans the FSM refusal reason;
-    // every other edge fans the peer_kind.
+    // Fans over a SNAPSHOT of m_observers so a callback that (un)registers an observer mutates
+    // the live list without invalidating the in-flight iteration: a same-turn remove is honored,
+    // a same-turn add takes effect on the next posted edge.
     void dispatch_lifecycle(const lifecycle_event &ev)
     {
-        // Register the endpoint's liveness state at the READY edge (NOT connected): the
-        // subscribe loop has drained by ready, so the subscriber's remembered demand —
-        // which carries its OWN requested periods — is populated and the monitor arms
-        // the real periods. Deregister at disconnected/dead BEFORE the executor
-        // quiesces, so a firing tick never touches a dead endpoint.
+        // Register at READY, NOT connected: the subscribe loop has drained by ready, so the
+        // remembered demand (carrying the subscriber's OWN periods) is populated and the monitor
+        // arms the real periods. Deregister before the executor quiesces so a firing tick never
+        // touches a dead endpoint.
         if(ev.edge == lifecycle_edge::ready)
             register_endpoint(ev.id, ev.node_name);
         else if(ev.edge == lifecycle_edge::disconnected || ev.edge == lifecycle_edge::dead)
         {
             m_monitor.deregister_endpoint(ev.id);
-            // Release every same-host ring the peer held: a torn-down peer can no longer
-            // map the ring, so the additive lane is dropped (the wire path, if it survives
-            // a reconnect, re-drives the demand edge).
+            // A torn-down peer can no longer map the ring, so the additive lane is dropped (a
+            // surviving reconnect re-drives the demand edge).
             m_coordinator.on_peer_dead(ev.node_name);
         }
 
@@ -692,10 +576,8 @@ private:
         }
     }
 
-    // Arm the monitor for each topic the subscriber demanded on this endpoint. The
-    // remembered demand carries the subscriber's OWN requested periods (threaded
-    // through subscribe(id, fqn, qos)); a 0 period leaves that axis inert. Keyed by the
-    // peer's node_id and the topic_hash so the deadline is per-(endpoint, topic).
+    // Arm the monitor per (endpoint, topic) the subscriber demanded. The remembered demand
+    // carries the subscriber's OWN periods; a 0 period leaves that axis inert.
     void register_endpoint(const node_id &id, const std::string &node_name)
     {
         for(const auto &demand : m_messages.remembered_topics(node_name))
@@ -704,15 +586,14 @@ private:
                                         demand.qos.requested_lease_ns);
     }
 
-    // Fan a fired timing event to the engine's settable observable (posted turn).
     void fan_liveness(const liveness_event &ev)
     {
         if(m_on_liveness)
             m_on_liveness(ev);
     }
 
-    // Deliver to each observer over a snapshot, skipping any unregistered mid-turn, so
-    // a callback may safely (un)register observers without corrupting the fan-out.
+    // Skip any observer unregistered mid-turn so a callback may safely (un)register without
+    // corrupting the fan-out.
     template<class Deliver>
     void fan_out(Deliver deliver)
     {
@@ -739,28 +620,22 @@ private:
                      });
     }
 
-    // POST the drop on the borrowed executor, capturing the POD by value into the turn
-    // (all scalars + a node_id — a cheap, lifetime-free copy). This is the indirection
-    // that keeps a per-packet drop site off the synchronous observer path.
+    // The indirection that keeps a per-packet drop site off the synchronous observer path.
     void post_drop(const detail::drop_event &ev)
     {
         Policy::post(m_executor, [this, ev] { fan_out([&](observer &o) { o.on_drop(ev); }); });
     }
 
-    // POST a security transition over the same snapshot fan-out the lifecycle and drop
-    // edges use, capturing the flat POD by value — never inline from the session's
-    // teardown/refusal frame.
+    // Never inline from the session's teardown/refusal frame.
     void post_security(const security_event &ev)
     {
         Policy::post(m_executor, [this, ev] { fan_out([&](observer &o) { o.on_security(ev); }); });
     }
 
-    // POST a captured wire frame to the observer fan-out, keeping the single-writer ring
-    // discipline (the recorder pushes only on the executor turn, never the io thread). The
-    // wire_record carries a span into io-thread-owned bytes that does NOT survive the post,
-    // so the frame is COPIED into an owned buffer captured BY MOVE into the turn (the owner-
-    // carry idiom) and the span is rebuilt over the owned buffer inside the turn before the
-    // fan-out. This one copy-into-turn is the inherent every-packet cost of wire capture.
+    // Keeps the single-writer ring discipline (push only on the executor turn, never the io
+    // thread). The span into io-thread-owned bytes does NOT survive the post, so the frame is
+    // COPIED into an owned buffer carried BY MOVE into the turn and the span rebuilt over it.
+    // This copy-into-turn is the inherent every-packet cost of wire capture.
     void post_wire(recording::wire_direction dir, std::uint64_t seq, const node_id &peer,
                    std::span<const std::byte> bytes)
     {
@@ -785,10 +660,8 @@ private:
     shm::medium_coordinator<registry_type, channel_type> m_coordinator;
     known_peers                                          m_known;
     std::vector<observer *>                              m_observers;
-    // The single capture-decision point: it owns the per-topic selection rules AND the
-    // data-path observer-presence count, so the hot sink heads consult one gate
-    // (should_emit/observers_present) instead of a separate boolean. add_observer/
-    // remove_observer feed it the observes_data_path()-guarded count.
+    // The single capture-decision point: owns the per-topic selection rules AND the data-path
+    // observer-presence count, so the hot sink heads consult one gate, not a separate boolean.
     capture_policy                                                   m_capture;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
     bool                                                             m_dial_eagerly;

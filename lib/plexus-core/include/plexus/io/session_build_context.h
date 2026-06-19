@@ -24,10 +24,9 @@
 
 namespace plexus::io {
 
-// The node-shared inputs every per-slot session is built from: the engine owns one
-// of these and the registry borrows it by reference. A slot rebuild (a reconnect)
-// draws the same forwarders, self identity, handshake bound, executor and logger
-// from here, so the node-wide wiring is reused with no re-plumbing.
+// The node-shared inputs every per-slot session is built from: the engine owns one, the
+// registry borrows it. A slot rebuild (a reconnect) draws the same wiring from here, so the
+// node-wide plumbing is reused with no re-plumbing.
 template<typename Policy>
 struct session_build_context
 {
@@ -41,54 +40,34 @@ struct session_build_context
     reconnect_config             redial;
     std::uint64_t                redial_seed;
     log::logger                 &logger;
-    // The node-shared receive route every slot's session delivers data through: the
-    // engine sets it after construction, the registry threads it into every built
-    // session so a reconnect's slot REBUILD draws it again (the per-session receive
-    // seam is lost on a rebuild and raced by the posted observer fan-out). One 3-arg
-    // shape carrying the message_info serves both arities — a bytes-only consumer
-    // drops the info. Absent (unset) until the engine wires it — a session guards on it.
+    // The receive route. The per-session seam is lost on a rebuild and raced by the posted
+    // observer fan-out, so it is threaded from here on every build. One 3-arg shape carrying
+    // the message_info serves both arities (a bytes-only consumer drops the info). Absent
+    // until the engine wires it — a session guards on it.
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>,
                                             const message_info &)>
             on_message;
-    // The node-shared process-tier object-lane route, shaped like on_message: the
-    // engine sets it after construction, the registry threads it into every built
-    // session so a reconnect REBUILD draws it again. Absent until the engine wires it.
+    // The process-tier object-lane route, shaped like on_message. Absent until wired.
     plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> on_object;
-    // The node-shared route from any slot's session up to the engine's observer
-    // fan-out: the engine sets this after construction, the registry forwards each
-    // session's lifecycle edge through it. It carries a lifecycle_event (the engine
-    // arms its liveliness monitor off the edge before fanning the per-edge observer
-    // method out posted), so it is a typed sink, NOT one of the observer's per-edge
-    // methods. Absent (unset) on a context built before the engine wires it — a slot's
-    // forward guards on it being set.
+    // A typed lifecycle sink, NOT an observer per-edge method: the engine arms its liveliness
+    // monitor off the edge before fanning the per-edge observer method out posted, so the edge
+    // must reach it typed first. Absent until wired — a slot's forward guards on it.
     plexus::detail::move_only_function<void(const lifecycle_event &)> on_lifecycle;
-    // The node-shared presence-stamp route from any slot's session to the engine's one
-    // liveliness monitor: the engine sets this after construction to monitor.stamp_seen,
-    // the registry wires each session's on_stamp_seen through it carrying that session's
-    // pinned peer id. Absent (unset) until the engine wires it — the session guards on it.
+    // The presence-stamp route to the engine's one liveliness monitor, carrying the session's
+    // pinned peer id. Absent until wired — the session guards on it.
     plexus::detail::move_only_function<void(const node_id &)> on_stamp_seen;
-    // The one node-shared observer every slot's session events reach: the security edge
-    // routes straight into session_observer.on_security (the lifecycle edge keeps its
-    // typed on_lifecycle sink above because the engine arms the monitor off it first).
-    // The engine installs its own posting fan-out adapter here so a security transition
-    // reaches the registered observers POSTED, never inline from the session. The default
-    // is the shared inert observer (one predictable branch when no node observer is set),
-    // and the registry re-threads it on every reconnect rebuild. The single node-level
-    // attach_policy that gates every transport rides fsm_cfg.attach_policy.
+    // The security edge routes straight into session_observer.on_security (the lifecycle edge
+    // keeps its typed sink above because the engine arms the monitor off it first). The engine
+    // installs a posting adapter here so a security transition reaches observers POSTED, never
+    // inline. Default = the inert observer (one predictable branch when none is set).
     observer &session_observer = shared_null_observer();
-    // The node-shared, OpenSSL-free security seam (transcript digest + AEAD decorator
-    // install), injected once at spine construction. It is the type-erased boundary that
-    // keeps the EVP/decorator instantiation behind the gated target while the bridge
-    // stays plaintext: an empty seam is the no-AEAD posture. The registry threads it to
-    // each built session.
+    // The OpenSSL-free security seam (transcript digest + AEAD decorator install): the
+    // type-erased boundary that keeps the EVP/decorator instantiation behind the gated target
+    // while the bridge stays plaintext. An empty seam is the no-AEAD posture.
     security_seam install_security;
-    // The production source of each session's AEAD decorator-install action: the gated
-    // layer sets this once at spine construction; given a just-built channel and the
-    // negotiation it derives the keys and routes the channel through the EVP decorator.
-    // The registry binds it per session into peer_session::on_install_security, capturing
-    // that slot's channel. Type-erased so the core bridge links no libcrypto. Absent
-    // (unset) until the gated transport path is wired — a security-engaged accept with no
-    // factory then finds no per-session hook and is refused fail-closed (never fail-open).
+    // Derives the keys and routes a just-built channel through the EVP decorator. Type-erased
+    // so the core bridge links no libcrypto. Absent until the gated path is wired — a
+    // security-engaged accept with no factory is then refused fail-closed (never fail-open).
     plexus::detail::move_only_function<void(typename Policy::byte_channel_type &,
                                             const security_negotiation &)>
             install_security_factory;
