@@ -25,7 +25,7 @@ TEST_CASE("udp selector: the scheme classifies its reliability class from the en
     pio::transport_selector sel;
 
     // The load-bearing scheme-encode: udp is best_effort, udpr is the reliable-
-    // datagram opt-in. Pinned by test so plan-05's later udpr retarget is visible.
+    // datagram opt-in. Pinned by test so a later udpr retarget stays visible.
     REQUIRE(sel.reliability_of_scheme("udp") == pio::reliability_hint::best_effort);
     REQUIRE(sel.reliability_of_scheme("udpr") == pio::reliability_hint::reliable_datagram);
 

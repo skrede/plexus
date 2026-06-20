@@ -50,7 +50,7 @@ target_link_libraries(test_udp_teardown PRIVATE
 catch_discover_tests(test_udp_teardown TEST_PREFIX "udp.")
 
 # The reliable-data ARQ legs (header-only inside plexus::asio): the sans-IO reorder
-# buffer's head-of-line in-order release (D-04), and the selective-repeat engine proven
+# buffer's head-of-line in-order release, and the selective-repeat engine proven
 # end-to-end over deterministic loss/reorder/duplication via the lossy_relay fixture.
 # The `udp.` ctest prefix selects them.
 add_executable(test_udp_reorder_buffer test_udp_reorder_buffer.cpp)
@@ -89,7 +89,7 @@ target_link_libraries(test_udp_selector PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_selector TEST_PREFIX "udp.")
 
-# The congestion knobs (D-05) over the reliable-datagram ARQ: congestion=block back-
+# The congestion knobs over the reliable-datagram ARQ: congestion=block back-
 # pressures a full window through a bounded ack-drained queue WITHOUT stalling the
 # io_context (a concurrent flow keeps flowing); congestion=drop sheds at the publisher.
 # Header-only inside plexus::asio; the `udp.` ctest prefix selects it.

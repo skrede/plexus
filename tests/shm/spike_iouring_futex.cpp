@@ -19,20 +19,20 @@
 #include <ctime>
 #include <system_error>
 
-// The D-10 thread-free notifier spike (NON-GATING). It answers ONE question
+// The thread-free notifier spike (NON-GATING). It answers ONE question
 // with host evidence: can an IORING_OP_FUTEX_WAIT completion on a MAP_SHARED
 // word be reaped THROUGH the user's asio reactor WITHOUT a plexus-spawned
 // thread? The integration is genuinely unproven on this host because the
 // vendored asio is on the epoll backend (no ASIO_HAS_IO_URING), so asio will not
 // natively drive io_uring — the only seam is io_uring_register_eventfd ->
 // asio::posix::stream_descriptor::async_wait, which this spike exercises end to
-// end. The result is recorded at the D-10 checkpoint; it does NOT gate the phase
+// end. The result is recorded as evidence; it does NOT gate anything
 // (the bounded-thread + eventfd fallback is the proven floor).
 
 namespace {
 
 // Raw cross-address-space FUTEX_WAKE — no FUTEX_PRIVATE_FLAG, so the wake
-// crosses the MAP_SHARED page into the waiting process (the D-05 requirement;
+// crosses the MAP_SHARED page into the waiting process (the cross-process wake;
 // std::atomic::notify is process-local-table-broken here).
 long futex_wake_shared(std::uint32_t *word, int count)
 {
@@ -116,7 +116,7 @@ TEST_CASE("spike: io_uring futex-wait CQE reaped through the asio reactor", "[sh
     ::io_uring_queue_exit(&ring);
     ::munmap(word, sizeof(std::uint32_t));
 
-    // The load-bearing evidence for D-10: the eventfd seam fired on the asio
+    // The load-bearing evidence: the eventfd seam fired on the asio
     // reactor AND the futex CQE was reaped there, with NO plexus thread. If
     // either is false the bounded-thread fallback is the practical primary.
     INFO("eventfd async_wait fired on reactor: " << wait_fired);

@@ -40,7 +40,7 @@
 #include <sys/wait.h>
 
 // The large-message live-mux round-trip: a publisher declares a sizing shm_geometry and
-// mints the ring through shm_mux_member's ACQUIRE PATH (the gap plan 02 closed — NOT the
+// mints the ring through shm_mux_member's ACQUIRE PATH (the live acquire — NOT the
 // unit registry), and a >1 MiB then a 16 MiB payload crosses byte-exact to a same-host
 // subscriber that attaches the converged ring. Parameterized over the two notifier
 // variants (shmn = a real cross-process futex wake; shmr = the reactor-reaped path,
@@ -215,7 +215,7 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes,
                     std::move(binder)};
 
     // The producer-side provisioning: the publisher's effective payload width + mode +
-    // capacity reach ring_geometry_for through the live acquire (the gap plan 02 closed).
+    // capacity reach ring_geometry_for through the live acquire (not the unit registry).
     member.set_topic_geometry(fqn, payload_bytes, pio::shm_geometry{capacity, mode});
 
     std::unique_ptr<channel_t> channel;

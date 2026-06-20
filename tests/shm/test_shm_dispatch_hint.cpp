@@ -6,8 +6,8 @@
 
 #include <cstdint>
 
-// The dispatch_hint FLAGS type (D-01) + the selector's locality x dispatch
-// SHM-eligibility decision (D-02). dispatch_hint is a bitmask modeled on
+// The dispatch_hint FLAGS type + the selector's locality x dispatch
+// SHM-eligibility decision. dispatch_hint is a bitmask modeled on
 // locality.h: none = 0 is the absence; shm_eligible(h) is true iff any bit is set;
 // the operators compose. topic_qos carries it (and max_message_bytes), both defaulting to
 // "unset". The selector gates SHM on same-host AND a qualifying hint.

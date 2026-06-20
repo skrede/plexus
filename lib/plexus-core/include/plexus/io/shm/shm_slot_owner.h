@@ -8,7 +8,7 @@
 namespace plexus::io::shm {
 
 // The move-only, intrusive wire_bytes owner that pins a ring slot's take_refcount
-// for the lifetime of a deserialized view (the D-06 reshape: no reference-counted
+// for the lifetime of a deserialized view (the loan reshape: no reference-counted
 // heap handle). It is the SHM-local owner the zero-copy take() path selects for
 // its returned wire_bytes<shm_slot_owner>; the universal default wire_bytes owner
 // of the other policies (the type-erased heap handle) is UNCHANGED.

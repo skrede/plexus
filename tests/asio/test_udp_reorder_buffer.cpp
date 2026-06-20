@@ -1,4 +1,4 @@
-// The head-of-line reorder oracle (D-04): the receiver delivers reliable segments in
+// The head-of-line reorder oracle: the receiver delivers reliable segments in
 // PUBLISH ORDER. A gap at seq N holds N+1.. in the buffer until N arrives, then the
 // contiguous run releases in order. This is the load-bearing in-order proof — the gap
 // case (feed 0, then 2, then 3, assert NOTHING past 0 delivers; feed 1, assert 1,2,3
@@ -73,7 +73,7 @@ TEST_CASE("udp reorder: contiguous arrival delivers immediately in order", "[udp
     REQUIRE(r.buf.cumulative() == 2);
 }
 
-TEST_CASE("udp reorder HOL (D-04): a gap holds all higher seqs until the gap fills",
+TEST_CASE("udp reorder HOL: a gap holds all higher seqs until the gap fills",
           "[udp][reorder]")
 {
     recorder r;

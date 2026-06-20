@@ -81,7 +81,7 @@ target_link_libraries(test_shm_ring_dekker PRIVATE
 
 catch_discover_tests(test_shm_ring_dekker TEST_PREFIX "shm.")
 
-# The D-06 loan reshape: the move-only intrusive shm_slot_owner, the zero-copy
+# The loan reshape: the move-only intrusive shm_slot_owner, the zero-copy
 # take() returning wire_bytes<shm_slot_owner> (no shared_ptr), and the move-only
 # loaned_buffer / taken_message lifetime (inert moved-from, unpin exactly once).
 add_executable(test_shm_zerocopy_take test_shm_zerocopy_take.cpp)
@@ -238,7 +238,7 @@ catch_discover_tests(test_shm_region_namespace TEST_PREFIX "shm.")
 # The core pub/sub endpoints (header-only, asio/POSIX-free): the shm_channel
 # send -> drain round-trip over an anonymous mapped span (loan -> one memcpy ->
 # publish -> signal), the notifier signaling exactly once per successful send via
-# a recording stub, and the D-04 oversize fallback (a payload over the slot
+# a recording stub, and the oversize fallback (a payload over the slot
 # capacity returns rejected, no publish, no signal). The TU includes only core
 # headers, proving the endpoints carry no backend dependency.
 add_executable(test_shm_channel test_shm_channel.cpp)
@@ -354,7 +354,7 @@ if(LIBURING_FOUND)
 
     # The spike links plexus::asio for the asio include path ONLY — it probes
     # whether an io_uring CQE can be reaped THROUGH the user's asio reactor (the
-    # D-10 question). The backend target plexus-shm itself stays asio-free (D-09);
+    # spike question). The backend target plexus-shm itself stays asio-free;
     # this asio dependency lives in the spike test executable, never in the lib.
     target_link_libraries(spike_iouring_futex PRIVATE
         plexus::shm

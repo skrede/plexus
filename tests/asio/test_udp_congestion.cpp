@@ -2,7 +2,7 @@
 // programmable-relay reliable-datagram channel-pair fixture (with its scripted per-segment
 // loss and the bounded back-pressure queue), so splitting the cells scatters that shared
 // relay + channel-pair fixture state.
-// The congestion knobs (D-05) over the reliable-datagram ARQ: when a reliable send
+// The congestion knobs over the reliable-datagram ARQ: when a reliable send
 // window is FULL, the per-channel congestion mode decides the publisher's fate.
 //   * block (the safe reliable default): the publish is back-pressured into a BOUNDED
 //     publish-side queue drained by the next ack — publish() never blocks, the io_context
