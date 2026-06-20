@@ -5,7 +5,8 @@
 # alloc-delta gate runs over a non-allocating sink Policy. Links the header-only
 # core, the wire layer, and the inproc backend; the `forwarder.` ctest prefix lets
 # `ctest -R forwarder` select it. Auto-discovered by the tests glob.
-add_executable(test_message_forwarder test_message_forwarder.cpp)
+add_executable(test_message_forwarder test_message_forwarder.cpp
+    test_message_forwarder_receive.cpp test_message_forwarder_alloc.cpp)
 
 # tests/ is on the include path so the test can pull in support/alloc_counter.h.
 target_include_directories(test_message_forwarder PRIVATE
@@ -24,7 +25,7 @@ catch_discover_tests(test_message_forwarder TEST_PREFIX "forwarder.")
 # frames are warn-and-dropped through an injected counting logger. The router is
 # backend-agnostic (spans + move_only_function), so this needs only the core +
 # wire layers. Selected by the same `forwarder.` ctest prefix.
-add_executable(test_frame_router test_frame_router.cpp)
+add_executable(test_frame_router test_frame_router.cpp test_frame_router_drop.cpp)
 
 target_link_libraries(test_frame_router PRIVATE
     plexus::core
@@ -41,7 +42,8 @@ catch_discover_tests(test_frame_router TEST_PREFIX "forwarder.")
 # steady-state provider-dispatch alloc-delta gate over a non-allocating sink Policy.
 # Parity-strict: no timeout test (there is no per-call timer to exercise). Links the
 # core, wire, and inproc layers; selected by the same `forwarder.` ctest prefix.
-add_executable(test_procedure_forwarder test_procedure_forwarder.cpp)
+add_executable(test_procedure_forwarder test_procedure_forwarder.cpp
+    test_procedure_forwarder_alloc.cpp test_procedure_forwarder_timeout.cpp)
 
 target_include_directories(test_procedure_forwarder PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -61,7 +63,7 @@ catch_discover_tests(test_procedure_forwarder TEST_PREFIX "forwarder.")
 # LATCH-NOALLOC retention gate over a non-allocating sink Policy. Links the core,
 # wire, and inproc layers; selected by the `forwarder.` ctest prefix and by `latch`
 # Catch2 tags so `ctest -R latch` and `ctest -R forwarder` both pick it up.
-add_executable(test_latch_forwarder test_latch_forwarder.cpp)
+add_executable(test_latch_forwarder test_latch_forwarder.cpp test_latch_forwarder_churn.cpp)
 
 target_include_directories(test_latch_forwarder PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -78,7 +80,7 @@ catch_discover_tests(test_latch_forwarder TEST_PREFIX "forwarder.")
 # the not-yet-built metadata-overload contract RED-now (flipped GREEN by the owning
 # plan). Links the core, wire, and inproc layers; selected by the `forwarder.` ctest
 # prefix and by `ctest -R message_info`.
-add_executable(test_message_info test_message_info.cpp)
+add_executable(test_message_info test_message_info.cpp test_message_info_gid.cpp)
 
 target_link_libraries(test_message_info PRIVATE
     plexus::core
@@ -92,7 +94,7 @@ catch_discover_tests(test_message_info TEST_PREFIX "forwarder.")
 # subscribe_response status. The matching case is GREEN; the mismatch case is RED-now
 # (the type_id compare is activated by the owning plan). Links the core, wire, and
 # inproc layers; selected by the `forwarder.` ctest prefix and by `ctest -R type_id_match`.
-add_executable(test_type_id_match test_type_id_match.cpp)
+add_executable(test_type_id_match test_type_id_match.cpp test_type_id_match_strict.cpp)
 
 target_link_libraries(test_type_id_match PRIVATE
     plexus::core
@@ -124,7 +126,7 @@ catch_discover_tests(test_durability_replay TEST_PREFIX "forwarder.")
 # depth-1 ring stays byte-identical to last-writer-wins (all/latest/none). The
 # delivery effects are looped for reproducibility. Links the core, wire, and inproc
 # layers; selected by the `forwarder.` ctest prefix and by `ctest -R history_ring`.
-add_executable(test_history_ring test_history_ring.cpp)
+add_executable(test_history_ring test_history_ring.cpp test_history_ring_depth.cpp)
 
 target_link_libraries(test_history_ring PRIVATE
     plexus::core
@@ -140,7 +142,8 @@ catch_discover_tests(test_history_ring TEST_PREFIX "forwarder.")
 # evicted), and a zero-alloc steady enqueue/pop loop proven through support/
 # alloc_counter.h. A pure detail-header unit, so it needs only the core; selected by
 # the `forwarder.` ctest prefix and by `ctest -R priority_band`.
-add_executable(test_priority_band_queue test_priority_band_queue.cpp)
+add_executable(test_priority_band_queue test_priority_band_queue.cpp
+    test_priority_band_queue_alloc.cpp)
 
 target_include_directories(test_priority_band_queue PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -195,7 +198,8 @@ catch_discover_tests(test_fetch_latched TEST_PREFIX "forwarder.")
 # invariant, and the zero-allocation steady-state stamp. Each timing leg is looped
 # for reproducibility. Links the core, the inproc virtual-clock substrate, and the
 # alloc-counter via tests/; selected by the `forwarder.` ctest prefix.
-add_executable(test_liveliness_monitor test_liveliness_monitor.cpp)
+add_executable(test_liveliness_monitor test_liveliness_monitor.cpp
+    test_liveliness_monitor_lifetime.cpp)
 
 target_include_directories(test_liveliness_monitor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -231,7 +235,7 @@ catch_discover_tests(test_subscriber_qos_thread TEST_PREFIX "forwarder.")
 # mode yielding a degraded verdict with a NON-EMPTY field set. A pure header unit (no
 # I/O, no backend) — needs only the core; selected by the `forwarder.` ctest prefix and
 # by `ctest -R 'qos rxo'` (the space-bearing case names).
-add_executable(test_qos_rxo test_qos_rxo.cpp)
+add_executable(test_qos_rxo test_qos_rxo.cpp test_qos_rxo_size.cpp)
 
 target_link_libraries(test_qos_rxo PRIVATE
     plexus::core
@@ -247,7 +251,7 @@ catch_discover_tests(test_qos_rxo TEST_PREFIX "forwarder.")
 # late bytes joiner replays the retained frame); and the caller's slot reference is
 # balanced on every path. Links the core, wire, and inproc layers; selected by the
 # `forwarder.` ctest prefix.
-add_executable(test_publish_object test_publish_object.cpp)
+add_executable(test_publish_object test_publish_object.cpp test_publish_object_latch.cpp)
 
 target_link_libraries(test_publish_object PRIVATE
     plexus::core

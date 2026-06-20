@@ -1,3 +1,7 @@
+// over-limit: one cohesive medium-coordinator decision matrix; every cell drives the one
+// shared stub_registry + fake_channel + gate/receive recorder harness (the engine-owned
+// coordinator over its injected gates), so splitting the cells scatters that shared
+// recorder-bound fixture into near-empty per-cell shells.
 #include "plexus/io/shm/medium_coordinator.h"
 #include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/dispatch_hint.h"

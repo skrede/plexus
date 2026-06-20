@@ -21,7 +21,7 @@ catch_discover_tests(test_asio_policy TEST_PREFIX "asio.")
 # crypto backend is on, the SAME TU also compiles the mux-route legs (the multiplexing
 # transport header pulls in plexus::crypto for its secure member), gated by
 # PLEXUS_HAVE_TLS_MUX so the base UDP legs build with crypto off.
-add_executable(test_udp_transport test_udp_transport.cpp)
+add_executable(test_udp_transport test_udp_transport.cpp test_udp_transport_mux.cpp)
 target_link_libraries(test_udp_transport PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
@@ -32,7 +32,8 @@ if(PLEXUS_ENABLE_CRYPTO_BACKEND)
 endif()
 catch_discover_tests(test_udp_transport TEST_PREFIX "udp.")
 
-add_executable(test_udp_handshake_arq test_udp_handshake_arq.cpp)
+add_executable(test_udp_handshake_arq test_udp_handshake_arq.cpp
+    test_udp_handshake_arq_component.cpp)
 target_link_libraries(test_udp_handshake_arq PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
@@ -82,7 +83,7 @@ catch_discover_tests(test_udp_arq_sweep TEST_PREFIX "udp.")
 # The two-axis selector unit test: a PURE value-object check of the tier x
 # scheme->reliability composition (no socket, no io_context). Header-only inside
 # plexus::asio; the `udp.` ctest prefix selects it.
-add_executable(test_udp_selector test_udp_selector.cpp)
+add_executable(test_udp_selector test_udp_selector.cpp test_udp_selector_dispatch.cpp)
 target_link_libraries(test_udp_selector PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
@@ -102,7 +103,8 @@ catch_discover_tests(test_udp_congestion TEST_PREFIX "udp.")
 # reliable-mode channel (symmetric on both ends) whose send() drives the ARQ in-order
 # over loss; a "udp" dial stays best_effort; oversize rejects at publish on the reliable
 # class too. Header-only inside plexus::asio; the `udp.` ctest prefix selects it.
-add_executable(test_udp_reliable_datagram test_udp_reliable_datagram.cpp)
+add_executable(test_udp_reliable_datagram test_udp_reliable_datagram.cpp
+    test_udp_reliable_datagram_loss.cpp)
 target_link_libraries(test_udp_reliable_datagram PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
@@ -112,7 +114,7 @@ catch_discover_tests(test_udp_reliable_datagram TEST_PREFIX "udp.")
 # append-only (legacy frames decode to 0), and a spoofed seq=0 reliable-data segment on a
 # non-zero-ISN plaintext udpr session is rejected as out of window. Header-only inside
 # plexus::asio; the `udp.` ctest prefix selects it.
-add_executable(test_udp_isn test_udp_isn.cpp)
+add_executable(test_udp_isn test_udp_isn.cpp test_udp_isn_spoof.cpp test_udp_isn_frag.cpp)
 target_link_libraries(test_udp_isn PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
@@ -123,7 +125,8 @@ catch_discover_tests(test_udp_isn TEST_PREFIX "udp.")
 # lost fragment via the reassembly timeout) and reliable (each fragment ARQ'd above the
 # engine, a lost fragment retransmitted, the message completes byte-equal). Header-only
 # inside plexus::asio; the `udp.` ctest prefix selects it.
-add_executable(test_udp_fragmentation test_udp_fragmentation.cpp)
+add_executable(test_udp_fragmentation test_udp_fragmentation.cpp
+    test_udp_fragmentation_reliable.cpp)
 target_link_libraries(test_udp_fragmentation PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)

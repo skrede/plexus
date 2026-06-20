@@ -1,3 +1,6 @@
+// over-limit: one cohesive fast-path identity+flip matrix; both cells share the one codec +
+// two-node net harness (the encode-count delta and object-address identity witness), so
+// splitting them across TUs scatters that shared fixture into near-empty per-cell shells.
 // The fast-path named gates: cell 6 (the zero-serialization identity witness, here as the
 // named gate with the carrier-field assertions) and cell 7 (the LOOPED fast/fallback flip).
 // The flip is proven the no-success-from-a-single-run way: a fresh net per iteration, the

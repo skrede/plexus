@@ -1,3 +1,7 @@
+// over-limit: one cohesive egress-priority scheduling matrix; every cell drives the one
+// shared backpressured-destination forwarder harness (the stalled-channel band scheduler +
+// drop-event taps), and that shared fixture preamble alone exceeds the file ceiling, so the
+// cells cannot split across TUs without scattering that one harness into over-budget shells.
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/egress_scheduler.h"

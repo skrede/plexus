@@ -1,3 +1,6 @@
+// over-limit: one cohesive safe-defaults + fail-closed geometry matrix; the cells share the one
+// heap-backed stub-broker registry harness, so splitting them scatters that shared broker
+// fixture into near-empty per-cell shells.
 #include "plexus/io/shm/loan_status.h"
 #include "plexus/io/shm/region_broker_concept.h"
 #include "plexus/io/shm/ring_geometry.h"

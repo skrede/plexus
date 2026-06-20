@@ -1,3 +1,7 @@
+// over-limit: one cohesive wakeup->reactor bridge matrix; the cells share the one forked
+// producer + io_uring-futex reactor-bridge harness over a converged region, and that shared
+// fixture preamble plus its produce helpers cannot split across TUs without scattering that
+// shared cross-process bridge state into near-empty per-cell shells.
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
 #include "plexus/shm/posix_shm_region_broker.h"

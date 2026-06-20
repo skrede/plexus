@@ -1,33 +1,4 @@
-// The transport_selector two-axis composition, as a PURE unit test (no socket, no
-// io_context). The selector composes locality (the tier) x reliability (the
-// scheme-encoded delivery class) FROM THE ENDPOINT ALONE — the dial(ep) reality,
-// where the scheme is the only routing discriminator the engine path carries. The
-// matrix pins:
-//   * the tier: "unix"/"inproc" -> local (locality wins regardless of the class);
-//     "udp"/"udpr"/"tcp"/"tls" -> remote.
-//   * the scheme->reliability class: "udp" -> best_effort, "udpr" ->
-//     reliable_datagram, "tcp"/"tls" -> reliable, "unix"/"inproc" -> unspecified
-//     (local; reliability moot).
-//   * the value-object invariant: two independently constructed selectors give
-//     identical results (no global atomic, no setter — there is no process state to
-//     mutate). A route is forced ONLY by passing a different scheme, never by
-//     mutating the selector.
-// Crucially it pins reliability_of_scheme("udpr") == reliable_datagram and
-// reliability_of_scheme("udp") == best_effort: the scheme-encode that makes the
-// reliable-datagram opt-in reachable through dial(ep).
-
-#include "plexus/io/endpoint.h"
-#include "plexus/io/reliability.h"
-#include "plexus/io/transport_selector.h"
-#include "plexus/io/shm/dispatch_hint.h"
-#include "plexus/io/reliability_requirement.h"
-
-#include <catch2/catch_test_macros.hpp>
-
-#include <string>
-#include <string_view>
-
-namespace pio = plexus::io;
+#include "test_udp_selector_common.h"
 
 TEST_CASE("udp selector: the tier classifies same-host local and everything else remote",
           "[udp][selector][tier]")
@@ -144,63 +115,4 @@ TEST_CASE("udp selector: reliability_class enforces the no-silent-downgrade rule
         const bool          admissible = sel.reliability_class(ep, reliable) == verdict::admissible;
         REQUIRE(admissible == pio::scheme_is_reliable(ep.scheme));
     }
-}
-
-TEST_CASE("udp selector: reliability_hint_of bridges the publisher's declared class",
-          "[udp][selector][reliability]")
-{
-    pio::transport_selector sel;
-    REQUIRE(sel.reliability_hint_of(pio::reliability::best_effort) ==
-            pio::reliability_hint::best_effort);
-    REQUIRE(sel.reliability_hint_of(pio::reliability::reliable) == pio::reliability_hint::reliable);
-}
-
-TEST_CASE("udp selector: dispatch_class observably changes with the hint and leaves "
-          "shm_eligible_for intact",
-          "[udp][selector][dispatch]")
-{
-    pio::transport_selector sel;
-    using pio::shm::dispatch_hint;
-
-    // The declared dispatch hint observably steers the verdict: a set hint prefers the
-    // fast path, none does not. For a LOCAL peer it coincides with shm_eligible_for.
-    const pio::endpoint unix_ep{"unix", "/tmp/s"};
-    REQUIRE(sel.dispatch_class(unix_ep, dispatch_hint::frequent));
-    REQUIRE_FALSE(sel.dispatch_class(unix_ep, dispatch_hint::none));
-
-    // For a REMOTE peer the verdict records the advisory preference (true iff any bit set).
-    const pio::endpoint tcp_ep{"tcp", "127.0.0.1:5000"};
-    REQUIRE(sel.dispatch_class(tcp_ep, dispatch_hint::frequent));
-    REQUIRE_FALSE(sel.dispatch_class(tcp_ep, dispatch_hint::none));
-
-    // shm_eligible_for is UNCHANGED: same-host AND a hint set -> true; a remote peer is
-    // never shm-eligible even with a hint.
-    REQUIRE(sel.shm_eligible_for(unix_ep, dispatch_hint::frequent));
-    REQUIRE_FALSE(sel.shm_eligible_for(tcp_ep, dispatch_hint::frequent));
-}
-
-TEST_CASE("udp selector: the new verdicts preserve the pure value-object invariant",
-          "[udp][selector][value-object]")
-{
-    pio::transport_selector a;
-    pio::transport_selector b;
-    using pio::shm::dispatch_hint;
-
-    // Two independently constructed selectors agree on every new verdict; a verdict is
-    // forced ONLY by a different (scheme, hint), never by mutating the selector.
-    const pio::endpoint udp{"udp", "127.0.0.1:5000"};
-    const pio::endpoint tcp{"tcp", "127.0.0.1:5000"};
-    REQUIRE(a.reliability_class(udp, pio::reliability_hint::reliable) ==
-            b.reliability_class(udp, pio::reliability_hint::reliable));
-    REQUIRE(a.reliability_class(tcp, pio::reliability_hint::reliable) ==
-            b.reliability_class(tcp, pio::reliability_hint::reliable));
-    REQUIRE(a.dispatch_class({"unix", "/tmp/s"}, dispatch_hint::frequent) ==
-            b.dispatch_class({"unix", "/tmp/s"}, dispatch_hint::frequent));
-    REQUIRE(a.reliability_hint_of(pio::reliability::reliable) ==
-            b.reliability_hint_of(pio::reliability::reliable));
-
-    // A different scheme forces a different reliability verdict — the discriminator is the
-    // input, not selector state.
-    REQUIRE(a.reliability_class(udp, pio::reliability_hint::reliable) !=
-            a.reliability_class(tcp, pio::reliability_hint::reliable));
 }

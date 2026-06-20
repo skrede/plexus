@@ -1,3 +1,7 @@
+// over-limit: one cohesive wire_fallback production-seam matrix; the per-mode prefer-hook cells
+// share the one node-declare-path shm broker + mux harness, and that shared fixture preamble
+// alone exceeds the file ceiling, so the cells cannot split across TUs without scattering that
+// one harness into over-budget shells.
 #include "plexus/shm/posix_shm_region_broker.h"
 
 #include "plexus/io/shm/ring_geometry_mode.h"

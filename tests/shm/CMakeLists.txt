@@ -43,7 +43,7 @@ catch_discover_tests(test_shm_scaffold TEST_PREFIX "shm.")
 # (the ring drives a caller-supplied anonymous mapped span), proving the core is
 # POSIX/asio-free. They link plexus::core for the core include path and the
 # xproc harness header path.
-add_executable(test_shm_ring_core test_shm_ring_core.cpp)
+add_executable(test_shm_ring_core test_shm_ring_core.cpp test_shm_ring_core_capacity.cpp)
 
 target_include_directories(test_shm_ring_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
@@ -56,7 +56,8 @@ catch_discover_tests(test_shm_ring_core TEST_PREFIX "shm.")
 
 # Ring backpressure: best_effort overwrite-skips a pinned slot, the full-lap
 # congested fallback, and the reliable cursor gate (lossless).
-add_executable(test_shm_ring_backpressure test_shm_ring_backpressure.cpp)
+add_executable(test_shm_ring_backpressure test_shm_ring_backpressure.cpp
+    test_shm_ring_backpressure_recovery.cpp)
 
 target_link_libraries(test_shm_ring_backpressure PRIVATE
     plexus::core
@@ -205,7 +206,8 @@ catch_discover_tests(test_shm_wake_gating TEST_PREFIX "shm.")
 # attaches + consumes, and a real value round-trips byte-equal over the MAP_SHARED
 # broadcast ring. Links plexus::shm (broker + fingerprint) + plexus::wire (the fqn
 # hash the region naming routes through).
-add_executable(test_shm_same_host_roundtrip test_shm_same_host_roundtrip.cpp)
+add_executable(test_shm_same_host_roundtrip test_shm_same_host_roundtrip.cpp
+    test_shm_same_host_fingerprint.cpp)
 
 target_include_directories(test_shm_same_host_roundtrip PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
@@ -269,7 +271,7 @@ catch_discover_tests(test_shm_spin_park TEST_PREFIX "shm.")
 # spin/yield path allocates nothing across N sends (the alloc-counter idiom from
 # tests/support). The two driver threads are a test-local concern (the channel
 # spawns none).
-add_executable(test_shm_congested test_shm_congested.cpp)
+add_executable(test_shm_congested test_shm_congested.cpp test_shm_congested_alloc.cpp)
 
 target_include_directories(test_shm_congested PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
