@@ -27,7 +27,7 @@ target_link_libraries(test_rekey_threshold_sweep PRIVATE
 
 catch_discover_tests(test_rekey_threshold_sweep TEST_PREFIX "crypto.")
 
-add_executable(test_authenticated_channel test_authenticated_channel.cpp $<TARGET_OBJECTS:plexus-crypto>)
+add_executable(test_authenticated_channel test_authenticated_channel.cpp test_authenticated_channel_epoch.cpp $<TARGET_OBJECTS:plexus-crypto>)
 
 target_link_libraries(test_authenticated_channel PRIVATE
     plexus::crypto
@@ -35,7 +35,7 @@ target_link_libraries(test_authenticated_channel PRIVATE
 
 catch_discover_tests(test_authenticated_channel TEST_PREFIX "crypto.")
 
-add_executable(test_nonce_uniqueness test_nonce_uniqueness.cpp $<TARGET_OBJECTS:plexus-crypto>)
+add_executable(test_nonce_uniqueness test_nonce_uniqueness.cpp test_nonce_uniqueness_counter.cpp $<TARGET_OBJECTS:plexus-crypto>)
 
 target_link_libraries(test_nonce_uniqueness PRIVATE
     plexus::crypto
@@ -43,7 +43,7 @@ target_link_libraries(test_nonce_uniqueness PRIVATE
 
 catch_discover_tests(test_nonce_uniqueness TEST_PREFIX "crypto.")
 
-add_executable(test_datagram_replay test_datagram_replay.cpp $<TARGET_OBJECTS:plexus-crypto>)
+add_executable(test_datagram_replay test_datagram_replay.cpp test_datagram_replay_drop.cpp test_datagram_replay_epoch.cpp $<TARGET_OBJECTS:plexus-crypto>)
 
 target_link_libraries(test_datagram_replay PRIVATE
     plexus::crypto

@@ -12,17 +12,12 @@ endif()
 
 set(PLEXUS_IO_TESTS
     test_mtu_budget
-    test_send_queue
-    test_stream_send_queue
     test_udp_backpressure_queue
-    test_pending_dial_registry
     test_handshake_gate
     test_assembly_pattern
     test_cert_facts
     test_verify_policy
-    test_attach_policy
     test_cookie_secret
-    test_fragmentation
     test_reassembler_flat_bound
     test_identity_types
     test_epoch_source)
@@ -33,6 +28,33 @@ foreach(test ${PLEXUS_IO_TESTS})
     catch_discover_tests(${test} TEST_PREFIX "io.")
 endforeach()
 
+# The scenario-split block oracles: each split file's siblings compile into the one
+# existing target so catch_discover_tests enumerates the identical set.
+add_executable(test_send_queue
+    test_send_queue.cpp
+    test_send_queue_capacity.cpp)
+target_link_libraries(test_send_queue PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_send_queue TEST_PREFIX "io.")
+
+add_executable(test_stream_send_queue
+    test_stream_send_queue.cpp
+    test_stream_send_queue_capacity.cpp
+    test_stream_send_queue_gather.cpp)
+target_link_libraries(test_stream_send_queue PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_stream_send_queue TEST_PREFIX "io.")
+
+add_executable(test_pending_dial_registry
+    test_pending_dial_registry.cpp
+    test_pending_dial_registry_accepted.cpp)
+target_link_libraries(test_pending_dial_registry PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_pending_dial_registry TEST_PREFIX "io.")
+
+add_executable(test_attach_policy
+    test_attach_policy.cpp
+    test_attach_policy_edges.cpp)
+target_link_libraries(test_attach_policy PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_attach_policy TEST_PREFIX "io.")
+
 # The mtu_budget oracle pins the oversize-boundary arithmetic against the real
 # wire::udp_envelope_overhead constant, so it additionally links the header-only
 # plexus::wire interface target (still sans-IO — no backend, no socket).
@@ -41,7 +63,17 @@ target_link_libraries(test_mtu_budget PRIVATE plexus::wire)
 # The fragment/reassemble unit drives the wire fragment codec and proves the bounded
 # reassembler deterministically on the virtual-clock harness, so it additionally links
 # the wire codec and the plexus::testing substrate (still sans-IO — no backend, no socket).
-target_link_libraries(test_fragmentation PRIVATE plexus::wire plexus::testing)
+# Its wire/split/reassemble scenario clusters compile into the one target.
+add_executable(test_fragmentation
+    test_fragmentation.cpp
+    test_fragmentation_split.cpp
+    test_fragmentation_reassemble.cpp)
+target_link_libraries(test_fragmentation PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::testing
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_fragmentation TEST_PREFIX "io.")
 
 # The reassembler structural-cost bound oracle drives feed() directly against a crafted
 # frag_cnt on the virtual-clock harness, so it additionally links the plexus::testing

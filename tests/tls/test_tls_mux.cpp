@@ -1,3 +1,6 @@
+// over-limit: one cohesive TLS-over-mux E2E matrix; every cell drives the one shared
+// ephemeral-cert + mux-face loopback-pair harness (whose identity + quintet-member preamble
+// alone exceeds the file ceiling), so splitting the cells scatters that one harness.
 #include "plexus/asio/all_backends_mux.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"

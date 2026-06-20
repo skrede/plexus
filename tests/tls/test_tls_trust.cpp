@@ -1,3 +1,6 @@
+// over-limit: one cohesive TLS trust/pinning E2E matrix; every cell drives the one shared
+// ephemeral-cert + mutual-TLS loopback harness (whose credential + live-handshake preamble
+// alone exceeds the file ceiling), so splitting the cells scatters that one harness.
 #include "plexus/tls/tls_channel.h"
 #include "plexus/tls/tls_transport.h"
 #include "plexus/tls/tls_credential.h"

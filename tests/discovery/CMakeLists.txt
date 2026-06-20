@@ -7,11 +7,8 @@ if(NOT PLEXUS_BUILD_TESTS)
     return()
 endif()
 
-set(PLEXUS_DISCOVERY_TESTS
-    test_contact_card)
-
-foreach(test ${PLEXUS_DISCOVERY_TESTS})
-    add_executable(${test} ${test}.cpp)
-    target_link_libraries(${test} PRIVATE plexus::core Catch2::Catch2WithMain)
-    catch_discover_tests(${test} TEST_PREFIX "discovery.")
-endforeach()
+add_executable(test_contact_card
+    test_contact_card.cpp
+    test_contact_card_static_discovery.cpp)
+target_link_libraries(test_contact_card PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_contact_card TEST_PREFIX "discovery.")

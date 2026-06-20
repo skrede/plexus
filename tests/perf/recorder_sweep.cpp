@@ -1,3 +1,7 @@
+// over-limit: one cohesive measurement rig bound to the single-TU alloc_counter; both sweeps
+// share the one net/sink harness + median drivers + main report and the program-wide
+// operator-new override, so splitting it across TUs scatters that single-TU allocation
+// contract and the one measurement program.
 // A standalone measurement rig for the recorder's two numeric byte/rate knobs. It drives a
 // saturating producer through the PUBLIC node.make_recorder over an in-memory byte_sink and
 // reports medians over >=3 runs (it REPORTS numbers, it is NOT a ctest — the parity suite

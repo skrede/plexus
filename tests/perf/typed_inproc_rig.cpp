@@ -1,3 +1,7 @@
+// over-limit: one cohesive measurement rig bound to the single-TU alloc_counter; every cell
+// reports steady-loop heap behavior against the one program-wide operator-new override and
+// shares the one net/result harness + main report driver, so splitting it across TUs scatters
+// that single-TU allocation contract and the one measurement program.
 // A no-syscall perf rig for the typed in-process pub/sub fast path. Two nodes on one bus
 // (single-dialer), one typed topic; the steady loop borrows a pool slot, publishes the
 // object, and drives to quiescence so the object rides the zero-serialization lane to the
