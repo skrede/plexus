@@ -126,7 +126,7 @@ struct node_options
 
     // required-with-default the same-host auto-upgrade: the consumer-sovereign policy
     // the medium coordinator consults on a co-host demand edge. The default engages the
-    // upgrade out of the box (D-06); a deployment supplies a stricter predicate (e.g. one
+    // upgrade out of the box; a deployment supplies a stricter predicate (e.g. one
     // returning false) to disable it. A plain function pointer, never a stand-in for
     // absence — its value is always meaningful.
     upgrade_policy_fn upgrade_policy{&default_upgrade_policy};

@@ -75,12 +75,26 @@ function(_size_has_marker file out_var)
     endif()
 endfunction()
 
+# Count lines exactly as `wc -l` does: the number of newline terminators. We
+# read the raw bytes and take the length delta after stripping newlines, which
+# is immune to the embedded-semicolon corruption that makes file(STRINGS)'s list
+# length over-count (CMake splits a list on both '\n' AND ';', so a ';' inside a
+# C++ source line spuriously inflates the count). A trailing line with no final
+# newline is not counted, matching `wc -l`.
+function(_size_line_count file out_var)
+    file(READ "${file}" _content)
+    string(LENGTH "${_content}" _with)
+    string(REPLACE "\n" "" _content "${_content}")
+    string(LENGTH "${_content}" _without)
+    math(EXPR _n "${_with} - ${_without}")
+    set(${out_var} ${_n} PARENT_SCOPE)
+endfunction()
+
 set(_violations "")
 set(_seen_registered "")
 
 foreach(_file IN LISTS _scan_files)
-    file(STRINGS "${_file}" _lines)
-    list(LENGTH _lines _count)
+    _size_line_count("${_file}" _count)
     file(RELATIVE_PATH _rel "${SIZE_GATE_ROOT}" "${_file}")
 
     _size_has_marker("${_file}" _has_marker)

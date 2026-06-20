@@ -4,7 +4,7 @@
 // The reliable-data ARQ over loss: the load-bearing beyond-parity proof. A
 // selective-repeat sliding window + a head-of-line reorder receiver + an adaptive RTO
 // (Karn) must deliver every reliable payload EXACTLY ONCE and IN PUBLISH ORDER over a
-// deterministically lossy/reordering/duplicating link (D-04). The loss is injected by a
+// deterministically lossy/reordering/duplicating link. The loss is injected by a
 // programmable UDP relay (an extension of the handshake-ARQ lossy_relay): the handshake
 // and the acks always pass; the relay scripts per-data-segment actions (drop / reorder /
 // duplicate) so the test controls exactly which segments are lost or shuffled and the

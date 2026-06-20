@@ -46,7 +46,7 @@ namespace plexus::tls {
 // The secure-best_effort DTLS transport_backend: owns the ONE bound udp_server, the inbound demux
 // (sender -> dtls_channel), the node's single cookie secret, the transport-owned pending-dial
 // table, and every minted dtls_channel. DTLS records ride RAW (DTLS owns RFC-6347 anti-replay +
-// handshake retransmit, D-03). listen(ep) arms the recv loop (a MISS mints a server channel behind
+// handshake retransmit). listen(ep) arms the recv loop (a MISS mints a server channel behind
 // the cookie gate — OpenSSL replies HelloVerifyRequest, no full state until a valid cookie echoes).
 // dial(ep) kicks the client handshake, firing on_dialed ON external_complete (the crypto handshake
 // IS the plexus handshake). Single-owner: the registry holds unique_ptr<dtls_channel> keyed by raw

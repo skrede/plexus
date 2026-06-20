@@ -101,7 +101,7 @@ TEST_CASE("dtls.external_complete: the FSM resolves with cert identity and no pl
         REQUIRE(std::memcmp(l.dialed->peer_node_id().data(), server_id.digest.data(), 16) == 0);
         REQUIRE(std::memcmp(l.accepted->peer_node_id().data(), client_id.digest.data(), 16) == 0);
 
-        // The dialed endpoint is carried through on_dialed (D-01: the crypto handshake
+        // The dialed endpoint is carried through on_dialed (the crypto handshake
         // resolved the session — no plexus handshake_request/response frame was sent).
         REQUIRE(l.dialed_ep.scheme == "dtls");
 
