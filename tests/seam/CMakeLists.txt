@@ -13,7 +13,9 @@ catch_discover_tests(test_seam_concepts TEST_PREFIX "seam.")
 # demand path — a deterministic inproc seam test (no backend socket). Links the inproc
 # Policy substrate for the engine harness. Registered under the `udp.` prefix so
 # `ctest -R udp` selects it with the rest of the phase's reliability legs.
-add_executable(test_reliability_enforcement test_reliability_enforcement.cpp)
+add_executable(test_reliability_enforcement
+    test_reliability_enforcement.cpp
+    test_reliability_enforcement_classifier.cpp)
 target_link_libraries(test_reliability_enforcement PRIVATE
     plexus::core
     plexus::wire

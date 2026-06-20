@@ -2,9 +2,7 @@
 # Each links the header-only plexus::wire target plus Catch2's main; ctest -R
 # wire selects them.
 set(PLEXUS_WIRE_TESTS
-    test_wire_codec
     test_varint
-    test_frame_reassembler
     test_length_prefixed_helper
     test_subscribe_qos_codec
     test_fetch_latched_codec
@@ -18,6 +16,24 @@ foreach(test ${PLEXUS_WIRE_TESTS})
     # suite by name (the [wire] Catch2 tag is not a ctest-visible selector).
     catch_discover_tests(${test} TEST_PREFIX "wire.")
 endforeach()
+
+add_executable(test_frame_reassembler
+    test_frame_reassembler.cpp
+    test_frame_reassembler_overflow.cpp)
+target_link_libraries(test_frame_reassembler PRIVATE plexus::wire Catch2::Catch2WithMain)
+catch_discover_tests(test_frame_reassembler TEST_PREFIX "wire.")
+
+# The codec parity oracle's scenario clusters (header/data/subscribe/rpc/handshake)
+# compile into the one test_wire_codec binary so catch_discover_tests enumerates the
+# identical set across the split layout.
+add_executable(test_wire_codec
+    test_wire_codec.cpp
+    test_wire_codec_data.cpp
+    test_wire_codec_subscribe.cpp
+    test_wire_codec_rpc.cpp
+    test_wire_codec_handshake.cpp)
+target_link_libraries(test_wire_codec PRIVATE plexus::wire Catch2::Catch2WithMain)
+catch_discover_tests(test_wire_codec TEST_PREFIX "wire.")
 
 # The UDP wire oracle: the envelope codec round-trip + the uint16 dedup window's
 # RFC-1982 wrap-safety. Both are pure header-only wire units (no backend), so each
@@ -47,7 +63,9 @@ catch_discover_tests(test_locality_qos TEST_PREFIX "wire.")
 # The stream_inbound detection oracle drives a virtual-clock inproc timer, so this
 # TU additionally links plexus::inproc (the other wire targets do not) — mirroring
 # how the integration inproc targets pull in the manual-clock executor/timer.
-add_executable(test_stream_inbound test_stream_inbound.cpp)
+add_executable(test_stream_inbound
+    test_stream_inbound.cpp
+    test_stream_inbound_feed_error.cpp)
 target_link_libraries(test_stream_inbound PRIVATE
     plexus::wire
     plexus::inproc

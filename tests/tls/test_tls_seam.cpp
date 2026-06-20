@@ -1,3 +1,6 @@
+// over-limit: one cohesive TLS transport-seam E2E matrix; every cell drives the one shared
+// ephemeral-cert + mutual-TLS transport/loopback harness (whose policy + live-handshake
+// preamble alone exceeds the file ceiling), so splitting the cells scatters that one harness.
 #include "plexus/tls/tls_policy.h"
 #include "plexus/tls/tls_channel.h"
 #include "plexus/tls/tls_transport.h"

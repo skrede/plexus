@@ -1,3 +1,6 @@
+// over-limit: one cohesive DTLS teardown-discipline E2E matrix; every cell drives the one
+// shared raw-OpenSSL-client + server-channel + demux loopback harness (whose live-handshake
+// preamble alone exceeds the file ceiling), so splitting the cells scatters that one harness.
 #include "dtls_test_support.h"
 
 #include "plexus/tls/dtls_transport.h"

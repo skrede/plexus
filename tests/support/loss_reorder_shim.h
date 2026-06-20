@@ -13,17 +13,11 @@
 #include <utility>
 #include <algorithm>
 
-// A deterministic, fixed-seed loss/reorder relay sitting on the datagram wire between a
-// client and a server UDP socket. Every datagram the client emits to the relay's front
-// port is forwarded to the server, optionally DROPPED (a configurable fraction) or held
-// and re-emitted out of order (a bounded reorder depth). The drop/reorder decisions come
-// from an LCG seeded at construction, so the captured-then-re-injected datagram sequence
-// is byte-identical across process runs — the empirical-reproducibility property the
-// fragment-scale sweep and the lossy-link benchmark cell both depend on (no std::random).
-//
-// It lives test-side only (never plexus source): it interposes at the test's wire
-// boundary, not inside any plexus channel. Header-only so a second translation unit reuses
-// the same shim — every member is inline.
+// A deterministic, fixed-seed loss/reorder relay on the datagram wire between a client and
+// a server UDP socket: each client->server datagram is forwarded, optionally dropped, or
+// held and re-emitted out of order. Decisions come from an LCG seeded at construction, so
+// the re-injected sequence is byte-identical across runs (the empirical-reproducibility
+// property the fragment sweep and the lossy-link bench cell depend on; no std::random).
 
 namespace plexus::testing {
 
@@ -132,10 +126,8 @@ private:
     std::size_t                        m_dropped = 0;
 };
 
-// A live UDP relay applying the deterministic scheduler at the wire boundary: the client
-// dials the relay's front port; the relay forwards (per the scheduler) to the real server
-// and pipes the server's replies straight back, untouched (the loss model is one-directional
-// on the data-carrying client->server leg, matching the injected-loss test legs).
+// A live UDP relay applying the deterministic scheduler at the wire boundary; replies are
+// piped back untouched (the loss model is one-directional on the client->server leg).
 class loss_reorder_relay
 {
 public:

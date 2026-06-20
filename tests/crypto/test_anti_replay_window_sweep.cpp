@@ -1,3 +1,6 @@
+// over-limit: one cohesive empirical anti-replay-width sweep; both cells share the one
+// fixed-seed LCG + reordered-schedule + reference-window harness, and that shared sweep
+// fixture dominates the file, so splitting the two cells scatters it into near-empty shells.
 // The recorded sweep substantiating k_anti_replay_window_bits at FRAGMENT scale. A
 // large (4 MiB) message fragments into ~3500 sealed datagrams, each a distinct AEAD
 // sequence; the window must admit every fragment that arrives within the link's

@@ -1,3 +1,6 @@
+// over-limit: one cohesive FSM transition matrix over a single shared fixture; the total
+// (state x event) enumeration is one indivisible TEST_CASE and the zero-alloc step binds the
+// single-TU alloc_counter, so splitting scatters the matrix and the one allocation contract.
 // The exhaustive isolation oracle for the pure, sans-IO handshake_fsm. The FSM is
 // pure logic — no clock, socket, executor, or thread — so determinism is structural
 // and the oracle's job is exhaustive enumeration of the (state, event, version,

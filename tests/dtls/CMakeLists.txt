@@ -12,7 +12,11 @@ endif()
 # $<TARGET_OBJECTS:plexus-crypto>; linking plexus::crypto pulls only the INTERFACE
 # usage requirements (include dirs + OpenSSL/asio deps), never a second
 # asio-bearing archive (the COMDAT-safe wiring, proven by link+run).
-add_executable(test_dtls_handshake test_dtls_handshake.cpp $<TARGET_OBJECTS:plexus-crypto>)
+add_executable(test_dtls_handshake
+    test_dtls_handshake.cpp
+    test_dtls_handshake_dial.cpp
+    test_dtls_handshake_relay.cpp
+    $<TARGET_OBJECTS:plexus-crypto>)
 
 target_link_libraries(test_dtls_handshake PRIVATE
     plexus::crypto
@@ -22,7 +26,7 @@ catch_discover_tests(test_dtls_handshake TEST_PREFIX "dtls.")
 
 # The cookie / anti-DoS proof: a ClientHello with no/invalid cookie allocates no
 # full handshake state (HelloVerifyRequest), a valid cookie proceeds to completion.
-add_executable(test_dtls_cookie test_dtls_cookie.cpp $<TARGET_OBJECTS:plexus-crypto>)
+add_executable(test_dtls_cookie test_dtls_cookie.cpp test_dtls_cookie_verify.cpp $<TARGET_OBJECTS:plexus-crypto>)
 
 target_link_libraries(test_dtls_cookie PRIVATE
     plexus::crypto
@@ -35,7 +39,7 @@ catch_discover_tests(test_dtls_cookie TEST_PREFIX "dtls.")
 # rejected at publish via on_error(message_too_large) — never fragmented. A high
 # configured cap lets DTLS_get_data_mtu bind the min(configured_cap, DTLS_get_data_mtu)
 # reject; a low cap proves the configured term binds. Live legs loop N>=100.
-add_executable(test_dtls_mtu test_dtls_mtu.cpp $<TARGET_OBJECTS:plexus-crypto>)
+add_executable(test_dtls_mtu test_dtls_mtu.cpp test_dtls_mtu_record.cpp $<TARGET_OBJECTS:plexus-crypto>)
 
 target_link_libraries(test_dtls_mtu PRIVATE
     plexus::crypto
@@ -74,7 +78,11 @@ catch_discover_tests(test_dtls_teardown TEST_PREFIX "dtls.")
 # records (each one DTLS record, never one oversize record) and reassembled into ONE
 # on_data byte-equal at the peer, while a frame at the record budget still rides exactly
 # one record (parity, no fragmentation). Live legs loop N>=50; re-run >=3.
-add_executable(test_dtls_fragmentation test_dtls_fragmentation.cpp $<TARGET_OBJECTS:plexus-crypto>)
+add_executable(test_dtls_fragmentation
+    test_dtls_fragmentation.cpp
+    test_dtls_fragmentation_burst.cpp
+    test_dtls_fragmentation_envelope.cpp
+    $<TARGET_OBJECTS:plexus-crypto>)
 
 target_link_libraries(test_dtls_fragmentation PRIVATE
     plexus::crypto
@@ -90,7 +98,7 @@ catch_discover_tests(test_dtls_fragmentation TEST_PREFIX "dtls.")
 # local — never the dtls member. Links plexus::asio (the mux + unix/tcp/udp members)
 # alongside plexus::crypto (the secure/secure-datagram members). Live legs loop
 # N>=100; re-run >=3.
-add_executable(test_dtls_mux test_dtls_mux.cpp $<TARGET_OBJECTS:plexus-crypto>)
+add_executable(test_dtls_mux test_dtls_mux.cpp test_dtls_mux_route.cpp $<TARGET_OBJECTS:plexus-crypto>)
 
 target_link_libraries(test_dtls_mux PRIVATE
     plexus::asio

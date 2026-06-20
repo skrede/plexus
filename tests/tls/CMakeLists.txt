@@ -50,7 +50,7 @@ catch_discover_tests(test_tls_mux TEST_PREFIX "tls.")
 # The lifted message-size envelope on the secure TLS stream: a 16 MB single frame
 # round-trips byte-equal over a live mutual-TLS loopback pair with the node ceiling +
 # budget + outbox raised through the transport ctor. Live; looped in-body, re-run >=2.
-add_executable(test_tls_large_payload test_tls_large_payload.cpp $<TARGET_OBJECTS:plexus-crypto>)
+add_executable(test_tls_large_payload test_tls_large_payload.cpp test_tls_large_payload_past_field.cpp $<TARGET_OBJECTS:plexus-crypto>)
 
 target_link_libraries(test_tls_large_payload PRIVATE
     plexus::crypto
