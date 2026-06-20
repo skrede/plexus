@@ -1,12 +1,7 @@
-// Capture a live multi-endpoint session to a flat record stream, single process. The node
-// declares a recording QoS (what + how often a topic is captured) and attaches a recorder
-// over a consumer-owned byte_sink — here a trivial file sink the example defines over the
-// public byte_sink seam (there is no built-in file sink; the drain destination is the
-// consumer's choice). The recorder rides the node's executor turns (no thread). After the
-// session the captured flat stream is written to a file; when the optional MCAP transcode
-// is built, it is converted to an MCAP container Foxglove can open. The capture leg runs
-// unconditionally; the MCAP step is the optional offline-analysis path. Public API only;
-// self-terminating (no backends, no mDNS).
+// Capture a live multi-endpoint session to a flat record stream, single process: the node
+// declares a recording QoS and attaches a recorder over a consumer-owned byte_sink (no
+// built-in file sink). The flat stream is written to a file; when the optional MCAP transcode
+// is built, it converts to an MCAP container Foxglove can open. Public API only; self-terminating.
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
@@ -89,8 +84,7 @@ struct reading_codec
 };
 
 // A consumer-owned drain target over the public byte_sink seam: it accumulates the drained
-// flat stream in memory and exposes it for the file write / the MCAP step. A real binding
-// would write straight to a file/serial/SD here; the seam is a raw byte drain.
+// flat stream in memory and exposes it for the file write / MCAP step.
 class buffer_sink final : public plexus::io::recording::byte_sink
 {
 public:
@@ -124,11 +118,10 @@ plexus::node_id id_of(std::uint8_t seed)
     return id;
 }
 
-int main()
+// Run a two-node inproc session publishing a short telemetry burst on two topics with the
+// recorder attached, draining into `sink` (payload fidelity, keep-all).
+void capture_session(buffer_sink &sink)
 {
-    // The recording declaration: capture each selected topic's payload, keep every sample
-    // (the keep-all default). Declared once at the node; a recorder gives it somewhere to
-    // drain.
     plexus::recording_qos capture{};
     capture.fidelity = plexus::io::capture_fidelity::payload;
 
@@ -137,8 +130,6 @@ int main()
     transport_t                         ta{ex, bus};
     transport_t                         tb{ex, bus};
     plexus::discovery::static_discovery disc{{}};
-
-    buffer_sink sink;
 
     {
         node_t pub_node{ex, disc, id_of(0x0A), ta, opts(0xA, /*eager=*/false, capture)};
@@ -174,6 +165,12 @@ int main()
         rec.flush();
     }
     ex.drain();
+}
+
+int main()
+{
+    buffer_sink sink;
+    capture_session(sink);
 
     std::cout << "captured " << sink.bytes().size() << " bytes of flat record stream\n";
 

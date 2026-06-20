@@ -1,42 +1,16 @@
 // Capture a live session whose payloads are bare JSON and convert it to an MCAP that plots
-// in Foxglove out of the box. plexus records to its own flat record stream (the canonical,
-// crash-recoverable, MCU-affordable store); the host-side transcode turns that stream into
-// MCAP. The codec emits a small JSON object per sample, and the recorder declares a matching
-// jsonschema in the stream preamble — so the transcode labels the data channel "json" with a
-// real JSON Schema and Foxglove decodes/plots the numeric fields with no further setup.
+// in Foxglove out of the box. plexus records to its own flat record stream; the host-side
+// transcode turns that stream into MCAP. The codec emits a small JSON object per sample and
+// the recorder declares a matching jsonschema in the stream preamble — so the transcode
+// labels the data channel "json" with a real JSON Schema and Foxglove decodes/plots it.
 // Single process, public API only, self-terminating (no backends, no mDNS).
 //
-// ── Build ──────────────────────────────────────────────────────────────────────────────────
-//   The MCAP transcode is a host-side optional dependency (the `mcap` library is NOT in the
-//   header-only core and NOT on the MCU). Enable it explicitly:
-//
+// Build (the `mcap` transcode is a host-side optional dep, not in the core / not on the MCU):
 //     cmake -B build -DPLEXUS_BUILD_EXAMPLES=ON -DPLEXUS_BUILD_MCAP_TRANSCODE=ON
-//     cmake --build build -j4 --target mcap_basic_foxglove
-//
-//   (Without -DPLEXUS_BUILD_MCAP_TRANSCODE=ON this example is not built — see recording_example
-//    for the capture-only path that builds unconditionally.)
-//
-// ── Run ────────────────────────────────────────────────────────────────────────────────────
-//     ./build/examples/mcap_basic_foxglove
-//
-//   It writes two files in the working directory:
-//     mcap_basic_foxglove.plxr   the flat record stream (the canonical capture)
-//     mcap_basic_foxglove.mcap   the MCAP container (the analysis artifact)
-//   and prints the transcode summary (schemas / channels / messages + recovery accounting).
-//
-// ── Open / read / use the MCAP output ──────────────────────────────────────────────────────
-//   Foxglove (the intended consumer):
-//     • Desktop app or the web app at https://studio.foxglove.dev
-//     • File ▸ Open local file…  (or drag mcap_basic_foxglove.mcap onto the window)
-//     • The telemetry channels decode out of the box (their declared encoding is "json" and
-//       the schema is a real jsonschema): plot the "value" field over time, scrub, export CSV.
-//   The `mcap` CLI (https://github.com/foxglove/mcap — `mcap` command) for a quick look:
-//     mcap info mcap_basic_foxglove.mcap          # summary: channels, schemas, message counts
-//     mcap list channels mcap_basic_foxglove.mcap # the channel ▸ schema mapping
-//     mcap cat mcap_basic_foxglove.mcap --json    # every message as JSON
-//
-//   The transcode validates nothing about the bytes — the honesty is the producer's contract:
-//   the codec emits exactly what the declared schema describes.
+//     cmake --build build -j4 --target mcap_basic_foxglove && ./build/examples/mcap_basic_foxglove
+// It writes mcap_basic_foxglove.{plxr,mcap} and prints the transcode summary. Open the .mcap
+// in Foxglove (https://studio.foxglove.dev) or inspect it with `mcap info`/`mcap cat --json`;
+// the transcode validates nothing — the codec emits exactly what the declared schema says.
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
@@ -81,8 +55,7 @@ struct reading
     std::uint32_t value{};
 };
 
-// Emits a small JSON object as the payload — exactly what the declared jsonschema describes,
-// so the payload-fidelity tier stores bytes Foxglove decodes with no plexus codec in the path.
+// Emits a small JSON object as the payload — exactly what the declared jsonschema describes.
 struct reading_codec
 {
     using value_type = reading;

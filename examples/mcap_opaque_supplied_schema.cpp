@@ -2,41 +2,18 @@
 // interprets — and convert it to MCAP that still decodes in Foxglove because the consumer
 // SUPPLIES a truthful schema (the contrast to mcap_basic_foxglove's typed codec).
 //
-// HONESTY CAVEAT (load-bearing): "opaque" means opaque to plexus's STORE, not undecodable. The
-// transcode validates NOTHING about whether the bytes match the declared schema (it is
-// serializer-agnostic), so the declaration's truthfulness is the producer's contract. NEVER
-// declare an encoding/schema the bytes do not satisfy — a mismatch produces a channel Foxglove
-// fails to decode, a dishonest demo, not a plexus defect.
-//
+// HONESTY CAVEAT: "opaque" means opaque to plexus's STORE, not undecodable. The
+// transcode validates NOTHING about whether the bytes match the declared schema, so the
+// declaration's truthfulness is the producer's contract — never declare an encoding/schema the
+// bytes do not satisfy (a mismatch is a dishonest demo, not a plexus defect).
 // Single process, public API only, self-terminating (no backends, no mDNS).
 //
-// ── Build ──────────────────────────────────────────────────────────────────────────────────
-//   The MCAP transcode is a host-side optional dependency (the `mcap` library is NOT in the
-//   header-only core and NOT on the MCU). Enable it explicitly:
-//
+// Build (the `mcap` transcode is a host-side optional dep, not in the core / not on the MCU):
 //     cmake -B build -DPLEXUS_BUILD_EXAMPLES=ON -DPLEXUS_BUILD_MCAP_TRANSCODE=ON
 //     cmake --build build -j4 --target mcap_opaque_supplied_schema
-//
-//   (Without -DPLEXUS_BUILD_MCAP_TRANSCODE=ON this example is not built — see recording_example
-//    for the capture-only path that builds unconditionally.)
-//
-// ── Run ────────────────────────────────────────────────────────────────────────────────────
 //     ./build/examples/mcap_opaque_supplied_schema
-//
-//   It writes two files in the working directory:
-//     mcap_opaque_supplied_schema.plxr   the flat record stream (the canonical capture)
-//     mcap_opaque_supplied_schema.mcap   the MCAP container (the analysis artifact)
-//   and prints the transcode summary (schemas / channels / messages + recovery accounting).
-//
-// ── Open / read / use the MCAP output ──────────────────────────────────────────────────────
-//   Foxglove (the intended consumer):
-//     • Desktop app or the web app at https://studio.foxglove.dev
-//     • File ▸ Open local file…  (or drag mcap_opaque_supplied_schema.mcap onto the window)
-//     • The data channel decodes because the SUPPLIED encoding/schema matches the stored bytes.
-//   The `mcap` CLI (https://github.com/foxglove/mcap — `mcap` command) for a quick look:
-//     mcap info mcap_opaque_supplied_schema.mcap          # summary: channels, schemas, counts
-//     mcap list channels mcap_opaque_supplied_schema.mcap # the channel ▸ schema mapping
-//     mcap cat mcap_opaque_supplied_schema.mcap --json    # every message as JSON
+// It writes mcap_opaque_supplied_schema.{plxr,mcap} and prints the transcode summary; the data
+// channel decodes because the SUPPLIED encoding/schema matches the stored bytes.
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
@@ -75,8 +52,7 @@ using plexus::inproc::inproc_policy;
 using transport_t = plexus::inproc::inproc_transport<>;
 using node_t      = plexus::node<inproc_policy, transport_t>;
 
-// A finished byte blob — plexus's store sees only opaque bytes. The codec is a pure passthrough.
-struct opaque_blob
+struct opaque_blob // a finished byte blob — plexus's store sees only opaque bytes
 {
     std::vector<std::byte> bytes;
 };
@@ -100,8 +76,7 @@ struct blob_codec
     plexus::type_identity type_info() const { return {0x0BACED01u, "opaque_blob"}; }
 };
 
-// The exact encoding the supplied bytes satisfy. The blob the producer builds below IS valid
-// JSON matching this schema — declaring anything the bytes do not satisfy would be dishonest.
+// The exact encoding the supplied bytes satisfy (the blob built below IS valid JSON for it).
 constexpr std::string_view k_blob_jsonschema =
         R"({"type":"object","title":"opaque_blob","properties":{)"
         R"("seq":{"type":"integer"},"reading":{"type":"integer"}}})";
@@ -162,8 +137,8 @@ int main()
         pub_node.listen({"inproc", "host-a:5000"});
         ex.drain();
 
-        // Supply the encoding + schema the opaque bytes actually satisfy. plexus copies this
-        // verbatim into the stream preamble; the transcode labels the data channel from it.
+        // Supply the encoding + schema the opaque bytes satisfy (copied verbatim into the
+        // preamble).
         plexus::recorder_options ropts;
         const auto               schema_bytes =
                 std::as_bytes(std::span{k_blob_jsonschema.data(), k_blob_jsonschema.size()});
