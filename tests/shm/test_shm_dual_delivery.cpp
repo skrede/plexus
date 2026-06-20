@@ -1,3 +1,6 @@
+// over-limit: one cohesive dual-delivery cross-process proof; the single end-to-end SHM-ring +
+// wire-loopback round-trip is one pipeline over a shared converged region and reactor bridge,
+// so it cannot split without scattering that shared cross-process pipeline state.
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
 #include "plexus/shm/posix_shm_region_broker.h"

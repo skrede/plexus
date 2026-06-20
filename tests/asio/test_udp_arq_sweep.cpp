@@ -1,3 +1,6 @@
+// over-limit: one cohesive empirical ARQ numeric sweep; the single {loss x window x RTO} grid
+// scenario shares one seeded probabilistic-loss relay harness and its captured result table, so
+// splitting it scatters that shared sweep fixture and the contiguous evidence record.
 // The reliable-ARQ numeric sweep: an EMPIRICAL substantiation of the RTO / window
 // defaults (a numeric choice is recorded from evidence, not picked by feel). It drives
 // the full channel-pair ARQ over a SEEDED probabilistic-loss relay across a grid of

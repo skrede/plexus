@@ -1,3 +1,6 @@
+// over-limit: one cohesive wake-vs-teardown race proof (asan-targeted); the single forked
+// producer signaling at the moment of channel+bridge teardown is one end-to-end pipeline over a
+// shared region and reactor bridge, so it cannot split without scattering that shared state.
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
 #include "plexus/shm/posix_shm_region_broker.h"

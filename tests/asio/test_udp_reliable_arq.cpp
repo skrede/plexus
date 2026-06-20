@@ -1,3 +1,6 @@
+// over-limit: one cohesive selective-repeat ARQ-over-loss matrix; every cell drives the one
+// shared programmable lossy-relay channel-pair fixture (the drop/reorder/duplicate scripting +
+// the window/RTO config), so splitting the cells scatters that shared relay + ARQ fixture state.
 // The reliable-data ARQ over loss: the load-bearing beyond-parity proof. A
 // selective-repeat sliding window + a head-of-line reorder receiver + an adaptive RTO
 // (Karn) must deliver every reliable payload EXACTLY ONCE and IN PUBLISH ORDER over a

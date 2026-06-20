@@ -1,3 +1,6 @@
+// over-limit: one cohesive borrowed-executor lifecycle gate; the three assertion families
+// all drive the one shared host struct that owns the executor/discovery/transports and embeds
+// the borrowing nodes, so splitting them scatters that shared single-substrate fixture.
 // The borrowed-executor named gate, shaped like the vagus integration bridge: a host
 // struct OWNS the whole substrate — the executor, the discovery service, and the
 // transports — and embeds two plexus::node instances that BORROW all three. Nothing

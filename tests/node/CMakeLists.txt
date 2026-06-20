@@ -52,7 +52,7 @@ target_link_libraries(test_node_construction PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_node_construction TEST_PREFIX "node.")
 
-add_executable(test_node_discovery test_node_discovery.cpp)
+add_executable(test_node_discovery test_node_discovery.cpp test_node_discovery_awareness.cpp)
 target_link_libraries(test_node_discovery PRIVATE
     plexus::plexus
     plexus::inproc
@@ -61,14 +61,14 @@ catch_discover_tests(test_node_discovery TEST_PREFIX "node.")
 
 # The pub/sub endpoint handles: move-only RAII semantics + ctor-canonical registration,
 # and the end-to-end bytes family including the standing-demand fan.
-add_executable(test_handles test_handles.cpp)
+add_executable(test_handles test_handles.cpp test_handles_retire.cpp)
 target_link_libraries(test_handles PRIVATE
     plexus::plexus
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_handles TEST_PREFIX "node.")
 
-add_executable(test_bytes_pubsub test_bytes_pubsub.cpp)
+add_executable(test_bytes_pubsub test_bytes_pubsub.cpp test_bytes_pubsub_fan.cpp)
 target_link_libraries(test_bytes_pubsub PRIVATE
     plexus::plexus
     plexus::inproc
@@ -78,7 +78,7 @@ catch_discover_tests(test_bytes_pubsub TEST_PREFIX "node.")
 # The call family (caller/procedure handles): the byte-identical round-trip, the
 # double-serve refusal and retire-to-no_handler cases, and the no-provider errc proof
 # (posted, never inline; never hangs).
-add_executable(test_call_family test_call_family.cpp)
+add_executable(test_call_family test_call_family.cpp test_call_family_spelling.cpp)
 target_compile_definitions(test_call_family PRIVATE PLEXUS_HAS_FAMILY_SPELLING)
 target_link_libraries(test_call_family PRIVATE
     plexus::plexus
@@ -96,7 +96,7 @@ catch_discover_tests(test_caller_errc TEST_PREFIX "node.")
 # The typed request/response family: a typed caller/procedure round-trip through real
 # encode/decode, the provider-errc value carriage under provider_category, the
 # request/reply decode-failure legs, and the bytes-procedure interop fallback.
-add_executable(test_typed_reqres test_typed_reqres.cpp)
+add_executable(test_typed_reqres test_typed_reqres.cpp test_typed_reqres_interop.cpp)
 target_compile_definitions(test_typed_reqres PRIVATE PLEXUS_HAS_FAMILY_SPELLING)
 target_link_libraries(test_typed_reqres PRIVATE
     plexus::plexus
@@ -144,7 +144,7 @@ catch_discover_tests(test_borrowed_executor_bridge TEST_PREFIX "node.")
 
 # The fixed-slot loan pool backing the typed publisher: borrow/publish lifecycle,
 # alloc-free slot reuse, and graceful counted exhaustion.
-add_executable(test_loan_pool test_loan_pool.cpp)
+add_executable(test_loan_pool test_loan_pool.cpp test_loan_pool_move.cpp)
 target_link_libraries(test_loan_pool PRIVATE
     plexus::plexus
     plexus::inproc
@@ -153,7 +153,7 @@ catch_discover_tests(test_loan_pool TEST_PREFIX "node.")
 
 # The typed pub/sub family end to end: the zero-serialization fast path (address witness,
 # zero encodes), the byte fallback, the decode-failure knobs, and the strict posture.
-add_executable(test_typed_pubsub test_typed_pubsub.cpp)
+add_executable(test_typed_pubsub test_typed_pubsub.cpp test_typed_pubsub_posture.cpp)
 target_link_libraries(test_typed_pubsub PRIVATE
     plexus::plexus
     plexus::inproc
@@ -162,7 +162,8 @@ catch_discover_tests(test_typed_pubsub TEST_PREFIX "node.")
 
 # The typed↔bytes interop matrix: every boundary cell between a typed and a bytes endpoint
 # (and a declared-mismatch typed pair) asserting its observable outcome, never UB.
-add_executable(test_typed_interop_matrix test_typed_interop_matrix.cpp)
+add_executable(test_typed_interop_matrix test_typed_interop_matrix.cpp
+    test_typed_interop_matrix_refusal.cpp)
 target_link_libraries(test_typed_interop_matrix PRIVATE
     plexus::plexus
     plexus::inproc

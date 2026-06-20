@@ -1,3 +1,7 @@
+// over-limit: one cohesive large-message live-mux round-trip matrix; the per-notifier-variant
+// cells share the one cross-process publisher/subscriber mux-acquire harness, and that shared
+// fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs without
+// scattering that one harness into over-budget shells.
 #include "plexus/shm/futex_notifier_primitive.h"
 #include "plexus/shm/posix_shm_region_broker.h"
 #include "plexus/shm/region_handle.h"

@@ -1,3 +1,7 @@
+// over-limit: one cohesive mux-join selection matrix; the member-satisfies / prefer-hook /
+// fallback cells share the one stub-broker mux-composition harness, and that shared fixture
+// preamble alone exceeds the file ceiling, so the cells cannot split across TUs without
+// scattering that one harness into over-budget shells.
 #include "plexus/io/shm/region_broker_concept.h"
 #include "plexus/io/shm/ring_layout.h"
 #include "plexus/io/shm/same_host.h"

@@ -1,3 +1,7 @@
+// over-limit: one cohesive topic-registry lifecycle matrix; the acquire/release/teardown cells
+// share the one stub-broker + recording-notifier registry harness, and that shared fixture
+// preamble alone exceeds the file ceiling, so the cells cannot split across TUs without
+// scattering that one harness into over-budget shells.
 #include "plexus/io/shm/loan_status.h"
 #include "plexus/io/shm/region_broker_concept.h"
 #include "plexus/io/shm/ring_layout.h"

@@ -1,3 +1,6 @@
+// over-limit: one cohesive ring-memory-cost query matrix; the cells share the one recording
+// stub-broker registry harness that captures the requested slab sizes, so splitting them
+// scatters that shared recording-broker fixture into near-empty per-cell shells.
 #include "plexus/io/shm/loan_status.h"
 #include "plexus/io/shm/region_broker_concept.h"
 #include "plexus/io/shm/ring_geometry.h"
