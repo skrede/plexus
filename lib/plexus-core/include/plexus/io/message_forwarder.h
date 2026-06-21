@@ -293,6 +293,7 @@ public:
     // addrefs through the bus, and this verb releases the caller's reference once after the fan
     // loop — so the slot is balanced on every path.
     template<typename EncodeFn>
+    // NOLINTNEXTLINE(readability-function-size)
     void publish_object(std::string_view fqn, object_carrier carrier, EncodeFn &&encode,
                         std::uint64_t session_id = 0)
     {

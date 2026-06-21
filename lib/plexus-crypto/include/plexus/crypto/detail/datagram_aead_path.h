@@ -86,6 +86,7 @@ bool candidate_key_for(Ch &c, std::uint8_t epoch_byte, aead_key &out, bool &adva
 }
 
 template<typename Ch>
+// NOLINTNEXTLINE(readability-function-size)
 void datagram_on_lower_data(Ch &c, std::span<const std::byte> bytes)
 {
     if(bytes.size() < Ch::k_frame_overhead)

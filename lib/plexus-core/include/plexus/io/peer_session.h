@@ -107,6 +107,7 @@ public:
     // Wire the receive path, register the router consumers, arm the handshake timer, and
     // (for an outbound peer) begin the handshake. Two paired sessions both begin outbound:
     // the simultaneous-connect path completes on both ends.
+    // NOLINTNEXTLINE(readability-function-size)
     void start()
     {
         m_torn_down                 = false;

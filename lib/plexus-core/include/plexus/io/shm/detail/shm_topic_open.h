@@ -70,6 +70,7 @@ shm::acquire_result topic_join(Registry &r, Entry &e, const std::string &ctrl_na
 // co-host peer already mapped this companion ring) — it attaches FIRST when the region exists,
 // and mints only when none does yet, so the peer arriving second JOINs and both converge.
 template<typename Registry, typename Entry>
+// NOLINTNEXTLINE(readability-function-size)
 shm::acquire_result topic_open_ring(Registry &r, Entry &e, const std::string &fqn,
                                     shm::ring_direction direction, std::uint32_t max_payload,
                                     shm::ring_geometry_mode mode, std::uint32_t consumer_capacity,

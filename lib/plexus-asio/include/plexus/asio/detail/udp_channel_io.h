@@ -221,6 +221,7 @@ void drain_backpressure(Ch &c)
 // a kind=1 data segment, an ack wraps a kind=1 ack frame, an in-order payload posts on_data, and
 // exhaustion surfaces a connection-fatal error.
 template<typename Ch>
+// NOLINTNEXTLINE(readability-function-size)
 void ensure_arq(Ch &c)
 {
     if(c.m_arq)

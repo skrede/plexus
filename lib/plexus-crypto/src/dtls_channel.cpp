@@ -29,6 +29,7 @@ int to_int(std::size_t v) noexcept { return static_cast<int>(v); }
 
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
                            ::asio::ip::udp::endpoint dest, const tls_credential &cred,
                            io::security::cookie_secret &cookie_state, role r,
@@ -222,6 +223,7 @@ void dtls_channel::drain_outbound()
     }
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 void dtls_channel::drain_inbound()
 {
     if(!m_ssl)
@@ -278,6 +280,7 @@ void dtls_channel::drain_inbound()
     try_complete();
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 void dtls_channel::try_complete()
 {
     if(m_complete_fired || !m_ssl || !::SSL_is_init_finished(m_ssl))

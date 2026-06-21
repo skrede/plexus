@@ -30,6 +30,10 @@ if(PLEXUS_BUILD_TESTS)
     # not depend on PLEXUS_ENABLE_SHM_BACKEND.
     include(${PROJECT_SOURCE_DIR}/cmake/shm_leak_gate.cmake)
     include(${PROJECT_SOURCE_DIR}/cmake/size_gate.cmake)
+    # The function-size + cognitive-complexity gate reaches the header-only
+    # template bodies through the test TUs that instantiate them, so it lives
+    # behind PLEXUS_BUILD_TESTS with the others and needs the compile DB.
+    include(${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
 
     # Auto-discover each per-area unit-test fragment (excluding fuzz, gated
     # above). New test areas register by adding their own fragment.

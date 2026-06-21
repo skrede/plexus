@@ -31,6 +31,7 @@ std::unique_ptr<polymorphic_byte_channel> mux_wrap(std::unique_ptr<C> ch)
 // Install one member's four completion sinks, each forwarding the wrapped channel / edge up to the
 // mux's own erased sink (a no-op until the mux owner installs it). RELOCATION of wire_member.
 template<typename Mux, typename M>
+// NOLINTNEXTLINE(readability-function-size)
 void wire_member(Mux &mux, M &m)
 {
     using C = typename M::channel_type;
