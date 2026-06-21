@@ -111,21 +111,17 @@ public:
     {
         if(m_engine == nullptr)
             return;
+#if defined(__cpp_exceptions)
         try
         {
-            m_engine->remove_observer(*m_sink);
-            if(m_block)
-            {
-                m_block->draining = false;
-                while(m_block->pump())
-                {
-                }
-                std::visit([](auto &m) { m.flush(); }, m_block->machinery);
-            }
+            drain_to_sink();
         }
         catch(...)
         {
         }
+#else
+        drain_to_sink();
+#endif
     }
 
     // The FDR surface (pre_buffer mode): trigger() freezes the held window (alloc-free); in
@@ -156,6 +152,21 @@ public:
     }
 
 private:
+    // The teardown drain step: deregister the sink FIRST, then drain the ring out to it and flush.
+    // Called from the dtor, wrapped under exceptions and run bare under -fno-exceptions.
+    void drain_to_sink()
+    {
+        m_engine->remove_observer(*m_sink);
+        if(m_block)
+        {
+            m_block->draining = false;
+            while(m_block->pump())
+            {
+            }
+            std::visit([](auto &m) { m.flush(); }, m_block->machinery);
+        }
+    }
+
     io::recording::flat_recorder &flat()
     {
         return std::get<io::recording::flat_recorder>(m_block->machinery);

@@ -262,6 +262,7 @@ public:
     // outlive the drain. A dtor must not throw — the post is wrapped.
     ~node()
     {
+#if defined(__cpp_exceptions)
         try
         {
             m_engine.remove_observer(m_peer_watch);
@@ -270,6 +271,10 @@ public:
         catch(...)
         {
         }
+#else
+        m_engine.remove_observer(m_peer_watch);
+        m_engine.post_participant_teardown({io::participant_edge::destroyed, m_id});
+#endif
     }
 
     // Bind, then append this transport's {scheme, port} to the live card and re-advertise.

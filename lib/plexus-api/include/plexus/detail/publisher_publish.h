@@ -17,14 +17,19 @@ namespace plexus::detail {
 // any exception the posted edge raises (the posted-edge-from-dtor pattern, also in ~node).
 inline void retire_publisher_quiet(const io::endpoint_seam &seam, const std::string &fqn) noexcept
 {
-    if(seam.ctx != nullptr)
-        try
-        {
-            seam.retire_publisher(seam.ctx, fqn);
-        }
-        catch(...)
-        {
-        }
+    if(seam.ctx == nullptr)
+        return;
+#if defined(__cpp_exceptions)
+    try
+    {
+        seam.retire_publisher(seam.ctx, fqn);
+    }
+    catch(...)
+    {
+    }
+#else
+    seam.retire_publisher(seam.ctx, fqn);
+#endif
 }
 
 // Encode one value into the publisher's reused scratch and return a span into it (valid for the
