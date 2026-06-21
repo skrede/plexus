@@ -7,9 +7,10 @@
 # unit that is no longer over-limit is itself a violation (stale exceptions are
 # not silently tolerated). This file is self-dispatching: included from the
 # build it registers an ALL custom target that re-invokes it via -P
-# (cross-platform, no bash); run with -DSIZE_GATE_SCAN it performs the scan.
-# Advisory while SIZE_GATE_FATAL is OFF (WARNING per violation, build succeeds);
-# with -DSIZE_GATE_FATAL=ON each violation is a FATAL_ERROR.
+# (cross-platform, no bash) with SIZE_GATE_FATAL=ON, so a violation fails the
+# build; run with -DSIZE_GATE_SCAN it performs the scan. A direct -P invocation
+# without -DSIZE_GATE_FATAL=ON stays advisory (WARNING per violation) for
+# probing the tree by hand.
 
 set(SIZE_GATE_LIMIT 200)
 
@@ -17,9 +18,10 @@ if(NOT SIZE_GATE_SCAN)
     add_custom_target(size_gate ALL
         COMMAND ${CMAKE_COMMAND}
                 -DSIZE_GATE_SCAN=ON
+                -DSIZE_GATE_FATAL=ON
                 -DSIZE_GATE_ROOT=${PROJECT_SOURCE_DIR}
                 -P ${CMAKE_CURRENT_LIST_FILE}
-        COMMENT "Asserting source units stay within the file-size ceiling (advisory)"
+        COMMENT "Asserting source units stay within the file-size ceiling"
         VERBATIM)
     return()
 endif()

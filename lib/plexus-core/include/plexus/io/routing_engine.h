@@ -442,6 +442,7 @@ private:
     // Fans over a SNAPSHOT of m_observers so a callback that (un)registers an observer mutates
     // the live list without invalidating the in-flight iteration: a same-turn remove is honored,
     // a same-turn add takes effect on the next posted edge.
+    // NOLINTNEXTLINE(readability-function-size)
     void dispatch_lifecycle(const lifecycle_event &ev)
     {
         // Register at READY, NOT connected: the subscribe loop has drained by ready, so the

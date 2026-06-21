@@ -653,6 +653,7 @@ private:
     // captureless static lambda (a plain fn-ptr, zero alloc) recovering the node and forwarding
     // to the private *_seam VERBATIM, so the concrete Policy stays inside those bodies. The
     // inbound delivery path never crosses here.
+    // NOLINTNEXTLINE(readability-function-size)
     io::endpoint_seam endpoint_seam_for() noexcept
     {
         io::endpoint_seam s{};

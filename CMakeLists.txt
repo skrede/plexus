@@ -70,6 +70,10 @@ install(FILES
 
 if(PLEXUS_BUILD_TESTS OR PLEXUS_BUILD_FUZZ_TESTS)
     enable_testing()
+    # The function-size gate (tests/CMakeLists.txt) drives run-clang-tidy against
+    # this tree's compile DB, so the DB must be emitted whenever the test suite
+    # configures it; the gate fails closed if it is missing.
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
     add_subdirectory(tests)
 endif()
 

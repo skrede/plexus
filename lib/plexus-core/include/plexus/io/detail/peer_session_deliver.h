@@ -34,6 +34,7 @@ message_info assemble_message_info(Session &s, const wire::frame_header &hdr)
 // node_id half is m_ctx.peer_id — the PINNED session peer — never a node_id from the frame.
 // None set = silent drop. RELOCATION of the session body (a friend).
 template<typename Session>
+// NOLINTNEXTLINE(readability-function-size)
 void deliver_session_data(Session &s, const wire::frame_header &hdr,
                           std::span<const std::byte> inner)
 {

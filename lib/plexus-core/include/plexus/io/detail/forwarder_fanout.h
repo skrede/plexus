@@ -24,6 +24,7 @@ namespace plexus::io::detail {
 // the forwarder body — the forwarder still owns the registry/endpoint/global-default; this carries
 // the gate out (it is a friend, so it reads them through the forwarder reference).
 template<typename Forwarder, typename Peer>
+// NOLINTNEXTLINE(readability-function-size)
 bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn,
                        std::optional<std::uint64_t> subscriber_type_id,
                        const subscriber_qos        &sub_qos)

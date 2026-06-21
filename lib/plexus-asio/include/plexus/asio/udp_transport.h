@@ -165,6 +165,7 @@ public:
     // the ARQ closures so the engine correlates the completion by endpoint. The scheme
     // selects the channel mode: "udpr" -> the reliable-datagram ARQ class, anything else
     // -> best_effort. The mode is declared in the handshake so the acceptor is symmetric.
+    // NOLINTNEXTLINE(readability-function-size)
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;

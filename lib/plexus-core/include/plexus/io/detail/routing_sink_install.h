@@ -27,7 +27,12 @@ namespace plexus::io::detail {
 // ctor body — the engine still OWNS every object; this only carries the wiring out of the
 // over-limit ctor. Templated on the engine so it sees the concrete Policy/Transport/Clock and
 // the private member-sink makers it is a friend of.
+// Function over the 25-line ceiling (0 cognitive): one flat sequential wiring of every
+// node-shared sink over the shared engine members; splitting the run into one-shot helpers
+// scatters that wiring with no readability gain (the artificial-purity layer conventions forbid).
+// Registered in EXCEPTIONS.md (function exceptions).
 template<typename Engine>
+// NOLINTNEXTLINE(readability-function-size)
 void install_routing_sinks(Engine &e)
 {
     using policy_type  = typename Engine::policy_type;

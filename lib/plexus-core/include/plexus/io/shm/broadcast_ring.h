@@ -96,6 +96,7 @@ public:
     // cell's sequence to its index per the Vyukov init. cell_count must be a
     // power of two; slot_capacity > 0. The spans must already be sized for the
     // geometry (control_region_bytes / slab_region_bytes).
+    // NOLINTNEXTLINE(readability-function-size)
     static loan_status create(std::span<std::byte> control, std::span<std::byte> slab,
                               std::uint64_t cell_count, std::uint64_t slot_capacity,
                               broadcast_ring &out,
@@ -173,6 +174,7 @@ public:
     // Claims a free cell for a message of `size` bytes under the reliable policy
     // with no consumer gating. size>slot_capacity -> rejected; a free cell won ->
     // ok; ring full -> congested.
+    // NOLINTNEXTLINE(readability-function-size)
     loan_status claim(std::size_t size, claim_result &out) noexcept
     {
         if(size > m_slot_capacity)
@@ -530,6 +532,7 @@ private:
         return loan_status::ok;
     }
 
+    // NOLINTNEXTLINE(readability-function-size)
     loan_status claim_best_effort(std::uint64_t &pos, claim_result &out) noexcept
     {
         for(std::uint64_t skipped = 0;;)

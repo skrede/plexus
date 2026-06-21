@@ -102,6 +102,7 @@ public:
     {
     }
 
+    // NOLINTNEXTLINE(readability-function-size)
     feed_result feed(std::span<const std::byte> data)
     {
         compact();

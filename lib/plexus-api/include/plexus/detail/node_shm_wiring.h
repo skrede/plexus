@@ -75,6 +75,7 @@ io::selection_hook resolve_hook(Transports &...transports)
 // preference hook does). The minted concrete channel is wrapped into the engine's byte_channel
 // before the coordinator retains it. RELOCATION of the node's per-member install body.
 template<typename Engine, typename Member>
+// NOLINTNEXTLINE(readability-function-size)
 void install_same_host_upgrade(Engine &engine, Member &member)
 {
     using engine_channel = typename Engine::channel_type;

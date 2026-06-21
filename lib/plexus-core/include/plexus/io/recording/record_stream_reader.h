@@ -72,6 +72,7 @@ public:
     {
     }
 
+    // NOLINTNEXTLINE(readability-function-size)
     bool read_definitions(stream_definitions &out)
     {
         wire::reader r{m_stream};
@@ -108,6 +109,7 @@ public:
 
     // Scan the data section front-to-back, appending every recovered record to `out` and
     // reporting the recovery accounting. Call read_definitions first.
+    // NOLINTNEXTLINE(readability-function-size)
     recovery_result recover(std::vector<decoded_record> &out)
     {
         recovery_result res;

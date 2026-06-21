@@ -25,6 +25,7 @@ namespace plexus::io::detail {
 // peer's identity. RELOCATION of the session body — it is a friend, so it reaches the
 // router, negotiator, fsm, and forwarders through the session reference.
 template<typename Session>
+// NOLINTNEXTLINE(readability-function-size)
 void register_session_consumers(Session &s)
 {
     s.m_router.on_handshake_req(

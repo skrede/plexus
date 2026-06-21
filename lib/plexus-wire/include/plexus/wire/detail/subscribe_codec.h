@@ -101,6 +101,7 @@ inline std::vector<std::byte> encode_subscribe_request(const subscribe_request &
     return buf;
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 inline std::optional<subscribe_request> decode_subscribe_request(std::span<const std::byte> payload)
 {
     if(payload.size() < detail::subscribe_request_min_size)
@@ -194,7 +195,6 @@ decode_unsubscribe_response(std::span<const std::byte> payload)
             .topic_hash = wire::detail::read_u64(payload.data()),
             .status = static_cast<unsubscribe_status>(wire::detail::read_u8(payload.data() + 8))};
 }
-
 }
 
 #endif

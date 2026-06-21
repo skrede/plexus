@@ -96,6 +96,7 @@ public:
 
     ~unix_listener() { stop(); }
 
+    // NOLINTNEXTLINE(readability-function-size)
     void start(const io::endpoint &bind_ep)
     {
         std::error_code ec;

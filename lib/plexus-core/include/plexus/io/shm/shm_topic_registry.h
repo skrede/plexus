@@ -96,6 +96,7 @@ public:
     // bumps the refcount and returns the same created/attached verdict it minted
     // with. A first acquire mints (or attaches to a peer's) ring of the geometry
     // max_payload sizes (0 -> default).
+    // NOLINTNEXTLINE(readability-function-size)
     acquire_result acquire(const std::string &fqn, ring_direction direction,
                            std::uint32_t      max_payload,
                            ring_geometry_mode mode = ring_geometry_mode::reliable_preserving,
