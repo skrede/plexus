@@ -67,7 +67,7 @@ TEST_CASE("typed reqres: a second local serve on one fqn throws on the typed for
             (typed_procedure{n.b, "rpc",
                              [](const request_t &) -> plexus::expected<response_t, std::error_code>
                              { return response_t{1}; }}),
-            std::logic_error);
+            std::runtime_error);
 }
 
 #ifdef PLEXUS_HAS_FAMILY_SPELLING

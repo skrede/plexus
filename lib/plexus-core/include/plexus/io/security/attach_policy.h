@@ -4,13 +4,13 @@
 #include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/cookie_secret.h"
 #include "plexus/io/security/ct_equal.h"
+#include "plexus/detail/fail_closed.h"
 
 #include <span>
 #include <array>
 #include <vector>
 #include <cstddef>
 #include <utility>
-#include <stdexcept>
 
 namespace plexus::io::security {
 
@@ -53,7 +53,7 @@ public:
     {
         for(const auto &k : m_keys)
             if(k.material.size() < k_min_psk_len)
-                throw std::runtime_error("psk_keystore_policy: key material below minimum length");
+                plexus::detail::fail_closed("psk_keystore_policy: key material below minimum length");
     }
 
     [[nodiscard]] bool decide(const attach_facts &facts) const noexcept override

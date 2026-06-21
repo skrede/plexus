@@ -63,7 +63,7 @@ TEST_CASE("call family: a second local serve on one fqn throws and leaves the fi
             (inproc_procedure{n.b, "rpc",
                               [](std::span<const std::byte>, inproc_procedure::reply_fn &reply)
                               { reply(plexus::wire::rpc_status::success, {}); }}),
-            std::logic_error);
+            std::runtime_error);
 
     // The refused ctor left no side effect: the FIRST handler still answers.
     inproc_caller call{n.a, "rpc"};

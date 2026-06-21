@@ -32,6 +32,7 @@
 #include "plexus/policy.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/fail_closed.h"
 #include "plexus/detail/address_parse.h"
 #include "plexus/detail/node_shm_wiring.h"
 #include "plexus/detail/function_traits.h"
@@ -46,7 +47,6 @@
 #include <utility>
 #include <charconv>
 #include <optional>
-#include <stdexcept>
 #include <algorithm>
 #include <functional>
 #include <type_traits>
@@ -557,7 +557,7 @@ private:
     void serve_procedure_seam(std::string_view fqn, io::handler_fn handler)
     {
         if(std::find(m_served_fqns.begin(), m_served_fqns.end(), fqn) != m_served_fqns.end())
-            throw std::logic_error("plexus: a procedure is already served locally on this fqn");
+            plexus::detail::fail_closed("plexus: a procedure is already served locally on this fqn");
         m_served_fqns.emplace_back(fqn);
         m_engine.procedures().serve(fqn, std::move(handler));
     }

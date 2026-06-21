@@ -3,13 +3,13 @@
 
 #include "plexus/io/security/ct_equal.h"
 #include "plexus/detail/compat.h"
+#include "plexus/detail/fail_closed.h"
 
 #include <span>
 #include <array>
 #include <chrono>
 #include <vector>
 #include <cstddef>
-#include <stdexcept>
 
 namespace plexus::io::security {
 
@@ -68,7 +68,7 @@ public:
             , m_rand(std::move(rand))
     {
         if(!m_rand(m_key) || !m_rand(m_cur) || !m_rand(m_prev))
-            throw std::runtime_error("cookie_secret: rand_fn failed (degraded RNG)");
+            plexus::detail::fail_closed("cookie_secret: rand_fn failed (degraded RNG)");
         m_last_rotate = std::chrono::steady_clock::now();
     }
 
