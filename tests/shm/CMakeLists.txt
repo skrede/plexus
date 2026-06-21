@@ -283,7 +283,10 @@ target_link_libraries(test_shm_congested PRIVATE
     Threads::Threads
     Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_congested TEST_PREFIX "shm.")
+# RUN_SERIAL: the congested-alloc gate asserts a zero delta on the single-TU global operator-new
+# counter; serializing keeps the count immune to the CPU contention of concurrent test processes.
+catch_discover_tests(test_shm_congested TEST_PREFIX "shm."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The demand-driven topic registry (header-only, asio/strand/std::function-free): a
 # stub broker over heap-backed regions + a recording stub notifier prove the

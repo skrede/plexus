@@ -15,7 +15,10 @@ target_link_libraries(test_inproc_policy PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 
-catch_discover_tests(test_inproc_policy TEST_PREFIX "inproc.")
+# RUN_SERIAL: the alloc-counter harness reads the single-TU global operator-new counter;
+# serializing keeps the count immune to the CPU contention of concurrent test processes.
+catch_discover_tests(test_inproc_policy TEST_PREFIX "inproc."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # Object-lane runtime test: process-tier object-handle delivery between channels,
 # FIFO ordering vs byte packets on one pair, and leak-free refcount release on the
