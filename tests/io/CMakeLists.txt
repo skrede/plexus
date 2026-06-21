@@ -79,3 +79,15 @@ catch_discover_tests(test_fragmentation TEST_PREFIX "io.")
 # frag_cnt on the virtual-clock harness, so it additionally links the plexus::testing
 # substrate (still sans-IO — no backend, no socket).
 target_link_libraries(test_reassembler_flat_bound PRIVATE plexus::testing)
+
+# The move_only_function fallback oracle asserts the SBO inline storage allocates zero
+# heap for a small callable, so it includes support/alloc_counter.h (one operator-new
+# override per program) and lives in its own executable, like the wire noalloc gates;
+# tests/ is on the include path for it.
+add_executable(test_move_only_function test_move_only_function.cpp)
+target_link_libraries(test_move_only_function PRIVATE plexus::core Catch2::Catch2WithMain)
+target_include_directories(test_move_only_function PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# RUN_SERIAL: the zero-heap assertion snapshots the single-TU global operator-new counter
+# around the wrap; serializing keeps the count immune to concurrent-process contention.
+catch_discover_tests(test_move_only_function TEST_PREFIX "io."
+    PROPERTIES RUN_SERIAL TRUE)
