@@ -79,7 +79,11 @@ catch_discover_tests(test_stream_inbound TEST_PREFIX "wire.")
 add_executable(test_handshake_codec_noalloc test_handshake_codec_noalloc.cpp)
 target_link_libraries(test_handshake_codec_noalloc PRIVATE plexus::wire Catch2::Catch2WithMain)
 target_include_directories(test_handshake_codec_noalloc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_handshake_codec_noalloc TEST_PREFIX "wire.")
+# RUN_SERIAL: the noalloc gate snapshots the single-TU global operator-new counter across a
+# steady-state loop and asserts a zero delta; serializing keeps the count immune to the CPU
+# contention of concurrent test processes.
+catch_discover_tests(test_handshake_codec_noalloc TEST_PREFIX "wire."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The wire::reader/writer cursor oracle: the field-list round-trip, the fail-closed
 # per-read bound, the over-long-varint delegation, and the writer-into-a-reserved-
@@ -89,4 +93,6 @@ catch_discover_tests(test_handshake_codec_noalloc TEST_PREFIX "wire.")
 add_executable(test_wire_cursor test_wire_cursor.cpp)
 target_link_libraries(test_wire_cursor PRIVATE plexus::wire Catch2::Catch2WithMain)
 target_include_directories(test_wire_cursor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_wire_cursor TEST_PREFIX "wire_cursor.")
+# RUN_SERIAL: no-realloc gate over the single-TU global operator-new counter (see above).
+catch_discover_tests(test_wire_cursor TEST_PREFIX "wire_cursor."
+    PROPERTIES RUN_SERIAL TRUE)

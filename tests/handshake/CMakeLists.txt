@@ -20,7 +20,10 @@ target_link_libraries(test_handshake_fsm PRIVATE
     plexus::wire
     Catch2::Catch2WithMain)
 
-catch_discover_tests(test_handshake_fsm TEST_PREFIX "handshake.")
+# RUN_SERIAL: alloc-count contract over the single-TU global operator-new counter; serializing
+# keeps the count immune to the CPU contention of concurrent test processes.
+catch_discover_tests(test_handshake_fsm TEST_PREFIX "handshake."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The widened-frame codec oracle: the same-host fingerprint rides the handshake as
 # an append-only fixed-width field. Re-pins the round-trip across the fingerprint

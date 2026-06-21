@@ -15,7 +15,11 @@ target_link_libraries(test_hot_path_alloc PRIVATE
 # tests/ is on the include path so the test can pull in support/alloc_counter.h.
 target_include_directories(test_hot_path_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_hot_path_alloc TEST_PREFIX "integration.")
+# RUN_SERIAL: the alloc gate snapshots the single-TU global operator-new counter across a
+# steady-state loop and asserts a zero delta. Run concurrently with other test processes,
+# CPU contention can perturb the measurement window; serializing keeps the count immune.
+catch_discover_tests(test_hot_path_alloc TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The typed in-process fast-path alloc gate: a warmed steady-state borrow->publish->drain
 # loop over the node facade allocates zero (the zero-serialization lane), with a forced-
@@ -29,7 +33,9 @@ target_link_libraries(test_typed_inproc_alloc PRIVATE
     Catch2::Catch2WithMain)
 target_include_directories(test_typed_inproc_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_typed_inproc_alloc TEST_PREFIX "integration.")
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_typed_inproc_alloc TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The typed value_logger: the codec decodes one topic at the handle, a projection (or the
 # operator<< floor) formats CSV/JSON-Lines/text into a reused buffer. The alloc-gate
@@ -42,7 +48,9 @@ target_link_libraries(test_value_logger PRIVATE
     Catch2::Catch2WithMain)
 target_include_directories(test_value_logger PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_value_logger TEST_PREFIX "integration.")
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_value_logger TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The recorder numeric-defaults chosen-cell assertion: the recorded-sweep precedent
 # (tests/crypto/test_rekey_threshold_sweep) pinned for the recorder ring budget. Drives a
@@ -223,7 +231,9 @@ target_link_libraries(test_reconnect_inproc PRIVATE
     Catch2::Catch2WithMain)
 target_include_directories(test_reconnect_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_reconnect_inproc TEST_PREFIX "integration.")
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_reconnect_inproc TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The reconnect-survives-observer oracle on the virtual clock: an observer installed
 # once on a node still receives the post-reconnect lifecycle edge after a forced
@@ -545,7 +555,9 @@ target_link_libraries(test_byte_ring PRIVATE
 target_include_directories(test_byte_ring PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_byte_ring TEST_PREFIX "integration.")
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_byte_ring TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The flat record-stream format oracle: the canonical encoding round-trips through the
 # reader (mixed categories, a payload sample byte-identical with no codec in the path),
@@ -667,7 +679,9 @@ target_link_libraries(test_recorder_capture PRIVATE
 target_include_directories(test_recorder_capture PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_recorder_capture TEST_PREFIX "integration.")
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_recorder_capture TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The recorder-attached alloc gate: with a recorder draining, the steady-state push ->
 # encode -> ring -> drain path allocates ZERO after attach (grown-once ring + reused encode
@@ -683,7 +697,9 @@ target_link_libraries(test_recorder_attached_alloc PRIVATE
 target_include_directories(test_recorder_attached_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_recorder_attached_alloc TEST_PREFIX "integration.")
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_recorder_attached_alloc TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
 
 # The host-identity accessor oracle: the authenticated peer's host identity is
 # read from the security step (SPKI-derived for TLS, attach-bound for PSK), never a
