@@ -1053,6 +1053,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         util)
     catch_discover_tests(test_serial_pty_roundtrip TEST_PREFIX "integration.")
 
+    # The SER-02 corruption->resync recovery oracle over the same openpty pair: corrupt bytes
+    # (a flipped byte AND a dropped byte) are written RAW onto the master fd, and the slave-end
+    # serial_channel's CRC decorator must drop them, fire the non-fatal on_frame_dropped seam,
+    # magic-resync, and still deliver the following valid frame — with on_protocol_close /
+    # on_closed NEVER fired. Each leg loops in-body; the ctest invocation is re-run >=3 process
+    # runs. Links util for openpty(3).
+    add_executable(test_serial_resync test_serial_resync.cpp)
+    target_link_libraries(test_serial_resync PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    catch_discover_tests(test_serial_resync TEST_PREFIX "integration.")
+
     # The saturating-publisher memory-bound gate: a producer outrunning a never-reading
     # peer drives each stream channel's bounded write queue to its cap and no further — the
     # byte budget is the structural memory bound. Looped per tcp/unix transport; re-run >=3
