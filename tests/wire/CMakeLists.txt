@@ -24,6 +24,17 @@ add_executable(test_frame_reassembler
 target_link_libraries(test_frame_reassembler PRIVATE plexus::wire Catch2::Catch2WithMain)
 catch_discover_tests(test_frame_reassembler TEST_PREFIX "wire.")
 
+# The serial CRC32C trailer + magic-resync decorator oracle. crc_serial.h pulls
+# close_cause / move_only_function from stream_inbound.h (which lives in plexus::wire
+# but includes the core compat shim), so this TU additionally links plexus::core for
+# that include path — the rest of the wire oracle needs only plexus::wire.
+add_executable(test_crc_serial_decorator test_crc_serial_decorator.cpp)
+target_link_libraries(test_crc_serial_decorator PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_crc_serial_decorator TEST_PREFIX "wire.")
+
 # The codec parity oracle's scenario clusters (header/data/subscribe/rpc/handshake)
 # compile into the one test_wire_codec binary so catch_discover_tests enumerates the
 # identical set across the split layout.

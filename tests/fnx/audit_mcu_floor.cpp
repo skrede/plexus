@@ -22,6 +22,7 @@
 #include "plexus/io/security/cookie_secret.h"
 #include "plexus/io/security/attach_policy.h"
 
+#include "plexus/wire/crc_serial.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame_reassembler.h"
 #include "plexus/wire/topic_hash.h"
@@ -36,6 +37,7 @@
 
 #include "plexus/node_id.h"
 
+#include <span>
 #include <chrono>
 #include <cstddef>
 #include <optional>
@@ -81,5 +83,13 @@ int main()
     (void)bounded.lookup(self);
     (void)bounded.contains(self);
     bounded.forget(self);
+
+    // Drive the serial CRC decorator's inbound scan/verify path so its member bodies are
+    // instantiated and compiled on the -fno-exceptions floor (Phase 59 reuses it on the MCU).
+    plexus::wire::crc_serial_inbound dec;
+    dec.on_match([](std::span<const std::byte>) {});
+    dec.on_drop([](plexus::wire::close_cause) {});
+    const std::byte probe[]{std::byte{0x56}, std::byte{0x50}};
+    dec.feed(probe);
     return 0;
 }

@@ -26,7 +26,10 @@ enum class close_cause : std::uint8_t
     invalid_magic,
     payload_too_large,
     buffer_overflow,
-    no_progress_timeout
+    no_progress_timeout,
+    // Append-only; raised ONLY by the serial CRC decorator. The ONE non-fatal cause
+    // (drop+resync), surfaced through a SEPARATE on_frame_dropped seam, never on_protocol_close.
+    crc_mismatch
 };
 
 inline close_cause to_close_cause(feed_error error)
