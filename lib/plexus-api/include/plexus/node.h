@@ -208,8 +208,6 @@ public:
             , m_logger(resolve_logger(opts))
             , m_service_name(opts.name.empty() ? io::node_name_of(id) : opts.name)
             , m_max_message_bytes(opts.max_message_bytes)
-            , m_shm_geometry(opts.shm_geometry)
-            , m_max_ring_slab_bytes(opts.max_ring_slab_bytes)
             , m_wire_crypto_position(opts.wire.position)
             // The leaves are BORROWED three ways and never consumed (mux glue, resolve_hook's
             // by-ref capture, engine_leaf's re-read), so a future edit must NOT move into the mux
@@ -234,11 +232,10 @@ public:
         // browse to awareness. Synchronous in the ctor turn (the set-before-listen contract).
         advertise_card();
         m_disc.browse([this](const discovery::service_info &peer) { note_from_card(peer); });
-        // Bound every same-host ring this node mints. A composition with no shm member is a no-op.
-        apply_shm_slab_ceiling(m_max_ring_slab_bytes);
-        // Pass the upgrade policy through and install the shm mint gate when one exists; a
-        // composition with no shm member installs no gate (inert).
-        install_upgrade_coordinator(opts.upgrade_policy);
+        // Source the upgrade policy from the shm member (which owns its default + ceiling) and
+        // install the shm mint gate when one exists; a composition with no shm member installs no
+        // gate (inert). The per-ring slab ceiling already defaults on the member's registry.
+        install_upgrade_coordinator();
         // The off default selects nothing, so a node that declares no recording QoS stays inert.
         m_engine.capture().set_default(opts.capture.to_rule());
         m_engine.post_participant({io::participant_edge::created, m_id});
@@ -410,7 +407,7 @@ private:
         // Thread the subscriber's own hint (the bilateral OR) and provision a co-host
         // subscriber-only default-geometry ring through the SAME path the publisher uses.
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
-        provision_same_host_ring(fqn, subscriber_effective_bytes(qos), m_shm_geometry);
+        provision_same_host_ring(fqn, subscriber_effective_bytes(qos), std::nullopt);
         m_engine.post_endpoint(
                 fqn,
                 {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
@@ -454,11 +451,11 @@ private:
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.post_endpoint(
                 fqn, {io::endpoint_edge::publisher_declared, wire::fqn_topic_hash(fqn), type_id});
-        // Resolution order: per-topic ?: node-default ?: shipped. Producer-side same-host-local,
-        // never wire-advertised, never RxO.
-        const io::shm::shm_geometry geom            = shm_geometry.value_or(m_shm_geometry);
-        const std::size_t           effective_bytes = io::effective_max(qos, m_max_message_bytes);
-        provision_same_host_ring(fqn, effective_bytes, geom);
+        // Resolution order: per-topic ?: the shm member's own default ?: shipped. Producer-side
+        // same-host-local, never wire-advertised, never RxO. An absent per-topic override defers to
+        // each shm member's default_geometry().
+        const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
+        provision_same_host_ring(fqn, effective_bytes, shm_geometry);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
     }
 
@@ -472,12 +469,16 @@ private:
     }
 
     // Record the topic's effective size + resolved geometry on the shm member, keyed by fqn,
-    // BEFORE the dial/listen mints the ring. A composition with no shm member is a no-op.
+    // BEFORE the dial/listen mints the ring. A composition with no shm member is a no-op. An absent
+    // per-topic override resolves to each shm member's OWN default_geometry() (the member, not
+    // node_options, owns the same-host ring default).
     void provision_same_host_ring(std::string_view fqn, std::size_t effective_bytes,
-                                  const io::shm::shm_geometry &geom)
+                                  std::optional<io::shm::shm_geometry> geom)
     {
         std::string key{fqn};
-        for_each_shm_member([&](auto &m) { m.set_topic_geometry(key, effective_bytes, geom); });
+        for_each_shm_member([&](auto &m)
+                            { m.set_topic_geometry(key, effective_bytes,
+                                                   geom.value_or(m.default_geometry())); });
     }
 
     // A subscriber-only ring sizes to the subscriber's requested per-message max, else the node
@@ -490,17 +491,17 @@ private:
                 : m_max_message_bytes;
     }
 
-    void apply_shm_slab_ceiling(std::uint64_t bytes)
+    // Source the upgrade policy from the shm member (it owns the default) and, when an shm member
+    // exists, install its companion-ring MINT + RECEIVE gates (relocated to
+    // detail::install_same_host_upgrade). No shm member = inert (no gate, no policy installed).
+    void install_upgrade_coordinator()
     {
-        for_each_shm_member([&](auto &m) { m.set_max_ring_slab_bytes(bytes); });
-    }
-
-    // Pass the upgrade policy through and, when an shm member exists, install its companion-ring
-    // MINT + RECEIVE gates (relocated to detail::install_same_host_upgrade). No shm member = inert.
-    void install_upgrade_coordinator(upgrade_policy_fn policy)
-    {
-        m_engine.on_upgrade_policy(policy);
-        for_each_shm_member([this](auto &m) { detail::install_same_host_upgrade(m_engine, m); });
+        for_each_shm_member(
+                [this](auto &m)
+                {
+                    m_engine.on_upgrade_policy(m.upgrade_policy());
+                    detail::install_same_host_upgrade(m_engine, m);
+                });
     }
 
     // Apply fn to the shm member of the engine leaf, if one exists (the single borrowed transport
@@ -769,11 +770,9 @@ private:
     std::string                                 m_host;
     std::vector<discovery::listening_transport> m_listens;
 
-    // The node-level size + same-host ring defaults (per-topic ?: these ?: shipped constant) the
-    // declare path resolves the effective geometry against. Producer-side only.
-    std::size_t           m_max_message_bytes;
-    io::shm::shm_geometry m_shm_geometry;
-    std::uint64_t         m_max_ring_slab_bytes;
+    // The node-level per-message size default the declare path resolves the effective geometry
+    // against. The same-host ring geometry + slab-ceiling defaults live on the shm member itself.
+    std::size_t m_max_message_bytes;
 
     // Retained from node_options.wire so make_recorder can stamp it into the recorder's stream
     // preamble (a recording-only fact, never on the live wire).
