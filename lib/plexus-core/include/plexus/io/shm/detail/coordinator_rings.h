@@ -16,7 +16,7 @@
 
 // These live in plexus::io::detail (NOT a new plexus::io::shm::detail namespace): introducing the
 // latter would shadow the bare detail:: lookups that sibling io/shm headers resolve to io::detail
-// (the io::detail-shadowing hazard). The medium_coordinator reaches them by fall-through.
+// (the io::detail-shadowing hazard). The upgrade_coordinator reaches them by fall-through.
 namespace plexus::io::detail {
 
 // One held companion lane for a (peer, fqn). Exactly one lane is engaged per pair — the up-edge

@@ -10,17 +10,17 @@
 #include <cstddef>
 #include <utility>
 
-namespace plexus::io::shm {
+namespace plexus::io {
 
-// The same-host preference hook: prefer the shared-memory candidate when the pair is
-// SHM-eligible AND the ring acquire succeeds, else fall back to the AF_UNIX candidate. This is
-// the FIRST case where a tier (local) resolves to >1 candidate, and it is NOT a pure positional
-// order: it depends on the RUNTIME ring-acquire success (a forced broker failure must fall back
-// to the stream). The hook reads the per-candidate shm_eligible flag, then consults the injected
+// The same-medium preference hook: prefer the upgrade-capable candidate when the pair is
+// upgrade-eligible AND the medium acquire succeeds, else fall back to the AF_UNIX candidate. This
+// is the FIRST case where a tier (local) resolves to >1 candidate, and it is NOT a pure positional
+// order: it depends on the RUNTIME acquire success (a forced broker failure must fall back to the
+// stream). The hook reads the per-candidate shm_eligible flag, then consults the injected
 // can_acquire probe (captured by move-only function so the erased hook stays decoupled from the
 // concrete member type). The probe captures the member by reference; the member outlives the mux.
 template<typename Member>
-[[nodiscard]] inline io::selection_hook prefer_shm_hook(Member &member)
+[[nodiscard]] inline io::selection_hook prefer_upgradeable_hook(Member &member)
 {
     plexus::detail::move_only_function<bool(const endpoint &)> can_acquire =
             [&member](const endpoint &ep) { return member.can_acquire(ep); };

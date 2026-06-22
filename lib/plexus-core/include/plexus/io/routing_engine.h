@@ -17,7 +17,7 @@
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/peer_session_registry.h"
 #include "plexus/io/session_build_context.h"
-#include "plexus/io/shm/medium_coordinator.h"
+#include "plexus/io/upgrade_coordinator.h"
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_sink_install.h"
@@ -258,7 +258,7 @@ public:
     message_forwarder<Policy>   &messages() noexcept { return m_messages; }
     procedure_forwarder<Policy> &procedures() noexcept { return m_procedures; }
     registry_type               &registry() noexcept { return m_registry; }
-    shm::medium_coordinator<registry_type, channel_type> &coordinator() noexcept
+    upgrade_coordinator<registry_type, channel_type> &coordinator() noexcept
     {
         return m_coordinator;
     }
@@ -274,27 +274,27 @@ public:
     // Installs the send-companion MINT gate into the coordinator — only for an shm-bearing
     // composition. The mint returns the live companion channel + its per-message route inputs.
     void on_upgrade_gate(
-            plexus::detail::move_only_function<shm::companion_mint<channel_type>(std::string_view)>
+            plexus::detail::move_only_function<upgrade_mint<channel_type>(std::string_view)>
                     mint)
     {
         m_coordinator.on_gate(std::move(mint));
     }
 
-    // Installs the RECEIVE-companion gate into the coordinator — only for an shm-bearing
+    // Installs the RECEIVE-companion gate into the coordinator — only for an upgrade-capable
     // composition. The gate attaches the co-host ring as a consumer and routes drained framed
-    // messages through inject_companion_receive to the matching peer session's receive path.
+    // messages through inject_upgrade_receive to the matching peer session's receive path.
     void on_upgrade_receive_gate(plexus::detail::move_only_function<
-                                 shm::companion_receive(std::string_view, std::string_view)>
+                                 upgrade_receive(std::string_view, std::string_view)>
                                          mint)
     {
         m_coordinator.on_receive_gate(std::move(mint));
     }
 
-    // Route a drained companion-ring frame into node_name's receive path — the SAME entry the
+    // Route a drained upgrade-lane frame into node_name's receive path — the SAME entry the
     // wire feeds. Called POSTED (the notifier->executor bridge posts the drain), never inline
     // from a wake. A vanished peer drops the frame. A fitting message reaches the user callback
-    // over SHM exactly once — the send side put it on this lane alone, never the wire.
-    void inject_companion_receive(std::string_view node_name, std::span<const std::byte> frame)
+    // over the upgrade lane exactly once — the send side put it on this lane alone, never the wire.
+    void inject_upgrade_receive(std::string_view node_name, std::span<const std::byte> frame)
     {
         if(session_type *s = m_registry.session_for_name(node_name))
             s->inject_receive(frame);
@@ -499,7 +499,7 @@ private:
     security_fanout                                      m_security_fanout;
     session_build_context<Policy>                        m_build;
     registry_type                                        m_registry;
-    shm::medium_coordinator<registry_type, channel_type> m_coordinator;
+    upgrade_coordinator<registry_type, channel_type>     m_coordinator;
     basic_known_peers<PeerStorage>                       m_known;
     std::vector<observer *>                              m_observers;
     // The single capture-decision point: owns the per-topic selection rules AND the data-path

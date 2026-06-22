@@ -39,8 +39,9 @@ make_all_backends_mux_shm(shm_member &shm, unix_transport &local, asio_transport
                           tls::dtls_transport   &secure_datagram,
                           io::transport_selector selector = {})
 {
-    return all_backends_mux_shm{shm,      local,           remote,   secure,
-                                datagram, secure_datagram, selector, io::shm::prefer_shm_hook(shm)};
+    return all_backends_mux_shm{shm,      local,           remote,  secure,
+                                datagram, secure_datagram, selector,
+                                io::prefer_upgradeable_hook(shm)};
 }
 
 }

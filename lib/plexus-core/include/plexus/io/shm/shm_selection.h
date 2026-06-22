@@ -31,7 +31,7 @@ enum class same_host_medium : std::uint8_t
 // the OR of whatever this side declared with whatever the peer declared (passed in
 // already combined by the caller); EITHER end's hint upgrades BOTH ends, and both
 // independently converge on region_name_for(fqn) with NO wire exchange. The hint
-// only gates whether each side ATTEMPTS the acquire; the medium_coordinator mints
+// only gates whether each side ATTEMPTS the acquire; the upgrade_coordinator mints
 // the companion ring through the shm member (the broker-failure fallback keeps the wire).
 [[nodiscard]] inline same_host_medium select_same_host_medium(host_fingerprint peer,
                                                               host_fingerprint local,

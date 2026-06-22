@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_DETAIL_NODE_SHM_WIRING_H
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 
@@ -37,13 +38,13 @@ std::unique_ptr<EngineChannel> wrap_companion(std::unique_ptr<C> ch)
 }
 
 // Bind the hook over ONE leaf if it exposes the ring acquire probe. The if constexpr is
-// load-bearing: prefer_shm_hook only INSTANTIATES for a can_acquire leaf, so a non-shm leaf
-// (AF_UNIX, TCP) never forces an uncompilable prefer_shm_hook<that-leaf>.
+// load-bearing: prefer_upgradeable_hook only INSTANTIATES for a can_acquire leaf, so a non-shm
+// leaf (AF_UNIX, TCP) never forces an uncompilable prefer_upgradeable_hook<that-leaf>.
 template<typename M>
 void bind_shm_hook(io::selection_hook &hook, M &member)
 {
     if constexpr(node_has_can_acquire<M>)
-        hook = io::shm::prefer_shm_hook(member);
+        hook = io::prefer_upgradeable_hook(member);
 }
 
 // Build the hook over whichever borrowed member exposes the ring acquire probe, capturing it by
@@ -80,7 +81,7 @@ void install_same_host_upgrade(Engine &engine, Member &member)
 {
     using engine_channel = typename Engine::channel_type;
     engine.on_upgrade_gate(
-            [&member](std::string_view fqn) -> io::shm::companion_mint<engine_channel>
+            [&member](std::string_view fqn) -> io::upgrade_mint<engine_channel>
             {
                 const std::string                              key{fqn};
                 std::unique_ptr<typename Member::channel_type> ch = member.mint_companion(key);
@@ -97,13 +98,13 @@ void install_same_host_upgrade(Engine &engine, Member &member)
     // outlives the coordinator). A null handle declines: the subscriber keeps the wire.
     engine.on_upgrade_receive_gate(
             [&member, &engine](std::string_view node_name,
-                               std::string_view fqn) -> io::shm::companion_receive
+                               std::string_view fqn) -> io::upgrade_receive
             {
                 const std::string key{fqn};
                 const std::string peer{node_name};
                 auto              handle = member.mint_receive_companion(
                         key, [&engine, peer](std::span<const std::byte> frame)
-                        { engine.inject_companion_receive(peer, frame); });
+                        { engine.inject_upgrade_receive(peer, frame); });
                 if(!handle)
                     return {};
                 return {[h = std::move(handle)]() mutable { (void)h; }};
