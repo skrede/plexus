@@ -23,6 +23,14 @@ endif()
 # core), so it is guarded on asio alone rather than the asio+mDNS pair above.
 if(TARGET plexus::asio)
     plexus_example(size_envelope_qos plexus::plexus plexus::asio)
+
+    # The host half of the on-device serial slice: it reuses the asio serial transport on the
+    # real /dev/ttyUSB0 link, so it is guarded on asio alone (static discovery, no mDNS). Its
+    # source lives under mcu/, so it is wired with an explicit add_executable rather than the
+    # bare plexus_example() (which assumes <name>.cpp beside this list). It is a board-gated
+    # runnable binary the gate driver flashes + drives — deliberately NOT a registered ctest.
+    add_executable(serial_gate_host mcu/serial_gate_host.cpp)
+    target_link_libraries(serial_gate_host PRIVATE plexus::plexus plexus::asio)
 endif()
 
 plexus_example(typed_inproc_fastpath plexus::plexus plexus::inproc)
