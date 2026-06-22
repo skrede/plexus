@@ -52,7 +52,8 @@ struct rx_probe
     int                        drops{0};
     bool                       protocol_closed{false};
     bool                       closed{false};
-    pio::frame_router          router;
+    plexus::log::null_logger   sink;
+    pio::frame_router          router{sink};
 
     void wire(pasio::serial_channel &ch)
     {

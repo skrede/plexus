@@ -66,8 +66,8 @@ struct rpc_link
     procedure_forwarder caller{ex, k_long_deadline, sink};
     procedure_forwarder provider{ex, k_long_deadline, sink};
 
-    plexus::io::frame_router caller_router;
-    plexus::io::frame_router provider_router;
+    plexus::io::frame_router caller_router{sink};
+    plexus::io::frame_router provider_router{sink};
 
     procedure_forwarder::peer caller_peer{caller_tx, "provider-node"};
     procedure_forwarder::peer provider_peer{provider_tx, "caller-node"};

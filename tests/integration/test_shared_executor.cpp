@@ -41,7 +41,8 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
 
     pasio::asio_channel                   client(io);
     std::optional<std::vector<std::byte>> received;
-    pio::frame_router                     router;
+    plexus::log::null_logger              router_sink;
+    pio::frame_router                     router{router_sink};
     router.on_unidirectional(
             [&](const wire::frame_header &, std::span<const std::byte> inner)
             {

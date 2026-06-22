@@ -42,7 +42,7 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
     // consumer hands the inner payload (header-off) to the realigned deliver().
     std::string              got_fqn;
     std::string              got_body;
-    plexus::io::frame_router router;
+    plexus::io::frame_router router{sink};
     router.on_unidirectional(
             [&](const plexus::wire::frame_header &, std::span<const std::byte> inner)
             {

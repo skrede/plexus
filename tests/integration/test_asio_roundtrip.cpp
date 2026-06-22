@@ -63,7 +63,8 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
     // contract honestly rather than hand-stripping the header in the test.
     pasio::asio_channel                   client(io);
     std::optional<std::vector<std::byte>> received;
-    pio::frame_router                     router;
+    plexus::log::null_logger              router_sink;
+    pio::frame_router                     router{router_sink};
     router.on_unidirectional(
             [&](const wire::frame_header &, std::span<const std::byte> inner)
             {

@@ -63,8 +63,8 @@ struct manual_link
     manual_forwarder caller;
     manual_forwarder provider{ex, std::chrono::hours(1), sink};
 
-    plexus::io::frame_router caller_router;
-    plexus::io::frame_router provider_router;
+    plexus::io::frame_router caller_router{sink};
+    plexus::io::frame_router provider_router{sink};
 
     manual_forwarder::peer caller_peer{caller_tx, "provider-node"};
     manual_forwarder::peer provider_peer{provider_tx, "caller-node"};

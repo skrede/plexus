@@ -59,8 +59,8 @@ struct live_rpc
     pasio::asio_channel                  client{io};
     plexus::log::null_logger             sink;
 
-    pio::frame_router server_router; // server: demux inbound rpc_request
-    pio::frame_router client_router; // client: demux inbound rpc_response
+    pio::frame_router server_router{sink}; // server: demux inbound rpc_request
+    pio::frame_router client_router{sink}; // client: demux inbound rpc_response
 
     std::optional<forwarder> provider; // server side (constructed once accepted)
     forwarder                caller{

@@ -67,7 +67,8 @@ late_join one_late_join(std::span<const std::byte> payload, std::string_view fqn
     // on_unidirectional decodes the inner payload — the production receive contract.
     pasio::asio_channel                   client(io);
     std::optional<std::vector<std::byte>> received;
-    pio::frame_router                     router;
+    plexus::log::null_logger              router_sink;
+    pio::frame_router                     router{router_sink};
     router.on_unidirectional(
             [&](const wire::frame_header &, std::span<const std::byte> inner)
             {

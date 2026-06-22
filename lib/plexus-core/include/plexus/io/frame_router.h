@@ -40,7 +40,9 @@ public:
     using data_consumer = plexus::detail::move_only_function<void(const wire::frame_header &,
                                                                   std::span<const std::byte>)>;
 
-    explicit frame_router(log::logger &logger = shared_null_logger()) noexcept
+    // The logger is a required, borrowed dependency — a peer_session always threads
+    // its own logger into the router it owns; there is no defaulted sink.
+    explicit frame_router(log::logger &logger) noexcept
             : m_logger(logger)
     {
     }

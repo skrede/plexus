@@ -93,8 +93,8 @@ TEST_CASE("inproc rpc dispatch path is allocation-free; the correlation table ch
     sink_forwarder caller{ex, k_long_deadline, log_sink};
     sink_forwarder provider{ex, k_long_deadline, log_sink};
 
-    plexus::io::frame_router caller_router;
-    plexus::io::frame_router provider_router;
+    plexus::io::frame_router caller_router{log_sink};
+    plexus::io::frame_router provider_router{log_sink};
 
     sink_forwarder::peer caller_peer{caller_ch, "provider-node"};
     sink_forwarder::peer provider_peer{provider_ch, "caller-node"};

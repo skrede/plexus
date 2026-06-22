@@ -30,7 +30,8 @@ TEST_CASE("serial channel: a framed message round-trips over an openpty pair, lo
         auto rx = adopt_channel(io, pty.take_slave());
 
         std::optional<std::string> received;
-        pio::frame_router           router;
+        plexus::log::null_logger    router_sink;
+        pio::frame_router           router{router_sink};
         router.on_unidirectional(
                 [&](const wire::frame_header &, std::span<const std::byte> inner)
                 {

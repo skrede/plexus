@@ -50,7 +50,8 @@ std::optional<wire::subscribe_request> one_control_roundtrip(std::string_view fq
     // stripped the frame_header).
     pasio::asio_channel                    client(io);
     std::optional<wire::subscribe_request> demuxed;
-    pio::frame_router                      router;
+    plexus::log::null_logger               router_sink;
+    pio::frame_router                      router{router_sink};
     router.on_subscribe(
             [&](std::span<const std::byte> inner)
             {

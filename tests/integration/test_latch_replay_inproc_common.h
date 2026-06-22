@@ -62,7 +62,8 @@ struct receive_sink
     }
 
     inproc_channel<>         channel;
-    plexus::io::frame_router router;
+    plexus::log::null_logger sink;
+    plexus::io::frame_router router{sink};
     std::vector<std::string> bodies;
 };
 

@@ -92,6 +92,7 @@ public:
             , m_channel(*ctx.channel)
             , m_fsm_cfg(fsm_cfg)
             , m_fsm(fsm_cfg)
+            , m_router(logger)
             , m_handshake_timer(executor)
             , m_messages(messages)
             , m_procedures(procedures)

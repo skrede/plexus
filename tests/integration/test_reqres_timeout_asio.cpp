@@ -47,8 +47,8 @@ struct silent_rpc
     pasio::asio_channel                  client{io};
     plexus::log::null_logger             sink;
 
-    pio::frame_router server_router;
-    pio::frame_router client_router;
+    pio::frame_router server_router{sink};
+    pio::frame_router client_router{sink};
 
     std::optional<forwarder> provider;
     std::optional<forwarder> caller;
