@@ -120,7 +120,7 @@ struct peer_node
                     ctx.channel   = std::move(ch);
                     ctx.node_name = "dialer-node";
                     responder.emplace(ctx, io, make_cfg(seed), k_long_timeout, messages, procedures,
-                                      true);
+                                      true, sink);
                     responder->start();
                 });
         transport.listen({"tcp", "127.0.0.1:0"});

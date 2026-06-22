@@ -23,7 +23,7 @@ TEST_CASE("host_identity: a plaintext (no security posture) attach has no authen
                 resp_ctx.node_name = "requester-node";
                 resp_ctx.peer_id   = make_id(0x02);
                 responder.emplace(resp_ctx, ex, make_cfg(0x01, nullptr), k_long_timeout,
-                                  resp_messages, resp_procedures, true);
+                                  resp_messages, resp_procedures, true, sink);
                 responder->start();
             });
     transport.on_dialed(
@@ -33,7 +33,7 @@ TEST_CASE("host_identity: a plaintext (no security posture) attach has no authen
                 req_ctx.node_name = "responder-node";
                 req_ctx.peer_id   = make_id(0x01);
                 requester.emplace(req_ctx, ex, make_cfg(0x02, nullptr), k_long_timeout,
-                                  req_messages, req_procedures, false);
+                                  req_messages, req_procedures, false, sink);
                 requester->start();
             });
 

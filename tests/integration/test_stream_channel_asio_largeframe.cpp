@@ -119,7 +119,7 @@ struct session_under_peer
                     ctx.channel   = std::move(ch);
                     ctx.node_name = "raw-peer";
                     peer.emplace(ctx, io, make_cfg(0x02), k_long_timeout, messages, procedures,
-                                 false);
+                                 false, sink);
                     peer->start();
                     peer->on_transport_drop([this] { ++drops; });
                 });

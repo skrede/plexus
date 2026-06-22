@@ -87,7 +87,7 @@ struct link
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
                     responder.emplace(resp_ctx, ex, make_cfg(0x01, resp_fp), k_long_timeout,
-                                      resp_messages, resp_procedures, true);
+                                      resp_messages, resp_procedures, true, sink);
                     responder->start();
                 });
         transport.on_dialed(
@@ -96,7 +96,7 @@ struct link
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
                     requester.emplace(req_ctx, ex, make_cfg(0x02, req_fp), k_long_timeout,
-                                      req_messages, req_procedures, false);
+                                      req_messages, req_procedures, false, sink);
                     requester->start();
                 });
         transport.listen({"inproc", "svc"});

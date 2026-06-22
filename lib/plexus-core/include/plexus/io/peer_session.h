@@ -87,7 +87,7 @@ public:
     peer_session(peer_context<Policy> &ctx, executor_type executor,
                  const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout,
                  message_forwarder<Policy> &messages, procedure_forwarder<Policy> &procedures,
-                 bool is_inbound_bootstrap, log::logger &logger = shared_null_logger())
+                 bool is_inbound_bootstrap, log::logger &logger)
             : m_ctx(ctx)
             , m_channel(*ctx.channel)
             , m_fsm_cfg(fsm_cfg)

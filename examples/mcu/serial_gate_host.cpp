@@ -142,8 +142,8 @@ int main()
 
     // The requester session: is_inbound_bootstrap=false makes this end DRIVE the outbound
     // handshake request the device (the listening responder) answers.
-    serial_session session{ctx,      io,       gate_fsm_config(), k_timeout,
-                           messages, procedures, /*is_inbound_bootstrap=*/false};
+    serial_session session{ctx,      io,         gate_fsm_config(), k_timeout,
+                           messages, procedures, /*is_inbound_bootstrap=*/false, sink};
 
     std::optional<std::uint8_t> received;
     session.on_message(

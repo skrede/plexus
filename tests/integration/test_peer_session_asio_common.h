@@ -136,7 +136,7 @@ struct tcp_link
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
                     responder.emplace(resp_ctx, io, make_cfg(0x01), timeout, resp_messages,
-                                      resp_procedures, true);
+                                      resp_procedures, true, sink);
                     responder->on_message([this](std::string_view, std::span<const std::byte> d)
                                           { resp_received.emplace_back(to_string(d)); });
                     responder->start();
@@ -147,7 +147,7 @@ struct tcp_link
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
                     requester.emplace(req_ctx, io, make_cfg(0x02), timeout, req_messages,
-                                      req_procedures, false);
+                                      req_procedures, false, sink);
                     requester->on_message([this](std::string_view, std::span<const std::byte> d)
                                           { req_received.emplace_back(to_string(d)); });
                     requester->start();

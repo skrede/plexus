@@ -165,7 +165,7 @@ struct timeout_harness
 
     explicit timeout_harness(std::chrono::nanoseconds timeout)
             : ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}
-            , requester(ctx, ex, make_cfg(0x02), timeout, messages, procedures, false)
+            , requester(ctx, ex, make_cfg(0x02), timeout, messages, procedures, false, sink)
     {
         ctx.channel->connect_to(
                 peer_ch.local_endpoint()); // sends land on a peer that never replies

@@ -86,9 +86,10 @@ TEST_CASE("serial channel: a peer_session pair completes the point-at-port hands
         resp_ctx.node_name = "requester-node";
 
         serial_session requester{req_ctx,  io, make_cfg(0x02), k_long_timeout,
-                                 req_messages, req_procedures, /*is_inbound_bootstrap=*/false};
+                                 req_messages, req_procedures, /*is_inbound_bootstrap=*/false, sink};
         serial_session responder{resp_ctx, io, make_cfg(0x01), k_long_timeout,
-                                  resp_messages, resp_procedures, /*is_inbound_bootstrap=*/true};
+                                  resp_messages, resp_procedures, /*is_inbound_bootstrap=*/true,
+                                  sink};
         requester.start();
         responder.start();
 

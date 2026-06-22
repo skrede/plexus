@@ -173,7 +173,7 @@ struct link
                     resp_ctx.node_name = "requester-node";
                     resp_ctx.peer_id   = make_cfg(0x02, nullptr).self_id;
                     responder.emplace(resp_ctx, ex, make_cfg(0x01, resp_policy), k_long_timeout,
-                                      resp_messages, resp_procedures, true);
+                                      resp_messages, resp_procedures, true, sink);
                     responder->set_security_seam(&resp_seam);
                     responder->on_security([this](const security_event &ev)
                                            { resp_security.push_back(ev); });
@@ -190,7 +190,7 @@ struct link
                     req_ctx.node_name = "responder-node";
                     req_ctx.peer_id   = make_cfg(0x01, nullptr).self_id;
                     requester.emplace(req_ctx, ex, make_cfg(0x02, req_policy), k_long_timeout,
-                                      req_messages, req_procedures, false);
+                                      req_messages, req_procedures, false, sink);
                     requester->set_security_seam(&req_seam);
                     requester->on_security([this](const security_event &ev)
                                            { req_security.push_back(ev); });

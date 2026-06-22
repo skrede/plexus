@@ -88,7 +88,7 @@ struct dial_link
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
                     responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages,
-                                      resp_procedures, true);
+                                      resp_procedures, true, sink);
                     responder->start();
                 });
         transport.on_dialed(
@@ -97,7 +97,7 @@ struct dial_link
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
                     requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages,
-                                      req_procedures, false);
+                                      req_procedures, false, sink);
                     requester->start();
                 });
         transport.on_dial_failed([this](const plexus::io::endpoint &, plexus::io::io_error)

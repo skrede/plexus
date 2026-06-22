@@ -111,7 +111,7 @@ struct tcp_reconnect
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
                     responder.emplace(resp_ctx, io, make_cfg(0x01), k_long_timeout, resp_messages,
-                                      resp_procedures, true);
+                                      resp_procedures, true, sink);
                     responder->start();
                 });
         transport.on_dialed(
@@ -120,7 +120,7 @@ struct tcp_reconnect
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
                     requester.emplace(req_ctx, io, make_cfg(0x02), k_long_timeout, req_messages,
-                                      req_procedures, false);
+                                      req_procedures, false, sink);
                     requester->start();
                     // Route a transport DROP (broken_pipe/connection_reset) — not a clean
                     // close — to the driver through the session's production drop seam. The

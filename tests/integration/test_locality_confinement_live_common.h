@@ -73,7 +73,7 @@ struct live_link
                     sub_ctx.channel   = std::move(ch);
                     sub_ctx.node_name = "publisher-node";
                     subscriber.emplace(sub_ctx, io, make_cfg(0x01), std::chrono::hours(1),
-                                       sub_messages, sub_procedures, true);
+                                       sub_messages, sub_procedures, true, sink);
                     subscriber->on_message(
                             [this](std::string_view, std::span<const std::byte> d)
                             {
@@ -88,7 +88,7 @@ struct live_link
                     pub_ctx.channel   = std::move(ch);
                     pub_ctx.node_name = "subscriber-node";
                     publisher.emplace(pub_ctx, io, make_cfg(0x02), std::chrono::hours(1),
-                                      pub_messages, pub_procedures, false);
+                                      pub_messages, pub_procedures, false, sink);
                     publisher->start();
                 });
     }

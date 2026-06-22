@@ -111,7 +111,7 @@ struct link
                     // the source-identity gid reconstructs against the true peer node_id.
                     resp_ctx.peer_id = make_cfg(0x02).self_id; // the requester's node_id
                     responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages,
-                                      resp_procedures, true);
+                                      resp_procedures, true, sink);
                     responder->on_message([this](std::string_view, std::span<const std::byte> d)
                                           { resp_received.emplace_back(to_string(d)); });
                     responder->start();
@@ -124,7 +124,7 @@ struct link
                     req_ctx.peer_id =
                             make_cfg(0x01).self_id; // the responder's node_id (the dialed peer)
                     requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages,
-                                      req_procedures, false);
+                                      req_procedures, false, sink);
                     requester->on_message([this](std::string_view, std::span<const std::byte> d)
                                           { req_received.emplace_back(to_string(d)); });
                     requester->start();

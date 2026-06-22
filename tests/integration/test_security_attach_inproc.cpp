@@ -218,7 +218,7 @@ struct link
                     resp_ctx.node_name = "requester-node";
                     resp_ctx.peer_id   = make_cfg(0x02).self_id;
                     responder.emplace(resp_ctx, ex, make_cfg(0x01, resp_policy), timeout,
-                                      resp_messages, resp_procedures, true);
+                                      resp_messages, resp_procedures, true, sink);
                     responder->set_security_seam(&resp_seam);
                     responder->on_security([this](const security_event &ev)
                                            { resp_security.push_back(ev); });
@@ -237,7 +237,7 @@ struct link
                     req_ctx.node_name = "responder-node";
                     req_ctx.peer_id   = make_cfg(0x01).self_id;
                     requester.emplace(req_ctx, ex, make_cfg(0x02, req_policy), timeout,
-                                      req_messages, req_procedures, false);
+                                      req_messages, req_procedures, false, sink);
                     requester->set_security_seam(&req_seam);
                     requester->on_security([this](const security_event &ev)
                                            { req_security.push_back(ev); });
@@ -306,7 +306,7 @@ struct psk_link
                     // in flight one) — accept_any on its on_request leg — and stamps ITS proof on
                     // the response via the prover.
                     responder.emplace(resp_ctx, ex, make_cfg(0x01, &m_accept_any), k_long_timeout,
-                                      resp_messages, resp_procedures, true);
+                                      resp_messages, resp_procedures, true, sink);
                     responder->set_security_seam(&resp_seam);
                     responder->set_attach_entropy(counter_rand(0x0a));
                     responder->set_attach_prover(attach_prover{responder_key, real_keyed_hmac()});
@@ -327,7 +327,7 @@ struct psk_link
                     req_ctx.peer_id   = make_cfg(0x01).self_id;
                     m_dialer_policy.emplace(std::move(dialer_keystore), real_keyed_hmac());
                     requester.emplace(req_ctx, ex, make_cfg(0x02, &*m_dialer_policy),
-                                      k_long_timeout, req_messages, req_procedures, false);
+                                      k_long_timeout, req_messages, req_procedures, false, sink);
                     requester->set_security_seam(&req_seam);
                     requester->set_attach_entropy(counter_rand(0x0b));
                     requester->on_security([this](const security_event &ev)
@@ -517,7 +517,8 @@ TEST_CASE("io.security_attach an auth-only + datagram configuration is refused (
 
     // A bootstrap responder so a single request completes the attach; the secured seam
     // is engaged but NO install hook is wired — the auth-only datagram configuration.
-    session responder{ctx, ex, make_cfg(0x08, &admit), k_long_timeout, messages, procedures, true};
+    session responder{ctx, ex, make_cfg(0x08, &admit), k_long_timeout, messages, procedures, true,
+                      sink};
     responder.set_security_seam(&seam);
     responder.on_security([&](const security_event &ev) { security.push_back(ev); });
     responder.on_lifecycle([&](const lifecycle_event &ev) { lifecycle.push_back(ev); });

@@ -124,7 +124,7 @@ struct link
                     prod_ctx.node_name = "subscriber-node";
                     prod_ctx.peer_id   = make_cfg(0x02).self_id; // the subscriber's node_id
                     producer.emplace(prod_ctx, ex, make_cfg(0x01), k_long_timeout, prod_messages,
-                                     prod_procedures, true);
+                                     prod_procedures, true, sink);
                     producer->start();
                 });
         transport.on_dialed(
@@ -134,7 +134,7 @@ struct link
                     sub_ctx.node_name = "producer-node";
                     sub_ctx.peer_id   = make_cfg(0x01).self_id; // the producer's node_id
                     subscriber.emplace(sub_ctx, ex, make_cfg(0x02), k_long_timeout, sub_messages,
-                                       sub_procedures, false);
+                                       sub_procedures, false, sink);
                     subscriber->on_message([this](std::string_view, std::span<const std::byte> d)
                                            { received.emplace_back(to_string(d)); });
                     subscriber->on_subscribe_refused([this](std::uint64_t, subscribe_status s)

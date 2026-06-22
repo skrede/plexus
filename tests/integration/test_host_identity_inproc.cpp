@@ -58,7 +58,7 @@ TEST_CASE("host_identity: a spoofed external claim is ignored — the accessor b
                 resp_ctx.node_name = "requester-node";
                 resp_ctx.peer_id   = id_req;
                 responder.emplace(resp_ctx, ex, make_cfg(0x01, &admit), k_long_timeout,
-                                  resp_messages, resp_procedures, true);
+                                  resp_messages, resp_procedures, true, sink);
                 responder->set_security_seam(&resp_seam);
                 responder->on_install_security([](const security_negotiation &) {});
                 responder->start();
@@ -70,7 +70,7 @@ TEST_CASE("host_identity: a spoofed external claim is ignored — the accessor b
                 req_ctx.node_name = "responder-node";
                 req_ctx.peer_id   = id_resp;
                 requester.emplace(req_ctx, ex, make_cfg(0x02, &admit), k_long_timeout, req_messages,
-                                  req_procedures, false);
+                                  req_procedures, false, sink);
                 requester->set_security_seam(&req_seam);
                 requester->on_install_security([](const security_negotiation &) {});
                 // Before the attach resolves the accessor is absent — no identity to spoof yet.
