@@ -2,3 +2,8 @@
 # is exception-free and RTTI-free on the constrained target.
 CONFIG_COMPILER_CXX_EXCEPTIONS=n
 CONFIG_COMPILER_CXX_RTTI=n
+
+# plexus owns UART0 — silence the IDF runtime console/log on the data link so framed
+# bytes are not interleaved with console output. The bounded magic-byte resync in the
+# framing layer tolerates the un-suppressable boot-ROM preamble (the host resyncs past it).
+CONFIG_ESP_CONSOLE_NONE=y

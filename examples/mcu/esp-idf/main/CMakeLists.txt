@@ -1,6 +1,9 @@
-# The plexus-mcu compile-proof component. plexus is header-only, so this pulls in
-# its include trees and binds against FreeRTOS only.
-idf_component_register(SRCS "app_main.cpp" INCLUDE_DIRS "." REQUIRES freertos)
+# The plexus-mcu serial-slice component. plexus is header-only, so this pulls in its
+# include trees and binds against FreeRTOS plus the UART driver (the transport opens UART0)
+# and the GPIO driver (the example pin read). Both drivers are EXAMPLE-component deps, never
+# core — the HAL touch stays out of lib/ (the pure-comms-library invariant).
+idf_component_register(SRCS "app_main.cpp" INCLUDE_DIRS "."
+    REQUIRES freertos driver esp_driver_gpio)
 
 target_include_directories(${COMPONENT_LIB} PRIVATE
     "${PLEXUS_ROOT}/lib/plexus-core/include"
