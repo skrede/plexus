@@ -7,6 +7,7 @@
 
 #include <deque>
 #include <vector>
+#include <cstdint>
 #include <utility>
 #include <algorithm>
 

@@ -6,6 +6,7 @@
 #include "plexus/detail/compat.h"
 
 #include <chrono>
+#include <cstdint>
 #include <utility>
 #include <system_error>
 
