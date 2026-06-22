@@ -58,8 +58,10 @@ struct manual_link
     plexus::inproc::inproc_channel<manual_clock> provider_tx{ex};
     plexus::inproc::inproc_channel<manual_clock> provider_rx{ex};
 
+    plexus::log::null_logger sink;
+
     manual_forwarder caller;
-    manual_forwarder provider{ex, std::chrono::hours(1)};
+    manual_forwarder provider{ex, std::chrono::hours(1), sink};
 
     plexus::io::frame_router caller_router;
     plexus::io::frame_router provider_router;
@@ -68,7 +70,7 @@ struct manual_link
     manual_forwarder::peer provider_peer{provider_tx, "caller-node"};
 
     explicit manual_link(std::chrono::nanoseconds caller_deadline)
-            : caller(ex, caller_deadline)
+            : caller(ex, caller_deadline, sink)
     {
         caller_tx.connect_to(provider_rx.local_endpoint());
         provider_tx.connect_to(caller_rx.local_endpoint());

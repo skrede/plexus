@@ -105,7 +105,7 @@ struct session_under_peer
 
     plexus::log::null_logger       sink;
     msg_forwarder                  messages{sink};
-    rpc_forwarder                  procedures{io, k_long_timeout};
+    rpc_forwarder                  procedures{io, k_long_timeout, sink};
     pio::peer_context<asio_policy> ctx;
     std::optional<session>         peer;
 

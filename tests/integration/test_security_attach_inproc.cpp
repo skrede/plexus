@@ -182,8 +182,8 @@ struct link
     plexus::log::null_logger sink;
     msg_forwarder req_messages{sink};
     msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout};
-    rpc_forwarder resp_procedures{ex, k_long_timeout};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
@@ -270,8 +270,8 @@ struct psk_link
     plexus::log::null_logger sink;
     msg_forwarder req_messages{sink};
     msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout};
-    rpc_forwarder resp_procedures{ex, k_long_timeout};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
@@ -503,7 +503,7 @@ TEST_CASE("io.security_attach an auth-only + datagram configuration is refused (
     inproc_executor<>        ex{bus};
     plexus::log::null_logger sink;
     msg_forwarder            messages{sink};
-    rpc_forwarder            procedures{ex, k_long_timeout};
+    rpc_forwarder            procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> ctx;
     ctx.channel = std::make_unique<inproc_channel<>>(ex);
@@ -546,7 +546,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
     inproc_transport<>       transport{ex, bus};
     plexus::log::null_logger sink;
     msg_forwarder            messages{sink};
-    rpc_forwarder            procedures{ex, k_long_timeout};
+    rpc_forwarder            procedures{ex, k_long_timeout, sink};
 
     int           installs = 0;
     build_context build{ex,

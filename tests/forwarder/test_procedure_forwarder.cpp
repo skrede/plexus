@@ -12,7 +12,8 @@ TEST_CASE("attach refcount gate emits exactly one procedure subscribe on 0->1", 
         capture           cap(ex);
         auto              peer = make_peer(ch, cap, "provider-node");
 
-        procedure_forwarder fwd{ex, k_long_deadline};
+        plexus::log::null_logger sink;
+        procedure_forwarder      fwd{ex, k_long_deadline, sink};
         REQUIRE(fwd.attach(peer, "svc"));       // 0->1
         REQUIRE_FALSE(fwd.attach(peer, "svc")); // 1->2, no emit
         ex.drain();
@@ -34,7 +35,8 @@ TEST_CASE("attach succeeds on 0->1 for an arbitrary fqn (no remote registry)", "
         capture           cap(ex);
         auto              peer = make_peer(ch, cap, "provider-node");
 
-        procedure_forwarder fwd{ex, k_long_deadline};
+        plexus::log::null_logger sink;
+        procedure_forwarder      fwd{ex, k_long_deadline, sink};
         REQUIRE(fwd.attach(peer, "never.advertised.anywhere"));
         ex.drain();
         REQUIRE(count_subscribes(cap) == 1);

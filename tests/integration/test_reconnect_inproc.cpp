@@ -206,8 +206,8 @@ struct harness
     plexus::log::null_logger sink;
     msg_forwarder req_messages{sink};
     msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout};
-    rpc_forwarder resp_procedures{ex, k_long_timeout};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
 
     // The per-peer records own the channel + the epoch well and OUTLIVE every
     // incarnation, so each rebuilt session draws a strictly-later epoch with no

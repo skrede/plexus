@@ -158,7 +158,7 @@ struct timeout_harness
 
     plexus::log::null_logger sink;
     manual_msg messages{sink};
-    manual_rpc procedures{ex, std::chrono::hours(1)};
+    manual_rpc procedures{ex, std::chrono::hours(1), sink};
 
     plexus::io::peer_context<manual_policy> ctx; // the record owns the dialer channel
     manual_session                          requester;

@@ -110,7 +110,7 @@ struct peer_node
     peer_node(::asio::io_context &io, std::uint8_t seed)
             : transport(io)
             , messages(sink)
-            , procedures(io, k_long_timeout)
+            , procedures(io, k_long_timeout, sink)
             , id(make_id(seed))
     {
         transport.on_accepted(

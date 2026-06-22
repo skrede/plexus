@@ -103,8 +103,8 @@ struct link
     plexus::log::null_logger sink;
     msg_forwarder sub_messages{sink};  // the subscriber's forwarder
     msg_forwarder prod_messages{sink}; // the producer's forwarder
-    rpc_forwarder sub_procedures{ex, k_long_timeout};
-    rpc_forwarder prod_procedures{ex, k_long_timeout};
+    rpc_forwarder sub_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder prod_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> sub_ctx;
     plexus::io::peer_context<inproc_policy> prod_ctx;

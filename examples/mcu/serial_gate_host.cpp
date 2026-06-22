@@ -138,7 +138,7 @@ int main()
     // The node-shared pub/sub + rpc forwarders the session bridges this peer into.
     plexus::log::null_logger sink;
     serial_msg_fwd messages{sink};
-    serial_rpc_fwd procedures{io, k_timeout};
+    serial_rpc_fwd procedures{io, k_timeout, sink};
 
     // The requester session: is_inbound_bootstrap=false makes this end DRIVE the outbound
     // handshake request the device (the listening responder) answers.

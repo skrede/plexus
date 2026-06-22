@@ -45,6 +45,7 @@ struct silent_rpc
     pasio::asio_listener                 listener{io};
     std::unique_ptr<pasio::asio_channel> server_channel;
     pasio::asio_channel                  client{io};
+    plexus::log::null_logger             sink;
 
     pio::frame_router server_router;
     pio::frame_router client_router;
@@ -64,7 +65,7 @@ struct silent_rpc
         ::asio::ip::tcp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), listener.port());
         client.socket().connect(server_ep);
 
-        caller.emplace(io, caller_deadline);
+        caller.emplace(io, caller_deadline, sink);
         client_router.on_rpc_response([this](std::span<const std::byte> inner)
                                       { caller->deliver_response(*caller_peer, inner); });
         client.on_data([this](std::span<const std::byte> frame) { client_router.route(frame); });
@@ -74,7 +75,7 @@ struct silent_rpc
             io.poll_one();
 
         caller_peer.emplace(forwarder::peer{client, "server-node"});
-        provider.emplace(io, std::chrono::hours(1)); // provider arms no timeout of its own
+        provider.emplace(io, std::chrono::hours(1), sink); // provider arms no timeout of its own
         provider_peer.emplace(forwarder::peer{*server_channel, "client-node"});
 
         // The provider receives + dispatches the request, but the handler NEVER

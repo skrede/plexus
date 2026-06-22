@@ -112,8 +112,8 @@ struct dial_unix_link
     plexus::log::null_logger sink;
     msg_forwarder req_messages{sink};
     msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{io, k_long_timeout};
-    rpc_forwarder resp_procedures{io, k_long_timeout};
+    rpc_forwarder req_procedures{io, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
 
     plexus::io::peer_context<pasio::unix_policy> req_ctx;   // the dialer slot's per-peer record
     plexus::io::peer_context<pasio::unix_policy> resp_ctx;  // the accepted slot's per-peer record

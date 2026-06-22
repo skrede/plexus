@@ -94,12 +94,14 @@ public:
     // (no hot-path growth), not a wire change — an over-capacity call fails fast.
     static constexpr std::size_t k_default_max_outstanding = 1024;
 
-    // The executor (to construct a per-call Policy timer) and the default call
-    // deadline are REQUIRED — a forwarder cannot arm a timeout it was not told to.
-    // The deadline is passed in, not defaulted to a magic constant, per plexus's
-    // required-over-default posture: the right value depends on the deployment.
+    // The executor (to construct a per-call Policy timer), the default call deadline,
+    // and the logger are REQUIRED — a forwarder cannot arm a timeout it was not told
+    // to, and the logger is a borrowed engine dependency, not a defaulted convenience.
+    // The deadline and logger are passed in, not defaulted to a magic constant or a
+    // shared sink, per plexus's required-over-default posture: the right value depends
+    // on the deployment. max_outstanding keeps its capacity default.
     procedure_forwarder(executor_type executor, std::chrono::nanoseconds default_deadline,
-                        log::logger &logger          = shared_null_logger(),
+                        log::logger &logger,
                         std::size_t  max_outstanding = k_default_max_outstanding)
             : m_logger(logger)
             , m_executor(executor)

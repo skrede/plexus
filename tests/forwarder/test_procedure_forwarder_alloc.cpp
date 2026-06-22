@@ -67,10 +67,11 @@ TEST_CASE("steady-state provider dispatch + reply framing allocates nothing", "[
     // Policy so the only heap traffic that could appear is the forwarder's own.
     using sink_forwarder = plexus::io::procedure_forwarder<sink_policy>;
 
-    sink_executor        ex;
-    sink_channel         provider_ch(ex);
-    sink_forwarder       provider{ex, k_long_deadline};
-    sink_forwarder::peer provider_peer{provider_ch, "caller-node"};
+    sink_executor            ex;
+    sink_channel             provider_ch(ex);
+    plexus::log::null_logger log_sink;
+    sink_forwarder           provider{ex, k_long_deadline, log_sink};
+    sink_forwarder::peer     provider_peer{provider_ch, "caller-node"};
 
     // A handler that replies with a fixed return span captured by reference: the
     // reply itself moves no heap (the body lives in the test frame).

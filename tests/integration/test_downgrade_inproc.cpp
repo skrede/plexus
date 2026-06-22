@@ -148,8 +148,8 @@ struct link
     plexus::log::null_logger                sink;
     msg_forwarder                           req_messages{sink};
     msg_forwarder                           resp_messages{sink};
-    rpc_forwarder                           req_procedures{ex, k_long_timeout};
-    rpc_forwarder                           resp_procedures{ex, k_long_timeout};
+    rpc_forwarder                           req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder                           resp_procedures{ex, k_long_timeout, sink};
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
     std::optional<session>                  requester;

@@ -55,8 +55,8 @@ struct live_link
     plexus::log::null_logger         sink;
     pio::message_forwarder<Policy>   pub_messages{sink};
     pio::message_forwarder<Policy>   sub_messages{sink};
-    pio::procedure_forwarder<Policy> pub_procedures{io, std::chrono::hours(1)};
-    pio::procedure_forwarder<Policy> sub_procedures{io, std::chrono::hours(1)};
+    pio::procedure_forwarder<Policy> pub_procedures{io, std::chrono::hours(1), sink};
+    pio::procedure_forwarder<Policy> sub_procedures{io, std::chrono::hours(1), sink};
 
     pio::peer_context<Policy>                pub_ctx;
     pio::peer_context<Policy>                sub_ctx;

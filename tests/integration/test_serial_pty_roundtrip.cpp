@@ -73,8 +73,8 @@ TEST_CASE("serial channel: a peer_session pair completes the point-at-port hands
         plexus::log::null_logger sink;
         serial_msg_fwd req_messages{sink};
         serial_msg_fwd resp_messages{sink};
-        serial_rpc_fwd req_procedures{io, k_long_timeout};
-        serial_rpc_fwd resp_procedures{io, k_long_timeout};
+        serial_rpc_fwd req_procedures{io, k_long_timeout, sink};
+        serial_rpc_fwd resp_procedures{io, k_long_timeout, sink};
 
         pio::peer_context<pasio::serial_policy> req_ctx;  // the dialer (requester) slot
         pio::peer_context<pasio::serial_policy> resp_ctx; // the listener (responder) bootstrap slot

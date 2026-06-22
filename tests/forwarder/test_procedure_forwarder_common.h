@@ -84,8 +84,10 @@ struct rpc_link
     inproc_channel<> provider_tx{ex};
     inproc_channel<> provider_rx{ex};
 
-    procedure_forwarder caller{ex, k_long_deadline};
-    procedure_forwarder provider{ex, k_long_deadline};
+    plexus::log::null_logger sink;
+
+    procedure_forwarder caller{ex, k_long_deadline, sink};
+    procedure_forwarder provider{ex, k_long_deadline, sink};
 
     plexus::io::frame_router caller_router;
     plexus::io::frame_router provider_router;
