@@ -79,7 +79,8 @@ TEST_CASE("frame-once fan-out: the per-publish allocation does not scale with th
     {
         sink_executor                              ex;
         std::vector<std::unique_ptr<sink_channel>> chs;
-        sink_forwarder                             fwd{};
+        plexus::log::null_logger                   log_sink;
+        sink_forwarder                             fwd{log_sink};
         for(int i = 0; i < subscribers; ++i)
         {
             chs.emplace_back(std::make_unique<sink_channel>(ex));

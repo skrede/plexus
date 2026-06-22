@@ -550,10 +550,11 @@ TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter A
 
     for(int loop = 0; loop < 4; ++loop)
     {
-        std::size_t             reported = 0;
-        stall_channel           ch{reported};
-        forwarder               fwd{};
-        recording_drop_observer observer;
+        std::size_t              reported = 0;
+        stall_channel            ch{reported};
+        plexus::log::null_logger sink;
+        forwarder                fwd{sink};
+        recording_drop_observer  observer;
 
         // A bounded band under congestion=drop_newest: stall the destination so every
         // publish bands, then flood past the band depth so the surplus sheds.
@@ -593,7 +594,8 @@ TEST_CASE("integration.drop_coverage an inproc subscriber's egress shed reaches 
     {
         std::size_t                    reported = 0;
         inproc_stall_channel           ch{reported};
-        forwarder                      fwd{};
+        plexus::log::null_logger       sink;
+        forwarder                      fwd{sink};
         std::vector<cause::drop_event> drops;
 
         fwd.on_drop([&drops](const cause::drop_event &ev) { drops.push_back(ev); });

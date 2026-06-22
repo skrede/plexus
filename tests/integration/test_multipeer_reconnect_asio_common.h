@@ -98,6 +98,7 @@ inline reconnect_config bounded_cfg(std::uint32_t max_attempts)
 struct peer_node
 {
     pasio::asio_transport                 transport;
+    plexus::log::null_logger              sink;
     msg_forwarder                         messages;
     rpc_forwarder                         procedures;
     pio::peer_context<pasio::asio_policy> ctx;
@@ -108,7 +109,7 @@ struct peer_node
 
     peer_node(::asio::io_context &io, std::uint8_t seed)
             : transport(io)
-            , messages()
+            , messages(sink)
             , procedures(io, k_long_timeout)
             , id(make_id(seed))
     {

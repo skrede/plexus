@@ -67,8 +67,9 @@ struct dial_link
     inproc_executor<>  ex{bus};
     inproc_transport<> transport{ex, bus};
 
-    msg_forwarder req_messages{};
-    msg_forwarder resp_messages{};
+    plexus::log::null_logger sink;
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 

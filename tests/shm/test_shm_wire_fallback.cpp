@@ -299,7 +299,8 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     tap_channel wire_tap{medium::wire, "unix"};
     tap_channel shm_tap{medium::shm, "unix", companion_ring.get()};
 
-    forwarder fwd;
+    plexus::log::null_logger sink;
+    forwarder                fwd{sink};
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
 
     // The companion-route hook: consult route_message_medium against the member's
@@ -387,7 +388,8 @@ TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over 
 
     tap_channel wire_tap{medium::wire, "unix"};
 
-    forwarder fwd;
+    plexus::log::null_logger sink;
+    forwarder                fwd{sink};
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
     // The companion is ABSENT: the hook always declines (nullptr), so the forwarder keeps
     // every message on the recorded wire sub.channel — never a dropped large message.
@@ -428,7 +430,8 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
     tap_channel wire_tap{medium::wire, "unix"};
     tap_channel shm_tap{medium::shm, "unix", companion_ring.get()};
 
-    forwarder fwd;
+    plexus::log::null_logger sink;
+    forwarder                fwd{sink};
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
     fwd.on_companion_route(
             [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel *

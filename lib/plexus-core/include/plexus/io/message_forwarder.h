@@ -82,11 +82,12 @@ public:
     using endpoint_type = subscription_endpoint<channel_type>;
     using peer          = typename endpoint_type::peer;
 
-    // global_default is the node-level per-message size ceiling the RxO size relation resolves an
-    // offered topic's 0=unset max against — the SAME value the data-path transports use, so a
-    // remote subscribe is admitted against one consistent ceiling, not a drift-prone local one.
-    explicit message_forwarder(std::size_t  global_default = io::global_default_max_message_bytes,
-                               log::logger &logger         = shared_null_logger())
+    // The logger is a required, borrowed engine dependency. global_default is the node-level
+    // per-message size ceiling the RxO size relation resolves an offered topic's 0=unset max against
+    // — the SAME value the data-path transports use, so a remote subscribe is admitted against one
+    // consistent ceiling, not a drift-prone local one.
+    explicit message_forwarder(log::logger &logger,
+                               std::size_t  global_default = io::global_default_max_message_bytes)
             : m_logger(logger)
             , m_global_default(global_default)
     {

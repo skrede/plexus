@@ -67,7 +67,8 @@ TEST_CASE("latch replay targets only the new subscriber, no double-receive", "[l
     auto              peer_a = make_peer(ch_a, cap_a, "node-a");
     auto              peer_b = make_peer(ch_b, cap_b, "node-b");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     fwd.latch("topic");
     REQUIRE(fwd.attach_for_fanout(peer_a, "topic")); // A before the publish
     ex.drain();
@@ -98,7 +99,8 @@ TEST_CASE("latch retention survives subscriber churn", "[latch][forwarder]")
     capture           cap_a(ex);
     auto              peer_a = make_peer(ch_a, cap_a, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     fwd.latch("topic");
     fwd.publish("topic", as_bytes(std::string{"survivor"}));
     REQUIRE(fwd.attach_for_fanout(peer_a, "topic"));
@@ -128,7 +130,8 @@ TEST_CASE("multi-publisher to one latched topic is last-writer-wins", "[latch][f
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     fwd.latch("topic");
     fwd.publish("topic", as_bytes(std::string{"writer-1"}));
     fwd.publish("topic", as_bytes(std::string{"writer-2"}));
@@ -158,10 +161,11 @@ TEST_CASE("latched retention adds no allocation beyond the frame-once publish",
     // already-framed shared owner by addref, so it adds nothing beyond the publish owner.
     const auto allocs_per_publish = [&](bool latched)
     {
-        sink_executor        ex;
-        sink_channel         ch(ex);
-        sink_forwarder       fwd{};
-        sink_forwarder::peer peer{ch, "node-a"};
+        sink_executor            ex;
+        sink_channel             ch(ex);
+        plexus::log::null_logger log_sink;
+        sink_forwarder           fwd{log_sink};
+        sink_forwarder::peer     peer{ch, "node-a"};
         if(latched)
             fwd.latch("topic");
         fwd.attach_for_fanout(peer, "topic");

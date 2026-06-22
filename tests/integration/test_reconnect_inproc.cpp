@@ -175,7 +175,8 @@ std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t
 {
     inproc_bus<manual_clock>      bus;
     inproc_executor<manual_clock> ex(bus);
-    msg_forwarder                 framer{};
+    plexus::log::null_logger      sink;
+    msg_forwarder                 framer{sink};
     inproc_channel<manual_clock>  capture(ex);
     inproc_channel<manual_clock>  tx(ex);
     tx.connect_to(capture.local_endpoint());
@@ -202,8 +203,9 @@ struct harness
     inproc_executor<manual_clock> ex{bus};
     transport_t                   transport{ex, bus};
 
-    msg_forwarder req_messages{};
-    msg_forwarder resp_messages{};
+    plexus::log::null_logger sink;
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
     rpc_forwarder req_procedures{ex, k_long_timeout};
     rpc_forwarder resp_procedures{ex, k_long_timeout};
 
@@ -525,7 +527,8 @@ TEST_CASE("inproc reconnect: the POST-RECONNECT publish loop stays frame-once (p
         sink_executor                              sx;
         std::vector<std::unique_ptr<sink_channel>> channels;
         std::vector<forwarder::peer>               peers;
-        forwarder                                  fwd{};
+        plexus::log::null_logger                   log_sink;
+        forwarder                                  fwd{log_sink};
         for(int i = 0; i < subscribers; ++i)
         {
             channels.push_back(std::make_unique<sink_channel>(sx));

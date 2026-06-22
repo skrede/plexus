@@ -136,7 +136,8 @@ int main()
     pump_until(io, [] { return false; }, clock::now() + k_boot_settle);
 
     // The node-shared pub/sub + rpc forwarders the session bridges this peer into.
-    serial_msg_fwd messages{};
+    plexus::log::null_logger sink;
+    serial_msg_fwd messages{sink};
     serial_rpc_fwd procedures{io, k_timeout};
 
     // The requester session: is_inbound_bootstrap=false makes this end DRIVE the outbound

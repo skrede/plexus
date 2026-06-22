@@ -63,7 +63,8 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
 
     const auto                                       payload = bytes_of("shared-executor-payload");
     const std::string                                fqn     = "demo._plexus._tcp.local.";
-    pio::message_forwarder<pasio::asio_policy>       fwd{};
+    plexus::log::null_logger                         sink;
+    pio::message_forwarder<pasio::asio_policy>       fwd{sink};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "peer-node"};
     fwd.attach(sub, fqn);
     // The subscribe is now frame_header-wrapped (control frames are framed like

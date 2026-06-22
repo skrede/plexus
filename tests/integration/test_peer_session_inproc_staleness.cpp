@@ -11,10 +11,11 @@ namespace {
 // exercises the production staleness gate, not a hand-strip.
 std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
-    inproc_bus<>      bus;
-    inproc_executor<> ex(bus);
-    msg_forwarder     framer{};
-    inproc_channel<>  capture(ex);
+    inproc_bus<>             bus;
+    inproc_executor<>        ex(bus);
+    plexus::log::null_logger sink;
+    msg_forwarder            framer{sink};
+    inproc_channel<>         capture(ex);
     inproc_channel<>  tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
@@ -155,7 +156,8 @@ struct timeout_harness
     inproc_executor<manual_clock> ex{bus};
     inproc_channel<manual_clock>  peer_ch{ex}; // a silent peer that never responds
 
-    manual_msg messages{};
+    plexus::log::null_logger sink;
+    manual_msg messages{sink};
     manual_rpc procedures{ex, std::chrono::hours(1)};
 
     plexus::io::peer_context<manual_policy> ctx; // the record owns the dialer channel

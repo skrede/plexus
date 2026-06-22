@@ -9,9 +9,10 @@ TEST_CASE("host_identity: a plaintext (no security posture) attach has no authen
 {
     inproc_bus<>       bus;
     inproc_executor<>  ex{bus};
-    inproc_transport<> transport{ex, bus};
-    msg_forwarder      req_messages{}, resp_messages{};
-    rpc_forwarder      req_procedures{ex, k_long_timeout}, resp_procedures{ex, k_long_timeout};
+    inproc_transport<>       transport{ex, bus};
+    plexus::log::null_logger sink;
+    msg_forwarder            req_messages{sink}, resp_messages{sink};
+    rpc_forwarder            req_procedures{ex, k_long_timeout}, resp_procedures{ex, k_long_timeout};
     plexus::io::peer_context<inproc_policy> req_ctx, resp_ctx;
     std::optional<session>                  requester, responder;
 

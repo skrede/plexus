@@ -70,8 +70,9 @@ TEST_CASE("serial channel: a peer_session pair completes the point-at-port hands
         pty_pair           pty;
         ::asio::io_context io;
 
-        serial_msg_fwd req_messages{};
-        serial_msg_fwd resp_messages{};
+        plexus::log::null_logger sink;
+        serial_msg_fwd req_messages{sink};
+        serial_msg_fwd resp_messages{sink};
         serial_rpc_fwd req_procedures{io, k_long_timeout};
         serial_rpc_fwd resp_procedures{io, k_long_timeout};
 

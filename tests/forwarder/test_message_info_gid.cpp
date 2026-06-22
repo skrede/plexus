@@ -19,7 +19,8 @@ TEST_CASE("message_info: declare(emit_source_identity) mints a stable, distinct 
     capture.on_data([&](std::span<const std::byte> f) { framed.assign(f.begin(), f.end()); });
     auto peer = make_peer(sub, "node-rx");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
 
     // The decoded endpoint counter of the LAST frame captured on the wire (nullopt when
     // the frame's gid flag was clear).

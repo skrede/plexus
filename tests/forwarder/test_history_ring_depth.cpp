@@ -13,7 +13,8 @@ TEST_CASE("durability=all with replay_depth caps to the most-recent replay_depth
         capture           cap(ex);
         auto              peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{};
+        plexus::log::null_logger sink;
+        forwarder fwd{sink};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
         for(int i = 0; i < 5; ++i)
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));
@@ -42,7 +43,8 @@ TEST_CASE("a depth-1 ring stays byte-identical to last-writer-wins (all/latest/n
         capture           cap(ex);
         auto              peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{};
+        plexus::log::null_logger sink;
+        forwarder fwd{sink};
         fwd.latch("topic"); // depth-1 convenience
         fwd.publish("topic", as_bytes(std::string{"v1"}));
         fwd.publish("topic", as_bytes(std::string{"v2"}));

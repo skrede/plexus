@@ -81,7 +81,7 @@ public:
             : m_transport(transport)
             , m_executor(executor)
             , m_monitor(m_executor)
-            , m_messages(global_default, logger)
+            , m_messages(logger, global_default)
             , m_procedures(executor, handshake_timeout, logger)
             , m_security_fanout{*this}
             , m_build{executor,

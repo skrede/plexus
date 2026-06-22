@@ -10,7 +10,8 @@ TEST_CASE("detach on 1->0 emits exactly one unsubscribe_request", "[forwarder]")
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder                fwd{sink};
     fwd.attach(peer, "alpha");
     fwd.attach(peer, "alpha"); // refcount 2
     ex.drain();
@@ -30,7 +31,8 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder                fwd{sink};
     fwd.attach(peer, "alpha"); // registers the topic_hash -> fqn resolution
 
     const std::string body  = "the-opaque-payload";
@@ -63,7 +65,8 @@ TEST_CASE("no-subscriber publish sends nothing (demand-driven)", "[forwarder]")
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder                fwd{sink};
     fwd.publish("alpha", as_bytes(std::string{"nobody-home"}));
     ex.drain();
     REQUIRE_FALSE(bus.has_pending_packets()); // nothing was ever enqueued
@@ -75,7 +78,7 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
     counting_logger   log;
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder         fwd{plexus::io::global_default_max_message_bytes, log};
+    forwarder         fwd{log, plexus::io::global_default_max_message_bytes};
     inproc_channel<>  ch(ex);
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
@@ -95,10 +98,11 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
 
 TEST_CASE("default forwarder drops a malformed frame silently via null_logger", "[forwarder]")
 {
-    inproc_bus<>      bus;
-    inproc_executor<> ex(bus);
-    forwarder         fwd{}; // no logger argument: shared null_logger
-    inproc_channel<>  ch(ex);
+    inproc_bus<>             bus;
+    inproc_executor<>        ex(bus);
+    plexus::log::null_logger sink; // an inert sink: warn-and-drop stays silent
+    forwarder                fwd{sink};
+    inproc_channel<>         ch(ex);
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
 

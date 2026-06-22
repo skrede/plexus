@@ -6,7 +6,8 @@ TEST_CASE("latch records the per-topic qos independent of any subscriber", "[lat
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder         fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     fwd.latch("topic"); // zero subscribers, no attach
     // The registry seam the headline scenario depends on: declare/latch records
     // the qos before any add_subscriber. Reach it via a fresh registry mirroring
@@ -29,7 +30,8 @@ TEST_CASE("late subscriber to a latched topic gets the retained value published 
         capture           cap(ex);
         auto              peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{};
+        plexus::log::null_logger sink;
+        forwarder fwd{sink};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(std::string{"retained-v1"})); // NO subscriber yet
         ex.drain();
@@ -56,7 +58,8 @@ TEST_CASE("a non-latched topic does not replay on a late subscribe", "[latch][fo
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     fwd.publish("topic", as_bytes(std::string{"live-only"})); // not latched, no subscriber
     ex.drain();
 
@@ -74,7 +77,8 @@ TEST_CASE("a latched-but-never-published topic replays nothing (empty retention)
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     fwd.latch("topic");
     REQUIRE(fwd.attach_for_fanout(peer, "topic")); // subscribe BEFORE any publish
     ex.drain();
@@ -97,7 +101,8 @@ TEST_CASE("depth=1 replays only the last latched value", "[latch][forwarder]")
         capture           cap(ex);
         auto              peer = make_peer(ch, cap, "node-a");
 
-        forwarder fwd{};
+        plexus::log::null_logger sink;
+        forwarder fwd{sink};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(std::string{"v1"}));
         fwd.publish("topic", as_bytes(std::string{"v2"}));

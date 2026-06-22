@@ -8,7 +8,8 @@ TEST_CASE(
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder         fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     sink_peer         s(ex, "node-a");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
@@ -41,7 +42,8 @@ TEST_CASE("publish_object: a bytes-family subscriber takes the byte path with on
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder         fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     sink_peer         s(ex, "node-a");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
@@ -73,7 +75,8 @@ TEST_CASE(
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder         fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     sink_peer         typed(ex, "node-typed");
     sink_peer         bytes(ex, "node-bytes");
 
@@ -106,7 +109,8 @@ TEST_CASE("publish_object: a tag mismatch falls back to the byte path", "[forwar
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
-    forwarder         fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     sink_peer         s(ex, "node-a");
 
     // Producer + subscriber both declare the SAME type (so attach is accepted), but

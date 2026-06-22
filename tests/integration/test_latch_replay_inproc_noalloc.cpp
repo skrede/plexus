@@ -77,10 +77,11 @@ TEST_CASE("inproc LATCH-NOALLOC: steady-state latched publishing adds no retenti
     // owner by addref, so it adds nothing beyond the frame-once publish owner.
     const auto allocs_per_publish = [&](bool latched)
     {
-        sink_executor        ex;
-        sink_channel         ch(ex);
-        sink_forwarder       fwd{};
-        sink_forwarder::peer peer{ch, "node-a"};
+        sink_executor            ex;
+        sink_channel             ch(ex);
+        plexus::log::null_logger log_sink;
+        sink_forwarder           fwd{log_sink};
+        sink_forwarder::peer     peer{ch, "node-a"};
         if(latched)
             fwd.latch("topic");
         fwd.attach_for_fanout(peer, "topic");

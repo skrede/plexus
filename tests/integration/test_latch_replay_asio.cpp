@@ -89,7 +89,8 @@ late_join one_late_join(std::span<const std::byte> payload, std::string_view fqn
     // here with zero subscribers (a non-latched publish with no subscriber is a
     // no-op — demand-driven). The MEASURED second client then subscribes and its
     // attach_for_fanout drives the replay of the retained frame.
-    pio::message_forwarder<pasio::asio_policy>       fwd{};
+    plexus::log::null_logger                         sink;
+    pio::message_forwarder<pasio::asio_policy>       fwd{sink};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "late-node"};
     if(latched)
         fwd.latch(fqn);

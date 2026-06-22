@@ -477,7 +477,8 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
 
     SECTION("with a hook installed, only the boundary crossings fire, carrying the subscriber role")
     {
-        forwarder fwd{};
+        plexus::log::null_logger log_sink;
+        forwarder                fwd{log_sink};
         fwd.on_demand_transition(
                 [&edges](std::string_view, std::string_view fqn, demand_transition d, demand_role r)
                 { edges.push_back({std::string{fqn}, d, r}); });
@@ -498,7 +499,8 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
 
     SECTION("with NO hook installed, both edges are a no-op (no crash, no emit)")
     {
-        forwarder fwd{};
+        plexus::log::null_logger log_sink;
+        forwarder                fwd{log_sink};
         REQUIRE(fwd.attach(peer, "alpha"));
         REQUIRE(fwd.detach(peer, "alpha"));
         ex.drain();

@@ -83,10 +83,11 @@ inline std::vector<std::byte> make_data_frame(const std::string &payload, std::u
     using plexus::inproc::inproc_channel;
     using inproc_msg = pio::message_forwarder<plexus::inproc::inproc_policy>;
 
-    inproc_bus<>      bus;
-    inproc_executor<> ex(bus);
-    inproc_msg        framer{};
-    inproc_channel<>  capture(ex);
+    inproc_bus<>             bus;
+    inproc_executor<>        ex(bus);
+    plexus::log::null_logger sink;
+    inproc_msg               framer{sink};
+    inproc_channel<>         capture(ex);
     inproc_channel<>  tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
@@ -113,8 +114,9 @@ struct tcp_link
     ::asio::io_context    io;
     pasio::asio_transport transport{io};
 
-    msg_forwarder req_messages{};
-    msg_forwarder resp_messages{};
+    plexus::log::null_logger sink;
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
     rpc_forwarder req_procedures{io, k_long_timeout};
     rpc_forwarder resp_procedures{io, k_long_timeout};
 

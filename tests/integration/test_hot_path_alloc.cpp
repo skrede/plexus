@@ -177,7 +177,8 @@ TEST_CASE("steady-state publish->frame-once->fan-out loop stays frame-once: per-
         sink_executor                              ex;
         std::vector<std::unique_ptr<sink_channel>> channels;
         std::vector<forwarder::peer>               peers;
-        forwarder                                  fwd{};
+        plexus::log::null_logger                   log_sink;
+        forwarder                                  fwd{log_sink};
         for(int i = 0; i < subscribers; ++i)
         {
             channels.push_back(std::make_unique<sink_channel>(ex));
@@ -225,9 +226,10 @@ TEST_CASE(
     const auto allocs_per_publish = [&](bool latched)
     {
         sink_executor   ex;
-        sink_channel    ch(ex);
-        forwarder::peer peer{ch, "node-a"};
-        forwarder       fwd{};
+        sink_channel             ch(ex);
+        forwarder::peer          peer{ch, "node-a"};
+        plexus::log::null_logger log_sink;
+        forwarder                fwd{log_sink};
         if(latched)
             fwd.declare(fqn, topic_qos{.latch = true, .depth = N});
         fwd.attach(peer, fqn);
@@ -265,7 +267,8 @@ TEST_CASE("steady-state message_info deliver path is zero-alloc", "[integration]
     sink_channel    ch(ex);
     forwarder::peer peer{ch, "node-rx"};
 
-    forwarder fwd{};
+    plexus::log::null_logger log_sink;
+    forwarder                fwd{log_sink};
     fwd.attach(peer, fqn); // resolves topic_hash -> fqn for the receive tail
 
     // Build the inner unidirectional payload ONCE (the borrowed receive buffer).
@@ -352,7 +355,8 @@ TEST_CASE("steady-state publish through the egress scheduler bands stays frame-o
         sink_executor                                      ex;
         std::vector<std::unique_ptr<banding_sink_channel>> channels;
         std::vector<forwarder::peer>                       peers;
-        forwarder                                          fwd{};
+        plexus::log::null_logger                           log_sink;
+        forwarder                                          fwd{log_sink};
         for(int i = 0; i < subscribers; ++i)
         {
             channels.push_back(std::make_unique<banding_sink_channel>(ex));

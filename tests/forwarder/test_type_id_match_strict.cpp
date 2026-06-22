@@ -11,7 +11,8 @@ TEST_CASE("strict posture: a typed strict subscriber is refused by an undeclared
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     // No declared producer type for "alpha". A strict typed subscriber refuses to bind.
     REQUIRE_FALSE(fwd.attach_for_fanout(peer, "alpha", std::uint64_t{0xABCD}, strict_typed()));
     ex.drain();
@@ -36,7 +37,8 @@ TEST_CASE("strict posture: a typed strict subscriber binds to a matching typed p
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
     REQUIRE(fwd.attach_for_fanout(peer, "alpha", std::uint64_t{0xABCD}, strict_typed()));
     ex.drain();
@@ -60,7 +62,8 @@ TEST_CASE("strict posture: a lenient subscriber still binds to an undeclared pro
     capture           cap(ex);
     auto              peer = make_peer(ch, cap, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     // A lenient (default-posture) typed subscriber attaches to an untyped producer —
     // the existing accepting-undeclared semantics are unchanged.
     REQUIRE(fwd.attach_for_fanout(peer, "alpha", std::uint64_t{0xABCD}));

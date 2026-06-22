@@ -10,7 +10,8 @@ TEST_CASE("message_info: the existing 2-arg deliver hands up the topic and bytes
     inproc_channel<>  ch(ex);
     auto              peer = make_peer(ch, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
@@ -42,7 +43,8 @@ TEST_CASE("message_info: the metadata overload delivers a fully-populated info",
     inproc_channel<>  ch(ex);
     auto              peer = make_peer(ch, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
@@ -93,7 +95,8 @@ TEST_CASE("message_info: the metadata overload reconstructs source_identity from
     inproc_channel<>  ch(ex);
     auto              peer = make_peer(ch, "node-a");
 
-    forwarder fwd{};
+    plexus::log::null_logger sink;
+    forwarder fwd{sink};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 

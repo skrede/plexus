@@ -24,7 +24,8 @@ TEST_CASE("inproc latch replay delivers the late joiner the retained value throu
         receive_sink      sink(ex);
         auto              peer = make_peer(ch, sink, "late-node");
 
-        forwarder fwd{};
+        plexus::log::null_logger log_sink;
+        forwarder                fwd{log_sink};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(payload)); // retained with ZERO subscribers
         ex.drain();
@@ -62,7 +63,8 @@ TEST_CASE("inproc non-latched topic does not replay on a late subscribe, looped"
         receive_sink      sink(ex);
         auto              peer = make_peer(ch, sink, "late-node");
 
-        forwarder fwd{};
+        plexus::log::null_logger log_sink;
+        forwarder                fwd{log_sink};
         fwd.publish("topic", as_bytes(std::string{"live-only"})); // not latched, no subscriber
         ex.drain();
 

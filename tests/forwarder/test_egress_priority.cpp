@@ -225,7 +225,8 @@ TEST_CASE("egress_priority: a realtime frame leaves a stalled destination before
     {
         stall_state     st;
         stall_channel   ch{st};
-        stall_forwarder fwd{};
+        plexus::log::null_logger sink;
+        stall_forwarder fwd{sink};
 
         // Two topics over the SAME destination, one background and one realtime.
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
@@ -273,7 +274,8 @@ TEST_CASE("egress_priority: a flooded background band never delays a high frame 
     {
         stall_state     st;
         stall_channel   ch{st};
-        stall_forwarder fwd{};
+        plexus::log::null_logger sink;
+        stall_forwarder fwd{sink};
 
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("hi", topic_qos{.priority = io::priority::high});
@@ -328,7 +330,8 @@ TEST_CASE("egress_priority: a multi-band backlog drains in strict band-descendin
     {
         stall_state     st;
         stall_channel   ch{st};
-        stall_forwarder fwd{};
+        plexus::log::null_logger sink;
+        stall_forwarder fwd{sink};
 
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("nm", topic_qos{.priority = io::priority::normal});
@@ -390,7 +393,8 @@ TEST_CASE("egress_priority: inproc is unaffected — mixed priorities deliver in
         sink.on_data([&](std::span<const std::byte> d)
                      { frames.emplace_back(d.begin(), d.end()); });
 
-        inproc_forwarder fwd{};
+        plexus::log::null_logger log_sink;
+        inproc_forwarder fwd{log_sink};
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("rt", topic_qos{.priority = io::priority::realtime});
         REQUIRE(fwd.attach_for_fanout(inproc_forwarder::peer{ch, "node-a"}, "bg"));
@@ -455,7 +459,8 @@ TEST_CASE("egress_priority: the MUX/ERASED path bands — realtime leaves before
         auto                          inner = std::make_unique<stall_channel>(st);
         pio::polymorphic_byte_channel ch(
                 std::make_unique<pio::channel_adapter<stall_channel>>(std::move(inner)));
-        erased_forwarder fwd{};
+        plexus::log::null_logger sink;
+        erased_forwarder fwd{sink};
 
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("rt", topic_qos{.priority = io::priority::realtime});
@@ -567,7 +572,8 @@ TEST_CASE("egress_priority: drop_oldest evicts the oldest resident frame; surviv
         // absent, the new body present, the survivors in FIFO order.
         stall_state     st;
         stall_channel   ch{st};
-        stall_forwarder fwd{};
+        plexus::log::null_logger sink;
+        stall_forwarder fwd{sink};
         // The saturated topic is on the normal band; the drain trigger rides a separate
         // realtime topic on an EMPTY higher band, so the trigger never re-saturates the
         // normal band — it only releases the stall and kicks the inline drain.
@@ -616,7 +622,8 @@ TEST_CASE("egress_priority: block refuses the new frame at a saturated band; it 
 
         stall_state     st;
         stall_channel   ch{st};
-        stall_forwarder fwd{};
+        plexus::log::null_logger sink;
+        stall_forwarder fwd{sink};
         fwd.declare(
                 "t",
                 topic_qos{.congestion = io::congestion::block, .priority = io::priority::normal});
@@ -656,7 +663,8 @@ TEST_CASE(
     {
         stall_state     st;
         stall_channel   ch{st};
-        stall_forwarder fwd{};
+        plexus::log::null_logger sink;
+        stall_forwarder fwd{sink};
         fwd.declare("t", topic_qos{.congestion = mode, .priority = io::priority::normal});
         REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
 
@@ -700,7 +708,8 @@ TEST_CASE("egress_priority: drop_newest refuses the new frame at a saturated ban
 
         stall_state     st;
         stall_channel   ch{st};
-        stall_forwarder fwd{};
+        plexus::log::null_logger sink;
+        stall_forwarder fwd{sink};
         fwd.declare("t",
                     topic_qos{.congestion = io::congestion::drop_newest,
                               .priority   = io::priority::normal});
