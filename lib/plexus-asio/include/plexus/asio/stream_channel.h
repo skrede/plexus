@@ -62,6 +62,28 @@ struct stream_socket_options
     std::uint32_t keepalive_count         = 0;
 };
 
+// The per-read kernel buffer default (heap, sized once — never a stack array). 64 KiB clears
+// one max TLS record (~16 KiB) and dwarfs the 4 KiB that forced 16-1024 reads per large
+// message. It is a required-WITH-default ctor argument on the channel, so a constrained target
+// dials it down to ~1-2 KiB; omitting it yields this byte-identical default.
+inline constexpr std::size_t k_stream_read_buffer_bytes = 64u * 1024u;
+
+// The fail-closed floor for the read-buffer size. The size is a consumer/QoS config value, not
+// an attacker/wire-controlled one; a degenerate (0) request must never produce a silent
+// zero-size buffer (a zero-length async_read makes no progress). It is floored to this minimum
+// — one TLS record clears with margin — rather than rejected, so a mis-set QoS knob degrades to
+// a usable buffer instead of failing construction. There is deliberately no upper clamp here:
+// the on-bench footprint ceiling is a separate, later concern.
+inline constexpr std::size_t k_min_stream_read_buffer_bytes = 4u * 1024u;
+
+// Resolve a requested read-buffer size to the size actually allocated: a degenerate (sub-floor)
+// request floors to k_min_stream_read_buffer_bytes (fail-closed against a zero-size buffer), any
+// at-or-above request is honored verbatim.
+constexpr std::size_t stream_read_buffer_size(std::size_t requested) noexcept
+{
+    return requested < k_min_stream_read_buffer_bytes ? k_min_stream_read_buffer_bytes : requested;
+}
+
 // A byte_channel over an asio stream type (a bare socket, or an ssl::stream). Inbound bytes
 // feed a member wire::stream_inbound (which composes the frame_reassembler and owns the
 // no-progress slowloris timer); each complete frame is POSTED to on_data (per the
@@ -78,10 +100,6 @@ template<typename Stream, typename Traits, typename Bootstrap>
 class stream_channel
 {
 public:
-    // The per-read kernel buffer (heap, sized once — never a stack array). 64 KiB clears one max
-    // TLS record (~16 KiB) and dwarfs the 4 KiB that forced 16-1024 reads per large message.
-    static constexpr std::size_t k_stream_read_buffer_bytes = 64u * 1024u;
-
     // Dial/executor-alone: unconnected, not reading yet — the transport arms the open path
     // (start_read for plaintext, the handshake for TLS). BootstrapArgs forward the per-backend
     // construction state (none for plaintext, the credential for TLS) into the Bootstrap. The
@@ -91,11 +109,14 @@ public:
     template<typename... BootstrapArgs>
     explicit stream_channel(::asio::io_context &io, wire::stream_inbound_config cfg,
                             io::congestion congestion, io::egress_capacity egress,
-                            stream_socket_options socket_options, BootstrapArgs &&...bargs)
+                            stream_socket_options socket_options,
+                            std::size_t read_buffer_bytes = k_stream_read_buffer_bytes,
+                            BootstrapArgs &&...bargs)
             : m_io(io)
             , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
             , m_stream(m_bootstrap.make_stream(io))
             , m_inbound(io, cfg)
+            , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
             , m_congestion(congestion)
             , m_socket_options(socket_options)
             , m_egress(detail::stream_make_send_sink(*this), egress.bytes)
@@ -111,11 +132,14 @@ public:
     template<typename Connected, typename... BootstrapArgs>
     stream_channel(::asio::io_context &io, Connected connected, wire::stream_inbound_config cfg,
                    io::congestion congestion, io::egress_capacity egress,
-                   stream_socket_options socket_options, BootstrapArgs &&...bargs)
+                   stream_socket_options socket_options,
+                   std::size_t read_buffer_bytes = k_stream_read_buffer_bytes,
+                   BootstrapArgs &&...bargs)
             : m_io(io)
             , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
             , m_stream(m_bootstrap.make_stream(io, std::move(connected)))
             , m_inbound(io, cfg)
+            , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
             , m_congestion(congestion)
             , m_socket_options(socket_options)
             , m_egress(detail::stream_make_send_sink(*this), egress.bytes)
@@ -298,7 +322,7 @@ private:
     Stream                                                 m_stream;
     wire::stream_inbound<asio_timer, ::asio::io_context &> m_inbound;
     std::vector<::asio::const_buffer> m_gather; // reused gather-write iovec (grows once)
-    std::vector<std::byte> m_read_buf = std::vector<std::byte>(k_stream_read_buffer_bytes);
+    std::vector<std::byte> m_read_buf; // sized once from the read-buffer ctor param
     io::congestion         m_congestion;
     stream_socket_options  m_socket_options;
     std::uint64_t          m_scheduler_key{

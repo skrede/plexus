@@ -81,8 +81,9 @@ public:
                 wire::stream_inbound_config         cfg        = {},
                 io::congestion                      congestion = io::congestion::block,
                 io::egress_capacity                 egress = io::egress_capacity::bounded_default(),
-                plexus::asio::stream_socket_options opts   = {})
-            : base(io, cfg, congestion, egress, opts, cred)
+                plexus::asio::stream_socket_options opts   = {},
+                std::size_t read_buffer_bytes = plexus::asio::k_stream_read_buffer_bytes)
+            : base(io, cfg, congestion, egress, opts, read_buffer_bytes, cred)
     {
     }
 
@@ -95,8 +96,9 @@ public:
                 const tls_credential &cred, wire::stream_inbound_config cfg = {},
                 io::congestion                      congestion = io::congestion::block,
                 io::egress_capacity                 egress = io::egress_capacity::bounded_default(),
-                plexus::asio::stream_socket_options opts   = {})
-            : base(io, std::move(connected), cfg, congestion, egress, opts, cred)
+                plexus::asio::stream_socket_options opts   = {},
+                std::size_t read_buffer_bytes = plexus::asio::k_stream_read_buffer_bytes)
+            : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes, cred)
     {
     }
 

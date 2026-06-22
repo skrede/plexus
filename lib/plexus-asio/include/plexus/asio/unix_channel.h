@@ -69,8 +69,9 @@ public:
     explicit unix_channel(::asio::io_context &io, wire::stream_inbound_config cfg = {},
                           io::congestion        congestion = io::congestion::block,
                           io::egress_capacity   egress     = io::egress_capacity::bounded_default(),
-                          stream_socket_options opts       = {})
-            : base(io, cfg, congestion, egress, opts)
+                          stream_socket_options opts       = {},
+                          std::size_t read_buffer_bytes    = k_stream_read_buffer_bytes)
+            : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
     {
     }
 
@@ -78,8 +79,9 @@ public:
                  wire::stream_inbound_config cfg        = {},
                  io::congestion              congestion = io::congestion::block,
                  io::egress_capacity         egress     = io::egress_capacity::bounded_default(),
-                 stream_socket_options       opts       = {})
-            : base(io, std::move(connected), cfg, congestion, egress, opts)
+                 stream_socket_options       opts       = {},
+                 std::size_t                 read_buffer_bytes = k_stream_read_buffer_bytes)
+            : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
     {
     }
 };

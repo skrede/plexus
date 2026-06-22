@@ -15,6 +15,15 @@ target_link_libraries(test_asio_policy PRIVATE
 
 catch_discover_tests(test_asio_policy TEST_PREFIX "asio.")
 
+# The stream read-buffer tunability oracle: a value-level check of the per-read buffer
+# sizing (the 64 KiB default, a custom override, the degenerate-size floor). Header-only
+# inside plexus::asio (no socket); the `asio.` ctest prefix selects it.
+add_executable(test_stream_read_buffer test_stream_read_buffer.cpp)
+target_link_libraries(test_stream_read_buffer PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_stream_read_buffer TEST_PREFIX "asio.")
+
 # Live connectionless-UDP legs: the best_effort transport (end-to-end + dedup +
 # oversize) and the handshake ARQ over injected loss. Header-only inside plexus::asio
 # (no new compiled backend target); the `udp.` ctest prefix selects them. When the
