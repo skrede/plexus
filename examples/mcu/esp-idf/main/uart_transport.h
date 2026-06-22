@@ -163,7 +163,9 @@ private:
                 .parity     = UART_PARITY_DISABLE,
                 .stop_bits  = UART_STOP_BITS_1,
                 .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
+                .rx_flow_ctrl_thresh = 0,
                 .source_clk = UART_SCLK_DEFAULT,
+                .flags      = {},
         };
         uart_param_config(m_port, &cfg);
         uart_driver_install(m_port, k_rx_ring_bytes, 0, 0, nullptr, 0);
