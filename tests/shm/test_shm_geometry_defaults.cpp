@@ -4,7 +4,10 @@
 #include "plexus/io/shm/loan_status.h"
 #include "plexus/io/shm/region_broker_concept.h"
 #include "plexus/io/shm/ring_geometry.h"
+#include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/ring_layout.h"
+#include "plexus/io/shm/shm_mux_member.h"
+#include "plexus/io/shm/shm_selection.h"
 #include "plexus/io/shm/shm_topic_registry.h"
 
 #include "plexus/io/congestion.h"
@@ -176,6 +179,7 @@ struct silent_notifier
 static_assert(notifier<silent_notifier>, "silent_notifier must satisfy the notifier seam");
 
 using test_registry = shm_topic_registry<stub_broker, silent_notifier>;
+using test_member   = shm_mux_member<stub_broker, silent_notifier>;
 
 }
 
@@ -199,6 +203,29 @@ TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-iden
                               ring_geometry_mode::reliable_preserving, k_max_consumers);
     REQUIRE(small.cell_count == 256u);
     REQUIRE(small.slot_capacity == 4096u);
+
+    // The same-host ring defaults relocated from node_options onto the shm transport ship the
+    // BYTE-IDENTICAL values the node now sources from the member: the {0, reliable_preserving}
+    // geometry (max_consumers 0 resolves to the capacity floor above) and the consumer-sovereign
+    // auto-upgrade policy. This is the relocation's behavioral-identity proof (no field migration,
+    // no value drift) — the unprovisioned default resolves through default_geometry() to the SAME
+    // 256/4096 ring asserted above.
+    region_store store;
+    stub_broker  broker{store};
+    test_member  member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+
+    const shm_geometry def = member.default_geometry();
+    REQUIRE(def.max_consumers == 0u);
+    REQUIRE(def.mode == ring_geometry_mode::reliable_preserving);
+
+    // The default policy reproduces attempt_shm_upgrade across the full (same_host x hint) matrix:
+    // it engages only when same-host AND a qualifying hint is set, and can only decline otherwise.
+    for(const bool same_host : {false, true})
+        for(const dispatch_hint hint :
+            {dispatch_hint::none, dispatch_hint::frequent, dispatch_hint::large,
+             dispatch_hint::priority, dispatch_hint::frequent | dispatch_hint::large})
+            REQUIRE(member.upgrade_policy()(same_host, hint) ==
+                    attempt_shm_upgrade(same_host, hint));
 }
 
 TEST_CASE(
