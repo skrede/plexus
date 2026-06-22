@@ -15,6 +15,7 @@
 
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/known_peers.h"
+#include "plexus/io/fixed_peer_storage.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/handshake_fsm.h"
 
@@ -69,5 +70,16 @@ int main()
 
     (void)engine.messages();
     (void)engine.known();
+
+    // The constrained-target peer table: instantiate basic_known_peers over the dep-free
+    // fixed-capacity storage and drive its four verbs so the over-capacity fail-closed path
+    // (plexus::detail::fail_closed) is compiled under -fno-exceptions. The routing_engine
+    // threads PeerStorage as a defaulted template param, so a fixed-storage engine compiles
+    // on the same MCU floor.
+    plexus::io::basic_known_peers<plexus::io::fixed_peer_storage<8>> bounded;
+    bounded.note_peer(self, plexus::io::endpoint{.scheme = "inproc", .address = "x"});
+    (void)bounded.lookup(self);
+    (void)bounded.contains(self);
+    bounded.forget(self);
     return 0;
 }

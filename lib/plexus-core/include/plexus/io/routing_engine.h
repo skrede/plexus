@@ -59,7 +59,8 @@ namespace plexus::io {
 // over-limit: one cohesive node-level engine; the demand-driven public verbs share the borrowed
 // substrate members and the posted observer fan-out, so splitting the API scatters that shared
 // state (the sink-install, sink-maker, and posted-dispatch clusters already extracted to detail/).
-template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
+template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock,
+         typename PeerStorage = std_map_peer_storage>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
 {
@@ -499,7 +500,7 @@ private:
     session_build_context<Policy>                        m_build;
     registry_type                                        m_registry;
     shm::medium_coordinator<registry_type, channel_type> m_coordinator;
-    known_peers                                          m_known;
+    basic_known_peers<PeerStorage>                       m_known;
     std::vector<observer *>                              m_observers;
     // The single capture-decision point: owns the per-topic selection rules AND the data-path
     // observer-presence count, so the hot sink heads consult one gate, not a separate boolean.

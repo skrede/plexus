@@ -20,7 +20,8 @@ set(PLEXUS_IO_TESTS
     test_cookie_secret
     test_reassembler_flat_bound
     test_identity_types
-    test_epoch_source)
+    test_epoch_source
+    test_known_peers_storage)
 
 foreach(test ${PLEXUS_IO_TESTS})
     add_executable(${test} ${test}.cpp)
