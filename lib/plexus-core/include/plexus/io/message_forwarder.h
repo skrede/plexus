@@ -389,9 +389,8 @@ public:
     // its counted subscribes on reconnect. Empty vector for an unknown node_name.
     const std::vector<remembered_demand> &remembered_topics(const std::string &node_name) const
     {
-        static const std::vector<remembered_demand> empty;
-        auto                                        it = m_remote_topics.find(node_name);
-        return it == m_remote_topics.end() ? empty : it->second;
+        auto it = m_remote_topics.find(node_name);
+        return it == m_remote_topics.end() ? m_empty : it->second;
     }
 
     // Decode the INNER unidirectional payload, resolve the fqn by topic_hash, and hand the opaque
@@ -771,6 +770,9 @@ private:
     endpoint_type                                                            m_endpoint;
     detail::egress_scheduler<channel_type, Policy>                           m_egress;
     std::unordered_map<std::string, std::vector<remembered_demand>>          m_remote_topics;
+    // The forwarder owns this never-mutated empty vector so remembered_topics returns it by
+    // reference on the unknown-node branch — no function-local static, no dynamic-init guard.
+    std::vector<remembered_demand>                                           m_empty;
     std::unordered_map<std::uint64_t, detail::history_ring>                  m_retained;
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp;
     plexus::detail::move_only_function<void(const detail::drop_event &)>     m_on_drop;

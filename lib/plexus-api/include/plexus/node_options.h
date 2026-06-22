@@ -76,8 +76,8 @@ struct node_options
     // preserves the pre-attach-gate behavior.
     const io::security::attach_policy *attach_policy{nullptr};
 
-    // The cold-path log sink, borrowed. Null resolves to shared_null_logger() once in
-    // the node ctor. A null-object default pointer, never a stand-in for a real sink.
+    // The cold-path log sink, borrowed. Null resolves to the node-owned inert default
+    // logger in the node ctor. A null-object default pointer, never a stand-in for a real sink.
     log::logger *logger{nullptr};
 
     // required-with-default 8 MiB: the node-level per-message size default a topic with

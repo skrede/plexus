@@ -717,9 +717,9 @@ private:
                 .attach_policy            = opts.attach_policy};
     }
 
-    static log::logger &resolve_logger(const node_options &opts)
+    log::logger &resolve_logger(const node_options &opts)
     {
-        return opts.logger != nullptr ? *opts.logger : io::shared_null_logger();
+        return opts.logger != nullptr ? *opts.logger : m_default_logger;
     }
 
     // The engine's transport leaf: the one borrowed transport, or the node-owned mux glue when
@@ -763,6 +763,10 @@ private:
     plexus::node_id                             m_id;
     executor_type                               m_executor;
     discovery::discovery                       &m_disc;
+    // The node owns its inert default logger and binds m_logger / the engine to it by reference
+    // when no logger is supplied — declared immediately ABOVE m_logger so it is fully constructed
+    // before resolve_logger binds either reference in the init-list. One owned sink, no global.
+    log::null_logger                            m_default_logger;
     log::logger                                &m_logger;
     std::string                                 m_service_name;
     std::string                                 m_host;

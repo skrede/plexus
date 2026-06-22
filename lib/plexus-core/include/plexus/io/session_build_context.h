@@ -59,8 +59,9 @@ struct session_build_context
     // The security edge routes straight into session_observer.on_security (the lifecycle edge
     // keeps its typed sink above because the engine arms the monitor off it first). The engine
     // installs a posting adapter here so a security transition reaches observers POSTED, never
-    // inline. Default = the inert observer (one predictable branch when none is set).
-    observer &session_observer = shared_null_observer();
+    // inline. Supplied positionally on every construction path (the engine fills it with its
+    // own security fan-out); never defaulted to a shared sink.
+    observer                    &session_observer;
     // The OpenSSL-free security seam (transcript digest + AEAD decorator install): the
     // type-erased boundary that keeps the EVP/decorator instantiation behind the gated target
     // while the bridge stays plaintext. An empty seam is the no-AEAD posture.
