@@ -5,8 +5,7 @@
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/polymorphic_byte_channel.h"
-
-#include "plexus/io/shm/shm_mux_member.h"
+#include "plexus/io/shm/shm_preference_hook.h"
 
 #include <span>
 #include <string>

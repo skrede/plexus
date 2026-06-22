@@ -19,8 +19,6 @@
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 
-#include "plexus/io/shm/shm_mux_member.h"
-
 #include "plexus/log/logger.h"
 
 #include "plexus/discovery/discovery.h"
