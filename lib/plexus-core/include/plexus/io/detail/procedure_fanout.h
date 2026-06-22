@@ -15,6 +15,11 @@
 
 namespace plexus::io::detail {
 
+// Forward-declared because reply_status() calls it before its definition below.
+template<typename Forwarder, typename Channel>
+void send_data(Forwarder &f, Channel &channel, wire::msg_type type,
+               std::span<const std::byte> inner, std::uint64_t session_id);
+
 // The rpc observation fan: hand the call/serve/reply edge to the engine sink (which posts a
 // snapshot to the observer fan-out); absent = one branch. The surfaced view is envelope-only (the
 // correlation_id, and status for a reply) — the param/return spans are transient, so no

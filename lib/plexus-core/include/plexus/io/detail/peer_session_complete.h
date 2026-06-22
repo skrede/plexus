@@ -16,6 +16,10 @@
 
 namespace plexus::io::detail {
 
+// Forward-declared because execute() calls it before its definition below.
+template<typename Session>
+void on_complete(Session &s);
+
 // The peer_kind discriminator: an inbound bootstrap is an accepted peer, an outbound
 // dial a dialed peer.
 template<typename Session>
