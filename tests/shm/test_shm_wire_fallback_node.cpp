@@ -41,11 +41,11 @@
 // The PRODUCTION-SEAM proof for wire_fallback: the same-host medium decision a node
 // reaches through node.advertise(...) is the multiplexer's selection hook over the
 // shm-bearing pack, gated by shm_mux_member::can_acquire. The node installs this hook
-// (prefer_shm_hook) whenever its composition carries a shared-memory member, and
+// (prefer_upgradeable_hook) whenever its composition carries a shared-memory member, and
 // can_acquire is MODE-AWARE: a wire_fallback topic declines the ring so the same-host
 // channel resolves to the WIRE (the fail-safe — a message too large for the capped ring
 // always has a reliable channel), while reliable_preserving / best_effort_large prefer the
-// ring exactly as before. This oracle drives the REAL prefer_shm_hook over the REAL
+// ring exactly as before. This oracle drives the REAL prefer_upgradeable_hook over the REAL
 // shm_mux_member (provisioned through the SAME set_topic_geometry the node declare path
 // calls) and asserts which member the dial routed to — the medium, asserted at the channel
 // level, never assumed. A live xproc round-trip then proves an over-cap wire_fallback
@@ -128,7 +128,7 @@ struct stream_member
 
 // The composition the node builds for a shm-bearing pack: the shm member FIRST (the
 // preference hook scans for its shm_eligible flag), the stream member second (the
-// fallback). The node installs prefer_shm_hook(shm) over exactly this shape.
+// fallback). The node installs prefer_upgradeable_hook(shm) over exactly this shape.
 using mux_t = pcore::multiplexing_transport<member_t, stream_member>;
 
 // Resolve which member a same-host "shm" dial routed to, with the topic provisioned by the
@@ -141,7 +141,7 @@ std::string route_for_mode(const std::string &fqn, pio::ring_geometry_mode mode)
     member.set_topic_geometry(fqn, 4 * k_kib, pio::shm_geometry{2u, mode});
 
     stream_member stream;
-    mux_t         mux{member, stream, {}, pio::prefer_shm_hook(member)};
+    mux_t         mux{member, stream, {}, plexus::io::prefer_upgradeable_hook(member)};
 
     std::string dialed_scheme;
     mux.on_dialed([&](std::unique_ptr<pcore::polymorphic_byte_channel> ch, const endpoint &)
@@ -249,7 +249,7 @@ TEST_CASE("shm.wire_fallback_node a wire_fallback topic's same-host channel is t
           "modes prefer SHM",
           "[shm][wire_fallback][node]")
 {
-    // The medium asserted at the production selection seam: the SAME prefer_shm_hook the
+    // The medium asserted at the production selection seam: the SAME prefer_upgradeable_hook the
     // node installs over a shm-bearing pack, the SAME set_topic_geometry the node declare
     // path calls. A wire_fallback topic declines the ring (the hook falls back to the wire
     // member); the two reliable-ring modes prefer the ring — byte-identical to today.

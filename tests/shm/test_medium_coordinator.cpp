@@ -2,7 +2,7 @@
 // shared stub_registry + fake_channel + gate/receive recorder harness (the engine-owned
 // coordinator over its injected gates), so splitting the cells scatters that shared
 // recorder-bound fixture into near-empty per-cell shells.
-#include "plexus/io/shm/medium_coordinator.h"
+#include "plexus/io/upgrade_coordinator.h"
 #include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/dispatch_hint.h"
 #include "plexus/io/message_forwarder.h"
@@ -72,7 +72,7 @@ struct fake_channel
     void send(std::span<const std::byte> b) { sent.push_back(b.size()); }
 };
 
-using coordinator = medium_coordinator<stub_registry, fake_channel>;
+using coordinator = plexus::io::upgrade_coordinator<stub_registry, fake_channel>;
 
 // The injected mint gate the node would build over its shm member: it records every mint
 // as the served-medium path, returns a live companion (the can_acquire/mint verdict) at
@@ -86,7 +86,7 @@ struct gate_recorder
     std::uint64_t            slot_capacity = 0;
     int                      live          = 0;
 
-    companion_mint<fake_channel> mint(std::string_view fqn)
+    plexus::io::upgrade_mint<fake_channel> mint(std::string_view fqn)
     {
         if(!accept)
             return {};
@@ -104,7 +104,7 @@ void install_gate(coordinator &c, gate_recorder &gate)
 
 // The injected RECEIVE gate the node would build over its shm member's
 // mint_receive_companion: it records every attach as (node_name, fqn) and returns a live
-// companion_receive whose erased owner increments/decrements a live count (modeling the
+// upgrade_receive whose erased owner increments/decrements a live count (modeling the
 // RAII handle that releases the ring on drop), or a declined (empty) owner when accept is
 // false (the broker-failure / no-shm path).
 struct receive_recorder
@@ -138,7 +138,7 @@ struct receive_recorder
         }
     };
 
-    companion_receive mint(std::string_view node_name, std::string_view fqn)
+    plexus::io::upgrade_receive mint(std::string_view node_name, std::string_view fqn)
     {
         if(!accept)
             return {};

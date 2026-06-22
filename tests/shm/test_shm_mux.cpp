@@ -235,7 +235,7 @@ TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member
         shm_member   shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
-        mux_t               mux{shm, stream, {}, prefer_shm_hook(shm)};
+        mux_t               mux{shm, stream, {}, pio::prefer_upgradeable_hook(shm)};
 
         // The mux wraps each member's dialed channel into a polymorphic_byte_channel and
         // re-emits it; the dialed channel's scheme survives the erasure, so a "shm"-scheme
@@ -270,7 +270,7 @@ TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring a
         shm_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
-        mux_t               mux{shm, stream, {}, prefer_shm_hook(shm)};
+        mux_t               mux{shm, stream, {}, pio::prefer_upgradeable_hook(shm)};
 
         std::string dialed_scheme;
         mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &)

@@ -551,7 +551,7 @@ catch_discover_tests(test_shm_mux TEST_PREFIX "shm.")
 
 # The medium-coordinator oracle (header-only core + inproc): the engine-owned coordinator
 # consumes the forwarder's demand transition, reads same_host, runs the upgrade policy, and
-# acquires/releases the per-topic ring THROUGH the injected gate (the can_acquire/prefer_shm_hook
+# acquires/releases the per-topic ring THROUGH the injected gate (the can_acquire/prefer_upgradeable_hook
 # path), never a direct registry acquire — with refcount 0->1/1->0 gating, last-unsubscribe and
 # peer-dead teardown, the bilateral-OR hint, and dual delivery (the wire never suppressed). It also
 # drives the forwarder's real on_demand_transition emit seam (boundary-only fire, no-op when unset).
@@ -646,7 +646,7 @@ target_link_libraries(test_shm_wire_fallback PRIVATE
 catch_discover_tests(test_shm_wire_fallback TEST_PREFIX "shm.")
 
 # The wire_fallback PRODUCTION-SEAM proof: the same-host medium decision a node reaches
-# through node.advertise(...) is the multiplexer's prefer_shm_hook over the shm-bearing
+# through node.advertise(...) is the multiplexer's prefer_upgradeable_hook over the shm-bearing
 # pack, gated by the now MODE-AWARE shm_mux_member::can_acquire. A wire_fallback topic
 # (provisioned by the SAME set_topic_geometry the node declare path calls) declines the
 # ring so its same-host channel is the WIRE (the fail-safe); the two reliable-ring modes
