@@ -30,6 +30,7 @@
 #include "plexus/node_id.h"
 #include "plexus/topic_qos.h"
 #include "plexus/policy.h"
+#include "plexus/transport_priority.h"
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/fail_closed.h"
@@ -196,6 +197,7 @@ public:
     using engine_transport = detail::node_engine_transport<Transports...>;
     using engine_type      = io::routing_engine<engine_policy, engine_transport>;
     using engine_channel   = typename engine_type::channel_type;
+    using transport_tuple  = std::tuple<Transports...>;
 
     // The node_id is taken VERBATIM: plexus compares the identity, never mints or interprets it.
     node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id,
