@@ -103,16 +103,17 @@ inline reconnect_config bounded_cfg(std::uint32_t max_attempts)
 
 struct asio_node
 {
-    ::asio::io_context   &io;
-    pasio::asio_transport transport;
-    engine                eng;
+    ::asio::io_context      &io;
+    pasio::asio_transport    transport;
+    plexus::log::null_logger sink;
+    engine                   eng;
 
     asio_node(::asio::io_context &shared, std::uint8_t id_seed, bool eager,
               const reconnect_config &redial = forever_cfg(), std::uint8_t compatible = 1)
             : io(shared)
             , transport(shared)
             , eng(transport, shared, make_cfg(id_seed, 1, compatible), k_long_timeout, redial,
-                  k_seed, eager)
+                  k_seed, sink, eager)
     {
         eng.listen({"tcp", "127.0.0.1:0"});
     }

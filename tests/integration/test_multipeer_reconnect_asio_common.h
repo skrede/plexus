@@ -144,11 +144,12 @@ struct multipeer_net
 {
     ::asio::io_context                      io;
     pasio::asio_transport                   transport{io};
+    plexus::log::null_logger                sink;
     engine                                  a;
     std::vector<std::unique_ptr<peer_node>> peers;
 
     multipeer_net(std::size_t n, const reconnect_config &a_redial = fast_cfg())
-            : a(transport, io, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, false)
+            : a(transport, io, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, sink, false)
     {
         a.listen({"tcp", "127.0.0.1:0"});
         for(std::size_t i = 0; i < n; ++i)

@@ -126,7 +126,7 @@ struct fan_net
     explicit fan_net(std::size_t subscriber_count)
             : pub_transport(ex, bus)
             , pub(pub_transport, ex, make_cfg(k_pub_seed), k_long_timeout, forever_cfg(), k_seed,
-                  false)
+                  sink, false)
     {
         pub.listen({"inproc", "pub"});
         for(std::size_t i = 0; i < subscriber_count; ++i)
@@ -134,7 +134,7 @@ struct fan_net
             const auto seed = static_cast<std::uint8_t>(0x10 + i);
             auto       t    = std::make_unique<transport_t>(ex, bus);
             auto e = std::make_unique<engine>(*t, ex, make_cfg(seed), k_long_timeout, forever_cfg(),
-                                              k_seed, false);
+                                              k_seed, sink, false);
             const std::string name = "sub-" + std::to_string(i);
             e->listen({"inproc", name});
             e->note_peer(pub_id(), {"inproc", "pub"});
@@ -151,6 +151,7 @@ struct fan_net
     inproc_bus<manual_clock>                  bus;
     inproc_executor<manual_clock>             ex{bus};
     transport_t                               pub_transport;
+    plexus::log::null_logger                  sink;
     engine                                    pub;
     std::vector<std::unique_ptr<transport_t>> sub_transports;
     std::vector<std::unique_ptr<engine>>      subs;
@@ -170,9 +171,9 @@ struct rpc_net
             : caller_transport(ex, bus)
             , provider_transport(ex, bus)
             , caller(caller_transport, ex, make_cfg(k_caller_seed), k_long_timeout, forever_cfg(),
-                     k_seed, false)
+                     k_seed, sink, false)
             , provider(provider_transport, ex, make_cfg(k_provider_seed), k_long_timeout,
-                       forever_cfg(), k_seed, false)
+                       forever_cfg(), k_seed, sink, false)
     {
         caller.listen({"inproc", "caller"});
         provider.listen({"inproc", "provider"});
@@ -189,6 +190,7 @@ struct rpc_net
     inproc_executor<manual_clock> ex{bus};
     transport_t                   caller_transport;
     transport_t                   provider_transport;
+    plexus::log::null_logger      sink;
     engine                        caller;
     engine                        provider;
 };

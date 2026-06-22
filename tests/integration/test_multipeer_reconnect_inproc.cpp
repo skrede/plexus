@@ -177,14 +177,15 @@ struct discovery_stub
 // engine's channels unwind before the transport.
 struct peer_node
 {
-    transport_t     transport;
-    engine          eng;
-    plexus::node_id id;
-    endpoint        ep;
+    transport_t              transport;
+    plexus::log::null_logger sink;
+    engine                   eng;
+    plexus::node_id          id;
+    endpoint                 ep;
 
     peer_node(inproc_executor<manual_clock> &ex, inproc_bus<manual_clock> &bus, std::uint8_t seed)
             : transport(ex, bus)
-            , eng(transport, ex, make_cfg(seed), k_long_timeout, forever_cfg(), k_seed, false)
+            , eng(transport, ex, make_cfg(seed), k_long_timeout, forever_cfg(), k_seed, sink, false)
             , id(make_id(seed))
             , ep{"inproc", "node-" + std::to_string(static_cast<unsigned>(seed))}
     {
@@ -202,12 +203,13 @@ struct multipeer_net
     inproc_bus<manual_clock>                bus;
     inproc_executor<manual_clock>           ex{bus};
     transport_t                             transport_a{ex, bus};
+    plexus::log::null_logger                sink;
     engine                                  a;
     discovery_stub                          discovery;
     std::vector<std::unique_ptr<peer_node>> peers;
 
     multipeer_net(std::size_t n, const reconnect_config &a_redial = forever_cfg())
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, false)
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, sink, false)
     {
         a.listen({"inproc", "node-a"});
         for(std::size_t i = 0; i < n; ++i)

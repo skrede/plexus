@@ -96,9 +96,10 @@ inline reconnect_config forever_cfg()
 // channels/sessions before the io_context they borrow.
 struct asio_node
 {
-    ::asio::io_context   &io;
-    pasio::asio_transport transport;
-    engine                eng;
+    ::asio::io_context      &io;
+    pasio::asio_transport    transport;
+    plexus::log::null_logger sink;
+    engine                   eng;
 
     // listen_now=false defers the listen so the caller can bring the acceptor up
     // LATE (the refused-then-up path that forces an out-of-order dial completion).
@@ -106,7 +107,7 @@ struct asio_node
             : io(shared)
             , transport(shared)
             , eng(transport, shared, make_cfg(id_seed), k_long_timeout, forever_cfg(), k_seed,
-                  eager)
+                  sink, eager)
     {
         if(listen_now)
             eng.listen({"tcp", "127.0.0.1:0"});

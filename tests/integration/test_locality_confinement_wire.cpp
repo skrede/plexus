@@ -57,10 +57,11 @@ TEST_CASE("locality confinement: a local-confined subscribe toward a tcp peer es
         demand_transport                              transport_a{ex, bus};
         demand_transport                              transport_b{ex, bus};
 
+        plexus::log::null_logger sink;
         demand_engine a(transport_a, ex, make_cfg(0xA1), std::chrono::hours(1), forever_cfg(),
-                        k_seed, /*eager=*/false);
+                        k_seed, sink, /*eager=*/false);
         demand_engine b(transport_b, ex, make_cfg(0xB2), std::chrono::hours(1), forever_cfg(),
-                        k_seed, /*eager=*/false);
+                        k_seed, sink, /*eager=*/false);
         a.listen({"inproc", "node-a"});
         b.listen({"inproc", "node-b"});
 

@@ -149,6 +149,7 @@ struct two_node
     inproc_executor<manual_clock> ex{bus};
     transport_t                   transport_a{ex, bus};
     transport_t                   transport_b{ex, bus};
+    plexus::log::null_logger      sink;
 
     engine a;
     engine b;
@@ -160,8 +161,8 @@ struct two_node
     endpoint        ep_b{"inproc", "node-b"};
 
     explicit two_node(bool eager = false)
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, eager)
-            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, eager)
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, eager)
+            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, eager)
     {
         a.listen(ep_a);
         b.listen(ep_b);

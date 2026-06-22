@@ -231,7 +231,8 @@ struct two_node
 
     // A owns a counting logger so the semantic-close leg can assert the single warn
     // the protocol-error funnel emits; it is injected into A's engine by reference.
-    counting_logger a_logger;
+    counting_logger          a_logger;
+    plexus::log::null_logger sink; // B's inert sink
 
     engine a;
     engine b;
@@ -243,8 +244,8 @@ struct two_node
     endpoint        ep_b{"inproc", "node-b"};
 
     explicit two_node(const reconnect_config &a_redial = forever_cfg())
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, false, a_logger)
-            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, false)
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, a_logger, false)
+            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false)
     {
         a.listen(ep_a);
         b.listen(ep_b);
@@ -416,10 +417,11 @@ TEST_CASE("inproc drop seam: crossing a surrender bound marks is_dead and re-dia
 
         // A's B slot is bounded (max_attempts) so enough real drops surrender it; C
         // is forever, so it is the live co-resident peer the surrender must not touch.
+        plexus::log::null_logger sink;
         engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts),
-                 k_seed, false);
-        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, false);
-        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, false);
+                 k_seed, sink, false);
+        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
 
         plexus::node_id id_b = make_id(0xB2);
         plexus::node_id id_c = make_id(0xC3);
@@ -631,11 +633,13 @@ TEST_CASE("inproc drop seam: an engine-installed observer sees an unroutable inp
         transport_t                   transport_a{ex, bus};
         transport_t                   transport_b{ex, bus};
 
-        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, false);
+        plexus::log::null_logger sink;
+        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
         // B's engine is destroyed mid-test to make A's heartbeat target vanish, so it
         // lives in an optional A's slot outlives (no clock advance => no re-dial yet).
         std::optional<engine> b;
-        b.emplace(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, false);
+        b.emplace(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink,
+                  false);
 
         plexus::node_id id_b = make_id(0xB2);
         endpoint        ep_b{"inproc", "node-b"};
@@ -768,7 +772,8 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         inproc_bus<manual_clock>      bus;
         inproc_executor<manual_clock> ex{bus};
         transport_t                   transport{ex, bus};
-        engine eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, false);
+        plexus::log::null_logger      sink;
+        engine eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
         recording_drop_observer observer;
         eng.add_observer(observer);
 

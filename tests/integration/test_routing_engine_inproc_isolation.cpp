@@ -83,9 +83,10 @@ TEST_CASE("inproc routing: a single slot's channel drop re-dials only that slot;
         transport_t                   transport_b{ex, bus};
         transport_t                   transport_c{ex, bus};
 
-        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, false);
-        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, false);
-        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, false);
+        plexus::log::null_logger sink;
+        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
 
         plexus::node_id id_b = make_id(0xB2);
         plexus::node_id id_c = make_id(0xC3);

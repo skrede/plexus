@@ -71,12 +71,14 @@ public:
     using registry_type = peer_session_registry<Policy, Transport, Clock>;
     using session_type  = peer_session<Policy>;
 
-    // dial_eagerly is required-with-default: false (LAZY). A bool, NOT optional<bool> — its
-    // absence is not meaningful, only its value is.
+    // The logger is a required, borrowed engine dependency (the node threads its resolved
+    // logger here) — placed ahead of the defaulted knobs so it carries no default. dial_eagerly
+    // is required-with-default: false (LAZY). A bool, NOT optional<bool> — its absence is not
+    // meaningful, only its value is.
     routing_engine(Transport &transport, executor_type executor,
                    const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout,
-                   const reconnect_config &redial, std::uint64_t redial_seed,
-                   bool dial_eagerly = false, log::logger &logger = shared_null_logger(),
+                   const reconnect_config &redial, std::uint64_t redial_seed, log::logger &logger,
+                   bool dial_eagerly = false,
                    std::size_t global_default = io::global_default_max_message_bytes)
             : m_transport(transport)
             , m_executor(executor)

@@ -546,6 +546,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
     inproc_executor<>        ex{bus};
     inproc_transport<>       transport{ex, bus};
     plexus::log::null_logger sink;
+    plexus::io::observer     obs;
     msg_forwarder            messages{sink};
     rpc_forwarder            procedures{ex, k_long_timeout, sink};
 
@@ -559,12 +560,12 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
                                                      std::chrono::milliseconds(10000), std::nullopt,
                                                      std::nullopt},
                         /*redial_seed=*/1,
-                        plexus::io::shared_null_logger(),
+                        sink,
                         {},
                         {},
                         {},
                         {},
-                        plexus::io::shared_null_observer(),
+                        obs,
                         fake_seam(),
                         {}};
     // The production source of each session's install hook: the gated layer sets this once;

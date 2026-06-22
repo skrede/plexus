@@ -115,9 +115,9 @@ struct rig
     inproc_executor<clock_t_> ex{bus};
     transport_t               transport_a{ex, bus};
     transport_t               transport_b{ex, bus};
-
-    engine a;
-    engine b;
+    plexus::log::null_logger  sink;
+    engine                    a;
+    engine                    b;
 
     plexus::node_id id_a{make_id(0xA1)};
     plexus::node_id id_b{make_id(0xB2)};
@@ -128,9 +128,9 @@ struct rig
     engine::session_type *a_to_b{nullptr};
 
     rig()
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed,
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink,
                 /*eager=*/true)
-            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed,
+            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink,
                 /*eager=*/true)
     {
         a.listen(ep_a);

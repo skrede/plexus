@@ -98,7 +98,7 @@ public:
 
 // A function-local static error_category: the std::error_category identity contract
 // (one stable address per category, compared by &) is the standard's own requirement,
-// the same standing exception as shared_null_logger().
+// a standing exception to the no-static-singleton posture.
 inline const std::error_category &call_category() noexcept
 {
     static detail::call_error_category category;

@@ -54,9 +54,8 @@ public:
 };
 
 // The shared default accept_any policy a listener binds when the caller injects none. A
-// function-local static (no namespace-scope static singleton object), mirroring
-// shared_null_logger — one process-wide stateless instance the borrowed-by-const& seam
-// points at by default.
+// function-local static (no namespace-scope static singleton object) — one process-wide
+// stateless instance the borrowed-by-const& seam points at by default.
 inline const peer_cred_policy &shared_accept_any_peer_cred()
 {
     static accept_any_peer_cred policy;

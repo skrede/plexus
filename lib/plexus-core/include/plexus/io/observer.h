@@ -84,16 +84,6 @@ public:
     virtual bool observes_data_path() const { return false; }
 };
 
-// The shared inert observer a build context defaults to when no observer is installed:
-// every edge is the base no-op, so an unobserved node pays one predictable branch. A
-// function-local static bound by reference (no namespace-scope singleton), mirroring
-// shared_null_logger.
-inline observer &shared_null_observer()
-{
-    static observer sink;
-    return sink;
-}
-
 }
 
 #endif

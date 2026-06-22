@@ -213,7 +213,7 @@ public:
             , m_glue(transports..., io::transport_selector{}, detail::resolve_hook(transports...))
             , m_leaf(engine_leaf(transports...))
             , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout,
-                       opts.reconnect, opts.redial_seed, opts.dial_eagerly, resolve_logger(opts),
+                       opts.reconnect, opts.redial_seed, resolve_logger(opts), opts.dial_eagerly,
                        opts.max_message_bytes)
     {
         // Install the node-shared routes ONCE, before any session is built (the

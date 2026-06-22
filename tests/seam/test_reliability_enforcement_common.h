@@ -113,10 +113,12 @@ struct rendezvous
     inproc_executor<manual_clock> ex{bus};
     transport_t                   dialer_tp{ex, bus};
     transport_t                   responder_tp{ex, bus};
+    plexus::log::null_logger      sink;
 
-    engine dialer{dialer_tp, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, false};
+    engine dialer{dialer_tp, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink,
+                  false};
     engine responder{responder_tp,  ex,     make_cfg(0xB2), k_long_timeout,
-                     forever_cfg(), k_seed, false};
+                     forever_cfg(), k_seed, sink, false};
 
     plexus::node_id peer{make_id(0xB2)};
     endpoint        peer_ep;

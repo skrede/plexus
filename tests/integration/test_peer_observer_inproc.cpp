@@ -169,6 +169,7 @@ struct two_node
     inproc_executor<manual_clock> ex{bus};
     transport_t                   transport_a{ex, bus};
     transport_t                   transport_b{ex, bus};
+    plexus::log::null_logger      sink;
 
     engine a;
     engine b;
@@ -181,8 +182,8 @@ struct two_node
     explicit two_node(const reconnect_config &a_redial     = forever_cfg(),
                       std::uint8_t            a_compatible = 1)
             : a(transport_a, ex, make_cfg(0xA1, 1, a_compatible), k_long_timeout, a_redial, k_seed,
-                false)
-            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, false)
+                sink, false)
+            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false)
     {
         a.listen(ep_a);
         b.listen(ep_b);
@@ -283,10 +284,11 @@ TEST_CASE("inproc observer: dead fires once when the driver surrenders, and the 
         transport_t                   transport_b{ex, bus};
         transport_t                   transport_c{ex, bus};
 
+        plexus::log::null_logger sink;
         engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts),
-                 k_seed, false);
-        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, false);
-        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, false);
+                 k_seed, sink, false);
+        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
         recording_observer rec;
         a.add_observer(rec);
 

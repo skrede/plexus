@@ -41,8 +41,9 @@ int main()
                                                   .max_attempts = std::nullopt,
                                                   .max_elapsed  = std::nullopt};
 
+    plexus::log::null_logger                      sink;
     plexus::io::routing_engine<policy, transport> engine{
-            tr, executor, fsm_cfg, std::chrono::seconds{1}, redial, 0x1u};
+            tr, executor, fsm_cfg, std::chrono::seconds{1}, redial, 0x1u, sink};
 
     (void)engine.messages();
     return 0;

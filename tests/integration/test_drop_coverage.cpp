@@ -144,6 +144,7 @@ struct drop_fixture
     plexus::inproc::inproc_bus<manual_clock>      bus;
     plexus::inproc::inproc_executor<manual_clock> ex{bus};
     transport_t                                   transport{ex, bus};
+    plexus::log::null_logger                      log_sink;
     engine_t engine{transport,
                     ex,
                     make_cfg(0xA1),
@@ -152,6 +153,7 @@ struct drop_fixture
                                                  std::chrono::milliseconds(10000), std::nullopt,
                                                  std::nullopt},
                     0xC0FFEEu,
+                    log_sink,
                     false};
     recording_drop_observer observer;
 

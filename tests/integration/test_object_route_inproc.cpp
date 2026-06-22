@@ -143,6 +143,7 @@ struct object_net
     inproc_executor<manual_clock> ex{bus};
     transport_t                   transport_a{ex, bus};
     transport_t                   transport_b{ex, bus};
+    plexus::log::null_logger      sink;
 
     engine a;
     engine b;
@@ -152,9 +153,9 @@ struct object_net
     endpoint        ep_b{"inproc", "node-b"};
 
     object_net()
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed,
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink,
                 /*eager=*/true)
-            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed,
+            , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink,
                 /*eager=*/true)
     {
         a.listen(ep_a);
