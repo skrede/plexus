@@ -1038,6 +1038,21 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_stream_channel_unix TEST_PREFIX "integration.")
 
+    # The hardware-free host serial loopback oracle over an openpty pair: two serial_channels,
+    # one adopting each pty fd on one io_context, prove a production-framed message round-trips
+    # host<->host (SER-01) and a peer_session pair completes the point-at-port bring-up handshake
+    # over the framed serial link, reusing the handshake_fsm unchanged (SER-04). Loops each path
+    # in-body; the ctest invocation is re-run >=3 process runs. Links util for openpty(3).
+    add_executable(test_serial_pty_roundtrip test_serial_pty_roundtrip.cpp)
+    target_link_libraries(test_serial_pty_roundtrip PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    catch_discover_tests(test_serial_pty_roundtrip TEST_PREFIX "integration.")
+
     # The saturating-publisher memory-bound gate: a producer outrunning a never-reading
     # peer drives each stream channel's bounded write queue to its cap and no further — the
     # byte budget is the structural memory bound. Looped per tcp/unix transport; re-run >=3
