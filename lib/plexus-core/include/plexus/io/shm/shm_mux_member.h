@@ -41,6 +41,19 @@
 
 namespace plexus::io::shm {
 
+// The same-host upgrade decision: given THIS end's same_host verdict and the topic's own
+// dispatch hint, whether to attempt the shared-memory ring acquire. A plain function pointer
+// keeps the carrying surface trivially copyable (the injected-predicate style, not an allocating
+// policy registry). It can only DECLINE the upgrade — the same_host gate inside the default still
+// holds. Owned by the shm transport (the user composes that transport), not by node_options.
+using upgrade_policy_fn = bool (*)(bool same_host, dispatch_hint own_hint);
+
+// The shipped default: the bilateral, consumer-sovereign same-host auto-upgrade.
+[[nodiscard]] inline bool default_upgrade_policy(bool same_host, dispatch_hint own_hint) noexcept
+{
+    return attempt_shm_upgrade(same_host, own_hint);
+}
+
 // over-limit: one cohesive mux_member contract; the dial/listen/can_acquire/companion verbs
 // all drive the OWNED registry (the sole ring-lifecycle owner) + the per-fqn geometry map, so
 // splitting the surface scatters that shared ownership state (the channel, the consumer, the
@@ -214,11 +227,25 @@ public:
         return {p.mode, geom.slot_capacity};
     }
 
-    // Apply the node-level per-ring slab ceiling to the owned registry.
+    // Apply the per-ring slab ceiling to the owned registry. The registry already defaults to
+    // k_max_ring_slab_bytes at construction (the shipped ceiling), so a caller need only invoke
+    // this to RAISE it for a larger reliable ring.
     void set_max_ring_slab_bytes(std::uint64_t bytes) noexcept
     {
         m_registry.set_max_ring_slab_bytes(bytes);
     }
+
+    // The transport-default same-host ring geometry a publisher with no per-topic override resolves
+    // against (the {0, reliable_preserving} shipped default: max_consumers 0 resolves to the
+    // capacity floor, the safe reliable mode). Sourced by the node's declare/subscribe path so the
+    // default lives on the transport that owns the rings, not on node_options.
+    [[nodiscard]] shm_geometry default_geometry() const noexcept { return m_default_geometry; }
+
+    // The consumer-sovereign same-host upgrade policy the medium coordinator consults on a co-host
+    // demand edge. The default engages the upgrade out of the box; a deployment supplies a stricter
+    // predicate (e.g. one always returning false) to disable it. Owned here, never on node_options.
+    void set_upgrade_policy(upgrade_policy_fn policy) noexcept { m_upgrade_policy = policy; }
+    [[nodiscard]] upgrade_policy_fn upgrade_policy() const noexcept { return m_upgrade_policy; }
 
 private:
     template<typename M>
@@ -236,6 +263,8 @@ private:
 
     registry_type                                                           m_registry;
     std::unordered_map<std::string, detail::shm_provisioned>                m_geometry;
+    shm_geometry      m_default_geometry{};
+    upgrade_policy_fn m_upgrade_policy{&default_upgrade_policy};
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)>
                                                                          m_on_dialed;
