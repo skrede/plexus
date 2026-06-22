@@ -33,7 +33,8 @@ crc_trailer(std::span<const std::byte> header, std::span<const std::byte> payloa
 [[nodiscard]] inline std::uint32_t read_trailer_le(std::span<const std::byte> t) noexcept
 {
     return std::to_integer<std::uint32_t>(t[0]) | (std::to_integer<std::uint32_t>(t[1]) << 8) |
-           (std::to_integer<std::uint32_t>(t[2]) << 16) | (std::to_integer<std::uint32_t>(t[3]) << 24);
+            (std::to_integer<std::uint32_t>(t[2]) << 16) |
+            (std::to_integer<std::uint32_t>(t[3]) << 24);
 }
 
 // The self-resyncing CRC32C frame decorator that sits between a serial read-loop and
@@ -83,7 +84,12 @@ private:
         }
     }
 
-    enum class step : std::uint8_t { consumed, dropped, need_more };
+    enum class step : std::uint8_t
+    {
+        consumed,
+        dropped,
+        need_more
+    };
 
     // Verify the frame anchored at m_pos. need_more while the header or the declared
     // frame+trailer span has not all arrived; consumed (emit) on a CRC match; dropped

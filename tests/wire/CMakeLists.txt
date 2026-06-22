@@ -28,7 +28,9 @@ catch_discover_tests(test_frame_reassembler TEST_PREFIX "wire.")
 # close_cause / move_only_function from stream_inbound.h (which lives in plexus::wire
 # but includes the core compat shim), so this TU additionally links plexus::core for
 # that include path — the rest of the wire oracle needs only plexus::wire.
-add_executable(test_crc_serial_decorator test_crc_serial_decorator.cpp)
+add_executable(test_crc_serial_decorator
+    test_crc_serial_decorator.cpp
+    test_crc_serial_resync.cpp)
 target_link_libraries(test_crc_serial_decorator PRIVATE
     plexus::core
     plexus::wire
