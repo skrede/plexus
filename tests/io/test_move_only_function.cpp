@@ -37,7 +37,7 @@ struct large_callable
 {
     std::array<std::byte, 256> payload{};
     int                        base = 7;
-    int operator()(int x) const { return base + x; }
+    int                        operator()(int x) const { return base + x; }
 };
 
 }
