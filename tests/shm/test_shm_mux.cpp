@@ -16,6 +16,7 @@
 #include "plexus/io/reliability.h"
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
+#include "plexus/io/upgrade_capability.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/wire/stream_inbound.h"
@@ -162,6 +163,9 @@ static_assert(shm_member::mux_tier == pio::transport_kind::local,
               "the shm member rides the local (same-host) tier");
 static_assert(shm_member::mux_prefers_shm,
               "the shm member opts into the per-candidate same-host fast-path flag");
+static_assert(pio::upgradeable<shm_member>,
+              "shm member must satisfy the generic upgrade capability — it is the reference "
+              "plug-in for the same-medium upgrade probe");
 
 // A dummy local-tier stream member (the AF_UNIX stand-in): it serves "shm" too so the two
 // members are BOTH candidates for the same dialed endpoint (the multi-candidate-per-tier
@@ -206,6 +210,11 @@ struct dummy_stream_member
     }
     void on_error(plexus::detail::move_only_function<void(pio::io_error)>) {}
 };
+
+// The negative pin: a wire-only member (no acquire probe) does NOT satisfy the capability, so
+// the concept is not vacuously true.
+static_assert(!pio::upgradeable<dummy_stream_member>,
+              "a member without the acquire probe must not satisfy the upgrade capability");
 
 // The composition: the SHM member FIRST (the preference hook scans for its shm_eligible
 // flag), the stream member second (the fallback). Both serve the local tier + "shm", so a
