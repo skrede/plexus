@@ -52,6 +52,11 @@ set(_fixture_prefix "${SIZE_GATE_ROOT}/tests/size_gate/")
 string(REGEX REPLACE "([][+.*()^$?|\\\\])" "\\\\\\1" _fixture_re "${_fixture_prefix}")
 list(FILTER _scan_files EXCLUDE REGEX "^${_fixture_re}")
 
+# Generated build trees (e.g. an in-tree ESP-IDF cross-build under examples/) are
+# machine output, not hand-written source -- never gate them. Drop any path with a
+# build/ or build-<suffix>/ component, matching the .gitignore'd artifact dirs.
+list(FILTER _scan_files EXCLUDE REGEX "/build([-_][^/]*)?/")
+
 # Parse EXCEPTIONS.md once into the set of registered file paths (the first
 # pipe-delimited cell of each data row that names an existing source file).
 set(_registered "")
