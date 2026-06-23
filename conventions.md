@@ -146,3 +146,22 @@ for a real reason.
 ## English
 
 American spelling: "stabilizing", not "stabilising"; "color", not "colour".
+
+## Commit messages
+
+Format:
+
+```
+{Prefix}: {summary sentence}.
+
+- {what was done, one line per item}
+- {another item if applicable}
+```
+
+The summary line is brief and descriptive; the bullet list expands on it. A single-item commit
+may omit the bullets. Allowed prefixes: **Feature, Fix, Refactor, Docs, Examples, Optimization,
+Test, Build, WIP**. Use `WIP` when the commit does not compile.
+
+The no-planning-artifacts rule applies to commit messages too: never reference a phase number,
+plan or task ID, requirement or invariant label, or any other planning-tool artifact in a commit
+message.
