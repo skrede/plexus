@@ -6,6 +6,20 @@ written for people; they apply to everyone, including the agents that write much
 code. This file is authoritative for code style. When something here conflicts with habit,
 this wins.
 
+## No planning artifacts
+
+Planning lives in the planning tools, never in the code. Never reference an ID, key, or label
+produced by a planning or issue-tracking tool — phase numbers, milestone names, plan or task
+numbers, requirement IDs, invariant labels (`INV-2`, `SER-01`, …), or any `.planning`/GSD
+artifact — anywhere in the codebase: identifiers, comments, documentation, examples, and commit
+messages.
+
+State the *thing itself*, not its planning label. A comment explaining a real invariant says it
+in plain words ("the core holds no platform-specific code"); it never cites "INV-2". If a reader
+would have to open a planning document to decode a comment, the comment is wrong. The same goes
+for narrative scaffolding from how the code was built — "the slice", "the gate", "this milestone"
+— which means nothing to a reader of the finished code. Cut it.
+
 ## Language and portability
 
 - Idiomatic C++20. Use the language; do not reinvent what the standard library, asio, or
