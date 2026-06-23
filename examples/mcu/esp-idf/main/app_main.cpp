@@ -48,12 +48,11 @@ namespace {
 // reproducible multi-run gate assert. Configure it as a plain input ONCE before sampling.
 constexpr gpio_num_t k_sample_pin = GPIO_NUM_0;
 
-// PROVISIONAL: a generous task stack for bring-up. The final value must be the running peak
-// measured under sustained host-gate traffic (uxTaskGetStackHighWaterMark, >=3 runs, + headroom)
-// — that measurement is blocked until the serial handshake completes on-bench (see the Phase
-// 58.6 finding). The off-stack heap node keeps the construction stack ~2.2 KiB, so the true
-// figure is far below this.
-constexpr std::uint32_t k_plexus_task_stack = 16384; // bytes (ESP-IDF xTaskCreate takes bytes)
+// Sized to the measured running peak: under live host-gate traffic (the full handshake + the
+// telemetry publish) uxTaskGetStackHighWaterMark reported ~3968 bytes used, stable across runs.
+// This doubles that for headroom — ESP32 services peripheral ISRs on the active task's stack, so
+// the budget must absorb worst-case interrupt nesting on top of the deepest plexus path.
+constexpr std::uint32_t k_plexus_task_stack = 8192; // bytes (ESP-IDF xTaskCreate takes bytes)
 constexpr UBaseType_t   k_plexus_task_prio  = 5;
 
 void configure_sample_pin()
