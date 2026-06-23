@@ -50,7 +50,7 @@ struct reading_codec
     {
         if(b.size() != 8)
             return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         auto u32 = [&](int o)
         {
             std::uint32_t v = 0;
@@ -67,24 +67,24 @@ struct reading_codec
 
 int main()
 {
-    asio::io_context                 io;
-    plexus::asio::asio_transport     transport{io};
+    asio::io_context io;
+    plexus::asio::asio_transport transport{io};
     plexus::mdnspp::mdnspp_discovery disc{io, "_plexus._tcp.local."};
 
     plexus::node_options opts;
     opts.name         = "telemetry-subscriber";
     opts.dial_eagerly = true;
     opts.reconnect    = plexus::io::reconnect_config{
-            std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
+        std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     opts.redial_seed = 0x5BB5C;
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
-            io, disc, "telemetry-subscriber", transport, opts};
+        io, disc, "telemetry-subscriber", transport, opts};
     node.listen({"tcp", "127.0.0.1:5575"});
 
     plexus::subscriber<reading_codec> topic{
-            node, "telemetry", [](const reading &r)
-            { std::cout << "reading: sensor=" << r.sensor << " value=" << r.value << '\n'; }};
+        node, "telemetry", [](const reading &r)
+        { std::cout << "reading: sensor=" << r.sensor << " value=" << r.value << '\n'; }};
 
     io.run();
 }

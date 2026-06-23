@@ -1,0 +1,69 @@
+# Examples use the tree base style with two deliberate divergences: hand-placed line breaks
+# are left alone (ColumnLimit 0) and declaration names are not column-aligned, so the example
+# author controls the on-screen shape. This is a standalone config (the clang-format build here
+# does not support InheritParentConfig); keep it in sync with the root .clang-format by hand.
+---
+Language: Cpp
+BasedOnStyle: LLVM
+AccessModifierOffset: -4
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveDeclarations: None
+AlignOperands: false
+AlignTrailingComments: true
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCaseColons: false
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortEnumsOnASingleLine: false
+AlwaysBreakAfterDefinitionReturnType: false
+AlwaysBreakTemplateDeclarations: Yes
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: false
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: true
+  BeforeWhile: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+BreakBeforeBraces: Custom
+BreakConstructorInitializers: BeforeComma
+FixNamespaceComments: false
+ColumnLimit: 0
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+IndentCaseBlocks: true
+IndentCaseLabels: true
+IndentGotoLabels: false
+IndentPPDirectives: BeforeHash
+IndentWidth: 4
+InsertNewlineAtEOF: true
+KeepEmptyLinesAtTheStartOfBlocks: true
+MacroBlockBegin: ''
+MacroBlockEnd: ''
+PointerAlignment: Right
+ReferenceAlignment: Pointer
+SortIncludes: Never
+SortUsingDeclarations: Never
+SpaceAfterTemplateKeyword: false
+SpaceBeforeCtorInitializerColon: false
+SpaceBeforeParens: Never
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInConditionalStatement: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+TabWidth: 4
+...

@@ -1,4 +1,4 @@
-# Match the LOCKED component override (-fno-exceptions -fno-rtti): the substrate
+# Match the component's -fno-exceptions -fno-rtti override: the substrate
 # is exception-free and RTTI-free on the constrained target.
 CONFIG_COMPILER_CXX_EXCEPTIONS=n
 CONFIG_COMPILER_CXX_RTTI=n

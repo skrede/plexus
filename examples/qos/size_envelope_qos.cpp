@@ -105,7 +105,7 @@ int main()
     // frame carries the topic + a header above the raw payload, so the on-wire payload_len
     // is a touch above the message itself).
     constexpr std::size_t k_node_ceiling =
-            k_message_16mb + 1u * 1024u * 1024u; // raised above the 8 MiB default
+        k_message_16mb + 1u * 1024u * 1024u;                         // raised above the 8 MiB default
     constexpr std::size_t k_reassembly_budget = 48u * 1024u * 1024u; // room for the 16 MB message
 
     // Only TWO knobs govern the large-message path: the per-MESSAGE ceiling (the sole size
@@ -146,7 +146,7 @@ int main()
     frames_qos.max_message_bytes = k_message_16mb; // an explicit per-topic ceiling for this topic
 
     std::vector<std::byte> frames_received;
-    int                    oversize_received = 0;
+    int oversize_received = 0;
     plexus::subscriber<> frames_sub{sub_node, "frames",
                                     [&](std::span<const std::byte> bytes, const pio::message_info &)
                                     { frames_received.assign(bytes.begin(), bytes.end()); }};
@@ -158,7 +158,8 @@ int main()
     plexus::publisher<> oversize_pub{pub_node, "oversize"};
 
     // Let the eager dialer establish the session and both demands settle before publishing.
-    pump_until(io, [] { return false; }, std::chrono::seconds{1});
+    pump_until(io, []
+               { return false; }, std::chrono::seconds{1});
 
     std::cout << "shipped node default : " << (pio::global_default_max_message_bytes >> 20)
               << " MiB\n";
@@ -171,7 +172,8 @@ int main()
     // The 16 MB single message: at the raised ceiling and budget it round-trips byte-equal.
     const auto frame = make_payload(k_message_16mb);
     frames_pub.publish(std::span<const std::byte>{frame});
-    pump_until(io, [&] { return frames_received.size() == k_message_16mb; });
+    pump_until(io, [&]
+               { return frames_received.size() == k_message_16mb; });
 
     const bool frame_ok = equal_bytes(frames_received, frame);
     std::cout << "\n16 MB \"frames\" round-trip: received " << frames_received.size()
@@ -182,7 +184,8 @@ int main()
     const auto oversize = make_payload(18u * 1024u * 1024u);
     oversize_pub.publish(std::span<const std::byte>{oversize});
     pump_until(
-            io, [] { return false; }, std::chrono::seconds{1}); // grace window for a (non-)delivery
+        io, []
+        { return false; }, std::chrono::seconds{1}); // grace window for a (non-)delivery
 
     std::cout << "18 MiB oversize publish : deliveries=" << oversize_received
               << " (0 == refused above the ceiling)\n";

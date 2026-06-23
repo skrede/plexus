@@ -26,31 +26,31 @@
 
 int main()
 {
-    asio::io_context                 io;
-    plexus::asio::asio_transport     transport{io};
+    asio::io_context io;
+    plexus::asio::asio_transport transport{io};
     plexus::mdnspp::mdnspp_discovery disc{io, "_plexus._tcp.local."};
 
     plexus::node_options opts;
     opts.name         = "demo-subscriber";
     opts.dial_eagerly = true;
     opts.reconnect    = plexus::io::reconnect_config{
-            std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
+        std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     opts.redial_seed = 0x5DB5C;
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
-            io, disc, "demo-subscriber", transport, opts};
+        io, disc, "demo-subscriber", transport, opts};
     node.listen({"tcp", "127.0.0.1:5571"});
 
     plexus::subscriber<> topic{
-            node, "demo", [](std::span<const std::byte> bytes, const plexus::io::message_info &info)
-            {
-                std::string line{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
-                std::cout << "received: " << line;
-                if(info.source_identity)
-                    std::cout << "  (from "
-                              << plexus::io::node_name_of(info.source_identity->node_id()) << ")";
-                std::cout << '\n';
-            }};
+        node, "demo", [](std::span<const std::byte> bytes, const plexus::io::message_info &info)
+        {
+            std::string line{reinterpret_cast<const char *>(bytes.data()), bytes.size()};
+            std::cout << "received: " << line;
+            if(info.source_identity)
+                std::cout << "  (from "
+                          << plexus::io::node_name_of(info.source_identity->node_id()) << ")";
+            std::cout << '\n';
+        }};
 
     io.run();
 }

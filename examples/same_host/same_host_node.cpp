@@ -40,7 +40,7 @@ namespace pasio = plexus::asio;
 
 int main()
 {
-    ::asio::io_context                  io;
+    ::asio::io_context io;
     plexus::discovery::static_discovery disc{{}};
 
     pasio::same_host_transports ts{io};

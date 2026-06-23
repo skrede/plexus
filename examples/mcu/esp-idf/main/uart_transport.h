@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_EXAMPLE_UART_TRANSPORT_H
 #define HPP_GUARD_PLEXUS_EXAMPLE_UART_TRANSPORT_H
 
-// Example-side glue for the on-device serial slice. Two pieces live here, both in the
+// Example-side glue for the on-device serial link. Two pieces live here, both in the
 // EXAMPLE component (never in lib/): the Policy binding that swaps the stub channel for
 // the real uart_channel, and a thin transport that opens UART0 and delivers ONE channel
 // to the node engine. They are example-side ON PURPOSE — the only compiled comms-library
@@ -72,30 +72,28 @@ class uart_transport
 {
 public:
     explicit uart_transport(uart_port_t port = UART_NUM_0)
-            : m_port(port)
+        : m_port(port)
     {
     }
 
     uart_transport(const uart_transport &)            = delete;
     uart_transport &operator=(const uart_transport &) = delete;
 
-    void on_accepted(
-            plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>)> cb)
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>)> cb)
     {
         m_on_accepted = std::move(cb);
     }
-    void on_dialed(plexus::detail::move_only_function<void(
-                           std::unique_ptr<plexus::mcu::uart_channel>, const plexus::io::endpoint &)>
-                           cb)
+
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>, const plexus::io::endpoint &)> cb)
     {
         m_on_dialed = std::move(cb);
     }
-    void on_dial_failed(
-            plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)>
-                    cb)
+
+    void on_dial_failed(plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> cb)
     {
         m_on_dial_failed = std::move(cb);
     }
+
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -143,57 +141,51 @@ public:
     // The scheme + locality tier: a directly-attached point-to-point UART is the most-local
     // link, serving the "serial" scheme — the same advertisement as the host serial_transport.
     static constexpr std::array<std::string_view, 1> mux_schemes{"serial"};
-    static constexpr plexus::io::transport_kind      mux_tier = plexus::io::transport_kind::local;
+    static constexpr plexus::io::transport_kind mux_tier = plexus::io::transport_kind::local;
 
 private:
     // Construct the one channel, record a non-owning handle for poll(), then hand ownership to
     // the caller (the engine moves it into a session). The raw handle never owns.
     std::unique_ptr<plexus::mcu::uart_channel> mint_channel()
     {
-        auto ch    = std::make_unique<plexus::mcu::uart_channel>(m_port, k_max_payload_bytes,
-                                                                 k_rx_ring_bytes);
-        m_channel  = ch.get();
+        auto ch   = std::make_unique<plexus::mcu::uart_channel>(m_port, k_max_payload_bytes, k_rx_ring_bytes);
+        m_channel = ch.get();
         return ch;
     }
 
     // Install the ISR-fed RX ring (above the 128-byte hw FIFO) and apply 8N1 @115200 with
     // flow control off — plexus owns UART0 (console NONE), single cable, no spare flow pins.
-    // tx_buffer_size==0 makes uart_write_bytes synchronous (deterministic for the slice).
+    // tx_buffer_size==0 makes uart_write_bytes synchronous (deterministic for this example).
     void open_driver()
     {
         if(m_installed)
             return;
         const uart_config_t cfg{
-                .baud_rate  = 115200,
-                .data_bits  = UART_DATA_8_BITS,
-                .parity     = UART_PARITY_DISABLE,
-                .stop_bits  = UART_STOP_BITS_1,
-                .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
-                .rx_flow_ctrl_thresh = 0,
-                .source_clk = UART_SCLK_DEFAULT,
-                .flags      = {},
+            .baud_rate           = 115200,
+            .data_bits           = UART_DATA_8_BITS,
+            .parity              = UART_PARITY_DISABLE,
+            .stop_bits           = UART_STOP_BITS_1,
+            .flow_ctrl           = UART_HW_FLOWCTRL_DISABLE,
+            .rx_flow_ctrl_thresh = 0,
+            .source_clk          = UART_SCLK_DEFAULT,
+            .flags               = {},
         };
         uart_param_config(m_port, &cfg);
-        uart_set_pin(m_port, k_uart0_tx_gpio, k_uart0_rx_gpio, UART_PIN_NO_CHANGE,
-                     UART_PIN_NO_CHANGE);
+        uart_set_pin(m_port, k_uart0_tx_gpio, k_uart0_rx_gpio, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
         uart_driver_install(m_port, k_rx_ring_bytes, 0, 0, nullptr, 0);
         m_installed = true;
     }
 
-    uart_port_t                  m_port;
-    bool                         m_installed{false};
-    plexus::mcu::uart_channel   *m_channel{nullptr}; // non-owning poll handle; engine owns it
+    uart_port_t m_port;
+    bool m_installed{false};
+    plexus::mcu::uart_channel *m_channel{nullptr}; // non-owning poll handle; engine owns it
     plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>,
-                                            const plexus::io::endpoint &)>
-                                                                                       m_on_dialed;
-    plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)>
-            m_on_dial_failed;
+    plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>, const plexus::io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> m_on_dial_failed;
     plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
 };
 
-static_assert(plexus::io::transport_backend<example::uart_transport, example::uart_policy>,
-              "uart_transport must satisfy transport_backend — check listen/dial/on_* surface");
+static_assert(plexus::io::transport_backend<example::uart_transport, example::uart_policy>, "uart_transport must satisfy transport_backend — check listen/dial/on_* surface");
 
 }
 

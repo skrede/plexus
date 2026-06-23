@@ -55,7 +55,7 @@ struct pair_codec
     {
         if(b.size() != sizeof(T))
             return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::memcpy(&out, b.data(), sizeof(T));
         return {};
     }
@@ -63,19 +63,19 @@ struct pair_codec
 
 int main()
 {
-    asio::io_context                 io;
-    plexus::asio::asio_transport     transport{io};
+    asio::io_context io;
+    plexus::asio::asio_transport transport{io};
     plexus::mdnspp::mdnspp_discovery disc{io, "_plexus._tcp.local."};
 
     plexus::node_options opts;
     opts.name         = "divide-client";
     opts.dial_eagerly = true;
     opts.reconnect    = plexus::io::reconnect_config{
-            std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
+        std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     opts.redial_seed = 0xC11D1;
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
-            io, disc, "divide-client", transport, opts};
+        io, disc, "divide-client", transport, opts};
     node.listen({"tcp", "127.0.0.1:5577"});
 
     using divide_caller = plexus::caller<div_response(div_request), pair_codec>;
@@ -103,7 +103,7 @@ int main()
 
     // Retry the valid divide until a provider answers (no_provider while mDNS converges
     // re-arms); on the first real answer, the session is up, so fire the error leg too.
-    asio::steady_timer    retry{io};
+    asio::steady_timer retry{io};
     std::function<void()> attempt = [&]
     {
         divide.call(div_request{42, 7},
@@ -112,7 +112,8 @@ int main()
                         if(!r && r.error() == plexus::call_errc::no_provider)
                         {
                             retry.expires_after(std::chrono::seconds(1));
-                            retry.async_wait([&](auto) { attempt(); });
+                            retry.async_wait([&](auto)
+                                             { attempt(); });
                             return;
                         }
                         print("42 / 7", std::move(r));

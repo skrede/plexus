@@ -1,4 +1,4 @@
-// The on-device serial vertical slice: the engine running on the constrained-target
+// The on-device serial example: the engine running on the constrained-target
 // substrate through example application code. It constructs the cooperative executor, the
 // real UART byte_channel (delivered by the example-side uart_transport), a node, and a
 // timer that samples the BOOT button (GPIO0) and publishes the reading through the real
@@ -53,21 +53,21 @@ constexpr gpio_num_t k_sample_pin = GPIO_NUM_0;
 // This doubles that for headroom — ESP32 services peripheral ISRs on the active task's stack, so
 // the budget must absorb worst-case interrupt nesting on top of the deepest plexus path.
 constexpr std::uint32_t k_plexus_task_stack = 8192; // bytes (ESP-IDF xTaskCreate takes bytes)
-constexpr UBaseType_t   k_plexus_task_prio  = 5;
+constexpr UBaseType_t k_plexus_task_prio    = 5;
 
 void configure_sample_pin()
 {
     const gpio_config_t cfg{
-            .pin_bit_mask = 1ULL << k_sample_pin,
-            .mode         = GPIO_MODE_INPUT,
-            .pull_up_en   = GPIO_PULLUP_DISABLE,
-            .pull_down_en = GPIO_PULLDOWN_DISABLE,
-            .intr_type    = GPIO_INTR_DISABLE,
+        .pin_bit_mask = 1ULL << k_sample_pin,
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
     };
     gpio_config(&cfg);
 }
 
-// The INV-2 boundary: the one HAL touch. Read the pin level (example code only) and hand
+// The HAL boundary — the one hardware touch. Read the pin level (example code only) and hand
 // the single byte to plexus as opaque payload — plexus never sees the HAL, only the bytes.
 std::array<std::byte, 1> sample_reading()
 {
@@ -82,31 +82,31 @@ std::array<std::byte, 1> sample_reading()
 struct sample_loop
 {
     plexus::mcu::freertos_timer &timer;
-    plexus::publisher<void>     &topic;
+    plexus::publisher<void> &topic;
 
     void arm()
     {
         timer.expires_after(std::chrono::milliseconds{1000});
         timer.async_wait(
-                [this](std::error_code)
-                {
-                    const auto reading = sample_reading();
-                    topic.publish(std::span<const std::byte>{reading});
-                    arm();
-                });
+            [this](std::error_code)
+            {
+                const auto reading = sample_reading();
+                topic.publish(std::span<const std::byte>{reading});
+                arm();
+            });
     }
 };
 
 // The user's one task: it owns the executor and drives the cooperative super-loop. The engine
 // object is heap-allocated here so it does not sit on this task's stack; ex/transport/disc/opts
 // are task-scope locals declared ABOVE the node — the node borrows them by reference, so they
-// must outlive it. INV-3 holds: this is the example's own task, not a plexus-spawned thread.
+// must outlive it. This is the example's own task, not a plexus-spawned thread.
 void plexus_task(void *)
 {
     using namespace std::chrono_literals;
 
     plexus::mcu::freertos_executor ex;
-    example::uart_transport        transport; // opens UART0 and delivers the one uart_channel
+    example::uart_transport transport; // opens UART0 and delivers the one uart_channel
 
     // Point-at-port discovery: the serial link is the only peer, so the table is empty (no
     // IP discovery). The node is discoverable from birth and the serial channel is the link.
@@ -118,8 +118,7 @@ void plexus_task(void *)
     opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x32C0DE;
 
-    auto node = std::make_unique<plexus::node<example::uart_policy, example::uart_transport>>(
-            ex, disc, "esp32-telemetry", transport, opts);
+    auto node = std::make_unique<plexus::node<example::uart_policy, example::uart_transport>>(ex, disc, "esp32-telemetry", transport, opts);
     // This device LISTENS; by convention the dialing peer (the host gate) drives the
     // handshake request. The endpoint scheme matches the transport's "serial" advertisement.
     node->listen({"serial", "uart0"});
@@ -128,7 +127,7 @@ void plexus_task(void *)
 
     // The cooperative timer samples the pin and publishes, then re-arms itself.
     plexus::mcu::freertos_timer timer(ex);
-    sample_loop                 loop{timer, telemetry};
+    sample_loop loop{timer, telemetry};
     configure_sample_pin();
     loop.arm();
 
@@ -156,6 +155,6 @@ void plexus_task(void *)
 extern "C" void app_main()
 {
     // Spawn the user's plexus task with a stack sized to the engine's footprint, then return —
-    // the spawned task runs the slice for the lifetime of the device.
+    // the spawned task runs the example for the lifetime of the device.
     xTaskCreate(plexus_task, "plexus", k_plexus_task_stack, nullptr, k_plexus_task_prio, nullptr);
 }

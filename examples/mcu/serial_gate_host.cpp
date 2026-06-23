@@ -1,4 +1,4 @@
-// The host half of the on-device serial vertical slice: a single dial-and-assert run. It
+// The host half of the on-device serial example: a single dial-and-assert run. It
 // reuses the host serial_transport VERBATIM (no new host transport code) on the real CP2102
 // /dev/ttyUSB0 link and proves one real message arrives from the attached device through the
 // actual handshake + framing + CRC + pub/sub engine.
@@ -56,7 +56,7 @@ constexpr const char *k_device_endpoint = "/dev/ttyUSB0@115200";
 
 // The topic the device publishes its BOOT-button reading on, and a bound on how long a single
 // dial-and-assert run waits for the first message (the device samples at ~1 Hz).
-constexpr const char          *k_topic = "telemetry";
+constexpr const char *k_topic = "telemetry";
 constexpr std::chrono::seconds k_timeout{5};
 
 // After releasing the auto-reset lines the board boots fresh; wait for the app to come up (drain
@@ -124,14 +124,14 @@ bool knock_until_handshake(::asio::io_context &io, pio::peer_context<pasio::seri
         session.emplace(ctx, io, gate_fsm_config(), k_timeout, messages, procedures,
                         /*is_inbound_bootstrap=*/false, sink);
         session->on_message(
-                [&](std::string_view fqn, std::span<const std::byte> bytes)
-                {
-                    if(fqn == k_topic && !bytes.empty())
-                        received = static_cast<std::uint8_t>(bytes[0]);
-                });
+            [&](std::string_view fqn, std::span<const std::byte> bytes)
+            {
+                if(fqn == k_topic && !bytes.empty())
+                    received = static_cast<std::uint8_t>(bytes[0]);
+            });
         session->start();
-        pump_until(io, [&] { return session->is_complete(); },
-                   std::min(deadline, std::chrono::steady_clock::now() + k_attempt_window));
+        pump_until(io, [&]
+                   { return session->is_complete(); }, std::min(deadline, std::chrono::steady_clock::now() + k_attempt_window));
         if(session->is_complete())
             return true;
     }
@@ -157,8 +157,8 @@ int main()
     ctx.node_name = "esp32-telemetry";
 
     transport.on_dialed(
-            [&](std::unique_ptr<pasio::serial_channel> ch, const pio::endpoint &)
-            { ctx.channel = std::move(ch); });
+        [&](std::unique_ptr<pasio::serial_channel> ch, const pio::endpoint &)
+        { ctx.channel = std::move(ch); });
     transport.dial({"serial", k_device_endpoint});
 
     if(!ctx.channel)
@@ -169,7 +169,8 @@ int main()
 
     // Reset the board into the application, then let it boot before the first handshake request.
     drive_auto_reset_into_run(ctx.channel->serial_stream().native_handle());
-    pump_until(io, [] { return false; }, clock::now() + k_boot_settle);
+    pump_until(io, []
+               { return false; }, clock::now() + k_boot_settle);
 
     // The pub/sub + rpc forwarders the session bridges into; they outlive the per-attempt sessions
     // (no forwarder state accrues until a session subscribes, so re-creating one leaves none stale).
@@ -177,7 +178,7 @@ int main()
     serial_msg_fwd messages{sink};
     serial_rpc_fwd procedures{io, k_timeout, sink};
 
-    std::optional<std::uint8_t>   received;
+    std::optional<std::uint8_t> received;
     std::optional<serial_session> session;
     if(!knock_until_handshake(io, ctx, messages, procedures, sink, session, received))
     {
@@ -188,7 +189,8 @@ int main()
 
     // Handshake done — demand-subscribe so the device fans its next (demand-gated) telemetry sample.
     session->subscribe(k_topic);
-    pump_until(io, [&] { return received.has_value(); }, clock::now() + k_timeout);
+    pump_until(io, [&]
+               { return received.has_value(); }, clock::now() + k_timeout);
 
     if(received.has_value())
     {

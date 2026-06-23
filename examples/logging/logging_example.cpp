@@ -65,7 +65,7 @@ struct reading_codec
     {
         if(b.size() != 8)
             return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         auto u32 = [&](int o)
         {
             std::uint32_t v = 0;
@@ -125,10 +125,10 @@ plexus::node_id id_of(std::uint8_t seed)
 // logging node is the single eager dialer (the canonical inproc topology).
 struct net
 {
-    plexus::inproc::inproc_bus<>        bus;
-    plexus::inproc::inproc_executor<>   ex{bus};
-    transport_t                         ta{ex, bus};
-    transport_t                         tb{ex, bus};
+    plexus::inproc::inproc_bus<> bus;
+    plexus::inproc::inproc_executor<> ex{bus};
+    transport_t ta{ex, bus};
+    transport_t tb{ex, bus};
     plexus::discovery::static_discovery disc{{}};
 
     node_t pub_node{ex, disc, id_of(0x0A), ta, opts(0xA, /*eager=*/false)};
@@ -150,9 +150,9 @@ int main()
     // value to CSV columns on std::cout. The ostream MUST outlive the handle. The handle is
     // RAII and move-only — keep it alive for the session, drop it to retire.
     auto logger = n.log_node.log<reading_codec, reading_projection>(
-            "telemetry",
-            plexus::value_logger_options{.out = std::cout, .format = plexus::log_format::csv},
-            reading_codec{}, reading_projection{});
+        "telemetry",
+        plexus::value_logger_options{.out = std::cout, .format = plexus::log_format::csv},
+        reading_codec{}, reading_projection{});
 
     plexus::publisher<reading_codec> pub{n.pub_node, "telemetry", plexus::typed_publisher_options{},
                                          reading_codec{}};

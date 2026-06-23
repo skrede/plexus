@@ -68,7 +68,7 @@ struct reading_codec
     {
         if(b.size() != 8)
             return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         auto u32 = [&](int o)
         {
             std::uint32_t v = 0;
@@ -125,10 +125,10 @@ void capture_session(buffer_sink &sink)
     plexus::recording_qos capture{};
     capture.fidelity = plexus::io::capture_fidelity::payload;
 
-    plexus::inproc::inproc_bus<>        bus;
-    plexus::inproc::inproc_executor<>   ex{bus};
-    transport_t                         ta{ex, bus};
-    transport_t                         tb{ex, bus};
+    plexus::inproc::inproc_bus<> bus;
+    plexus::inproc::inproc_executor<> ex{bus};
+    transport_t ta{ex, bus};
+    transport_t tb{ex, bus};
     plexus::discovery::static_discovery disc{{}};
 
     {
@@ -141,12 +141,12 @@ void capture_session(buffer_sink &sink)
         auto rec = pub_node.make_recorder(sink);
 
         {
-            plexus::publisher<reading_codec>  temp{pub_node, "telemetry.temperature",
+            plexus::publisher<reading_codec> temp{pub_node, "telemetry.temperature",
+                                                  plexus::typed_publisher_options{},
+                                                  reading_codec{}};
+            plexus::publisher<reading_codec> press{pub_node, "telemetry.pressure",
                                                    plexus::typed_publisher_options{},
                                                    reading_codec{}};
-            plexus::publisher<reading_codec>  press{pub_node, "telemetry.pressure",
-                                                    plexus::typed_publisher_options{},
-                                                    reading_codec{}};
             plexus::subscriber<reading_codec> temp_sub{sub_node, "telemetry.temperature",
                                                        [](const reading &) {}};
             plexus::subscriber<reading_codec> press_sub{sub_node, "telemetry.pressure",
@@ -184,7 +184,7 @@ int main()
 
 #ifdef PLEXUS_WITH_MCAP_TRANSCODE
     const std::filesystem::path mcap_path = "recording_example_capture.mcap";
-    const auto                  result    = plexus::tools::flat_to_mcap(sink.bytes(), mcap_path);
+    const auto result                     = plexus::tools::flat_to_mcap(sink.bytes(), mcap_path);
     if(result.ok)
         std::cout << "transcoded to " << mcap_path.string() << ": " << result.channels
                   << " channels, " << result.messages << " messages (open in Foxglove)\n";

@@ -67,12 +67,12 @@ namespace pasio = plexus::asio;
 
 int main()
 {
-    ::asio::io_context                   io;
+    ::asio::io_context io;
     plexus::shm::posix_shm_region_broker broker;
-    plexus::discovery::static_discovery  disc{{}};
+    plexus::discovery::static_discovery disc{{}};
 
     pasio::transport_set<pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport> ts{
-            io, broker};
+        io, broker};
 
     plexus::node_id id{};
     id[0]     = std::byte{0x2A};
