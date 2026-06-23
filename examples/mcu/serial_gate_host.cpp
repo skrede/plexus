@@ -4,17 +4,13 @@
 // actual handshake + framing + CRC + pub/sub engine.
 //
 // A serial endpoint (/dev/ttyXXX@baud) is not an IP host:port, so it is not discovery-dialable
-// — the node's discovery dial resolves a numeric port per transport, which a serial device has
-// no analog of. So the gate drives the engine ONE layer below the node facade, exactly as the
-// host serial integration oracle does: the serial_transport opens the port and delivers ONE
-// live channel, a peer_session bridges that channel into the REUSED handshake_fsm + pub/sub
+// (the node's discovery dial resolves a numeric port a serial device has no analog of). The gate
+// drives the engine ONE layer below the node facade: the serial_transport opens the port and
+// delivers ONE live channel, a peer_session bridges it into the REUSED handshake_fsm + pub/sub
 // forwarders, and the requester end drives the handshake the device (the listening responder)
 // answers. The device publishes a raw single byte (the BOOT-button level, released = 1) on the
-// telemetry topic, demand-gated — so the gate subscribes once the session completes and the
-// device fans the next sample. on_message captures the byte; a valid one-byte message is the
-// pass (it proves the link end to end). On receipt the program prints GATE_PASS value=<v> and
-// exits 0; on a few-second timeout it prints GATE_FAIL and exits non-zero. The >=3-run
-// reproducibility loop lives in the gate driver, not here.
+// telemetry topic, demand-gated, so the gate subscribes once the session completes. A valid
+// one-byte message is the pass: GATE_PASS value=<v> and exit 0; on timeout GATE_FAIL, non-zero.
 
 #include "plexus/asio/serial_policy.h"
 #include "plexus/asio/serial_transport.h"
