@@ -1,7 +1,7 @@
 // over-limit: one cohesive real-TLS bounded-outbox hardening leg; the single congestion=drop/block
 // scenario drives the one shared mutual-TLS loopback + stalled-write harness, so it cannot split
 // without scattering that shared socket/TLS state The gated real-TLS bounded-outbox hardening leg
-// over asio loopback: the SECOND composition of the shared io::detail::stream_send_queue block (the
+// over asio loopback: the SECOND composition of the shared stream::detail::send_queue block (the
 // plaintext asio_channel pins the first via test #225). A real mutual-TLS pair handshakes over a
 // connected loopback socket; the server end NEVER reads, so the kernel send buffer fills
 // and the encrypted async_write stalls — the dialed channel's userspace outbox then
@@ -21,7 +21,7 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/security/verify_policy.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -44,9 +44,10 @@
 #include <optional>
 #include <filesystem>
 
-namespace ptls = plexus::tls;
-namespace pio  = plexus::io;
-namespace wire = plexus::wire;
+namespace ptls   = plexus::tls;
+namespace pio    = plexus::io;
+namespace wire   = plexus::wire;
+namespace stream = plexus::stream;
 
 using spki_digest = std::array<std::byte, 32>;
 
@@ -168,7 +169,7 @@ TEST_CASE("tls channel: the bounded outbox sheds under congestion=drop and stall
         ptls::tls_channel     server{
                 server_io, std::move(raw_server), server_cred, {}, pio::congestion::block};
         ptls::tls_channel client{client_io,   std::move(raw_client),
-                                 client_cred, wire::stream_inbound_config{},
+                                 client_cred, stream::stream_inbound_config{},
                                  mode,        pio::egress_capacity::of_bytes(cap)};
 
         bool server_ready = false;

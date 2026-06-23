@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_DETAIL_SERIAL_BOOTSTRAP_H
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_SERIAL_BOOTSTRAP_H
 
-#include "plexus/wire/crc_serial.h"
+#include "plexus/stream/crc_serial.h"
 
 #include "plexus/wire_bytes.h"
 
@@ -69,8 +69,8 @@ private:
     {
         const auto header  = framed.first(plexus::wire::header_size);
         const auto payload = framed.subspan(plexus::wire::header_size);
-        auto       owner = std::make_shared<std::array<std::byte, plexus::wire::crc_trailer_size>>(
-                plexus::wire::crc_trailer(header, payload));
+        auto       owner = std::make_shared<std::array<std::byte, plexus::stream::crc_trailer_size>>(
+                plexus::stream::crc_trailer(header, payload));
         c.enqueue_egress_owned(
                 plexus::wire_bytes<>{std::span<const std::byte>{*owner}, std::move(owner)});
     }

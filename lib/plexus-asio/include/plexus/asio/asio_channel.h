@@ -125,7 +125,7 @@ class asio_channel : public stream_channel<::asio::ip::tcp::socket, tcp_traits,
                                 detail::plaintext_bootstrap<::asio::ip::tcp::socket>>;
 
 public:
-    explicit asio_channel(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+    explicit asio_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {},
                           io::congestion        congestion = io::congestion::block,
                           io::egress_capacity   egress     = io::egress_capacity::bounded_default(),
                           stream_socket_options opts       = {},
@@ -135,7 +135,7 @@ public:
     }
 
     asio_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected,
-                 wire::stream_inbound_config cfg        = {},
+                 stream::stream_inbound_config cfg        = {},
                  io::congestion              congestion = io::congestion::block,
                  io::egress_capacity         egress     = io::egress_capacity::bounded_default(),
                  stream_socket_options       opts       = {},

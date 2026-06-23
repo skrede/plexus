@@ -34,7 +34,7 @@ TEST_CASE("tls.large_past_field: a 32 MB single frame round-trips byte-identical
         auto                client_cred = make_cred(client_id, server_id.digest);
         ptls::tls_transport server{io,
                                    server_cred,
-                                   wire::stream_inbound_config{},
+                                   stream::stream_inbound_config{},
                                    true,
                                    pio::congestion::block,
                                    pio::egress_capacity::of_bytes(k_outbox),
@@ -43,7 +43,7 @@ TEST_CASE("tls.large_past_field: a 32 MB single frame round-trips byte-identical
                                    k_budget};
         ptls::tls_transport client{io,
                                    client_cred,
-                                   wire::stream_inbound_config{},
+                                   stream::stream_inbound_config{},
                                    true,
                                    pio::congestion::block,
                                    pio::egress_capacity::of_bytes(k_outbox),

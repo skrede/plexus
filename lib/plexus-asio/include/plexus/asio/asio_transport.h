@@ -7,7 +7,7 @@
 #include "plexus/asio/stream_transport.h"
 #include "plexus/asio/detail/asio_endpoint_parse.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
@@ -59,15 +59,15 @@ public:
     // aggregate reassembly-memory cap — the two operator-facing message-size node options
     // (required-WITH-default, bound to the shipped named constants). Stamped onto every
     // minted channel's inbound config; a per-topic override resolves through io::effective_max.
-    explicit asio_transport(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+    explicit asio_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {},
                             bool no_delay = true, io::congestion congestion = io::congestion::block,
                             io::egress_capacity   egress = io::egress_capacity::bounded_default(),
                             stream_socket_options socket_options = {},
                             std::size_t global_default    = io::global_default_max_message_bytes,
                             std::size_t reassembly_budget = io::reassembly_memory_budget)
-            : base(io, wire::with_message_limits(cfg, global_default, reassembly_budget), no_delay,
+            : base(io, stream::with_message_limits(cfg, global_default, reassembly_budget), no_delay,
                    congestion, egress, socket_options, io,
-                   wire::with_message_limits(cfg, global_default, reassembly_budget), no_delay,
+                   stream::with_message_limits(cfg, global_default, reassembly_budget), no_delay,
                    congestion, egress, socket_options)
     {
     }

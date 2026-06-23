@@ -11,7 +11,7 @@ target_include_directories(plexus-mcu INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
-target_link_libraries(plexus-mcu INTERFACE plexus::core)
+target_link_libraries(plexus-mcu INTERFACE plexus::core plexus::stream)
 
 target_compile_features(plexus-mcu INTERFACE cxx_std_20)
 

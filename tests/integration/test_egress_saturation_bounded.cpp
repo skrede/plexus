@@ -19,7 +19,7 @@
 
 #include "plexus/io/congestion.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -35,9 +35,10 @@
 #include <cstddef>
 #include <utility>
 
-namespace pasio = plexus::asio;
-namespace pio   = plexus::io;
-namespace wire  = plexus::wire;
+namespace pasio  = plexus::asio;
+namespace pio    = plexus::io;
+namespace wire   = plexus::wire;
+namespace stream = plexus::stream;
 
 namespace {
 
@@ -117,7 +118,7 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
             ::asio::ip::tcp::socket idle_client{io};
             idle_client.connect(acc.local_endpoint());
             acc.accept(idle_peer);
-            pasio::asio_channel idle{io, std::move(idle_client), wire::stream_inbound_config{},
+            pasio::asio_channel idle{io, std::move(idle_client), stream::stream_inbound_config{},
                                      pio::congestion::block, pio::egress_capacity::of_bytes(k_cap)};
             idle.close();
             REQUIRE(idle.dropped_count() == 0); // a drained/empty close bumps nothing
@@ -125,7 +126,7 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
                        // `this`)
         }
 
-        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
+        pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{},
                                pio::congestion::block, pio::egress_capacity::of_bytes(k_cap)};
 
         // Fill past one drain turn: send 1 KiB frames until the stalled queue holds a backlog
@@ -160,7 +161,7 @@ TEST_CASE("egress_saturation_bounded tcp: a saturating publisher stays memory-bo
 
         // The plaintext channel is already bounded — it pins the structural invariant the
         // unix leg must come to match.
-        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
+        pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{},
                                pio::congestion::block, pio::egress_capacity::of_bytes(k_cap)};
         saturate_and_assert_bounded(io, ch);
     }
@@ -183,7 +184,7 @@ TEST_CASE("egress_saturation_bounded unix: a saturating publisher stays memory-b
         // Adopt the client end into an accept-mode unix_channel with the small cap: the
         // bounded stream_send_queue holds the outbox at the shallow cap under this
         // saturation, byte-identical to the plaintext channel above.
-        pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{},
+        pasio::unix_channel ch{io, std::move(client), stream::stream_inbound_config{},
                                pio::congestion::block, pio::egress_capacity::of_bytes(k_cap)};
         saturate_and_assert_bounded(io, ch);
     }

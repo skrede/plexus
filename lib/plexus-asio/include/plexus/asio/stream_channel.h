@@ -16,7 +16,7 @@
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/stream_channel_io.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include "plexus/wire_bytes.h"
 
@@ -26,7 +26,7 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/egress_capacity.h"
 #include "plexus/io/detail/scheduler_key.h"
-#include "plexus/io/detail/stream_send_queue.h"
+#include "plexus/stream/detail/send_queue.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -85,12 +85,12 @@ constexpr std::size_t stream_read_buffer_size(std::size_t requested) noexcept
 }
 
 // A byte_channel over an asio stream type (a bare socket, or an ssl::stream). Inbound bytes
-// feed a member wire::stream_inbound (which composes the frame_reassembler and owns the
+// feed a member stream::stream_inbound (which composes the frame_reassembler and owns the
 // no-progress slowloris timer); each complete frame is POSTED to on_data (per the
 // byte_channel contract), while a framing violation or a no-progress stall raises
 // on_protocol_close — a seam DISTINCT from on_error so the session discriminates
 // peer-misbehaved (no re-dial) from network-dropped (re-dial). The channel is caller-owned
-// and runs its read loop with `this` captured. The wire::stream_inbound_config (the node's
+// and runs its read loop with `this` captured. The stream::stream_inbound_config (the node's
 // hardening config the transport stamps every channel with) is a required-WITH-default ctor
 // argument, defaulted to {} so a channel minted with just (io) is a real default-config
 // channel, never an unarmed one. The Bootstrap expresses the open path: plaintext sends
@@ -107,7 +107,7 @@ public:
     // default that back-pressures; drop_newest = the opt-out shed), threaded as required-
     // WITH-default ctor args exactly as udp_channel threads io::congestion.
     template<typename... BootstrapArgs>
-    explicit stream_channel(::asio::io_context &io, wire::stream_inbound_config cfg,
+    explicit stream_channel(::asio::io_context &io, stream::stream_inbound_config cfg,
                             io::congestion congestion, io::egress_capacity egress,
                             stream_socket_options socket_options,
                             std::size_t read_buffer_bytes = k_stream_read_buffer_bytes,
@@ -130,7 +130,7 @@ public:
     // socket the Bootstrap wraps into the stream (a tcp::socket for both TCP and TLS, a
     // local-stream socket for AF_UNIX).
     template<typename Connected, typename... BootstrapArgs>
-    stream_channel(::asio::io_context &io, Connected connected, wire::stream_inbound_config cfg,
+    stream_channel(::asio::io_context &io, Connected connected, stream::stream_inbound_config cfg,
                    io::congestion congestion, io::egress_capacity egress,
                    stream_socket_options socket_options,
                    std::size_t read_buffer_bytes = k_stream_read_buffer_bytes,
@@ -286,7 +286,7 @@ private:
     template<typename Ch>
     friend void detail::stream_do_read(Ch &);
     template<typename Ch>
-    friend io::detail::stream_send_queue::send_sink detail::stream_make_send_sink(Ch &);
+    friend stream::detail::send_queue::send_sink detail::stream_make_send_sink(Ch &);
 
     void bind_bootstrap()
     {
@@ -320,7 +320,7 @@ private:
     ::asio::io_context                                    &m_io;
     Bootstrap                                              m_bootstrap;
     Stream                                                 m_stream;
-    wire::stream_inbound<asio_timer, ::asio::io_context &> m_inbound;
+    stream::stream_inbound<asio_timer, ::asio::io_context &> m_inbound;
     std::vector<::asio::const_buffer> m_gather; // reused gather-write iovec (grows once)
     std::vector<std::byte> m_read_buf; // sized once from the read-buffer ctor param
     io::congestion         m_congestion;
@@ -328,7 +328,7 @@ private:
     std::uint64_t          m_scheduler_key{
             io::detail::next_scheduler_key()};  // stable per-construction egress key
     std::size_t                   m_dropped{0}; // congestion=drop shed count
-    io::detail::stream_send_queue m_egress;     // bounded byte-budgeted serial write block
+    stream::detail::send_queue m_egress;     // bounded byte-budgeted serial write block
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()>                           m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)>               m_on_error;

@@ -29,7 +29,7 @@ TEST_CASE("unix stream channel: a 16 MB single frame round-trips byte-identicall
     namespace pio                         = plexus::io;
     constexpr std::size_t       k_payload = 16u * 1024u * 1024u;
     constexpr std::size_t       k_ceiling = 20u * 1024u * 1024u;
-    wire::stream_inbound_config cfg{};
+    stream::stream_inbound_config cfg{};
     cfg.max_payload_size          = k_ceiling;
     cfg.buffered_bytes_cap        = k_ceiling + wire::header_size;
     constexpr std::size_t k_queue = k_ceiling + 4u * 1024u * 1024u;

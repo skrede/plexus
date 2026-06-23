@@ -9,7 +9,7 @@
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
-#include "plexus/io/detail/stream_send_queue.h"
+#include "plexus/stream/detail/send_queue.h"
 
 #include <asio/post.hpp>
 #include <asio/write.hpp>
@@ -104,15 +104,15 @@ void stream_do_read(Ch &c)
                                });
 }
 
-// The irreducible asio send-sink the stream_send_queue block drives: gather the block-owned node
+// The irreducible asio send-sink the stream send_queue block drives: gather the block-owned node
 // views into one ConstBufferSequence and issue a SINGLE async_write (asio lowers it to one
 // writev/WSASend; for TLS, OpenSSL coalesces the plaintext into fewer records). On a socket error
 // the channel fails (which closes the block), so the completion's open-guard stops the chain.
 template<typename Ch>
-io::detail::stream_send_queue::send_sink stream_make_send_sink(Ch &c)
+stream::detail::send_queue::send_sink stream_make_send_sink(Ch &c)
 {
-    return [&c](io::detail::stream_send_queue::buffer_sequence views,
-                io::detail::stream_send_queue::completion      done)
+    return [&c](stream::detail::send_queue::buffer_sequence views,
+                stream::detail::send_queue::completion      done)
     {
         c.m_gather.clear();
         c.m_gather.reserve(views.size());

@@ -19,7 +19,7 @@ catch_discover_tests(test_fail_closed TEST_PREFIX "fnx.")
 # routing_engine is instantiated over). No facade, no recorder/value_projection — FNX-03 is
 # structural (those headers are simply not included).
 add_executable(audit_mcu_floor audit_mcu_floor.cpp)
-target_link_libraries(audit_mcu_floor PRIVATE plexus::core plexus::inproc)
+target_link_libraries(audit_mcu_floor PRIVATE plexus::core plexus::stream plexus::inproc)
 
 # The api-facade audit TU: node.h + publisher.h over the inproc backend, exercising the
 # converted serve_procedure_seam throw and the guarded catch(...) cleanup sites.

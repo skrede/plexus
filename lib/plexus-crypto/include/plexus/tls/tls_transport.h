@@ -11,7 +11,7 @@
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_endpoint_parse.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -54,7 +54,7 @@ public:
     // reassembly-memory cap (the two operator-facing message-size node options, stamped onto every
     // minted channel's inbound config). All required-WITH-default.
     tls_transport(::asio::io_context &io, const tls_credential &cred,
-                  wire::stream_inbound_config cfg = {}, bool no_delay = true,
+                  stream::stream_inbound_config cfg = {}, bool no_delay = true,
                   io::congestion      congestion = io::congestion::block,
                   io::egress_capacity egress     = io::egress_capacity::bounded_default(),
                   plexus::asio::stream_socket_options socket_options = {},
@@ -63,9 +63,9 @@ public:
             : m_io(io)
             , m_cred(cred)
             , m_listener(io, cred,
-                         wire::with_message_limits(cfg, global_default, reassembly_budget),
+                         stream::with_message_limits(cfg, global_default, reassembly_budget),
                          no_delay, congestion, egress, socket_options)
-            , m_cfg(wire::with_message_limits(cfg, global_default, reassembly_budget))
+            , m_cfg(stream::with_message_limits(cfg, global_default, reassembly_budget))
             , m_no_delay(no_delay)
             , m_congestion(congestion)
             , m_egress_capacity(egress)
@@ -172,7 +172,7 @@ private:
     ::asio::io_context                 &m_io;
     const tls_credential               &m_cred;
     tls_listener                        m_listener;
-    wire::stream_inbound_config         m_cfg;
+    stream::stream_inbound_config         m_cfg;
     bool                                m_no_delay;
     io::congestion                      m_congestion;
     io::egress_capacity                 m_egress_capacity;

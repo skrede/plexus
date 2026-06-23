@@ -50,7 +50,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
         opts.keepalive = true;
         pasio::asio_channel ch{io,
                                std::move(client),
-                               wire::stream_inbound_config{},
+                               stream::stream_inbound_config{},
                                pio::congestion::block,
                                pio::egress_capacity::bounded_default(),
                                opts};
@@ -70,7 +70,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
     // A default channel: the buffers stay at the kernel default and keepalive stays off.
     {
         auto [peer, client] = connected_pair();
-        pasio::asio_channel ch{io, std::move(client), wire::stream_inbound_config{},
+        pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{},
                                pio::congestion::block};
 
         ::asio::socket_base::send_buffer_size    snd;

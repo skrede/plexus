@@ -6,7 +6,7 @@
 #include "plexus/crypto/aead_epoch.h"
 #include "plexus/crypto/detail/aead_path.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
 

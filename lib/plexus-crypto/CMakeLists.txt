@@ -50,6 +50,7 @@ target_include_directories(plexus-crypto PUBLIC
 target_link_libraries(plexus-crypto PUBLIC
     plexus::core
     plexus::wire
+    plexus::stream
     plexus::asio
     plexus::datagram
     plexus_asio_dep

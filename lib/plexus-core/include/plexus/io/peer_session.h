@@ -36,7 +36,7 @@
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/heartbeat.h"
 #include "plexus/wire/frame_codec.h"
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 #include "plexus/wire/fetch_latched.h"
 
 #include "plexus/detail/compat.h"

@@ -8,7 +8,8 @@
 // one carries none (the stream sink is one async_write over a buffer SEQUENCE with no
 // destination).
 
-#include "plexus/io/detail/stream_send_queue.h"
+#include "plexus/stream/detail/send_queue.h"
+
 #include "plexus/wire_bytes.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -19,7 +20,7 @@
 #include <cstddef>
 #include <utility>
 
-using stream_send_queue = plexus::io::detail::stream_send_queue;
+using stream_send_queue = plexus::stream::detail::send_queue;
 
 namespace stream_send_queue_fixture {
 

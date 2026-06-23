@@ -1,7 +1,8 @@
 #ifndef HPP_GUARD_TESTS_WIRE_CRC_SERIAL_COMMON_H
 #define HPP_GUARD_TESTS_WIRE_CRC_SERIAL_COMMON_H
 
-#include "plexus/wire/crc_serial.h"
+#include "plexus/stream/crc_serial.h"
+
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
 
@@ -19,6 +20,7 @@
 namespace crc_serial_test {
 
 using namespace plexus::wire;
+using namespace plexus::stream;
 
 inline std::span<const std::byte> as_bytes(std::string_view s) noexcept
 {

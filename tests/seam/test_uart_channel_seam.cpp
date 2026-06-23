@@ -9,7 +9,7 @@
 
 #include "plexus/mcu/uart_channel.h"
 
-#include "plexus/wire/crc_serial.h"
+#include "plexus/stream/crc_serial.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
 
@@ -43,7 +43,7 @@ std::vector<std::byte> on_wire(std::span<const std::byte> payload)
             payload);
     const auto header  = std::span<const std::byte>{frame}.first(plexus::wire::header_size);
     const auto body    = std::span<const std::byte>{frame}.subspan(plexus::wire::header_size);
-    const auto trailer = plexus::wire::crc_trailer(header, body);
+    const auto trailer = plexus::stream::crc_trailer(header, body);
     frame.insert(frame.end(), trailer.begin(), trailer.end());
     return frame;
 }
@@ -131,13 +131,13 @@ TEST_CASE("uart_channel egress appends the reused CRC trailer", "[seam]")
 
     // The header+payload then the 4-byte CRC32C trailer landed on the wire.
     const auto &tx = plexus::test::uart_fixture().tx;
-    REQUIRE(tx.size() == frame.size() + plexus::wire::crc_trailer_size);
+    REQUIRE(tx.size() == frame.size() + plexus::stream::crc_trailer_size);
     REQUIRE(std::equal(frame.begin(), frame.end(), tx.begin()));
 
     const auto header  = std::span<const std::byte>{frame}.first(plexus::wire::header_size);
     const auto body    = std::span<const std::byte>{frame}.subspan(plexus::wire::header_size);
-    const auto trailer = plexus::wire::crc_trailer(header, body);
-    REQUIRE(std::equal(trailer.begin(), trailer.end(), tx.end() - plexus::wire::crc_trailer_size));
+    const auto trailer = plexus::stream::crc_trailer(header, body);
+    REQUIRE(std::equal(trailer.begin(), trailer.end(), tx.end() - plexus::stream::crc_trailer_size));
 }
 
 TEST_CASE("uart_channel surfaces a driver-ring overrun, never swallows it", "[seam]")

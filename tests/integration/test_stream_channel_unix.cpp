@@ -82,7 +82,7 @@ TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to 
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         acc.accept(peer); // peer adopts but NEVER reads
 
-        pasio::unix_channel ch{io, std::move(client), wire::stream_inbound_config{}, mode,
+        pasio::unix_channel ch{io, std::move(client), stream::stream_inbound_config{}, mode,
                                pio::egress_capacity::of_bytes(cap)};
         REQUIRE(ch.congestion_mode() == mode);
 

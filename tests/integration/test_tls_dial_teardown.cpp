@@ -18,7 +18,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/security/verify_policy.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 
 #include <catch2/catch_test_macros.hpp>
 

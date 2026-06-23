@@ -12,7 +12,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/scheduler_key.h"
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"

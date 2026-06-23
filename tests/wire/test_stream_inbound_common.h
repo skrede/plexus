@@ -13,7 +13,7 @@
 // A frame that fails to COMPLETE within its deadline raises a single
 // on_protocol_close(no_progress_timeout).
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
 
@@ -39,8 +39,8 @@ using plexus::wire::close_cause;
 using plexus::wire::frame_header;
 using plexus::wire::msg_type;
 using plexus::wire::header_size;
-using plexus::wire::stream_inbound;
-using plexus::wire::stream_inbound_config;
+using plexus::stream::stream_inbound;
+using plexus::stream::stream_inbound_config;
 using plexus::wire::complete_frame;
 using plexus::wire::encode_frame;
 using plexus::wire::encode_header;

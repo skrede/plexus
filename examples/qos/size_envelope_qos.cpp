@@ -33,7 +33,7 @@
 
 #include "plexus/discovery/static_discovery.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include <asio/io_context.hpp>
 
@@ -44,9 +44,10 @@
 #include <cstdint>
 #include <iostream>
 
-namespace pasio = plexus::asio;
-namespace pio   = plexus::io;
-namespace wire  = plexus::wire;
+namespace pasio  = plexus::asio;
+namespace pio    = plexus::io;
+namespace wire   = plexus::wire;
+namespace stream = plexus::stream;
 
 namespace {
 
@@ -112,7 +113,7 @@ int main()
     // authority) and the aggregate reassembly budget (the receive-side memory backstop). The
     // send-side write-queue cap is a back-pressure backlog knob, NOT a message-size bound, so
     // it stays at its default — a within-ceiling message always sends regardless of the cap.
-    wire::stream_inbound_config cfg{};
+    stream::stream_inbound_config cfg{};
 
     auto make_transport = [&]
     {

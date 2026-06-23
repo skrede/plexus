@@ -66,7 +66,7 @@ class unix_channel
                            detail::plaintext_bootstrap<::asio::local::stream_protocol::socket>>;
 
 public:
-    explicit unix_channel(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+    explicit unix_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {},
                           io::congestion        congestion = io::congestion::block,
                           io::egress_capacity   egress     = io::egress_capacity::bounded_default(),
                           stream_socket_options opts       = {},
@@ -76,7 +76,7 @@ public:
     }
 
     unix_channel(::asio::io_context &io, ::asio::local::stream_protocol::socket connected,
-                 wire::stream_inbound_config cfg        = {},
+                 stream::stream_inbound_config cfg        = {},
                  io::congestion              congestion = io::congestion::block,
                  io::egress_capacity         egress     = io::egress_capacity::bounded_default(),
                  stream_socket_options       opts       = {},

@@ -78,7 +78,7 @@ public:
     // Dial mode: unconnected ssl::stream. The transport async_connects the lowest layer, then
     // calls start_client_handshake(host). The credential is REQUIRED (first after io).
     tls_channel(::asio::io_context &io, const tls_credential &cred,
-                wire::stream_inbound_config         cfg        = {},
+                stream::stream_inbound_config         cfg        = {},
                 io::congestion                      congestion = io::congestion::block,
                 io::egress_capacity                 egress = io::egress_capacity::bounded_default(),
                 plexus::asio::stream_socket_options opts   = {},
@@ -93,7 +93,7 @@ public:
     // verify-rejected peer never yields a live accepted channel — fail-closed, symmetric with
     // the dial side).
     tls_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected,
-                const tls_credential &cred, wire::stream_inbound_config cfg = {},
+                const tls_credential &cred, stream::stream_inbound_config cfg = {},
                 io::congestion                      congestion = io::congestion::block,
                 io::egress_capacity                 egress = io::egress_capacity::bounded_default(),
                 plexus::asio::stream_socket_options opts   = {},

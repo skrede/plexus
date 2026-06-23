@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_STREAM_SEND_QUEUE_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_STREAM_SEND_QUEUE_H
+#ifndef HPP_GUARD_PLEXUS_STREAM_DETAIL_SEND_QUEUE_H
+#define HPP_GUARD_PLEXUS_STREAM_DETAIL_SEND_QUEUE_H
 
 #include "plexus/wire_bytes.h"
 #include "plexus/detail/compat.h"
@@ -12,12 +12,12 @@
 #include <cstddef>
 #include <utility>
 
-namespace plexus::io::detail {
+namespace plexus::stream::detail {
 
-// The STREAM sibling of send_queue: the sans-IO serial outbound discipline a reliable byte stream
-// needs, hoisted out of the asio socket / ssl::stream so the plaintext TCP and TLS channels reuse
-// ONE block (no Endpoint — a stream is point-to-point, so the send-sink is async_write with no
-// destination).
+// The stream sibling of the datagram send_queue: the sans-IO serial outbound discipline a
+// reliable byte stream needs, kept free of the asio socket / ssl::stream so the plaintext
+// TCP, TLS, and serial channels reuse ONE block (no Endpoint — a stream is point-to-point,
+// so the send-sink is a single async_write with no destination).
 //
 // A drain turn issues ONE async_write over a buffer SEQUENCE gathering the front-N queued nodes
 // (asio lowers a ConstBufferSequence to one writev/WSASend), so N frames cost one syscall. Each
@@ -35,7 +35,7 @@ namespace plexus::io::detail {
 // On a socket error the composer's send-sink reports it then closes the block; the completion's
 // open-guard makes post-close chaining a no-op, so the next frames are never written through the
 // failed socket. Single-owner, bare `this`; the owner closes the block before it dies.
-class stream_send_queue
+class send_queue
 {
 public:
     static constexpr std::size_t unbounded = std::numeric_limits<std::size_t>::max();
@@ -56,8 +56,8 @@ public:
     using completion      = plexus::detail::move_only_function<void(bool)>;
     using send_sink       = plexus::detail::move_only_function<void(buffer_sequence, completion)>;
 
-    explicit stream_send_queue(send_sink sink, std::size_t byte_cap = unbounded,
-                               std::size_t gather_limit = default_gather_limit)
+    explicit send_queue(send_sink sink, std::size_t byte_cap = unbounded,
+                        std::size_t gather_limit = default_gather_limit)
             : m_sink(std::move(sink))
             , m_byte_cap(byte_cap)
             , m_gather_limit(gather_limit)

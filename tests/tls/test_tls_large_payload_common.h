@@ -20,7 +20,8 @@
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
-#include "plexus/wire/stream_inbound.h"
+
+#include "plexus/stream/stream_inbound.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -46,9 +47,10 @@
 
 namespace tls_large_payload_fixture {
 
-namespace ptls = plexus::tls;
-namespace pio  = plexus::io;
-namespace wire = plexus::wire;
+namespace ptls   = plexus::tls;
+namespace pio    = plexus::io;
+namespace wire   = plexus::wire;
+namespace stream = plexus::stream;
 
 using spki_digest = std::array<std::byte, 32>;
 

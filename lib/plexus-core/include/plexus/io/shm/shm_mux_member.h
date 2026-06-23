@@ -24,7 +24,7 @@
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"

@@ -31,7 +31,7 @@ TEST_CASE("tls.large: a 16 MB single frame round-trips byte-identically over a l
         // for the 16 MB path. The intermediate ctor params keep their defaults.
         ptls::tls_transport server{io,
                                    server_cred,
-                                   wire::stream_inbound_config{},
+                                   stream::stream_inbound_config{},
                                    true,
                                    pio::congestion::block,
                                    pio::egress_capacity::of_bytes(k_outbox),
@@ -40,7 +40,7 @@ TEST_CASE("tls.large: a 16 MB single frame round-trips byte-identically over a l
                                    k_budget};
         ptls::tls_transport client{io,
                                    client_cred,
-                                   wire::stream_inbound_config{},
+                                   stream::stream_inbound_config{},
                                    true,
                                    pio::congestion::block,
                                    pio::egress_capacity::of_bytes(k_outbox),

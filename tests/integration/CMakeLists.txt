@@ -908,7 +908,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
 
     # The gated real-TCP stream-channel hardening leg: a raw client socket writes
     # hostile bytes (a bad-magic run; a header with a withheld payload) into a live
-    # asio_channel stamped with a SHORT-floor wire::stream_inbound_config, and the
+    # asio_channel stamped with a SHORT-floor stream::stream_inbound_config, and the
     # channel's on_protocol_close fires with the matching close_cause (invalid_magic;
     # no_progress_timeout) — the byte-stream slowloris/garbage defense proven over a
     # real socket. Loops each path in-body; re-run >=3 process runs.
@@ -1024,7 +1024,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
 
     # The gated real-AF_UNIX stream-channel hardening leg: a raw client socket writes
     # hostile bytes (a bad-magic run; a header with a withheld payload) into a live
-    # unix_channel stamped with a SHORT-floor wire::stream_inbound_config, and the
+    # unix_channel stamped with a SHORT-floor stream::stream_inbound_config, and the
     # channel's on_protocol_close fires with the matching close_cause (invalid_magic;
     # no_progress_timeout) — the byte-stream slowloris/garbage defense proven over a
     # real local socket. Loops each path in-body; re-run >=3 process runs.
@@ -1149,7 +1149,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         catch_discover_tests(test_mux_select_asio TEST_PREFIX "integration.")
 
         # The gated real-TLS bounded-outbox hardening leg: the SECOND composition of the
-        # shared io::detail::stream_send_queue block (the plaintext asio_channel pins the
+        # shared stream::detail::send_queue block (the plaintext asio_channel pins the
         # first). A real mutual-TLS pair handshakes over loopback; the server end never
         # reads, the encrypted async_write stalls, and the dialed channel's outbox cap
         # engages — congestion=drop sheds, congestion=block surfaces would_block, the

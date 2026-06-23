@@ -27,7 +27,7 @@ TEST_CASE("asio_policy constructs its timer and channel from the io_context", "[
 
     // The timer is constructible from the executor alone (still a Policy constraint).
     // The channel's executor-alone ctor is now a CONVENIENCE that mints a real
-    // default-config channel (the wire::stream_inbound_config defaulted to {}) — NOT
+    // default-config channel (the stream::stream_inbound_config defaulted to {}) — NOT
     // a Policy constraint: channel construction is owned by transport_backend. A
     // fresh channel reports an empty remote_endpoint until connected/accepted.
     CHECK(channel.remote_endpoint().scheme == "tcp");

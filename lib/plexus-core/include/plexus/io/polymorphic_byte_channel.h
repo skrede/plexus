@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_POLYMORPHIC_BYTE_CHANNEL_H
 #define HPP_GUARD_PLEXUS_IO_POLYMORPHIC_BYTE_CHANNEL_H
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"

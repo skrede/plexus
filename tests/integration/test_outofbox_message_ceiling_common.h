@@ -25,7 +25,7 @@
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 
 #ifdef PLEXUS_HAVE_TLS_OUTOFBOX
     #include "plexus/tls/tls_channel.h"

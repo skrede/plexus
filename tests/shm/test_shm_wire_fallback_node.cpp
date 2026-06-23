@@ -17,7 +17,7 @@
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 #include "plexus/io/detail/scheduler_key.h"
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 
 #include "plexus/detail/compat.h"
 

@@ -43,7 +43,7 @@ add_executable(test_stream_send_queue
     test_stream_send_queue.cpp
     test_stream_send_queue_capacity.cpp
     test_stream_send_queue_gather.cpp)
-target_link_libraries(test_stream_send_queue PRIVATE plexus::core Catch2::Catch2WithMain)
+target_link_libraries(test_stream_send_queue PRIVATE plexus::core plexus::stream Catch2::Catch2WithMain)
 catch_discover_tests(test_stream_send_queue TEST_PREFIX "io.")
 
 add_executable(test_pending_dial_registry

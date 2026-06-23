@@ -6,7 +6,7 @@
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_unix_endpoint_parse.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -64,7 +64,7 @@ public:
     // channel this listener accepts. mode is the socket-file permission (required-WITH-
     // default 0700). policy is the borrowed accept-time peer-credential allowlist
     // (defense-in-depth; the named accept_any default admits every local peer).
-    explicit unix_listener(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+    explicit unix_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {},
                            ::mode_t                              mode = default_socket_mode,
                            const io::security::peer_cred_policy &policy =
                                    io::security::shared_accept_any_peer_cred(),
@@ -163,7 +163,7 @@ private:
 
     ::asio::io_context                      &m_io;
     ::asio::local::stream_protocol::acceptor m_acceptor;
-    wire::stream_inbound_config              m_cfg;
+    stream::stream_inbound_config              m_cfg;
     ::mode_t                                 m_mode;
     const io::security::peer_cred_policy    *m_peer_policy; // borrowed; never owned
     io::congestion                           m_congestion;

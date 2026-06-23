@@ -2,7 +2,7 @@
 
 #include "plexus/io/frame_router.h"
 
-#include "plexus/wire/crc_serial.h"
+#include "plexus/stream/crc_serial.h"
 #include "plexus/wire/data_frame.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -35,7 +35,7 @@ std::vector<std::byte> wire_frame(const std::string &payload)
     const auto             framed  = make_data_frame(payload, /*session_id=*/1);
     const auto             header  = std::span<const std::byte>{framed}.first(wire::header_size);
     const auto             inner   = std::span<const std::byte>{framed}.subspan(wire::header_size);
-    const auto             trailer = wire::crc_trailer(header, inner);
+    const auto             trailer = stream::crc_trailer(header, inner);
     std::vector<std::byte> out{framed.begin(), framed.end()};
     out.insert(out.end(), trailer.begin(), trailer.end());
     return out;

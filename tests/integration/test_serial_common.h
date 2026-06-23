@@ -51,14 +51,15 @@
 #include <optional>
 #include <string_view>
 
-namespace pasio = plexus::asio;
-namespace wire  = plexus::wire;
-namespace pio   = plexus::io;
+namespace pasio  = plexus::asio;
+namespace wire   = plexus::wire;
+namespace stream = plexus::stream;
+namespace pio    = plexus::io;
 
 using plexus::io::handshake_fsm_config;
-using serial_session   = pio::peer_session<pasio::serial_policy>;
-using serial_msg_fwd   = pio::message_forwarder<pasio::serial_policy>;
-using serial_rpc_fwd   = pio::procedure_forwarder<pasio::serial_policy>;
+using serial_session = pio::peer_session<pasio::serial_policy>;
+using serial_msg_fwd = pio::message_forwarder<pasio::serial_policy>;
+using serial_rpc_fwd = pio::procedure_forwarder<pasio::serial_policy>;
 
 namespace serial_fixture {
 
@@ -101,7 +102,7 @@ inline std::vector<std::byte> make_data_frame(const std::string &payload, std::u
     plexus::log::null_logger sink;
     inproc_msg               framer{sink};
     inproc_channel<>         capture(ex);
-    inproc_channel<>  tx(ex);
+    inproc_channel<>         tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
     capture.on_data([&](std::span<const std::byte> f) { captured.assign(f.begin(), f.end()); });
@@ -157,8 +158,8 @@ struct pty_pair
 
 // Adopt a pty fd into a fresh serial_channel: wrap the fd as a serial_port (the native-handle
 // ctor — the port now owns the fd) and move it into the adopt-connected channel ctor.
-inline std::unique_ptr<pasio::serial_channel>
-adopt_channel(::asio::io_context &io, int fd, wire::stream_inbound_config cfg = {})
+inline std::unique_ptr<pasio::serial_channel> adopt_channel(::asio::io_context &io, int fd,
+                                                            stream::stream_inbound_config cfg = {})
 {
     return std::make_unique<pasio::serial_channel>(io, ::asio::serial_port{io, fd}, cfg);
 }

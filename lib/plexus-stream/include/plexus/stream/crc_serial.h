@@ -1,10 +1,10 @@
-#ifndef HPP_GUARD_PLEXUS_WIRE_CRC_SERIAL_H
-#define HPP_GUARD_PLEXUS_WIRE_CRC_SERIAL_H
+#ifndef HPP_GUARD_PLEXUS_STREAM_CRC_SERIAL_H
+#define HPP_GUARD_PLEXUS_STREAM_CRC_SERIAL_H
 
-#include "plexus/wire/crc32c.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/crc32c.h"
 #include "plexus/wire/frame_codec.h"
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 
 #include "plexus/detail/compat.h"
 
@@ -14,7 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace plexus::wire {
+namespace plexus::stream {
 
 inline constexpr std::size_t crc_trailer_size = 4;
 
@@ -25,7 +25,7 @@ inline constexpr std::size_t crc_trailer_size = 4;
 [[nodiscard]] inline std::array<std::byte, crc_trailer_size>
 crc_trailer(std::span<const std::byte> header, std::span<const std::byte> payload) noexcept
 {
-    const std::uint32_t crc = crc32c(payload, crc32c(header));
+    const std::uint32_t crc = wire::crc32c(payload, wire::crc32c(header));
     return {std::byte(crc & 0xFFu), std::byte((crc >> 8) & 0xFFu), std::byte((crc >> 16) & 0xFFu),
             std::byte((crc >> 24) & 0xFFu)};
 }
@@ -50,9 +50,10 @@ class crc_serial_inbound
 {
 public:
     using emit = plexus::detail::move_only_function<void(std::span<const std::byte>)>;
-    using drop = plexus::detail::move_only_function<void(close_cause)>;
+    using drop = plexus::detail::move_only_function<void(wire::close_cause)>;
 
-    explicit crc_serial_inbound(std::size_t max_payload = k_max_reassembler_payload_bytes) noexcept
+    explicit crc_serial_inbound(
+            std::size_t max_payload = wire::k_max_reassembler_payload_bytes) noexcept
             : m_max_payload(max_payload)
     {
     }
@@ -97,12 +98,12 @@ private:
     step try_one_frame()
     {
         auto at = std::span<const std::byte>{m_buf}.subspan(m_pos);
-        if(at.size() < header_size)
+        if(at.size() < wire::header_size)
             return step::need_more;
-        const auto hdr = decode_header(at);
+        const auto hdr = wire::decode_header(at);
         if(!hdr || hdr->payload_len > m_max_payload)
             return resync();
-        const std::size_t frame_len = header_size + hdr->payload_len;
+        const std::size_t frame_len = wire::header_size + hdr->payload_len;
         if(at.size() < frame_len + crc_trailer_size)
             return step::need_more;
         return verify(at, hdr->payload_len, frame_len);
@@ -110,10 +111,10 @@ private:
 
     step verify(std::span<const std::byte> at, std::size_t payload_len, std::size_t frame_len)
     {
-        const auto header  = at.subspan(0, header_size);
-        const auto payload = at.subspan(header_size, payload_len);
+        const auto header  = at.subspan(0, wire::header_size);
+        const auto payload = at.subspan(wire::header_size, payload_len);
         const auto trailer = at.subspan(frame_len, crc_trailer_size);
-        if(read_trailer_le(trailer) != crc32c(payload, crc32c(header)))
+        if(read_trailer_le(trailer) != wire::crc32c(payload, wire::crc32c(header)))
             return resync();
         if(m_on_match)
             m_on_match(at.subspan(0, frame_len));
@@ -127,7 +128,7 @@ private:
     {
         ++m_pos;
         if(m_on_drop)
-            m_on_drop(close_cause::crc_mismatch);
+            m_on_drop(wire::close_cause::crc_mismatch);
         return step::dropped;
     }
 
@@ -139,11 +140,11 @@ private:
         const auto buf = std::span<const std::byte>{m_buf};
         while(m_pos + 1 < buf.size())
         {
-            if(buf[m_pos] == magic_byte_0 && buf[m_pos + 1] == magic_byte_1)
+            if(buf[m_pos] == wire::magic_byte_0 && buf[m_pos + 1] == wire::magic_byte_1)
                 return true;
             ++m_pos;
         }
-        if(m_pos < buf.size() && buf[m_pos] != magic_byte_0)
+        if(m_pos < buf.size() && buf[m_pos] != wire::magic_byte_0)
             ++m_pos;
         return false;
     }

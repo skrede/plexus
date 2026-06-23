@@ -4,7 +4,7 @@
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_executor.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"

@@ -5,7 +5,7 @@
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_endpoint_parse.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -38,7 +38,7 @@ public:
     // no_delay disables Nagle on every accepted peer (required-WITH-default true — the
     // latency-MW default; a Nagle use-case overrides it): set BEFORE the channel adopts
     // the socket, since the accept ctor starts reading immediately.
-    explicit asio_listener(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+    explicit asio_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {},
                            bool no_delay = true, io::congestion congestion = io::congestion::block,
                            io::egress_capacity   egress = io::egress_capacity::bounded_default(),
                            stream_socket_options socket_options = {})
@@ -135,7 +135,7 @@ private:
 
     ::asio::io_context                                                     &m_io;
     ::asio::ip::tcp::acceptor                                               m_acceptor;
-    wire::stream_inbound_config                                             m_cfg;
+    stream::stream_inbound_config                                             m_cfg;
     bool                                                                    m_no_delay;
     io::congestion                                                          m_congestion;
     io::egress_capacity                                                     m_egress_capacity;

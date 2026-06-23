@@ -7,7 +7,7 @@
 #include "plexus/crypto/aead_epoch.h"
 #include "plexus/crypto/detail/datagram_aead_path.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 #include "plexus/wire/frame.h"
 
 #include "plexus/io/detail/drop_event.h"

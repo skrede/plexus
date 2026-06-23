@@ -23,7 +23,7 @@
 #include "plexus/node_id.h"
 
 #include "plexus/wire/udp_envelope.h"
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/wire/close_cause.h"
 
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>

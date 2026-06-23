@@ -5,7 +5,7 @@
 #include "plexus/asio/detail/serial_bootstrap.h"
 #include "plexus/asio/detail/serial_channel_io.h"
 
-#include "plexus/wire/crc_serial.h"
+#include "plexus/stream/crc_serial.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
@@ -60,7 +60,7 @@ class serial_channel : public stream_channel<::asio::serial_port, serial_traits,
                                 detail::serial_bootstrap<::asio::serial_port>>;
 
 public:
-    explicit serial_channel(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+    explicit serial_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {},
                             io::congestion        congestion = io::congestion::block,
                             io::egress_capacity   egress = io::egress_capacity::bounded_default(),
                             stream_socket_options opts   = {},
@@ -73,7 +73,7 @@ public:
     }
 
     serial_channel(::asio::io_context &io, ::asio::serial_port connected,
-                   wire::stream_inbound_config cfg        = {},
+                   stream::stream_inbound_config cfg        = {},
                    io::congestion              congestion = io::congestion::block,
                    io::egress_capacity         egress     = io::egress_capacity::bounded_default(),
                    stream_socket_options       opts       = {},
@@ -114,7 +114,7 @@ public:
     // The serial read-loop seam (reached by detail::serial_do_read).
     [[nodiscard]] ::asio::serial_port      &serial_stream() noexcept { return stream(); }
     [[nodiscard]] std::vector<std::byte>   &serial_read_buf() noexcept { return m_read_buf; }
-    [[nodiscard]] wire::crc_serial_inbound &serial_decorator() noexcept { return m_decorator; }
+    [[nodiscard]] stream::crc_serial_inbound &serial_decorator() noexcept { return m_decorator; }
 
 private:
     void wire_decorator()
@@ -141,7 +141,7 @@ private:
                      });
     }
 
-    wire::crc_serial_inbound                                             m_decorator;
+    stream::crc_serial_inbound                                             m_decorator;
     std::vector<std::byte>                                               m_read_buf;
     bool                                                                 m_reading{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;

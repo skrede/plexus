@@ -22,7 +22,7 @@
 #include "plexus/io/security/cookie_secret.h"
 #include "plexus/io/security/attach_policy.h"
 
-#include "plexus/wire/crc_serial.h"
+#include "plexus/stream/crc_serial.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame_reassembler.h"
 #include "plexus/wire/topic_hash.h"
@@ -87,7 +87,7 @@ int main()
 
     // Drive the serial CRC decorator's inbound scan/verify path so its member bodies are
     // instantiated and compiled on the -fno-exceptions floor (the MCU build reuses it).
-    plexus::wire::crc_serial_inbound dec;
+    plexus::stream::crc_serial_inbound dec;
     dec.on_match([](std::span<const std::byte>) {});
     dec.on_drop([](plexus::wire::close_cause) {});
     const std::byte probe[]{std::byte{0x56}, std::byte{0x50}};

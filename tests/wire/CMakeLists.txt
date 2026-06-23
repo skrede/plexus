@@ -24,16 +24,15 @@ add_executable(test_frame_reassembler
 target_link_libraries(test_frame_reassembler PRIVATE plexus::wire Catch2::Catch2WithMain)
 catch_discover_tests(test_frame_reassembler TEST_PREFIX "wire.")
 
-# The serial CRC32C trailer + magic-resync decorator oracle. crc_serial.h pulls
-# close_cause / move_only_function from stream_inbound.h (which lives in plexus::wire
-# but includes the core compat shim), so this TU additionally links plexus::core for
-# that include path — the rest of the wire oracle needs only plexus::wire.
+# The serial CRC32C trailer + magic-resync decorator oracle. The decorator is stream-family
+# discipline over the wire codec, so this TU links plexus::stream (which pulls plexus::wire +
+# the core compat shim transitively); the frame fixtures it builds use the wire codec directly.
 add_executable(test_crc_serial_decorator
     test_crc_serial_decorator.cpp
     test_crc_serial_resync.cpp)
 target_link_libraries(test_crc_serial_decorator PRIVATE
-    plexus::core
     plexus::wire
+    plexus::stream
     Catch2::Catch2WithMain)
 catch_discover_tests(test_crc_serial_decorator TEST_PREFIX "wire.")
 
@@ -76,12 +75,14 @@ catch_discover_tests(test_locality_qos TEST_PREFIX "wire.")
 
 # The stream_inbound detection oracle drives a virtual-clock inproc timer, so this
 # TU additionally links plexus::inproc (the other wire targets do not) — mirroring
-# how the integration inproc targets pull in the manual-clock executor/timer.
+# how the integration inproc targets pull in the manual-clock executor/timer. The
+# detection layer is stream-family discipline, so it links plexus::stream.
 add_executable(test_stream_inbound
     test_stream_inbound.cpp
     test_stream_inbound_feed_error.cpp)
 target_link_libraries(test_stream_inbound PRIVATE
     plexus::wire
+    plexus::stream
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_stream_inbound TEST_PREFIX "wire.")

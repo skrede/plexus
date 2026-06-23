@@ -1,6 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_WIRE_STREAM_INBOUND_H
-#define HPP_GUARD_PLEXUS_WIRE_STREAM_INBOUND_H
+#ifndef HPP_GUARD_PLEXUS_STREAM_STREAM_INBOUND_H
+#define HPP_GUARD_PLEXUS_STREAM_STREAM_INBOUND_H
 
+#include "plexus/wire/close_cause.h"
 #include "plexus/wire/frame_reassembler.h"
 
 #include "plexus/detail/compat.h"
@@ -14,33 +15,7 @@
 #include <algorithm>
 #include <system_error>
 
-namespace plexus::wire {
-
-// Why a dedicated cause enum is raised on close, rather than feed_error: a close
-// signal carries only actionable reasons — the three real framing violations plus
-// the no-progress timeout — never feed_error::none (not a cause) nor the dead
-// no_progress enumerator (the timer keys off a size-proportional per-frame
-// deadline, not a reassembler signal).
-enum class close_cause : std::uint8_t
-{
-    invalid_magic,
-    payload_too_large,
-    buffer_overflow,
-    no_progress_timeout,
-    // Append-only; raised ONLY by the serial CRC decorator. The ONE non-fatal cause
-    // (drop+resync), surfaced through a SEPARATE on_frame_dropped seam, never on_protocol_close.
-    crc_mismatch
-};
-
-inline close_cause to_close_cause(feed_error error)
-{
-    switch(error)
-    {
-        case feed_error::payload_too_large: return close_cause::payload_too_large;
-        case feed_error::buffer_overflow:   return close_cause::buffer_overflow;
-        default:                            return close_cause::invalid_magic;
-    }
-}
+namespace plexus::stream {
 
 // Tunables for the per-frame no-progress deadline. Both are required-with-default:
 // a node may override them, but the defaults are safe and generous.
@@ -57,8 +32,8 @@ struct stream_inbound_config
 {
     std::chrono::nanoseconds no_progress_floor{std::chrono::seconds{30}};
     std::size_t              min_throughput_bytes_per_sec{64 * 1024};
-    std::size_t              max_payload_size{k_max_reassembler_payload_bytes};
-    std::size_t              buffered_bytes_cap{k_max_reassembler_payload_bytes + header_size};
+    std::size_t              max_payload_size{wire::k_max_reassembler_payload_bytes};
+    std::size_t buffered_bytes_cap{wire::k_max_reassembler_payload_bytes + wire::header_size};
 };
 
 // Stamp the per-MESSAGE receive ceiling and the aggregate reassembly-memory cap onto a
@@ -71,12 +46,12 @@ with_message_limits(stream_inbound_config cfg, std::size_t max_payload_size,
                     std::size_t reassembly_budget) noexcept
 {
     cfg.max_payload_size   = max_payload_size;
-    cfg.buffered_bytes_cap = std::max(reassembly_budget, max_payload_size + header_size);
+    cfg.buffered_bytes_cap = std::max(reassembly_budget, max_payload_size + wire::header_size);
     return cfg;
 }
 
 // The shared byte-stream framing-hardening detection layer. It composes the
-// frame_reassembler by value, consumes the feed_error the channel discards today,
+// wire::frame_reassembler by value, consumes the feed_error the channel discards today,
 // and owns a no-progress (slowloris) timer keyed off a SIZE-PROPORTIONAL per-frame
 // deadline: deadline = max(no_progress_floor, declared_payload_len / min_throughput).
 // A frame that fails to COMPLETE within its deadline raises a single
@@ -98,11 +73,11 @@ public:
     {
     }
 
-    void on_frame(plexus::detail::move_only_function<void(const complete_frame &)> cb)
+    void on_frame(plexus::detail::move_only_function<void(const wire::complete_frame &)> cb)
     {
         m_on_frame = std::move(cb);
     }
-    void on_protocol_close(plexus::detail::move_only_function<void(close_cause)> cb)
+    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
         m_on_protocol_close = std::move(cb);
     }
@@ -117,11 +92,11 @@ public:
             if(m_on_frame)
                 m_on_frame(frame);
 
-        if(result.error != feed_error::none)
+        if(result.error != wire::feed_error::none)
         {
             m_timer.cancel();
             if(m_on_protocol_close)
-                m_on_protocol_close(to_close_cause(result.error));
+                m_on_protocol_close(wire::to_close_cause(result.error));
             return;
         }
 
@@ -182,17 +157,17 @@ private:
                     if(ec)
                         return; // cancelled by a new frame, completion, or shutdown
                     if(m_on_protocol_close)
-                        m_on_protocol_close(close_cause::no_progress_timeout);
+                        m_on_protocol_close(wire::close_cause::no_progress_timeout);
                 });
         m_armed_deadline = d;
     }
 
-    frame_reassembler                                                m_reassembler;
-    Timer                                                            m_timer;
-    stream_inbound_config                                            m_cfg;
-    std::chrono::nanoseconds                                         m_armed_deadline{0};
-    plexus::detail::move_only_function<void(const complete_frame &)> m_on_frame;
-    plexus::detail::move_only_function<void(close_cause)>            m_on_protocol_close;
+    wire::frame_reassembler                                                m_reassembler;
+    Timer                                                                  m_timer;
+    stream_inbound_config                                                  m_cfg;
+    std::chrono::nanoseconds                                               m_armed_deadline{0};
+    plexus::detail::move_only_function<void(const wire::complete_frame &)> m_on_frame;
+    plexus::detail::move_only_function<void(wire::close_cause)>            m_on_protocol_close;
 };
 
 }

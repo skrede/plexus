@@ -4,7 +4,7 @@
 #include "plexus/mcu/detail/uart_io.h"
 
 #include "plexus/io/byte_channel.h"
-#include "plexus/wire/crc_serial.h"
+#include "plexus/stream/crc_serial.h"
 
 #include "plexus/detail/compat.h"
 
@@ -44,7 +44,7 @@ public:
     {
         const auto header  = framed.first(plexus::wire::header_size);
         const auto payload = framed.subspan(plexus::wire::header_size);
-        const auto trailer = plexus::wire::crc_trailer(header, payload); // REUSED verbatim
+        const auto trailer = plexus::stream::crc_trailer(header, payload); // REUSED verbatim
         detail::uart_write_all(m_port, framed);
         detail::uart_write_all(m_port, std::span<const std::byte>{trailer});
     }
@@ -131,7 +131,7 @@ private:
     std::size_t                                m_overrun_count{0};
     std::size_t                                m_dropped_count{0};
     std::array<std::byte, k_scratch_bytes>     m_scratch{};
-    plexus::wire::crc_serial_inbound           m_decorator;
+    plexus::stream::crc_serial_inbound           m_decorator;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()>                           m_on_closed;
     plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;

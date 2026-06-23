@@ -6,7 +6,7 @@
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_serial_endpoint_parse.h"
 
-#include "plexus/wire/stream_inbound.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -43,13 +43,13 @@ namespace plexus::asio {
 class serial_transport
 {
 public:
-    explicit serial_transport(::asio::io_context &io, wire::stream_inbound_config cfg = {},
+    explicit serial_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {},
                               io::congestion        congestion = io::congestion::block,
                               io::egress_capacity   egress = io::egress_capacity::bounded_default(),
                               std::size_t global_default    = io::global_default_max_message_bytes,
                               std::size_t reassembly_budget = io::reassembly_memory_budget)
             : m_io(io)
-            , m_cfg(wire::with_message_limits(cfg, global_default, reassembly_budget))
+            , m_cfg(stream::with_message_limits(cfg, global_default, reassembly_budget))
             , m_congestion(congestion)
             , m_egress(egress)
     {
@@ -165,7 +165,7 @@ private:
     }
 
     ::asio::io_context         &m_io;
-    wire::stream_inbound_config m_cfg;
+    stream::stream_inbound_config m_cfg;
     io::congestion              m_congestion;
     io::egress_capacity         m_egress;
     plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)> m_on_accepted;
