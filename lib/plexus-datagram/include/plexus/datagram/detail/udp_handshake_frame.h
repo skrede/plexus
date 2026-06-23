@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_UDP_HANDSHAKE_FRAME_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_UDP_HANDSHAKE_FRAME_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_HANDSHAKE_FRAME_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_HANDSHAKE_FRAME_H
 
 #include "plexus/wire/udp_envelope.h"
 
@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <optional>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // The UDP handshake control frame: a single hs_type byte carried as the inner frame
 // under the reliable_arq envelope kind. The dialer retransmits hs_request on the ARQ

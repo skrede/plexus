@@ -12,13 +12,13 @@ namespace {
 // ARQ could retransmit). The backpressure queue holds the not-yet-windowed remainder, so
 // the per-channel backpressure cap must reach the whole message (sized in the helper). A
 // generous retransmit budget covers the residual loopback loss/reorder at this volume.
-inline pio::detail::udp_arq_config paced_arq()
+inline plexus::datagram::detail::udp_arq_config paced_arq()
 {
-    return pio::detail::udp_arq_config{.window         = 64,
-                                       .initial_rto    = ms{20},
-                                       .min_rto        = ms{10},
-                                       .max_rto        = ms{200},
-                                       .max_retransmit = 80};
+    return plexus::datagram::detail::udp_arq_config{.window         = 64,
+                                                    .initial_rto    = ms{20},
+                                                    .min_rto        = ms{10},
+                                                    .max_rto        = ms{200},
+                                                    .max_retransmit = 80};
 }
 
 // The 4 MiB kernel-buffer ceiling this host's rmem_max/wmem_max permits — raised on both
@@ -39,7 +39,7 @@ struct large_result
 
 large_result roundtrip_large(std::size_t budget, std::size_t payload_size,
                              std::size_t global_default, std::size_t reassembly_budget,
-                             pio::detail::udp_arq_config arq, int iterations)
+                             plexus::datagram::detail::udp_arq_config arq, int iterations)
 {
     // A multi-megabyte reassembly over the paced ARQ takes well past the 5 s default
     // per-message reclaim window, which would evict the partial mid-flight; extend it so an

@@ -35,10 +35,10 @@
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/priority.h"
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/reassembler.h"
+#include "plexus/datagram/detail/reassembler.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/detail/priority_band_queue.h"
-#include "plexus/io/detail/udp_handshake_frame.h"
+#include "plexus/datagram/detail/udp_handshake_frame.h"
 
 #include "plexus/topic_qos.h"
 
@@ -107,8 +107,8 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = plexus::inproc::inproc_transport<manual_clock>;
 using engine_t    = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 using test_reassembler =
-        plexus::io::detail::reassembler<plexus::inproc::inproc_executor<manual_clock> &,
-                                        plexus::inproc::inproc_timer<manual_clock>>;
+        plexus::datagram::detail::reassembler<plexus::inproc::inproc_executor<manual_clock> &,
+                                              plexus::inproc::inproc_timer<manual_clock>>;
 
 // An observer that records the cause of every posted drop it sees.
 struct recording_drop_observer final : plexus::io::observer
@@ -485,7 +485,7 @@ TEST_CASE("integration.drop_coverage arq_shed posts through the engine hook when
         // queued. No peer ever acks, so the window never reopens.
         udp_channel ch(io, server, dest, udp_channel::default_max_payload, {},
                        plexus::io::congestion::drop_newest, udp_channel::default_backpressure_bytes,
-                       plexus::io::detail::udp_channel_mode::reliable_datagram);
+                       plexus::datagram::detail::udp_channel_mode::reliable_datagram);
         ch.on_drop(fx.sink());
 
         const auto  payload = filler(64);
@@ -526,9 +526,9 @@ TEST_CASE("integration.drop_coverage demux_refused posts through the engine hook
         // Craft a best_effort handshake-request datagram (encode_handshake_into already
         // wraps the UDP envelope) and send it from a client socket.
         std::vector<std::byte> datagram;
-        plexus::io::detail::encode_handshake_into(
-                datagram, plexus::io::detail::udp_hs_type::request,
-                plexus::io::detail::udp_channel_mode::best_effort);
+        plexus::datagram::detail::encode_handshake_into(
+                datagram, plexus::datagram::detail::udp_hs_type::request,
+                plexus::datagram::detail::udp_channel_mode::best_effort);
 
         ::asio::ip::udp::socket   client(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         ::asio::ip::udp::endpoint to(::asio::ip::make_address_v4("127.0.0.1"), port);

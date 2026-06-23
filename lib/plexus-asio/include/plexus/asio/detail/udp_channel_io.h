@@ -301,7 +301,7 @@ void deliver_inbound(Ch &c, std::span<const std::byte> datagram)
             return feed_fragment(c, dec->frame); // best_effort fragment -> reassembler
         post_on_data(c, dec->frame);
     }
-    else if(c.m_mode == io::detail::udp_channel_mode::reliable_datagram)
+    else if(c.m_mode == datagram::detail::udp_channel_mode::reliable_datagram)
         deliver_reliable(c, dec->seq, dec->fragmented, dec->frame);
 }
 

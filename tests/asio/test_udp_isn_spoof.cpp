@@ -71,7 +71,7 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
     // and no fixed sequential step (the signatures a low-entropy / reconstructible source
     // would leave). This is a statistical property, so the bar is loose enough to never flake
     // on a sound CSPRNG yet tight enough to catch a constant / counter / single-seed stream.
-    namespace iod            = pio::detail;
+    namespace iod            = plexus::datagram::detail;
     constexpr int k_sessions = 64;
 
     ::asio::io_context         io;

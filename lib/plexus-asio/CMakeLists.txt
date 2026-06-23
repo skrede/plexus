@@ -20,6 +20,7 @@ target_include_directories(plexus-asio INTERFACE
 target_link_libraries(plexus-asio INTERFACE
     plexus::core
     plexus::wire
+    plexus::datagram
     plexus_asio_dep)
 
 target_compile_features(plexus-asio INTERFACE cxx_std_20)

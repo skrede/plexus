@@ -20,7 +20,7 @@
 // ambiguously between ::asio and plexus::asio inside the asio headers.
 #ifdef PLEXUS_HAVE_ASIO_MUX
     #include "plexus/asio/udp_server.h"
-    #include "plexus/io/detail/send_queue.h"
+    #include "plexus/datagram/detail/send_queue.h"
 
     #include <asio/io_context.hpp>
     #include <asio/ip/udp.hpp>
@@ -225,7 +225,7 @@ TEST_CASE(
     // latched (depth-N retain in the loop) or not (publish + fan-out only).
     const auto allocs_per_publish = [&](bool latched)
     {
-        sink_executor   ex;
+        sink_executor            ex;
         sink_channel             ch(ex);
         forwarder::peer          peer{ch, "node-a"};
         plexus::log::null_logger log_sink;
@@ -504,7 +504,7 @@ TEST_CASE("steady-state udp send_queue pooled queued path recycles buffers (allo
           "[integration][udp]")
 {
     using endpoint = ::asio::ip::udp::endpoint;
-    using queue    = plexus::io::detail::send_queue<endpoint>;
+    using queue    = plexus::datagram::detail::send_queue<endpoint>;
     const endpoint dest{::asio::ip::make_address_v4("127.0.0.1"), 9};
 
     // The steady-state allocation count of a warm queued path sliding `K` datagrams of the given

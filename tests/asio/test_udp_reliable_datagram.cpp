@@ -24,8 +24,8 @@ TEST_CASE("udp reliable_datagram: a 'udpr' dial mints reliable-mode channels on 
     REQUIRE(accepted != nullptr);
     // The dialer declared reliable_datagram in the handshake; the acceptor minted the
     // SAME mode — both report "udpr" (the mode is symmetric, not just dialer-side).
-    REQUIRE(dialed->mode() == pio::detail::udp_channel_mode::reliable_datagram);
-    REQUIRE(accepted->mode() == pio::detail::udp_channel_mode::reliable_datagram);
+    REQUIRE(dialed->mode() == plexus::datagram::detail::udp_channel_mode::reliable_datagram);
+    REQUIRE(accepted->mode() == plexus::datagram::detail::udp_channel_mode::reliable_datagram);
     REQUIRE(dialed->remote_endpoint().scheme == "udpr");
     REQUIRE(accepted->remote_endpoint().scheme == "udpr");
 }
@@ -49,8 +49,8 @@ TEST_CASE("udp reliable_datagram: a 'udp' dial stays best_effort (the opt-in is 
 
     REQUIRE(dialed != nullptr);
     REQUIRE(accepted != nullptr);
-    REQUIRE(dialed->mode() == pio::detail::udp_channel_mode::best_effort);
-    REQUIRE(accepted->mode() == pio::detail::udp_channel_mode::best_effort);
+    REQUIRE(dialed->mode() == plexus::datagram::detail::udp_channel_mode::best_effort);
+    REQUIRE(accepted->mode() == plexus::datagram::detail::udp_channel_mode::best_effort);
     REQUIRE(dialed->remote_endpoint().scheme == "udp");
     REQUIRE(accepted->remote_endpoint().scheme == "udp");
 }

@@ -12,12 +12,12 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
-#include "plexus/io/mtu_budget.h"
+#include "plexus/datagram/mtu_budget.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/pending_dial_registry.h"
-#include "plexus/io/detail/udp_handshake_arq.h"
-#include "plexus/io/detail/udp_handshake_frame.h"
+#include "plexus/datagram/detail/udp_handshake_arq.h"
+#include "plexus/datagram/detail/udp_handshake_frame.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
@@ -57,8 +57,8 @@ class udp_transport
 {
 public:
     using endpoint_type = ::asio::ip::udp::endpoint;
-    using arq_type      = io::detail::udp_handshake_arq<udp_policy>;
-    using hs_type       = io::detail::udp_hs_type;
+    using arq_type      = datagram::detail::udp_handshake_arq<udp_policy>;
+    using hs_type       = datagram::detail::udp_hs_type;
 
     // global_default is the node-level per-MESSAGE size ceiling and reassembly_budget the
     // always-on aggregate reassembly-memory cap — the two operator-facing message-size
@@ -71,10 +71,10 @@ public:
     // fragment backlog is always admissible regardless of this knob (the ceiling, not this
     // cap, is the message-size authority); raise it only to allow extra backlog past one message.
     explicit udp_transport(::asio::io_context &io,
-                           std::size_t         max_payload       = udp_channel::default_max_payload,
-                           arq_type::schedule  hs_ladder         = arq_type::default_ladder,
-                           io::detail::udp_arq_config arq_cfg    = {},
-                           io::congestion             congestion = io::congestion::block,
+                           std::size_t         max_payload = udp_channel::default_max_payload,
+                           arq_type::schedule  hs_ladder   = arq_type::default_ladder,
+                           datagram::detail::udp_arq_config arq_cfg    = {},
+                           io::congestion                   congestion = io::congestion::block,
                            std::size_t max_peers = detail::udp_inbound_demux::default_max_peers,
                            std::size_t so_sndbuf = udp_server::default_so_sndbuf,
                            std::size_t so_rcvbuf = udp_server::default_so_rcvbuf,
@@ -227,11 +227,11 @@ private:
     // The scheme -> channel-mode classifier: "udpr" requests the reliable-datagram ARQ
     // class; every other scheme (including bare "udp") is best_effort. The mirror of the
     // mux selector's reliability_of_scheme, applied at the datagram member's dial face.
-    [[nodiscard]] static io::detail::udp_channel_mode
+    [[nodiscard]] static datagram::detail::udp_channel_mode
     mode_of_scheme(const std::string &scheme) noexcept
     {
-        return scheme == "udpr" ? io::detail::udp_channel_mode::reliable_datagram
-                                : io::detail::udp_channel_mode::best_effort;
+        return scheme == "udpr" ? datagram::detail::udp_channel_mode::reliable_datagram
+                                : datagram::detail::udp_channel_mode::best_effort;
     }
 
     // Draw a per-session ISN (RFC 6528 lineage) DIRECTLY from std::random_device, the OS
@@ -261,7 +261,7 @@ private:
     friend void detail::ensure_bound(U &, const ::asio::ip::udp &);
     template<typename U>
     friend void detail::send_handshake(U &, const typename U::endpoint_type &, typename U::hs_type,
-                                       io::detail::udp_channel_mode, std::uint16_t);
+                                       datagram::detail::udp_channel_mode, std::uint16_t);
     template<typename U>
     friend void detail::wire_teardown(U &, udp_channel &, const typename U::endpoint_type &);
     template<typename U>
@@ -288,10 +288,10 @@ private:
     std::size_t               m_global_default; // node-level per-MESSAGE size ceiling
     std::size_t               m_reassembly_budget; // aggregate reassembly-memory cap (always-on)
     std::size_t m_backpressure_bytes; // per-channel bounded send queue for windowed fragments
-    std::chrono::milliseconds  m_reassembly_timeout; // per-message reassembly reclaim window
-    arq_type::schedule         m_hs_ladder;
-    io::detail::udp_arq_config m_arq_cfg;
-    io::congestion             m_congestion;
+    std::chrono::milliseconds        m_reassembly_timeout; // per-message reassembly reclaim window
+    arq_type::schedule               m_hs_ladder;
+    datagram::detail::udp_arq_config m_arq_cfg;
+    io::congestion                   m_congestion;
     std::random_device
             m_isn_rng; // OS CSPRNG; one draw per dial/accept (no hot-path RNG, no stream state)
     std::vector<std::byte> m_hs_scratch;

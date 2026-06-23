@@ -1,10 +1,10 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_UDP_RTO_ESTIMATOR_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_UDP_RTO_ESTIMATOR_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_RTO_ESTIMATOR_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_RTO_ESTIMATOR_H
 
 #include <chrono>
 #include <algorithm>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // The adaptive retransmit-timeout estimator (RFC 6298). It maintains the smoothed
 // round-trip time SRTT and its variation RTTVAR from unambiguous round-trip samples and

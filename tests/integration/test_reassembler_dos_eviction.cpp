@@ -87,8 +87,8 @@ TEST_CASE("integration.reassembler_dos the demux cap bounds the spoofed-source c
     // Each datagram channel is per-peer and owns one reassembler, so the demux peer cap
     // bounds how many reassemblers a spoofed-source flood can mint — the aggregate
     // reassembly-memory bound is (demux cap × per-reassembler cap), not unbounded.
-    using demux =
-            plexus::io::detail::basic_inbound_demux<int, std::uint32_t, std::hash<std::uint32_t>>;
+    using demux = plexus::datagram::detail::basic_inbound_demux<int, std::uint32_t,
+                                                                std::hash<std::uint32_t>>;
 
     constexpr std::size_t cap = 8;
     demux                 d{cap};

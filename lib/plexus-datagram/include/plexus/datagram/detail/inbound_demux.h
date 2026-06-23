@@ -1,11 +1,11 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_INBOUND_DEMUX_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_INBOUND_DEMUX_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_INBOUND_DEMUX_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_INBOUND_DEMUX_H
 
 #include <cstddef>
 #include <utility>
 #include <unordered_map>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // Sender (addr,port) -> Channel* map: the whole game of a connectionless
 // transport (no plexus analog — the stream transports own a per-connection socket

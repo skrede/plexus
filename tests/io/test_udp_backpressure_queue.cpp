@@ -6,8 +6,8 @@
 // total below the cap and re-admit unboundedly, mitigating the T-23-D2 integer-overflow
 // threat). plexus::plexus only (header-only core; no backend link).
 
-#include "plexus/io/detail/send_queue.h"
-#include "plexus/io/detail/udp_backpressure_queue.h"
+#include "plexus/datagram/detail/send_queue.h"
+#include "plexus/datagram/detail/udp_backpressure_queue.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -16,7 +16,7 @@
 #include <cstddef>
 #include <utility>
 
-using queue = plexus::io::detail::udp_backpressure_queue;
+using queue = plexus::datagram::detail::udp_backpressure_queue;
 
 namespace {
 
@@ -105,7 +105,7 @@ TEST_CASE("send_queue: a finite byte cap refuses past the bound (the udp_server 
     // to under congestion), while an unbounded queue (today's server construction) admits
     // every datagram unboundedly. A WITHHOLDING sink (never invokes its completion)
     // simulates a stalled socket so the serial drain cannot free room.
-    using sq = plexus::io::detail::send_queue<int>;
+    using sq = plexus::datagram::detail::send_queue<int>;
 
     // The bounded queue: a 16-byte cap, a sink that withholds completion so nothing drains.
     sq bounded{[](std::span<const std::byte>, const int &, sq::completion) { /* withhold */ }, 16};

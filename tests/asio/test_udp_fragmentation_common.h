@@ -44,13 +44,13 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 // A compressed ARQ config so the fragment-loss retransmit is quick. A generous window +
 // retransmit cap so a multi-hundred-fragment reliable message rides through the bounded
 // congestion=block queue without exhausting retransmits over loopback.
-inline pio::detail::udp_arq_config fast_arq()
+inline plexus::datagram::detail::udp_arq_config fast_arq()
 {
-    return pio::detail::udp_arq_config{.window         = 256,
-                                       .initial_rto    = ms{20},
-                                       .min_rto        = ms{10},
-                                       .max_rto        = ms{120},
-                                       .max_retransmit = 20};
+    return plexus::datagram::detail::udp_arq_config{.window         = 256,
+                                                    .initial_rto    = ms{20},
+                                                    .min_rto        = ms{10},
+                                                    .max_rto        = ms{120},
+                                                    .max_retransmit = 20};
 }
 
 // A deterministic, position-dependent payload so a reassembled message is byte-checked

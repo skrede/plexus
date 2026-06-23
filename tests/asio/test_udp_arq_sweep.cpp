@@ -19,7 +19,7 @@
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
 
-#include "plexus/io/detail/udp_reliable_arq.h"
+#include "plexus/datagram/detail/udp_reliable_arq.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -140,11 +140,11 @@ struct cell_result
 cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs,
                      std::uint32_t seed)
 {
-    pio::detail::udp_arq_config cfg{.window         = window,
-                                    .initial_rto    = initial_rto,
-                                    .min_rto        = ms{5},
-                                    .max_rto        = initial_rto * 8,
-                                    .max_retransmit = 30};
+    plexus::datagram::detail::udp_arq_config cfg{.window         = window,
+                                                 .initial_rto    = initial_rto,
+                                                 .min_rto        = ms{5},
+                                                 .max_rto        = initial_rto * 8,
+                                                 .max_retransmit = 30};
 
     ::asio::io_context   io;
     pasio::udp_transport server{io, pasio::udp_channel::default_max_payload,

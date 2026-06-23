@@ -17,7 +17,7 @@
 #include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
 
-#include "plexus/io/detail/reassembler.h"
+#include "plexus/datagram/detail/reassembler.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/byte_channel.h"
 
@@ -170,7 +170,7 @@ std::vector<std::vector<std::byte>> fragment_and_seal(const derived_keys        
     return on_wire;
 }
 
-using test_reassembler = plexus::io::detail::reassembler<
+using test_reassembler = plexus::datagram::detail::reassembler<
         plexus::inproc::inproc_executor<plexus::testing::test_clock> &,
         plexus::inproc::inproc_timer<plexus::testing::test_clock>>;
 

@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_DETAIL_ASIO_INBOUND_DEMUX_H
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_ASIO_INBOUND_DEMUX_H
 
-#include "plexus/io/detail/inbound_demux.h"
+#include "plexus/datagram/detail/inbound_demux.h"
 
 #include <asio/ip/udp.hpp>
 #include <asio/ip/address.hpp>
@@ -46,8 +46,8 @@ struct asio_endpoint_hash
 // is unchanged — only the defining file moved + split.
 template<typename Channel>
 using basic_inbound_demux =
-        plexus::io::detail::basic_inbound_demux<Channel, ::asio::ip::udp::endpoint,
-                                                asio_endpoint_hash>;
+        plexus::datagram::detail::basic_inbound_demux<Channel, ::asio::ip::udp::endpoint,
+                                                      asio_endpoint_hash>;
 
 // The plain-UDP binding: udp_transport's existing call sites stay untouched.
 using udp_inbound_demux = basic_inbound_demux<udp_channel>;

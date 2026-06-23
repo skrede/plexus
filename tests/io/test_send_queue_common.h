@@ -7,7 +7,7 @@
 // destination type is a plain int here (the block is generic over the endpoint),
 // proving the block carries no UDP shape.
 
-#include "plexus/io/detail/send_queue.h"
+#include "plexus/datagram/detail/send_queue.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -16,7 +16,7 @@
 #include <cstddef>
 #include <utility>
 
-using send_queue = plexus::io::detail::send_queue<int>;
+using send_queue = plexus::datagram::detail::send_queue<int>;
 
 namespace send_queue_fixture {
 

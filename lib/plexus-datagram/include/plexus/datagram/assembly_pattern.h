@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_IO_ASSEMBLY_PATTERN_H
-#define HPP_GUARD_PLEXUS_IO_ASSEMBLY_PATTERN_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_ASSEMBLY_PATTERN_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_ASSEMBLY_PATTERN_H
 
-namespace plexus::io {
+namespace plexus::datagram {
 
 // The datagram assembly pattern: a documentation-only contract (NOT a uniform
 // interface and NOT a coordinator object) capturing HOW a concrete datagram

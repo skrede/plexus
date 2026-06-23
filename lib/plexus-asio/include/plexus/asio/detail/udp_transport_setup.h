@@ -7,7 +7,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/udp_handshake_frame.h"
+#include "plexus/datagram/detail/udp_handshake_frame.h"
 
 #include <asio/post.hpp>
 #include <asio/ip/udp.hpp>
@@ -48,11 +48,12 @@ void ensure_bound(T &t, const ::asio::ip::udp &proto)
 }
 
 template<typename T>
-void send_handshake(T &t, const typename T::endpoint_type &dest, typename T::hs_type type,
-                    io::detail::udp_channel_mode mode = io::detail::udp_channel_mode::best_effort,
-                    std::uint16_t                initial_seq = 0)
+void send_handshake(
+        T &t, const typename T::endpoint_type &dest, typename T::hs_type type,
+        datagram::detail::udp_channel_mode mode = datagram::detail::udp_channel_mode::best_effort,
+        std::uint16_t                      initial_seq = 0)
 {
-    io::detail::encode_handshake_into(t.m_hs_scratch, type, mode, initial_seq);
+    datagram::detail::encode_handshake_into(t.m_hs_scratch, type, mode, initial_seq);
     t.m_server.send_to(t.m_hs_scratch, dest);
 }
 
@@ -102,7 +103,7 @@ void fail_dial(T &t, const io::endpoint &ep, udp_channel *raw)
 template<typename T>
 void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<const std::byte> bytes)
 {
-    auto hs = io::detail::decode_handshake(bytes);
+    auto hs = datagram::detail::decode_handshake(bytes);
     if(!hs || hs->type != T::hs_type::request)
         return;
     auto  ch = std::make_unique<udp_channel>(t.m_io, t.m_server, from, t.m_max_payload, t.m_arq_cfg,
@@ -130,7 +131,7 @@ template<typename T>
 void route_to_peer(T &t, const typename T::endpoint_type &from, udp_channel *ch,
                    std::span<const std::byte> bytes)
 {
-    if(auto hs = io::detail::decode_handshake(bytes))
+    if(auto hs = datagram::detail::decode_handshake(bytes))
     {
         if(hs->type == T::hs_type::response)
             resolve_paired(t, ch);

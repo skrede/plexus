@@ -4,7 +4,7 @@
 // reject gates evaluate (size + envelope_overhead (+ a reliable marker byte) > max_payload).
 // No socket, no backend — header-only core, linked against plexus::plexus only.
 
-#include "plexus/io/mtu_budget.h"
+#include "plexus/datagram/mtu_budget.h"
 
 #include "plexus/wire/udp_envelope.h"
 
@@ -12,7 +12,7 @@
 
 #include <cstddef>
 
-using plexus::io::mtu_budget;
+using plexus::datagram::mtu_budget;
 
 TEST_CASE("mtu_budget default is the conservative 1200-byte payload floor", "[io][mtu_budget]")
 {

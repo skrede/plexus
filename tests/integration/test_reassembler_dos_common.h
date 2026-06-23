@@ -18,8 +18,8 @@
 // spoofed-source channel count, so the per-channel-per-peer reassembler structure bounds the
 // aggregate reassembly memory.
 
-#include "plexus/io/detail/reassembler.h"
-#include "plexus/io/detail/inbound_demux.h"
+#include "plexus/datagram/detail/reassembler.h"
+#include "plexus/datagram/detail/inbound_demux.h"
 #include "plexus/io/fragmentation.h"
 
 #include "plexus/testing/harness.h"
@@ -37,7 +37,7 @@ using namespace std::chrono_literals;
 
 namespace reassembler_dos_fixture {
 
-using test_reassembler = plexus::io::detail::reassembler<
+using test_reassembler = plexus::datagram::detail::reassembler<
         plexus::inproc::inproc_executor<plexus::testing::test_clock> &,
         plexus::inproc::inproc_timer<plexus::testing::test_clock>>;
 

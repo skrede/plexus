@@ -5,7 +5,7 @@
 // around its pump — so this unit only proves it compiles and that the namespace it
 // opens is well-formed. No socket, no backend — header-only core, plexus::plexus only.
 
-#include "plexus/io/assembly_pattern.h"
+#include "plexus/datagram/assembly_pattern.h"
 
 #include <catch2/catch_test_macros.hpp>
 

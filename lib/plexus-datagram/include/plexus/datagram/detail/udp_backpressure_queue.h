@@ -1,12 +1,12 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_UDP_BACKPRESSURE_QUEUE_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_UDP_BACKPRESSURE_QUEUE_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_BACKPRESSURE_QUEUE_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_BACKPRESSURE_QUEUE_H
 
 #include <span>
 #include <deque>
 #include <vector>
 #include <cstddef>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // The congestion=block backpressure queue: a BOUNDED FIFO of owned frames that a reliable
 // channel parks when its ARQ send window is full, drained by the next ack that frees a

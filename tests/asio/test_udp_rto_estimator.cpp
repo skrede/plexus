@@ -3,13 +3,13 @@
 // multiplicative backoff doubles per retransmit (capped). A pure value type — no timer,
 // no socket — so the smoothing math is proven in isolation from the IO engine.
 
-#include "plexus/io/detail/udp_rto_estimator.h"
+#include "plexus/datagram/detail/udp_rto_estimator.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
 
-namespace detail = plexus::io::detail;
+namespace detail = plexus::datagram::detail;
 using ms         = std::chrono::milliseconds;
 
 TEST_CASE("udp rto: the first sample seeds SRTT=R, RTTVAR=R/2 and clamps the RTO", "[udp][rto]")

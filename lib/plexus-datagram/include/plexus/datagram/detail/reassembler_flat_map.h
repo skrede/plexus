@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_REASSEMBLER_FLAT_MAP_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_REASSEMBLER_FLAT_MAP_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_REASSEMBLER_FLAT_MAP_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_REASSEMBLER_FLAT_MAP_H
 
 #include <span>
 #include <vector>
@@ -8,7 +8,7 @@
 #include <utility>
 #include <algorithm>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // A bounded, alloc-free-in-steady-state associative container keyed by an
 // attacker-controlled std::uint16_t (the reassembly msg_id), replacing the

@@ -172,7 +172,7 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
 {
     loopback h;
     REQUIRE(h.accepted != nullptr);
-    REQUIRE(h.accepted->mode() == pio::detail::udp_channel_mode::best_effort);
+    REQUIRE(h.accepted->mode() == plexus::datagram::detail::udp_channel_mode::best_effort);
 
     // A spoofed reliable_arq (kind=1) data segment from the peer's source endpoint must be
     // DROPPED on a best_effort channel — never routed to the reliable path that would

@@ -14,7 +14,7 @@
 
 #include "plexus/wire/udp_envelope.h"
 
-#include "plexus/io/detail/udp_handshake_frame.h"
+#include "plexus/datagram/detail/udp_handshake_frame.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -44,13 +44,13 @@ using ms = std::chrono::milliseconds;
 
 constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80}};
 
-inline pio::detail::udp_arq_config fast_arq()
+inline plexus::datagram::detail::udp_arq_config fast_arq()
 {
-    return pio::detail::udp_arq_config{.window         = 64,
-                                       .initial_rto    = ms{20},
-                                       .min_rto        = ms{10},
-                                       .max_rto        = ms{80},
-                                       .max_retransmit = 12};
+    return plexus::datagram::detail::udp_arq_config{.window         = 64,
+                                                    .initial_rto    = ms{20},
+                                                    .min_rto        = ms{10},
+                                                    .max_rto        = ms{80},
+                                                    .max_retransmit = 12};
 }
 
 inline std::vector<std::byte> bytes_of(const std::string &s)

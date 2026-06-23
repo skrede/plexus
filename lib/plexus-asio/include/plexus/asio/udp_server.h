@@ -7,7 +7,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
-#include "plexus/io/detail/send_queue.h"
+#include "plexus/datagram/detail/send_queue.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/buffer.hpp>
@@ -193,7 +193,7 @@ private:
     friend void detail::on_sync_send_error(S &, const std::error_code &);
     template<typename S>
     friend auto detail::make_send_sink(S &) ->
-            typename io::detail::send_queue<typename S::endpoint_type>::send_sink;
+            typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink;
     template<typename S>
     friend void detail::apply_socket_buffers(S &);
     template<typename S>
@@ -210,7 +210,8 @@ private:
     std::size_t                  m_dropped{0};     // congestion=drop shed count
     std::size_t                  m_send_errors{0}; // transient per-datagram send-failure discards
     std::size_t m_recv_resets{0}; // spurious recv connection_reset signals swallowed
-    io::detail::send_queue<endpoint_type> m_send_queue; // byte-capped owned outbound discipline
+    datagram::detail::send_queue<endpoint_type>
+            m_send_queue; // byte-capped owned outbound discipline
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)>
                                                            m_on_datagram;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;

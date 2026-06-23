@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_IO_MTU_BUDGET_H
-#define HPP_GUARD_PLEXUS_IO_MTU_BUDGET_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_MTU_BUDGET_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_MTU_BUDGET_H
 
 #include <cstddef>
 
-namespace plexus::io {
+namespace plexus::datagram {
 
 // A static per-channel PER-DATAGRAM payload budget that the fragment / oversize
 // path consults. It is NOT the largest message a channel can carry — once the

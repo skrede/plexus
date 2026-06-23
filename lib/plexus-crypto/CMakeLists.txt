@@ -51,6 +51,7 @@ target_link_libraries(plexus-crypto PUBLIC
     plexus::core
     plexus::wire
     plexus::asio
+    plexus::datagram
     plexus_asio_dep
     OpenSSL::SSL
     OpenSSL::Crypto)

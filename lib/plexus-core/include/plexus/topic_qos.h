@@ -39,7 +39,7 @@ namespace plexus {
 // node-level message ceiling that bounds the stream + datagram receive reassembly
 // and the send-side oversize-reject (resolved through io::effective_max); 0 falls
 // back to the node default. It is the per-MESSAGE size — distinct from the
-// per-FRAGMENT io::mtu_budget::max_payload. uint32 (a 4 GiB ceiling far exceeds the
+// per-FRAGMENT datagram::mtu_budget::max_payload. uint32 (a 4 GiB ceiling far exceeds the
 // shipped low-MiB target).
 struct topic_qos
 {

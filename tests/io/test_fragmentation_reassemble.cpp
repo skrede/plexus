@@ -5,8 +5,8 @@ using namespace fragmentation_fixture;
 namespace {
 
 using test_reassembler =
-        io::detail::reassembler<plexus::inproc::inproc_executor<testing::test_clock> &,
-                                plexus::inproc::inproc_timer<testing::test_clock>>;
+        datagram::detail::reassembler<plexus::inproc::inproc_executor<testing::test_clock> &,
+                                      plexus::inproc::inproc_timer<testing::test_clock>>;
 
 std::vector<std::byte> seq_bytes(std::size_t n, int base)
 {

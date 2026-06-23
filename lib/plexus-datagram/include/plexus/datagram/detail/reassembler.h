@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_REASSEMBLER_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_REASSEMBLER_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_REASSEMBLER_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_REASSEMBLER_H
 
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/reassembler_flat_map.h"
+#include "plexus/datagram/detail/reassembler_flat_map.h"
 
 #include "plexus/wire/frame_reassembler.h"
 
@@ -19,7 +19,7 @@
 #include <utility>
 #include <system_error>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // over-limit: one reassembly window; the fragment-insert, hole-track, and complete-and-deliver
 // steps all operate over the one partial-message buffer, so splitting them scatters the
@@ -60,8 +60,8 @@ public:
 
     struct config
     {
-        std::size_t               max_message_size{global_default_max_message_bytes};
-        std::size_t               total_memory_cap{reassembly_memory_budget};
+        std::size_t               max_message_size{plexus::io::global_default_max_message_bytes};
+        std::size_t               total_memory_cap{plexus::io::reassembly_memory_budget};
         std::chrono::milliseconds per_message_timeout{5000};
     };
 
@@ -83,7 +83,8 @@ public:
     reassembler(const reassembler &)            = delete;
     reassembler &operator=(const reassembler &) = delete;
 
-    using drop_sink = plexus::detail::move_only_function<void(const drop_event &)>;
+    using drop_sink =
+            plexus::detail::move_only_function<void(const plexus::io::detail::drop_event &)>;
 
     void on_deliver(deliver_sink cb) { m_on_deliver = std::move(cb); }
 
@@ -98,13 +99,14 @@ public:
     outcome feed(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt,
                  std::span<const std::byte> bytes)
     {
-        const outcome o = (frag_cnt == 0 || frag_idx >= frag_cnt || frag_cnt > max_fragment_count)
+        const outcome o =
+                (frag_cnt == 0 || frag_idx >= frag_cnt || frag_cnt > plexus::io::max_fragment_count)
                 ? outcome::dropped_malformed
                 : admit_fragment(msg_id, frag_idx, frag_cnt, bytes);
         if(o == outcome::dropped_malformed)
-            emit_drop(drop_cause::malformed);
+            emit_drop(plexus::io::detail::drop_cause::malformed);
         else if(o == outcome::dropped_cap)
-            emit_drop(drop_cause::reassembly_cap);
+            emit_drop(plexus::io::detail::drop_cause::reassembly_cap);
         return o;
     }
 
@@ -213,14 +215,15 @@ private:
                     if(ec || m_dead)
                         return;    // cancelled by completion / teardown
                     evict(msg_id); // best-effort reclaim of the stalled partial
-                    emit_drop(drop_cause::reassembly_evicted);
+                    emit_drop(plexus::io::detail::drop_cause::reassembly_evicted);
                 });
     }
 
-    void emit_drop(drop_cause cause)
+    void emit_drop(plexus::io::detail::drop_cause cause)
     {
         if(m_on_drop)
-            m_on_drop(drop_event{.cause = cause, .transport = locality::remote});
+            m_on_drop(plexus::io::detail::drop_event{.cause     = cause,
+                                                     .transport = plexus::io::locality::remote});
     }
 
     void evict(std::uint16_t msg_id)

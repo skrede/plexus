@@ -5,7 +5,7 @@
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
-#include "plexus/io/detail/send_queue.h"
+#include "plexus/datagram/detail/send_queue.h"
 
 #include <asio/ip/udp.hpp>
 #include <asio/socket_base.hpp>
@@ -72,11 +72,12 @@ void on_sync_send_error(S &s, const std::error_code &ec)
 // loss (counted, the drain chains past it); a fatal socket error closes the queue and is reported
 // once; an aborted/post-teardown completion is a guarded no-op.
 template<typename S>
-auto make_send_sink(S &s) -> typename io::detail::send_queue<typename S::endpoint_type>::send_sink
+auto make_send_sink(S &s) ->
+        typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink
 {
     using endpoint_type = typename S::endpoint_type;
     return [&s](std::span<const std::byte> bytes, const endpoint_type &dest,
-                typename io::detail::send_queue<endpoint_type>::completion done)
+                typename datagram::detail::send_queue<endpoint_type>::completion done)
     {
         s.m_socket.async_send_to(
                 ::asio::buffer(bytes.data(), bytes.size()), dest,

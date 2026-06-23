@@ -5,7 +5,7 @@
 // release in order) is asserted directly. The buffer is sans-IO (no socket, no
 // io_context): a pure deterministic unit. Bounded + dup-drop + uint16 wrap are covered.
 
-#include "plexus/io/detail/udp_reorder_buffer.h"
+#include "plexus/datagram/detail/udp_reorder_buffer.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -15,11 +15,9 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace pio = plexus::io;
-
 namespace {
 
-using reorder = pio::detail::udp_reorder_buffer;
+using reorder = plexus::datagram::detail::udp_reorder_buffer;
 
 std::vector<std::byte> bytes_of(const std::string &s)
 {
@@ -73,8 +71,7 @@ TEST_CASE("udp reorder: contiguous arrival delivers immediately in order", "[udp
     REQUIRE(r.buf.cumulative() == 2);
 }
 
-TEST_CASE("udp reorder HOL: a gap holds all higher seqs until the gap fills",
-          "[udp][reorder]")
+TEST_CASE("udp reorder HOL: a gap holds all higher seqs until the gap fills", "[udp][reorder]")
 {
     recorder r;
 

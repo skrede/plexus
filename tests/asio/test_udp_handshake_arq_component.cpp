@@ -5,7 +5,7 @@ using namespace udp_handshake_arq_fixture;
 TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired frame cancels it",
           "[udp][handshake]")
 {
-    using arq_t = pio::detail::udp_handshake_arq<pasio::udp_policy>;
+    using arq_t = plexus::datagram::detail::udp_handshake_arq<pasio::udp_policy>;
 
     SECTION("a paired frame mid-ladder establishes and stops further transmits")
     {

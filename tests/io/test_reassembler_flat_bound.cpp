@@ -6,7 +6,7 @@
 // in-flight table unbounded. These bounds hold regardless of the entry container, so the
 // oracle pins behavior any later container swap must preserve verbatim.
 
-#include "plexus/io/detail/reassembler.h"
+#include "plexus/datagram/detail/reassembler.h"
 
 #include "plexus/testing/harness.h"
 
@@ -22,8 +22,8 @@ using namespace plexus;
 namespace {
 
 using test_reassembler =
-        io::detail::reassembler<plexus::inproc::inproc_executor<testing::test_clock> &,
-                                plexus::inproc::inproc_timer<testing::test_clock>>;
+        datagram::detail::reassembler<plexus::inproc::inproc_executor<testing::test_clock> &,
+                                      plexus::inproc::inproc_timer<testing::test_clock>>;
 
 std::vector<std::byte> one_byte() { return std::vector<std::byte>(1, std::byte{0xAB}); }
 

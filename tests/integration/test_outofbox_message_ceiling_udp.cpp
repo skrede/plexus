@@ -12,13 +12,13 @@ namespace {
 // raised kernel socket buffers. The per-message size ceiling, write/back-pressure caps, and
 // reassembly budget all stay at the shipped defaults — this only governs HOW FAST fragments
 // leave, not how large a message may be. A generous retransmit budget covers loopback loss.
-inline pio::detail::udp_arq_config paced_arq()
+inline plexus::datagram::detail::udp_arq_config paced_arq()
 {
-    return pio::detail::udp_arq_config{.window         = 1024,
-                                       .initial_rto    = ms{20},
-                                       .min_rto        = ms{10},
-                                       .max_rto        = ms{160},
-                                       .max_retransmit = 40};
+    return plexus::datagram::detail::udp_arq_config{.window         = 1024,
+                                                    .initial_rto    = ms{20},
+                                                    .min_rto        = ms{10},
+                                                    .max_rto        = ms{160},
+                                                    .max_retransmit = 40};
 }
 
 }

@@ -1,8 +1,8 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_UDP_RELIABLE_ARQ_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_UDP_RELIABLE_ARQ_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_RELIABLE_ARQ_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_RELIABLE_ARQ_H
 
-#include "plexus/io/detail/udp_reorder_buffer.h"
-#include "plexus/io/detail/udp_rto_estimator.h"
+#include "plexus/datagram/detail/udp_reorder_buffer.h"
+#include "plexus/datagram/detail/udp_rto_estimator.h"
 
 #include "plexus/wire/udp_ack.h"
 
@@ -20,7 +20,7 @@
 #include <algorithm>
 #include <system_error>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // over-limit: one cohesive ARQ state machine; the selective-repeat sender window, the reorder
 // receiver, and the RFC-6298 RTO timer all advance the shared sequence/window/ack state, so

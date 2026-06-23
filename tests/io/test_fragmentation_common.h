@@ -1,9 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_IO_TEST_FRAGMENTATION_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_IO_TEST_FRAGMENTATION_COMMON_H
 
-#include "plexus/io/detail/reassembler.h"
+#include "plexus/datagram/detail/reassembler.h"
 #include "plexus/io/fragmentation.h"
-#include "plexus/io/mtu_budget.h"
+#include "plexus/datagram/mtu_budget.h"
 #include "plexus/wire/udp_envelope.h"
 
 #include "plexus/testing/harness.h"

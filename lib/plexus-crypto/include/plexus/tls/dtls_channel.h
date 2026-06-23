@@ -12,11 +12,11 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
-#include "plexus/io/mtu_budget.h"
+#include "plexus/datagram/mtu_budget.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/handshake_gate.h"
-#include "plexus/io/detail/reassembler.h"
+#include "plexus/datagram/detail/reassembler.h"
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/detail/compat.h"
 
@@ -66,17 +66,17 @@ public:
     };
 
     using reassembler_type =
-            io::detail::reassembler<::asio::io_context &, plexus::asio::asio_timer>;
+            datagram::detail::reassembler<::asio::io_context &, plexus::asio::asio_timer>;
 
     // The per-channel LOGICAL payload ceiling — the upper term of min(max_payload,
     // DTLS_get_data_mtu). A caller MAY raise it above the single-datagram budget so the fragment
     // path carries large messages; the default is the single-Ethernet floor.
-    static constexpr std::size_t default_max_payload = io::mtu_budget{}.max_payload;
+    static constexpr std::size_t default_max_payload = datagram::mtu_budget{}.max_payload;
 
     // The per-channel DTLS RECORD MTU handed to SSL_set_mtu (the encrypted budget the fragmenter
     // splits against). DECOUPLED from max_payload: raising the logical ceiling lets a message
     // fragment while each fragment still rides one DTLS record bounded by this MTU.
-    static constexpr std::size_t default_record_mtu = io::mtu_budget{}.max_payload;
+    static constexpr std::size_t default_record_mtu = datagram::mtu_budget{}.max_payload;
 
     // Build over the shared udp_server: own NO socket, share the credential's SSL_CTX (up_ref'd),
     // publish the per-instance peer-addr + the transport's borrowed cookie state into the SSL

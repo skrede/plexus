@@ -6,7 +6,7 @@
 // is range-checked before it indexes, and feed() must never crash or invoke UB on an
 // arbitrary span.
 
-#include "plexus/io/detail/reassembler.h"
+#include "plexus/datagram/detail/reassembler.h"
 #include "plexus/io/fragmentation.h"
 
 #include "plexus/wire/udp_envelope.h"
@@ -24,7 +24,7 @@ namespace {
 
 using fuzz_executor    = plexus::inproc::inproc_executor<std::chrono::steady_clock>;
 using fuzz_timer       = plexus::inproc::inproc_timer<std::chrono::steady_clock>;
-using fuzz_reassembler = plexus::io::detail::reassembler<fuzz_executor &, fuzz_timer>;
+using fuzz_reassembler = plexus::datagram::detail::reassembler<fuzz_executor &, fuzz_timer>;
 
 // Read up to two bytes as a big-endian uint16, tolerating a short span (a missing
 // byte reads as zero) so the reassembler's own range checks are fuzzed even when the

@@ -4,7 +4,7 @@ using namespace udp_isn_fixture;
 
 TEST_CASE("udp isn: the handshake frame round-trips the ISN append-only", "[udp][isn]")
 {
-    namespace iod = pio::detail;
+    namespace iod = plexus::datagram::detail;
 
     std::vector<std::byte> out;
     iod::encode_handshake_into(out, iod::udp_hs_type::request,
@@ -18,7 +18,7 @@ TEST_CASE("udp isn: the handshake frame round-trips the ISN append-only", "[udp]
 
 TEST_CASE("udp isn: a legacy handshake without the ISN bytes decodes to ISN 0", "[udp][isn]")
 {
-    namespace iod = pio::detail;
+    namespace iod = plexus::datagram::detail;
 
     // A 2-byte [hs_type, channel_mode] frame (the pre-ISN layout) — the ISN bytes absent.
     const std::byte inner[2]{static_cast<std::byte>(iod::udp_hs_type::response),
@@ -35,7 +35,7 @@ TEST_CASE("udp isn: a legacy handshake without the ISN bytes decodes to ISN 0", 
 
 TEST_CASE("udp isn: an unknown channel-mode byte still fails closed", "[udp][isn]")
 {
-    namespace iod = pio::detail;
+    namespace iod = plexus::datagram::detail;
 
     const std::byte        inner[4]{static_cast<std::byte>(iod::udp_hs_type::request),
                                     std::byte{0x7F}, // an undefined mode

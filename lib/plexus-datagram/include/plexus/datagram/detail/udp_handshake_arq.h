@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_UDP_HANDSHAKE_ARQ_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_UDP_HANDSHAKE_ARQ_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_HANDSHAKE_ARQ_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_HANDSHAKE_ARQ_H
 
 #include "plexus/policy.h"
 #include "plexus/detail/compat.h"
@@ -10,7 +10,7 @@
 #include <utility>
 #include <system_error>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // The handshake ARQ: a UDP session cannot establish over loss without retransmitting
 // the handshake request/response, so this arms a fixed 250 / 500 / 1000 ms ladder

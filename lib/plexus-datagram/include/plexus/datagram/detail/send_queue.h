@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_SEND_QUEUE_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_SEND_QUEUE_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_SEND_QUEUE_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_SEND_QUEUE_H
 
 #include "plexus/detail/compat.h"
 
@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <utility>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // A generic, sans-IO serial outbound discipline: the bytes-lifetime + one-in-flight
 // drain that every datagram backend needs, hoisted out of the asio socket so a plain

@@ -12,7 +12,7 @@
 
 #include "plexus/asio/udp_policy.h"
 #include "plexus/asio/udp_transport.h"
-#include "plexus/io/detail/udp_handshake_arq.h"
+#include "plexus/datagram/detail/udp_handshake_arq.h"
 
 #include <catch2/catch_test_macros.hpp>
 

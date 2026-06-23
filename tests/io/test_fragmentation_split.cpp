@@ -32,10 +32,11 @@ TEST_CASE("the splitter fragments against the default budget and honors an upwar
     // default a payload above it fragments, and an explicit higher budget (the tunable knob)
     // yields fewer, larger fragments — the per-datagram budget is configurable up, never
     // silently clamped to the default.
-    const std::vector<std::byte> payload(io::mtu_budget{}.max_payload * 4);
+    const std::vector<std::byte> payload(datagram::mtu_budget{}.max_payload * 4);
 
-    const auto at_default  = collect(payload, io::mtu_budget{}.max_payload);
-    const auto at_override = collect(payload, io::mtu_budget{.max_payload = 8192}.max_payload);
+    const auto at_default = collect(payload, datagram::mtu_budget{}.max_payload);
+    const auto at_override =
+            collect(payload, datagram::mtu_budget{.max_payload = 8192}.max_payload);
 
     REQUIRE(at_default.size() > 1);                // genuinely fragmented at 1200
     CHECK(at_override.size() < at_default.size()); // the larger budget fragments less

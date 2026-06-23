@@ -129,7 +129,7 @@ TEST_CASE("udp fragment reliable: a large payload reassembles byte-equal with a 
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
-        REQUIRE(dialed->mode() == pio::detail::udp_channel_mode::reliable_datagram);
+        REQUIRE(dialed->mode() == plexus::datagram::detail::udp_channel_mode::reliable_datagram);
 
         // Drop the 3rd reliable data segment once: the ARQ retransmits it and the receiver
         // HOL-holds the later fragments behind the gap until the retransmit fills it.

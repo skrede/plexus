@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_UDP_REORDER_BUFFER_H
-#define HPP_GUARD_PLEXUS_IO_DETAIL_UDP_REORDER_BUFFER_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_REORDER_BUFFER_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_REORDER_BUFFER_H
 
 #include "plexus/detail/compat.h"
 
@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace plexus::io::detail {
+namespace plexus::datagram::detail {
 
 // The receiver-side in-order release buffer for the reliable data ARQ: it reorders
 // DISCRETE datagrams by a uint16 seq and emits them in PUBLISH ORDER with head-of-line
