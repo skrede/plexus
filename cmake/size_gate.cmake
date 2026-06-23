@@ -53,9 +53,10 @@ string(REGEX REPLACE "([][+.*()^$?|\\\\])" "\\\\\\1" _fixture_re "${_fixture_pre
 list(FILTER _scan_files EXCLUDE REGEX "^${_fixture_re}")
 
 # Generated build trees (e.g. an in-tree ESP-IDF cross-build under examples/) are
-# machine output, not hand-written source -- never gate them. Drop any path with a
-# build/ or build-<suffix>/ component, matching the .gitignore'd artifact dirs.
-list(FILTER _scan_files EXCLUDE REGEX "/build([-_][^/]*)?/")
+# machine output, not hand-written source -- never gate them. Drop any path whose
+# component is a build/, build-<suffix>/, or cmake-build-<suffix>/ artifact dir,
+# matching the .gitignore'd patterns (the JetBrains cmake-build-* layout included).
+list(FILTER _scan_files EXCLUDE REGEX "/(cmake-)?build([-_][^/]*)?/")
 
 # Parse EXCEPTIONS.md once into the set of registered file paths (the first
 # pipe-delimited cell of each data row that names an existing source file).
