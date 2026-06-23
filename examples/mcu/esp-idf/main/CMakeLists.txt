@@ -9,7 +9,7 @@ target_include_directories(${COMPONENT_LIB} PRIVATE
     "${PLEXUS_ROOT}/lib/plexus-core/include"
     "${PLEXUS_ROOT}/lib/plexus-wire/include"
     "${PLEXUS_ROOT}/lib/plexus-api/include"
-    "${PLEXUS_ROOT}/lib/plexus-mcu/include")
+    "${PLEXUS_ROOT}/backends/plexus-mcu/include")
 
 # Override IDF's default C++17 to gnu++20, exceptions + RTTI off. gnu++20 leaves
 # __cpp_lib_move_only_function undefined, selecting the compat.h SBO fallback.

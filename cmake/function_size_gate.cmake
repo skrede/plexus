@@ -11,21 +11,22 @@
 # the gate). Visiting the whole DB -- including the test TUs that instantiate
 # the library templates -- is the only way to reach those bodies. The
 # diagnostics are then scoped back to the library via -header-filter so only a
-# lib/plexus overage can fail the build; test and example bodies are out of this
-# gate's scope (their own size is a separate question).
+# lib/plexus or backends/plexus overage can fail the build; test and example
+# bodies are out of this gate's scope (their own size is a separate question).
 #
 # -warnings-as-errors keys on the diagnostic CHECK, not its location, so a bare
 # warnings-as-errors run over the full DB would also fail on the test/example
 # main-source bodies that -header-filter cannot suppress (header-filter gates
 # header locations, never a TU's own main file). This gate therefore runs
 # clang-tidy advisory and fails the build itself iff a surviving diagnostic is
-# located in a lib/plexus path -- the same scan-then-FATAL shape as size_gate
+# located in a library path -- the same scan-then-FATAL shape as size_gate
 # and shm_leak_gate. This file is self-dispatching: included from the build it
 # registers an ALL target that re-invokes it via -P with FUNC_GATE_FATAL=ON; a
 # direct -P invocation without it stays advisory for probing by hand.
 
-# The library path fragment a surviving diagnostic must match to fail the build.
-set(FUNC_GATE_SCOPE "/lib/plexus")
+# The library path fragment a surviving diagnostic must match to fail the build:
+# Tier-1/2 logic under lib/plexus and Tier-3 mechanisms under backends/plexus.
+set(FUNC_GATE_SCOPE "/(lib|backends)/plexus")
 
 if(NOT FUNC_GATE_SCAN)
     add_custom_target(function_size_gate ALL
@@ -58,7 +59,7 @@ execute_process(
             -p ${FUNC_GATE_BUILD_DIR}
             -quiet
             -checks=-*,readability-function-size,readability-function-cognitive-complexity
-            -header-filter=.*/lib/plexus.*
+            -header-filter=.*/(lib|backends)/plexus.*
     OUTPUT_VARIABLE _tidy_out
     ERROR_VARIABLE _tidy_err
     RESULT_VARIABLE _tidy_rc)
@@ -78,11 +79,11 @@ list(REMOVE_DUPLICATES _violations)
 list(LENGTH _violations _nviol)
 
 if(_nviol EQUAL 0)
-    message(STATUS "function size gate: clean (no unsuppressed lib/plexus function overage)")
+    message(STATUS "function size gate: clean (no unsuppressed library function overage)")
     return()
 endif()
 
-set(_report "function size gate: ${_nviol} unsuppressed lib/plexus function overage(s):")
+set(_report "function size gate: ${_nviol} unsuppressed library function overage(s):")
 foreach(_v IN LISTS _violations)
     string(STRIP "${_v}" _v)
     string(APPEND _report "\n  - ${_v}")

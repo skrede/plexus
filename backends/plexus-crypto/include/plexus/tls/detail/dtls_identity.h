@@ -9,7 +9,7 @@ namespace plexus::tls::detail {
 
 // The DTLS channel's cookie-address packer. The peer-identity (node_id + node_name)
 // is no longer derived here: it comes from the ONE verify-time cert_facts extraction
-// (lib/plexus-crypto/src/tls_credential.cpp), stashed onto the channel via SSL
+// (backends/plexus-crypto/src/tls_credential.cpp), stashed onto the channel via SSL
 // ex_data and read at the completion edge — so there is exactly one SPKI digest per
 // handshake and no X509-coupled identity extraction at the capture site.
 

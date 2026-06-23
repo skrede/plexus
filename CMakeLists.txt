@@ -6,9 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Backends and extras are opt-in, gated targets — never required by the core.
 option(PLEXUS_ENABLE_ASIO_BACKEND "Build the asio executor/socket/timer backend" OFF)
-# Declared at root (ahead of the lib glob below) so every fragment sees it: the
-# glob processes lib/plexus-asio before lib/plexus-shm alphabetically, and the
-# asio backend's gated shm fragment must read the correct value on a fresh configure.
+# Declared at root (ahead of the fragment globs below) so every fragment sees it:
+# the asio backend's gated shm fragment must read the correct value on a fresh
+# configure regardless of the order the lib/ and backends/ fragments are processed.
 option(PLEXUS_ENABLE_SHM_BACKEND "Build the gated POSIX shared-memory backend (linux-first)" OFF)
 option(PLEXUS_BUILD_TESTS "Build the test suite" OFF)
 option(PLEXUS_BUILD_FUZZ_TESTS "Build the libFuzzer harnesses" OFF)
@@ -33,15 +33,21 @@ if(PLEXUS_WARNINGS_AS_ERRORS)
     add_compile_options(-Werror)
 endif()
 
-# Project-wide library registration contract: every lib/<target>/ owns a
-# CMakeLists.txt fragment and is auto-discovered here. The glob is
-# target-kind-agnostic — INTERFACE cores (plexus, plexus-wire, plexus-inproc)
-# and gated compiled backends (plexus-asio, plexus-mdnspp) are discovered the
-# same way; each fragment self-gates (an INTERFACE target is unconditional, a
-# compiled backend defines its target only when its option is ON). New targets
-# register by adding their fragment, never by editing this file.
+# Project-wide library registration contract: every lib/<target>/ (Tier-1 core +
+# contracts and Tier-2 mechanism-free family logic) and every backends/<target>/
+# (Tier-3 OS/library mechanisms) owns a CMakeLists.txt fragment and is
+# auto-discovered here. The dependency arrow is one-way: backends/ depends on
+# lib/, never the reverse. The glob is target-kind-agnostic — INTERFACE cores
+# (plexus, plexus-wire, plexus-inproc) and gated compiled backends (plexus-asio,
+# plexus-mdnspp) are discovered the same way; each fragment self-gates (an
+# INTERFACE target is unconditional, a compiled backend defines its target only
+# when its option is ON). New targets register by adding their fragment, never by
+# editing this file.
 file(GLOB PLEXUS_LIB_FRAGMENTS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/*/CMakeLists.txt)
+file(GLOB PLEXUS_BACKEND_FRAGMENTS CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/backends/*/CMakeLists.txt)
+list(APPEND PLEXUS_LIB_FRAGMENTS ${PLEXUS_BACKEND_FRAGMENTS})
 foreach(fragment ${PLEXUS_LIB_FRAGMENTS})
     get_filename_component(fragment_dir ${fragment} DIRECTORY)
     add_subdirectory(${fragment_dir})

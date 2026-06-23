@@ -1,7 +1,7 @@
 # The size assertion: no source unit may exceed the conventions.md file ceiling
 # (200 lines, comments and blank lines included) unless it is a registered
-# exception. The scan set is the whole tree -- lib/, tests/, examples/ -- minus
-# the gate's own negative-fixture dir. An over-limit file is legal only when it
+# exception. The scan set is the whole tree -- lib/, backends/, tests/, examples/
+# -- minus the gate's own negative-fixture dir. An over-limit file is legal only when it
 # carries BOTH an in-code "// over-limit:" marker AND a matching row in
 # EXCEPTIONS.md; the two are cross-checked in both directions, and a row for a
 # unit that is no longer over-limit is itself a violation (stale exceptions are
@@ -29,7 +29,7 @@ endif()
 # Scan the conventional tree-wide scope when it exists; otherwise scan the root
 # directly (the targeted negative-fixture invocation passes a leaf dir).
 set(_scan_roots "")
-foreach(_sub IN ITEMS lib tests examples)
+foreach(_sub IN ITEMS lib backends tests examples)
     if(IS_DIRECTORY "${SIZE_GATE_ROOT}/${_sub}")
         list(APPEND _scan_roots "${SIZE_GATE_ROOT}/${_sub}")
     endif()
