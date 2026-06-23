@@ -81,16 +81,20 @@ public:
     // in addition to the one-shot on_error fire — a lost byte is visible, never swallowed.
     [[nodiscard]] std::size_t overrun_count() const noexcept { return m_overrun_count; }
 
+    // The observable dropped-frame seam: a monotonic count of CRC-mismatched frames the
+    // decorator discarded and resynced past. This is the host on_frame_dropped seam in
+    // count form — non-fatal by contract, so a corrupted frame is visible, never fatal.
+    [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped_count; }
+
 private:
     void wire_decorator()
     {
         m_decorator.on_match([this](std::span<const std::byte> f) { deliver(f); });
-        m_decorator.on_drop(
-                [this](plexus::wire::close_cause c)
-                {
-                    if(m_on_protocol_close)
-                        m_on_protocol_close(c);
-                });
+        // A CRC mismatch is the ONE non-fatal decorator cause (crc_serial.h): the frame is
+        // dropped and the link resynced, NEVER torn down. Count it (observable via
+        // dropped_count) and leave the session up — mirroring the host on_frame_dropped seam.
+        // It must NOT reach on_protocol_close, which stays strictly fatal.
+        m_decorator.on_drop([this](plexus::wire::close_cause) { ++m_dropped_count; });
     }
 
     // CRITICAL DIVERGENCE from the host serial_channel::post_frame, which allocates a
@@ -125,6 +129,7 @@ private:
     uart_port_t                                m_port;
     std::size_t                                m_rx_ring_ceiling;
     std::size_t                                m_overrun_count{0};
+    std::size_t                                m_dropped_count{0};
     std::array<std::byte, k_scratch_bytes>     m_scratch{};
     plexus::wire::crc_serial_inbound           m_decorator;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
