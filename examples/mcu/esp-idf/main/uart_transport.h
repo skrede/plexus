@@ -56,6 +56,12 @@ static_assert(plexus::Policy<uart_policy>,
 inline constexpr std::size_t k_max_payload_bytes = 256;
 inline constexpr std::size_t k_rx_ring_bytes     = 2048;
 
+// The ESP32 UART0 default pads (U0TXD/U0RXD), set explicitly: under CONSOLE_NONE the IDF
+// driver finds no routed RX pin and ties RX to a constant logic-1 (a break-detect
+// workaround), deafening the link. Routing RX to a real pad restores input and skips it.
+inline constexpr int k_uart0_tx_gpio = 1;
+inline constexpr int k_uart0_rx_gpio = 3;
+
 // The on-device serial connector. A UART is point-to-point: there is no acceptor and no
 // async connect, so this implements transport_backend DIRECTLY and both verbs collapse to
 // install-driver-and-deliver-ONE-channel — listen via on_accepted (no endpoint to
@@ -168,6 +174,8 @@ private:
                 .flags      = {},
         };
         uart_param_config(m_port, &cfg);
+        uart_set_pin(m_port, k_uart0_tx_gpio, k_uart0_rx_gpio, UART_PIN_NO_CHANGE,
+                     UART_PIN_NO_CHANGE);
         uart_driver_install(m_port, k_rx_ring_bytes, 0, 0, nullptr, 0);
         m_installed = true;
     }
