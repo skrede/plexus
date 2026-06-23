@@ -113,7 +113,7 @@ struct unsubscribe_response
 
 namespace detail {
 
-// Subscribe request wire layout (the slice carries no service-policy fields):
+// Subscribe request wire layout (no service-policy fields):
 //   topic_hash(8) + type_hash(8) + endpoint_source_type(1)
 //   + fqn_len(2) + fqn_bytes + type_name_len(2) + type_name_bytes
 // Minimum = 8 + 8 + 1 + 2 + 2 = 21 bytes

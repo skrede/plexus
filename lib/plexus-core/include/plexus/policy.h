@@ -21,7 +21,7 @@ concept timer = requires(T &t, std::chrono::milliseconds dur,
     { t.cancel() } -> std::same_as<void>;
 };
 
-// Policy<P>: the single compile-time seam the slice is written against. A Policy
+// Policy<P>: the single compile-time seam the engine is written against. A Policy
 // bundles the hot-path substrate — an executor with a byte_channel and a timer
 // (the timer is constructible from the executor, per backend convention) and the
 // byte_owner the receive seam binds wire_bytes views to — plus a static post()

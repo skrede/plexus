@@ -8,7 +8,7 @@ It is being built by porting the proven cores of `vagus-plexus` into a clean, ba
 shape, mirroring the abstraction philosophy of `mdnspp` (one compile-time `Policy` for the
 hot-path substrate; cold-path services behind runtime interfaces).
 
-Status: greenfield. The first milestone is a production-quality vertical slice (one primitive,
+Status: greenfield. The first milestone is a single production-quality primitive (one primitive,
 asio + inproc backends) that validates the policy seam before the full port.
 
 > This repository is independent. The accumulated design record and prior art live in the

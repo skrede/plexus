@@ -86,7 +86,7 @@ int main()
     bounded.forget(self);
 
     // Drive the serial CRC decorator's inbound scan/verify path so its member bodies are
-    // instantiated and compiled on the -fno-exceptions floor (Phase 59 reuses it on the MCU).
+    // instantiated and compiled on the -fno-exceptions floor (the MCU build reuses it).
     plexus::wire::crc_serial_inbound dec;
     dec.on_match([](std::span<const std::byte>) {});
     dec.on_drop([](plexus::wire::close_cause) {});

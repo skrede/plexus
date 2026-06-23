@@ -18,7 +18,7 @@
 
 using namespace serial_fixture;
 
-// SER-02: corruption injected onto an untrusted serial line must be DROPPED and the link
+// Corruption injected onto an untrusted serial line must be DROPPED and the link
 // magic-resynced — never aborted or closed. The corrupt bytes are written RAW onto the pty
 // master fd (bypassing the egress CRC trailer, exactly as a line glitch / hostile peer would
 // put them on the wire); only the slave end is adopted into a serial_channel whose decorator

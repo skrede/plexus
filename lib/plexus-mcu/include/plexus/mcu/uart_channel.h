@@ -16,7 +16,7 @@
 namespace plexus::mcu {
 
 // The constrained-target UART byte_channel: the one new transport leaf of the serial
-// slice. It collapses the host serial_channel + serial_channel_io + serial_bootstrap
+// path. It collapses the host serial_channel + serial_channel_io + serial_bootstrap
 // into a single lean header and drives the policy-free wire layer — crc_serial_inbound
 // + stream_inbound + frame_codec, reused VERBATIM — over uart_read_bytes/uart_write_bytes
 // instead of asio. The engine and the framing/CRC bytes are unchanged; only the asio->UART

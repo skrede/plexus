@@ -36,7 +36,7 @@ enum class ring_policy : std::uint8_t
 // (drop_newest) or after evicting whole oldest records (drop_oldest). head/tail are monotonic
 // absolute byte counters mapped into the store by modulo; the producer's release publishes a frame
 // the acquiring consumer reads. The byte budget is a PLACEHOLDER construction parameter (no tuned
-// default — the empirical sweep is a later milestone).
+// default yet — to be set from an empirical sweep).
 class byte_ring
 {
 public:

@@ -3,7 +3,7 @@
 // UNCHANGED. Including freertos_policy.h fires static_assert(Policy<freertos_policy>)
 // at compile time — the load-bearing proof that a fully non-asio substrate (a
 // cooperative super-loop executor, a tick-backed timer, a no-op transport-free
-// channel, a fixed in-place byte_owner) satisfies the single seam the slice is
+// channel, a fixed in-place byte_owner) satisfies the single seam the engine is
 // written against. The redundant local assert is an explicit witness at the test
 // site; the runtime TEST_CASEs prove the generic core instantiates against the
 // substrate with no I/O and no background thread.

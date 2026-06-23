@@ -15,7 +15,7 @@ namespace plexus::asio::detail {
 
 // The serial open path: the plaintext bootstrap with a CRC32C integrity trailer spliced
 // onto egress. make_stream/reset mirror plaintext_bootstrap. The two divergences keep the
-// decorator splice OUT of the shared stream_channel files (INV-1):
+// decorator splice OUT of the shared stream_channel files:
 //   * submit appends the 4-byte LE CRC32C trailer as a SECOND queued gather node so the
 //     payload is never copied to append it — the trailer rides the same single writev as
 //     the framed bytes (the egress coalesces adjacent nodes), preserving zero-copy egress.

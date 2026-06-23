@@ -3,7 +3,7 @@
 // byte_channel concept), and the runtime TEST_CASEs drive synthetic bytes through its
 // reused crc_serial decorator path WITHOUT a real UART — over the test-local host UART
 // shim. The on-target uart_read_bytes/uart_write_bytes path is exercised for real only
-// in the cross-build + live gate; this TU is additive to the host suite baseline (INV-1).
+// in the cross-build + live gate; this TU is additive to the host suite baseline.
 
 #include "host_uart_shim.h" // MUST precede uart_channel.h: declares the host UART symbols
 

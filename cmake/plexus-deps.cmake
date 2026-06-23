@@ -5,7 +5,7 @@
 #   1. find_package(asio CONFIG)  — an installed/vcpkg asio::asio target.
 #   2. pkg-config asio            — a system/pkg-config install.
 #   3. FetchContent asio-1-36-0   — the exact tag mdnspp pins, as a last resort.
-# The resolved version is reported so the slice's transport runs are reproducible.
+# The resolved version is reported so transport runs are reproducible.
 #
 # Defines the INTERFACE target plexus_asio_dep carrying the asio include path and
 # ASIO_STANDALONE (the standalone, header-only, non-Boost configuration).

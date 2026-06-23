@@ -5,8 +5,8 @@
 // kernel wires together exactly like a serial cable — a byte written to one end appears on the
 // other — so two ::asio::serial_port objects, one adopting each fd on ONE io_context, are a real
 // point-to-point serial link with no device. The pty_link below stands up two serial_channels
-// over that pair (the SER-01 framing round-trip) and a peer_session pair over the same channels
-// (the SER-04 point-at-port handshake, the requester end dialing the responder bootstrap). Both
+// over that pair (the framing round-trip) and a peer_session pair over the same channels
+// (the point-at-port handshake, the requester end dialing the responder bootstrap). Both
 // reuse the live channel send/on_data path and the production framing/handshake; nothing is
 // hand-stripped. Each behavioral path loops in-body and the ctest invocation is re-run >=3
 // process runs — a serial round-trip claim is never made from a single run.

@@ -1,4 +1,4 @@
-# Gated, compiled asio TCP backend: the production transport half of the slice.
+# Gated, compiled asio TCP backend: the production compiled transport backend.
 # The header-only core (plexus-core, plexus-wire) never links asio — this target, and
 # only this target, pulls standalone asio in, and only when the backend is ON.
 # Auto-discovered by the root lib glob; self-gated so the core stays asio-free

@@ -16,7 +16,7 @@ using plexus::testing::mock_channel;
 using plexus::testing::test_clock;
 
 // Compile-time gate: the recording mock satisfies the same concept the production
-// channels do, so a slice templated on a byte_channel accepts it unchanged.
+// channels do, so code templated on a byte_channel accepts it unchanged.
 static_assert(plexus::io::byte_channel<mock_channel<test_clock>>);
 
 namespace {

@@ -1,4 +1,4 @@
-# Integration proofs for the vertical slice: the live TCP loopback round-trip and
+# Integration proofs for the live transports: the live TCP loopback round-trip and
 # the shared-executor test (asio + mdnspp on one io_context) are gated; the
 # hot-path allocation audit is a deterministic inproc test and needs no backend.
 # Auto-discovered by the tests glob; the `integration.` ctest prefix lets
@@ -1040,8 +1040,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
 
     # The hardware-free host serial loopback oracle over an openpty pair: two serial_channels,
     # one adopting each pty fd on one io_context, prove a production-framed message round-trips
-    # host<->host (SER-01) and a peer_session pair completes the point-at-port bring-up handshake
-    # over the framed serial link, reusing the handshake_fsm unchanged (SER-04). Loops each path
+    # host<->host and a peer_session pair completes the point-at-port bring-up handshake
+    # over the framed serial link, reusing the handshake_fsm unchanged. Loops each path
     # in-body; the ctest invocation is re-run >=3 process runs. Links util for openpty(3).
     add_executable(test_serial_pty_roundtrip test_serial_pty_roundtrip.cpp)
     target_link_libraries(test_serial_pty_roundtrip PRIVATE
@@ -1053,7 +1053,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         util)
     catch_discover_tests(test_serial_pty_roundtrip TEST_PREFIX "integration.")
 
-    # The SER-02 corruption->resync recovery oracle over the same openpty pair: corrupt bytes
+    # The corruption->resync recovery oracle over the same openpty pair: corrupt bytes
     # (a flipped byte AND a dropped byte) are written RAW onto the master fd, and the slave-end
     # serial_channel's CRC decorator must drop them, fire the non-fatal on_frame_dropped seam,
     # magic-resync, and still deliver the following valid frame — with on_protocol_close /

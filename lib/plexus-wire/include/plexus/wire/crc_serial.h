@@ -45,7 +45,7 @@ crc_trailer(std::span<const std::byte> header, std::span<const std::byte> payloa
 // exactly as the TCP read-loop does); on a corrupt frame it DROPS the frame, advances
 // one byte past the current magic, rescans, and raises a NON-FATAL crc_mismatch through
 // on_drop — it NEVER aborts or closes the link. Policy-free and exception-free so the
-// MCU build (Phase 59) reuses it on the -fno-exceptions floor.
+// MCU build reuses it on the -fno-exceptions floor.
 class crc_serial_inbound
 {
 public:

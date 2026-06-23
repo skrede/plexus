@@ -8,7 +8,7 @@
 
 using namespace serial_fixture;
 
-// SER-01: a complete framed message round-trips host<->host over an openpty pair with NO hardware.
+// A complete framed message round-trips host<->host over an openpty pair with NO hardware.
 // One serial_channel adopts the master fd, the other the slave fd, on one io_context. A
 // production-framed unidirectional message is sent over one channel; the other channel's on_data
 // (which re-frames each reassembled frame back to header-on bytes per the byte_channel contract)
@@ -53,7 +53,7 @@ TEST_CASE("serial channel: a framed message round-trips over an openpty pair, lo
     REQUIRE(delivered == k_iterations);
 }
 
-// SER-04: the point-at-port bring-up handshake completes over the framed serial link, driving the
+// The point-at-port bring-up handshake completes over the framed serial link, driving the
 // REUSED handshake_fsm via the peer_session bridge (no FSM change). The pty pair is the only peer:
 // the requester end (the master fd, is_inbound_bootstrap=false) drives the outbound handshake
 // request, the responder end (the slave fd, is_inbound_bootstrap=true) takes the inbound bootstrap

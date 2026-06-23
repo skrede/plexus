@@ -28,7 +28,7 @@ namespace plexus::mcu::detail {
 }
 
 // Synchronous egress: with tx_buffer_size==0 each call blocks only until the bytes are
-// in the hardware FIFO — deterministic for the low-rate one-message slice. The header
+// in the hardware FIFO — deterministic for the low-rate one-message path. The header
 // and the CRC trailer are written as two adjacent calls (the host serial path's two
 // gather nodes collapsed to two synchronous writes).
 inline void uart_write_all(uart_port_t port, std::span<const std::byte> bytes) noexcept

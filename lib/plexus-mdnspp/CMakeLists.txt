@@ -21,7 +21,7 @@ endif()
 include(${PROJECT_SOURCE_DIR}/cmake/plexus-deps.cmake)
 
 # Consume mdnspp with the asio policy ON and encryption OFF (no libsodium/OpenSSL
-# in the slice). The default fetches the develop branch from GitHub; setting
+# in this adapter). The default fetches the develop branch from GitHub; setting
 # PLEXUS_MDNSPP_SOURCE_DIR overrides that with an on-disk source tree (the path a
 # local mdnspp checkout lives at), which keeps the version vetted/reproducible
 # and lets an offline host build against a working copy.

@@ -9,7 +9,7 @@ namespace plexus::io {
 // A subscription's per-demand delivery-guarantee requirement — the demand-side knob
 // the routing_engine's reliability gate enforces. Mirrors the locality reach_mask
 // shape: a required-with-default param whose default value (`any`) is permissive
-// (anything connects; mechanism-not-policy — CONTEXT LOCKED), and whose strict value
+// (anything connects; mechanism, not policy), and whose strict value
 // (`reliable`) refuses a demand the target peer's transport cannot meet.
 //   * any      — no requirement: the subscription connects regardless of the peer's
 //                transport reliability (the permissive default; existing callers are

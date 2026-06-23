@@ -28,7 +28,7 @@ namespace plexus::asio {
 // The host serial byte_channel: stream_channel over ::asio::serial_port with the serial open
 // path. Structurally the 4th instantiation of the shared stream_channel core (after TCP,
 // AF_UNIX, TLS) — a clone of unix_channel with the socket type swapped — PLUS the serial-only
-// CRC32C integrity decorator spliced in WITHOUT editing any shared stream_channel file (INV-1):
+// CRC32C integrity decorator spliced in WITHOUT editing any shared stream_channel file:
 //   * egress: serial_bootstrap appends the 4-byte CRC32C trailer as a 2nd gather node.
 //   * inbound: this channel owns the CRC verify+resync decorator and runs its OWN read loop
 //     (serial_do_read) that drives it, instead of the shared stream_inbound feed — so a corrupt
