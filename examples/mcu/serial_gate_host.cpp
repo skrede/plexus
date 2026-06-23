@@ -60,8 +60,14 @@ constexpr const char          *k_topic = "telemetry";
 constexpr std::chrono::seconds k_timeout{5};
 
 // After releasing the auto-reset lines the board boots fresh; wait for the app to come up (drain
-// and resync past the boot-ROM preamble) before driving the handshake request.
+// and resync past the boot-ROM preamble) before driving the first handshake request.
 constexpr std::chrono::milliseconds k_boot_settle{2500};
+
+// The board boots asynchronously after the reset pulse and the engine does NOT retransmit the
+// single stream handshake request, so a lone early request is lost. Re-issue it every
+// k_attempt_window until the booted board answers, bounded by k_handshake_budget (>> worst boot).
+constexpr std::chrono::milliseconds k_attempt_window{1500};
+constexpr std::chrono::milliseconds k_handshake_budget{15000};
 
 // A distinct self-id for the gate's handshake config — any non-zero id satisfies the FSM; the
 // link is point-to-point so there is exactly one peer to identify against.
@@ -87,6 +93,49 @@ void pump_until(::asio::io_context &io, Pred pred, std::chrono::steady_clock::ti
         if(io.stopped())
             io.restart();
     }
+}
+
+// The ESP32 dev-board auto-reset circuit ties EN/IO0 to the adapter's RTS/DTR; merely opening the
+// port leaves those lines holding the board reset-looping. Drive the classic auto-reset-into-RUN
+// sequence on the fd: IO0 high (run, not the download ROM), then pulse EN low->high. A host-link
+// concern only — the device firmware and the wire protocol are untouched.
+void drive_auto_reset_into_run(int fd)
+{
+    int dtr = TIOCM_DTR;
+    int rts = TIOCM_RTS;
+    ::ioctl(fd, TIOCMBIC, &dtr); // IO0 high -> boot the application, not the download ROM
+    ::ioctl(fd, TIOCMBIS, &rts); // EN low  -> assert reset
+    ::usleep(100 * 1000);
+    ::ioctl(fd, TIOCMBIC, &rts); // EN high -> release -> the board boots and runs the app
+}
+
+// Knock until the booted board answers: each attempt is a fresh requester session on the SAME open
+// channel, re-sending the request a predecessor's race lost. The per-attempt window stays under
+// k_timeout so the old session is replaced before its abort timer fires (no teardown frame reaches
+// the board). Returns true with `session` holding the completed session; a byte lands in `received`.
+bool knock_until_handshake(::asio::io_context &io, pio::peer_context<pasio::serial_policy> &ctx,
+                           serial_msg_fwd &messages, serial_rpc_fwd &procedures,
+                           plexus::log::null_logger &sink, std::optional<serial_session> &session,
+                           std::optional<std::uint8_t> &received)
+{
+    const auto deadline = std::chrono::steady_clock::now() + k_handshake_budget;
+    while(std::chrono::steady_clock::now() < deadline)
+    {
+        session.emplace(ctx, io, gate_fsm_config(), k_timeout, messages, procedures,
+                        /*is_inbound_bootstrap=*/false, sink);
+        session->on_message(
+                [&](std::string_view fqn, std::span<const std::byte> bytes)
+                {
+                    if(fqn == k_topic && !bytes.empty())
+                        received = static_cast<std::uint8_t>(bytes[0]);
+                });
+        session->start();
+        pump_until(io, [&] { return session->is_complete(); },
+                   std::min(deadline, std::chrono::steady_clock::now() + k_attempt_window));
+        if(session->is_complete())
+            return true;
+    }
+    return false;
 }
 
 }
@@ -118,54 +167,28 @@ int main()
         return 1;
     }
 
-    // The ESP32 dev-board auto-reset circuit ties the chip's EN/IO0 to the adapter's RTS/DTR.
-    // Merely opening the port leaves those lines in a state that holds the board reset-looping,
-    // so it never runs the app to answer the handshake. Drive the classic auto-reset-into-RUN
-    // sequence on the port fd: IO0 high (normal boot, not download), then pulse EN low->high to
-    // reset cleanly into the application. A host-link concern only — the device firmware and the
-    // wire protocol are untouched.
-    {
-        const int fd  = ctx.channel->serial_stream().native_handle();
-        int       dtr = TIOCM_DTR;
-        int       rts = TIOCM_RTS;
-        ::ioctl(fd, TIOCMBIC, &dtr); // IO0 high -> boot the application, not the download ROM
-        ::ioctl(fd, TIOCMBIS, &rts); // EN low  -> assert reset
-        ::usleep(100 * 1000);
-        ::ioctl(fd, TIOCMBIC, &rts); // EN high -> release -> the board boots and runs the app
-    }
+    // Reset the board into the application, then let it boot before the first handshake request.
+    drive_auto_reset_into_run(ctx.channel->serial_stream().native_handle());
     pump_until(io, [] { return false; }, clock::now() + k_boot_settle);
 
-    // The node-shared pub/sub + rpc forwarders the session bridges this peer into.
+    // The pub/sub + rpc forwarders the session bridges into; they outlive the per-attempt sessions
+    // (no forwarder state accrues until a session subscribes, so re-creating one leaves none stale).
     plexus::log::null_logger sink;
     serial_msg_fwd messages{sink};
     serial_rpc_fwd procedures{io, k_timeout, sink};
 
-    // The requester session: is_inbound_bootstrap=false makes this end DRIVE the outbound
-    // handshake request the device (the listening responder) answers.
-    serial_session session{ctx,      io,         gate_fsm_config(), k_timeout,
-                           messages, procedures, /*is_inbound_bootstrap=*/false, sink};
-
-    std::optional<std::uint8_t> received;
-    session.on_message(
-            [&](std::string_view fqn, std::span<const std::byte> bytes)
-            {
-                if(fqn == k_topic && !bytes.empty())
-                    received = static_cast<std::uint8_t>(bytes[0]);
-            });
-    session.start();
-
-    // Complete the handshake first, THEN issue the demand-subscribe so the device fans the next
-    // telemetry sample to this peer (the publish is demand-gated — no subscriber, no emit).
-    const auto deadline = clock::now() + k_timeout;
-    pump_until(io, [&] { return session.is_complete(); }, deadline);
-    if(!session.is_complete())
+    std::optional<std::uint8_t>   received;
+    std::optional<serial_session> session;
+    if(!knock_until_handshake(io, ctx, messages, procedures, sink, session, received))
     {
-        std::cout << "GATE_FAIL handshake did not complete within " << k_timeout.count() << "s\n";
+        std::cout << "GATE_FAIL handshake did not complete within "
+                  << k_handshake_budget.count() << "ms\n";
         return 1;
     }
 
-    session.subscribe(k_topic);
-    pump_until(io, [&] { return received.has_value(); }, deadline);
+    // Handshake done — demand-subscribe so the device fans its next (demand-gated) telemetry sample.
+    session->subscribe(k_topic);
+    pump_until(io, [&] { return received.has_value(); }, clock::now() + k_timeout);
 
     if(received.has_value())
     {
