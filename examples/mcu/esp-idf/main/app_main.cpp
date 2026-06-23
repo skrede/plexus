@@ -6,11 +6,14 @@
 // driver/gpio.h include — lives ONLY here in the example component, never in lib/ (the
 // pure-comms-library invariant): plexus sees opaque bytes, no HAL/policy leaks into core.
 //
-// The super-loop never returns: the user's one task drives the executor with no background
-// plexus thread. The block-with-timeout park is LOAD-BEARING — it yields to the FreeRTOS
-// idle task and feeds the task watchdog; a busy spin here trips a watchdog reset. The tick
-// stays 100 Hz (CONFIG_FREERTOS_HZ is NOT raised). plexus owns UART0 (console NONE); the
-// magic-byte resync in the framing layer absorbs the un-suppressable boot-ROM preamble.
+// The node lives off the task stack — heap-allocated once at setup (a one-time allocation, not
+// a hot-path one) so the constrained main stack does not have to carry the engine object. The
+// composition and its super-loop run in a dedicated task the example creates and sizes to the
+// engine's measured footprint; the user owns that task and drives the executor in it, with no
+// background plexus thread. The block-with-timeout park is LOAD-BEARING — it yields to the
+// FreeRTOS idle task and feeds the task watchdog; a busy spin here trips a watchdog reset. The
+// tick stays 100 Hz. plexus owns UART0 (console NONE); the magic-byte resync in the framing
+// layer absorbs the un-suppressable boot-ROM preamble.
 
 #include "uart_transport.h"
 
@@ -33,6 +36,7 @@
 
 #include <span>
 #include <array>
+#include <memory>
 #include <chrono>
 #include <cstddef>
 #include <optional>
@@ -43,6 +47,14 @@ namespace {
 // GPIO0 is the BOOT button: released = 1, pressed = 0 — a deterministic digital level for a
 // reproducible multi-run gate assert. Configure it as a plain input ONCE before sampling.
 constexpr gpio_num_t k_sample_pin = GPIO_NUM_0;
+
+// PROVISIONAL: a generous task stack for bring-up. The final value must be the running peak
+// measured under sustained host-gate traffic (uxTaskGetStackHighWaterMark, >=3 runs, + headroom)
+// — that measurement is blocked until the serial handshake completes on-bench (see the Phase
+// 58.6 finding). The off-stack heap node keeps the construction stack ~2.2 KiB, so the true
+// figure is far below this.
+constexpr std::uint32_t k_plexus_task_stack = 16384; // bytes (ESP-IDF xTaskCreate takes bytes)
+constexpr UBaseType_t   k_plexus_task_prio  = 5;
 
 void configure_sample_pin()
 {
@@ -86,9 +98,11 @@ struct sample_loop
     }
 };
 
-}
-
-extern "C" void app_main()
+// The user's one task: it owns the executor and drives the cooperative super-loop. The engine
+// object is heap-allocated here so it does not sit on this task's stack; ex/transport/disc/opts
+// are task-scope locals declared ABOVE the node — the node borrows them by reference, so they
+// must outlive it. INV-3 holds: this is the example's own task, not a plexus-spawned thread.
+void plexus_task(void *)
 {
     using namespace std::chrono_literals;
 
@@ -105,13 +119,13 @@ extern "C" void app_main()
     opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x32C0DE;
 
-    plexus::node<example::uart_policy, example::uart_transport> node{ex, disc, "esp32-telemetry",
-                                                                     transport, opts};
+    auto node = std::make_unique<plexus::node<example::uart_policy, example::uart_transport>>(
+            ex, disc, "esp32-telemetry", transport, opts);
     // This device LISTENS; by convention the dialing peer (the host gate) drives the
     // handshake request. The endpoint scheme matches the transport's "serial" advertisement.
-    node.listen({"serial", "uart0"});
+    node->listen({"serial", "uart0"});
 
-    plexus::publisher<void> telemetry{node, "telemetry"};
+    plexus::publisher<void> telemetry{*node, "telemetry"};
 
     // The cooperative timer samples the pin and publishes, then re-arms itself.
     plexus::mcu::freertos_timer timer(ex);
@@ -136,4 +150,13 @@ extern "C" void app_main()
         // schedule. Never a busy-poll: a spin here starves the idle task into a watchdog reset.
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+}
+
+}
+
+extern "C" void app_main()
+{
+    // Spawn the user's plexus task with a stack sized to the engine's footprint, then return —
+    // the spawned task runs the slice for the lifetime of the device.
+    xTaskCreate(plexus_task, "plexus", k_plexus_task_stack, nullptr, k_plexus_task_prio, nullptr);
 }
