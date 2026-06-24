@@ -37,18 +37,18 @@ enum class action
 // bytes, so EVERY client->server datagram is scripted in order.
 struct relay
 {
-    ::asio::io_context         &io;
-    ::asio::ip::udp::socket     front; // faces the client
-    ::asio::ip::udp::socket     back;  // faces the server
-    ::asio::ip::udp::endpoint   server_ep;
-    ::asio::ip::udp::endpoint   client_ep;
-    ::asio::ip::udp::endpoint   from;
+    ::asio::io_context &io;
+    ::asio::ip::udp::socket front; // faces the client
+    ::asio::ip::udp::socket back;  // faces the server
+    ::asio::ip::udp::endpoint server_ep;
+    ::asio::ip::udp::endpoint client_ep;
+    ::asio::ip::udp::endpoint from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
 
-    std::deque<action>                  script; // consumed per client->server datagram
-    std::vector<std::vector<std::byte>> held;   // held datagrams to release out of order
-    int                                 seen{0};
+    std::deque<action> script;                // consumed per client->server datagram
+    std::vector<std::vector<std::byte>> held; // held datagrams to release out of order
+    int seen{0};
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
             : io(ctx)
@@ -60,7 +60,7 @@ struct relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const
+    std::uint16_t port() const
     {
         return front.local_endpoint().port();
     }
@@ -95,13 +95,18 @@ struct relay
         }
         switch(a)
         {
-            case action::pass: send_to_server(dg); break;
-            case action::drop: break; // lost: OpenSSL retransmits
+            case action::pass:
+                send_to_server(dg);
+                break;
+            case action::drop:
+                break; // lost: OpenSSL retransmits
             case action::duplicate:
                 send_to_server(dg);
                 send_to_server(dg);
                 break;
-            case action::hold: held.emplace_back(dg.begin(), dg.end()); break;
+            case action::hold:
+                held.emplace_back(dg.begin(), dg.end());
+                break;
         }
     }
 

@@ -1,6 +1,3 @@
-// over-limit: one cohesive empirical ARQ numeric sweep; the single {loss x window x RTO} grid
-// scenario shares one seeded probabilistic-loss relay harness and its captured result table, so
-// splitting it scatters that shared sweep fixture and the contiguous evidence record.
 // The reliable-ARQ numeric sweep: an EMPIRICAL substantiation of the RTO / window
 // defaults (a numeric choice is recorded from evidence, not picked by feel). It drives
 // the full channel-pair ARQ over a SEEDED probabilistic-loss relay across a grid of
@@ -50,7 +47,7 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{15}, ms{30}, ms{60
 
 std::vector<std::byte> payload_of(int n)
 {
-    std::string            s = "sweep-payload-" + std::to_string(n);
+    std::string s = "sweep-payload-" + std::to_string(n);
     std::vector<std::byte> out(s.size());
     for(std::size_t i = 0; i < s.size(); ++i)
         out[i] = static_cast<std::byte>(s[i]);
@@ -62,17 +59,17 @@ std::vector<std::byte> payload_of(int n)
 // The drop count is recorded as the retransmit-pressure proxy.
 struct prob_relay
 {
-    ::asio::io_context         &io;
-    ::asio::ip::udp::socket     front;
-    ::asio::ip::udp::socket     back;
-    ::asio::ip::udp::endpoint   server_ep;
-    ::asio::ip::udp::endpoint   client_ep;
-    ::asio::ip::udp::endpoint   from;
+    ::asio::io_context &io;
+    ::asio::ip::udp::socket front;
+    ::asio::ip::udp::socket back;
+    ::asio::ip::udp::endpoint server_ep;
+    ::asio::ip::udp::endpoint client_ep;
+    ::asio::ip::udp::endpoint from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
-    std::mt19937                rng;
-    double                      loss;
-    int                         dropped{0};
+    std::mt19937 rng;
+    double loss;
+    int dropped{0};
 
     prob_relay(::asio::io_context &ctx, std::uint16_t server_port, double loss_rate, std::uint32_t seed)
             : io(ctx)
@@ -86,12 +83,12 @@ struct prob_relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const
+    std::uint16_t port() const
     {
         return front.local_endpoint().port();
     }
 
-    [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
+    static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
         return dec && dec->kind == wire::udp_envelope_kind::reliable_arq && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
@@ -105,7 +102,7 @@ struct prob_relay
                                      if(ec)
                                          return;
                                      client_ep = from;
-                                     std::span<const std::byte>             dg{front_buf.data(), n};
+                                     std::span<const std::byte> dg{front_buf.data(), n};
                                      std::uniform_real_distribution<double> u(0.0, 1.0);
                                      if(!(is_data(dg) && u(rng) < loss))
                                          back.send_to(::asio::buffer(front_buf.data(), n), server_ep);
@@ -132,20 +129,20 @@ struct prob_relay
 struct cell_result
 {
     bool complete{false};
-    int  delivered{0};
-    int  dropped{0};
+    int delivered{0};
+    int dropped{0};
 };
 
 cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs, std::uint32_t seed)
 {
     plexus::datagram::detail::udp_arq_config cfg{.window = window, .initial_rto = initial_rto, .min_rto = ms{5}, .max_rto = initial_rto * 8, .max_retransmit = 30};
 
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, cfg};
     pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, cfg};
 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
-    std::vector<int>                    got;
+    std::vector<int> got;
     server.on_accepted(
             [&](std::unique_ptr<pasio::udp_channel> ch)
             {
@@ -190,10 +187,10 @@ cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs
 
 TEST_CASE("udp sweep: reliable delivery completes across a loss x window x RTO grid", "[.sweep][udp]")
 {
-    constexpr int                      n_msgs = 40;
-    const std::array<double, 4>        loss_rates{0.0, 0.1, 0.25, 0.4};
-    const std::array<std::size_t, 3>   windows{16, 64, 256};
-    const std::array<ms, 3>            rtos{ms{15}, ms{30}, ms{60}};
+    constexpr int n_msgs = 40;
+    const std::array<double, 4> loss_rates{0.0, 0.1, 0.25, 0.4};
+    const std::array<std::size_t, 3> windows{16, 64, 256};
+    const std::array<ms, 3> rtos{ms{15}, ms{30}, ms{60}};
     const std::array<std::uint32_t, 3> seeds{1u, 7u, 13u};
 
     std::ostringstream tbl;

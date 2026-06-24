@@ -45,16 +45,16 @@ constexpr pasio::udp_transport::arq_type::schedule fast_ladder{ms{20}, ms{40}, m
 // loss-injection fixture (a wrapping forwarder).
 struct lossy_relay
 {
-    ::asio::io_context         &io;
-    ::asio::ip::udp::socket     front; // faces the client
-    ::asio::ip::udp::socket     back;  // faces the server
-    ::asio::ip::udp::endpoint   server_ep;
-    ::asio::ip::udp::endpoint   client_ep; // learned from the first client datagram
-    ::asio::ip::udp::endpoint   from;      // scratch for the active recv
+    ::asio::io_context &io;
+    ::asio::ip::udp::socket front; // faces the client
+    ::asio::ip::udp::socket back;  // faces the server
+    ::asio::ip::udp::endpoint server_ep;
+    ::asio::ip::udp::endpoint client_ep; // learned from the first client datagram
+    ::asio::ip::udp::endpoint from;      // scratch for the active recv
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
-    int                         drop_count;
-    int                         dropped{0};
+    int drop_count;
+    int dropped{0};
 
     lossy_relay(::asio::io_context &ctx, std::uint16_t server_port, int drops)
             : io(ctx)
@@ -67,7 +67,7 @@ struct lossy_relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const
+    std::uint16_t port() const
     {
         return front.local_endpoint().port();
     }

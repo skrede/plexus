@@ -1,6 +1,3 @@
-// over-limit: one cohesive safe-defaults + fail-closed geometry matrix; the cells share the one
-// heap-backed stub-broker registry harness, so splitting them scatters that shared broker
-// fixture into near-empty per-cell shells.
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/region_broker_concept.h"
 #include "plexus/shm/ring_geometry.h"
@@ -48,13 +45,13 @@ struct region_store
     struct region
     {
         std::vector<std::byte> storage;
-        std::byte             *base = nullptr;
-        std::size_t            size = 0;
-        bool                   live = false;
+        std::byte *base  = nullptr;
+        std::size_t size = 0;
+        bool live        = false;
     };
 
     std::map<std::string, std::shared_ptr<region>> regions;
-    bool                                           fail_slab_create = false;
+    bool fail_slab_create = false;
 
     std::shared_ptr<region> make(const std::string &name, std::size_t bytes)
     {
@@ -129,8 +126,8 @@ private:
         m_region.reset();
     }
 
-    region_store                         *m_store = nullptr;
-    std::string                           m_name;
+    region_store *m_store = nullptr;
+    std::string m_name;
     std::shared_ptr<region_store::region> m_region;
 };
 
@@ -147,7 +144,7 @@ public:
     region_status create(std::string_view name, std::size_t bytes, const create_options &, region_handle &out)
     {
         const std::string key{name};
-        const bool        is_slab = key.size() >= 2 && key.compare(key.size() - 2, 2, ".s") == 0;
+        const bool is_slab = key.size() >= 2 && key.compare(key.size() - 2, 2, ".s") == 0;
         if(is_slab && m_store.fail_slab_create)
             return region_status::failed;
         if(auto it = m_store.regions.find(key); it != m_store.regions.end() && it->second->live)
@@ -159,7 +156,7 @@ public:
     region_status attach(std::string_view name, region_handle &out)
     {
         const std::string key{name};
-        auto              it = m_store.regions.find(key);
+        auto it = m_store.regions.find(key);
         if(it == m_store.regions.end() || !it->second->live)
             return region_status::not_found;
         out = stub_handle(&m_store, key, it->second);
@@ -220,8 +217,8 @@ TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-iden
     // no value drift) — the unprovisioned default resolves through default_geometry() to the SAME
     // 256/4096 ring asserted above.
     region_store store;
-    stub_broker  broker{store};
-    test_member  member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    stub_broker broker{store};
+    test_member member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
     const shm_geometry def = member.default_geometry();
     REQUIRE(def.max_consumers == 0u);
@@ -237,13 +234,13 @@ TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-iden
 TEST_CASE("shm.geometry_defaults an over-ceiling registration fails closed naming the ceiling bound", "[shm][geometry_defaults]")
 {
     region_store store;
-    stub_broker  broker{store};
+    stub_broker broker{store};
 
     // A deliberately-small tunable ceiling: small enough that even a modest reliable ring
     // exceeds it, so the registration must fail closed against the CEILING bound rather
     // than mint a downgraded or shrunk ring.
     constexpr std::uint64_t tiny_ceiling = 64 * 1024; // 64 KiB
-    test_registry           registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block, test_registry::default_notifier_binder(), tiny_ceiling);
+    test_registry registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block, test_registry::default_notifier_binder(), tiny_ceiling);
 
     const std::uint32_t payload = static_cast<std::uint32_t>(k_mib); // 1 MiB ring slab >> 64 KiB
     REQUIRE(registry.acquire("topic.over_ceiling", ring_direction::request, payload, ring_geometry_mode::reliable_preserving, 1u) == acquire_result::failed);
@@ -269,9 +266,9 @@ TEST_CASE("shm.geometry_defaults an OS-allocation-failed registration fails clos
     // OS-allocator leg — the second fail-closed path.
     test_registry registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
-    const std::uint32_t payload      = static_cast<std::uint32_t>(512 * 1024);
-    const ring_geometry g            = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 1u);
-    const std::size_t   expected_ask = slab_region_bytes(g.cell_count, g.slot_capacity);
+    const std::uint32_t payload    = static_cast<std::uint32_t>(512 * 1024);
+    const ring_geometry g          = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 1u);
+    const std::size_t expected_ask = slab_region_bytes(g.cell_count, g.slot_capacity);
 
     REQUIRE(registry.acquire("topic.os_fail", ring_direction::request, payload, ring_geometry_mode::reliable_preserving, 1u) == acquire_result::failed);
 

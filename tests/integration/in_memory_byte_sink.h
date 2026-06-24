@@ -19,7 +19,7 @@ public:
         m_bytes.insert(m_bytes.end(), bytes.begin(), bytes.end());
     }
 
-    [[nodiscard]] std::span<const std::byte> bytes() const noexcept
+    std::span<const std::byte> bytes() const noexcept
     {
         return m_bytes;
     }

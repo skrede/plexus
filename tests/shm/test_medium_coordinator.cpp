@@ -1,7 +1,3 @@
-// over-limit: one cohesive medium-coordinator decision matrix; every cell drives the one
-// shared stub_registry + fake_channel + gate/receive recorder harness (the engine-owned
-// coordinator over its injected gates), so splitting the cells scatters that shared
-// recorder-bound fixture into near-empty per-cell shells.
 #include "plexus/io/upgrade_coordinator.h"
 #include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_selection.h"
@@ -51,7 +47,7 @@ struct stub_registry
 {
     std::map<std::string, bool> verdicts;
 
-    [[nodiscard]] bool same_host_for(std::string_view node_name) const
+    bool same_host_for(std::string_view node_name) const
     {
         auto it = verdicts.find(std::string{node_name});
         return it != verdicts.end() && it->second;
@@ -64,7 +60,7 @@ struct stub_registry
 struct fake_channel
 {
     std::vector<std::size_t> sent;
-    int                     *live = nullptr;
+    int *live = nullptr;
     explicit fake_channel(int *counter)
             : live(counter)
     {
@@ -89,10 +85,10 @@ using coordinator = plexus::io::upgrade_coordinator<stub_registry, fake_channel>
 struct gate_recorder
 {
     std::vector<std::string> minted;
-    bool                     accept        = true;
-    ring_geometry_mode       mode          = ring_geometry_mode::reliable_preserving;
-    std::uint64_t            slot_capacity = 0;
-    int                      live          = 0;
+    bool accept                 = true;
+    ring_geometry_mode mode     = ring_geometry_mode::reliable_preserving;
+    std::uint64_t slot_capacity = 0;
+    int live                    = 0;
 
     plexus::io::upgrade_mint<fake_channel> mint(std::string_view fqn)
     {
@@ -103,7 +99,7 @@ struct gate_recorder
         return {std::make_unique<fake_channel>(&live), std::move(fits)};
     }
 
-    [[nodiscard]] std::size_t mints() const
+    std::size_t mints() const
     {
         return minted.size();
     }
@@ -122,8 +118,8 @@ void install_gate(coordinator &c, gate_recorder &gate)
 struct receive_recorder
 {
     std::vector<std::pair<std::string, std::string>> attached;
-    bool                                             accept = true;
-    int                                              live   = 0;
+    bool accept = true;
+    int live    = 0;
 
     // The RAII stand-in for the concrete shm_companion_consumer: ++live on construction,
     // --live on destruction. The owner closure captures one by move and is NEVER called —
@@ -158,7 +154,7 @@ struct receive_recorder
         return {[h = handle{&live}]() mutable { (void)h; }};
     }
 
-    [[nodiscard]] std::size_t attaches() const
+    std::size_t attaches() const
     {
         return attached.size();
     }
@@ -178,7 +174,7 @@ TEST_CASE("shm.coordinator a co-host qualifying 0->1 mints THROUGH the gate, nev
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator   c{reg};
+    coordinator c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
@@ -193,7 +189,7 @@ TEST_CASE("shm.coordinator an off-host 0->1 mints NOTHING and keeps the wire", "
     stub_registry reg;
     reg.verdicts["node-a"] = false; // off-host
     gate_recorder gate;
-    coordinator   c{reg};
+    coordinator c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
@@ -207,7 +203,7 @@ TEST_CASE("shm.coordinator a hint-less co-host 0->1 mints NOTHING", "[shm][coord
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator   c{reg};
+    coordinator c{reg};
     install_gate(c, gate);
     // no set_topic_hint -> dispatch_hint::none -> no hint bit set, no upgrade
 
@@ -266,7 +262,7 @@ TEST_CASE("shm.coordinator a reliable_preserving companion carries every fitting
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate; // reliable_preserving: route_message_medium is always shm
-    coordinator   c{reg};
+    coordinator c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
@@ -280,7 +276,7 @@ TEST_CASE("shm.coordinator the 1->0 edge drops the companion; intermediate edges
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator   c{reg};
+    coordinator c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::priority);
 
@@ -301,7 +297,7 @@ TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator   c{reg};
+    coordinator c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
     c.set_topic_hint("beta", dispatch_hint::large);
@@ -323,9 +319,9 @@ TEST_CASE("shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive compan
     // nullptr for it (it has no send channel); the wire send path is irrelevant on this side.
     stub_registry reg;
     reg.verdicts["node-a"] = true;
-    gate_recorder    gate;
+    gate_recorder gate;
     receive_recorder rgate;
-    coordinator      c{reg};
+    coordinator c{reg};
     install_gate(c, gate);
     install_receive_gate(c, rgate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
@@ -348,7 +344,7 @@ TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     receive_recorder rgate;
-    coordinator      c{reg};
+    coordinator c{reg};
     install_receive_gate(c, rgate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
     c.set_topic_hint("beta", dispatch_hint::large);
@@ -390,7 +386,7 @@ TEST_CASE("shm.coordinator the default policy auto-engages; an override can disa
     // Default (no on_policy): a co-host qualifying edge auto-engages.
     {
         gate_recorder gate;
-        coordinator   c{reg};
+        coordinator c{reg};
         install_gate(c, gate);
         c.set_topic_hint("alpha", dispatch_hint::frequent);
         c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
@@ -399,7 +395,7 @@ TEST_CASE("shm.coordinator the default policy auto-engages; an override can disa
     // An override returning false disables the upgrade (the consumer-sovereign disable).
     {
         gate_recorder gate;
-        coordinator   c{reg};
+        coordinator c{reg};
         install_gate(c, gate);
         c.on_policy([](bool, dispatch_hint) { return false; });
         c.set_topic_hint("alpha", dispatch_hint::frequent);
@@ -413,7 +409,7 @@ TEST_CASE("shm.coordinator the bilateral OR: a subscriber-side hint upgrades a h
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    coordinator   c{reg};
+    coordinator c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::none);     // publisher: no hint
     c.set_topic_hint("alpha", dispatch_hint::frequent); // subscriber: a qualifying hint
@@ -432,7 +428,7 @@ TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the top
     reg.verdicts["node-a"] = true;
     reg.verdicts["node-b"] = true;
     gate_recorder gate;
-    coordinator   c{reg};
+    coordinator c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
@@ -464,25 +460,25 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
     using plexus::inproc::inproc_channel;
 
     // The forwarder's REAL emit seam: drive attach/detach edges and record the transitions.
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch(ex);
-    inproc_channel<>  sink(ex);
+    inproc_channel<> ch(ex);
+    inproc_channel<> sink(ex);
     ch.connect_to(sink.local_endpoint());
     forwarder::peer peer{ch, "node-a"};
 
     struct edge
     {
-        std::string       fqn;
+        std::string fqn;
         demand_transition dir;
-        demand_role       role;
+        demand_role role;
     };
     std::vector<edge> edges;
 
     SECTION("with a hook installed, only the boundary crossings fire, carrying the subscriber role")
     {
         plexus::log::null_logger log_sink;
-        forwarder                fwd{log_sink};
+        forwarder fwd{log_sink};
         fwd.on_demand_transition([&edges](std::string_view, std::string_view fqn, demand_transition d, demand_role r) { edges.push_back({std::string{fqn}, d, r}); });
 
         REQUIRE(fwd.attach(peer, "alpha"));       // 0->1: up
@@ -502,7 +498,7 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
     SECTION("with NO hook installed, both edges are a no-op (no crash, no emit)")
     {
         plexus::log::null_logger log_sink;
-        forwarder                fwd{log_sink};
+        forwarder fwd{log_sink};
         REQUIRE(fwd.attach(peer, "alpha"));
         REQUIRE(fwd.detach(peer, "alpha"));
         ex.drain();

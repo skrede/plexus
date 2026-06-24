@@ -1,6 +1,4 @@
-// over-limit: one cohesive process-tier object-route matrix; the zero-serialization,
-// unresolved-hash, and reconnect-survival cells share the one two-engine object-route harness, so
-// splitting them scatters that shared fixture The process-tier object-route oracle on the manual
+// The process-tier object-route oracle on the manual
 // virtual clock. An object published on one engine's forwarder (publish_object) reaches the peer
 // engine's object route in the SAME process with zero serialization: the route observes the SAME
 // slot object pointer the publisher handed off (the address-identity witness at the engine seam).
@@ -56,7 +54,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -88,9 +86,9 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
-constexpr std::uint64_t k_tag          = 0x5151;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr std::uint64_t k_tag  = 0x5151;
 
 handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
@@ -116,8 +114,8 @@ reconnect_config forever_cfg()
 struct counted_payload
 {
     std::string value;
-    int         release_calls{0};
-    loan_slot   slot{};
+    int release_calls{0};
+    loan_slot slot{};
 };
 
 object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
@@ -142,18 +140,18 @@ std::span<const std::byte> encode_value(const std::string &v)
 // destruction unwinds the engines' channels before the bus.
 struct object_net
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t                   transport_a{ex, bus};
-    transport_t                   transport_b{ex, bus};
-    plexus::log::null_logger      sink;
+    transport_t transport_a{ex, bus};
+    transport_t transport_b{ex, bus};
+    plexus::log::null_logger sink;
 
     engine a;
     engine b;
 
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint        ep_a{"inproc", "node-a"};
-    endpoint        ep_b{"inproc", "node-b"};
+    endpoint ep_a{"inproc", "node-a"};
+    endpoint ep_b{"inproc", "node-b"};
 
     object_net()
             : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink,
@@ -214,16 +212,16 @@ TEST_CASE("object route: an object published on B reaches A's object route with 
           "address",
           "[integration][routing][object][inproc]")
 {
-    constexpr int     k_iterations = 50;
-    const std::string topic        = "topic";
-    int               delivered    = 0;
+    constexpr int k_iterations = 50;
+    const std::string topic    = "topic";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
         object_net net;
 
-        std::vector<std::string>   fqns;
-        std::vector<const void *>  object_addrs;
+        std::vector<std::string> fqns;
+        std::vector<const void *> object_addrs;
         std::vector<std::uint64_t> tags;
         std::vector<std::uint64_t> seqs;
         net.a.on_object_route(
@@ -288,8 +286,8 @@ TEST_CASE("object route: an unresolvable topic_hash releases and never delivers"
 
 TEST_CASE("object route: the route survives a forced reconnect rebuild without re-install (looped)", "[integration][routing][object][inproc]")
 {
-    constexpr int     k_reconnects = 6;
-    const std::string topic        = "topic";
+    constexpr int k_reconnects = 6;
+    const std::string topic    = "topic";
     manual_clock::reset();
     object_net net;
 

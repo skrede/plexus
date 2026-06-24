@@ -48,7 +48,7 @@ public:
     void close()
     {
     }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    plexus::io::endpoint remote_endpoint() const
     {
         return {"wire", ""};
     }
@@ -68,17 +68,17 @@ public:
     {
         m_on_protocol_close = std::move(cb);
     }
-    [[nodiscard]] std::size_t backpressured() const
+    std::size_t backpressured() const
     {
         return 0;
     }
 
-    std::function<void(std::span<const std::byte>)>                      m_sink;
-    std::vector<std::byte>                                               m_last;
+    std::function<void(std::span<const std::byte>)> m_sink;
+    std::vector<std::byte> m_last;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                           m_on_closed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
+    plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close;
 };
 
 // Each session derives keys from a salt that varies per (run, session-instance): a
@@ -135,9 +135,9 @@ inline std::uint64_t key_fingerprint(std::uint32_t session_salt, std::uint32_t e
 // reads ARE the nonce the decorator constructs for that frame.
 inline void drive_flow(std::set<nonce_tuple> &seen, std::uint32_t session_salt, std::uint64_t count, std::uint64_t rekey_threshold)
 {
-    wire_lower                        wire;
+    wire_lower wire;
     authenticated_channel<wire_lower> sender(wire, aead_cipher_id::chacha20_poly1305, keys_for(session_salt), 0, rekey_threshold);
-    const auto                        frame = make_frame(session_salt, "n");
+    const auto frame = make_frame(session_salt, "n");
     for(std::uint64_t i = 0; i < count; ++i)
     {
         const auto epoch = sender.send_epoch();

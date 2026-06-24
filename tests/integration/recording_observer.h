@@ -1,6 +1,3 @@
-// over-limit: one cohesive recording-observer class; every overridden edge method mutates the
-// shared per-peer/per-topic/per-participant tally maps, so the single class body cannot split
-// across files without scattering that shared member state.
 #ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_OBSERVER_H
 #define HPP_GUARD_TESTS_INTEGRATION_RECORDING_OBSERVER_H
 
@@ -33,13 +30,13 @@ class recording_observer final : public plexus::io::observer
 public:
     struct counts
     {
-        int                           connected{0};
-        int                           disconnected{0};
-        int                           reconnected{0};
-        int                           dead{0};
-        int                           ready{0};
-        int                           rejected{0};
-        plexus::io::peer_kind         last_kind{plexus::io::peer_kind::dialed};
+        int connected{0};
+        int disconnected{0};
+        int reconnected{0};
+        int dead{0};
+        int ready{0};
+        int rejected{0};
+        plexus::io::peer_kind last_kind{plexus::io::peer_kind::dialed};
         plexus::io::handshake_outcome last_reason{plexus::io::handshake_outcome::none};
     };
 
@@ -50,18 +47,18 @@ public:
     // test can assert the view BORROWS the buffer (a shared addref) rather than copies it.
     struct topic_counts
     {
-        int                         published{0};
-        int                         delivered{0};
-        int                         rpc_call{0};
-        int                         rpc_serve{0};
-        int                         rpc_reply{0};
-        int                         publisher_declared{0};
-        int                         publisher_dropped{0};
-        int                         subscriber_registered{0};
-        int                         subscriber_retired{0};
-        int                         unsubscribed{0};
+        int published{0};
+        int delivered{0};
+        int rpc_call{0};
+        int rpc_serve{0};
+        int rpc_reply{0};
+        int publisher_declared{0};
+        int publisher_dropped{0};
+        int subscriber_registered{0};
+        int subscriber_retired{0};
+        int unsubscribed{0};
         std::shared_ptr<const void> last_view_owner{};
-        long                        last_view_use_count{0};
+        long last_view_use_count{0};
     };
 
     struct participant_counts
@@ -154,10 +151,18 @@ public:
         auto &t = m_topics[std::string{fqn}];
         switch(ev.edge)
         {
-            case plexus::io::endpoint_edge::publisher_declared:    ++t.publisher_declared; break;
-            case plexus::io::endpoint_edge::publisher_dropped:     ++t.publisher_dropped; break;
-            case plexus::io::endpoint_edge::subscriber_registered: ++t.subscriber_registered; break;
-            case plexus::io::endpoint_edge::subscriber_retired:    ++t.subscriber_retired; break;
+            case plexus::io::endpoint_edge::publisher_declared:
+                ++t.publisher_declared;
+                break;
+            case plexus::io::endpoint_edge::publisher_dropped:
+                ++t.publisher_dropped;
+                break;
+            case plexus::io::endpoint_edge::subscriber_registered:
+                ++t.subscriber_registered;
+                break;
+            case plexus::io::endpoint_edge::subscriber_retired:
+                ++t.subscriber_retired;
+                break;
         }
     }
 
@@ -220,13 +225,13 @@ public:
     }
 
 private:
-    std::map<plexus::node_id, counts>             m_peers;
+    std::map<plexus::node_id, counts> m_peers;
     std::map<plexus::node_id, participant_counts> m_participants;
-    std::map<std::string, topic_counts>           m_topics;
-    std::map<std::uint64_t, int>                  m_unsubscribed_by_hash;
-    counts                                        m_empty{};
-    participant_counts                            m_empty_participant{};
-    topic_counts                                  m_empty_topic{};
+    std::map<std::string, topic_counts> m_topics;
+    std::map<std::uint64_t, int> m_unsubscribed_by_hash;
+    counts m_empty{};
+    participant_counts m_empty_participant{};
+    topic_counts m_empty_topic{};
 };
 
 #endif

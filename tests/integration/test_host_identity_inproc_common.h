@@ -78,7 +78,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed, const plexus::io::sec
 
 struct admit_policy final : public plexus::io::security::attach_policy
 {
-    [[nodiscard]] bool decide(const attach_facts &) const noexcept override
+    bool decide(const attach_facts &) const noexcept override
     {
         return true;
     }

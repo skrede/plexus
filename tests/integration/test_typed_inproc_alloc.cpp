@@ -1,7 +1,4 @@
-// over-limit: one cohesive typed zero-alloc matrix; every cell snapshots the one TU-local global
-// new/delete counter (replaceable at most once per binary) around a shared warmed
-// borrow->publish->drain loop, so the cells cannot split across TUs without scattering that single
-// allocation-counter contract. The standing alloc-free gate for the typed in-process fast path: a
+// The standing alloc-free gate for the typed in-process fast path: a
 // warmed steady-state loop of borrow -> publish(loan&&) -> drain -> typed callback must allocate
 // ZERO bytes. The fast path is the zero-serialization lane (the loan pool produces a slot, the
 // object rides the bus by reference, the codec's encode is never invoked), so the only heap the
@@ -116,11 +113,11 @@ plexus::node_options make_opts(bool eager)
 
 struct net
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -151,16 +148,16 @@ TEST_CASE("typed inproc fast path: the warmed steady-state borrow->publish->drai
     net n;
     n.connect();
 
-    std::uint32_t    last      = 0;
-    std::size_t      delivered = 0;
+    std::uint32_t last    = 0;
+    std::size_t delivered = 0;
     typed_subscriber s{n.a, "topic", [&](const sample &v)
                        {
                            last = v.value;
                            ++delivered;
                        }};
-    counting_codec   codec;
-    auto             encodes = codec.encodes;
-    typed_publisher  p{n.b, "topic", plexus::typed_publisher_options{}, codec};
+    counting_codec codec;
+    auto encodes = codec.encodes;
+    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     auto fast_publish = [&](std::uint32_t value)
@@ -179,7 +176,7 @@ TEST_CASE("typed inproc fast path: the warmed steady-state borrow->publish->drai
         fast_publish(static_cast<std::uint32_t>(i));
 
     const std::size_t delivered_before = delivered;
-    const int         encodes_before   = encodes->load();
+    const int encodes_before           = encodes->load();
 
     plexus::testing::reset_alloc_count();
     const auto before = plexus::testing::alloc_count();
@@ -203,10 +200,10 @@ TEST_CASE("typed inproc forced fallback: the serialize path's allocation is docu
     net n;
     n.connect();
 
-    std::size_t      delivered = 0;
+    std::size_t delivered = 0;
     typed_subscriber s{n.a, "topic", [&](const sample &) { ++delivered; }};
-    counting_codec   codec;
-    auto             encodes = codec.encodes;
+    counting_codec codec;
+    auto encodes = codec.encodes;
     // A depth-0 pool forces every publish(const T&) onto the serialize path: encode the
     // value and publish bytes. This is the byte fallback the fast path degrades to under
     // exhaustion; its allocation is REPORTED for contrast, not asserted to zero.
@@ -221,7 +218,7 @@ TEST_CASE("typed inproc forced fallback: the serialize path's allocation is docu
         n.drive();
     }
 
-    const int         encodes_before   = encodes->load();
+    const int encodes_before           = encodes->load();
     const std::size_t delivered_before = delivered;
 
     plexus::testing::reset_alloc_count();
@@ -252,8 +249,8 @@ TEST_CASE("encode-thunk construction over a multi-pointer capture is zero-alloc"
     constexpr int K    = 4096;
 
     std::array<std::byte, 4> payload{};
-    std::uint64_t            sequence = 0;
-    std::uint32_t            value    = 0;
+    std::uint64_t sequence = 0;
+    std::uint32_t value    = 0;
 
     auto build_and_invoke = [&](std::uint32_t v) -> std::size_t
     {

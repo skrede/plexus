@@ -1,6 +1,4 @@
-// over-limit: one cohesive node-shared receive-route matrix; the install-once, reconnect-survival,
-// and per-session-yield cells share the one routing_engine route harness, so splitting them
-// scatters that shared fixture The node-shared receive-route oracle on the manual virtual clock.
+// The node-shared receive-route oracle on the manual virtual clock.
 // The per-session receive seam (peer_session::on_message) is installed on the live session object
 // and is therefore LOST when a reconnect rebuilds the slot's session, and it is raced by the
 // engine's posted observer fan-out. The node-shared route threaded through the
@@ -61,7 +59,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -93,8 +91,8 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -131,18 +129,18 @@ reconnect_config forever_cfg()
 // engines so destruction unwinds the engines' channels before the bus.
 struct route_net
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t                   transport_a{ex, bus};
-    transport_t                   transport_b{ex, bus};
-    plexus::log::null_logger      sink;
+    transport_t transport_a{ex, bus};
+    transport_t transport_b{ex, bus};
+    plexus::log::null_logger sink;
 
     engine a;
     engine b;
 
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint        ep_a{"inproc", "node-a"};
-    endpoint        ep_b{"inproc", "node-b"};
+    endpoint ep_a{"inproc", "node-a"};
+    endpoint ep_b{"inproc", "node-b"};
 
     route_net()
             : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink,
@@ -209,16 +207,16 @@ TEST_CASE("shared receive route: a route installed via the engine delivers a pub
           "with a populated message_info",
           "[integration][routing][inproc]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string topic        = "topic";
-    const std::string payload      = "routed-through-the-shared-route";
-    int               delivered    = 0;
+    constexpr int k_iterations = 100;
+    const std::string topic    = "topic";
+    const std::string payload  = "routed-through-the-shared-route";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
         route_net net;
 
-        std::vector<std::string>  received;
+        std::vector<std::string> received;
         std::vector<message_info> infos;
         net.a.on_message_route(
                 [&](std::string_view, std::span<const std::byte> d, const message_info &mi)
@@ -245,8 +243,8 @@ TEST_CASE("shared receive route: the route survives a forced reconnect rebuild w
           "(looped)",
           "[integration][routing][inproc]")
 {
-    constexpr int     k_reconnects = 6;
-    const std::string topic        = "topic";
+    constexpr int k_reconnects = 6;
+    const std::string topic    = "topic";
     manual_clock::reset();
     route_net net;
 
@@ -286,10 +284,10 @@ TEST_CASE("shared receive route: the route survives a forced reconnect rebuild w
 
 TEST_CASE("shared receive route: a per-session on_message takes precedence over the shared route", "[integration][routing][inproc]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string topic        = "topic";
-    const std::string payload      = "precedence-payload";
-    int               proven       = 0;
+    constexpr int k_iterations = 100;
+    const std::string topic    = "topic";
+    const std::string payload  = "precedence-payload";
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();

@@ -46,10 +46,10 @@ private:
 // at construction — never a mutable setter (the determinism contract: schedule fixed at ctor).
 struct loss_reorder_config
 {
-    std::uint32_t loss_num      = 0;
-    std::uint32_t loss_den      = 100;
-    std::size_t   reorder_depth = 0;
-    std::uint64_t seed          = 0x9E3779B97F4A7C15ull;
+    std::uint32_t loss_num    = 0;
+    std::uint32_t loss_den    = 100;
+    std::size_t reorder_depth = 0;
+    std::uint64_t seed        = 0x9E3779B97F4A7C15ull;
 };
 
 // A pure (no-IO) deterministic loss/reorder scheduler over an opaque datagram stream. drive()
@@ -65,7 +65,7 @@ public:
     {
     }
 
-    [[nodiscard]] std::vector<std::vector<std::byte>> drive(std::span<const std::byte> datagram)
+    std::vector<std::vector<std::byte>> drive(std::span<const std::byte> datagram)
     {
         std::vector<std::vector<std::byte>> out;
         if(m_rng.hits(m_cfg.loss_num, m_cfg.loss_den))
@@ -85,7 +85,7 @@ public:
         return out;
     }
 
-    [[nodiscard]] std::vector<std::vector<std::byte>> flush()
+    std::vector<std::vector<std::byte>> flush()
     {
         std::vector<std::vector<std::byte>> out;
         while(!m_hold.empty())
@@ -93,7 +93,7 @@ public:
         return out;
     }
 
-    [[nodiscard]] std::size_t dropped() const noexcept
+    std::size_t dropped() const noexcept
     {
         return m_dropped;
     }
@@ -103,16 +103,16 @@ private:
     // within the bounded window (not strictly FIFO) yet deterministic.
     std::vector<std::byte> take_held()
     {
-        const std::size_t      idx = m_rng.bounded(m_hold.size());
-        std::vector<std::byte> dg  = std::move(m_hold[idx]);
+        const std::size_t idx     = m_rng.bounded(m_hold.size());
+        std::vector<std::byte> dg = std::move(m_hold[idx]);
         m_hold.erase(m_hold.begin() + static_cast<std::ptrdiff_t>(idx));
         return dg;
     }
 
-    loss_reorder_config                m_cfg;
-    shim_lcg                           m_rng;
+    loss_reorder_config m_cfg;
+    shim_lcg m_rng;
     std::deque<std::vector<std::byte>> m_hold;
-    std::size_t                        m_dropped = 0;
+    std::size_t m_dropped = 0;
 };
 
 }

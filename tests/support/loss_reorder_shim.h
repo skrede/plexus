@@ -34,15 +34,15 @@ public:
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const
+    std::uint16_t port() const
     {
         return m_front.local_endpoint().port();
     }
-    [[nodiscard]] std::size_t dropped() const noexcept
+    std::size_t dropped() const noexcept
     {
         return m_sched.dropped();
     }
-    [[nodiscard]] std::size_t forwarded() const noexcept
+    std::size_t forwarded() const noexcept
     {
         return m_forwarded;
     }
@@ -81,16 +81,16 @@ private:
                                   });
     }
 
-    ::asio::io_context          &m_io;
-    ::asio::ip::udp::socket      m_front;
-    ::asio::ip::udp::socket      m_back;
-    ::asio::ip::udp::endpoint    m_server_ep;
-    ::asio::ip::udp::endpoint    m_client_ep;
-    ::asio::ip::udp::endpoint    m_from;
+    ::asio::io_context &m_io;
+    ::asio::ip::udp::socket m_front;
+    ::asio::ip::udp::socket m_back;
+    ::asio::ip::udp::endpoint m_server_ep;
+    ::asio::ip::udp::endpoint m_client_ep;
+    ::asio::ip::udp::endpoint m_from;
     std::array<std::byte, 65536> m_front_buf{};
     std::array<std::byte, 65536> m_back_buf{};
-    loss_reorder_scheduler       m_sched;
-    std::size_t                  m_forwarded = 0;
+    loss_reorder_scheduler m_sched;
+    std::size_t m_forwarded = 0;
 };
 
 }

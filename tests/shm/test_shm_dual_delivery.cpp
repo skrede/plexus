@@ -1,6 +1,3 @@
-// over-limit: one cohesive dual-delivery cross-process proof; the single end-to-end SHM-ring +
-// wire-loopback round-trip is one pipeline over a shared converged region and reactor bridge,
-// so it cannot split without scattering that shared cross-process pipeline state.
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
@@ -94,7 +91,7 @@ constexpr std::uint32_t k_payload = 0xD04D11EFu;
 bool produce_shm(const std::string &fqn)
 {
     posix_shm_region_broker broker;
-    region_handle           ctrl, slab;
+    region_handle ctrl, slab;
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
@@ -116,9 +113,9 @@ bool produce_shm(const std::string &fqn)
 // proving the upgrade did not suppress it. Returns the bytes the server received.
 std::uint32_t wire_roundtrip_loopback(std::uint32_t payload)
 {
-    ::asio::io_context        io;
+    ::asio::io_context io;
     ::asio::ip::tcp::acceptor acceptor(io, ::asio::ip::tcp::endpoint(::asio::ip::tcp::v4(), 0));
-    const auto                port = acceptor.local_endpoint().port();
+    const auto port = acceptor.local_endpoint().port();
 
     ::asio::ip::tcp::socket client(io);
     client.connect(::asio::ip::tcp::endpoint(::asio::ip::make_address("127.0.0.1"), port));
@@ -134,7 +131,7 @@ std::uint32_t wire_roundtrip_loopback(std::uint32_t payload)
 
 TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic coexist on one topic", "[shm][dual_delivery]")
 {
-    const std::string        fqn  = "topic.dual." + std::to_string(::getpid());
+    const std::string fqn         = "topic.dual." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 3; ++iter)
@@ -156,15 +153,15 @@ TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic c
         // The SHM leg (consumer parent): create the regions, build the channel, arm the
         // bridge on a user-owned io_context bound to the ring's notify word.
         posix_shm_region_broker broker;
-        region_handle           ctrl, slab;
+        region_handle ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
         REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
 
-        ::asio::io_context                                              io;
-        plexus::asio::shm::ring_notifier<test_policy>                   bridge(io, ring.notify_generation());
+        ::asio::io_context io;
+        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t shm_got = 0;

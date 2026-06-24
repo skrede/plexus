@@ -1,6 +1,4 @@
-// over-limit: one cohesive capture-gate decision matrix; the per-mode/decimation cells all witness
-// the one shared counting-encode-thunk node-pair harness, so splitting them scatters that shared
-// fixture The per-topic capture-gate oracle on the manual virtual clock. The gate is exercised
+// The per-topic capture-gate oracle on the manual virtual clock. The gate is exercised
 // through the typed loan path (publish_object) over a connected inproc node pair: a counting
 // encode thunk witnesses the encode-count WITHOUT any production-side counter (the encode
 // lambda the publisher already passes is the seam), and a recording observer's per-topic
@@ -72,7 +70,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -104,10 +102,10 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
-constexpr std::uint64_t k_tag          = 0x5151;
-constexpr const char   *k_topic        = "topic";
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr std::uint64_t k_tag  = 0x5151;
+constexpr const char *k_topic  = "topic";
 
 handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
@@ -131,8 +129,8 @@ reconnect_config forever_cfg()
 struct counted_payload
 {
     std::string value;
-    int         release_calls{0};
-    loan_slot   slot{};
+    int release_calls{0};
+    loan_slot slot{};
 };
 
 object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
@@ -162,18 +160,18 @@ struct lifecycle_only_observer final : plexus::io::observer
 // production mutator.
 struct capture_net
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t                   transport_a{ex, bus};
-    transport_t                   transport_b{ex, bus};
-    plexus::log::null_logger      sink;
+    transport_t transport_a{ex, bus};
+    transport_t transport_b{ex, bus};
+    plexus::log::null_logger sink;
 
     engine a;
     engine b;
 
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint        ep_a{"inproc", "node-a"};
-    endpoint        ep_b{"inproc", "node-b"};
+    endpoint ep_a{"inproc", "node-a"};
+    endpoint ep_b{"inproc", "node-b"};
 
     int encode_calls{0};
 
@@ -286,7 +284,7 @@ TEST_CASE("capture gate: wire on an inproc topic degrades to payload (one encode
 
 TEST_CASE("capture gate: count_n decimation keeps one encode per N publishes", "[integration][capture]")
 {
-    constexpr int           k = 9;
+    constexpr int k           = 9;
     constexpr std::uint32_t n = 3;
     manual_clock::reset();
     capture_net net;
@@ -303,7 +301,7 @@ TEST_CASE("capture gate: the default time_window mechanism admits one record per
     // assertion is exact and free of wall-clock flakiness. Looped to satisfy the no-single-run
     // discipline for a clock-adjacent assertion.
     constexpr std::uint64_t window_ns = 1000;
-    const std::uint64_t     hash      = topic_hash();
+    const std::uint64_t hash          = topic_hash();
     for(int run = 0; run < 3; ++run)
     {
         plexus::io::capture_policy policy;
@@ -330,7 +328,7 @@ TEST_CASE("capture gate: the folded should_emit matches the dual gate across the
     SECTION("unselected topic WITH a data-path observer still posts the metadata floor")
     {
         manual_clock::reset();
-        capture_net        net;
+        capture_net net;
         recording_observer rec;
         net.b.add_observer(rec); // observes_data_path() == true
         net.drive();
@@ -359,7 +357,7 @@ TEST_CASE("capture gate: the folded should_emit matches the dual gate across the
     SECTION("unselected topic with no observer posts nothing and encodes nothing")
     {
         manual_clock::reset();
-        capture_net        net;
+        capture_net net;
         recording_observer rec; // registered ONLY as a tally; never added to the engine
 
         counted_payload p;
@@ -375,7 +373,7 @@ TEST_CASE("capture gate: a lifecycle-only observer never admits payload posts on
 {
     constexpr int k = 4;
     manual_clock::reset();
-    capture_net             net;
+    capture_net net;
     lifecycle_only_observer life;
     net.b.add_observer(life); // observes_data_path() == false -> NOT counted as data-path-present
     net.drive();

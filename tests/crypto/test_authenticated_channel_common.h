@@ -52,7 +52,7 @@ public:
     {
         m_closed = true;
     }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    plexus::io::endpoint remote_endpoint() const
     {
         return {"wire", ""};
     }
@@ -72,7 +72,7 @@ public:
     {
         m_on_protocol_close = std::move(cb);
     }
-    [[nodiscard]] std::size_t backpressured() const
+    std::size_t backpressured() const
     {
         return 0;
     }
@@ -83,13 +83,13 @@ public:
             m_on_data(bytes);
     }
 
-    std::function<void(std::span<const std::byte>)>                      m_sink;
-    std::vector<std::byte>                                               m_last;
-    bool                                                                 m_closed{false};
+    std::function<void(std::span<const std::byte>)> m_sink;
+    std::vector<std::byte> m_last;
+    bool m_closed{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                           m_on_closed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
+    plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close;
 };
 
 static_assert(plexus::io::byte_channel<wire_lower>, "wire_lower must satisfy byte_channel for the decorator test");

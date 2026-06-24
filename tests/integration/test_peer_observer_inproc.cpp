@@ -1,6 +1,4 @@
-// over-limit: one cohesive observer lifecycle+readiness matrix; the edge cells all assert against
-// the one shared recording-observer + routing_engine harness on the single manual clock, so
-// splitting them scatters that shared fixture The deterministic peer-observer behavior oracle on
+// The deterministic peer-observer behavior oracle on
 // the manual virtual clock. A recording observer (shared header) is registered on a real
 // routing_engine and the full lifecycle + readiness matrix is forced over the inproc backend,
 // looped where behavioral with the established proven == k_iterations idiom. Every edge is POSTED
@@ -67,7 +65,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -99,9 +97,9 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
-constexpr auto          k_ceiling      = std::chrono::milliseconds(10001);
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr auto k_ceiling       = std::chrono::milliseconds(10001);
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -153,8 +151,8 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
 std::vector<std::byte> make_subscribe_response(std::uint64_t session_id)
 {
     plexus::wire::subscribe_response resp{.topic_hash = 0x1234, .status = plexus::wire::subscribe_status::subscribed};
-    auto                             payload = plexus::wire::encode_subscribe_response(resp);
-    plexus::wire::frame_header       hdr{.type = plexus::wire::msg_type::subscribe_response, .flags = 0, .session_id = session_id, .timestamp_ns = 0, .payload_len = payload.size()};
+    auto payload = plexus::wire::encode_subscribe_response(resp);
+    plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::subscribe_response, .flags = 0, .session_id = session_id, .timestamp_ns = 0, .payload_len = payload.size()};
     return plexus::wire::encode_frame(hdr, payload);
 }
 
@@ -162,19 +160,19 @@ std::vector<std::byte> make_subscribe_response(std::uint64_t session_id)
 // selectable so the surrender and rejection legs can arm them; B is forever/matched.
 struct two_node
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t                   transport_a{ex, bus};
-    transport_t                   transport_b{ex, bus};
-    plexus::log::null_logger      sink;
+    transport_t transport_a{ex, bus};
+    transport_t transport_b{ex, bus};
+    plexus::log::null_logger sink;
 
     engine a;
     engine b;
 
     plexus::node_id id_a{make_id(0xA1)};
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint        ep_a{"inproc", "node-a"};
-    endpoint        ep_b{"inproc", "node-b"};
+    endpoint ep_a{"inproc", "node-a"};
+    endpoint ep_b{"inproc", "node-b"};
 
     explicit two_node(const reconnect_config &a_redial = forever_cfg(), std::uint8_t a_compatible = 1)
             : a(transport_a, ex, make_cfg(0xA1, 1, a_compatible), k_long_timeout, a_redial, k_seed, sink, false)
@@ -202,11 +200,11 @@ TEST_CASE("inproc observer: connected fires once and ready fires immediately for
           "[integration][observer][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        two_node           net;
+        two_node net;
         recording_observer rec;
         net.a.add_observer(rec);
 
@@ -231,11 +229,11 @@ TEST_CASE("inproc observer: a drop+redial fires reconnected (NOT a second connec
           "[integration][observer][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        two_node           net;
+        two_node net;
         recording_observer rec;
         net.a.add_observer(rec);
 
@@ -269,24 +267,24 @@ TEST_CASE("inproc observer: dead fires once when the driver surrenders, and the 
           "peer is untouched",
           "[integration][observer][inproc]")
 {
-    constexpr int           k_iterations   = 50;
+    constexpr int k_iterations             = 50;
     constexpr std::uint32_t k_max_attempts = 3;
-    int                     proven         = 0;
+    int proven                             = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
 
-        inproc_bus<manual_clock>      bus;
+        inproc_bus<manual_clock> bus;
         inproc_executor<manual_clock> ex{bus};
-        transport_t                   transport_a{ex, bus};
-        transport_t                   transport_b{ex, bus};
-        transport_t                   transport_c{ex, bus};
+        transport_t transport_a{ex, bus};
+        transport_t transport_b{ex, bus};
+        transport_t transport_c{ex, bus};
 
         plexus::log::null_logger sink;
-        engine                   a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts), k_seed, sink, false);
-        engine                   b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        engine                   c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        recording_observer       rec;
+        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts), k_seed, sink, false);
+        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        recording_observer rec;
         a.add_observer(rec);
 
         const auto id_b = make_id(0xB2);
@@ -330,13 +328,13 @@ TEST_CASE("inproc observer: rejected fires once carrying the real refusal reason
           "[integration][observer][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
         // B advertises version 1; A requires compatible >= 2, so A rejects B's
         // response (B's accept carries version 1) -> A fires rejected(reject_version).
-        two_node           net(forever_cfg(), /*a_compatible=*/2);
+        two_node net(forever_cfg(), /*a_compatible=*/2);
         recording_observer rec;
         net.a.add_observer(rec);
 
@@ -359,13 +357,13 @@ TEST_CASE("inproc observer: on_peer_ready over the REAL loop, then the awaited p
           "(first-publish-loss-free)",
           "[integration][observer][inproc]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "ready-then-publish";
-    int               proven       = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "ready-then-publish";
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        two_node           net;
+        two_node net;
         recording_observer rec;
         net.a.add_observer(rec);
 
@@ -379,7 +377,7 @@ TEST_CASE("inproc observer: on_peer_ready over the REAL loop, then the awaited p
         // The awaited publish: A is the subscriber, so B publishes and the frame lands
         // at A's per-session sink. Proves the subscribe round-trip actually wired the
         // fan-out (a never-firing ready would leave this empty).
-        auto                    *a_to_b = net.a.session_for(net.id_b);
+        auto *a_to_b = net.a.session_for(net.id_b);
         std::vector<std::string> a_received;
         a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(to_string(d)); });
 
@@ -401,11 +399,11 @@ TEST_CASE("inproc observer: ready fires EXACTLY once per cycle across a reconnec
           "[integration][observer][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        two_node           net;
+        two_node net;
         recording_observer rec;
         net.a.add_observer(rec);
 
@@ -434,11 +432,11 @@ TEST_CASE("inproc observer: premature-ready window — ready stays 1 while the r
           "[integration][observer][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        two_node           net;
+        two_node net;
         recording_observer rec;
         net.a.add_observer(rec);
 
@@ -483,11 +481,11 @@ TEST_CASE("inproc observer: an accepted (inbound) peer fires connected/disconnec
           "[integration][observer][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        two_node           net;
+        two_node net;
         recording_observer rec;
         net.b.add_observer(rec); // observe the ACCEPTING node's inbound slot
 
@@ -525,10 +523,10 @@ TEST_CASE("inproc observer: calling engine.subscribe from inside an observer cal
     // also the ASan-critical posted-edge path (the suite runs under asan/ubsan).
     struct reentrant_observer final : public plexus::io::observer
     {
-        engine         *eng{nullptr};
+        engine *eng{nullptr};
         plexus::node_id target{};
-        int             connected{0};
-        void            on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
+        int connected{0};
+        void on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
         {
             ++connected;
             if(eng)
@@ -537,11 +535,11 @@ TEST_CASE("inproc observer: calling engine.subscribe from inside an observer cal
     };
 
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        two_node           net;
+        two_node net;
         reentrant_observer obs;
         obs.eng    = &net.a;
         obs.target = net.id_b;
@@ -570,8 +568,8 @@ TEST_CASE("inproc observer: (un)registering an observer from inside a lifecycle 
     struct self_removing_observer final : public plexus::io::observer
     {
         engine *eng{nullptr};
-        int     connected{0};
-        void    on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
+        int connected{0};
+        void on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
         {
             ++connected;
             if(eng)
@@ -580,13 +578,13 @@ TEST_CASE("inproc observer: (un)registering an observer from inside a lifecycle 
     };
 
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        two_node               net;
+        two_node net;
         self_removing_observer first;
-        recording_observer     second;
+        recording_observer second;
         first.eng = &net.a;
         net.a.add_observer(first);  // unregisters itself on connected
         net.a.add_observer(second); // the co-observer must still receive its edge
@@ -609,11 +607,11 @@ TEST_CASE("inproc observer: a forged subscribe_response with no outstanding matc
           "[integration][observer][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        two_node           net;
+        two_node net;
         recording_observer rec;
         net.a.add_observer(rec);
 

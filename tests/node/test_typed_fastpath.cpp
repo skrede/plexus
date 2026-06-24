@@ -1,6 +1,3 @@
-// over-limit: one cohesive fast-path identity+flip matrix; both cells share the one codec +
-// two-node net harness (the encode-count delta and object-address identity witness), so
-// splitting them across TUs scatters that shared fixture into near-empty per-cell shells.
 // The fast-path named gates: cell 6 (the zero-serialization identity witness, here as the
 // named gate with the carrier-field assertions) and cell 7 (the LOOPED fast/fallback flip).
 // The flip is proven the no-success-from-a-single-run way: a fresh net per iteration, the
@@ -111,11 +108,11 @@ plexus::node_options make_opts(bool eager)
 
 struct net
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -145,17 +142,17 @@ TEST_CASE("typed fast path cell 6: the identity witness — same address, zero e
     n.connect();
 
     std::vector<const sample *> seen_addr;
-    std::vector<std::uint32_t>  seen_value;
-    std::vector<message_info>   infos;
-    typed_subscriber            s{n.a, "topic", [&](const sample &v, const message_info &info)
-                                  {
+    std::vector<std::uint32_t> seen_value;
+    std::vector<message_info> infos;
+    typed_subscriber s{n.a, "topic", [&](const sample &v, const message_info &info)
+                       {
                            seen_addr.push_back(&v);
                            seen_value.push_back(v.value);
                            infos.push_back(info);
-                                  }};
-    counting_codec              codec;
-    auto                        encodes = codec.encodes;
-    typed_publisher             p{n.b, "topic", plexus::typed_publisher_options{}, codec};
+                       }};
+    counting_codec codec;
+    auto encodes = codec.encodes;
+    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     auto loan = p.borrow();
@@ -185,9 +182,9 @@ TEST_CASE("typed fast path cell 6: the identity witness — same address, zero e
 // makes some publishes within one iteration fall back mid-stream.
 TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every message's path witnessed", "[node][typed][fastpath]")
 {
-    constexpr int         k_iterations = 8;
+    constexpr int k_iterations         = 8;
     constexpr std::size_t k_pool_depth = 4;
-    int                   proven       = 0;
+    int proven                         = 0;
 
     for(int iter = 0; iter < k_iterations; ++iter)
     {
@@ -198,10 +195,10 @@ TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every messa
 
         // The witnesses the subscriber records, regardless of which kind it is.
         std::vector<std::uint32_t> values;
-        std::vector<const void *>  addrs; // the delivered object address (fast path) or null
+        std::vector<const void *> addrs; // the delivered object address (fast path) or null
 
-        counting_codec                  codec;
-        auto                            encodes = codec.encodes;
+        counting_codec codec;
+        auto encodes = codec.encodes;
         plexus::typed_publisher_options popts;
         popts.pool_depth = k_pool_depth;
         typed_publisher p{n.b, "topic", popts, codec};
@@ -248,13 +245,13 @@ TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every messa
 
         // One in-flight borrow per drive keeps the pool from exhausting, so the path is
         // purely the subscriber-kind flip (eligible typed = fast, ineligible bytes = byte).
-        std::vector<const void *>  expected_addr;
+        std::vector<const void *> expected_addr;
         std::vector<std::uint32_t> expected_value;
         for(int i = 0; i < 3; ++i)
         {
-            const std::uint32_t value  = 0x1000u + static_cast<std::uint32_t>(i);
-            const int           before = encodes->load();
-            const void         *addr   = borrow_publish(value);
+            const std::uint32_t value = 0x1000u + static_cast<std::uint32_t>(i);
+            const int before          = encodes->load();
+            const void *addr          = borrow_publish(value);
             n.drive(); // delivers + releases the slot before the next borrow
             const int delta = encodes->load() - before;
 
@@ -278,10 +275,10 @@ TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every messa
         // byte-paths every message, so the burst would add nothing to witness.)
         if(eligible)
         {
-            const std::size_t          burst = k_pool_depth + 3;
-            std::vector<const void *>  burst_addr;
+            const std::size_t burst = k_pool_depth + 3;
+            std::vector<const void *> burst_addr;
             std::vector<std::uint32_t> burst_value;
-            const int                  before = encodes->load();
+            const int before = encodes->load();
             for(std::size_t i = 0; i < burst; ++i)
             {
                 const std::uint32_t value = 0x2000u + static_cast<std::uint32_t>(i);

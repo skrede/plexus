@@ -1,7 +1,3 @@
-// over-limit: one cohesive egress-priority scheduling matrix; every cell drives the one
-// shared backpressured-destination forwarder harness (the stalled-channel band scheduler +
-// drop-event taps), and that shared fixture preamble alone exceeds the file ceiling, so the
-// cells cannot split across TUs without scattering that one harness into over-budget shells.
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/egress_scheduler.h"
@@ -48,7 +44,7 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // carrier): a span over an owning shared_ptr<vector>, mirroring the forwarder's frame.
 plexus::wire_bytes<> owned(std::span<const std::byte> bytes)
 {
-    auto                       buf = std::make_shared<std::vector<std::byte>>(bytes.begin(), bytes.end());
+    auto buf = std::make_shared<std::vector<std::byte>>(bytes.begin(), bytes.end());
     std::span<const std::byte> view{*buf};
     return plexus::wire_bytes<>{view, std::shared_ptr<const void>{std::move(buf)}};
 }
@@ -91,8 +87,8 @@ std::vector<std::string> data_bodies(const std::vector<std::vector<std::byte>> &
 // run inline, so the ordering is deterministic without a real runtime.
 struct stall_state
 {
-    std::size_t                         reported{0}; // what backpressured() returns
-    std::vector<std::vector<std::byte>> sends;       // every frame the channel was handed, in order
+    std::size_t reported{0};                   // what backpressured() returns
+    std::vector<std::vector<std::byte>> sends; // every frame the channel was handed, in order
 };
 
 struct stall_executor
@@ -128,7 +124,7 @@ struct stall_channel
     void close()
     {
     }
-    [[nodiscard]] io::endpoint remote_endpoint() const
+    io::endpoint remote_endpoint() const
     {
         return {"tcp", "127.0.0.1:0"};
     }
@@ -144,16 +140,16 @@ struct stall_channel
     void on_protocol_close(detail::move_only_function<void(wire::close_cause)>)
     {
     }
-    [[nodiscard]] std::size_t backpressured() const noexcept
+    std::size_t backpressured() const noexcept
     {
         return m_st->reported;
     }
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    std::uint64_t scheduler_key() const noexcept
     {
         return m_key;
     }
 
-    stall_state  *m_st{nullptr};
+    stall_state *m_st{nullptr};
     std::uint64_t m_key{next_stall_key()};
 };
 
@@ -201,10 +197,10 @@ using stall_forwarder = io::message_forwarder<stall_policy>;
 // reads, so a frame the cap would refuse is observable as a refused send, not a silent loss.
 struct capped_state
 {
-    std::size_t                         cap{0};
-    std::size_t                         queued{0};
-    std::size_t                         refused{0}; // sends the byte cap turned away
-    std::vector<std::vector<std::byte>> sends;      // every frame the channel actually admitted
+    std::size_t cap{0};
+    std::size_t queued{0};
+    std::size_t refused{0};                    // sends the byte cap turned away
+    std::vector<std::vector<std::byte>> sends; // every frame the channel actually admitted
 };
 
 struct capped_channel
@@ -238,7 +234,7 @@ struct capped_channel
     void close()
     {
     }
-    [[nodiscard]] io::endpoint remote_endpoint() const
+    io::endpoint remote_endpoint() const
     {
         return {"tcp", "127.0.0.1:0"};
     }
@@ -254,11 +250,11 @@ struct capped_channel
     void on_protocol_close(detail::move_only_function<void(wire::close_cause)>)
     {
     }
-    [[nodiscard]] std::size_t backpressured() const noexcept
+    std::size_t backpressured() const noexcept
     {
         return m_st->queued;
     }
-    [[nodiscard]] std::size_t write_queue_capacity() const noexcept
+    std::size_t write_queue_capacity() const noexcept
     {
         return m_st->cap;
     }
@@ -291,10 +287,10 @@ TEST_CASE("egress_priority: a realtime frame leaves a stalled destination before
     constexpr int k_flood      = 50;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        stall_state              st;
-        stall_channel            ch{st};
+        stall_state st;
+        stall_channel ch{st};
         plexus::log::null_logger sink;
-        stall_forwarder          fwd{sink};
+        stall_forwarder fwd{sink};
 
         // Two topics over the SAME destination, one background and one realtime.
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
@@ -340,10 +336,10 @@ TEST_CASE("egress_priority: a flooded background band never delays a high frame 
     constexpr int k_flood      = 40;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        stall_state              st;
-        stall_channel            ch{st};
+        stall_state st;
+        stall_channel ch{st};
         plexus::log::null_logger sink;
-        stall_forwarder          fwd{sink};
+        stall_forwarder fwd{sink};
 
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("hi", topic_qos{.priority = io::priority::high});
@@ -396,10 +392,10 @@ TEST_CASE("egress_priority: a multi-band backlog drains in strict band-descendin
     constexpr int k_per_band   = 6;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        stall_state              st;
-        stall_channel            ch{st};
+        stall_state st;
+        stall_channel ch{st};
         plexus::log::null_logger sink;
-        stall_forwarder          fwd{sink};
+        stall_forwarder fwd{sink};
 
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("nm", topic_qos{.priority = io::priority::normal});
@@ -451,16 +447,16 @@ TEST_CASE("egress_priority: inproc is unaffected — mixed priorities deliver in
     // The inproc capture substrate: a second channel records every delivered frame.
     for(int iter = 0; iter < 100; ++iter)
     {
-        inproc::inproc_bus<>      bus;
+        inproc::inproc_bus<> bus;
         inproc::inproc_executor<> ex(bus);
-        inproc::inproc_channel<>  ch(ex);
-        inproc::inproc_channel<>  sink(ex);
+        inproc::inproc_channel<> ch(ex);
+        inproc::inproc_channel<> sink(ex);
         ch.connect_to(sink.local_endpoint());
         std::vector<std::vector<std::byte>> frames;
         sink.on_data([&](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
 
         plexus::log::null_logger log_sink;
-        inproc_forwarder         fwd{log_sink};
+        inproc_forwarder fwd{log_sink};
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("rt", topic_qos{.priority = io::priority::realtime});
         REQUIRE(fwd.attach_for_fanout(inproc_forwarder::peer{ch, "node-a"}, "bg"));
@@ -521,11 +517,11 @@ TEST_CASE("egress_priority: the MUX/ERASED path bands — realtime leaves before
     constexpr int k_flood      = 50;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        stall_state                   st;
-        auto                          inner = std::make_unique<stall_channel>(st);
+        stall_state st;
+        auto inner = std::make_unique<stall_channel>(st);
         pio::polymorphic_byte_channel ch(std::make_unique<pio::channel_adapter<stall_channel>>(std::move(inner)));
-        plexus::log::null_logger      sink;
-        erased_forwarder              fwd{sink};
+        plexus::log::null_logger sink;
+        erased_forwarder fwd{sink};
 
         fwd.declare("bg", topic_qos{.priority = io::priority::background});
         fwd.declare("rt", topic_qos{.priority = io::priority::realtime});
@@ -586,11 +582,11 @@ TEST_CASE("egress_priority: the scheduler keys on a stable per-construction id; 
     // fresh scheduler_key(), the new channel's key has no prior entry: its band counters
     // start clean and a frame admits, proving no stale state bled across the reuse.
     io::detail::egress_scheduler<stall_channel, stall_policy> sched{};
-    const std::size_t                                         band = io::detail::band_of(io::priority::normal);
+    const std::size_t band = io::detail::band_of(io::priority::normal);
 
     std::uint64_t dead_key = 0;
     {
-        stall_state   st;
+        stall_state st;
         stall_channel ch{st};
         dead_key    = ch.scheduler_key();
         st.reported = io::detail::k_low_water + 1; // stall: the band fills, then overflows
@@ -603,7 +599,7 @@ TEST_CASE("egress_priority: the scheduler keys on a stable per-construction id; 
 
     // A fresh channel. Reuse the same heap storage as a hostile ABA case: even if `new`
     // hands back the freed address, the key differs, so the band map cannot alias.
-    stall_state   st2;
+    stall_state st2;
     stall_channel fresh{st2};
     REQUIRE(fresh.scheduler_key() != dead_key); // a reconstructed channel gets a distinct key
 
@@ -624,18 +620,18 @@ TEST_CASE("egress_priority: drop_oldest evicts the oldest resident frame; surviv
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // The directly-driven scheduler proves the per-band counter (the observability gate).
-        stall_state                                               counter_st;
-        stall_channel                                             counter_ch{counter_st};
+        stall_state counter_st;
+        stall_channel counter_ch{counter_st};
         io::detail::egress_scheduler<stall_channel, stall_policy> sched{};
-        const std::size_t                                         band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::drop_oldest);
+        const std::size_t band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::drop_oldest);
         REQUIRE(sched.dropped_oldest(counter_ch, band) == 1);
 
         // The forwarder path proves the runtime wire EFFECT: the evicted oldest body is
         // absent, the new body present, the survivors in FIFO order.
-        stall_state              st;
-        stall_channel            ch{st};
+        stall_state st;
+        stall_channel ch{st};
         plexus::log::null_logger sink;
-        stall_forwarder          fwd{sink};
+        stall_forwarder fwd{sink};
         // The saturated topic is on the normal band; the drain trigger rides a separate
         // realtime topic on an EMPTY higher band, so the trigger never re-saturates the
         // normal band — it only releases the stall and kicks the inline drain.
@@ -673,16 +669,16 @@ TEST_CASE("egress_priority: block refuses the new frame at a saturated band; it 
     constexpr int k_iterations = 100;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        stall_state                                               counter_st;
-        stall_channel                                             counter_ch{counter_st};
+        stall_state counter_st;
+        stall_channel counter_ch{counter_st};
         io::detail::egress_scheduler<stall_channel, stall_policy> sched{};
-        const std::size_t                                         band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::block);
+        const std::size_t band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::block);
         REQUIRE(sched.blocked(counter_ch, band) == 1);
 
-        stall_state              st;
-        stall_channel            ch{st};
+        stall_state st;
+        stall_channel ch{st};
         plexus::log::null_logger sink;
-        stall_forwarder          fwd{sink};
+        stall_forwarder fwd{sink};
         fwd.declare("t", topic_qos{.congestion = io::congestion::block, .priority = io::priority::normal});
         fwd.declare("kick", topic_qos{.priority = io::priority::realtime});
         REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
@@ -716,10 +712,10 @@ TEST_CASE("egress_priority: a forced drop is observable per-topic-per-band on th
     namespace pdetail = io::detail;
     auto force_drops  = [](io::congestion mode, pdetail::drop_cause cause, std::size_t overflows)
     {
-        stall_state              st;
-        stall_channel            ch{st};
+        stall_state st;
+        stall_channel ch{st};
         plexus::log::null_logger sink;
-        stall_forwarder          fwd{sink};
+        stall_forwarder fwd{sink};
         fwd.declare("t", topic_qos{.congestion = mode, .priority = io::priority::normal});
         REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
 
@@ -752,16 +748,16 @@ TEST_CASE("egress_priority: drop_newest refuses the new frame at a saturated ban
     constexpr int k_iterations = 100;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        stall_state                                               counter_st;
-        stall_channel                                             counter_ch{counter_st};
+        stall_state counter_st;
+        stall_channel counter_ch{counter_st};
         io::detail::egress_scheduler<stall_channel, stall_policy> sched{};
-        const std::size_t                                         band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::drop_newest);
+        const std::size_t band = saturate_scheduler(sched, counter_ch, counter_st, io::congestion::drop_newest);
         REQUIRE(sched.dropped_newest(counter_ch, band) == 1);
 
-        stall_state              st;
-        stall_channel            ch{st};
+        stall_state st;
+        stall_channel ch{st};
         plexus::log::null_logger sink;
-        stall_forwarder          fwd{sink};
+        stall_forwarder fwd{sink};
         fwd.declare("t", topic_qos{.congestion = io::congestion::drop_newest, .priority = io::priority::normal});
         fwd.declare("kick", topic_qos{.priority = io::priority::realtime});
         REQUIRE(fwd.attach_for_fanout(stall_forwarder::peer{ch, "node-a"}, "t"));
@@ -797,7 +793,7 @@ TEST_CASE("egress_priority: the drain leaves a frame the channel cap cannot admi
     // Driven directly so the cap interaction is deterministic without a runtime.
     capped_state cst;
     cst.cap = io::detail::k_low_water; // the gate equals the channel's own write-queue cap
-    capped_channel                                              ch{cst};
+    capped_channel ch{cst};
     io::detail::egress_scheduler<capped_channel, capped_policy> sched{};
 
     const std::size_t band  = io::detail::band_of(io::priority::normal);
@@ -836,10 +832,10 @@ TEST_CASE("egress_priority: the low-water gate tracks the channel's OWN write-qu
     // admit — losing it past the band drop counters; the per-channel gate refuses to over-feed.
     capped_state cst;
     cst.cap = 100; // far below the default k_low_water
-    capped_channel                                              ch{cst};
+    capped_channel ch{cst};
     io::detail::egress_scheduler<capped_channel, capped_policy> sched{};
 
-    const std::size_t     band = io::detail::band_of(io::priority::normal);
+    const std::size_t band     = io::detail::band_of(io::priority::normal);
     constexpr std::size_t unit = 60; // two units (120) exceed the 100-byte cap
 
     // The empty channel admits the first frame (any size). The second must stay banded:

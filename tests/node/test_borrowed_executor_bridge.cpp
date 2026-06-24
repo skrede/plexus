@@ -1,6 +1,3 @@
-// over-limit: one cohesive borrowed-executor lifecycle gate; the three assertion families
-// all drive the one shared host struct that owns the executor/discovery/transports and embeds
-// the borrowing nodes, so splitting them scatters that shared single-substrate fixture.
 // The borrowed-executor named gate, shaped like the vagus integration bridge: a host
 // struct OWNS the whole substrate — the executor, the discovery service, and the
 // transports — and embeds two plexus::node instances that BORROW all three. Nothing
@@ -123,11 +120,11 @@ bool pump_until(inproc_executor<> &ex, Pred done, int step_budget = 100000)
 // lifetime contract.
 struct host_bridge
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};
@@ -165,12 +162,12 @@ TEST_CASE("borrowed executor: no thread is spawned across construction and a ful
     h.connect();
 
     std::vector<std::string> got;
-    inproc_subscriber        sub{h.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
-    inproc_publisher         pub{h.b, "topic"};
+    inproc_subscriber sub{h.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_publisher pub{h.b, "topic"};
 
     inproc_procedure proc{h.b, "rpc",
                           [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply) { reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param))); }};
-    inproc_caller    call{h.a, "rpc"};
+    inproc_caller call{h.a, "rpc"};
     h.pump();
 
     pub.publish(as_bytes("payload"));
@@ -206,7 +203,7 @@ TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop"
 
     // Sample point 1: a fresh subscriber's standing fan is posted, not run inline.
     inproc_subscriber sub{h.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
-    inproc_publisher  pub{h.b, "topic"};
+    inproc_publisher pub{h.b, "topic"};
     REQUIRE(got.empty());
 
     // Sample point 2: still nothing delivered before the loop turns; the subscribe demand
@@ -230,18 +227,18 @@ TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop"
 TEST_CASE("borrowed executor: the host-pumped round-trip is reproducible, looped", "[node][borrowed-executor]")
 {
     constexpr int k_iterations = 8;
-    host_bridge   h;
+    host_bridge h;
     h.connect();
 
     inproc_procedure proc{h.b, "rpc",
                           [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply) { reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param))); }};
-    inproc_caller    call{h.a, "rpc"};
+    inproc_caller call{h.a, "rpc"};
     h.pump();
 
     int proven = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
-        const std::string          req = "req-" + std::to_string(i);
+        const std::string req = "req-" + std::to_string(i);
         std::optional<std::string> got;
         call.call(as_bytes(req),
                   [&](plexus::expected<reply_t, std::error_code> r)

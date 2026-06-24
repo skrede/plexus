@@ -1,6 +1,4 @@
-// over-limit: one cohesive flat-stream-to-MCAP transcode round-trip; the capture, transcode, and
-// read-back-mapping assertions share the one live-session-to-mcap-file pipeline, so splitting them
-// scatters that shared pipeline state The host-side flat-stream to MCAP transcode round-trip
+// The host-side flat-stream to MCAP transcode round-trip
 // oracle. A live wire-capturing inproc session is driven through the PUBLIC recording API into an
 // in-memory flat stream; the transcode maps it to an MCAP file; the mcap reader reads it back and
 // the channel / schema / message mapping is asserted: a per-topic sample channel carries the
@@ -132,13 +130,13 @@ plexus::node_options base_opts()
 // readings, drain the recorder, and return the accumulated flat capture bytes.
 std::vector<std::byte> capture_session(int count)
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    static_discovery  disc{{}};
+    static_discovery disc{{}};
 
     inproc_transport<> consumer_tp{ex, bus};
     inproc_transport<> producer_inner{ex, bus};
-    wire_transport     producer_tp{producer_inner};
+    wire_transport producer_tp{producer_inner};
 
     plexus::node_options consumer_opts = base_opts();
     plexus::node_options producer_opts = base_opts();
@@ -148,14 +146,14 @@ std::vector<std::byte> capture_session(int count)
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};
 
     in_memory_byte_sink sink;
-    auto                recorder = producer.make_recorder(sink);
+    auto recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
     ex.drain();
 
     typed_subscriber sub{consumer, "telemetry", [](const reading &) {}};
-    typed_publisher  pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
+    typed_publisher pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
     ex.drain();
 
     for(int i = 0; i < count; ++i)
@@ -177,10 +175,10 @@ std::vector<std::byte> capture_session(int count)
 struct read_back
 {
     std::unordered_set<std::string> topics;
-    std::size_t                     total_messages{0};
-    std::size_t                     telemetry_messages{0};
-    std::size_t                     wire_messages{0};
-    std::size_t                     wire_meta_messages{0};
+    std::size_t total_messages{0};
+    std::size_t telemetry_messages{0};
+    std::size_t wire_messages{0};
+    std::size_t wire_meta_messages{0};
     // The published reading values recovered from the raw wire-frame payload tails: the
     // codec writes the value as 4 little-endian bytes which framing leaves at the frame
     // tail, so recovering them proves the raw bytes rode through the transcode byte-
@@ -194,9 +192,9 @@ struct read_back
 
 read_back read_mcap(const std::filesystem::path &path)
 {
-    read_back        rb;
+    read_back rb;
     mcap::McapReader reader;
-    const auto       status = reader.open(path.string());
+    const auto status = reader.open(path.string());
     REQUIRE(status.ok());
 
     for(const auto &view : reader.readMessages())
@@ -214,7 +212,7 @@ read_back read_mcap(const std::filesystem::path &path)
             if(view.message.dataSize >= 4)
             {
                 const std::byte *d = view.message.data + (view.message.dataSize - 4);
-                std::uint32_t    v = 0;
+                std::uint32_t v    = 0;
                 for(int i = 0; i < 4; ++i)
                     v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(d[i])) << (8 * i);
                 rb.wire_tail_values.insert(v);
@@ -233,14 +231,14 @@ read_back read_mcap(const std::filesystem::path &path)
 // to noChunking. A real Summary carries chunk indexes and statistics, asserted non-empty.
 struct summary_check
 {
-    bool          summary_ok{false};
-    std::size_t   chunk_indexes{0};
+    bool summary_ok{false};
+    std::size_t chunk_indexes{0};
     std::uint64_t message_count{0};
 };
 
 summary_check read_summary(const std::filesystem::path &path)
 {
-    summary_check    sc;
+    summary_check sc;
     mcap::McapReader reader;
     REQUIRE(reader.open(path.string()).ok());
 
@@ -265,8 +263,8 @@ bool has_prefix(const std::unordered_set<std::string> &topics, std::string_view 
 
 TEST_CASE("mcap transcode round-trips a captured session through the mcap reader", "[mcap_transcode][mcap]")
 {
-    const int  count = 8;
-    const auto flat  = capture_session(count);
+    const int count = 8;
+    const auto flat = capture_session(count);
     REQUIRE(!flat.empty());
 
     const auto out = std::filesystem::temp_directory_path() / std::filesystem::path{"plexus_transcode_roundtrip.mcap"};
@@ -347,8 +345,8 @@ struct json_reading_codec
 
     plexus::wire_bytes<> encode(const json_reading &v) const
     {
-        auto                       owner = std::make_shared<std::string>("{\"value\":" + std::to_string(v.value) + "}");
-        std::span<const std::byte> view  = std::as_bytes(std::span{owner->data(), owner->size()});
+        auto owner                      = std::make_shared<std::string>("{\"value\":" + std::to_string(v.value) + "}");
+        std::span<const std::byte> view = std::as_bytes(std::span{owner->data(), owner->size()});
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
@@ -372,9 +370,9 @@ constexpr std::string_view k_reading_jsonschema = R"({"type":"object","title":"j
 // labels its channel; the undeclared topic resolves no entry and stays opaque.
 std::vector<std::byte> capture_declared_and_opaque(int count)
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    static_discovery  disc{{}};
+    static_discovery disc{{}};
 
     inproc_transport<> consumer_tp{ex, bus};
     inproc_transport<> producer_tp{ex, bus};
@@ -385,7 +383,7 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
     in_memory_byte_sink sink;
 
     plexus::recorder_options ropts;
-    const auto               schema_bytes = std::as_bytes(std::span{k_reading_jsonschema.data(), k_reading_jsonschema.size()});
+    const auto schema_bytes = std::as_bytes(std::span{k_reading_jsonschema.data(), k_reading_jsonschema.size()});
     ropts.schemas.push_back(
             plexus::type_schema{.type_id = 0x70110001u, .message_encoding = "json", .schema_name = "json_reading", .schema_encoding = "jsonschema", .schema_data = schema_bytes});
     auto recorder = producer.make_recorder(sink, std::move(ropts));
@@ -400,7 +398,7 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
     using opaque_subscriber   = typed_subscriber;
 
     declared_subscriber d_sub{consumer, "declared.telemetry", [](const json_reading &) {}};
-    opaque_subscriber   o_sub{consumer, "opaque.telemetry", [](const reading &) {}};
+    opaque_subscriber o_sub{consumer, "opaque.telemetry", [](const reading &) {}};
 
     plexus::typed_publisher_options decl_opts;
     decl_opts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
@@ -408,7 +406,7 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
     opaque_opts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
 
     declared_publisher d_pub{producer, "declared.telemetry", decl_opts, json_reading_codec{}};
-    opaque_publisher   o_pub{producer, "opaque.telemetry", opaque_opts, reading_codec{}};
+    opaque_publisher o_pub{producer, "opaque.telemetry", opaque_opts, reading_codec{}};
     ex.drain();
 
     for(int i = 0; i < count; ++i)
@@ -436,8 +434,8 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
 
 TEST_CASE("mcap transcode labels a declared data channel from the preamble; undeclared stays opaque", "[mcap_transcode][mcap]")
 {
-    const int  count = 4;
-    const auto flat  = capture_declared_and_opaque(count);
+    const int count = 4;
+    const auto flat = capture_declared_and_opaque(count);
     REQUIRE(!flat.empty());
 
     const auto out = std::filesystem::temp_directory_path() / std::filesystem::path{"plexus_transcode_declared.mcap"};

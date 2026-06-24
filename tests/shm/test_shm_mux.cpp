@@ -1,7 +1,3 @@
-// over-limit: one cohesive mux-join selection matrix; the member-satisfies / prefer-hook /
-// fallback cells share the one stub-broker mux-composition harness, and that shared fixture
-// preamble alone exceeds the file ceiling, so the cells cannot split across TUs without
-// scattering that one harness into over-budget shells.
 #include "plexus/shm/region_broker_concept.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/shm_mux_member.h"
@@ -57,9 +53,9 @@ struct region_store
     struct region
     {
         std::vector<std::byte> storage;
-        std::byte             *base = nullptr;
-        std::size_t            size = 0;
-        bool                   live = false;
+        std::byte *base  = nullptr;
+        std::size_t size = 0;
+        bool live        = false;
     };
 
     std::map<std::string, std::shared_ptr<region>> regions;
@@ -143,7 +139,7 @@ public:
 
 private:
     region_store &m_store;
-    bool          m_fail = false;
+    bool m_fail = false;
 };
 
 static_assert(region_broker<stub_broker>, "stub_broker must satisfy the region_broker seam");
@@ -182,13 +178,13 @@ struct dummy_stream_channel
 {
     pio::endpoint ep;
     std::uint64_t key = plexus::io::detail::next_scheduler_key();
-    void          send(std::span<const std::byte>)
+    void send(std::span<const std::byte>)
     {
     }
     void close()
     {
     }
-    [[nodiscard]] pio::endpoint remote_endpoint() const
+    pio::endpoint remote_endpoint() const
     {
         return ep;
     }
@@ -204,11 +200,11 @@ struct dummy_stream_channel
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
     {
     }
-    [[nodiscard]] std::size_t backpressured() const noexcept
+    std::size_t backpressured() const noexcept
     {
         return 0;
     }
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    std::uint64_t scheduler_key() const noexcept
     {
         return key;
     }
@@ -218,7 +214,7 @@ struct dummy_stream_member
 {
     using channel_type = dummy_stream_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
-    static constexpr pio::transport_kind             mux_tier = pio::transport_kind::local;
+    static constexpr pio::transport_kind mux_tier = pio::transport_kind::local;
 
     bool dialed = false;
 
@@ -259,16 +255,16 @@ using mux_t = pio::multiplexing_transport<shm_member, dummy_stream_member>;
 
 TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member when it acquires", "[shm][mux]")
 {
-    constexpr int k_iterations  = 100;
-    int           routed_to_shm = 0;
+    constexpr int k_iterations = 100;
+    int routed_to_shm          = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         region_store store;
-        stub_broker  broker{store};
-        shm_member   shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+        stub_broker broker{store};
+        shm_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
-        mux_t               mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
+        mux_t mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
 
         // The mux wraps each member's dialed channel into a polymorphic_byte_channel and
         // re-emits it; the dialed channel's scheme survives the erasure, so a "shm"-scheme
@@ -291,17 +287,17 @@ TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member
 TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring acquire fails", "[shm][mux]")
 {
     constexpr int k_iterations = 100;
-    int           fell_back    = 0;
+    int fell_back              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         region_store store;
-        stub_broker  broker{store};
+        stub_broker broker{store};
         broker.fail(true); // force every ring acquire to fail
 
         shm_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
-        mux_t               mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
+        mux_t mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
 
         std::string dialed_scheme;
         mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &) { dialed_scheme = ch->remote_endpoint().scheme; });
@@ -326,12 +322,12 @@ TEST_CASE("shm.mux a congestion-blocked send drives on_drop with cause=blocked t
     // the edge the engine binds to its posted drop_sink at dial/accept. Loop so a single-run
     // fluke cannot pass.
     constexpr int k_iterations = 4;
-    int           saw_blocked  = 0;
+    int saw_blocked            = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         region_store store;
-        stub_broker  broker{store};
-        shm_member   shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+        stub_broker broker{store};
+        shm_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         std::unique_ptr<shm_member::channel_type> ch;
         shm.on_dialed([&](std::unique_ptr<shm_member::channel_type> c, const pio::endpoint &) { ch = std::move(c); });

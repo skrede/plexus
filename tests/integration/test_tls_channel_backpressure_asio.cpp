@@ -1,6 +1,4 @@
-// over-limit: one cohesive real-TLS bounded-outbox hardening leg; the single congestion=drop/block
-// scenario drives the one shared mutual-TLS loopback + stalled-write harness, so it cannot split
-// without scattering that shared socket/TLS state The gated real-TLS bounded-outbox hardening leg
+// The gated real-TLS bounded-outbox hardening leg
 // over asio loopback: the SECOND composition of the shared stream::detail::send_queue block (the
 // plaintext asio_channel pins the first via test #225). A real mutual-TLS pair handshakes over a
 // connected loopback socket; the server end NEVER reads, so the kernel send buffer fills
@@ -60,7 +58,7 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest           digest{};
+    spki_digest digest{};
 
     explicit identity_fixture(const std::string &tag)
     {
@@ -148,8 +146,8 @@ TEST_CASE("tls channel: the bounded outbox sheds under congestion=drop and stall
         ::asio::io_context server_io;
 
         ::asio::ip::tcp::acceptor acc{server_io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket   raw_server{server_io};
-        ::asio::ip::tcp::socket   raw_client{client_io};
+        ::asio::ip::tcp::socket raw_server{server_io};
+        ::asio::ip::tcp::socket raw_client{client_io};
         raw_client.connect(acc.local_endpoint());
         acc.accept(raw_server);
 
@@ -157,8 +155,8 @@ TEST_CASE("tls channel: the bounded outbox sheds under congestion=drop and stall
         auto client_cred = make_cred(client_id, server_id.digest);
 
         constexpr std::size_t cap = 4096;
-        ptls::tls_channel     server{server_io, std::move(raw_server), server_cred, {}, pio::congestion::block};
-        ptls::tls_channel     client{client_io, std::move(raw_client), client_cred, stream::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
+        ptls::tls_channel server{server_io, std::move(raw_server), server_cred, {}, pio::congestion::block};
+        ptls::tls_channel client{client_io, std::move(raw_client), client_cred, stream::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
 
         bool server_ready = false;
         bool client_ready = false;

@@ -1,6 +1,4 @@
-// over-limit: one cohesive inproc drop+surrender matrix; the drop-cause scenarios all drive the one
-// shared two-node link/observer harness on the single manual virtual clock, so splitting them
-// scatters that shared fixture and clock state The deterministic inproc drop+surrender oracle on
+// The deterministic inproc drop+surrender oracle on
 // the manual virtual clock: it lifts the established-session transport-drop detection out of the
 // harness and into the production receive path, and exercises the surrender->dead query the
 // registry now exposes. Two (and, for the surrender leg, three) engines over one
@@ -88,7 +86,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -120,9 +118,9 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu; // fixed seed -> reproducible backoff
-constexpr auto          k_ceiling      = std::chrono::milliseconds(10001);
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu; // fixed seed -> reproducible backoff
+constexpr auto k_ceiling       = std::chrono::milliseconds(10001);
 
 handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
@@ -153,7 +151,7 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
 // per-byte / per-frame amplification). A plain instance, no static singleton.
 struct counting_logger final : plexus::log::logger
 {
-    int  warns{0};
+    int warns{0};
     void warn(std::string_view) override
     {
         ++warns;
@@ -167,14 +165,14 @@ struct counting_logger final : plexus::log::logger
 std::vector<std::byte> make_handshake_response(plexus::wire::handshake_status status)
 {
     plexus::wire::handshake_response resp{};
-    resp.id[0]                         = std::byte{0xB2};
-    resp.version_major                 = 1;
-    resp.version_minor                 = 0;
-    resp.compatible_version_major      = 1;
-    resp.compatible_version_minor      = 0;
-    resp.protocol_version              = plexus::wire::k_protocol_version;
-    resp.status                        = status;
-    auto                       payload = plexus::wire::encode_handshake_response(resp);
+    resp.id[0]                    = std::byte{0xB2};
+    resp.version_major            = 1;
+    resp.version_minor            = 0;
+    resp.compatible_version_major = 1;
+    resp.compatible_version_minor = 0;
+    resp.protocol_version         = plexus::wire::k_protocol_version;
+    resp.status                   = status;
+    auto payload                  = plexus::wire::encode_handshake_response(resp);
     plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::handshake_resp, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = payload.size()};
     return plexus::wire::encode_frame(hdr, payload);
 }
@@ -192,7 +190,7 @@ std::vector<std::byte> make_undecodable_frame()
 // NOT a protocol error and must NOT trip the close funnel.
 std::vector<std::byte> make_unknown_topic_frame(std::uint64_t session_id)
 {
-    std::array<std::byte, 4>   body{};
+    std::array<std::byte, 4> body{};
     plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = session_id, .timestamp_ns = 0, .payload_len = body.size()};
     return plexus::wire::encode_frame(hdr, body);
 }
@@ -222,24 +220,24 @@ struct discovery_stub
 // engines so destruction unwinds the engines' channels before the bus.
 struct two_node
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t                   transport_a{ex, bus};
-    transport_t                   transport_b{ex, bus};
+    transport_t transport_a{ex, bus};
+    transport_t transport_b{ex, bus};
 
     // A owns a counting logger so the semantic-close leg can assert the single warn
     // the protocol-error funnel emits; it is injected into A's engine by reference.
-    counting_logger          a_logger;
+    counting_logger a_logger;
     plexus::log::null_logger sink; // B's inert sink
 
     engine a;
     engine b;
 
-    discovery_stub  discovery;
+    discovery_stub discovery;
     plexus::node_id id_a{make_id(0xA1)};
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint        ep_a{"inproc", "node-a"};
-    endpoint        ep_b{"inproc", "node-b"};
+    endpoint ep_a{"inproc", "node-a"};
+    endpoint ep_b{"inproc", "node-b"};
 
     explicit two_node(const reconnect_config &a_redial = forever_cfg())
             : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, a_logger, false)
@@ -265,11 +263,11 @@ struct two_node
 struct recording_drop_observer final : plexus::io::observer
 {
     std::vector<plexus::io::detail::drop_cause> seen;
-    void                                        on_drop(const plexus::io::detail::drop_event &ev) override
+    void on_drop(const plexus::io::detail::drop_event &ev) override
     {
         seen.push_back(ev.cause);
     }
-    [[nodiscard]] bool any() const
+    bool any() const
     {
         return !seen.empty();
     }
@@ -311,8 +309,8 @@ struct backing_region
 
 private:
     std::vector<std::byte> m_storage;
-    std::byte             *m_data{nullptr};
-    std::size_t            m_size{0};
+    std::byte *m_data{nullptr};
+    std::size_t m_size{0};
 };
 
 // A move-only handle over a heap region (the single-process stand-in for a mapped
@@ -358,7 +356,7 @@ TEST_CASE("inproc drop seam: a REAL partner-end close drives an automatic re-dia
           "[integration][drop_seam][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -392,7 +390,7 @@ TEST_CASE("inproc drop seam: a REAL partner-end close drives an automatic re-dia
 TEST_CASE("inproc drop seam: a clean tear_down on the dialer's OWN session drives no re-dial", "[integration][drop_seam][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -420,30 +418,30 @@ TEST_CASE("inproc drop seam: crossing a surrender bound marks is_dead and re-dia
           "co-resident live peer is untouched",
           "[integration][drop_seam][inproc]")
 {
-    constexpr int           k_iterations   = 100;
+    constexpr int k_iterations             = 100;
     constexpr std::uint32_t k_max_attempts = 3;
-    int                     proven         = 0;
+    int proven                             = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
 
-        inproc_bus<manual_clock>      bus;
+        inproc_bus<manual_clock> bus;
         inproc_executor<manual_clock> ex{bus};
-        transport_t                   transport_a{ex, bus};
-        transport_t                   transport_b{ex, bus};
-        transport_t                   transport_c{ex, bus};
+        transport_t transport_a{ex, bus};
+        transport_t transport_b{ex, bus};
+        transport_t transport_c{ex, bus};
 
         // A's B slot is bounded (max_attempts) so enough real drops surrender it; C
         // is forever, so it is the live co-resident peer the surrender must not touch.
         plexus::log::null_logger sink;
-        engine                   a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts), k_seed, sink, false);
-        engine                   b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        engine                   c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts), k_seed, sink, false);
+        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
 
         plexus::node_id id_b = make_id(0xB2);
         plexus::node_id id_c = make_id(0xC3);
-        endpoint        ep_b{"inproc", "node-b"};
-        endpoint        ep_c{"inproc", "node-c"};
+        endpoint ep_b{"inproc", "node-b"};
+        endpoint ep_c{"inproc", "node-c"};
         a.listen({"inproc", "node-a"});
         b.listen(ep_b);
         c.listen(ep_c);
@@ -494,7 +492,7 @@ TEST_CASE("inproc drop seam: a SEMANTIC protocol-error close (an FSM abort from 
           "[integration][drop_seam][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -504,8 +502,8 @@ TEST_CASE("inproc drop seam: a SEMANTIC protocol-error close (an FSM abort from 
         net.a.reach(net.id_b);
         net.drive();
         REQUIRE(net.a.is_connected(net.id_b));
-        const auto before       = net.a.attempt_count(net.id_b);
-        const int  warns_before = net.a_logger.warns;
+        const auto before      = net.a.attempt_count(net.id_b);
+        const int warns_before = net.a_logger.warns;
 
         // Feed A's dialer session a version_incompatible handshake response: the
         // production decode + FSM path returns abort, which the close funnel routes
@@ -536,7 +534,7 @@ TEST_CASE("inproc drop seam: a header-undecodable complete frame closes via the 
           "[integration][drop_seam][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -546,8 +544,8 @@ TEST_CASE("inproc drop seam: a header-undecodable complete frame closes via the 
         net.a.reach(net.id_b);
         net.drive();
         REQUIRE(net.a.is_connected(net.id_b));
-        const auto before       = net.a.attempt_count(net.id_b);
-        const int  warns_before = net.a_logger.warns;
+        const auto before      = net.a.attempt_count(net.id_b);
+        const int warns_before = net.a_logger.warns;
 
         // A complete frame whose header does NOT decode is a frame-level protocol
         // violation: on_receive funnels it into close_for_protocol_error (one warn +
@@ -573,7 +571,7 @@ TEST_CASE("inproc drop seam: a benign unknown-topic data frame reaches the forwa
           "[integration][drop_seam][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -609,12 +607,12 @@ TEST_CASE("inproc drop seam: a data packet to a vanished partner is dropped AND 
     for(int loop = 0; loop < 4; ++loop)
     {
         manual_clock::reset();
-        inproc_bus<manual_clock>      bus;
+        inproc_bus<manual_clock> bus;
         inproc_executor<manual_clock> ex{bus};
 
         inproc_channel<manual_clock> sender(ex);
         inproc_channel<manual_clock> bystander(ex); // a live, unrelated channel on the bus
-        recording_drop_observer      observer;
+        recording_drop_observer observer;
 
         std::size_t bystander_rx = 0;
         bystander.on_data([&](std::span<const std::byte>) { ++bystander_rx; });
@@ -645,20 +643,20 @@ TEST_CASE("inproc drop seam: an engine-installed observer sees an unroutable inp
     for(int loop = 0; loop < 4; ++loop)
     {
         manual_clock::reset();
-        inproc_bus<manual_clock>      bus;
+        inproc_bus<manual_clock> bus;
         inproc_executor<manual_clock> ex{bus};
-        transport_t                   transport_a{ex, bus};
-        transport_t                   transport_b{ex, bus};
+        transport_t transport_a{ex, bus};
+        transport_t transport_b{ex, bus};
 
         plexus::log::null_logger sink;
-        engine                   a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
         // B's engine is destroyed mid-test to make A's heartbeat target vanish, so it
         // lives in an optional A's slot outlives (no clock advance => no re-dial yet).
         std::optional<engine> b;
         b.emplace(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
 
         plexus::node_id id_b = make_id(0xB2);
-        endpoint        ep_b{"inproc", "node-b"};
+        endpoint ep_b{"inproc", "node-b"};
         a.listen({"inproc", "node-a"});
         b->listen(ep_b);
 
@@ -711,7 +709,7 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         backing_region slab{slab_region_bytes(cells, slot)};
         broadcast_ring ring;
         REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) == loan_status::ok);
-        null_notifier           notify;
+        null_notifier notify;
         recording_drop_observer observer;
 
         // A best_effort + drop_newest channel whose ring is fully pinned by a held reader
@@ -719,10 +717,10 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         // the shm congestion drop edge posts into the observer). The byte_channel wraps the
         // channel and owns the on_drop edge; the registry is borrowed only for its dtor
         // release, which is a no-op for this hand-built (never-acquired) ring.
-        shm_channel<null_notifier>                     channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
-        stub_broker                                    broker;
+        shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+        stub_broker broker;
         shm_topic_registry<stub_broker, null_notifier> registry(broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
-        shm_byte_channel<stub_broker, null_notifier>   bytechan(registry, channel, "shm-topic", plexus::io::endpoint{"shm", "shm-topic"});
+        shm_byte_channel<stub_broker, null_notifier> bytechan(registry, channel, "shm-topic", plexus::io::endpoint{"shm", "shm-topic"});
         bytechan.on_drop([&](const plexus::io::detail::drop_event &ev) { observer.on_drop(ev); });
 
         std::uint32_t idx = 0;
@@ -740,7 +738,7 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         }
 
         std::uint32_t payload = 0xFEEDFACEu;
-        std::byte     bytes[sizeof(payload)];
+        std::byte bytes[sizeof(payload)];
         std::memcpy(bytes, &payload, sizeof(payload));
         // The byte_channel send hits the congested verdict and emits the drop edge
         // ADDITIVELY (on_error stays available); the observer sees the congestion drop.
@@ -779,12 +777,12 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         // multiplexer, so its channel reaches the engine ERASED as a polymorphic_byte_channel;
         // the engine binds on_drop through that erasure (wire_channel_drop). This proves the
         // erased on_drop forwards to the concrete shm channel and posts to the observer.
-        inproc_bus<manual_clock>      bus;
+        inproc_bus<manual_clock> bus;
         inproc_executor<manual_clock> ex{bus};
-        transport_t                   transport{ex, bus};
-        plexus::log::null_logger      sink;
-        engine                        eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        recording_drop_observer       observer;
+        transport_t transport{ex, bus};
+        plexus::log::null_logger sink;
+        engine eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        recording_drop_observer observer;
         eng.add_observer(observer);
 
         backing_region control{control_region_bytes(cells)};
@@ -793,8 +791,8 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) == loan_status::ok);
         null_notifier notify;
 
-        shm_channel<null_notifier>                     channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
-        stub_broker                                    broker;
+        shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+        stub_broker broker;
         shm_topic_registry<stub_broker, null_notifier> registry(broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
         // Erase the concrete shm channel behind the production polymorphic_byte_channel and
@@ -820,7 +818,7 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         }
 
         std::uint32_t payload = 0xFEEDFACEu;
-        std::byte     bytes[sizeof(payload)];
+        std::byte bytes[sizeof(payload)];
         std::memcpy(bytes, &payload, sizeof(payload));
         // The send hits the congested verdict and emits the drop edge; it travels concrete
         // on_drop -> engine drop_sink -> POSTED fan-out. Drain the executor for the posted turn.

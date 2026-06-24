@@ -1,7 +1,3 @@
-// over-limit: one cohesive large-message live-mux round-trip matrix; the per-notifier-variant
-// cells share the one cross-process publisher/subscriber mux-acquire harness, and that shared
-// fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs without
-// scattering that one harness into over-budget shells.
 #include "plexus/native/futex_notifier_primitive.h"
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
@@ -147,7 +143,7 @@ bool subscribe_and_check(const std::string &fqn, coord *c, const std::vector<std
         ;
 
     posix_shm_region_broker broker;
-    region_handle           ctrl, slab;
+    region_handle ctrl, slab;
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
@@ -164,7 +160,7 @@ bool subscribe_and_check(const std::string &fqn, coord *c, const std::vector<std
     for(;;)
     {
         pio::broadcast_ring::consume_result out;
-        const auto                          st = ring.consume(cursor, out);
+        const auto st = ring.consume(cursor, out);
         if(st == pio::loan_status::ok)
         {
             ok = out.slab.size() == expected.size() && std::memcmp(out.slab.data(), expected.data(), expected.size()) == 0;
@@ -258,8 +254,8 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes, pio::
 template<typename Notifier>
 struct acquire_probe
 {
-    bool               channel_minted = false;
-    pio::acquire_bound bound          = pio::acquire_bound::none;
+    bool channel_minted      = false;
+    pio::acquire_bound bound = pio::acquire_bound::none;
 };
 
 template<typename Notifier>
@@ -269,7 +265,7 @@ acquire_probe<Notifier> probe_acquire(const std::string &fqn, std::size_t payloa
     using channel_t = typename member_t::channel_type;
 
     posix_shm_region_broker broker;
-    member_t                member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
     member.set_topic_geometry(fqn, payload_bytes, pio::shm_geometry{capacity, mode});
 
     std::unique_ptr<channel_t> channel;

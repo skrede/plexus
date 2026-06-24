@@ -1,7 +1,3 @@
-// over-limit: one cohesive wire_fallback production-seam matrix; the per-mode prefer-hook cells
-// share the one node-declare-path shm broker + mux harness, and that shared fixture preamble
-// alone exceeds the file ceiling, so the cells cannot split across TUs without scattering that
-// one harness into over-budget shells.
 #include "plexus/native/posix_shm_region_broker.h"
 
 #include "plexus/shm/ring_geometry_mode.h"
@@ -95,15 +91,15 @@ using member_t = pio::shm_mux_member<posix_shm_region_broker, spin_notifier>;
 // memory). It records whether the mux routed the dial to it.
 struct stream_channel
 {
-    endpoint      ep;
+    endpoint ep;
     std::uint64_t key = plexus::io::detail::next_scheduler_key();
-    void          send(std::span<const std::byte>)
+    void send(std::span<const std::byte>)
     {
     }
     void close()
     {
     }
-    [[nodiscard]] endpoint remote_endpoint() const
+    endpoint remote_endpoint() const
     {
         return ep;
     }
@@ -119,11 +115,11 @@ struct stream_channel
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
     {
     }
-    [[nodiscard]] std::size_t backpressured() const noexcept
+    std::size_t backpressured() const noexcept
     {
         return 0;
     }
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    std::uint64_t scheduler_key() const noexcept
     {
         return key;
     }
@@ -135,7 +131,7 @@ struct stream_member
 {
     using channel_type = stream_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
-    static constexpr pcore::transport_kind           mux_tier = pcore::transport_kind::local;
+    static constexpr pcore::transport_kind mux_tier = pcore::transport_kind::local;
 
     bool dialed = false;
 
@@ -174,11 +170,11 @@ using mux_t = pcore::multiplexing_transport<member_t, stream_member>;
 std::string route_for_mode(const std::string &fqn, pio::ring_geometry_mode mode)
 {
     posix_shm_region_broker broker;
-    member_t                member{broker, pcore::reliability::reliable, pcore::congestion::block};
+    member_t member{broker, pcore::reliability::reliable, pcore::congestion::block};
     member.set_topic_geometry(fqn, 4 * k_kib, pio::shm_geometry{2u, mode});
 
     stream_member stream;
-    mux_t         mux{member, stream, {}, plexus::shm::prefer_upgradeable_hook(member)};
+    mux_t mux{member, stream, {}, plexus::shm::prefer_upgradeable_hook(member)};
 
     std::string dialed_scheme;
     mux.on_dialed([&](std::unique_ptr<pcore::polymorphic_byte_channel> ch, const endpoint &) { dialed_scheme = ch->remote_endpoint().scheme; });
@@ -230,7 +226,7 @@ bool wire_leg_roundtrip(std::size_t over_cap_bytes)
         return false;
 
     const std::size_t region_bytes = over_cap_bytes + sizeof(std::uint64_t);
-    void             *shared       = ::mmap(nullptr, region_bytes, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *shared                   = ::mmap(nullptr, region_bytes, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if(shared == MAP_FAILED)
     {
         ::munmap(c, sizeof(coord));
@@ -248,17 +244,17 @@ bool wire_leg_roundtrip(std::size_t over_cap_bytes)
     {
         while(c->regions_ready.load(std::memory_order_acquire) == 0)
             ;
-        const std::uint64_t len     = c->expect_len.load(std::memory_order_acquire);
-        const auto         *payload = static_cast<const std::byte *>(shared) + sizeof(std::uint64_t);
-        const std::uint64_t got     = fnv1a(std::span<const std::byte>{payload, len});
-        const bool          ok      = got == c->expect_hash.load(std::memory_order_acquire);
+        const std::uint64_t len = c->expect_len.load(std::memory_order_acquire);
+        const auto *payload     = static_cast<const std::byte *>(shared) + sizeof(std::uint64_t);
+        const std::uint64_t got = fnv1a(std::span<const std::byte>{payload, len});
+        const bool ok           = got == c->expect_hash.load(std::memory_order_acquire);
         c->bytes_ok.store(ok ? 1u : 0u, std::memory_order_release);
         c->child_done.store(1u, std::memory_order_release);
         ::_exit(ok ? 0 : 1);
     }
 
     std::vector<std::byte> payload(over_cap_bytes, std::byte{0xCD});
-    auto                  *dst = static_cast<std::byte *>(shared) + sizeof(std::uint64_t);
+    auto *dst = static_cast<std::byte *>(shared) + sizeof(std::uint64_t);
     std::memcpy(dst, payload.data(), payload.size());
     c->expect_len.store(payload.size(), std::memory_order_release);
     c->expect_hash.store(fnv1a(std::span<const std::byte>{payload.data(), payload.size()}), std::memory_order_release);
@@ -301,7 +297,7 @@ TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without hol
     const std::string fqn = "topic.wfbn.refcount." + std::to_string(::getpid());
 
     posix_shm_region_broker broker;
-    member_t                member{broker, pcore::reliability::reliable, pcore::congestion::block};
+    member_t member{broker, pcore::reliability::reliable, pcore::congestion::block};
 
     member.set_topic_geometry(fqn, 4 * k_kib, pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback});
     REQUIRE_FALSE(member.can_acquire(endpoint{"shm", fqn}));

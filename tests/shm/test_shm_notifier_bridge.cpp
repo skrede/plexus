@@ -1,7 +1,3 @@
-// over-limit: one cohesive wakeup->reactor bridge matrix; the cells share the one forked
-// producer + io_uring-futex reactor-bridge harness over a converged region, and that shared
-// fixture preamble plus its produce helpers cannot split across TUs without scattering that
-// shared cross-process bridge state into near-empty per-cell shells.
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
@@ -95,7 +91,7 @@ constexpr std::uint32_t k_payload = 0xBEEF1234u;
 bool produce(const std::string &fqn)
 {
     posix_shm_region_broker broker;
-    region_handle           ctrl, slab;
+    region_handle ctrl, slab;
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
 
@@ -121,7 +117,7 @@ bool produce(const std::string &fqn)
 bool produce_gated(const std::string &fqn)
 {
     posix_shm_region_broker broker;
-    region_handle           ctrl, slab;
+    region_handle ctrl, slab;
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
 
@@ -144,7 +140,7 @@ bool produce_gated(const std::string &fqn)
 
 TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor and drains", "[shm][notifier_bridge]")
 {
-    const std::string        fqn  = "topic.bridge." + std::to_string(::getpid());
+    const std::string fqn         = "topic.bridge." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -168,14 +164,14 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         // registers a cursor at the tail), arm the bridge on a user-owned
         // io_context bound to the ring's notify word, then drive ONLY that reactor.
         posix_shm_region_broker broker;
-        region_handle           ctrl, slab;
+        region_handle ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
         REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
 
-        ::asio::io_context                            io;
+        ::asio::io_context io;
         plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
 
         // The channel's subscriber registers its cursor at the producer's tail at
@@ -232,7 +228,7 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
     // producer could read a stale non-PARKED state, skip the wake, and the consumer
     // would never drain — surfacing as the deadline timeout below, never a silent hang.
     // Looped N>=100; the parked consumer drives the REAL submit_futex_wait path.
-    const std::string        fqn  = "topic.bridgegate." + std::to_string(::getpid());
+    const std::string fqn         = "topic.bridgegate." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -252,7 +248,7 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
         }
 
         posix_shm_region_broker broker;
-        region_handle           ctrl, slab;
+        region_handle ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 

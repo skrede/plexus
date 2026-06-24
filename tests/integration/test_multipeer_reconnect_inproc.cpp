@@ -1,6 +1,4 @@
-// over-limit: one cohesive N-peer concurrent-drop matrix; the survivor-isolation and surrender
-// cells drive the one shared multi-peer dialer harness on the single manual clock, so splitting
-// them scatters that shared fixture The deterministic N>=3-peer concurrent-drop oracle on the
+// The deterministic N>=3-peer concurrent-drop oracle on the
 // manual virtual clock: one dialer engine A holding N established peer sessions (B,C,D,...), each
 // peer its own engine over the shared inproc bus, all on a fixed seed. It widens the per-slot
 // isolation proof to the SET: several established sessions drop AT ONCE (every remote
@@ -70,7 +68,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -102,9 +100,9 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu; // fixed seed -> reproducible backoff
-constexpr auto          k_ceiling      = std::chrono::milliseconds(10001);
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu; // fixed seed -> reproducible backoff
+constexpr auto k_ceiling       = std::chrono::milliseconds(10001);
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -116,12 +114,12 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // the REAL staleness gate (mirrors the single-connection reconnect oracle).
 std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
-    inproc_bus<manual_clock>                     bus;
-    inproc_executor<manual_clock>                ex(bus);
-    plexus::log::null_logger                     sink;
+    inproc_bus<manual_clock> bus;
+    inproc_executor<manual_clock> ex(bus);
+    plexus::log::null_logger sink;
     plexus::io::message_forwarder<manual_policy> framer{sink};
-    inproc_channel<manual_clock>                 capture(ex);
-    inproc_channel<manual_clock>                 tx(ex);
+    inproc_channel<manual_clock> capture(ex);
+    inproc_channel<manual_clock> tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
     capture.on_data([&](std::span<const std::byte> f) { captured.assign(f.begin(), f.end()); });
@@ -180,11 +178,11 @@ struct discovery_stub
 // engine's channels unwind before the transport.
 struct peer_node
 {
-    transport_t              transport;
+    transport_t transport;
     plexus::log::null_logger sink;
-    engine                   eng;
-    plexus::node_id          id;
-    endpoint                 ep;
+    engine eng;
+    plexus::node_id id;
+    endpoint ep;
 
     peer_node(inproc_executor<manual_clock> &ex, inproc_bus<manual_clock> &bus, std::uint8_t seed)
             : transport(ex, bus)
@@ -203,12 +201,12 @@ struct peer_node
 // surrender leg can arm a bounded dialer.
 struct multipeer_net
 {
-    inproc_bus<manual_clock>                bus;
-    inproc_executor<manual_clock>           ex{bus};
-    transport_t                             transport_a{ex, bus};
-    plexus::log::null_logger                sink;
-    engine                                  a;
-    discovery_stub                          discovery;
+    inproc_bus<manual_clock> bus;
+    inproc_executor<manual_clock> ex{bus};
+    transport_t transport_a{ex, bus};
+    plexus::log::null_logger sink;
+    engine a;
+    discovery_stub discovery;
     std::vector<std::unique_ptr<peer_node>> peers;
 
     multipeer_net(std::size_t n, const reconnect_config &a_redial = forever_cfg())
@@ -260,10 +258,10 @@ TEST_CASE("multipeer inproc: concurrent real drops re-dial each dropped slot ind
           "survivors are bit-for-bit undisturbed",
           "[integration][multipeer][inproc]")
 {
-    constexpr int         k_iterations = 100;
-    constexpr std::size_t k_n          = 3; // N>=3 established peers
-    constexpr std::size_t k_dropped    = 2; // K>=2 dropped concurrently; 1 survives
-    int                   proven       = 0;
+    constexpr int k_iterations      = 100;
+    constexpr std::size_t k_n       = 3; // N>=3 established peers
+    constexpr std::size_t k_dropped = 2; // K>=2 dropped concurrently; 1 survives
+    int proven                      = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -315,10 +313,10 @@ TEST_CASE("multipeer inproc: one peer crossing a surrender bound is is_dead whil
           "is untouched",
           "[integration][multipeer][inproc]")
 {
-    constexpr int           k_iterations   = 100;
-    constexpr std::size_t   k_n            = 3;
+    constexpr int k_iterations             = 100;
+    constexpr std::size_t k_n              = 3;
     constexpr std::uint32_t k_max_attempts = 3;
-    int                     proven         = 0;
+    int proven                             = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -365,9 +363,9 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
           "current-epoch frame is delivered",
           "[integration][multipeer][inproc]")
 {
-    constexpr int         k_iterations = 100;
-    constexpr std::size_t k_n          = 3;
-    int                   proven       = 0;
+    constexpr int k_iterations = 100;
+    constexpr std::size_t k_n  = 3;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -379,8 +377,8 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
         // stay up. The staleness gate on A's slot-0 latches the PEER's epoch, so the
         // dead epoch the straggler must carry is peer 0's INBOUND session_id before the
         // drop (A's own local epoch is a separate well).
-        auto      &p          = net.peer(0);
-        auto      *a_to_p     = net.a.session_for(p.id);
+        auto &p               = net.peer(0);
+        auto *a_to_p          = net.a.session_for(p.id);
         const auto dead_local = a_to_p->session_id();
 
         std::vector<std::string> a_received;
@@ -414,7 +412,7 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
         // fed verbatim through A's slot-0 production receive path (on_receive runs the
         // gate before the router), with no second delivery.
         const std::uint8_t stale_epoch = (live_epoch == 1) ? std::uint8_t{2} : std::uint8_t(live_epoch - 1);
-        auto               straggler   = make_data_frame("dead-incarnation", stale_epoch);
+        auto straggler                 = make_data_frame("dead-incarnation", stale_epoch);
         a_to_p->on_receive(straggler);
         net.drive();
         REQUIRE(a_received.size() == 1); // the previous-epoch frame is DROPPED

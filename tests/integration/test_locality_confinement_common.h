@@ -95,7 +95,7 @@ struct tagged_channel
     void close()
     {
     }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    plexus::io::endpoint remote_endpoint() const
     {
         return {m_scheme, ""};
     }

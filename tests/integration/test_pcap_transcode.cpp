@@ -1,6 +1,4 @@
-// over-limit: one cohesive flat-stream-to-pcapng transcode round-trip; the single end-to-end
-// capture-transcode-parse pipeline is one whole over a shared captured session, so it cannot split
-// without scattering that pipeline state The host-side flat-stream to pcapng transcode round-trip
+// The host-side flat-stream to pcapng transcode round-trip
 // oracle. A live wire-capturing inproc session is driven through the PUBLIC recording API into an
 // in-memory flat stream; the transcode maps every wire-frame record to an Enhanced Packet Block on
 // a single DLT_USER0 interface; the produced bytes are parsed back in-test (no external dependency)
@@ -126,13 +124,13 @@ plexus::node_options base_opts()
 // readings, drain the recorder, and return the accumulated flat capture bytes.
 std::vector<std::byte> capture_session(int count, plexus::wire_crypto_position position = plexus::wire_crypto_position::cleartext)
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    static_discovery  disc{{}};
+    static_discovery disc{{}};
 
     inproc_transport<> consumer_tp{ex, bus};
     inproc_transport<> producer_inner{ex, bus};
-    wire_transport     producer_tp{producer_inner};
+    wire_transport producer_tp{producer_inner};
 
     plexus::node_options consumer_opts = base_opts();
     plexus::node_options producer_opts = base_opts();
@@ -142,14 +140,14 @@ std::vector<std::byte> capture_session(int count, plexus::wire_crypto_position p
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};
 
     in_memory_byte_sink sink;
-    auto                recorder = producer.make_recorder(sink);
+    auto recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
     ex.drain();
 
     typed_subscriber sub{consumer, "telemetry", [](const reading &) {}};
-    typed_publisher  pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
+    typed_publisher pub{producer, "telemetry", plexus::typed_publisher_options{}, reading_codec{}};
     ex.drain();
 
     for(int i = 0; i < count; ++i)
@@ -190,16 +188,16 @@ struct parsed_epb
     std::uint32_t original_len{};
     std::uint32_t flags_low2{};
     std::uint32_t tail_value{};
-    bool          tail_present{false};
-    bool          comment_has_crypto{false};
+    bool tail_present{false};
+    bool comment_has_crypto{false};
 };
 
 struct parsed_pcapng
 {
-    bool                         shb_magic_ok{false};
-    bool                         shb_has_crypto_comment{false};
+    bool shb_magic_ok{false};
+    bool shb_has_crypto_comment{false};
     std::optional<std::uint16_t> idb_linktype;
-    std::vector<parsed_epb>      epbs;
+    std::vector<parsed_epb> epbs;
 };
 
 bool span_contains(std::span<const std::byte> b, std::size_t off, std::size_t len, std::string_view needle)
@@ -243,7 +241,7 @@ void parse_epb_options(std::span<const std::byte> b, std::size_t opt_off, std::s
 parsed_pcapng parse_pcapng(std::span<const std::byte> b)
 {
     parsed_pcapng out;
-    std::size_t   at = 0;
+    std::size_t at = 0;
     while(at + 12 <= b.size())
     {
         const std::uint32_t type  = rd_u32(b, at);
@@ -287,8 +285,8 @@ parsed_pcapng parse_pcapng(std::span<const std::byte> b)
 
 TEST_CASE("pcap transcode round-trips a captured session through a parsed pcapng", "[pcap_transcode][pcap]")
 {
-    const int  count = 8;
-    const auto flat  = capture_session(count);
+    const int count = 8;
+    const auto flat = capture_session(count);
     REQUIRE(!flat.empty());
 
     const auto out = std::filesystem::temp_directory_path() / std::filesystem::path{"plexus_transcode_roundtrip.pcapng"};
@@ -320,7 +318,7 @@ TEST_CASE("pcap transcode round-trips a captured session through a parsed pcapng
     REQUIRE(*p.idb_linktype == 147);
     REQUIRE(p.epbs.size() == result.packets);
 
-    bool                              saw_outbound = false;
+    bool saw_outbound = false;
     std::unordered_set<std::uint32_t> tail_values;
     for(const auto &epb : p.epbs)
     {
@@ -349,7 +347,7 @@ TEST_CASE("pcap transcode round-trips a captured session through a parsed pcapng
     // The same session recorded with the ciphertext tap position: byte-identical wire frames,
     // but the projector stamps crypto_position=ciphertext into the SHB and every frame comment.
     // The QA gate reads that carried token to exercise the dissector's sealed-blob branch.
-    const auto    cipher = capture_session(count, plexus::wire_crypto_position::ciphertext);
+    const auto cipher = capture_session(count, plexus::wire_crypto_position::ciphertext);
     std::ofstream cipher_fixture{std::filesystem::path{PLEXUS_QA_CIPHER_CAPTURE_PATH}, std::ios::binary};
     if(cipher_fixture)
         cipher_fixture.write(reinterpret_cast<const char *>(cipher.data()), static_cast<std::streamsize>(cipher.size()));

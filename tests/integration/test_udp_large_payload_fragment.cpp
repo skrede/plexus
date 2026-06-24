@@ -14,17 +14,17 @@ namespace {
 // to the assertion (the observed headers carry the true counts regardless of delivery).
 struct fragment_observer
 {
-    ::asio::io_context          &io;
-    ::asio::ip::udp::socket      front; // faces the client
-    ::asio::ip::udp::socket      back;  // faces the server
-    ::asio::ip::udp::endpoint    server_ep;
-    ::asio::ip::udp::endpoint    client_ep;
-    ::asio::ip::udp::endpoint    from;
+    ::asio::io_context &io;
+    ::asio::ip::udp::socket front; // faces the client
+    ::asio::ip::udp::socket back;  // faces the server
+    ::asio::ip::udp::endpoint server_ep;
+    ::asio::ip::udp::endpoint client_ep;
+    ::asio::ip::udp::endpoint from;
     std::array<std::byte, 70000> front_buf{};
     std::array<std::byte, 70000> back_buf{};
 
     std::vector<std::uint16_t> msg_ids; // distinct msg_ids in first-seen order
-    std::uint32_t              max_frag_cnt{0};
+    std::uint32_t max_frag_cnt{0};
 
     fragment_observer(::asio::io_context &ctx, std::uint16_t server_port)
             : io(ctx)
@@ -36,7 +36,7 @@ struct fragment_observer
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const
+    std::uint16_t port() const
     {
         return front.local_endpoint().port();
     }
@@ -113,7 +113,7 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
     constexpr std::size_t ceiling    = 20u * 1024u * 1024u;
     constexpr std::size_t reassembly = 48u * 1024u * 1024u;
 
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io,
                                 budget,
                                 pasio::udp_transport::arq_type::default_ladder,

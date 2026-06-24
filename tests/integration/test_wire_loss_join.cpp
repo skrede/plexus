@@ -1,6 +1,4 @@
-// over-limit: one cohesive cross-node loss-join proof; the single sequence-arithmetic join over two
-// skewed-clock recorded streams is one end-to-end pipeline over a shared relay harness, so it
-// cannot split without scattering that shared state The two-node cross-node loss-join: a sender's
+// The two-node cross-node loss-join: a sender's
 // recording_channel stamps a per-direction OUT sequence on every framed send; a receiver's
 // recording_channel stamps a per-direction IN sequence on every frame the lower channel delivers
 // upward. A relay between them forwards every frame EXCEPT one injected drop. Decoding both
@@ -63,7 +61,7 @@ public:
     void close()
     {
     }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    plexus::io::endpoint remote_endpoint() const
     {
         return {"test", ""};
     }
@@ -80,7 +78,7 @@ public:
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
     {
     }
-    [[nodiscard]] std::size_t backpressured() const
+    std::size_t backpressured() const
     {
         return 0;
     }
@@ -91,13 +89,13 @@ public:
             m_on_data(bytes);
     }
 
-    [[nodiscard]] const std::vector<std::byte> &last() const
+    const std::vector<std::byte> &last() const
     {
         return m_last;
     }
 
 private:
-    std::vector<std::byte>                                               m_last;
+    std::vector<std::byte> m_last;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
 };
 
@@ -122,14 +120,14 @@ std::vector<std::byte> frame_of(std::uint8_t base, std::size_t n)
 // reconstruction is a clock-free view of what each node observed on its own side.
 struct captured_frame
 {
-    std::uint64_t          seq{};
+    std::uint64_t seq{};
     std::vector<std::byte> bytes;
 };
 
 std::vector<captured_frame> frame_run(std::span<const std::byte> stream, wire_direction want, const node_id &peer)
 {
     record_stream_reader r{stream};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
     REQUIRE(r.recover(out).header_ok);
@@ -170,9 +168,9 @@ std::optional<std::uint64_t> lost_out_seq(const std::vector<captured_frame> &sen
 
 TEST_CASE("two-node loss-join: an injected drop is a structural sequence gap, clock-skew-immune", "[wire_loss_join][wire]")
 {
-    constexpr int           k_runs   = 5;
-    constexpr std::size_t   k_frames = 12;
-    constexpr std::uint64_t k_drop   = 7; // the sender's OUT seq dropped in transit
+    constexpr int k_runs           = 5;
+    constexpr std::size_t k_frames = 12;
+    constexpr std::uint64_t k_drop = 7; // the sender's OUT seq dropped in transit
 
     int proven = 0;
     for(int run = 0; run < k_runs; ++run)
@@ -193,8 +191,8 @@ TEST_CASE("two-node loss-join: an injected drop is a structural sequence gap, cl
         sender_rec.open(sender_id, plexus::io::topic_capture_rule{});
         receiver_rec.open(receiver_id, plexus::io::topic_capture_rule{});
 
-        auto                         *sender_lower   = new test_lower;
-        auto                         *receiver_lower = new test_lower;
+        auto *sender_lower   = new test_lower;
+        auto *receiver_lower = new test_lower;
         recording_channel<test_lower> sender_ch{std::unique_ptr<test_lower>(sender_lower)};
         recording_channel<test_lower> receiver_ch{std::unique_ptr<test_lower>(receiver_lower)};
 

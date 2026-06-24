@@ -52,7 +52,7 @@ public:
     void close()
     {
     }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    plexus::io::endpoint remote_endpoint() const
     {
         return {"wire", ""};
     }
@@ -72,17 +72,17 @@ public:
     {
         m_on_protocol_close = std::move(cb);
     }
-    [[nodiscard]] std::size_t backpressured() const
+    std::size_t backpressured() const
     {
         return 0;
     }
 
-    std::vector<std::byte>                                               m_sent;
-    std::function<void(std::span<const std::byte>)>                      m_sink;
+    std::vector<std::byte> m_sent;
+    std::function<void(std::span<const std::byte>)> m_sink;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                           m_on_closed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
+    plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close;
 };
 
 static_assert(plexus::io::byte_channel<plaintext_lower>, "plaintext_lower must satisfy byte_channel");
@@ -128,7 +128,7 @@ TEST_CASE("crypto.wire_crypto_position cleartext-above captures the plaintext fr
     // The decorator sits ABOVE any seal, over a plaintext lower channel: the captured OUT
     // bytes are the application-debuggable plaintext frame_header+payload, byte-identical to
     // what was sent. This is the DEFAULT position, proven live over the plaintext path.
-    auto                              *raw = new plaintext_lower;
+    auto *raw = new plaintext_lower;
     recording_channel<plaintext_lower> dec{std::unique_ptr<plaintext_lower>(raw)};
 
     std::vector<std::byte> captured;
@@ -156,8 +156,8 @@ TEST_CASE("crypto.wire_crypto_position ciphertext-below captures the sealed byte
     // secured node stack is NOT wired (out of scope).
     const auto keys = fixed_keys();
 
-    auto                                                     *raw = new plaintext_lower;
-    recording_channel<plaintext_lower>                        dec{std::unique_ptr<plaintext_lower>(raw)};
+    auto *raw = new plaintext_lower;
+    recording_channel<plaintext_lower> dec{std::unique_ptr<plaintext_lower>(raw)};
     authenticated_channel<recording_channel<plaintext_lower>> auth{dec, aead_cipher_id::chacha20_poly1305, keys};
 
     std::vector<std::byte> captured;

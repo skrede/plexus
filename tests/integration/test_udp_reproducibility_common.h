@@ -77,15 +77,15 @@ enum class action
 // A drop-scripting relay (acks + handshake always pass; a once-dropped seq retransmits).
 struct relay
 {
-    ::asio::io_context         &io;
-    ::asio::ip::udp::socket     front;
-    ::asio::ip::udp::socket     back;
-    ::asio::ip::udp::endpoint   server_ep;
-    ::asio::ip::udp::endpoint   client_ep;
-    ::asio::ip::udp::endpoint   from;
+    ::asio::io_context &io;
+    ::asio::ip::udp::socket front;
+    ::asio::ip::udp::socket back;
+    ::asio::ip::udp::endpoint server_ep;
+    ::asio::ip::udp::endpoint client_ep;
+    ::asio::ip::udp::endpoint from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
-    std::deque<action>          data_script;
+    std::deque<action> data_script;
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
             : io(ctx)
@@ -97,12 +97,12 @@ struct relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const
+    std::uint16_t port() const
     {
         return front.local_endpoint().port();
     }
 
-    [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
+    static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
         return dec && dec->kind == wire::udp_envelope_kind::reliable_arq && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;

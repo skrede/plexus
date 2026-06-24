@@ -1,6 +1,3 @@
-// over-limit: one cohesive TLS trust/pinning E2E matrix; every cell drives the one shared
-// ephemeral-cert + mutual-TLS loopback harness (whose credential + live-handshake preamble
-// alone exceeds the file ceiling), so splitting the cells scatters that one harness.
 #include "plexus/tls/tls_channel.h"
 #include "plexus/tls/tls_transport.h"
 #include "plexus/tls/tls_credential.h"
@@ -52,7 +49,7 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest           digest{};
+    spki_digest digest{};
 
     explicit identity_fixture(const std::string &tag)
     {
@@ -133,16 +130,16 @@ ptls::tls_credential pin_none(const identity_fixture &self)
 // verify reject on EITHER side leaves the corresponding end empty (fail-closed).
 struct trust_link
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     ptls::tls_credential accepter_cred;
     ptls::tls_credential dialer_cred;
-    ptls::tls_transport  accepter;
-    ptls::tls_transport  dialer;
+    ptls::tls_transport accepter;
+    ptls::tls_transport dialer;
 
     std::unique_ptr<ptls::tls_channel> accepted;
     std::unique_ptr<ptls::tls_channel> dialed;
-    bool                               dial_failed{false};
-    bool                               dialed_errored{false};
+    bool dial_failed{false};
+    bool dialed_errored{false};
 
     std::vector<std::vector<std::byte>> accepter_received;
 
@@ -202,7 +199,7 @@ struct trust_link
 std::vector<std::byte> make_frame(const std::string &payload)
 {
     plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 1, .timestamp_ns = 0, .payload_len = 0};
-    auto                       bytes = reinterpret_cast<const std::byte *>(payload.data());
+    auto bytes = reinterpret_cast<const std::byte *>(payload.data());
     return plexus::wire::encode_frame(hdr, std::span<const std::byte>{bytes, payload.size()});
 }
 
@@ -216,7 +213,7 @@ TEST_CASE("tls trust: mutual cross-pinning lands both ends live and delivers byt
     identity_fixture dia("dia");
 
     const std::string payload = "mutual-pin-accepts-and-the-frame-survives";
-    const auto        frame   = make_frame(payload);
+    const auto frame          = make_frame(payload);
 
     int completed = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
@@ -243,7 +240,7 @@ TEST_CASE("tls trust: the accepter not pinning the dialer fails closed — no ac
 {
     identity_fixture acc("acc");
     identity_fixture dia("dia");
-    const auto       frame = make_frame("a-rejected-dialer-must-never-reach-the-accepter");
+    const auto frame = make_frame("a-rejected-dialer-must-never-reach-the-accepter");
 
     int rejected = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
@@ -259,7 +256,7 @@ TEST_CASE("tls trust: the accepter not pinning the dialer fails closed — no ac
         // yields NO channel, the dialer's transient channel errors out, and NO
         // application byte ever crosses to the accepter.
         identity_fixture other("oth");
-        trust_link       l(pin_one(acc, other.digest), pin_one(dia, acc.digest));
+        trust_link l(pin_one(acc, other.digest), pin_one(dia, acc.digest));
         l.pump_until([&] { return l.accepted || l.dialed || l.dial_failed; });
         l.try_send_then_settle(std::span<const std::byte>{frame});
 
@@ -286,7 +283,7 @@ TEST_CASE("tls trust: the dialer not pinning the accepter fails closed — on_di
         // identity's digest instead of the accepter's — proving the DIALER
         // verifies the server too (not just the server verifying the client).
         identity_fixture other("oth");
-        trust_link       l(pin_one(acc, dia.digest), pin_one(dia, other.digest));
+        trust_link l(pin_one(acc, dia.digest), pin_one(dia, other.digest));
         l.pump_until([&] { return l.accepted || l.dialed || l.dial_failed; });
         l.settle();
 
@@ -310,7 +307,7 @@ TEST_CASE("tls trust: a mismatched (wrong-digest) pin rejects — no channel, lo
         // reject is in-handshake for the client), so on_dialed never fires; the
         // accepter rejects too, so no accepted channel either.
         identity_fixture wrong("wrg");
-        trust_link       l(pin_one(acc, wrong.digest), pin_one(dia, wrong.digest));
+        trust_link l(pin_one(acc, wrong.digest), pin_one(dia, wrong.digest));
         l.pump_until([&] { return l.accepted || l.dialed || l.dial_failed; });
         l.settle();
 
@@ -325,7 +322,7 @@ TEST_CASE("tls trust: a credential with an empty (no-pin) policy rejects every p
 {
     identity_fixture acc("acc");
     identity_fixture dia("dia");
-    const auto       frame = make_frame("an-empty-pin-policy-authorizes-no-one");
+    const auto frame = make_frame("an-empty-pin-policy-authorizes-no-one");
 
     int rejected = 0;
     for(int iter = 0; iter < k_iterations; ++iter)

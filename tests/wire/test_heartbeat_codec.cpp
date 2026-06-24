@@ -1,6 +1,6 @@
-// The heartbeat codec oracle: the new untrusted-input decoder pinned ahead of the
-// milestone-boundary fuzz. It proves the fixed-width encode/decode round-trip, the
-// bounds-safe short-buffer rejection (a buffer one byte short decodes to nullopt,
+// The heartbeat codec oracle: an untrusted-input decoder. It proves the fixed-width
+// encode/decode round-trip, the bounds-safe short-buffer rejection (a buffer one byte
+// short decodes to nullopt,
 // never an over-read), and the forward-compatible over-long handling (the fixed
 // prefix decodes, the trailing bytes are ignored). A pure header-only wire unit.
 
@@ -22,7 +22,7 @@ using plexus::wire::k_heartbeat_payload_size;
 TEST_CASE("heartbeat codec: encode then decode round-trips the fixed payload")
 {
     const heartbeat hb{.version = 1, .reserved = 0};
-    const auto      bytes = encode_heartbeat(hb);
+    const auto bytes = encode_heartbeat(hb);
     REQUIRE(bytes.size() == k_heartbeat_payload_size);
 
     const auto decoded = decode_heartbeat(bytes);

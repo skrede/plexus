@@ -17,15 +17,15 @@ enum class action
 // a retransmit to interleave with fresh sends.
 struct relay
 {
-    ::asio::io_context         &io;
-    ::asio::ip::udp::socket     front;
-    ::asio::ip::udp::socket     back;
-    ::asio::ip::udp::endpoint   server_ep;
-    ::asio::ip::udp::endpoint   client_ep;
-    ::asio::ip::udp::endpoint   from;
+    ::asio::io_context &io;
+    ::asio::ip::udp::socket front;
+    ::asio::ip::udp::socket back;
+    ::asio::ip::udp::endpoint server_ep;
+    ::asio::ip::udp::endpoint client_ep;
+    ::asio::ip::udp::endpoint from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
-    std::deque<action>          data_script;
+    std::deque<action> data_script;
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
             : io(ctx)
@@ -37,12 +37,12 @@ struct relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const
+    std::uint16_t port() const
     {
         return front.local_endpoint().port();
     }
 
-    [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
+    static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
         return dec && dec->kind == wire::udp_envelope_kind::reliable_arq && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
@@ -99,15 +99,15 @@ struct relay
 TEST_CASE("udp burst: a reliable retransmit interleaved with fresh sends delivers in order", "[udp][burst][reliable][reproducibility]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
         pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
-        std::vector<std::string>            delivered;
+        std::vector<std::string> delivered;
         server.on_accepted(
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {

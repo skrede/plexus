@@ -1,6 +1,4 @@
-// over-limit: one cohesive attach-gate matrix; the policy/posture/install-hook cells all drive the
-// one shared two-peer_session bridge + security-event harness, so splitting them scatters that
-// shared fixture The security attach-gate bridge oracle: two peer_sessions over the inproc backend
+// The security attach-gate bridge oracle: two peer_sessions over the inproc backend
 // drive the end-to-end attach surface this wave wires — the dedicated security_event,
 // the lifecycle rejected edge, the AEAD install hook on a successful attach, the
 // stream-tamper teardown, and the auth-only+datagram posture refusal. No OpenSSL: the
@@ -86,8 +84,8 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, const attach_policy *policy 
 // is exercised without any crypto. The reject leg drives reject_unauthorized.
 struct verdict_policy final : public attach_policy
 {
-    bool               admit{true};
-    [[nodiscard]] bool decide(const attach_facts &) const noexcept override
+    bool admit{true};
+    bool decide(const attach_facts &) const noexcept override
     {
         return admit;
     }
@@ -170,30 +168,30 @@ std::vector<std::byte> psk_material(std::uint8_t seed, std::size_t len = 16)
 // observer wiring. Mirrors the peer_session inproc rig.
 struct link
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder            req_messages{sink};
-    msg_forwarder            resp_messages{sink};
-    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
-    std::optional<session>                  requester;
-    std::optional<session>                  responder;
+    std::optional<session> requester;
+    std::optional<session> responder;
 
     security_seam req_seam;
     security_seam resp_seam;
 
-    std::vector<security_event>  req_security;
-    std::vector<security_event>  resp_security;
+    std::vector<security_event> req_security;
+    std::vector<security_event> resp_security;
     std::vector<lifecycle_event> req_lifecycle;
     std::vector<lifecycle_event> resp_lifecycle;
-    int                          req_installs{0};
-    int                          resp_installs{0};
+    int req_installs{0};
+    int resp_installs{0};
 
     // wire_install gates whether the AEAD install hook is set: a secured posture with NO
     // install hook is the auth-only configuration (admission without AEAD).
@@ -251,30 +249,30 @@ struct link
 // posture the attach gate runs under), with the install hook wired so an admit completes.
 struct psk_link
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder            req_messages{sink};
-    msg_forwarder            resp_messages{sink};
-    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
-    std::optional<session>                  requester;
-    std::optional<session>                  responder;
+    std::optional<session> requester;
+    std::optional<session> responder;
 
     security_seam req_seam;
     security_seam resp_seam;
 
-    std::vector<security_event>  req_security;
-    std::vector<security_event>  resp_security;
+    std::vector<security_event> req_security;
+    std::vector<security_event> resp_security;
     std::vector<lifecycle_event> req_lifecycle;
     std::vector<lifecycle_event> resp_lifecycle;
-    int                          req_installs{0};
-    int                          resp_installs{0};
+    int req_installs{0};
+    int resp_installs{0};
 
     // dialer_keystore: the keyed_psk set the DIALER's policy verifies the responder's proof
     // against (an empty/wrong set drives the refuse legs). responder_key: the keyed_psk the
@@ -328,7 +326,7 @@ struct psk_link
     }
 
 private:
-    plexus::io::security::accept_any   m_accept_any;
+    plexus::io::security::accept_any m_accept_any;
     std::optional<psk_keystore_policy> m_dialer_policy;
 };
 
@@ -464,8 +462,8 @@ std::vector<std::byte> matched_request(std::uint8_t peer_seed)
                                         .cipher_offer             = 0x01,
                                         .chosen_cipher            = 0x01,
                                         .proof                    = {}};
-    auto                            payload = plexus::wire::encode_handshake_request(req);
-    plexus::wire::frame_header      hdr{.type = plexus::wire::msg_type::handshake_req, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = payload.size()};
+    auto payload = plexus::wire::encode_handshake_request(req);
+    plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::handshake_req, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = payload.size()};
     return plexus::wire::encode_frame(hdr, payload);
 }
 
@@ -476,11 +474,11 @@ TEST_CASE("io.security_attach an auth-only + datagram configuration is refused (
     verdict_policy admit;
     admit.admit = true;
 
-    inproc_bus<>             bus;
-    inproc_executor<>        ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     plexus::log::null_logger sink;
-    msg_forwarder            messages{sink};
-    rpc_forwarder            procedures{ex, k_long_timeout, sink};
+    msg_forwarder messages{sink};
+    rpc_forwarder procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> ctx;
     ctx.channel = std::make_unique<inproc_channel<>>(ex);
@@ -488,8 +486,8 @@ TEST_CASE("io.security_attach an auth-only + datagram configuration is refused (
     ctx.node_name = "peer-node";
     ctx.peer_id   = make_cfg(0x07).self_id;
 
-    security_seam                seam = fake_seam(); // secured posture (attach engaged)
-    std::vector<security_event>  security;
+    security_seam seam = fake_seam(); // secured posture (attach engaged)
+    std::vector<security_event> security;
     std::vector<lifecycle_event> lifecycle;
 
     // A bootstrap responder so a single request completes the attach; the secured seam
@@ -518,15 +516,15 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
     verdict_policy admit;
     admit.admit = true;
 
-    inproc_bus<>             bus;
-    inproc_executor<>        ex{bus};
-    inproc_transport<>       transport{ex, bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    inproc_transport<> transport{ex, bus};
     plexus::log::null_logger sink;
-    plexus::io::observer     obs;
-    msg_forwarder            messages{sink};
-    rpc_forwarder            procedures{ex, k_long_timeout, sink};
+    plexus::io::observer obs;
+    msg_forwarder messages{sink};
+    rpc_forwarder procedures{ex, k_long_timeout, sink};
 
-    int           installs = 0;
+    int installs = 0;
     build_context build{ex,
                         make_cfg(0x08, &admit),
                         k_long_timeout,
@@ -567,7 +565,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
 
 TEST_CASE("io.security_attach the REAL psk_keystore_policy admits a matching-key attach end to end", "[io][security_attach]")
 {
-    const auto      material = psk_material(0xA0);
+    const auto material = psk_material(0xA0);
     const keyed_psk key{psk_key_id(0x01), material};
 
     // Both ends hold key_id 0x01 with the SAME material: the responder proves under it on

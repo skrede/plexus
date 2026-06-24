@@ -50,7 +50,7 @@ public:
     {
         m_closed = true;
     }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    plexus::io::endpoint remote_endpoint() const
     {
         return {"wire", ""};
     }
@@ -70,7 +70,7 @@ public:
     {
         m_on_protocol_close = std::move(cb);
     }
-    [[nodiscard]] std::size_t backpressured() const
+    std::size_t backpressured() const
     {
         return 0;
     }
@@ -81,13 +81,13 @@ public:
             m_on_data(bytes);
     }
 
-    std::function<void(std::span<const std::byte>)>                      m_sink;
-    std::vector<std::byte>                                               m_last;
-    bool                                                                 m_closed{false};
+    std::function<void(std::span<const std::byte>)> m_sink;
+    std::vector<std::byte> m_last;
+    bool m_closed{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                           m_on_closed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
+    plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close;
 };
 
 static_assert(plexus::io::byte_channel<wire_lower>, "wire_lower must satisfy byte_channel for the decorator test");
@@ -135,9 +135,9 @@ inline std::vector<std::byte> make_frame(std::uint64_t session_id, std::string_v
 // test can reorder/replay them into the receiver at will.
 inline std::vector<std::vector<std::byte>> seal_datagrams(const derived_keys &keys, std::size_t count)
 {
-    wire_lower                                 send_wire;
+    wire_lower send_wire;
     datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys);
-    std::vector<std::vector<std::byte>>        on_wire;
+    std::vector<std::vector<std::byte>> on_wire;
     send_wire.m_sink = [&](std::span<const std::byte> b) { on_wire.emplace_back(b.begin(), b.end()); };
     for(std::size_t i = 0; i < count; ++i)
         sender.send(make_frame(7, "datagram-payload-" + std::to_string(i)));
@@ -150,7 +150,7 @@ inline plexus::crypto::aead_key step_forward(const plexus::crypto::aead_key &fro
 {
     std::array<std::byte, 16> nonce{};
     std::array<std::byte, 32> transcript{};
-    derived_keys              d{};
+    derived_keys d{};
     REQUIRE(derive_keys(std::span<const std::byte>{from}, nonce, nonce, transcript, d));
     return d.k_send;
 }

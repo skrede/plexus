@@ -10,16 +10,16 @@ namespace {
 // sized for a default-budget fragment datagram.
 struct relay
 {
-    ::asio::io_context         &io;
-    ::asio::ip::udp::socket     front;
-    ::asio::ip::udp::socket     back;
-    ::asio::ip::udp::endpoint   server_ep;
-    ::asio::ip::udp::endpoint   client_ep;
-    ::asio::ip::udp::endpoint   from;
+    ::asio::io_context &io;
+    ::asio::ip::udp::socket front;
+    ::asio::ip::udp::socket back;
+    ::asio::ip::udp::endpoint server_ep;
+    ::asio::ip::udp::endpoint client_ep;
+    ::asio::ip::udp::endpoint from;
     std::array<std::byte, 4096> front_buf{};
     std::array<std::byte, 4096> back_buf{};
-    std::deque<action>          data_script;
-    int                         data_seen{0};
+    std::deque<action> data_script;
+    int data_seen{0};
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
             : io(ctx)
@@ -31,12 +31,12 @@ struct relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const
+    std::uint16_t port() const
     {
         return front.local_endpoint().port();
     }
 
-    [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
+    static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
         return dec && dec->kind == wire::udp_envelope_kind::reliable_arq && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
@@ -101,12 +101,12 @@ TEST_CASE("udp fragment reliable: a large payload reassembles byte-equal with a 
     // count stays inside the ARQ window + the bounded congestion=block queue (no synchronous
     // overrun of the unsized window — the throughput interaction above that bound is a
     // separate flow-control concern handled elsewhere).
-    constexpr std::size_t budget       = 512;
-    constexpr int         k_iterations = 10;
-    int                   proven       = 0;
+    constexpr std::size_t budget = 512;
+    constexpr int k_iterations   = 10;
+    int proven                   = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
         pasio::udp_transport client{io, budget, fast_hs, fast_arq()};
 

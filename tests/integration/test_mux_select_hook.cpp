@@ -34,7 +34,7 @@ struct dummy_channel
     void close()
     {
     }
-    [[nodiscard]] pio::endpoint remote_endpoint() const
+    pio::endpoint remote_endpoint() const
     {
         return ep;
     }
@@ -50,11 +50,11 @@ struct dummy_channel
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
     {
     }
-    [[nodiscard]] std::size_t backpressured() const noexcept
+    std::size_t backpressured() const noexcept
     {
         return 0;
     }
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    std::uint64_t scheduler_key() const noexcept
     {
         return 1;
     }
@@ -71,7 +71,7 @@ struct dummy_member
 {
     using channel_type = dummy_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"tcp"};
-    static constexpr pio::transport_kind             mux_tier = pio::transport_kind::remote;
+    static constexpr pio::transport_kind mux_tier = pio::transport_kind::remote;
 
     bool dialed   = false;
     bool listened = false;
@@ -111,13 +111,13 @@ TEST_CASE("mux_select_hook: the DEFAULT hook routes the dial to the FIRST candid
     // The resolution is deterministic (no timing/transport), so the loop is a redundancy
     // check, not a flake hunt; the real reproducibility proof is re-running the process.
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // The members are borrowed by reference and MUST outlive the mux (non-movable).
         dummy_member<0> first;
         dummy_member<1> second;
-        mux_t           mux{first, second};
+        mux_t mux{first, second};
 
         mux.dial({"tcp", "host:1"});
 
@@ -133,7 +133,7 @@ TEST_CASE("mux_select_hook: the DEFAULT hook routes the dial to the FIRST candid
 TEST_CASE("mux_select_hook: an INJECTED hook routes the dial to the SECOND candidate, looped", "[integration][mux][select][hook]")
 {
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         dummy_member<0> first;
@@ -143,7 +143,7 @@ TEST_CASE("mux_select_hook: an INJECTED hook routes the dial to the SECOND candi
         // hardcoded first-candidate choice. This is the behavioral substitutability the
         // multi-candidate selection seam requires.
         pio::selection_hook pick_last = [](const pio::endpoint &, std::span<const pio::mux_candidate> candidates) -> std::size_t { return candidates.back().index; };
-        mux_t               mux{first, second, {}, std::move(pick_last)};
+        mux_t mux{first, second, {}, std::move(pick_last)};
 
         mux.dial({"tcp", "host:1"});
 
@@ -158,10 +158,10 @@ TEST_CASE("mux_select_hook: an INJECTED hook routes the dial to the SECOND candi
 
 TEST_CASE("mux_select_hook: the injected hook also governs listen", "[integration][mux][select][hook]")
 {
-    dummy_member<0>     first;
-    dummy_member<1>     second;
+    dummy_member<0> first;
+    dummy_member<1> second;
     pio::selection_hook pick_last = [](const pio::endpoint &, std::span<const pio::mux_candidate> candidates) -> std::size_t { return candidates.back().index; };
-    mux_t               mux{first, second, {}, std::move(pick_last)};
+    mux_t mux{first, second, {}, std::move(pick_last)};
 
     mux.listen({"tcp", "host:1"});
 

@@ -1,7 +1,3 @@
-// over-limit: one cohesive measurement rig bound to the single-TU alloc_counter; every cell
-// reports steady-loop heap behavior against the one program-wide operator-new override and
-// shares the one net/result harness + main report driver, so splitting it across TUs scatters
-// that single-TU allocation contract and the one measurement program.
 // A no-syscall perf rig for the typed in-process pub/sub fast path. Two nodes on one bus
 // (single-dialer), one typed topic; the steady loop borrows a pool slot, publishes the
 // object, and drives to quiescence so the object rides the zero-serialization lane to the
@@ -118,11 +114,11 @@ plexus::node_options make_opts(bool eager)
 
 struct net
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     inproc_node a{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/true)};
     inproc_node b{ex, disc, make_id(0x0B), tb, make_opts(/*eager=*/false)};
@@ -142,8 +138,8 @@ struct net
 
 struct result
 {
-    double        per_pub_ns;
-    double        allocs_per_pub;
+    double per_pub_ns;
+    double allocs_per_pub;
     std::uint64_t delivered;
 };
 
@@ -153,8 +149,8 @@ result run_fast(std::size_t pool_depth, std::uint64_t iterations, std::uint64_t 
     net n;
     n.connect();
 
-    std::uint64_t                   delivered = 0;
-    typed_subscriber                s{n.a, "topic", [&](const sample &) { ++delivered; }};
+    std::uint64_t delivered = 0;
+    typed_subscriber s{n.a, "topic", [&](const sample &) { ++delivered; }};
     plexus::typed_publisher_options popts;
     popts.pool_depth = pool_depth;
     typed_publisher p{n.b, "topic", popts, counting_codec{}};
@@ -183,7 +179,7 @@ result run_fast(std::size_t pool_depth, std::uint64_t iterations, std::uint64_t 
     const auto t0 = clock_t_::now();
     for(std::uint64_t i = 0; i < iterations; ++i)
         publish_once(static_cast<std::uint32_t>(i));
-    const auto        t1     = clock_t_::now();
+    const auto t1            = clock_t_::now();
     const std::size_t allocs = plexus::testing::alloc_count();
 
     const double secs = std::chrono::duration<double>(t1 - t0).count();
@@ -196,8 +192,8 @@ result run_fallback(std::uint64_t iterations, std::uint64_t warm)
     net n;
     n.connect();
 
-    std::uint64_t                   delivered = 0;
-    typed_subscriber                s{n.a, "topic", [&](const sample &) { ++delivered; }};
+    std::uint64_t delivered = 0;
+    typed_subscriber s{n.a, "topic", [&](const sample &) { ++delivered; }};
     plexus::typed_publisher_options popts;
     popts.pool_depth = 0;
     typed_publisher p{n.b, "topic", popts, counting_codec{}};
@@ -217,7 +213,7 @@ result run_fallback(std::uint64_t iterations, std::uint64_t warm)
     const auto t0 = clock_t_::now();
     for(std::uint64_t i = 0; i < iterations; ++i)
         publish_once(static_cast<std::uint32_t>(i));
-    const auto        t1     = clock_t_::now();
+    const auto t1            = clock_t_::now();
     const std::size_t allocs = plexus::testing::alloc_count();
 
     const double secs = std::chrono::duration<double>(t1 - t0).count();
@@ -244,7 +240,7 @@ result run_stamp_cell(std::size_t pool_depth, std::uint64_t iterations, std::uin
     net n;
     n.connect();
 
-    typed_subscriber                s{n.a, "topic", std::move(cb)};
+    typed_subscriber s{n.a, "topic", std::move(cb)};
     plexus::typed_publisher_options popts;
     popts.pool_depth = pool_depth;
     typed_publisher p{n.b, "topic", popts, counting_codec{}};
@@ -272,7 +268,7 @@ result run_stamp_cell(std::size_t pool_depth, std::uint64_t iterations, std::uin
     const auto t0 = clock_t_::now();
     for(std::uint64_t i = 0; i < iterations; ++i)
         publish_once(static_cast<std::uint32_t>(i));
-    const auto        t1     = clock_t_::now();
+    const auto t1            = clock_t_::now();
     const std::size_t allocs = plexus::testing::alloc_count();
 
     const double secs = std::chrono::duration<double>(t1 - t0).count();
@@ -283,7 +279,7 @@ result run_stamped(std::size_t pool_depth, std::uint64_t iterations, std::uint64
 {
     std::uint64_t delivered = 0;
     std::uint64_t info_sink = 0;
-    auto          r         = run_stamp_cell(pool_depth, iterations, warm,
+    auto r                  = run_stamp_cell(pool_depth, iterations, warm,
                                              [&](const sample &, const plexus::io::message_info &info)
                                              {
                                 ++delivered;
@@ -309,13 +305,13 @@ result run_bytes(std::uint64_t iterations, std::uint64_t warm)
     net n;
     n.connect();
 
-    std::uint64_t    delivered = 0;
+    std::uint64_t delivered = 0;
     bytes_subscriber s{n.a, "topic", [&](std::span<const std::byte>) { ++delivered; }};
-    bytes_publisher  p{n.b, "topic"};
+    bytes_publisher p{n.b, "topic"};
     n.drive();
 
     std::array<std::byte, 4> buffer{};
-    auto                     publish_once = [&](std::uint32_t v)
+    auto publish_once = [&](std::uint32_t v)
     {
         for(int i = 0; i < 4; ++i)
             buffer[static_cast<std::size_t>(i)] = static_cast<std::byte>((v >> (8 * i)) & 0xff);
@@ -331,7 +327,7 @@ result run_bytes(std::uint64_t iterations, std::uint64_t warm)
     const auto t0 = clock_t_::now();
     for(std::uint64_t i = 0; i < iterations; ++i)
         publish_once(static_cast<std::uint32_t>(i));
-    const auto        t1     = clock_t_::now();
+    const auto t1            = clock_t_::now();
     const std::size_t allocs = plexus::testing::alloc_count();
 
     const double secs = std::chrono::duration<double>(t1 - t0).count();
@@ -358,8 +354,8 @@ int main(int argc, char **argv)
     // reception read elided), same pool depth, same bus. The delta is the reclaimed
     // reception-clock-read share.
     const std::size_t stamp_depth = 8;
-    const result      st          = run_stamped(stamp_depth, iterations, warm);
-    const result      un          = run_unstamped(stamp_depth, iterations, warm);
+    const result st               = run_stamped(stamp_depth, iterations, warm);
+    const result un               = run_unstamped(stamp_depth, iterations, warm);
     std::printf("  stamp demand A/B (pool_depth=%zu):\n", stamp_depth);
     std::printf("    run_stamped   (3-arg, message_info wanted):  per_publish=%.1fns  "
                 "allocs/publish=%.4f  delivered=%llu\n",

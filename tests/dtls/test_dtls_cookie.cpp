@@ -10,16 +10,16 @@ namespace {
 // HelloVerifyRequest (no full handshake state was allocated up front).
 struct cookie_relay
 {
-    ::asio::io_context         &io;
-    ::asio::ip::udp::socket     front;
-    ::asio::ip::udp::socket     back;
-    ::asio::ip::udp::endpoint   server_ep;
-    ::asio::ip::udp::endpoint   client_ep;
-    ::asio::ip::udp::endpoint   from;
+    ::asio::io_context &io;
+    ::asio::ip::udp::socket front;
+    ::asio::ip::udp::socket back;
+    ::asio::ip::udp::endpoint server_ep;
+    ::asio::ip::udp::endpoint client_ep;
+    ::asio::ip::udp::endpoint from;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
 
-    int         server_datagrams{0};
+    int server_datagrams{0};
     std::size_t first_server_response{0};
 
     cookie_relay(::asio::io_context &ctx, std::uint16_t server_port)
@@ -32,7 +32,7 @@ struct cookie_relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const
+    std::uint16_t port() const
     {
         return front.local_endpoint().port();
     }
@@ -81,17 +81,17 @@ TEST_CASE("dtls.cookie: a no-cookie ClientHello gets a small HelloVerifyRequest,
     pdt::identity_fixture cli("ck_cli");
 
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
-        ::asio::io_context   io;
-        auto                 server_cred = pdt::pin_one(srv, cli.digest);
-        auto                 client_cred = pdt::pin_one(cli, srv.digest);
+        ::asio::io_context io;
+        auto server_cred = pdt::pin_one(srv, cli.digest);
+        auto client_cred = pdt::pin_one(cli, srv.digest);
         ptls::dtls_transport server(io, server_cred);
         ptls::dtls_transport client(io, client_cred);
 
         std::unique_ptr<ptls::dtls_channel> accepted, dialed;
-        bool                                dial_failed = false;
+        bool dial_failed = false;
         server.on_accepted([&](std::unique_ptr<ptls::dtls_channel> ch) { accepted = std::move(ch); });
         client.on_dialed([&](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &) { dialed = std::move(ch); });
         client.on_dial_failed([&](const pdt::pio::endpoint &, pdt::pio::io_error) { dial_failed = true; });

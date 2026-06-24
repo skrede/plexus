@@ -1,6 +1,3 @@
-// over-limit: one cohesive TLS-over-mux E2E matrix; every cell drives the one shared
-// ephemeral-cert + mux-face loopback-pair harness (whose identity + quintet-member preamble
-// alone exceeds the file ceiling), so splitting the cells scatters that one harness.
 #include "plexus/asio/all_backends_mux.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
@@ -59,7 +56,7 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest           digest{};
+    spki_digest digest{};
 
     explicit identity_fixture(const std::string &tag)
     {
@@ -130,17 +127,17 @@ ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &pe
 // face cannot share a member; a real two-node loopback gives each node its own set.
 struct mux_face
 {
-    ::asio::io_context   &io;
-    ptls::tls_credential  cred;
+    ::asio::io_context &io;
+    ptls::tls_credential cred;
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
-    ptls::tls_transport   secure;
+    ptls::tls_transport secure;
     // The datagram member stays inert on these tls/tcp routes — its socket is only ever
     // bound when a "udp" channel is actually dialed/accepted, which these faces never do.
     pasio::udp_transport datagram{io};
     // The secure-datagram (DTLS) member reuses this face's credential but stays inert on
     // the tls/tcp routes these faces exercise — its socket binds only on a "dtls" dial.
-    ptls::dtls_transport    secure_datagram;
+    ptls::dtls_transport secure_datagram;
     pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
     mux_face(::asio::io_context &ctx, ptls::tls_credential c)
@@ -160,10 +157,10 @@ struct mux_face
 struct mux_pair
 {
     ::asio::io_context io;
-    mux_face           listen_face;
-    mux_face           dial_face;
+    mux_face listen_face;
+    mux_face dial_face;
 
-    std::optional<pio::endpoint>                   dialed_ep;
+    std::optional<pio::endpoint> dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
@@ -196,7 +193,7 @@ constexpr int k_iterations = 100;
 TEST_CASE("tls mux: the selector classifies tls and tcp as remote, unix and inproc as local", "[tls][mux][select]")
 {
     pio::transport_selector sel;
-    const auto              reserved = pio::reliability_hint::unspecified;
+    const auto reserved = pio::reliability_hint::unspecified;
 
     // "tls" is a REMOTE-tier scheme — so the locality confinement still EXCLUDES
     // it (a host-confined process|local topic never rides tls even though tls

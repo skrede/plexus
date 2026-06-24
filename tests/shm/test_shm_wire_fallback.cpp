@@ -1,7 +1,3 @@
-// over-limit: one cohesive wire_fallback per-message routing proof; the cross-process cells
-// share the one live shm broker + forwarder fan-out harness and its per-channel tap, and that
-// shared fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs
-// without scattering that one harness into over-budget shells.
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
@@ -139,7 +135,7 @@ public:
     void close()
     {
     }
-    [[nodiscard]] endpoint remote_endpoint() const
+    endpoint remote_endpoint() const
     {
         return endpoint{m_scheme, "peer"};
     }
@@ -156,7 +152,7 @@ public:
     {
     }
 
-    [[nodiscard]] std::size_t count(medium m) const
+    std::size_t count(medium m) const
     {
         std::size_t n = 0;
         for(medium c : m_carried)
@@ -164,15 +160,15 @@ public:
                 ++n;
         return n;
     }
-    [[nodiscard]] std::size_t total() const
+    std::size_t total() const
     {
         return m_carried.size();
     }
-    [[nodiscard]] std::size_t last_len() const
+    std::size_t last_len() const
     {
         return m_last_len;
     }
-    [[nodiscard]] std::uint64_t last_hash() const
+    std::uint64_t last_hash() const
     {
         return m_last_hash;
     }
@@ -185,12 +181,12 @@ public:
     }
 
 private:
-    medium              m_kind;
-    std::string         m_scheme;
-    shm_channel        *m_ring;
+    medium m_kind;
+    std::string m_scheme;
+    shm_channel *m_ring;
     std::vector<medium> m_carried;
-    std::size_t         m_last_len  = 0;
-    std::uint64_t       m_last_hash = 0;
+    std::size_t m_last_len    = 0;
+    std::uint64_t m_last_hash = 0;
 };
 
 static_assert(plexus::io::byte_channel<tap_channel>, "tap_channel must satisfy byte_channel");
@@ -250,7 +246,7 @@ bool subscribe_and_check(const std::string &fqn, coord *c)
         ;
 
     posix_shm_region_broker broker;
-    region_handle           ctrl, slab;
+    region_handle ctrl, slab;
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
@@ -261,11 +257,11 @@ bool subscribe_and_check(const std::string &fqn, coord *c)
     const std::uint64_t want_hash = c->expect_hash.load(std::memory_order_acquire);
 
     std::uint64_t cursor = 0;
-    bool          ok     = false;
+    bool ok              = false;
     for(;;)
     {
         pio::broadcast_ring::consume_result out;
-        const auto                          st = ring.consume(cursor, out);
+        const auto st = ring.consume(cursor, out);
         if(st == pio::loan_status::ok)
         {
             ok = out.slab.size() == want_len && fnv1a(out.slab) == want_hash;
@@ -286,10 +282,10 @@ bool subscribe_and_check(const std::string &fqn, coord *c)
 // the per-message medium.
 struct route_result
 {
-    std::size_t shm_carried             = 0; // messages the SHM-companion tap took
-    std::size_t wire_carried            = 0; // messages the wire tap took
-    bool        shm_byte_exact          = false;
-    bool        subscriber_exited_clean = false;
+    std::size_t shm_carried      = 0; // messages the SHM-companion tap took
+    std::size_t wire_carried     = 0; // messages the wire tap took
+    bool shm_byte_exact          = false;
+    bool subscriber_exited_clean = false;
 };
 
 route_result drive_round_trip(const std::string &fqn, std::size_t declared_payload, std::uint32_t capacity, std::size_t small_bytes, std::size_t large_bytes)
@@ -311,7 +307,7 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     }
 
     posix_shm_region_broker broker;
-    member_t                member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
     member.set_topic_geometry(fqn, declared_payload, pio::shm_geometry{capacity, pio::ring_geometry_mode::wire_fallback});
 
     std::unique_ptr<shm_channel> companion_ring;
@@ -326,7 +322,7 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     tap_channel shm_tap{medium::shm, "unix", companion_ring.get()};
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
 
     // The companion-route hook: consult route_message_medium against the member's
@@ -410,7 +406,7 @@ TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over 
     tap_channel wire_tap{medium::wire, "unix"};
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
     // The companion is ABSENT: the hook always declines (nullptr), so the forwarder keeps
     // every message on the recorded wire sub.channel — never a dropped large message.
@@ -438,7 +434,7 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
     const std::string fqn = "topic.wfb.frameover." + std::to_string(::getpid());
 
     posix_shm_region_broker broker;
-    member_t                member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
     member.set_topic_geometry(fqn, 2 * k_kib, pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback});
 
     std::unique_ptr<shm_channel> companion_ring;
@@ -450,7 +446,7 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
     tap_channel shm_tap{medium::shm, "unix", companion_ring.get()};
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
     fwd.on_companion_route(
             [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel *

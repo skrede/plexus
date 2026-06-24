@@ -1,6 +1,3 @@
-// over-limit: one cohesive ring-memory-cost query matrix; the cells share the one recording
-// stub-broker registry harness that captures the requested slab sizes, so splitting them
-// scatters that shared recording-broker fixture into near-empty per-cell shells.
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/region_broker_concept.h"
 #include "plexus/shm/ring_geometry.h"
@@ -44,14 +41,14 @@ struct recording_store
     struct region
     {
         std::vector<std::byte> storage;
-        std::byte             *base = nullptr;
-        std::size_t            size = 0;
-        bool                   live = false;
+        std::byte *base  = nullptr;
+        std::size_t size = 0;
+        bool live        = false;
     };
 
     std::map<std::string, std::shared_ptr<region>> regions;
-    std::vector<std::size_t>                       slab_requests;
-    std::size_t                                    last_total = 0;
+    std::vector<std::size_t> slab_requests;
+    std::size_t last_total = 0;
 
     std::shared_ptr<region> make(const std::string &name, std::size_t bytes)
     {
@@ -126,8 +123,8 @@ private:
         m_region.reset();
     }
 
-    recording_store                         *m_store = nullptr;
-    std::string                              m_name;
+    recording_store *m_store = nullptr;
+    std::string m_name;
     std::shared_ptr<recording_store::region> m_region;
 };
 
@@ -155,7 +152,7 @@ public:
     region_status attach(std::string_view name, region_handle &out)
     {
         const std::string key{name};
-        auto              it = m_store.regions.find(key);
+        auto it = m_store.regions.find(key);
         if(it == m_store.regions.end() || !it->second->live)
             return region_status::not_found;
         out = recording_handle(&m_store, key, it->second);
@@ -196,8 +193,8 @@ TEST_CASE("shm.ring_memory_query ring_memory_for equals the layout helpers for a
     for(std::uint32_t payload : {static_cast<std::uint32_t>(512 * k_kib), static_cast<std::uint32_t>(k_mib)})
         for(std::uint32_t capacity : {1u, 2u, 16u})
         {
-            const ring_geometry g        = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
-            const std::size_t   expected = control_region_bytes(g.cell_count) + slab_region_bytes(g.cell_count, g.slot_capacity);
+            const ring_geometry g      = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
+            const std::size_t expected = control_region_bytes(g.cell_count) + slab_region_bytes(g.cell_count, g.slot_capacity);
             REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, capacity) == expected);
         }
 }
@@ -224,14 +221,14 @@ TEST_CASE("shm.ring_memory_query ring_memory_for matches the bytes the registry 
 {
     // The query and the registry's mint must agree: the slab the registry asks the
     // broker to create equals ring_memory_for's slab term for the same (P, mode, C).
-    recording_store  store;
+    recording_store store;
     recording_broker broker{store};
-    test_registry    registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
+    test_registry registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
-    const std::uint32_t payload       = static_cast<std::uint32_t>(512 * k_kib);
-    const std::uint32_t capacity      = 2u;
-    const ring_geometry g             = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
-    const std::size_t   expected_slab = slab_region_bytes(g.cell_count, g.slot_capacity);
+    const std::uint32_t payload     = static_cast<std::uint32_t>(512 * k_kib);
+    const std::uint32_t capacity    = 2u;
+    const ring_geometry g           = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
+    const std::size_t expected_slab = slab_region_bytes(g.cell_count, g.slot_capacity);
 
     REQUIRE(registry.acquire("topic.query", ring_direction::request, payload, ring_geometry_mode::reliable_preserving, capacity) == acquire_result::created);
 

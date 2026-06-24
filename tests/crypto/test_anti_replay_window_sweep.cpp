@@ -1,6 +1,3 @@
-// over-limit: one cohesive empirical anti-replay-width sweep; both cells share the one
-// fixed-seed LCG + reordered-schedule + reference-window harness, and that shared sweep
-// fixture dominates the file, so splitting the two cells scatters it into near-empty shells.
 // The recorded sweep substantiating k_anti_replay_window_bits at FRAGMENT scale. A
 // large (4 MiB) message fragments into ~3500 sealed datagrams, each a distinct AEAD
 // sequence; the window must admit every fragment that arrives within the link's
@@ -67,7 +64,7 @@ private:
 // control-loop link exhibits).
 std::vector<std::uint64_t> reordered_schedule(std::size_t count, std::size_t reorder_depth, std::uint64_t seed)
 {
-    lcg                                                  rng(seed);
+    lcg rng(seed);
     std::vector<std::pair<std::uint64_t, std::uint64_t>> keyed;
     keyed.reserve(count);
     for(std::size_t i = 0; i < count; ++i)
@@ -88,7 +85,7 @@ template<std::size_t Width>
 std::size_t false_rejects(const std::vector<std::uint64_t> &arrival)
 {
     anti_replay_window<Width> w;
-    std::size_t               false_old = 0;
+    std::size_t false_old = 0;
     for(std::uint64_t seq : arrival)
     {
         const auto v = w.check_and_set(seq);
@@ -147,8 +144,8 @@ private:
     }
 
     std::vector<bool> m_bits = std::vector<bool>(Width, false);
-    std::uint64_t     m_highest{0};
-    bool              m_seen_any{false};
+    std::uint64_t m_highest{0};
+    bool m_seen_any{false};
 };
 
 // Drive the production window and the bit-by-bit reference through the SAME schedule;
@@ -157,7 +154,7 @@ template<std::size_t Width>
 bool verdicts_match(const std::vector<std::uint64_t> &arrival)
 {
     anti_replay_window<Width> w;
-    reference_window<Width>   ref;
+    reference_window<Width> ref;
     for(std::uint64_t seq : arrival)
         if(w.check_and_set(seq) != ref.check_and_set(seq))
             return false;
@@ -191,7 +188,7 @@ TEST_CASE("crypto.anti_replay_window word-shift slide is bitmap-identical to the
                                                    8192};
 
     std::vector<std::uint64_t> arrival;
-    std::uint64_t              highest = 0;
+    std::uint64_t highest = 0;
     for(std::uint64_t by : by_classes)
     {
         highest += by;
@@ -223,14 +220,14 @@ TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject r
           "[crypto][anti_replay]")
 {
     // A 4 MiB message at the 1200-byte MTU fragments into ~3500 sealed datagrams.
-    constexpr std::size_t   count = 3500;
-    constexpr std::uint64_t seed  = 0x5eed1234abcd0011ull;
+    constexpr std::size_t count  = 3500;
+    constexpr std::uint64_t seed = 0x5eed1234abcd0011ull;
 
     // The loopback in-flight window: rmem_default (208 KiB) / 1200 B MTU ≈ 177 datagrams
     // can be buffered at once, so backward displacement on a loopback burst is bounded
     // by ~177. The 64-slot window false-rejects here; 256 (and up) is clean.
     constexpr std::size_t loopback_depth = 177;
-    const auto            loopback       = reordered_schedule(count, loopback_depth, seed);
+    const auto loopback                  = reordered_schedule(count, loopback_depth, seed);
 
     REQUIRE(false_rejects<64>(loopback) > 0); // too narrow even for loopback reorder
     REQUIRE(false_rejects<256>(loopback) == 0);
@@ -243,7 +240,7 @@ TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject r
     // window is clean only to ~1031, so it too false-rejects at the full realistic-link
     // depth — confirming 4096 is the smallest swept width that bears margin over it.
     constexpr std::size_t realistic_link_depth = 1042;
-    const auto            realistic            = reordered_schedule(count, realistic_link_depth, seed);
+    const auto realistic                       = reordered_schedule(count, realistic_link_depth, seed);
 
     REQUIRE(false_rejects<64>(realistic) > 0);
     REQUIRE(false_rejects<256>(realistic) > 0);   // narrower than the realistic-link in-flight window

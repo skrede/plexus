@@ -1,6 +1,4 @@
-// over-limit: one cohesive recorder-defaults sweep; the per-payload recall cells and the decimation
-// guarantees share the one saturating-burst harness at the shipped ring budget, so splitting them
-// scatters that shared sweep fixture The recorder defaults chosen-cell assertion (the
+// The recorder defaults chosen-cell assertion (the
 // recorded-sweep precedent, tests/crypto/test_rekey_threshold_sweep). recorder_sweep measured the
 // recall curve recall = min(1, ring_bytes / (burst * framed_record)); this test pins the SHIPPED
 // ring_bytes default to its conservative design point: a modest small-payload backlog
@@ -87,7 +85,7 @@ struct fixed_codec
 
     plexus::wire_bytes<> encode(const sample &) const
     {
-        auto                       owner = std::make_shared<std::vector<std::byte>>(payload_bytes, std::byte{0xC3});
+        auto owner = std::make_shared<std::vector<std::byte>>(payload_bytes, std::byte{0xC3});
         std::span<const std::byte> view{owner->data(), owner->size()};
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
@@ -123,10 +121,10 @@ plexus::node_options make_opts(plexus::recording_qos capture)
 // an inner scope over the borrowed substrate (the recorder_capture teardown discipline).
 struct net
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     void drive()
     {
@@ -151,7 +149,7 @@ plexus::recording_qos keep_all_payload(plexus::io::decimation_mode mode)
 // bytes out — the producer-faster-than-drain regime. recall = recovered samples / burst.
 std::uint64_t recovered_samples(std::size_t ring_bytes, std::size_t payload_bytes, int burst)
 {
-    net        n;
+    net n;
     const auto id = make_id(0x4C);
 
     in_memory_byte_sink sink;
@@ -165,7 +163,7 @@ std::uint64_t recovered_samples(std::size_t ring_bytes, std::size_t payload_byte
         {
             plexus::topic_qos qos;
             qos.latch = true;
-            plexus::publisher<>  pub{n_node, "defaults.topic", qos};
+            plexus::publisher<> pub{n_node, "defaults.topic", qos};
             plexus::subscriber<> sub{n_node, "defaults.topic", [](std::span<const std::byte>, const message_info &) {}};
             n.drive();
 
@@ -180,11 +178,11 @@ std::uint64_t recovered_samples(std::size_t ring_bytes, std::size_t payload_byte
     n.drive();
 
     record_stream_reader reader{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     reader.read_definitions(defs);
 
     std::vector<decoded_record> records;
-    const recovery_result       res = reader.recover(records);
+    const recovery_result res = reader.recover(records);
     (void)res;
 
     std::uint64_t delivered = 0;
@@ -205,7 +203,7 @@ struct decim_counts
 // overflow), so the only thing varying payload-bearing-vs-total is the decimation rule.
 decim_counts count_n_run(std::uint32_t n_keep, std::size_t payload_bytes, int burst)
 {
-    net        n;
+    net n;
     const auto id = make_id(0x5D);
 
     plexus::recording_qos cap{};
@@ -225,7 +223,7 @@ decim_counts count_n_run(std::uint32_t n_keep, std::size_t payload_bytes, int bu
             plexus::typed_publisher_options popts;
             popts.qos.latch  = true;
             popts.pool_depth = 8;
-            plexus::publisher<fixed_codec>  pub{n_node, "defaults.topic", popts, fixed_codec{payload_bytes}};
+            plexus::publisher<fixed_codec> pub{n_node, "defaults.topic", popts, fixed_codec{payload_bytes}};
             plexus::subscriber<fixed_codec> sub{n_node, "defaults.topic", [](const sample &) {}};
             n.drive();
 
@@ -250,7 +248,7 @@ decim_counts count_n_run(std::uint32_t n_keep, std::size_t payload_bytes, int bu
     n.drive();
 
     record_stream_reader reader{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     reader.read_definitions(defs);
 
     std::vector<decoded_record> records;
@@ -271,13 +269,13 @@ decim_counts count_n_run(std::uint32_t n_keep, std::size_t payload_bytes, int bu
 // The default's design point: a modest small-payload backlog that fits the 1 MiB ring at
 // full recall. 800 records of 512 B is ~400 KiB of raw payload (well inside the framed
 // budget) — the common pub/sub small-payload case the conservative default targets.
-constexpr int         k_modest_burst   = 800;
+constexpr int k_modest_burst           = 800;
 constexpr std::size_t k_modest_payload = 512;
 
 // A genuine saturating large-payload burst: 2000 records of 4 KiB is ~8 MiB of raw payload,
 // far past the 1 MiB default (so it sheds) yet inside a 16 MiB firehose override (so it
 // recovers in full) — the override path.
-constexpr int         k_firehose_burst   = 2000;
+constexpr int k_firehose_burst           = 2000;
 constexpr std::size_t k_firehose_payload = 4096;
 constexpr std::size_t k_firehose_ring    = 16u * 1024u * 1024u;
 

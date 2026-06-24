@@ -68,7 +68,7 @@ TEST_CASE("udp_backpressure_queue caps on summed BYTES, not entry count", "[io][
     REQUIRE(q.queued_bytes() == 10);
 }
 
-TEST_CASE("udp_backpressure_queue near-cap boundary: byte accounting does not wrap (W1)", "[io][backpressure]")
+TEST_CASE("udp_backpressure_queue near-cap boundary: byte accounting does not wrap", "[io][backpressure]")
 {
     // overflow boundary: a frame at cap-1 bytes followed by a small frame
     // whose sum exceeds the cap is refused (compare-before-add), and the running total

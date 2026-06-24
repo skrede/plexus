@@ -1,6 +1,3 @@
-// over-limit: one cohesive cross-process shared-memory proof; the forked same_host_transports
-// rendezvous + medium assertion is one end-to-end pipeline over a shared /dev/shm region, so it
-// cannot split without scattering that cross-process state
 #include "plexus/asio/same_host_transports.h"
 
 #include "plexus/node.h"
@@ -132,7 +129,7 @@ std::string slab_name(const std::string &fqn)
 bool region_maps(const std::string &fqn)
 {
     posix_shm_region_broker broker;
-    region_handle           ctrl;
+    region_handle ctrl;
     return broker.attach(control_name(fqn), ctrl) == pio::region_status::ok;
 }
 
@@ -174,8 +171,8 @@ coord *map_coord()
 bool ring_carries(const std::string &fqn, std::span<const std::byte> needle, std::chrono::seconds bound)
 {
     posix_shm_region_broker broker;
-    region_handle           ctrl, slab;
-    const auto              deadline = std::chrono::steady_clock::now() + bound;
+    region_handle ctrl, slab;
+    const auto deadline = std::chrono::steady_clock::now() + bound;
     while(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
     {
         if(std::chrono::steady_clock::now() >= deadline)
@@ -189,7 +186,7 @@ bool ring_carries(const std::string &fqn, std::span<const std::byte> needle, std
     while(std::chrono::steady_clock::now() < deadline)
     {
         pio::broadcast_ring::consume_result out;
-        const auto                          st = ring.consume(cursor, out);
+        const auto st = ring.consume(cursor, out);
         if(st == pio::loan_status::ok)
         {
             if(contains(out.slab, needle))
@@ -259,12 +256,12 @@ struct medium_result
 // co-host vs forced-distinct variant.
 medium_result one_run(const std::string &fqn, const std::string &small, const std::string &large, bool same_host)
 {
-    const std::uint16_t   sub_port = static_cast<std::uint16_t>(41000 + 2 * (::getpid() % 9000));
-    const std::uint16_t   pub_port = sub_port + 1;
-    const plexus::node_id sub_id   = make_id(0x51);
-    const plexus::node_id pub_id   = make_id(0x52);
-    const std::string     sub_name = "node.sub." + std::to_string(::getpid());
-    const std::string     pub_name = "node.pub." + std::to_string(::getpid());
+    const std::uint16_t sub_port = static_cast<std::uint16_t>(41000 + 2 * (::getpid() % 9000));
+    const std::uint16_t pub_port = sub_port + 1;
+    const plexus::node_id sub_id = make_id(0x51);
+    const plexus::node_id pub_id = make_id(0x52);
+    const std::string sub_name   = "node.sub." + std::to_string(::getpid());
+    const std::string pub_name   = "node.pub." + std::to_string(::getpid());
 
     coord *c = map_coord();
     if(c == nullptr)
@@ -291,10 +288,10 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
     {
         ::close(pipe_fd[0]);
         {
-            ::asio::io_context                  io;
+            ::asio::io_context io;
             plexus::discovery::static_discovery disc{{peer_card(pub_name, pub_id, pub_port)}};
-            pasio::same_host_transports         ts{io};
-            auto                                node = ts.make_node(disc, sub_id, same_host ? dial_opts(true) : distinct_fingerprint_opts(true, 0xA1A1A1A1u));
+            pasio::same_host_transports ts{io};
+            auto node = ts.make_node(disc, sub_id, same_host ? dial_opts(true) : distinct_fingerprint_opts(true, 0xA1A1A1A1u));
 
             // The subscriber declares its OWN qualifying same-host hint: the upgrade is
             // bilateral-LOCAL (each side decides from its own hint with no wire exchange), so
@@ -310,8 +307,8 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
             plexus::subscriber<> sub{node, fqn, sub_qos, [&](std::span<const std::byte> b)
                                      {
                                          const std::string got(reinterpret_cast<const char *>(b.data()), b.size());
-                                         const char        tag = got == small ? 'S' : (got == large ? 'L' : '?');
-                                         const ssize_t     w   = ::write(pipe_fd[1], &tag, 1);
+                                         const char tag  = got == small ? 'S' : (got == large ? 'L' : '?');
+                                         const ssize_t w = ::write(pipe_fd[1], &tag, 1);
                                          (void)w;
                                      }};
             node.listen({"tcp", "127.0.0.1:" + std::to_string(sub_port)});
@@ -341,10 +338,10 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
 
     medium_result result;
     {
-        ::asio::io_context                  io;
+        ::asio::io_context io;
         plexus::discovery::static_discovery disc{{peer_card(sub_name, sub_id, sub_port)}};
-        pasio::same_host_transports         ts{io};
-        auto                                node = ts.make_node(disc, pub_id, same_host ? dial_opts(false) : distinct_fingerprint_opts(false, 0xB2B2B2B2u));
+        pasio::same_host_transports ts{io};
+        auto node = ts.make_node(disc, pub_id, same_host ? dial_opts(false) : distinct_fingerprint_opts(false, 0xB2B2B2B2u));
 
         if(same_host)
             REQUIRE_FALSE(node.router().local_fingerprint().is_null());
@@ -358,9 +355,9 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
         plexus::publisher<> companion_pub{node, fqn, companion_qos(),
                                           /*emit_source_identity=*/false, companion_geometry()};
 
-        bool       consumer_done = false;
-        bool       ring_signaled = false;
-        const auto deadline      = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        bool consumer_done  = false;
+        bool ring_signaled  = false;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
         while(!consumer_done && std::chrono::steady_clock::now() < deadline)
         {
             io.poll();

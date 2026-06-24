@@ -1,6 +1,4 @@
-// over-limit: one cohesive AEAD-over-fragment composition matrix; the in-order, reorder, and
-// forged-tag cells share the one seal+split+reassembler harness on the inproc test clock, so
-// splitting them scatters that shared fixture The per-fragment AEAD composition proof: the
+// The per-fragment AEAD composition proof: the
 // per-fragment seal composes with the fragmenter (io::split) and the reassembler END TO END, in the
 // shape the code already has — fragment FIRST, then seal each fragment as its own datagram
 // (per-fragment auth; per-message and hybrid are rejected, never re-layered here). A large (>= 1
@@ -63,7 +61,7 @@ public:
     {
         m_closed = true;
     }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    plexus::io::endpoint remote_endpoint() const
     {
         return {"wire", ""};
     }
@@ -83,7 +81,7 @@ public:
     {
         m_on_protocol_close = std::move(cb);
     }
-    [[nodiscard]] std::size_t backpressured() const
+    std::size_t backpressured() const
     {
         return 0;
     }
@@ -94,13 +92,13 @@ public:
             m_on_data(bytes);
     }
 
-    std::function<void(std::span<const std::byte>)>                      m_sink;
-    std::vector<std::byte>                                               m_last;
-    bool                                                                 m_closed{false};
+    std::function<void(std::span<const std::byte>)> m_sink;
+    std::vector<std::byte> m_last;
+    bool m_closed{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                           m_on_closed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
+    plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close;
 };
 
 static_assert(plexus::io::byte_channel<wire_lower>, "wire_lower must satisfy byte_channel for the decorator test");
@@ -159,13 +157,13 @@ std::vector<std::byte> frame_for_fragment(std::span<const std::byte> frag_payloa
 std::vector<std::vector<std::byte>> fragment_and_seal(const derived_keys &keys, std::span<const std::byte> message, std::size_t budget, std::uint16_t msg_id,
                                                       std::uint32_t &frag_cnt_out)
 {
-    wire_lower                                 send_wire;
+    wire_lower send_wire;
     datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys);
 
     std::vector<std::vector<std::byte>> on_wire;
     send_wire.m_sink = [&](std::span<const std::byte> b) { on_wire.emplace_back(b.begin(), b.end()); };
 
-    std::vector<std::byte>    frag_scratch;
+    std::vector<std::byte> frag_scratch;
     plexus::io::fragment_sink sink = [&](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
     {
         plexus::wire::encode_udp_fragment_payload_into(frag_scratch, msg_id, idx, cnt, slice);
@@ -184,10 +182,10 @@ using test_reassembler =
 // reassembler actually sees (the witness — a forged datagram must add nothing here).
 struct receiver_pipe
 {
-    wire_lower                                 recv_wire;
+    wire_lower recv_wire;
     datagram_authenticated_channel<wire_lower> channel;
-    test_reassembler                           reasm;
-    std::size_t                                fragments_fed{0};
+    test_reassembler reasm;
+    std::size_t fragments_fed{0};
 
     receiver_pipe(const derived_keys &keys, plexus::testing::harness &h)
             : channel(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys))
@@ -215,19 +213,19 @@ struct receiver_pipe
 
 TEST_CASE("integration.aead_fragment a sealed-fragment large message round-trips in order", "[aead][fragment][dgram]")
 {
-    const auto        keys    = fixed_keys();
-    const auto        message = make_message(1u * 1024u * 1024u); // 1 MiB
-    const std::size_t budget  = 1200;
+    const auto keys          = fixed_keys();
+    const auto message       = make_message(1u * 1024u * 1024u); // 1 MiB
+    const std::size_t budget = 1200;
 
     for(int run = 0; run < 3; ++run) // a transport claim is never made from one run
     {
         std::uint32_t frag_cnt = 0;
-        const auto    wire     = fragment_and_seal(keys, message, budget, /*msg_id=*/0x2A, frag_cnt);
+        const auto wire        = fragment_and_seal(keys, message, budget, /*msg_id=*/0x2A, frag_cnt);
         REQUIRE(frag_cnt > 1);
         REQUIRE(wire.size() == frag_cnt);
 
         plexus::testing::harness h;
-        receiver_pipe            rx(keys, h);
+        receiver_pipe rx(keys, h);
 
         std::vector<std::byte> delivered;
         rx.reasm.on_deliver([&](std::span<const std::byte> b) { delivered.assign(b.begin(), b.end()); });
@@ -245,21 +243,21 @@ TEST_CASE("integration.aead_fragment a sealed-fragment large message round-trips
           "fragment-scale reorder",
           "[aead][fragment][dgram][reorder]")
 {
-    const auto        keys    = fixed_keys();
-    const auto        message = make_message(1u * 1024u * 1024u); // 1 MiB -> ~900 fragments at 1200 B
-    const std::size_t budget  = 1200;
+    const auto keys          = fixed_keys();
+    const auto message       = make_message(1u * 1024u * 1024u); // 1 MiB -> ~900 fragments at 1200 B
+    const std::size_t budget = 1200;
 
     for(int run = 0; run < 3; ++run)
     {
         std::uint32_t frag_cnt = 0;
-        const auto    wire     = fragment_and_seal(keys, message, budget, /*msg_id=*/0x2A, frag_cnt);
+        const auto wire        = fragment_and_seal(keys, message, budget, /*msg_id=*/0x2A, frag_cnt);
 
         // Reorder the sealed datagrams at fragment scale through the deterministic
         // scheduler: a bounded reorder window well inside the swept anti-replay width, so
         // every reordered-but-fresh fragment opens and the message still completes. The
         // schedule is byte-identical across runs (RNG-free LCG).
         plexus::testing::loss_reorder_scheduler sched(plexus::testing::loss_reorder_config{.loss_num = 0, .reorder_depth = 64, .seed = 0x5eed1234abcd0011ull});
-        std::vector<std::vector<std::byte>>     reordered;
+        std::vector<std::vector<std::byte>> reordered;
         for(const auto &dg : wire)
             for(auto &out : sched.drive(std::span<const std::byte>{dg}))
                 reordered.push_back(std::move(out));
@@ -268,7 +266,7 @@ TEST_CASE("integration.aead_fragment a sealed-fragment large message round-trips
         REQUIRE(reordered.size() == wire.size());
 
         plexus::testing::harness h;
-        receiver_pipe            rx(keys, h);
+        receiver_pipe rx(keys, h);
 
         std::vector<std::byte> delivered;
         rx.reasm.on_deliver([&](std::span<const std::byte> b) { delivered.assign(b.begin(), b.end()); });
@@ -284,18 +282,18 @@ TEST_CASE("integration.aead_fragment a sealed-fragment large message round-trips
 
 TEST_CASE("integration.aead_fragment a forged fragment dies at the tag check before reassembly", "[aead][fragment][dgram][forged]")
 {
-    const auto        keys    = fixed_keys();
-    const auto        message = make_message(64u * 1024u); // a few dozen fragments
-    const std::size_t budget  = 1200;
+    const auto keys          = fixed_keys();
+    const auto message       = make_message(64u * 1024u); // a few dozen fragments
+    const std::size_t budget = 1200;
 
     for(int run = 0; run < 3; ++run)
     {
         std::uint32_t frag_cnt = 0;
-        auto          wire     = fragment_and_seal(keys, message, budget, /*msg_id=*/0x2A, frag_cnt);
+        auto wire              = fragment_and_seal(keys, message, budget, /*msg_id=*/0x2A, frag_cnt);
         REQUIRE(frag_cnt > 2);
 
         plexus::testing::harness h;
-        receiver_pipe            rx(keys, h);
+        receiver_pipe rx(keys, h);
 
         bool delivered = false;
         rx.reasm.on_deliver([&](std::span<const std::byte>) { delivered = true; });
@@ -303,7 +301,7 @@ TEST_CASE("integration.aead_fragment a forged fragment dies at the tag check bef
         // Tamper with one fragment's sealed ciphertext+tag region. It fails open() at the
         // tag check under per-fragment auth; the reassembler must NEVER see it (no feed).
         const std::size_t victim = frag_cnt / 2;
-        auto              forged = wire[victim];
+        auto forged              = wire[victim];
         forged.back() ^= std::byte{0xff};
 
         rx.deliver(std::span<const std::byte>{forged});
@@ -334,10 +332,10 @@ TEST_CASE("integration.aead_fragment the AEAD-decorated budget leaves room for t
     // header_size too — the production datagram fragment path keys the budget off the udp
     // overhead, not a stream frame_header, so the meaningful ceiling for THIS pipe is the
     // transport budget plus the harness's header framing.
-    const auto    keys     = fixed_keys();
-    const auto    message  = make_message(eff_aead * 3 + 17);
+    const auto keys        = fixed_keys();
+    const auto message     = make_message(eff_aead * 3 + 17);
     std::uint32_t frag_cnt = 0;
-    const auto    wire     = fragment_and_seal(keys, message, budget, /*msg_id=*/1, frag_cnt);
+    const auto wire        = fragment_and_seal(keys, message, budget, /*msg_id=*/1, frag_cnt);
     REQUIRE(frag_cnt >= 2);
     for(const auto &dg : wire)
     {

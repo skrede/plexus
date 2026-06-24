@@ -1,6 +1,3 @@
-// over-limit: one cohesive DTLS teardown-discipline E2E matrix; every cell drives the one
-// shared raw-OpenSSL-client + server-channel + demux loopback harness (whose live-handshake
-// preamble alone exceeds the file ceiling), so splitting the cells scatters that one harness.
 #include "dtls_test_support.h"
 
 #include "plexus/tls/dtls_transport.h"
@@ -43,12 +40,12 @@ namespace {
 // shutdown verb, so a real peer's close_notify must drive it.
 struct close_notify_harness
 {
-    ::asio::io_context                  io;
-    ptls::tls_credential                server_cred;
-    ptls::tls_credential                client_cred;
+    ::asio::io_context io;
+    ptls::tls_credential server_cred;
+    ptls::tls_credential client_cred;
     plexus::io::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server                   server_sock{io};
-    pasio::udp_server                   client_sock{io}; // a REAL client socket: the server sends here
+    pasio::udp_server server_sock{io};
+    pasio::udp_server client_sock{io}; // a REAL client socket: the server sends here
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
 
@@ -56,7 +53,7 @@ struct close_notify_harness
     BIO *client_ext{nullptr}; // the client's external BIO (wire side)
 
     std::vector<std::vector<std::byte>> server_to_client; // datagrams the server emitted
-    bool                                server_complete{false};
+    bool server_complete{false};
 
     close_notify_harness(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
@@ -160,7 +157,7 @@ struct close_notify_harness
 // deliver_inbound directly and so bypasses the demux).
 struct dial_link
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     ptls::tls_credential server_cred;
     ptls::tls_credential client_cred;
     ptls::dtls_transport server;
@@ -168,7 +165,7 @@ struct dial_link
 
     std::unique_ptr<ptls::dtls_channel> accepted;
     std::unique_ptr<ptls::dtls_channel> dialed;
-    bool                                dial_failed{false};
+    bool dial_failed{false};
 
     dial_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
@@ -215,7 +212,7 @@ TEST_CASE("dtls.teardown: an inbound datagram after the engine destroys a comple
     // on_datagram -> lookup -> deliver_inbound is a heap-use-after-free (asan). The fix
     // erases the demux entry when the channel tears down, so the frame is a clean MISS.
     constexpr int k_iterations = 50;
-    int           survived     = 0;
+    int survived               = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         dial_link l(server_id, client_id);
@@ -232,7 +229,7 @@ TEST_CASE("dtls.teardown: an inbound datagram after the engine destroys a comple
         // The dialer sends an app frame over the live DTLS channel: it arrives at the
         // server from the SAME source the demux is keyed on. The torn-down entry must be
         // gone, never a freed-pointer deref.
-        const std::string      payload = "after-teardown-" + std::to_string(i);
+        const std::string payload = "after-teardown-" + std::to_string(i);
         std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()), reinterpret_cast<const std::byte *>(payload.data()) + payload.size());
         l.dialed->send(std::span<const std::byte>{frame});
         l.drain();
@@ -255,7 +252,7 @@ TEST_CASE("dtls.teardown: a consumer that destroys the channel in on_closed surv
     // notify fired synchronously — a UAF the loop / try_complete() then touches.
     // Under asan this case is the proof. Looped to shake out any nondeterminism.
     constexpr int k_iterations = 50;
-    int           survived     = 0;
+    int survived               = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         auto h = std::make_unique<close_notify_harness>(server_id, client_id);
@@ -318,7 +315,7 @@ TEST_CASE("dtls.demux: the peer cap still bounds genuinely new senders after the
     // cap are still refused, while an overwrite of a PRESENT key at the cap succeeds
     // (it does not grow the map).
     pdetail::basic_inbound_demux<ptls::dtls_channel> demux(/*max_peers=*/2);
-    auto                                            *p = reinterpret_cast<ptls::dtls_channel *>(0x1000);
+    auto *p = reinterpret_cast<ptls::dtls_channel *>(0x1000);
 
     ::asio::ip::udp::endpoint a(::asio::ip::make_address("127.0.0.1"), 1);
     ::asio::ip::udp::endpoint b(::asio::ip::make_address("127.0.0.1"), 2);

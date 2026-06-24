@@ -1,6 +1,4 @@
-// over-limit: one cohesive downgrade/posture-mismatch refusal matrix; the both-ways refusal cells
-// share the one transcript-bound two-peer_session fail-closed harness, so splitting them scatters
-// that shared fixture The downgrade + posture-mismatch refusal oracle: two peer_sessions over the
+// The downgrade + posture-mismatch refusal oracle: two peer_sessions over the
 // inproc backend prove a forced cipher/version downgrade is refused with the distinguishing
 // downgrade_refused event in BOTH directions, and a secured-vs-plain posture mismatch is refused
 // with posture_mismatch in BOTH directions — fail-closed, no silent plaintext fallback. No OpenSSL:
@@ -73,7 +71,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, const attach_policy *policy)
 // untampered transcript under the test fold) admits.
 struct transcript_policy final : public attach_policy
 {
-    [[nodiscard]] bool decide(const attach_facts &f) const noexcept override
+    bool decide(const attach_facts &f) const noexcept override
     {
         for(auto b : f.transcript_digest)
             if(b != std::byte{0})
@@ -85,7 +83,7 @@ struct transcript_policy final : public attach_policy
 // An always-admit policy (the honest path under no tamper).
 struct admit_policy final : public attach_policy
 {
-    [[nodiscard]] bool decide(const attach_facts &) const noexcept override
+    bool decide(const attach_facts &) const noexcept override
     {
         return true;
     }
@@ -140,24 +138,24 @@ int count_rejected(const std::vector<lifecycle_event> &evs)
 // the per-side security/lifecycle events to assert a refusal in EITHER direction.
 struct link
 {
-    inproc_bus<>                            bus;
-    inproc_executor<>                       ex{bus};
-    inproc_transport<>                      transport{ex, bus};
-    plexus::log::null_logger                sink;
-    msg_forwarder                           req_messages{sink};
-    msg_forwarder                           resp_messages{sink};
-    rpc_forwarder                           req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder                           resp_procedures{ex, k_long_timeout, sink};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    inproc_transport<> transport{ex, bus};
+    plexus::log::null_logger sink;
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
-    std::optional<session>                  requester;
-    std::optional<session>                  responder;
-    security_seam                           req_seam;
-    security_seam                           resp_seam;
-    std::vector<security_event>             req_security;
-    std::vector<security_event>             resp_security;
-    std::vector<lifecycle_event>            req_lifecycle;
-    std::vector<lifecycle_event>            resp_lifecycle;
+    std::optional<session> requester;
+    std::optional<session> responder;
+    security_seam req_seam;
+    security_seam resp_seam;
+    std::vector<security_event> req_security;
+    std::vector<security_event> resp_security;
+    std::vector<lifecycle_event> req_lifecycle;
+    std::vector<lifecycle_event> resp_lifecycle;
 
     link(const attach_policy *req_policy, const attach_policy *resp_policy, security_seam rseam, security_seam pseam)
             : req_seam(std::move(rseam))
@@ -206,8 +204,8 @@ TEST_CASE("downgrade: a forced cipher/version downgrade is refused with downgrad
           "[integration][downgrade]")
 {
     transcript_policy req_pol; // the dialer refuses the tampered transcript
-    admit_policy      resp_pol;
-    link              l{&req_pol, &resp_pol, tampered_seam(), honest_seam()};
+    admit_policy resp_pol;
+    link l{&req_pol, &resp_pol, tampered_seam(), honest_seam()};
     l.drive();
 
     REQUIRE(count_kind(l.req_security, security_kind::downgrade_refused) == 1);
@@ -219,9 +217,9 @@ TEST_CASE("downgrade: a forced cipher/version downgrade is refused with downgrad
           "accepter side",
           "[integration][downgrade]")
 {
-    admit_policy      req_pol;
+    admit_policy req_pol;
     transcript_policy resp_pol; // the accepter refuses the tampered transcript
-    link              l{&req_pol, &resp_pol, honest_seam(), tampered_seam()};
+    link l{&req_pol, &resp_pol, honest_seam(), tampered_seam()};
     l.drive();
 
     REQUIRE(count_kind(l.resp_security, security_kind::downgrade_refused) == 1);
@@ -233,7 +231,7 @@ TEST_CASE("downgrade: an honest secured-vs-secured pair completes with NO postur
 {
     admit_policy req_pol;
     admit_policy resp_pol;
-    link         l{&req_pol, &resp_pol, honest_seam(), honest_seam()};
+    link l{&req_pol, &resp_pol, honest_seam(), honest_seam()};
     l.drive();
 
     REQUIRE(l.requester->is_complete());

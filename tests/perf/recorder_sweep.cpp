@@ -1,7 +1,3 @@
-// over-limit: one cohesive measurement rig bound to the single-TU alloc_counter; both sweeps
-// share the one net/sink harness + median drivers + main report and the program-wide
-// operator-new override, so splitting it across TUs scatters that single-TU allocation
-// contract and the one measurement program.
 // A standalone measurement rig for the recorder's two numeric byte/rate knobs. It drives a
 // saturating producer through the PUBLIC node.make_recorder over an in-memory byte_sink and
 // reports medians over >=3 runs (it REPORTS numbers, it is NOT a ctest — the parity suite
@@ -93,7 +89,7 @@ struct fixed_codec
 
     plexus::wire_bytes<> encode(const sample &) const
     {
-        auto                       owner = std::make_shared<std::vector<std::byte>>(payload_bytes, std::byte{0xC3});
+        auto owner = std::make_shared<std::vector<std::byte>>(payload_bytes, std::byte{0xC3});
         std::span<const std::byte> view{owner->data(), owner->size()};
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
@@ -119,7 +115,7 @@ public:
     {
         m_bytes.insert(m_bytes.end(), bytes.begin(), bytes.end());
     }
-    [[nodiscard]] std::span<const std::byte> bytes() const noexcept
+    std::span<const std::byte> bytes() const noexcept
     {
         return m_bytes;
     }
@@ -148,10 +144,10 @@ plexus::node_options make_opts(plexus::recording_qos capture)
 // in an inner scope over the borrowed substrate (the recorder_capture teardown discipline).
 struct net
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     void drive()
     {
@@ -163,7 +159,7 @@ struct recall_point
 {
     std::uint64_t produced;  // the burst (ground truth: one sample tap per publish)
     std::uint64_t delivered; // sample records recovered from the drained stream
-    double        recall;    // delivered / produced
+    double recall;           // delivered / produced
 };
 
 // One saturating-burst run at a given ring budget + payload size. The whole burst is
@@ -177,7 +173,7 @@ struct recall_point
 // its own dropout_record, so the recovered shed count is a floor on loss, not the metric).
 recall_point run_ring_cell(std::size_t ring_bytes, std::size_t payload_bytes, int burst, plexus::recording_qos capture)
 {
-    net        n;
+    net n;
     const auto id = make_id(0x4C);
 
     growing_byte_sink sink;
@@ -193,7 +189,7 @@ recall_point run_ring_cell(std::size_t ring_bytes, std::size_t payload_bytes, in
             // short-circuits the publish before the tap fires — the demand-driven send gate).
             plexus::topic_qos qos;
             qos.latch = true;
-            plexus::publisher<>  pub{n_node, "sweep.topic", qos};
+            plexus::publisher<> pub{n_node, "sweep.topic", qos};
             plexus::subscriber<> sub{n_node, "sweep.topic", [](std::span<const std::byte>, const plexus::io::message_info &) {}};
             n.drive();
 
@@ -208,11 +204,11 @@ recall_point run_ring_cell(std::size_t ring_bytes, std::size_t payload_bytes, in
     n.drive();
 
     record_stream_reader reader{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     reader.read_definitions(defs);
 
     std::vector<decoded_record> records;
-    const recovery_result       res = reader.recover(records);
+    const recovery_result res = reader.recover(records);
     (void)res;
 
     std::uint64_t delivered = 0;
@@ -221,7 +217,7 @@ recall_point run_ring_cell(std::size_t ring_bytes, std::size_t payload_bytes, in
             ++delivered;
 
     const std::uint64_t produced = static_cast<std::uint64_t>(burst);
-    const double        recall   = produced == 0 ? 0.0 : static_cast<double>(delivered) / static_cast<double>(produced);
+    const double recall          = produced == 0 ? 0.0 : static_cast<double>(delivered) / static_cast<double>(produced);
     return {produced, delivered, recall};
 }
 
@@ -229,7 +225,7 @@ struct decim_point
 {
     std::uint64_t total_samples;   // every produced sample record (envelope or payload)
     std::uint64_t payload_bearing; // sample records that carried real bytes (non-decimated)
-    double        keep_ratio;      // payload_bearing / total_samples
+    double keep_ratio;             // payload_bearing / total_samples
 };
 
 // One decimation run on the TYPED OBJECT lane (the only path the wants_payload gate governs):
@@ -239,7 +235,7 @@ struct decim_point
 // between records (the source clock is wire::now_timestamp_ns).
 decim_point run_decim_cell(plexus::recording_qos capture, std::size_t payload_bytes, int burst)
 {
-    net        n;
+    net n;
     const auto id = make_id(0x5D);
 
     growing_byte_sink sink;
@@ -254,7 +250,7 @@ decim_point run_decim_cell(plexus::recording_qos capture, std::size_t payload_by
             plexus::typed_publisher_options popts;
             popts.qos.latch  = true;
             popts.pool_depth = 8;
-            plexus::publisher<fixed_codec>  pub{n_node, "sweep.topic", popts, fixed_codec{payload_bytes}};
+            plexus::publisher<fixed_codec> pub{n_node, "sweep.topic", popts, fixed_codec{payload_bytes}};
             plexus::subscriber<fixed_codec> sub{n_node, "sweep.topic", [](const sample &) {}};
             n.drive();
 
@@ -279,7 +275,7 @@ decim_point run_decim_cell(plexus::recording_qos capture, std::size_t payload_by
     n.drive();
 
     record_stream_reader reader{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     reader.read_definitions(defs);
 
     std::vector<decoded_record> records;
