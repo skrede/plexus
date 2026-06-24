@@ -3,7 +3,7 @@
 
 #include "plexus/native/region_handle.h"
 
-#include "plexus/io/shm/region_broker_concept.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/detail/compat.h"
 
@@ -19,7 +19,7 @@ namespace plexus::native {
 // shm_unlink) stay hidden behind region_handle; core never pulls a POSIX
 // memory-mapping header. Non-copy/non-move (the house default for a broker).
 //
-// The verbs return the core io::shm::region_status by value and the mapped
+// The verbs return the core plexus::shm::region_status by value and the mapped
 // region through an out-param, mirroring the loan/take out-param convention;
 // the backend-internal shm_error (the errno mapping) never escapes.
 class posix_shm_region_broker
@@ -47,15 +47,15 @@ public:
     // creation mode (0600 owner-only default, the same-uid access floor);
     // opts.unlink_stale_on_create reclaims a crashed creator's orphan once. On
     // ok, `out` owns the name and unlinks it on release.
-    plexus::io::shm::region_status create(std::string_view name, std::size_t bytes,
-                                          const plexus::io::shm::create_options &opts,
+    plexus::shm::region_status create(std::string_view name, std::size_t bytes,
+                                          const plexus::shm::create_options &opts,
                                           region_handle                         &out);
 
     // Maps an existing named region writable. The returned handle is an
     // attacher: it munmaps on release but never unlinks. The attach path is the
     // trust boundary, so it consults the attach policy after name sanitization
     // and before opening; a false result returns denied.
-    plexus::io::shm::region_status attach(std::string_view name, region_handle &out);
+    plexus::shm::region_status attach(std::string_view name, region_handle &out);
 
     // Injection point for an attach-time authorization check. Default-allow; a
     // stricter-than-uid policy can be supplied with no signature churn. A
@@ -67,9 +67,9 @@ private:
     // closed AND the region unlinked (the creator owns the name). The attach mirror maps an
     // existing region's stat'd size and never unlinks. Both relocated out of create()/attach() so
     // each verb stays within the function ceiling.
-    static plexus::io::shm::region_status finish_create(int fd, std::size_t length,
+    static plexus::shm::region_status finish_create(int fd, std::size_t length,
                                                         std::string canonical, region_handle &out);
-    static plexus::io::shm::region_status finish_attach(int fd, std::string canonical,
+    static plexus::shm::region_status finish_attach(int fd, std::string canonical,
                                                         region_handle &out);
 
     plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{[](std::string_view)
@@ -78,7 +78,7 @@ private:
 
 }
 
-static_assert(::plexus::io::shm::region_broker<::plexus::native::posix_shm_region_broker>,
+static_assert(::plexus::shm::region_broker<::plexus::native::posix_shm_region_broker>,
               "posix_shm_region_broker must satisfy the core region_broker concept");
 
 #endif

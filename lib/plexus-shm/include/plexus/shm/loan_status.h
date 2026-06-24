@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_LOAN_STATUS_H
-#define HPP_GUARD_PLEXUS_IO_SHM_LOAN_STATUS_H
+#ifndef HPP_GUARD_PLEXUS_SHM_LOAN_STATUS_H
+#define HPP_GUARD_PLEXUS_SHM_LOAN_STATUS_H
 
 #include <cstdint>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // Synchronous status returned by value from every loan/publish/take verb; the
 // produced handle (a loaned_buffer or taken_message) comes back through an

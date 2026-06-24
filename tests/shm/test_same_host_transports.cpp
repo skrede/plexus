@@ -3,10 +3,10 @@
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/region_naming.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
 
 #include "plexus/node_options.h"
 
@@ -37,7 +37,7 @@
 // one such broker per instance, so two peers share an shm ring by topic name.
 
 namespace pasio = plexus::asio;
-namespace pio   = plexus::io::shm;
+namespace pio   = plexus::shm;
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
 

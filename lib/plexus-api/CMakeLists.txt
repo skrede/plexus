@@ -8,7 +8,7 @@ target_include_directories(plexus-api INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
-target_link_libraries(plexus-api INTERFACE plexus::core)
+target_link_libraries(plexus-api INTERFACE plexus::core plexus::shm)
 
 target_compile_features(plexus-api INTERFACE cxx_std_20)
 

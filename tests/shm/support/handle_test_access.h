@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HANDLE_TEST_ACCESS_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HANDLE_TEST_ACCESS_H
 
-#include "plexus/io/shm/loaned_buffer.h"
-#include "plexus/io/shm/taken_message.h"
+#include "plexus/shm/loaned_buffer.h"
+#include "plexus/shm/taken_message.h"
 
 #include <atomic>
 #include <cstddef>
@@ -14,7 +14,7 @@
 // outside those endpoints, kept in the test tree so production code carries no
 // test-only factory.
 
-namespace plexus::io::shm::test {
+namespace plexus::shm::test {
 
 struct handle_test_access
 {

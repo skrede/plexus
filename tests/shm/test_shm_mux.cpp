@@ -2,10 +2,10 @@
 // fallback cells share the one stub-broker mux-composition harness, and that shared fixture
 // preamble alone exceeds the file ceiling, so the cells cannot split across TUs without
 // scattering that one harness into over-budget shells.
-#include "plexus/io/shm/region_broker_concept.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/shm_mux_member.h"
-#include "plexus/io/shm/shm_slot_owner.h"
+#include "plexus/shm/region_broker_concept.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/shm_mux_member.h"
+#include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/endpoint.h"
@@ -43,7 +43,7 @@
 // when a forced broker failure makes the acquire fail, the SAME dial falls back to the
 // stream member. Looped N>=100 in-body; the binary is re-run >=3 process runs.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 namespace pio = plexus::io;
 
 namespace {
@@ -234,7 +234,7 @@ TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member
         shm_member   shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
-        mux_t               mux{shm, stream, {}, pio::prefer_upgradeable_hook(shm)};
+        mux_t               mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
 
         // The mux wraps each member's dialed channel into a polymorphic_byte_channel and
         // re-emits it; the dialed channel's scheme survives the erasure, so a "shm"-scheme
@@ -269,7 +269,7 @@ TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring a
         shm_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
-        mux_t               mux{shm, stream, {}, pio::prefer_upgradeable_hook(shm)};
+        mux_t               mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
 
         std::string dialed_scheme;
         mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &)

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_REGION_NAMING_H
-#define HPP_GUARD_PLEXUS_IO_SHM_REGION_NAMING_H
+#ifndef HPP_GUARD_PLEXUS_SHM_REGION_NAMING_H
+#define HPP_GUARD_PLEXUS_SHM_REGION_NAMING_H
 
 #include "plexus/wire/topic_hash.h"
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The direction of a same-host ring relative to a request/response exchange. A
 // pub/sub topic uses request as its single direction; a req/res pair names two

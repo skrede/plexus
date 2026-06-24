@@ -82,9 +82,9 @@ std::size_t page_round_up(std::size_t n)
 
 // Fold the backend-internal errno mapping onto the core status the concept
 // returns, so core never observes an errno or shm_error.
-plexus::io::shm::region_status to_status(shm_error e)
+plexus::shm::region_status to_status(shm_error e)
 {
-    using rs = plexus::io::shm::region_status;
+    using rs = plexus::shm::region_status;
     switch(e)
     {
         case shm_error::ok:                return rs::ok;
@@ -101,7 +101,7 @@ plexus::io::shm::region_status to_status(shm_error e)
 
 }
 
-plexus::io::shm::region_status posix_shm_region_broker::finish_create(int fd, std::size_t length,
+plexus::shm::region_status posix_shm_region_broker::finish_create(int fd, std::size_t length,
                                                                       std::string    canonical,
                                                                       region_handle &out)
 {
@@ -120,10 +120,10 @@ plexus::io::shm::region_status posix_shm_region_broker::finish_create(int fd, st
         return to_status(shm_error::map_failed);
     }
     out = region_handle{fd, base, length, std::move(canonical), true};
-    return plexus::io::shm::region_status::ok;
+    return plexus::shm::region_status::ok;
 }
 
-plexus::io::shm::region_status posix_shm_region_broker::finish_attach(int fd, std::string canonical,
+plexus::shm::region_status posix_shm_region_broker::finish_attach(int fd, std::string canonical,
                                                                       region_handle &out)
 {
     struct stat st{};
@@ -141,12 +141,12 @@ plexus::io::shm::region_status posix_shm_region_broker::finish_attach(int fd, st
         return to_status(shm_error::map_failed);
     }
     out = region_handle{fd, base, length, std::move(canonical), false};
-    return plexus::io::shm::region_status::ok;
+    return plexus::shm::region_status::ok;
 }
 
-plexus::io::shm::region_status
+plexus::shm::region_status
 posix_shm_region_broker::create(std::string_view name, std::size_t bytes,
-                                const plexus::io::shm::create_options &opts, region_handle &out)
+                                const plexus::shm::create_options &opts, region_handle &out)
 {
     out = region_handle{};
 
@@ -154,9 +154,9 @@ posix_shm_region_broker::create(std::string_view name, std::size_t bytes,
     // is the real DoS bound: fast-fail BEFORE any syscall, so the subsequent page
     // round-up cannot overflow.
     if(bytes == 0)
-        return plexus::io::shm::region_status::failed;
+        return plexus::shm::region_status::failed;
     if(bytes > k_max_region_size)
-        return plexus::io::shm::region_status::too_large;
+        return plexus::shm::region_status::too_large;
 
     std::string canonical;
     if(const auto status = sanitize_region_name(name, canonical); status != shm_error::ok)
@@ -169,7 +169,7 @@ posix_shm_region_broker::create(std::string_view name, std::size_t bytes,
     return finish_create(fd, page_round_up(bytes), std::move(canonical), out);
 }
 
-plexus::io::shm::region_status posix_shm_region_broker::attach(std::string_view name,
+plexus::shm::region_status posix_shm_region_broker::attach(std::string_view name,
                                                                region_handle   &out)
 {
     out = region_handle{};
@@ -179,7 +179,7 @@ plexus::io::shm::region_status posix_shm_region_broker::attach(std::string_view 
         return to_status(status);
 
     if(m_attach_policy && !m_attach_policy(canonical))
-        return plexus::io::shm::region_status::denied;
+        return plexus::shm::region_status::denied;
 
     const int fd = ::shm_open(canonical.c_str(), O_RDWR, 0);
     if(fd < 0)

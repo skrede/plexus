@@ -1,10 +1,10 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_DETAIL_SHM_MUX_ACQUIRE_H
-#define HPP_GUARD_PLEXUS_IO_SHM_DETAIL_SHM_MUX_ACQUIRE_H
+#ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_MUX_ACQUIRE_H
+#define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_MUX_ACQUIRE_H
 
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_selection.h"
-#include "plexus/io/shm/ring_geometry_mode.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_selection.h"
+#include "plexus/shm/ring_geometry_mode.h"
 
 #include "plexus/io/endpoint.h"
 
@@ -12,9 +12,9 @@
 #include <string>
 #include <cstdint>
 
-// These live in plexus::io::detail: a sibling detail namespace under io/shm would shadow the
-// bare detail:: lookups these headers resolve to io::detail. The reach is by fall-through.
-namespace plexus::io::detail {
+// The family's own detail namespace: the shm_mux_member body reaches these helpers through a
+// bare detail:: lookup that resolves here by fall-through from plexus::shm.
+namespace plexus::shm::detail {
 
 // The per-fqn provisioned geometry the shm member keys by topic: the publisher's effective
 // payload width, the declared mode, and the declared consumer capacity (0 = the shipped floor).

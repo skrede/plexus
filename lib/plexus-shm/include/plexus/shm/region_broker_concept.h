@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_REGION_BROKER_CONCEPT_H
-#define HPP_GUARD_PLEXUS_IO_SHM_REGION_BROKER_CONCEPT_H
+#ifndef HPP_GUARD_PLEXUS_SHM_REGION_BROKER_CONCEPT_H
+#define HPP_GUARD_PLEXUS_SHM_REGION_BROKER_CONCEPT_H
 
 #include "plexus/detail/compat.h"
 
@@ -8,10 +8,10 @@
 #include <concepts>
 #include <string_view>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The status a broker create/attach returns alongside (or instead of) a region
-// handle. Leads with ok exactly as loan_status / io_error do, so the status
+// handle. Leads with ok exactly as loan_status / io::io_error do, so the status
 // families read identically at every call site. A broker maps the irreducible
 // POSIX errors (the name exists, the perms deny, the region is too large, a
 // foreign/corrupt layout) onto this closed set; core never sees an errno.

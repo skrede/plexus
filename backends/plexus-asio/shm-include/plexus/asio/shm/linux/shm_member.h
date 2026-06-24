@@ -7,7 +7,7 @@
 
 #include "plexus/native/posix_shm_region_broker.h"
 
-#include "plexus/io/shm/shm_mux_member.h"
+#include "plexus/shm/shm_mux_member.h"
 
 #include "plexus/muxify.h"
 
@@ -24,13 +24,13 @@ namespace plexus::asio::shm {
 // the member type and its construction recipe ALONE — it pulls in no tls/dtls/udp/openssl,
 // so a lean (crypto-free) composition can compose shared memory without dragging in the
 // secure or datagram backends. The all-backends and the lean compositions both include it.
-using shm_member = io::shm::shm_mux_member<::plexus::native::posix_shm_region_broker,
+using shm_member = ::plexus::shm::shm_mux_member<::plexus::native::posix_shm_region_broker,
                                            ring_notifier<muxify<asio_policy>>>;
 
 // The notifier-binder for the bridge: capture the io_context and emplace a ring_notifier
 // over (executor, word) once the registry binds each ring. Free function so the lambda
 // shape lives in one place.
-[[nodiscard]] inline io::shm::shm_topic_registry<
+[[nodiscard]] inline ::plexus::shm::shm_topic_registry<
         ::plexus::native::posix_shm_region_broker, ring_notifier<muxify<asio_policy>>>::notifier_binder
 make_bridge_binder(::asio::io_context &io)
 {

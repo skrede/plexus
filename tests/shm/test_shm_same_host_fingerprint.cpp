@@ -1,11 +1,11 @@
 #include "plexus/native/machine_fingerprint.h"
 
 #include "plexus/io/host_fingerprint.h"
-#include "plexus/io/shm/ring_layout.h"
+#include "plexus/shm/ring_layout.h"
 
 #include <catch2/catch_test_macros.hpp>
 
-namespace pio = plexus::io::shm;
+namespace pio = plexus::shm;
 
 TEST_CASE("shm.same_host_roundtrip the machine fingerprint is deterministic and non-null",
           "[shm][same_host_roundtrip]")

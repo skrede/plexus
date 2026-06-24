@@ -3,11 +3,11 @@
 // congested; reliable claim gates on the slowest registered cursor (lossless).
 #pragma once
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/slot_subscriber.h"
-#include "plexus/io/shm/taken_message.h"
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/ring_layout.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/slot_subscriber.h"
+#include "plexus/shm/taken_message.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_layout.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -21,7 +21,7 @@
 
 namespace shm_ring_backpressure_fixture {
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 struct backing_region
 {

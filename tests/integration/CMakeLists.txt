@@ -200,6 +200,7 @@ catch_discover_tests(test_peer_session_inproc TEST_PREFIX "integration.")
 add_executable(test_peer_session_same_host_inproc test_peer_session_same_host_inproc.cpp)
 target_link_libraries(test_peer_session_same_host_inproc PRIVATE
     plexus::core
+    plexus::shm
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -307,6 +308,7 @@ catch_discover_tests(test_object_route_inproc TEST_PREFIX "integration.")
 add_executable(test_drop_seam_inproc test_drop_seam_inproc.cpp)
 target_link_libraries(test_drop_seam_inproc PRIVATE
     plexus::core
+    plexus::shm
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)

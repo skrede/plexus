@@ -1,5 +1,5 @@
 #include "plexus/io/host_fingerprint.h"
-#include "plexus/io/shm/region_naming.h"
+#include "plexus/shm/region_naming.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -10,7 +10,7 @@
 // the region name independently with no exchange, so determinism + direction
 // distinctness are the load-bearing properties.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 using plexus::io::host_fingerprint;
 using plexus::io::is_same_host;
 

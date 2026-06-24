@@ -1,15 +1,15 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_RING_GEOMETRY_H
-#define HPP_GUARD_PLEXUS_IO_SHM_RING_GEOMETRY_H
+#ifndef HPP_GUARD_PLEXUS_SHM_RING_GEOMETRY_H
+#define HPP_GUARD_PLEXUS_SHM_RING_GEOMETRY_H
 
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/ring_layout.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/ring_layout.h"
 
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The per-ring slab ceiling: the largest /dev/shm slab a single ring may size, so an
 // oversize payload declaration cannot map an unbounded region. It is the layout-side

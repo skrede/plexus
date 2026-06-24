@@ -1,11 +1,11 @@
 // over-limit: one cohesive ring-memory-cost query matrix; the cells share the one recording
 // stub-broker registry harness that captures the requested slab sizes, so splitting them
 // scatters that shared recording-broker fixture into near-empty per-cell shells.
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/region_broker_concept.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/shm_topic_registry.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/region_broker_concept.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/shm_topic_registry.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -28,7 +28,7 @@
 // broker at mint. The depth-32 16 MiB figure (512 MiB) is pinned so a regression back to
 // the old depth-17 (or a deep-tier off-by-one) is caught.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 namespace {
 

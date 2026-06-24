@@ -2,10 +2,10 @@
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/region_naming.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -26,7 +26,7 @@
 // The machine fingerprint, the broker, and the ring are all proven together.
 // Looped N>=100; the ctest binary is re-run >=3 times for reproducibility.
 
-namespace pio = plexus::io::shm;
+namespace pio = plexus::shm;
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
 

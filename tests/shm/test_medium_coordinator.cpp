@@ -3,8 +3,8 @@
 // coordinator over its injected gates), so splitting the cells scatters that shared
 // recorder-bound fixture into near-empty per-cell shells.
 #include "plexus/io/upgrade_coordinator.h"
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/shm_selection.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/shm_selection.h"
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/demand_transition.h"
@@ -37,7 +37,7 @@
 // route (a fitting message resolves to the companion, an over-cap wire_fallback message to
 // nullptr), the refcount-like 0->1/1->0 mint/drop gating, and the bounded hint map.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 using plexus::io::demand_transition;
 using plexus::io::demand_role;
 using plexus::io::dispatch_hint;

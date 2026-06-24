@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SLOT_PUBLISHER_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SLOT_PUBLISHER_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SLOT_PUBLISHER_H
+#define HPP_GUARD_PLEXUS_SHM_SLOT_PUBLISHER_H
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/loaned_buffer.h"
-#include "plexus/io/shm/loan_status.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/loaned_buffer.h"
+#include "plexus/shm/loan_status.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -11,11 +11,11 @@
 #include <cstddef>
 #include <utility>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
-// The producer endpoint over one broadcast ring: it derives a fixed delivery
+// The producer io::endpoint over one broadcast ring: it derives a fixed delivery
 // policy from the topic's QoS ONCE at construction (the reliable/best_effort
-// class and the block/drop_newest congestion mode become two stored fields, so the hot
+// class and the block/drop_newest io::congestion mode become two stored fields, so the hot
 // loan() never re-reads the QoS), then exposes the two-step loan -> fill ->
 // publish handle protocol the channel facade wraps.
 //
@@ -35,15 +35,15 @@ namespace plexus::io::shm {
 // claim_with_policy(reliable) so the producer gates on the slowest registered
 // cursor; best_effort threads claim_with_policy(best_effort) so it overwrites the
 // latest, skipping pinned slots — the cross-transport drop_oldest analog. The
-// congestion field rides through to the ring (block vs the drop modes is the
+// io::congestion field rides through to the ring (block vs the drop modes is the
 // publisher's contract; the ring surfaces congested either way and the
 // channel/caller decides).
 //
-// Borrows the ring BY REFERENCE; non-copy/non-move owning endpoint.
+// Borrows the ring BY REFERENCE; non-copy/non-move owning io::endpoint.
 class slot_publisher
 {
 public:
-    slot_publisher(broadcast_ring &ring, reliability rel, congestion cong) noexcept
+    slot_publisher(broadcast_ring &ring, io::reliability rel, io::congestion cong) noexcept
             : m_ring(ring)
             , m_reliability(rel)
             , m_congestion(cong)
@@ -78,8 +78,8 @@ public:
         return m_ring.commit(spent.m_position, spent.m_filled);
     }
 
-    reliability delivery() const noexcept { return m_reliability; }
-    congestion  overflow() const noexcept { return m_congestion; }
+    io::reliability delivery() const noexcept { return m_reliability; }
+    io::congestion  overflow() const noexcept { return m_congestion; }
 
     // The slowest registered consumer cursor -- the back-pressure progress signal a
     // blocking reliable producer watches to tell a live-but-slow consumer from a
@@ -91,8 +91,8 @@ public:
 
 private:
     broadcast_ring &m_ring;
-    reliability     m_reliability;
-    congestion      m_congestion;
+    io::reliability     m_reliability;
+    io::congestion      m_congestion;
 };
 
 }

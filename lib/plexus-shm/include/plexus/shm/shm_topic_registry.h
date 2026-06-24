@@ -1,17 +1,17 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SHM_TOPIC_REGISTRY_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SHM_TOPIC_REGISTRY_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SHM_TOPIC_REGISTRY_H
+#define HPP_GUARD_PLEXUS_SHM_SHM_TOPIC_REGISTRY_H
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/notifier_concept.h"
-#include "plexus/io/shm/region_broker_concept.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/region_naming.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_slot_owner.h"
-#include "plexus/io/shm/shm_acquire_result.h"
-#include "plexus/io/shm/detail/shm_topic_open.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/region_broker_concept.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/shm_acquire_result.h"
+#include "plexus/shm/detail/shm_topic_open.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -29,7 +29,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // over-limit: one cohesive ring-lifecycle owner; the acquire/release/sink/drain verbs and the
 // nested entry all share the m_entries ownership table + the per-entry notifier-arm/teardown
@@ -72,7 +72,7 @@ public:
     // max_ring_slab_bytes is the node-level per-ring slab ceiling enforced at registration —
     // required-with-default the shipped k_max_ring_slab_bytes so a caller that threads no node
     // knob keeps the shipped bound. The acquire fails closed above it.
-    shm_topic_registry(Broker &broker, reliability rel, congestion cong,
+    shm_topic_registry(Broker &broker, io::reliability rel, io::congestion cong,
                        notifier_binder bind_notifier       = default_notifier_binder(),
                        std::uint64_t   max_ring_slab_bytes = k_max_ring_slab_bytes,
                        std::string     region_ns           = {}) noexcept
@@ -271,16 +271,16 @@ private:
     };
 
     template<typename R, typename E>
-    friend ::plexus::io::shm::acquire_result
-    detail::topic_open_ring(R &, E &, const std::string &, ::plexus::io::shm::ring_direction,
-                            std::uint32_t, ::plexus::io::shm::ring_geometry_mode, std::uint32_t,
-                            ::plexus::io::shm::acquire_mode);
+    friend ::plexus::shm::acquire_result
+    detail::topic_open_ring(R &, E &, const std::string &, ::plexus::shm::ring_direction,
+                            std::uint32_t, ::plexus::shm::ring_geometry_mode, std::uint32_t,
+                            ::plexus::shm::acquire_mode);
     template<typename R, typename E>
-    friend ::plexus::io::shm::acquire_result
-    detail::topic_mint(R &, E &, const std::string &, const ::plexus::io::shm::ring_geometry &,
+    friend ::plexus::shm::acquire_result
+    detail::topic_mint(R &, E &, const std::string &, const ::plexus::shm::ring_geometry &,
                        std::uint64_t);
     template<typename R, typename E>
-    friend ::plexus::io::shm::acquire_result detail::topic_join(R &, E &, const std::string &,
+    friend ::plexus::shm::acquire_result detail::topic_join(R &, E &, const std::string &,
                                                                 const std::string &);
     template<typename R>
     friend bool detail::topic_region_exists(R &, const std::string &);
@@ -306,8 +306,8 @@ private:
     }
 
     Broker         &m_broker;
-    reliability     m_reliability;
-    congestion      m_congestion;
+    io::reliability     m_reliability;
+    io::congestion      m_congestion;
     notifier_binder m_bind_notifier;
     std::uint64_t   m_max_ring_slab_bytes;
     std::string     m_region_ns;

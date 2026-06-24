@@ -1,5 +1,5 @@
-#include "plexus/io/shm/region_broker_concept.h"
-#include "plexus/io/shm/notifier_concept.h"
+#include "plexus/shm/region_broker_concept.h"
+#include "plexus/shm/notifier_concept.h"
 
 #include "plexus/detail/compat.h"
 
@@ -14,7 +14,7 @@
 // (the surface a backend must present is correct and self-consistent) and that the
 // notifier's drain is a move-only callback, with NO POSIX/asio in the core TU.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 namespace {
 

@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_RING_GEOMETRY_MODE_H
-#define HPP_GUARD_PLEXUS_IO_SHM_RING_GEOMETRY_MODE_H
+#ifndef HPP_GUARD_PLEXUS_SHM_RING_GEOMETRY_MODE_H
+#define HPP_GUARD_PLEXUS_SHM_RING_GEOMETRY_MODE_H
 
 #include <cstdint>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // How a ring's depth is derived from its declared consumer capacity and payload.
 // reliable_preserving leads so it is the zero/default value (the safe-verdict-first
@@ -17,7 +17,7 @@ enum class ring_geometry_mode : std::uint8_t
 
     // Keep the fast SHM ring at LOW memory by admitting depth == consumers
     // (best-effort-exempt from the strict depth>consumers invariant) for large
-    // payloads, trading the reliability guarantee. An EXPLICIT opt-in, NEVER reached
+    // payloads, trading the io::reliability guarantee. An EXPLICIT opt-in, NEVER reached
     // as a silent fallback from a reliable ring that cannot be provisioned.
     best_effort_large,
 

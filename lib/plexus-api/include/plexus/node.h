@@ -441,7 +441,7 @@ private:
     void declare_publisher_seam(std::string_view fqn, const topic_qos &qos,
                                 bool                                  emit_source_identity,
                                 std::optional<std::uint64_t>          type_id      = std::nullopt,
-                                std::optional<io::shm::shm_geometry>  shm_geometry = std::nullopt,
+                                std::optional<shm::shm_geometry>  shm_geometry = std::nullopt,
                                 std::optional<io::topic_capture_rule> capture      = std::nullopt)
     {
         m_engine.messages().declare(fqn, qos, type_id, emit_source_identity);
@@ -471,7 +471,7 @@ private:
     // per-topic override resolves to each shm member's OWN default_geometry() (the member, not
     // node_options, owns the same-host ring default).
     void provision_same_host_ring(std::string_view fqn, std::size_t effective_bytes,
-                                  std::optional<io::shm::shm_geometry> geom)
+                                  std::optional<shm::shm_geometry> geom)
     {
         std::string key{fqn};
         for_each_shm_member([&](auto &m)
@@ -527,7 +527,7 @@ private:
 
     template<typename M>
     static constexpr bool has_topic_geometry = requires(M &m) {
-        m.set_topic_geometry(std::string{}, std::size_t{}, io::shm::shm_geometry{});
+        m.set_topic_geometry(std::string{}, std::size_t{}, shm::shm_geometry{});
     };
 
     // Resolve the FIRST connection-order peer with a complete session and route the call to it.
@@ -668,9 +668,9 @@ private:
                                  std::optional<std::uint64_t> type_id, const void *geometry,
                                  std::optional<io::topic_capture_rule> capture)
         {
-            std::optional<io::shm::shm_geometry> shm_geometry;
+            std::optional<shm::shm_geometry> shm_geometry;
             if(geometry != nullptr)
-                shm_geometry = *static_cast<const io::shm::shm_geometry *>(geometry);
+                shm_geometry = *static_cast<const shm::shm_geometry *>(geometry);
             static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry,
                                                              capture);
         };

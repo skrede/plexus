@@ -43,7 +43,7 @@ struct typed_publisher_options
     // optional because ABSENCE is meaningful: unset falls back to the node-level default,
     // present overrides per topic — "not declared" is distinct from "declared as the default".
     // Producer-side same-host provisioning only, never wire-advertised, never RxO.
-    std::optional<io::shm::shm_geometry> shm_geometry{};
+    std::optional<shm::shm_geometry> shm_geometry{};
 
     // optional because ABSENCE is meaningful (the shm_geometry precedent): unset falls back to
     // the node-level recording_qos, present overrides the recording fidelity for this topic.
@@ -64,7 +64,7 @@ public:
     template<typename Policy, typename... NodeTs>
     publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {},
               bool                                 emit_source_identity = false,
-              std::optional<io::shm::shm_geometry> shm_geometry         = std::nullopt)
+              std::optional<shm::shm_geometry> shm_geometry         = std::nullopt)
             : m_seam(n.endpoint_seam_for())
             , m_fqn(fqn)
     {

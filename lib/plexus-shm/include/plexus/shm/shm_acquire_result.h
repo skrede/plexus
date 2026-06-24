@@ -1,11 +1,11 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SHM_ACQUIRE_RESULT_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SHM_ACQUIRE_RESULT_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SHM_ACQUIRE_RESULT_H
+#define HPP_GUARD_PLEXUS_SHM_SHM_ACQUIRE_RESULT_H
 
-#include "plexus/io/shm/region_broker_concept.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include <cstdint>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The outcome of an acquire: a topic ring is either freshly MINTED by this node (created — it
 // owns the unlink), ATTACHED to a peer's existing ring (it never unlinks), or FAILED (the

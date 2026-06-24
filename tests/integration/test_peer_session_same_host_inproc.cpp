@@ -17,7 +17,7 @@
 #include "plexus/io/handshake_fsm.h"
 
 #include "plexus/io/host_fingerprint.h"
-#include "plexus/io/shm/shm_selection.h"
+#include "plexus/shm/shm_selection.h"
 #include "plexus/io/dispatch_hint.h"
 
 #include "plexus/inproc/inproc_policy.h"
@@ -161,8 +161,8 @@ TEST_CASE("the same-host verdict gates shared-memory eligibility: a non-same-hos
           "attempts a ring acquire",
           "[integration][peer_session][same_host][inproc]")
 {
-    using plexus::io::shm::select_same_host_medium;
-    using plexus::io::shm::same_host_medium;
+    using plexus::shm::select_same_host_medium;
+    using plexus::shm::same_host_medium;
     using plexus::io::dispatch_hint;
 
     link l{k_host_a, k_host_b}; // distinct hosts

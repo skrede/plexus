@@ -7,12 +7,12 @@
 #include "plexus/native/region_handle.h"
 #include "plexus/native/futex_notifier_primitive.h"
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/region_naming.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_slot_owner.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -51,7 +51,7 @@
 // Both are keyed to one topic (the deterministic region name + the loopback peer carry the
 // same fqn). Looped N>=3 in-body; the binary is re-run >=3 process runs for reproducibility.
 
-namespace pio = plexus::io::shm;
+namespace pio = plexus::shm;
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
 

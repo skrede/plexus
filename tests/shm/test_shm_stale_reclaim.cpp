@@ -1,7 +1,7 @@
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
-#include "plexus/io/shm/region_broker_concept.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include "support/xproc_harness.h"
 
@@ -26,7 +26,7 @@
 // bounded mitigation that ships now; robust dead-peer arbitration is a locked
 // deferral and is NOT designed here.
 
-namespace pio = plexus::io::shm;
+namespace pio = plexus::shm;
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
 

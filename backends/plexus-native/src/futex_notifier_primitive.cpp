@@ -45,7 +45,7 @@ void notifier_signal(std::atomic<std::uint32_t> &generation,
     // consumer was actually parked; a spinning (EMPTY) consumer sees the generation
     // move on its own, and an already-NOTIFIED state means a wake is already pending.
     const std::uint32_t prior =
-            park_state.exchange(::plexus::io::shm::k_park_notified, std::memory_order_acq_rel);
+            park_state.exchange(::plexus::shm::k_park_notified, std::memory_order_acq_rel);
     if(should_wake(prior))
         futex_op(reinterpret_cast<std::uint32_t *>(&generation), FUTEX_WAKE, INT_MAX);
 }

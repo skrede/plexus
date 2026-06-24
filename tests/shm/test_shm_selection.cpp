@@ -1,4 +1,4 @@
-#include "plexus/io/shm/shm_selection.h"
+#include "plexus/shm/shm_selection.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -6,7 +6,7 @@
 // resolves to the shared-memory medium; a same-host pair with no hint falls back to
 // the stream; a cross-host pair is never shared-memory regardless of hint.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 using plexus::io::dispatch_hint;
 using plexus::io::host_fingerprint;
 

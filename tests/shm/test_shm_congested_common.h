@@ -5,11 +5,11 @@
 // across N sends (the alloc-counter idiom).
 #pragma once
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_slot_owner.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -30,7 +30,7 @@
 
 namespace shm_congested_fixture {
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 // A no-op notifier satisfying the seam (this TU exercises the loan/publish gate,
 // not the wakeup; the channel still requires a notifier reference).

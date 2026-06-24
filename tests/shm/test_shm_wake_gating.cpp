@@ -1,6 +1,6 @@
 #include "plexus/native/futex_notifier_primitive.h"
 
-#include "plexus/io/shm/ring_layout.h"
+#include "plexus/shm/ring_layout.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -26,7 +26,7 @@
 
 namespace {
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 // A shared anonymous page holding the gated wakeup state: the generation word the
 // futex rides on + the 3-state park word the producer reads to gate the syscall.

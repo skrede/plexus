@@ -1,13 +1,13 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SHM_CHANNEL_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SHM_CHANNEL_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SHM_CHANNEL_H
+#define HPP_GUARD_PLEXUS_SHM_SHM_CHANNEL_H
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/loaned_buffer.h"
-#include "plexus/io/shm/notifier_concept.h"
-#include "plexus/io/shm/slot_publisher.h"
-#include "plexus/io/shm/slot_subscriber.h"
-#include "plexus/io/shm/taken_message.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/loaned_buffer.h"
+#include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/slot_publisher.h"
+#include "plexus/shm/slot_subscriber.h"
+#include "plexus/shm/taken_message.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -22,7 +22,7 @@
 #include <thread>
 #include <utility>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The send/drain facade composing a slot_publisher + slot_subscriber over ONE
 // ring with the notifier seam. It is the transport's working surface: a send does
@@ -59,7 +59,7 @@ public:
     // spin_budget is the consumer-sovereign adaptive spin-then-park knob threaded to the
     // slot_subscriber (required-WITH-default — the swept knee): the subscriber spins up to
     // the budget on an empty take before this drain returns and the notifier parks.
-    shm_channel(broadcast_ring &ring, Notifier &notify, reliability rel, congestion cong,
+    shm_channel(broadcast_ring &ring, Notifier &notify, io::reliability rel, io::congestion cong,
                 std::uint32_t spin_budget = slot_subscriber::default_spin_budget) noexcept
             : m_publisher(ring, rel, cong)
             , m_subscriber(ring, spin_budget)
@@ -124,8 +124,8 @@ private:
     loan_status loan_blocking(std::size_t size, loaned_buffer &out) noexcept
     {
         loan_status st = m_publisher.loan(size, out);
-        if(m_publisher.delivery() != reliability::reliable ||
-           m_publisher.overflow() != congestion::block)
+        if(m_publisher.delivery() != io::reliability::reliable ||
+           m_publisher.overflow() != io::congestion::block)
             return st; // best_effort / non-block: surface the status as-is (no blocking)
 
         std::uint64_t last_seen = m_publisher.slowest_consumer_position();

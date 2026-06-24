@@ -5,12 +5,12 @@
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/notifier_concept.h"
-#include "plexus/io/shm/shm_selection.h"
-#include "plexus/io/shm/shm_mux_member.h"
-#include "plexus/io/shm/region_naming.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/shm_selection.h"
+#include "plexus/shm/shm_mux_member.h"
+#include "plexus/shm/region_naming.h"
 
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/byte_channel.h"
@@ -55,7 +55,7 @@
 // subscriber with NO companion ring still receives every message over the wire — the
 // ring is the small-message fast path, never a correctness dependency.
 
-namespace pio = plexus::io::shm;
+namespace pio = plexus::shm;
 using plexus::io::endpoint;
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;

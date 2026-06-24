@@ -5,8 +5,8 @@
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/polymorphic_byte_channel.h"
-#include "plexus/io/shm/shm_selection.h"
-#include "plexus/io/shm/shm_preference_hook.h"
+#include "plexus/shm/shm_selection.h"
+#include "plexus/shm/shm_preference_hook.h"
 
 #include <span>
 #include <string>
@@ -44,7 +44,7 @@ template<typename M>
 void bind_shm_hook(io::selection_hook &hook, M &member)
 {
     if constexpr(node_has_can_acquire<M>)
-        hook = io::prefer_upgradeable_hook(member);
+        hook = shm::prefer_upgradeable_hook(member);
 }
 
 // Build the hook over whichever borrowed member exposes the ring acquire probe, capturing it by
@@ -91,8 +91,8 @@ void install_same_host_upgrade(Engine &engine, Member &member)
                 // The medium constructs its per-message route at mint time: a message rides the
                 // ring when route_message_medium picks shm for the resolved mode + capacity.
                 auto fits = [mode = g.mode, cap = g.slot_capacity](std::size_t bytes)
-                { return io::shm::route_message_medium(mode, bytes, cap) ==
-                         io::shm::same_host_medium::shm; };
+                { return shm::route_message_medium(mode, bytes, cap) ==
+                         shm::same_host_medium::shm; };
                 return {wrap_companion<engine_channel>(std::move(ch)), std::move(fits)};
             });
     // The SUBSCRIBER-side receive gate: attach the co-host ring as a consumer and route each

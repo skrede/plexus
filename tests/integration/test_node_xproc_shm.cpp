@@ -12,9 +12,9 @@
 #include "plexus/native/region_handle.h"
 #include "plexus/native/machine_fingerprint.h"
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/region_naming.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/region_naming.h"
 #include "plexus/io/host_fingerprint.h"
 
 #include "plexus/discovery/static_discovery.h"
@@ -64,7 +64,7 @@
 // independent runs with distinct per-run payloads (no success from a single run).
 
 namespace pasio = plexus::asio;
-namespace pio   = plexus::io::shm;
+namespace pio   = plexus::shm;
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
 

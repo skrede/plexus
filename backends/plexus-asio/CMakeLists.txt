@@ -66,6 +66,7 @@ if(PLEXUS_ENABLE_SHM_BACKEND)
 
     target_link_libraries(plexus-asio-shm INTERFACE
         plexus::asio
+        plexus::shm
         plexus::native
         PkgConfig::LIBURING)
 

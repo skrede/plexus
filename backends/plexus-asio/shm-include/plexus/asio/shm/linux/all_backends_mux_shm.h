@@ -41,7 +41,7 @@ make_all_backends_mux_shm(shm_member &shm, unix_transport &local, asio_transport
 {
     return all_backends_mux_shm{shm,      local,           remote,  secure,
                                 datagram, secure_datagram, selector,
-                                io::prefer_upgradeable_hook(shm)};
+                                ::plexus::shm::prefer_upgradeable_hook(shm)};
 }
 
 }

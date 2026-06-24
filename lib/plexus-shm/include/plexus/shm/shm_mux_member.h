@@ -1,18 +1,18 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SHM_MUX_MEMBER_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SHM_MUX_MEMBER_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SHM_MUX_MEMBER_H
+#define HPP_GUARD_PLEXUS_SHM_SHM_MUX_MEMBER_H
 
-#include "plexus/io/shm/region_broker_concept.h"
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/notifier_concept.h"
-#include "plexus/io/shm/shm_selection.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/region_naming.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_slot_owner.h"
-#include "plexus/io/shm/shm_byte_channel.h"
-#include "plexus/io/shm/shm_topic_registry.h"
-#include "plexus/io/shm/shm_preference_hook.h"
-#include "plexus/io/shm/detail/shm_mux_acquire.h"
+#include "plexus/shm/region_broker_concept.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/shm_selection.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/region_naming.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/shm_byte_channel.h"
+#include "plexus/shm/shm_topic_registry.h"
+#include "plexus/shm/shm_preference_hook.h"
+#include "plexus/shm/detail/shm_mux_acquire.h"
 
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/endpoint.h"
@@ -39,17 +39,17 @@
 #include <string_view>
 #include <unordered_map>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The same-host upgrade decision: given THIS end's same_host verdict and the topic's own
 // dispatch hint, whether to attempt the shared-memory ring acquire. A plain function pointer
 // keeps the carrying surface trivially copyable (the injected-predicate style, not an allocating
 // policy registry). It can only DECLINE the upgrade — the same_host gate inside the default still
 // holds. Owned by the shm transport (the user composes that transport), not by node_options.
-using upgrade_policy_fn = bool (*)(bool same_host, dispatch_hint own_hint);
+using upgrade_policy_fn = bool (*)(bool same_host, io::dispatch_hint own_hint);
 
 // The shipped default: the bilateral, consumer-sovereign same-host auto-upgrade.
-[[nodiscard]] inline bool default_upgrade_policy(bool same_host, dispatch_hint own_hint) noexcept
+[[nodiscard]] inline bool default_upgrade_policy(bool same_host, io::dispatch_hint own_hint) noexcept
 {
     return attempt_shm_upgrade(same_host, own_hint);
 }
@@ -85,7 +85,7 @@ public:
     // (required-with-default: a default-constructible notifier needs none). region_ns is the
     // static shm-region namespace (EMPTY shares rings by topic; a distinct namespace isolates
     // this application's same-host shm from unrelated apps).
-    shm_mux_member(Broker &broker, reliability rel, congestion cong,
+    shm_mux_member(Broker &broker, io::reliability rel, io::congestion cong,
                    notifier_binder bind_notifier = registry_type::default_notifier_binder(),
                    std::string     region_ns     = {}) noexcept
             : m_registry(broker, rel, cong, std::move(bind_notifier), k_max_ring_slab_bytes,
@@ -101,23 +101,23 @@ public:
         m_on_accepted = std::move(cb);
     }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>,
-                                                           const endpoint &)>
+                                                           const io::endpoint &)>
                            cb)
     {
         m_on_dialed = std::move(cb);
     }
-    void on_dial_failed(plexus::detail::move_only_function<void(const endpoint &, io_error)> cb)
+    void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
         m_on_dial_failed = std::move(cb);
     }
-    void on_error(plexus::detail::move_only_function<void(io_error)> cb)
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error = std::move(cb);
     }
 
     // The creator side: acquire (minting) the ring for the topic and announce the
     // accepted channel over it.
-    void listen(const endpoint &ep)
+    void listen(const io::endpoint &ep)
     {
         auto ch = detail::mux_open(*this, ep);
         if(ch && m_on_accepted)
@@ -125,12 +125,12 @@ public:
     }
 
     // The dialer side: acquire the ring and hand the live channel up, carrying the
-    // dialed endpoint back so the engine correlates the completion to its slot.
-    void dial(const endpoint &ep)
+    // dialed io::endpoint back so the engine correlates the completion to its slot.
+    void dial(const io::endpoint &ep)
     {
         auto ch = detail::mux_open(*this, ep);
         if(!ch)
-            return report_dial_fail(ep, io_error::connection_refused);
+            return report_dial_fail(ep, io::io_error::connection_refused);
         if(m_on_dialed)
             m_on_dialed(std::move(ch), ep);
     }
@@ -143,7 +143,7 @@ public:
     // bump. A wire_fallback topic declines OUTRIGHT (no acquire): its recorded session channel
     // MUST be the wire so an over-cap message always has a reliable fallback (the capped ring
     // stays a small-message companion fast path, not the sole channel).
-    [[nodiscard]] bool can_acquire(const endpoint &ep)
+    [[nodiscard]] bool can_acquire(const io::endpoint &ep)
     {
         const auto g = detail::mux_resolve(*this, ep.address, ring_direction::request);
         if(g.mode == ring_geometry_mode::wire_fallback)
@@ -154,7 +154,7 @@ public:
 
     // Drop a held probe bump the dial did not consume (the hook probed shm but chose the
     // stream fallback for a co-tier reason). Keeps the refcount honest.
-    void abandon(const endpoint &ep) { m_registry.release(ep.address, ring_direction::request); }
+    void abandon(const io::endpoint &ep) { m_registry.release(ep.address, ring_direction::request); }
 
     // Mint a per-topic COMPANION ring channel for the same-host upgrade coordinator: the
     // additive fast path a co-host (peer, topic) pair runs ALONGSIDE its wire session. Unlike
@@ -165,7 +165,7 @@ public:
         // join_live, not reclaim_stale: the co-host subscriber may have minted this same
         // companion ring first (its receive lane), so a clobbering unlink would split the pair
         // onto two rings. Attach-first when it exists, mint when it does not.
-        return detail::mux_open(*this, endpoint{"shm", fqn}, acquire_mode::join_live);
+        return detail::mux_open(*this, io::endpoint{"shm", fqn}, acquire_mode::join_live);
     }
 
     // The receive half of the companion model: attach the request-direction ring as a CONSUMER
@@ -255,7 +255,7 @@ private:
     friend detail::shm_resolved_geometry detail::mux_resolve(const M &, const std::string &,
                                                              shm::ring_direction);
 
-    void report_dial_fail(const endpoint &ep, io_error e)
+    void report_dial_fail(const io::endpoint &ep, io::io_error e)
     {
         if(m_on_dial_failed)
             m_on_dial_failed(ep, e);
@@ -266,10 +266,10 @@ private:
     shm_geometry      m_default_geometry{};
     upgrade_policy_fn m_upgrade_policy{&default_upgrade_policy};
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)>
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const io::endpoint &)>
                                                                          m_on_dialed;
-    plexus::detail::move_only_function<void(const endpoint &, io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io_error)>                   m_on_error;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
+    plexus::detail::move_only_function<void(io::io_error)>                   m_on_error;
 };
 
 }

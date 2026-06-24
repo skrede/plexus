@@ -1,9 +1,9 @@
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/slot_publisher.h"
-#include "plexus/io/shm/slot_subscriber.h"
-#include "plexus/io/shm/taken_message.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/slot_publisher.h"
+#include "plexus/shm/slot_subscriber.h"
+#include "plexus/shm/taken_message.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -28,7 +28,7 @@
 //   * budget>0, idle: take terminates and returns empty (the spin is bounded, never hangs),
 //     so the notifier park takes over when genuinely idle.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 namespace {
 

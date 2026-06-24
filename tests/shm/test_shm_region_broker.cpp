@@ -1,7 +1,7 @@
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
-#include "plexus/io/shm/region_broker_concept.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -23,7 +23,7 @@
 
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
-namespace pio = plexus::io::shm;
+namespace pio = plexus::shm;
 
 static_assert(pio::region_broker<posix_shm_region_broker>,
               "the broker test fixes the concept satisfaction as a compile gate");

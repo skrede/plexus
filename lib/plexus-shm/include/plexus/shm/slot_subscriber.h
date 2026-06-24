@@ -1,20 +1,20 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SLOT_SUBSCRIBER_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SLOT_SUBSCRIBER_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SLOT_SUBSCRIBER_H
+#define HPP_GUARD_PLEXUS_SHM_SLOT_SUBSCRIBER_H
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/cpu_relax.h"
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/taken_message.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/cpu_relax.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/taken_message.h"
 
 #include <cstdint>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
-// The consumer endpoint over one broadcast ring. It owns its OWN in-region read
+// The consumer io::endpoint over one broadcast ring. It owns its OWN in-region read
 // cursor: it registers a cursor at construction (starting at the producer's tail
 // so it sees only messages published after it joins) and unregisters it at
 // destruction (so the cursor stops gating producer reclamation). A registration
-// failure (the ring is at its k_max_consumers bound) leaves the endpoint with no
+// failure (the ring is at its k_max_consumers bound) leaves the io::endpoint with no
 // cursor; every take() then no-ops to empty.
 //
 //   take(out)   read the next message for this cursor. ok hands back a move-only
@@ -42,7 +42,7 @@ namespace plexus::io::shm {
 // default_spin_budget): it catches a genuine back-to-back arrival while staying
 // CPU-cheap and park-dominated, with the knob for a latency-maximalist consumer to opt up.
 //
-// Borrows the ring BY REFERENCE; non-copy/non-move owning endpoint.
+// Borrows the ring BY REFERENCE; non-copy/non-move owning io::endpoint.
 class slot_subscriber
 {
 public:

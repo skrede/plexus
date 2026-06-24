@@ -4,10 +4,10 @@
 // one harness into over-budget shells.
 #include "plexus/native/posix_shm_region_broker.h"
 
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/notifier_concept.h"
-#include "plexus/io/shm/shm_selection.h"
-#include "plexus/io/shm/shm_mux_member.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/shm_selection.h"
+#include "plexus/shm/shm_mux_member.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -60,7 +60,7 @@
 // contracts. The forwarder-side mechanism (route_message_medium + the on_companion_route
 // hook) stays built + unit-proven in test_shm_wire_fallback.cpp for that future lift.
 
-namespace pio   = plexus::io::shm;
+namespace pio   = plexus::shm;
 namespace pcore = plexus::io;
 using plexus::io::endpoint;
 using plexus::native::posix_shm_region_broker;
@@ -141,7 +141,7 @@ std::string route_for_mode(const std::string &fqn, pio::ring_geometry_mode mode)
     member.set_topic_geometry(fqn, 4 * k_kib, pio::shm_geometry{2u, mode});
 
     stream_member stream;
-    mux_t         mux{member, stream, {}, plexus::io::prefer_upgradeable_hook(member)};
+    mux_t         mux{member, stream, {}, plexus::shm::prefer_upgradeable_hook(member)};
 
     std::string dialed_scheme;
     mux.on_dialed([&](std::unique_ptr<pcore::polymorphic_byte_channel> ch, const endpoint &)

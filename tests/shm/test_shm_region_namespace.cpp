@@ -1,10 +1,10 @@
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/region_naming.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -27,7 +27,7 @@
 // differ, so no cross-delivery). The empty-namespace name equals the namespace-less name, so the
 // existing shm rings are unchanged (back-compat, asserted at the naming layer here too).
 
-namespace pio = plexus::io::shm;
+namespace pio = plexus::shm;
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
 

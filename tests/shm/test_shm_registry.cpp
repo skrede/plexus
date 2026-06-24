@@ -2,13 +2,13 @@
 // share the one stub-broker + recording-notifier registry harness, and that shared fixture
 // preamble alone exceeds the file ceiling, so the cells cannot split across TUs without
 // scattering that one harness into over-budget shells.
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/region_broker_concept.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/region_naming.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_slot_owner.h"
-#include "plexus/io/shm/shm_topic_registry.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/region_broker_concept.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/shm_topic_registry.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -33,7 +33,7 @@
 // max_payload ring sizing with a subscriber-only default fallback, and the
 // teardown ordering (disarm BEFORE the subscriber the drain touches is destroyed).
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 namespace {
 

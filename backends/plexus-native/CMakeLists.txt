@@ -21,7 +21,7 @@ endif()
 # plexus-asio adapter's job, not this target's. With no asio-bearing symbols a
 # second STATIC archive cannot fold against the asio backend's copy, so a plain
 # archive is the honest shape. Link deps are PUBLIC plexus::core + plexus::wire
-# — explicitly NOT asio.
+# + plexus::shm (the family concept headers it satisfies) — explicitly NOT asio.
 add_library(plexus-native STATIC
     src/shm_backend_version.cpp
     src/region_handle.cpp
@@ -36,6 +36,7 @@ target_include_directories(plexus-native PUBLIC
 
 target_link_libraries(plexus-native PUBLIC
     plexus::core
+    plexus::shm
     plexus::wire)
 
 target_compile_features(plexus-native PUBLIC cxx_std_20)

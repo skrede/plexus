@@ -1,19 +1,19 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_DETAIL_SHM_TOPIC_OPEN_H
-#define HPP_GUARD_PLEXUS_IO_SHM_DETAIL_SHM_TOPIC_OPEN_H
+#ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_OPEN_H
+#define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_OPEN_H
 
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/region_naming.h"
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/shm_acquire_result.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/shm_acquire_result.h"
 
 #include <string>
 #include <cstdint>
 #include <optional>
 
-// These live in plexus::io::detail: a sibling detail namespace under io/shm would shadow the
-// bare detail:: lookups these headers resolve to io::detail. The reach is by fall-through.
-namespace plexus::io::detail {
+// The family's own detail namespace: the registry body reaches these helpers through a bare
+// detail:: lookup that resolves here by fall-through from plexus::shm.
+namespace plexus::shm::detail {
 
 // A cheap existence probe for the consumer attach-first path: a successful read-only attach
 // proves the region is live (the handle is discarded). A miss returns false (the consumer

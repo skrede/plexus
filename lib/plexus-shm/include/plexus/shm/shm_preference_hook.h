@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SHM_PREFERENCE_HOOK_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SHM_PREFERENCE_HOOK_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SHM_PREFERENCE_HOOK_H
+#define HPP_GUARD_PLEXUS_SHM_SHM_PREFERENCE_HOOK_H
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/multiplexing_transport.h"
@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <utility>
 
-namespace plexus::io {
+namespace plexus::shm {
 
 // The same-medium preference hook: prefer the upgrade-capable candidate when the pair is
 // upgrade-eligible AND the medium acquire succeeds, else fall back to the AF_UNIX candidate. This
@@ -22,10 +22,10 @@ namespace plexus::io {
 template<typename Member>
 [[nodiscard]] inline io::selection_hook prefer_upgradeable_hook(Member &member)
 {
-    plexus::detail::move_only_function<bool(const endpoint &)> can_acquire =
-            [&member](const endpoint &ep) { return member.can_acquire(ep); };
+    plexus::detail::move_only_function<bool(const io::endpoint &)> can_acquire =
+            [&member](const io::endpoint &ep) { return member.can_acquire(ep); };
     return [probe = std::move(can_acquire)](
-                   const endpoint                    &ep,
+                   const io::endpoint                    &ep,
                    std::span<const io::mux_candidate> candidates) mutable -> std::size_t
     {
         std::size_t fallback      = candidates.front().index; // the first candidate (stream)

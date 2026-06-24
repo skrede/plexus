@@ -32,13 +32,13 @@
 
 #include "plexus/io/polymorphic_byte_channel.h"
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_mux_member.h"
-#include "plexus/io/shm/shm_topic_registry.h"
-#include "plexus/io/shm/region_broker_concept.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_mux_member.h"
+#include "plexus/shm/shm_topic_registry.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_transport.h"
@@ -277,18 +277,18 @@ struct null_notifier
     void disarm() noexcept {}
 };
 
-static_assert(plexus::io::shm::notifier<null_notifier>);
+static_assert(plexus::shm::notifier<null_notifier>);
 
 // A heap-backed, cache-line-aligned region the broadcast_ring lays its control + slab
 // into (the single-process stand-in for a mapped shm segment).
 struct backing_region
 {
     explicit backing_region(std::size_t bytes)
-            : m_storage(bytes + plexus::io::shm::k_cache_line)
+            : m_storage(bytes + plexus::shm::k_cache_line)
     {
         auto base    = reinterpret_cast<std::uintptr_t>(m_storage.data());
-        auto aligned = (base + plexus::io::shm::k_cache_line - 1) &
-                ~static_cast<std::uintptr_t>(plexus::io::shm::k_cache_line - 1);
+        auto aligned = (base + plexus::shm::k_cache_line - 1) &
+                ~static_cast<std::uintptr_t>(plexus::shm::k_cache_line - 1);
         m_data = reinterpret_cast<std::byte *>(aligned);
         m_size = bytes;
     }
@@ -318,19 +318,19 @@ class stub_broker
 {
 public:
     using region_handle = stub_region_handle;
-    plexus::io::shm::region_status create(std::string_view, std::size_t,
-                                          const plexus::io::shm::create_options &, region_handle &)
+    plexus::shm::region_status create(std::string_view, std::size_t,
+                                          const plexus::shm::create_options &, region_handle &)
     {
-        return plexus::io::shm::region_status::failed;
+        return plexus::shm::region_status::failed;
     }
-    plexus::io::shm::region_status attach(std::string_view, region_handle &)
+    plexus::shm::region_status attach(std::string_view, region_handle &)
     {
-        return plexus::io::shm::region_status::not_found;
+        return plexus::shm::region_status::not_found;
     }
     void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>) {}
 };
 
-static_assert(plexus::io::shm::region_broker<stub_broker>);
+static_assert(plexus::shm::region_broker<stub_broker>);
 
 }
 
@@ -678,13 +678,13 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
           "an installed observer",
           "[integration][drop_seam][shm][congested]")
 {
-    using plexus::io::shm::broadcast_ring;
-    using plexus::io::shm::loan_status;
-    using plexus::io::shm::shm_channel;
-    using plexus::io::shm::shm_byte_channel;
-    using plexus::io::shm::shm_topic_registry;
-    using plexus::io::shm::control_region_bytes;
-    using plexus::io::shm::slab_region_bytes;
+    using plexus::shm::broadcast_ring;
+    using plexus::shm::loan_status;
+    using plexus::shm::shm_channel;
+    using plexus::shm::shm_byte_channel;
+    using plexus::shm::shm_topic_registry;
+    using plexus::shm::control_region_bytes;
+    using plexus::shm::slab_region_bytes;
 
     constexpr std::uint64_t cells = 16;
     constexpr std::uint64_t slot  = 64;
@@ -749,13 +749,13 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
           "ERASED production binding and the posted fan-out",
           "[integration][drop_seam][shm][congested][production]")
 {
-    using plexus::io::shm::broadcast_ring;
-    using plexus::io::shm::loan_status;
-    using plexus::io::shm::shm_channel;
-    using plexus::io::shm::shm_byte_channel;
-    using plexus::io::shm::shm_topic_registry;
-    using plexus::io::shm::control_region_bytes;
-    using plexus::io::shm::slab_region_bytes;
+    using plexus::shm::broadcast_ring;
+    using plexus::shm::loan_status;
+    using plexus::shm::shm_channel;
+    using plexus::shm::shm_byte_channel;
+    using plexus::shm::shm_topic_registry;
+    using plexus::shm::control_region_bytes;
+    using plexus::shm::slab_region_bytes;
 
     constexpr std::uint64_t cells = 16;
     constexpr std::uint64_t slot  = 64;

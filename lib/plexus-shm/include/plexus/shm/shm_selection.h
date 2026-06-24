@@ -1,8 +1,8 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SHM_SELECTION_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SHM_SELECTION_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SHM_SELECTION_H
+#define HPP_GUARD_PLEXUS_SHM_SHM_SELECTION_H
 
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/region_naming.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/region_naming.h"
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/host_fingerprint.h"
 
@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The medium a same-host (peer, topic) pair resolves to. shm = the pair is
 // same-host AND carries a qualifying hint, so each side attempts the ring acquire.
@@ -34,11 +34,11 @@ enum class same_host_medium : std::uint8_t
 // independently converge on region_name_for(fqn) with NO wire exchange. The hint
 // only gates whether each side ATTEMPTS the acquire; the upgrade_coordinator mints
 // the companion ring through the shm member (the broker-failure fallback keeps the wire).
-[[nodiscard]] inline same_host_medium select_same_host_medium(host_fingerprint peer,
-                                                              host_fingerprint local,
-                                                              dispatch_hint combined_hint) noexcept
+[[nodiscard]] inline same_host_medium select_same_host_medium(io::host_fingerprint peer,
+                                                              io::host_fingerprint local,
+                                                              io::dispatch_hint combined_hint) noexcept
 {
-    if(is_same_host(peer, local) && any_set(combined_hint))
+    if(io::is_same_host(peer, local) && io::any_set(combined_hint))
         return same_host_medium::shm;
     return same_host_medium::stream;
 }
@@ -80,9 +80,9 @@ route_message_medium(ring_geometry_mode mode, std::size_t message_bytes,
 // EITHER end's qualifying hint therefore upgrades the pair: the side with the hint
 // attempts the acquire, and the converged ring is shared. A non-same-host pair never
 // upgrades regardless of the hint (the eligibility gate).
-[[nodiscard]] inline bool attempt_shm_upgrade(bool same_host, dispatch_hint own_hint) noexcept
+[[nodiscard]] inline bool attempt_shm_upgrade(bool same_host, io::dispatch_hint own_hint) noexcept
 {
-    return same_host && any_set(own_hint);
+    return same_host && io::any_set(own_hint);
 }
 
 // The ring-sizing authority for an upgrade THIS end drives: a publisher with

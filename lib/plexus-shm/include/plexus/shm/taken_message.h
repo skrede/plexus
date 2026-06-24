@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_TAKEN_MESSAGE_H
-#define HPP_GUARD_PLEXUS_IO_SHM_TAKEN_MESSAGE_H
+#ifndef HPP_GUARD_PLEXUS_SHM_TAKEN_MESSAGE_H
+#define HPP_GUARD_PLEXUS_SHM_TAKEN_MESSAGE_H
 
-#include "plexus/io/shm/shm_slot_owner.h"
+#include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/wire_bytes.h"
 
@@ -11,7 +11,7 @@
 #include <cstdint>
 #include <span>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 class slot_subscriber;
 
@@ -102,7 +102,7 @@ public:
 
 private:
     friend class slot_subscriber;
-    friend struct ::plexus::io::shm::test::handle_test_access;
+    friend struct ::plexus::shm::test::handle_test_access;
 
     taken_message(const std::byte *payload, std::size_t length,
                   std::atomic<std::uint32_t> *refcount) noexcept

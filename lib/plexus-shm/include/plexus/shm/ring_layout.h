@@ -1,12 +1,12 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_RING_LAYOUT_H
-#define HPP_GUARD_PLEXUS_IO_SHM_RING_LAYOUT_H
+#ifndef HPP_GUARD_PLEXUS_SHM_RING_LAYOUT_H
+#define HPP_GUARD_PLEXUS_SHM_RING_LAYOUT_H
 
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // over-limit: cited cross-process ring layout + named lock-free algorithms (std/parking_lot
 // 3-state word, Vyukov, Dekker mutual-announce) + the cross-process layout invariants; the why

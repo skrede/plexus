@@ -1,11 +1,11 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SHM_BYTE_CHANNEL_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SHM_BYTE_CHANNEL_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SHM_BYTE_CHANNEL_H
+#define HPP_GUARD_PLEXUS_SHM_SHM_BYTE_CHANNEL_H
 
-#include "plexus/io/shm/region_broker_concept.h"
-#include "plexus/io/shm/notifier_concept.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_slot_owner.h"
-#include "plexus/io/shm/shm_topic_registry.h"
+#include "plexus/shm/region_broker_concept.h"
+#include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/shm_topic_registry.h"
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/locality.h"
@@ -23,7 +23,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The per-topic byte_channel the shm mux member hands up: it wraps ONE live ring behind the
 // byte_channel verbs the multiplexer erases. send memcpy-publishes into the slab and wakes the
@@ -39,7 +39,7 @@ public:
     using registry_type = shm_topic_registry<Broker, Notifier>;
 
     shm_byte_channel(registry_type &registry, shm_channel<Notifier> &channel, std::string fqn,
-                     endpoint remote) noexcept
+                     io::endpoint remote) noexcept
             : m_registry(registry)
             , m_channel(channel)
             , m_fqn(std::move(fqn))
@@ -66,13 +66,13 @@ public:
         if(st == loan_status::rejected)
         {
             if(m_on_error)
-                m_on_error(io_error::message_too_large);
+                m_on_error(io::io_error::message_too_large);
             emit_drop();
         }
         else if(st == loan_status::congested)
         {
             if(m_on_error)
-                m_on_error(io_error::would_block);
+                m_on_error(io::io_error::would_block);
             emit_drop();
         }
     }
@@ -88,7 +88,7 @@ public:
             m_on_closed();
     }
 
-    [[nodiscard]] endpoint remote_endpoint() const { return m_remote; }
+    [[nodiscard]] io::endpoint remote_endpoint() const { return m_remote; }
 
     // Install the data sink and pump whatever is already pending: this channel routes the
     // drained bytes to ITS sink, re-draining here and on each pump() the owner drives off a wake.
@@ -99,11 +99,11 @@ public:
     }
 
     void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
-    void on_error(plexus::detail::move_only_function<void(io_error)> cb)
+    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error = std::move(cb);
     }
-    void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> cb)
+    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
     {
         m_on_drop = std::move(cb);
     }
@@ -113,7 +113,7 @@ public:
     }
 
     // send() memcpys straight into the shared-memory slab (no bounded userspace egress queue):
-    // the bounded ring's own congestion verdict is surfaced inline at send time, so this
+    // the bounded ring's own io::congestion verdict is surfaced inline at send time, so this
     // channel keeps no queued backlog. It reports 0 — "always accepts" — the accurate
     // saturation signal for an in-slab fire-through channel.
     [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
@@ -136,26 +136,26 @@ public:
     }
 
 private:
-    // The ring's congestion/rejection verdict surfaces inline at send time (no userspace egress
+    // The ring's io::congestion/rejection verdict surfaces inline at send time (no userspace egress
     // queue), so the drop edge is reported straight off send() carrying drop_cause::blocked. The
     // engine binds m_on_drop to its posted drop_sink, so the emit reaches the fan-out POSTED.
     void emit_drop()
     {
         if(m_on_drop)
-            m_on_drop(detail::drop_event{.cause     = detail::drop_cause::blocked,
-                                         .transport = locality::local});
+            m_on_drop(io::detail::drop_event{.cause     = io::detail::drop_cause::blocked,
+                                         .transport = io::locality::local});
     }
 
     registry_type         &m_registry;
     shm_channel<Notifier> &m_channel;
     std::string            m_fqn;
-    endpoint               m_remote;
-    std::uint64_t          m_scheduler_key{detail::next_scheduler_key()};
+    io::endpoint               m_remote;
+    std::uint64_t          m_scheduler_key{io::detail::next_scheduler_key()};
     bool                   m_released = false;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()>                           m_on_closed;
-    plexus::detail::move_only_function<void(io_error)>                   m_on_error;
-    plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop;
+    plexus::detail::move_only_function<void(io::io_error)>                   m_on_error;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
     plexus::detail::move_only_function<void(wire::close_cause)>          m_on_protocol_close;
 };
 

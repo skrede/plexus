@@ -1,8 +1,8 @@
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_slot_owner.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -25,7 +25,7 @@
 // fallback: a payload over the slot capacity returns rejected, nothing lands, the
 // notifier is never signaled.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 namespace {
 

@@ -1,11 +1,11 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_SHM_SLOT_OWNER_H
-#define HPP_GUARD_PLEXUS_IO_SHM_SHM_SLOT_OWNER_H
+#ifndef HPP_GUARD_PLEXUS_SHM_SHM_SLOT_OWNER_H
+#define HPP_GUARD_PLEXUS_SHM_SHM_SLOT_OWNER_H
 
 #include <atomic>
 #include <cstdint>
 #include <utility>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The move-only, intrusive wire_bytes owner that pins a ring slot's take_refcount
 // for the lifetime of a deserialized view (the loan reshape: no reference-counted

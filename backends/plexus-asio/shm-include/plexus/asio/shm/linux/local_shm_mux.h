@@ -32,7 +32,7 @@ using local_shm_mux = io::multiplexing_transport<shm_member, unix_transport, asi
                                                       asio_transport        &remote,
                                                       io::transport_selector selector = {})
 {
-    return local_shm_mux{shm, local, remote, selector, io::prefer_upgradeable_hook(shm)};
+    return local_shm_mux{shm, local, remote, selector, ::plexus::shm::prefer_upgradeable_hook(shm)};
 }
 
 }

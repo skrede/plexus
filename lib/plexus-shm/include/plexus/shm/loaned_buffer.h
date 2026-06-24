@@ -1,12 +1,12 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_LOANED_BUFFER_H
-#define HPP_GUARD_PLEXUS_IO_SHM_LOANED_BUFFER_H
+#ifndef HPP_GUARD_PLEXUS_SHM_LOANED_BUFFER_H
+#define HPP_GUARD_PLEXUS_SHM_LOANED_BUFFER_H
 
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <span>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 class slot_publisher;
 
@@ -88,7 +88,7 @@ public:
 
 private:
     friend class slot_publisher;
-    friend struct ::plexus::io::shm::test::handle_test_access;
+    friend struct ::plexus::shm::test::handle_test_access;
 
     loaned_buffer(std::byte *slot, std::size_t capacity, std::uint64_t position) noexcept
             : m_slot(slot)

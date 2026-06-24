@@ -1,11 +1,11 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_NOTIFIER_CONCEPT_H
-#define HPP_GUARD_PLEXUS_IO_SHM_NOTIFIER_CONCEPT_H
+#ifndef HPP_GUARD_PLEXUS_SHM_NOTIFIER_CONCEPT_H
+#define HPP_GUARD_PLEXUS_SHM_NOTIFIER_CONCEPT_H
 
 #include "plexus/detail/compat.h"
 
 #include <concepts>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // The notifier seam: the three-op cross-process wakeup interface the ring channel
 // borrows BY REFERENCE, defined in core so no core translation unit ever pulls a

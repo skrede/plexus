@@ -6,14 +6,14 @@
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/region_naming.h"
-#include "plexus/io/shm/shm_mux_member.h"
-#include "plexus/io/shm/shm_slot_owner.h"
-#include "plexus/io/shm/shm_topic_registry.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
+#include "plexus/shm/shm_mux_member.h"
+#include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/shm_topic_registry.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
@@ -51,7 +51,7 @@
 // the chosen ceiling FAILS CLOSED under reliable_preserving (no silent best-effort) and
 // round-trips under EXPLICIT best_effort_large.
 
-namespace pio = plexus::io::shm;
+namespace pio = plexus::shm;
 using plexus::io::endpoint;
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;

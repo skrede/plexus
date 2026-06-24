@@ -8,12 +8,12 @@
 #include "plexus/native/region_handle.h"
 #include "plexus/native/futex_notifier_primitive.h"
 
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/region_naming.h"
-#include "plexus/io/shm/shm_channel.h"
-#include "plexus/io/shm/shm_slot_owner.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
+#include "plexus/shm/shm_channel.h"
+#include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -45,7 +45,7 @@
 // the published value up through the shm_channel (the registry's drain primitive).
 // Looped N>=100 in-body; the ctest binary is re-run >=3 times for reproducibility.
 
-namespace pio = plexus::io::shm;
+namespace pio = plexus::shm;
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
 

@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_BROADCAST_RING_H
-#define HPP_GUARD_PLEXUS_IO_SHM_BROADCAST_RING_H
+#ifndef HPP_GUARD_PLEXUS_SHM_BROADCAST_RING_H
+#define HPP_GUARD_PLEXUS_SHM_BROADCAST_RING_H
 
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/cpu_relax.h"
-#include "plexus/io/shm/loan_status.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/cpu_relax.h"
+#include "plexus/shm/loan_status.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -15,7 +15,7 @@
 #include <span>
 #include <utility>
 
-namespace plexus::io::shm {
+namespace plexus::shm {
 
 // over-limit: one Vyukov-sequenced lock-free ring; the claim/commit/consume cursor protocol
 // + the seq_cst overwrite-vs-pin Dekker handshake are one indivisible whole over the shared
@@ -28,7 +28,7 @@ namespace plexus::io::shm {
 // + the per-cell sequence; the variable-size payload lives in a separate fixed-stride slab
 // keyed 1:1 to the cells). It exposes the low-level claim/commit/consume mechanism the
 // loan/publish/take endpoints wrap, plus the broadcast overlay (per-consumer in-region
-// cursors) and the two backpressure modes reliability/congestion select. Header-only (the
+// cursors) and the two backpressure modes io::reliability/io::congestion select. Header-only (the
 // atomics + offset math inline); it drives a caller-supplied control+cells span and a payload
 // slab span — the caller owns the mapping lifetime.
 //
@@ -208,14 +208,14 @@ public:
     // reliable -> congested when the slowest registered cursor has not passed the
     // cell (and spins out a transient pin); best-effort -> overwrite-latest,
     // skipping pinned cells, congested only when a full lap is pinned.
-    loan_status claim_with_policy(std::size_t size, reliability rel, congestion,
+    loan_status claim_with_policy(std::size_t size, io::reliability rel, io::congestion,
                                   claim_result &out) noexcept
     {
         if(size > m_slot_capacity)
             return loan_status::rejected;
 
         std::uint64_t pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
-        if(rel == reliability::reliable)
+        if(rel == io::reliability::reliable)
             return claim_reliable(pos, out);
         return claim_best_effort(pos, out);
     }

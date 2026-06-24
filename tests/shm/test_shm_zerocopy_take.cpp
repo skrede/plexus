@@ -1,7 +1,7 @@
 #include "support/handle_test_access.h"
 
-#include "plexus/io/shm/shm_slot_owner.h"
-#include "plexus/io/shm/taken_message.h"
+#include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/taken_message.h"
 
 #include "plexus/wire_bytes.h"
 
@@ -17,7 +17,7 @@
 // it destructs; the bytes stay valid (byte-equal) for the owner's whole lifetime,
 // looped N>=100. No shared_ptr anywhere in the loan path.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 TEST_CASE("zerocopy_take: wire_bytes aliases the slot and pins the refcount",
           "[shm][zerocopy_take]")

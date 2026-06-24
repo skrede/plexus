@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_NATIVE_FUTEX_NOTIFIER_PRIMITIVE_H
 #define HPP_GUARD_PLEXUS_NATIVE_FUTEX_NOTIFIER_PRIMITIVE_H
 
-#include "plexus/io/shm/ring_layout.h"
+#include "plexus/shm/ring_layout.h"
 
 #include <atomic>
 #include <cstdint>
@@ -15,7 +15,7 @@ namespace plexus::native {
 // syscall). Pure predicate so the gating logic is unit-assertable off the syscall.
 [[nodiscard]] inline bool should_wake(std::uint32_t prior_park_state) noexcept
 {
-    return prior_park_state == ::plexus::io::shm::k_park_parked;
+    return prior_park_state == ::plexus::shm::k_park_parked;
 }
 
 // The irreducible cross-process wakeup primitives: the raw by-address futex

@@ -1,6 +1,6 @@
-#include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/loan_status.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/loan_status.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -21,7 +21,7 @@
 // the payload. N>=10000 publishes per run; the tsan run is the phase-boundary
 // gate (Wave 6) -- this is the looped-logic proof.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 namespace {
 

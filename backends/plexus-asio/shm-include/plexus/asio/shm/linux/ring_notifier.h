@@ -3,8 +3,8 @@
 
 #include "plexus/native/futex_notifier_primitive.h"
 
-#include "plexus/io/shm/notifier_concept.h"
-#include "plexus/io/shm/ring_layout.h"
+#include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/ring_layout.h"
 
 #include "plexus/policy.h"
 #include "plexus/detail/compat.h"
@@ -177,7 +177,7 @@ private:
         // advanced the word past the snapshot, io_uring's FUTEX_WAIT completes the CQE
         // immediately (the kernel value-compares *word != cur on registration), so the
         // reactor turn re-drains and re-submits -- no lost wake, no blocked-on-stale.
-        m_park.store(::plexus::io::shm::k_park_parked, std::memory_order_release);
+        m_park.store(::plexus::shm::k_park_parked, std::memory_order_release);
         const std::uint32_t cur = m_word.load(std::memory_order_acquire);
         ::io_uring_prep_futex_wait(sqe, reinterpret_cast<std::uint32_t *>(&m_word), cur,
                                    FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
@@ -206,7 +206,7 @@ private:
         // The wake was delivered: clear the park before re-arming so a producer that
         // bumps the word while the drain is in flight is not gated off a stale PARKED
         // (submit_futex_wait re-stores PARKED right before it re-registers the waiter).
-        m_park.store(::plexus::io::shm::k_park_empty, std::memory_order_release);
+        m_park.store(::plexus::shm::k_park_empty, std::memory_order_release);
         Policy::post(m_executor, drain_post());
         submit_futex_wait();
         watch_doorbell();
@@ -237,7 +237,7 @@ private:
         };
     }
 
-    std::atomic<std::uint32_t>         m_park_fallback{::plexus::io::shm::k_park_empty};
+    std::atomic<std::uint32_t>         m_park_fallback{::plexus::shm::k_park_empty};
     std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
 
     typename Policy::executor_type m_executor;
@@ -358,9 +358,9 @@ private:
             // publish that already moved the word returns immediately (no lost wake).
             // Clear back to EMPTY on return: a producer bumping while the reactor
             // drains is not gated off a stale PARKED.
-            m_park.store(::plexus::io::shm::k_park_parked, std::memory_order_release);
+            m_park.store(::plexus::shm::k_park_parked, std::memory_order_release);
             ::plexus::native::notifier_wait(m_word, last_seen);
-            m_park.store(::plexus::io::shm::k_park_empty, std::memory_order_release);
+            m_park.store(::plexus::shm::k_park_empty, std::memory_order_release);
             last_seen = m_word.load(std::memory_order_acquire);
         }
     }
@@ -396,7 +396,7 @@ private:
         };
     }
 
-    std::atomic<std::uint32_t>         m_park_fallback{::plexus::io::shm::k_park_empty};
+    std::atomic<std::uint32_t>         m_park_fallback{::plexus::shm::k_park_empty};
     std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
 
     typename Policy::executor_type m_executor;

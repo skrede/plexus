@@ -23,7 +23,7 @@
 // minted node's engine (the configured local_fingerprint the handshake advertises).
 
 namespace pasio = plexus::asio;
-namespace pio   = plexus::io::shm;
+namespace pio   = plexus::shm;
 
 TEST_CASE("shm.same_host_fingerprint_node make_node default-fills the real machine fingerprint",
           "[shm][node][same_host][fingerprint]")

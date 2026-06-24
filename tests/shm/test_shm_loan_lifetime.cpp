@@ -1,8 +1,8 @@
 #include "support/handle_test_access.h"
 
-#include "plexus/io/shm/loaned_buffer.h"
-#include "plexus/io/shm/shm_slot_owner.h"
-#include "plexus/io/shm/taken_message.h"
+#include "plexus/shm/loaned_buffer.h"
+#include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/taken_message.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -15,7 +15,7 @@
 // inert (no double-commit, no double-unpin). The handles are already plexus
 // single-owner discipline; this proves the steal+null + idempotent-reclaim shape.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 
 TEST_CASE("loan_lifetime: a moved-from loaned_buffer is inert", "[shm][loan_lifetime]")
 {

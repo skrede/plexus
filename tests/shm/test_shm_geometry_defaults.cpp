@@ -1,14 +1,14 @@
 // over-limit: one cohesive safe-defaults + fail-closed geometry matrix; the cells share the one
 // heap-backed stub-broker registry harness, so splitting them scatters that shared broker
 // fixture into near-empty per-cell shells.
-#include "plexus/io/shm/loan_status.h"
-#include "plexus/io/shm/region_broker_concept.h"
-#include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/shm_mux_member.h"
-#include "plexus/io/shm/shm_selection.h"
-#include "plexus/io/shm/shm_topic_registry.h"
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/region_broker_concept.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/shm_mux_member.h"
+#include "plexus/shm/shm_selection.h"
+#include "plexus/shm/shm_topic_registry.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -32,7 +32,7 @@
 // acquire_result::failed and name WHICH bound was hit (ceiling vs OS allocator) with the
 // exact ask vs available — never a silent reliable -> best-effort downgrade.
 
-using namespace plexus::io::shm;
+using namespace plexus::shm;
 using plexus::io::dispatch_hint;
 
 namespace {
