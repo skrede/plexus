@@ -14,11 +14,9 @@
 
 namespace plexus::inproc {
 
-// The deterministic inproc Policy: bundles the step-executor (by reference, the
-// hot-path substrate), the inproc byte_channel, and the virtual-clock timer, plus
-// the shared_ptr<const void> byte_owner the receive seam binds wire_bytes views to.
-// The static post() forwards onto the executor. The static_assert below is the
-// compile-time gate proving a second, backend-independent substrate satisfies the seam.
+// The deterministic inproc Policy: the step-executor (by reference), the inproc byte_channel, the
+// virtual-clock timer, and the shared_ptr<const void> byte_owner the receive seam binds wire_bytes
+// views to. post() forwards onto the executor.
 struct inproc_policy
 {
     using executor_type     = inproc_executor<> &;

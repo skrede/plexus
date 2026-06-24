@@ -11,12 +11,9 @@
 
 namespace plexus::inproc {
 
-// Virtual-clock timer the executor fires from inside step(). The timer self-registers
-// on the executor at construction; expires_after arms it relative to Clock::now(),
-// async_wait stores the completion handler, and try_fire — called by step() — invokes
-// the handler once the clock has reached the expiry. cancel() and re-arming both
-// complete any pending handler with operation_canceled, mirroring the steady-timer
-// contract the Policy's timer concept is written against.
+// Virtual-clock timer the executor fires from inside step(). cancel() and re-arming both complete
+// any pending handler with operation_canceled, mirroring the steady-timer contract the Policy's
+// timer concept is written against.
 template<typename Clock = std::chrono::steady_clock>
 class inproc_timer
 {
@@ -61,9 +58,8 @@ public:
         complete_pending(std::make_error_code(std::errc::operation_canceled));
     }
 
-    // The firable predicate try_fire gates on, exposed so the executor can skip
-    // the clock read entirely when nothing could fire.
-    [[nodiscard]] bool armed() const noexcept
+    // Exposed so the executor can skip the clock read entirely when nothing could fire.
+    bool armed() const noexcept
     {
         return m_active && m_handler;
     }
@@ -87,10 +83,10 @@ private:
         }
     }
 
-    inproc_executor<Clock>                           *m_exec;
-    typename Clock::time_point                        m_expiry{};
+    inproc_executor<Clock> *m_exec;
+    typename Clock::time_point m_expiry{};
     detail::move_only_function<void(std::error_code)> m_handler;
-    bool                                              m_active{false};
+    bool m_active{false};
 };
 
 }

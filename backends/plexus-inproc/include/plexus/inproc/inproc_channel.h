@@ -20,10 +20,9 @@
 
 namespace plexus::inproc {
 
-// In-process byte_channel over the inproc_bus. send()/close() enqueue to the partner
-// and return immediately — the partner's on_data/close does not fire until the
-// executor's step-loop delivers the packet, so a handler can call back into the channel
-// with no re-entrancy hazard. Satisfies plexus::io::byte_channel.
+// In-process byte_channel over the inproc_bus. send()/close() enqueue to the partner and return
+// immediately — the partner's on_data/close does not fire until the executor's step-loop delivers
+// the packet, so a handler can call back into the channel with no re-entrancy hazard.
 template<typename Clock = std::chrono::steady_clock>
 class inproc_channel
 {
@@ -51,19 +50,16 @@ public:
     inproc_channel(inproc_channel &&)                 = delete;
     inproc_channel &operator=(inproc_channel &&)      = delete;
 
-    // Name the partner this channel sends toward. Pairing is a post-construction
-    // step because the Policy requires construction from the executor alone. The
-    // partner's bus key is resolved HERE, once: bus keys are never reused, so the
-    // hot send path addresses packets by integer key (the endpoint strings stay
-    // cold), and a partner endpoint the bus never minted resolves to 0 — its sends
-    // drop in deliver_one exactly as an unmatched endpoint did.
+    // Pairing is post-construction because the Policy constructs from the executor alone. The
+    // partner's bus key is resolved here once (keys are never reused); a partner endpoint the bus
+    // never minted resolves to 0, whose sends drop in deliver_one as an unmatched key.
     void connect_to(const io::endpoint &partner)
     {
         m_partner     = partner;
         m_partner_key = m_bus ? m_bus->key_for(partner) : 0;
     }
 
-    [[nodiscard]] const io::endpoint &local_endpoint() const noexcept
+    const io::endpoint &local_endpoint() const noexcept
     {
         return m_local;
     }
@@ -74,9 +70,8 @@ public:
             m_bus->enqueue(m_partner_key, data, this);
     }
 
-    // The process-tier object lane mirroring send(): enqueue a refcounted object
-    // handle through the same bus FIFO. A send on a closed channel does NOT enqueue
-    // and therefore does NOT addref, so no release is owed for it.
+    // A send on a closed channel does NOT enqueue and therefore does NOT addref, so no release is
+    // owed for it.
     void send_object(const io::object_carrier &carrier)
     {
         if(m_bus && !m_closed)
@@ -88,14 +83,11 @@ public:
         if(m_closed)
             return;
         m_closed = true;
-        // Notify the partner through the step-loop, never synchronously: the
-        // close is queued like a packet and surfaces on the partner only from
-        // inproc_bus::deliver_one() inside step().
         if(m_bus)
             m_bus->enqueue_close(m_partner_key);
     }
 
-    [[nodiscard]] io::endpoint remote_endpoint() const
+    io::endpoint remote_endpoint() const
     {
         return m_partner;
     }
@@ -121,26 +113,23 @@ public:
         m_on_drop = std::move(cb);
     }
 
-    // The non-stream opt-out: inproc moves whole pre-framed packets, so no partial frame — and
-    // thus no framing violation or slowloris stall — can ever exist on it. The callback is stored
-    // to satisfy the uniform channel seam and is NEVER fired (a protocol-close is meaningless
-    // without a byte stream to misbehave on).
+    // inproc moves whole pre-framed packets, so no partial frame can exist on it: the callback is
+    // stored to satisfy the uniform channel seam and is NEVER fired here.
     void on_protocol_close(detail::move_only_function<void(wire::close_cause)> cb)
     {
         m_on_protocol_close = std::move(cb);
     }
 
-    // Bus callbacks: invoked only from inproc_bus::deliver_one() inside the executor's
-    // step(); never reached synchronously from a peer's send()/close().
+    // The deliver_* entries are reached only from inproc_bus::deliver_one() inside step(), never
+    // synchronously from a peer's send()/close().
     void deliver(std::span<const std::byte> data)
     {
         if(!m_closed && m_on_data)
             m_on_data(data);
     }
 
-    // Hand a delivered object to the stored callback, transferring the bus's reference TO the
-    // callback (which owns the matching release). A delivery to a closed or handlerless channel
-    // releases here instead — the reference is balanced on every path, so no slot leaks.
+    // Transfers the bus's reference TO the callback (which owns the matching release); a delivery to
+    // a closed or handlerless channel releases here instead, so no path leaks.
     void deliver_object(const io::object_carrier &carrier)
     {
         if(!m_closed && m_on_object)
@@ -159,9 +148,7 @@ public:
             m_on_error(io::io_error::broken_pipe);
     }
 
-    // Report a process-tier packet the bus could not route to any live partner (the sender's
-    // connect_to named an endpoint the bus never minted, or the partner deregistered). The bus
-    // calls this from deliver_one inside the executor step-loop, so the report is already off the
+    // The bus calls this from deliver_one inside the step-loop, so the report is already off the
     // synchronous send() path — the posted drop contract.
     void report_unroutable()
     {
@@ -169,9 +156,8 @@ public:
             m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::unroutable, .transport = io::locality::process});
     }
 
-    // Surface a wire-protocol close (a framing violation, or a tag-verify failure once an AEAD
-    // decorator wraps the link) — the on_protocol_close seam a real byte-stream channel fires,
-    // exposed here so the deterministic rig drives the misbehavior path the bus cannot produce.
+    // Exposed so the deterministic rig drives the on_protocol_close misbehavior path the bus cannot
+    // produce.
     void deliver_protocol_close(wire::close_cause cause)
     {
         if(m_on_protocol_close)
@@ -179,18 +165,18 @@ public:
     }
 
 private:
-    inproc_executor<Clock>                                          *m_exec;
-    inproc_bus<Clock>                                               *m_bus;
-    io::endpoint                                                     m_local;
-    io::endpoint                                                     m_partner;
-    std::uint64_t                                                    m_partner_key{0};
-    detail::move_only_function<void(std::span<const std::byte>)>     m_on_data;
-    detail::move_only_function<void(const io::object_carrier &)>     m_on_object;
-    detail::move_only_function<void()>                               m_on_closed;
-    detail::move_only_function<void(io::io_error)>                   m_on_error;
+    inproc_executor<Clock> *m_exec;
+    inproc_bus<Clock> *m_bus;
+    io::endpoint m_local;
+    io::endpoint m_partner;
+    std::uint64_t m_partner_key{0};
+    detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
+    detail::move_only_function<void(const io::object_carrier &)> m_on_object;
+    detail::move_only_function<void()> m_on_closed;
+    detail::move_only_function<void(io::io_error)> m_on_error;
     detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
-    detail::move_only_function<void(wire::close_cause)>              m_on_protocol_close;
-    bool                                                             m_closed{false};
+    detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
+    bool m_closed{false};
 };
 
 }

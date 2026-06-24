@@ -9,16 +9,11 @@ namespace plexus::native {
 
 class posix_shm_region_broker;
 
-// Move-only RAII owner of a single mapped shared-memory region. The OS
-// primitives (fd, base pointer) are private and never cross the boundary; the
-// only public payload accessor is a writable std::span<std::byte>. The base is
-// page-aligned by construction (mmap guarantees it), hence >=8-aligned for the
-// ring sub-allocator that maps over it.
-//
-// Lifetime asymmetry (the correctness-critical invariant): every handle owns
-// its own mapping and always munmaps. A handle produced by create owns the
-// name and unlinks it on release; a handle produced by attach must never
-// unlink. A moved-from handle nulls its fields so its destructor no-ops.
+// Move-only RAII owner of a single mapped shared-memory region. Every handle
+// always munmaps; a create handle owns the name and unlinks it on release, an
+// attach handle never unlinks. A moved-from handle nulls its fields so its
+// destructor no-ops. The base is page-aligned (mmap guarantees it), hence
+// >=8-aligned for the ring sub-allocator mapped over it.
 class region_handle
 {
 public:
@@ -31,15 +26,11 @@ public:
     region_handle(region_handle &&other) noexcept;
     region_handle &operator=(region_handle &&other) noexcept;
 
-    // Writable view over the mapped region. Calling this on an empty or
-    // moved-from handle is caller misuse, not a recoverable error.
-    [[nodiscard]] std::span<std::byte> bytes() const;
+    std::span<std::byte> bytes() const;
 
-    // Mapped capacity in bytes (page-rounded at creation).
-    [[nodiscard]] std::size_t size() const noexcept;
+    std::size_t size() const noexcept;
 
-    // True for a live mapping, false for an empty or moved-from handle.
-    [[nodiscard]] bool valid() const noexcept
+    bool valid() const noexcept
     {
         return m_base != nullptr;
     }
@@ -49,16 +40,15 @@ private:
 
     region_handle(int fd, void *base, std::size_t length, std::string name, bool owns_name) noexcept;
 
-    // Always munmaps, closes the fd, and unlinks the name only when this handle
-    // owns it. noexcept + idempotent: nulls the members so a second invocation
-    // (the move-assign path) does nothing.
+    // noexcept + idempotent: nulls the members so a second invocation (the
+    // move-assign path) does nothing.
     void reclaim() noexcept;
 
-    int         m_fd{-1};
-    void       *m_base{nullptr};
+    int m_fd{-1};
+    void *m_base{nullptr};
     std::size_t m_length{0};
     std::string m_name;
-    bool        m_owns_name{false};
+    bool m_owns_name{false};
 };
 
 }

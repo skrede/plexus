@@ -17,16 +17,11 @@
 
 namespace plexus::inproc {
 
-// The inproc connector: a bus-mediated rendezvous giving listen/dial the same
-// shape asio's acceptor has, so the generic engine drives either backend
-// uniformly. listen(ep) registers the accepting endpoint on the bus with a
-// forwarder to this transport's on_accepted; dial(ep) looks the endpoint up,
-// mints a connected channel pair, hands the accepted end to the listener and the
-// dialer end to on_dialed. A dial to an unregistered endpoint fires
-// on_dial_failed with connection_refused — symmetric with a refused TCP connect.
-// The executor and bus are held by reference (no ownership); the caller owns the
-// minted channels (peer_session borrows channel&). The Clock threads through so a
-// deterministic reconnect oracle can drive it on a manual clock.
+// The inproc connector: a bus-mediated rendezvous giving listen/dial the same shape asio's acceptor
+// has, so the generic engine drives either backend uniformly. A dial to an unregistered endpoint
+// fires on_dial_failed with connection_refused — symmetric with a refused TCP connect. The executor
+// and bus are held by reference; the caller owns the minted channels (peer_session borrows
+// channel&).
 template<typename Clock = std::chrono::steady_clock>
 class inproc_transport
 {
@@ -95,13 +90,13 @@ private:
             m_on_dial_failed(ep, e);
     }
 
-    inproc_executor<Clock>                                                                        &m_exec;
-    inproc_bus<Clock>                                                                             &m_bus;
-    io::endpoint                                                                                   m_listen_ep;
-    detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)>                       m_on_accepted;
+    inproc_executor<Clock> &m_exec;
+    inproc_bus<Clock> &m_bus;
+    io::endpoint m_listen_ep;
+    detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> m_on_accepted;
     detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>, const io::endpoint &)> m_on_dialed;
-    detail::move_only_function<void(const io::endpoint &, io::io_error)>                           m_on_dial_failed;
-    detail::move_only_function<void(io::io_error)>                                                 m_on_error;
+    detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
+    detail::move_only_function<void(io::io_error)> m_on_error;
 };
 
 }

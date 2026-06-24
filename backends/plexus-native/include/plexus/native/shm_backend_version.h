@@ -3,12 +3,6 @@
 
 #include <string_view>
 
-// Trivial non-empty translation unit for the gated shared-memory backend
-// archive: a single compiled symbol so the STATIC library is never an empty
-// archive (rejected by some toolchains) before the POSIX broker / futex bodies
-// land. It also gives a link-AND-RUN handle to assert the gated target was
-// actually linked, not merely compiled.
-
 namespace plexus::native {
 
 std::string_view backend_version() noexcept;

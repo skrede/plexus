@@ -5,12 +5,8 @@
 
 namespace plexus::native {
 
-// The backend-internal status the POSIX region calls map a raw errno onto. Leads
-// with ok exactly as the core io_error / region_status families do, so the status
-// reads identically at every call site. map_errno translates the irreducible
-// errno set (the name exists, the perms deny, the region is too large, a foreign
-// name) into one of these; the broker then folds shm_error onto the core
-// region_status the concept returns, so core never sees an errno OR this enum.
+// The backend-internal status map_errno folds a raw errno onto; the broker then
+// folds it onto the core region_status, so core never sees an errno OR this enum.
 enum class shm_error : std::uint8_t
 {
     ok,

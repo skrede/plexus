@@ -16,16 +16,11 @@ namespace plexus::inproc {
 template<typename Clock>
 class inproc_timer;
 
-// Cooperative single-thread step-executor over an inproc_bus. step() advances
-// the system by one unit of work with a fixed priority — posted callbacks, then
-// a single bus delivery, then expired timers — and returns false only at
-// quiescence; drain() steps to quiescence. Timers are checked only once the
-// ready work (posted + bus) is exhausted, the asio reactor discipline: a due
-// timer fires within the same drain pass, and the steady delivery loop pays no
-// clock read per step (the read was 20%+ of the in-process publish cycle). The
-// virtual clock makes timer firing deterministic, and routing every byte
-// delivery through step() is what makes inproc delivery posted-only rather
-// than synchronous.
+// Cooperative single-thread step-executor over an inproc_bus. step() advances one unit of work at a
+// fixed priority — posted callbacks, then a single bus delivery, then expired timers — and returns
+// false only at quiescence; drain() steps to quiescence. Timers are checked only once the ready
+// work is exhausted (the asio reactor discipline), so the steady delivery loop pays no clock read
+// per step. Routing every byte delivery through step() is what makes inproc delivery posted-only.
 template<typename Clock = std::chrono::steady_clock>
 class inproc_executor
 {
@@ -85,8 +80,7 @@ public:
     }
 
 private:
-    // The clock is read only here, and only when some timer could actually fire —
-    // never for an armed-but-handlerless or cancelled timer.
+    // The clock is read only here, and only when some timer could actually fire.
     bool fire_due_timer()
     {
         const bool any_armed = std::any_of(m_timers.begin(), m_timers.end(), [](const inproc_timer<Clock> *t) { return t->armed(); });
@@ -99,9 +93,9 @@ private:
         return false;
     }
 
-    inproc_bus<Clock>                             &m_bus;
+    inproc_bus<Clock> &m_bus;
     std::deque<detail::move_only_function<void()>> m_posted;
-    std::vector<inproc_timer<Clock> *>             m_timers;
+    std::vector<inproc_timer<Clock> *> m_timers;
 };
 
 }
