@@ -13,10 +13,6 @@
 
 namespace plexus::tls {
 
-// over-limit: one cohesive DTLS BIO/handshake pump; the memory-BIO feed/drain, the SSL_do_handshake
-// drive, and the read/write paths share the one SSL state machine, so splitting them scatters the
-// SSL state across files with no readability gain.
-
 namespace {
 
 void free_bio(BIO *b)
@@ -161,7 +157,7 @@ void dtls_channel::send_large(std::span<const std::byte> bytes)
         return;
     }
     const std::uint16_t msg_id = m_out_msg_id++;
-    io::fragment_sink   sink   = [this, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
+    io::fragment_sink sink     = [this, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
     {
         // Each fragment is one FRAGMENTED-bit envelope (kind is nominal — DTLS owns its own
         // anti-replay, so the seq field is unused) submitted through the ready gate; the per-
@@ -277,8 +273,8 @@ void dtls_channel::try_complete()
     if(m_complete_fired || !m_ssl || !::SSL_is_init_finished(m_ssl))
         return;
     // Fail-closed mutual-auth gate: a verified peer cert is mandatory.
-    X509      *peer = ::SSL_get1_peer_certificate(m_ssl);
-    const bool ok   = peer && ::SSL_get_verify_result(m_ssl) == X509_V_OK;
+    X509 *peer    = ::SSL_get1_peer_certificate(m_ssl);
+    const bool ok = peer && ::SSL_get_verify_result(m_ssl) == X509_V_OK;
     if(ok)
     {
         capture_peer_identity(); // identity from the stashed verify-time facts

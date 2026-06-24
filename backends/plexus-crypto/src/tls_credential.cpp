@@ -25,10 +25,6 @@
 
 namespace plexus::tls {
 
-// over-limit: one cohesive OpenSSL credential-load unit; the cert/key/chain parse, validate,
-// and assemble steps share the EVP/X509/BIO handle set and its throw-on-unwind cleanup, so
-// splitting them scatters the cert/key/chain state across files with no readability gain.
-
 namespace {
 
 // Function-pointer-deleter handle aliases for the OpenSSL types consumed during
@@ -80,14 +76,14 @@ std::optional<std::array<std::byte, 32>> digest_of(X509 *leaf) noexcept
         return std::nullopt;
     x509_pub_ptr pub(raw, &free_x509_pubkey);
 
-    unsigned char *der     = nullptr;
-    const int      der_len = i2d_X509_PUBKEY(pub.get(), &der);
+    unsigned char *der = nullptr;
+    const int der_len  = i2d_X509_PUBKEY(pub.get(), &der);
     if(der_len <= 0 || !der)
         return std::nullopt;
 
     std::array<std::byte, 32> out{};
-    unsigned int              dlen = 0;
-    const int                 ok   = EVP_Digest(der, static_cast<std::size_t>(der_len), reinterpret_cast<unsigned char *>(out.data()), &dlen, EVP_sha256(), nullptr);
+    unsigned int dlen = 0;
+    const int ok      = EVP_Digest(der, static_cast<std::size_t>(der_len), reinterpret_cast<unsigned char *>(out.data()), &dlen, EVP_sha256(), nullptr);
     OPENSSL_cleanse(der, static_cast<std::size_t>(der_len));
     OPENSSL_free(der);
     if(ok != 1 || dlen != out.size())
@@ -101,12 +97,12 @@ std::string subject_of(X509 *leaf)
     X509_NAME *name = X509_get_subject_name(leaf);
     if(!name)
         return {};
-    char      cn[256];
+    char cn[256];
     const int n = X509_NAME_get_text_by_NID(name, NID_commonName, cn, sizeof(cn));
     if(n > 0)
         return std::string(cn, static_cast<std::size_t>(n));
-    char       *line = X509_NAME_oneline(name, nullptr, 0);
-    std::string out  = line ? line : "";
+    char *line      = X509_NAME_oneline(name, nullptr, 0);
+    std::string out = line ? line : "";
     OPENSSL_free(line);
     return out;
 }
@@ -116,7 +112,7 @@ std::string subject_of(X509 *leaf)
 std::vector<std::string> san_of(X509 *leaf)
 {
     std::vector<std::string> out;
-    auto                    *names = static_cast<GENERAL_NAMES *>(X509_get_ext_d2i(leaf, NID_subject_alt_name, nullptr, nullptr));
+    auto *names = static_cast<GENERAL_NAMES *>(X509_get_ext_d2i(leaf, NID_subject_alt_name, nullptr, nullptr));
     if(!names)
         return out;
     const int count = sk_GENERAL_NAME_num(names);
@@ -128,7 +124,7 @@ std::vector<std::string> san_of(X509 *leaf)
         if(gn->type == GEN_DNS || gn->type == GEN_URI)
         {
             const unsigned char *data = ASN1_STRING_get0_data(gn->d.ia5);
-            const int            len  = ASN1_STRING_length(gn->d.ia5);
+            const int len             = ASN1_STRING_length(gn->d.ia5);
             if(data && len > 0)
                 out.emplace_back(reinterpret_cast<const char *>(data), static_cast<std::size_t>(len));
         }
@@ -178,7 +174,7 @@ bool extract_cert_facts(X509 *peer, int depth, bool preverify_ok, io::security::
 int allocate_ex_data_index() noexcept
 {
     static std::once_flag once;
-    static int            index = -1;
+    static int index = -1;
     std::call_once(once, [] { index = SSL_CTX_get_ex_new_index(0, nullptr, nullptr, nullptr, nullptr); });
     return index;
 }
@@ -199,8 +195,8 @@ extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
         return preverify_ok;
 
     const int ssl_idx = SSL_get_ex_data_X509_STORE_CTX_idx();
-    auto     *ssl     = static_cast<SSL *>(X509_STORE_CTX_get_ex_data(ctx, ssl_idx));
-    auto      reject  = [ctx]
+    auto *ssl         = static_cast<SSL *>(X509_STORE_CTX_get_ex_data(ctx, ssl_idx));
+    auto reject       = [ctx]
     {
         X509_STORE_CTX_set_error(ctx, X509_V_ERR_APPLICATION_VERIFICATION);
         return 0;
@@ -256,7 +252,7 @@ extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 void check_key_perms(const std::string &key_path)
 {
     std::error_code ec;
-    auto            status = std::filesystem::status(key_path, ec);
+    auto status = std::filesystem::status(key_path, ec);
     if(ec)
         fail("tls key: stat failed: " + key_path);
     using fp                = std::filesystem::perms;
@@ -401,9 +397,9 @@ tls_credential load_credential(const std::string &cert_path, const std::string &
         fail("tls key: file not found: " + key_path);
     check_key_perms(key_path);
 
-    x509_ptr    cert = load_cert(cert_path);
-    evp_key_ptr key  = load_key(key_path);
-    ssl_ctx_ptr ctx  = build_ctx(cert.get(), key.get(), min_version);
+    x509_ptr cert   = load_cert(cert_path);
+    evp_key_ptr key = load_key(key_path);
+    ssl_ctx_ptr ctx = build_ctx(cert.get(), key.get(), min_version);
 
     std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> owned(ctx.release(), &free_ssl_ctx);
     return tls_credential{std::move(owned), std::move(policy)};
@@ -419,9 +415,9 @@ tls_credential load_dtls_credential(const std::string &cert_path, const std::str
         fail("dtls key: file not found: " + key_path);
     check_key_perms(key_path);
 
-    x509_ptr    cert = load_cert(cert_path);
-    evp_key_ptr key  = load_key(key_path);
-    ssl_ctx_ptr ctx  = build_dtls_ctx(cert.get(), key.get());
+    x509_ptr cert   = load_cert(cert_path);
+    evp_key_ptr key = load_key(key_path);
+    ssl_ctx_ptr ctx = build_dtls_ctx(cert.get(), key.get());
 
     std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> owned(ctx.release(), &free_ssl_ctx);
     return tls_credential{std::move(owned), std::move(policy)};
