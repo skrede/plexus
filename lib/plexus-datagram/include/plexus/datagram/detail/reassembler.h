@@ -1,14 +1,16 @@
 #ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_REASSEMBLER_H
 #define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_REASSEMBLER_H
 
-#include "plexus/io/fragmentation.h"
-#include "plexus/io/detail/drop_event.h"
+#include "plexus/policy.h"
+
 #include "plexus/datagram/detail/reassembler_flat_map.h"
 
-#include "plexus/wire/frame_reassembler.h"
-
-#include "plexus/policy.h"
 #include "plexus/detail/compat.h"
+
+#include "plexus/io/fragmentation.h"
+#include "plexus/io/detail/drop_event.h"
+
+#include "plexus/wire/frame_reassembler.h"
 
 #include <span>
 #include <memory>
@@ -21,47 +23,23 @@
 
 namespace plexus::datagram::detail {
 
-// over-limit: one reassembly window; the fragment-insert, hole-track, and complete-and-deliver
-// steps all operate over the one partial-message buffer, so splitting them scatters the
-// offset/hole state.
-
-// The bounded receiver half of the fragment/reassemble block: a partial-message table keyed by
-// msg_id (a bounded sorted-vector flat map, alloc-free in steady state) holding out-of-order
-// fragments until a message completes, then handing the assembled bytes to an owner-installed sink
-// ONCE. feed() is the untrusted-input surface — it range-checks every field BEFORE indexing, has no
-// exception path, and returns a drop outcome on any malformed/over-budget shape.
-//
-// BOUNDS (required-WITH-default config, structural — not setters; sweep-substantiated):
-// a per-message reassembly ceiling (max_message_size); a TOTAL reassembly-memory cap across all
-// in-flight entries (the hard DoS bound — a new partial that would exceed it is rejected, so many
-// small fragments claiming a huge total cannot exhaust memory). The cap counts BOTH held payload
-// AND the per-entry slot/present metadata a claimed frag_cnt forces (charged at open_entry), so a
-// tiny datagram claiming frag_cnt=32768 cannot mint ~786 KB of slot table accounted as a single
-// payload byte — the metadata is bounded by the same cap, not just the payload. A per-message
-// timeout (the Policy timer reclaims a stalled best-effort partial whose fragments never complete)
-// closes the slow path. The cap default (reassembly_memory_budget = 16 MiB) admits two concurrent
-// full global_default_max_message_bytes (8 MiB) partials per peer while bounding the aggregate
-// worst case (the demux peer cap × this) — the always-on aggregate DoS bound regardless of the
-// per-topic ceiling. The timeout default (5000 ms) gives an honest slow message room to complete
-// while reclaiming a stalled partial within five seconds.
-//
-// LIFETIME: single-owner, bare `this`, no shared lifetime. Each in-flight entry owns its timeout
-// timer; the owning channel cancels the reassembler before it dies, so a timer firing after
-// teardown is a guarded no-op (the if(ec || m_dead) guard). Sans-IO: on_deliver fires synchronously
-// on completion (the channel posts on_data around it; the block never touches the io_context).
+// Holds out-of-order fragments keyed by msg_id until a message completes, then hands the
+// assembled bytes to an owner-installed sink once. feed() is the untrusted-input surface: it
+// range-checks every field before indexing, has no exception path, and returns a drop outcome on
+// any malformed/over-budget shape. The total-memory cap is the hard DoS bound and counts both held
+// payload and the per-entry slot/present metadata a claimed frag_cnt forces (charged at
+// open_entry), so a tiny datagram claiming a huge frag_cnt cannot mint an outsized slot table.
 template<typename Executor, typename Timer>
     requires plexus::timer<Timer> && std::constructible_from<Timer, Executor>
 class reassembler
 {
 public:
-    // Takes the assembled message as an owning shared_bytes: it materializes ONCE and the owner
-    // rides straight to delivery, posted without a re-copy (the stream side's owner-carry idiom).
     using deliver_sink = plexus::detail::move_only_function<void(wire::shared_bytes)>;
 
     struct config
     {
-        std::size_t               max_message_size{plexus::io::global_default_max_message_bytes};
-        std::size_t               total_memory_cap{plexus::io::reassembly_memory_budget};
+        std::size_t max_message_size{plexus::io::global_default_max_message_bytes};
+        std::size_t total_memory_cap{plexus::io::reassembly_memory_budget};
         std::chrono::milliseconds per_message_timeout{5000};
     };
 
@@ -90,17 +68,13 @@ public:
         m_on_deliver = std::move(cb);
     }
 
-    // The drop-observability seam (null by default — zero cost when unobserved). A malformed/
-    // over-cap fragment and a timed-out partial each hand a coalesced event here; the installed
-    // sink POSTS, so the receive site never fires the observer synchronously.
     void on_drop(drop_sink cb)
     {
         m_on_drop = std::move(cb);
     }
 
-    // Feed an untrusted fragment. Range-checks precede every index; once all frag_cnt fragments
-    // for one msg_id have arrived (in any order) the message assembles and fires on_deliver
-    // exactly once. Returns the per-fragment outcome.
+    // Range-checks precede every index; once all frag_cnt fragments for one msg_id have arrived
+    // (in any order) the message assembles and fires on_deliver exactly once.
     outcome feed(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt, std::span<const std::byte> bytes)
     {
         const outcome o =
@@ -112,7 +86,6 @@ public:
         return o;
     }
 
-    // Owner teardown: stop every timer firing into a dying reassembler.
     void cancel()
     {
         m_dead = true;
@@ -120,18 +93,18 @@ public:
             kv.second.timer->cancel();
     }
 
-    [[nodiscard]] std::size_t in_flight() const noexcept
+    std::size_t in_flight() const noexcept
     {
         return m_table.size();
     }
-    [[nodiscard]] std::size_t held_bytes() const noexcept
+    std::size_t held_bytes() const noexcept
     {
         return m_held;
     }
 
-    // The per-entry structural cost a claimed frag_cnt forces (the slots vector plus the present
-    // bitmap), charged against the same cap as payload — see the BOUNDS note at the class head.
-    [[nodiscard]] static constexpr std::size_t structural_cost(std::uint32_t frag_cnt) noexcept
+    // The per-entry slot/present cost a claimed frag_cnt forces, charged against the same cap as
+    // payload so the slot table cannot be minted past the memory bound.
+    static constexpr std::size_t structural_cost(std::uint32_t frag_cnt) noexcept
     {
         return static_cast<std::size_t>(frag_cnt) * sizeof(std::vector<std::byte>) + (static_cast<std::size_t>(frag_cnt) + 7u) / 8u;
     }
@@ -139,12 +112,12 @@ public:
 private:
     struct entry
     {
-        std::vector<std::vector<std::byte>> slots; // per-index fragment bytes
-        std::vector<bool>                   present;
-        std::size_t                         received{0};
-        std::size_t                         size{0};     // payload bytes held by this entry
-        std::size_t                         overhead{0}; // structural slot/present cost charged to the cap
-        std::unique_ptr<Timer>              timer;
+        std::vector<std::vector<std::byte>> slots;
+        std::vector<bool> present;
+        std::size_t received{0};
+        std::size_t size{0};     // payload bytes held by this entry
+        std::size_t overhead{0}; // structural cost charged to the cap
+        std::unique_ptr<Timer> timer;
     };
 
     outcome admit_fragment(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt, std::span<const std::byte> bytes)
@@ -204,7 +177,7 @@ private:
         for(auto &slot : e.slots)
             msg.insert(msg.end(), slot.begin(), slot.end());
         if(m_on_deliver)
-            m_on_deliver(wire::shared_bytes{std::move(msg)}); // one owned materialization rides up
+            m_on_deliver(wire::shared_bytes{std::move(msg)});
         evict(msg_id);
     }
 
@@ -237,13 +210,13 @@ private:
         m_table.erase(it);
     }
 
-    Executor                    m_executor;
-    config                      m_cfg;
+    Executor m_executor;
+    config m_cfg;
     reassembler_flat_map<entry> m_table;
-    std::size_t                 m_held{0};
-    bool                        m_dead{false};
-    deliver_sink                m_on_deliver;
-    drop_sink                   m_on_drop;
+    std::size_t m_held{0};
+    bool m_dead{false};
+    deliver_sink m_on_deliver;
+    drop_sink m_on_drop;
 };
 
 }

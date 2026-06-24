@@ -6,13 +6,10 @@
 
 namespace plexus::datagram::detail {
 
-// The adaptive retransmit-timeout estimator (RFC 6298). It maintains the smoothed
-// round-trip time SRTT and its variation RTTVAR from unambiguous round-trip samples and
-// derives RTO = SRTT + 4*RTTVAR, clamped to [min, max]. The CALLER enforces Karn's
-// algorithm (it never feeds a sample drawn from a retransmitted segment's ack, since
-// such an ack is ambiguous about which transmission it acknowledges) — the estimator
-// only owns the smoothing math, so it is unit-testable in isolation without a timer or a
-// socket. A self-contained value type: no asio, no allocation.
+// The adaptive retransmit-timeout estimator (RFC 6298): it maintains SRTT and RTTVAR from
+// unambiguous round-trip samples and derives RTO = SRTT + 4*RTTVAR, clamped to [min, max]. The
+// caller enforces Karn's algorithm (it never feeds a sample drawn from a retransmitted segment's
+// ack); the estimator owns only the smoothing math.
 class udp_rto_estimator
 {
 public:
@@ -46,14 +43,14 @@ public:
     }
 
     // The current base RTO (before any per-segment retransmit backoff).
-    [[nodiscard]] ms rto() const noexcept
+    ms rto() const noexcept
     {
         return m_rto;
     }
 
     // The backed-off RTO for a segment retransmitted `retransmits` times: the base RTO
     // doubled per prior retransmit (Karn's multiplicative backoff), capped at max.
-    [[nodiscard]] ms backed_off(unsigned retransmits) const noexcept
+    ms backed_off(unsigned retransmits) const noexcept
     {
         ms r = m_rto;
         for(unsigned i = 0; i < retransmits; ++i)
@@ -61,17 +58,17 @@ public:
         return r;
     }
 
-    [[nodiscard]] bool seeded() const noexcept
+    bool seeded() const noexcept
     {
         return m_seeded;
     }
 
 private:
-    ms   m_min;
-    ms   m_max;
-    ms   m_rto;
-    ms   m_srtt{0};
-    ms   m_rttvar{0};
+    ms m_min;
+    ms m_max;
+    ms m_rto;
+    ms m_srtt{0};
+    ms m_rttvar{0};
     bool m_seeded{false};
 };
 

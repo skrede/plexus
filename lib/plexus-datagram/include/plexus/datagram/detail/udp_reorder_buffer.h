@@ -11,30 +11,17 @@
 
 namespace plexus::datagram::detail {
 
-// The receiver-side in-order release buffer for the reliable data ARQ: it reorders
-// DISCRETE datagrams by a uint16 seq and emits them in PUBLISH ORDER with head-of-line
-// blocking. A gap at `expected` holds it AND every higher seq until the gap
-// fills (by a retransmit), then drains the contiguous run. Shape-analog of the stream
-// reassembler (hold input, emit complete units in order via a single callback, bounded
-// with an overflow signal) but it reorders whole datagrams rather than concatenating a
-// byte stream.
-//
-// Wrap-safety: the seq space is uint16 and the comparison is RFC-1982 serial-number
-// arithmetic (the forward distance mod 2^16 splits the space in half), so a 65535 -> 0
-// rollover during continuous delivery is a forward step, not a blackout — the same
-// width-agnostic logic the dedup window uses. The buffer is bounded to a configured
-// window W and allocated at setup (the slot ring is sized once in the ctor): no
-// steady-state hot-path allocation. A seq below `expected` is a duplicate (already
-// delivered) and dropped; a seq at or beyond expected+W is out of window and dropped.
-//
-// Single-owner, header-only, sans-IO: feed() drives an owner-installed on_deliver in
-// order; the channel wraps the asio post around that callback (the buffer never touches
-// the io_context).
+// The receiver-side in-order release buffer for the reliable data ARQ: it reorders discrete
+// datagrams by a uint16 seq and emits them in publish order with head-of-line blocking (a gap at
+// `expected` holds it and every higher seq until the gap fills, then drains the contiguous run).
+// Wrap-safety: the comparison is RFC 1982 serial-number arithmetic (the forward distance mod 2^16
+// splits the space in half), so a 65535 -> 0 rollover is a forward step, not a blackout. A seq
+// below `expected` is a dropped duplicate; a seq at or beyond expected+W is out of window, dropped.
 class udp_reorder_buffer
 {
 public:
-    static constexpr std::uint16_t half_space     = 32768;
-    static constexpr std::size_t   default_window = 512;
+    static constexpr std::uint16_t half_space   = 32768;
+    static constexpr std::size_t default_window = 512;
 
     enum class outcome : std::uint8_t
     {
@@ -44,11 +31,8 @@ public:
         out_of_window // fed seq was at/beyond expected+W -> dropped (bound enforced)
     };
 
-    // The initial expected seq is a STRUCTURAL ctor argument (defaulting to 0), NOT an
-    // after-the-fact setter: production binds 0 on both ends (the sender's m_next and
-    // this receiver's m_expected both start at 0 — the DOCUMENTED contract that makes the
-    // cumulative-ack edge meaningful from segment one, since the handshake negotiates no
-    // initial sequence). A test that exercises the uint16 wrap binds a non-zero start here.
+    // CONTRACT: both ends start at the same initial_seq, so the cumulative-ack edge is meaningful
+    // from segment one.
     explicit udp_reorder_buffer(std::size_t window = default_window, std::uint16_t initial_seq = 0)
             : m_window(window == 0 ? default_window : window)
             , m_slots(m_window)
@@ -56,20 +40,14 @@ public:
     {
     }
 
-    // The owner-installed in-order delivery sink. The buffer calls it synchronously,
-    // strictly in publish order, exactly once per distinct seq. The fragmented bit rides
-    // the slot so the channel routes a reliable fragment to the reassembler on release
-    // (it is bound to acceptance and freed with the slot — no parallel per-seq side-set to
-    // prune). The channel posts on on_data around it (the buffer is sans-IO).
+    // The buffer calls the sink synchronously, strictly in publish order, exactly once per distinct
+    // seq. The fragmented bit rides the slot so the channel routes a reliable fragment to the
+    // reassembler on release.
     void on_deliver(plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> cb)
     {
         m_on_deliver = std::move(cb);
     }
 
-    // Feed a received segment. seq == expected -> deliver it then drain contiguous
-    // buffered successors (the gap-fill release). seq ahead of a gap -> buffer it and
-    // every higher seq (HOL: nothing past the gap is released). seq behind expected ->
-    // duplicate, dropped. seq at/beyond expected+W -> out of window, dropped.
     outcome feed(std::uint16_t seq, bool fragmented, std::span<const std::byte> bytes)
     {
         auto adv = static_cast<std::uint16_t>(seq - m_expected);
@@ -78,7 +56,7 @@ public:
         if(adv >= m_window)
             return outcome::out_of_window; // at/beyond the bound: drop, do not grow
 
-        auto      &slot    = m_slots[(m_base + adv) % m_window];
+        auto &slot         = m_slots[(m_base + adv) % m_window];
         const bool was_gap = (adv != 0);
         if(slot.present)
             return was_gap ? outcome::buffered : outcome::duplicate; // re-buffered hole / dup at edge
@@ -93,20 +71,19 @@ public:
         return outcome::delivered;
     }
 
-    // The highest in-order seq delivered so far (expected - 1), the cumulative-ack edge.
-    [[nodiscard]] std::uint16_t cumulative() const noexcept
+    // The highest in-order seq delivered so far (the cumulative-ack edge).
+    std::uint16_t cumulative() const noexcept
     {
         return static_cast<std::uint16_t>(m_expected - 1);
     }
 
-    [[nodiscard]] std::uint16_t expected() const noexcept
+    std::uint16_t expected() const noexcept
     {
         return m_expected;
     }
 
-    // Is the slot at offset `hole` (above the cumulative edge) buffered? Drives the
-    // selective-ack bitmap the receiver returns. hole 0 == expected (the gap itself).
-    [[nodiscard]] bool buffered_at(std::size_t hole) const noexcept
+    // Drives the selective-ack bitmap the receiver returns; hole 0 == expected (the gap itself).
+    bool buffered_at(std::size_t hole) const noexcept
     {
         if(hole >= m_window)
             return false;
@@ -117,14 +94,12 @@ private:
     struct slot
     {
         std::vector<std::byte> bytes;
-        bool                   present{false};
-        bool                   fragmented{false};
+        bool present{false};
+        bool fragmented{false};
     };
 
-    // Release the run of contiguous present slots starting at the base, advancing
-    // expected and the ring base past each, until the next gap. Each release fires the
-    // in-order sink. The vacated slot is marked free (its capacity is retained for
-    // reuse — no per-release free).
+    // Release the run of contiguous present slots from the base until the next gap, advancing
+    // expected and the ring base past each; the vacated slot's capacity is retained for reuse.
     void drain_contiguous()
     {
         while(m_slots[m_base].present)
@@ -138,10 +113,10 @@ private:
         }
     }
 
-    std::size_t                                                                               m_window;
-    std::vector<slot>                                                                         m_slots;       // a ring of W slots, allocated at setup
-    std::size_t                                                                               m_base{0};     // ring index of `expected`
-    std::uint16_t                                                                             m_expected{0}; // the next seq to deliver in order
+    std::size_t m_window;
+    std::vector<slot> m_slots;
+    std::size_t m_base{0}; // ring index of `expected`
+    std::uint16_t m_expected{0};
     plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver;
 };
 
