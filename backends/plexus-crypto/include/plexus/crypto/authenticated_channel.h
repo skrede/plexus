@@ -86,7 +86,7 @@ public:
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
-        m_on_data = std::move(cb);
+        m_on_data_cb = std::move(cb);
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
@@ -98,7 +98,7 @@ public:
     }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
-        m_on_protocol_close = std::move(cb);
+        m_on_protocol_close_cb = std::move(cb);
     }
 
     std::uint32_t send_epoch() const noexcept
@@ -144,8 +144,8 @@ private:
     std::vector<std::byte> m_open_scratch;
     std::vector<std::byte> m_send_frame;
     std::vector<std::byte> m_recv_frame;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
 };
 
 }

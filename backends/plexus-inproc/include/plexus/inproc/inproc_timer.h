@@ -49,7 +49,7 @@ public:
 
     void async_wait(detail::move_only_function<void(std::error_code)> handler)
     {
-        m_handler = std::move(handler);
+        m_handler_cb = std::move(handler);
     }
 
     void cancel()
@@ -61,12 +61,12 @@ public:
     // Exposed so the executor can skip the clock read entirely when nothing could fire.
     bool armed() const noexcept
     {
-        return m_active && m_handler;
+        return m_active && m_handler_cb;
     }
 
     bool try_fire(typename Clock::time_point now)
     {
-        if(!m_active || !m_handler || now < m_expiry)
+        if(!m_active || !m_handler_cb || now < m_expiry)
             return false;
         m_active = false;
         complete_pending(std::error_code{});
@@ -76,16 +76,16 @@ public:
 private:
     void complete_pending(std::error_code ec)
     {
-        if(m_handler)
+        if(m_handler_cb)
         {
-            auto h = std::exchange(m_handler, nullptr);
+            auto h = std::exchange(m_handler_cb, nullptr);
             h(ec);
         }
     }
 
     inproc_executor<Clock> *m_exec;
     typename Clock::time_point m_expiry{};
-    detail::move_only_function<void(std::error_code)> m_handler;
+    detail::move_only_function<void(std::error_code)> m_handler_cb;
     bool m_active{false};
 };
 

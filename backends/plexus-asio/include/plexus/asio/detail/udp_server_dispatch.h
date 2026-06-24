@@ -27,8 +27,8 @@ inline bool transient_send_error(const std::error_code &ec) noexcept
 template<typename S>
 void server_report(S &s, const std::error_code &ec)
 {
-    if(s.m_on_error)
-        s.m_on_error(detail::map_error(ec));
+    if(s.m_on_error_cb)
+        s.m_on_error_cb(detail::map_error(ec));
 }
 
 // At the byte cap: drop_newest sheds the overrun datagram (counted), block surfaces would_block.
@@ -40,8 +40,8 @@ void on_send_queue_full(S &s)
         ++s.m_dropped;
         return;
     }
-    if(s.m_on_error)
-        s.m_on_error(io::io_error::would_block);
+    if(s.m_on_error_cb)
+        s.m_on_error_cb(io::io_error::would_block);
 }
 
 template<typename S>
@@ -122,8 +122,8 @@ void do_receive(S &s)
                                   {
                                       if(ec)
                                           return fail(s, ec);
-                                      if(s.m_on_datagram)
-                                          s.m_on_datagram(s.m_sender, std::span<const std::byte>{s.m_recv_buf.data(), n});
+                                      if(s.m_on_datagram_cb)
+                                          s.m_on_datagram_cb(s.m_sender, std::span<const std::byte>{s.m_recv_buf.data(), n});
                                       if(s.m_open)
                                           do_receive(s);
                                   });

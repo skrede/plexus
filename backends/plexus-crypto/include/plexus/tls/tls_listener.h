@@ -61,11 +61,11 @@ public:
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> cb)
     {
-        m_on_accepted = std::move(cb);
+        m_on_accepted_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
 
     void start(const io::endpoint &bind_ep)
@@ -147,8 +147,8 @@ private:
     void resolve_accept(tls_channel *raw)
     {
         auto ch = m_accepting.adopt_accepted(raw);
-        if(ch && m_on_accepted)
-            m_on_accepted(std::move(ch));
+        if(ch && m_on_accepted_cb)
+            m_on_accepted_cb(std::move(ch));
     }
 
     // A handshake/verify failure: drop the accepted channel OFF its own async stack via a
@@ -168,8 +168,8 @@ private:
 
     void report(const std::error_code &ec)
     {
-        if(m_on_error)
-            m_on_error(plexus::asio::detail::map_error(ec));
+        if(m_on_error_cb)
+            m_on_error_cb(plexus::asio::detail::map_error(ec));
     }
 
     ::asio::io_context &m_io;
@@ -181,8 +181,8 @@ private:
     io::egress_capacity m_egress_capacity;
     plexus::asio::stream_socket_options m_socket_options;
     io::pending_dial_registry<tls_channel, std::monostate> m_accepting; // accepted-table owner
-    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
     bool m_running{false};
 };
 

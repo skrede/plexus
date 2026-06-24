@@ -72,11 +72,11 @@ public:
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<unix_channel>)> cb)
     {
-        m_on_accepted = std::move(cb);
+        m_on_accepted_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
 
     ~unix_listener()
@@ -155,8 +155,8 @@ private:
     io::egress_capacity m_egress_capacity;
     stream_socket_options m_socket_options;
     std::string m_bound_path;
-    plexus::detail::move_only_function<void(std::unique_ptr<unix_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(std::unique_ptr<unix_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
     bool m_running{false};
 };
 

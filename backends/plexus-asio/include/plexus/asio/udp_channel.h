@@ -108,8 +108,8 @@ public:
         if(m_arq)
             m_arq->cancel();
         // Erase the transport demux ref BEFORE this object dies.
-        if(m_on_teardown)
-            m_on_teardown();
+        if(m_on_teardown_cb)
+            m_on_teardown_cb();
     }
 
     // A reliable_datagram-mode channel dispatches to the in-order ARQ; a best_effort-mode channel
@@ -140,8 +140,8 @@ public:
         ::asio::post(m_io,
                      [this]
                      {
-                         if(m_on_closed)
-                             m_on_closed();
+                         if(m_on_closed_cb)
+                             m_on_closed_cb();
                      });
     }
 
@@ -167,26 +167,26 @@ public:
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
-        m_on_data = std::move(cb);
+        m_on_data_cb = std::move(cb);
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_closed = std::move(cb);
+        m_on_closed_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
-        m_on_protocol_close = std::move(cb);
+        m_on_protocol_close_cb = std::move(cb);
     }
 
     // An ARQ shed at the publisher emits here; the lazily-built reassembler's drop sink is
     // forwarded onto this one. The sink POSTS, so no shed site fires the observer synchronously.
     void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
     {
-        m_on_drop = std::move(cb);
+        m_on_drop_cb = std::move(cb);
     }
 
     // The transport's private teardown seam: the transport demuxes inbound by endpoint to a
@@ -194,7 +194,7 @@ public:
     // datagram is a clean MISS rather than a freed-pointer deref.
     void on_teardown(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_teardown = std::move(cb);
+        m_on_teardown_cb = std::move(cb);
     }
 
     // The selective-repeat ARQ stamps a seq, sends a data segment, and retransmits under an
@@ -219,7 +219,7 @@ public:
 
     void on_reliable_segment(plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> cb)
     {
-        m_on_reliable = std::move(cb);
+        m_on_reliable_cb = std::move(cb);
     }
 
     // Called BY the transport demux on each datagram for this peer (the channel owns no socket): it
@@ -319,13 +319,13 @@ private:
     std::vector<std::byte> m_frag_scratch;
     std::unique_ptr<arq_type> m_arq;
     std::unique_ptr<reassembler_type> m_reassembler;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()> m_on_closed;
-    plexus::detail::move_only_function<void()> m_on_teardown;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
-    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> m_on_reliable;
-    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+    plexus::detail::move_only_function<void()> m_on_closed_cb;
+    plexus::detail::move_only_function<void()> m_on_teardown_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
+    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> m_on_reliable_cb;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
     bool m_open;
 };
 

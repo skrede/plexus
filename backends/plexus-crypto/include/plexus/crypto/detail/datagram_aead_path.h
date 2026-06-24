@@ -24,8 +24,8 @@ namespace plexus::crypto::detail {
 template<typename Ch>
 void emit_drop(Ch &c, io::detail::drop_cause cause, io::locality transport = io::locality::remote)
 {
-    if(c.m_on_drop)
-        c.m_on_drop(io::detail::drop_event{.cause = cause, .transport = transport});
+    if(c.m_on_drop_cb)
+        c.m_on_drop_cb(io::detail::drop_event{.cause = cause, .transport = transport});
 }
 
 template<typename Ch>
@@ -144,8 +144,8 @@ void datagram_on_lower_data(Ch &c, std::span<const std::byte> bytes)
     c.m_recv_frame.resize(wire::header_size + c.m_open_scratch.size());
     std::copy(header.begin(), header.end(), c.m_recv_frame.begin());
     std::copy(c.m_open_scratch.begin(), c.m_open_scratch.end(), c.m_recv_frame.begin() + wire::header_size);
-    if(c.m_on_data)
-        c.m_on_data(std::span<const std::byte>{c.m_recv_frame});
+    if(c.m_on_data_cb)
+        c.m_on_data_cb(std::span<const std::byte>{c.m_recv_frame});
 }
 
 }

@@ -157,8 +157,8 @@ public:
         ::asio::post(m_io,
                      [this]
                      {
-                         if(m_on_closed)
-                             m_on_closed();
+                         if(m_on_closed_cb)
+                             m_on_closed_cb();
                      });
     }
 
@@ -169,19 +169,19 @@ public:
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
-        m_on_data = std::move(cb);
+        m_on_data_cb = std::move(cb);
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_closed = std::move(cb);
+        m_on_closed_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
-        m_on_protocol_close = std::move(cb);
+        m_on_protocol_close_cb = std::move(cb);
     }
 
     decltype(auto) socket() noexcept
@@ -310,10 +310,10 @@ private:
     std::uint64_t m_scheduler_key;
     std::size_t m_dropped;
     stream::detail::send_queue m_egress;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()> m_on_closed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+    plexus::detail::move_only_function<void()> m_on_closed_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
     bool m_open;
 };
 

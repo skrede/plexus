@@ -45,11 +45,11 @@ public:
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> cb)
     {
-        m_on_accepted = std::move(cb);
+        m_on_accepted_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
 
     void start(const io::endpoint &bind_ep)
@@ -107,8 +107,8 @@ private:
                         (void)peer.set_option(::asio::ip::tcp::no_delay(true), nec);
                     }
                     auto channel = std::make_unique<asio_channel>(m_io, std::move(peer), m_cfg, m_congestion, m_egress_capacity, m_socket_options);
-                    if(m_on_accepted)
-                        m_on_accepted(std::move(channel));
+                    if(m_on_accepted_cb)
+                        m_on_accepted_cb(std::move(channel));
                     if(m_running)
                         do_accept();
                 });
@@ -116,8 +116,8 @@ private:
 
     void report(const std::error_code &ec)
     {
-        if(m_on_error)
-            m_on_error(detail::map_error(ec));
+        if(m_on_error_cb)
+            m_on_error_cb(detail::map_error(ec));
     }
 
     ::asio::io_context &m_io;
@@ -127,8 +127,8 @@ private:
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;
     stream_socket_options m_socket_options;
-    plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
     bool m_running{false};
 };
 

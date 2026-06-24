@@ -71,14 +71,14 @@ public:
         m_listener.on_accepted(
                 [this](std::unique_ptr<tls_channel> ch)
                 {
-                    if(m_on_accepted)
-                        m_on_accepted(std::move(ch));
+                    if(m_on_accepted_cb)
+                        m_on_accepted_cb(std::move(ch));
                 });
         m_listener.on_error(
                 [this](io::io_error e)
                 {
-                    if(m_on_error)
-                        m_on_error(e);
+                    if(m_on_error_cb)
+                        m_on_error_cb(e);
                 });
     }
 
@@ -93,19 +93,19 @@ public:
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> cb)
     {
-        m_on_accepted = std::move(cb);
+        m_on_accepted_cb = std::move(cb);
     }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> cb)
     {
-        m_on_dialed = std::move(cb);
+        m_on_dialed_cb = std::move(cb);
     }
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
-        m_on_dial_failed = std::move(cb);
+        m_on_dial_failed_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
 
     void listen(const io::endpoint &ep)
@@ -166,10 +166,10 @@ private:
     io::egress_capacity m_egress_capacity;
     plexus::asio::stream_socket_options m_socket_options;
     io::pending_dial_registry<tls_channel, std::monostate> m_pending; // transport-owned half-open dials
-    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed_cb;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
 };
 
 }

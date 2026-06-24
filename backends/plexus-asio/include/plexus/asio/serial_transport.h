@@ -53,19 +53,19 @@ public:
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)> cb)
     {
-        m_on_accepted = std::move(cb);
+        m_on_accepted_cb = std::move(cb);
     }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)> cb)
     {
-        m_on_dialed = std::move(cb);
+        m_on_dialed_cb = std::move(cb);
     }
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
-        m_on_dial_failed = std::move(cb);
+        m_on_dial_failed_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
 
     // An open failure surfaces on_error (a listen carries no endpoint to correlate a failure to).
@@ -75,8 +75,8 @@ public:
         auto ch = open_channel(ep, ec);
         if(ec)
             return report_error(detail::map_error(ec));
-        if(m_on_accepted)
-            m_on_accepted(std::move(ch));
+        if(m_on_accepted_cb)
+            m_on_accepted_cb(std::move(ch));
     }
 
     // The dialed endpoint rides back through on_dialed / on_dial_failed so the engine correlates
@@ -87,8 +87,8 @@ public:
         auto ch = open_channel(ep, ec);
         if(ec)
             return report_dial_fail(ep, detail::map_error(ec));
-        if(m_on_dialed)
-            m_on_dialed(std::move(ch), ep);
+        if(m_on_dialed_cb)
+            m_on_dialed_cb(std::move(ch), ep);
     }
 
     void close()
@@ -138,23 +138,23 @@ private:
 
     void report_dial_fail(const io::endpoint &ep, io::io_error e)
     {
-        if(m_on_dial_failed)
-            m_on_dial_failed(ep, e);
+        if(m_on_dial_failed_cb)
+            m_on_dial_failed_cb(ep, e);
     }
     void report_error(io::io_error e)
     {
-        if(m_on_error)
-            m_on_error(e);
+        if(m_on_error_cb)
+            m_on_error_cb(e);
     }
 
     ::asio::io_context &m_io;
     stream::stream_inbound_config m_cfg;
     io::congestion m_congestion;
     io::egress_capacity m_egress;
-    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)> m_on_dialed_cb;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
 };
 
 }

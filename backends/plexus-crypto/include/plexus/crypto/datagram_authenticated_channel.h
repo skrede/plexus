@@ -80,7 +80,7 @@ public:
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
-        m_on_data = std::move(cb);
+        m_on_data_cb = std::move(cb);
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
@@ -103,7 +103,7 @@ public:
     // knows them; the cause is the load-bearing field.
     void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
     {
-        m_on_drop = std::move(cb);
+        m_on_drop_cb = std::move(cb);
     }
 
     std::size_t dropped_count() const noexcept
@@ -169,8 +169,8 @@ private:
     std::vector<std::byte> m_open_scratch;
     std::vector<std::byte> m_send_frame;
     std::vector<std::byte> m_recv_frame;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
 };
 
 }

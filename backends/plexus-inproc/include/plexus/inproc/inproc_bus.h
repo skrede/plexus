@@ -33,7 +33,7 @@ public:
     struct listener_entry
     {
         io::endpoint ep;
-        detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted;
+        detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted_cb;
     };
 
     inproc_bus() = default;

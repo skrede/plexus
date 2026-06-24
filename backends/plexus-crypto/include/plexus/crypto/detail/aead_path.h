@@ -33,8 +33,8 @@ void rekey_send(Ch &c)
 template<typename Ch>
 void handle_protocol_close(Ch &c, wire::close_cause cause)
 {
-    if(c.m_on_protocol_close)
-        c.m_on_protocol_close(cause);
+    if(c.m_on_protocol_close_cb)
+        c.m_on_protocol_close_cb(cause);
     c.close();
 }
 
@@ -107,8 +107,8 @@ void stream_aead_on_lower_data(Ch &c, std::span<const std::byte> bytes)
     c.m_recv_frame.resize(wire::header_size + c.m_open_scratch.size());
     std::copy(header.begin(), header.end(), c.m_recv_frame.begin());
     std::copy(c.m_open_scratch.begin(), c.m_open_scratch.end(), c.m_recv_frame.begin() + wire::header_size);
-    if(c.m_on_data)
-        c.m_on_data(std::span<const std::byte>{c.m_recv_frame});
+    if(c.m_on_data_cb)
+        c.m_on_data_cb(std::span<const std::byte>{c.m_recv_frame});
 }
 
 }

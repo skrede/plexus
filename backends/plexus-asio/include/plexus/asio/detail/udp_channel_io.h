@@ -25,8 +25,8 @@ namespace plexus::asio::detail {
 template<typename Ch>
 void reject_oversize(Ch &c)
 {
-    if(c.m_on_error)
-        c.m_on_error(io::io_error::message_too_large);
+    if(c.m_on_error_cb)
+        c.m_on_error_cb(io::io_error::message_too_large);
 }
 
 template<typename Ch>
@@ -60,8 +60,8 @@ void post_on_data(Ch &c, std::span<const std::byte> frame)
     ::asio::post(c.m_io,
                  [&c, owned]
                  {
-                     if(c.m_on_data)
-                         c.m_on_data(std::span<const std::byte>{*owned});
+                     if(c.m_on_data_cb)
+                         c.m_on_data_cb(std::span<const std::byte>{*owned});
                  });
 }
 
@@ -72,8 +72,8 @@ void post_on_data_owned(Ch &c, wire::shared_bytes owned)
     ::asio::post(c.m_io,
                  [&c, owned = std::move(owned)]
                  {
-                     if(c.m_on_data)
-                         c.m_on_data(static_cast<std::span<const std::byte>>(owned));
+                     if(c.m_on_data_cb)
+                         c.m_on_data_cb(static_cast<std::span<const std::byte>>(owned));
                  });
 }
 
@@ -90,8 +90,8 @@ void ensure_reassembler(Ch &c)
     c.m_reassembler->on_drop(
             [&c](const io::detail::drop_event &ev)
             {
-                if(c.m_on_drop)
-                    c.m_on_drop(ev);
+                if(c.m_on_drop_cb)
+                    c.m_on_drop_cb(ev);
             });
 }
 
@@ -128,14 +128,14 @@ typename Ch::submit_result on_window_full(Ch &c, std::span<const std::byte> payl
     if(c.m_congestion == io::congestion::drop_newest)
     {
         ++c.m_dropped;
-        if(c.m_on_drop)
-            c.m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::arq_shed, .transport = io::locality::remote});
+        if(c.m_on_drop_cb)
+            c.m_on_drop_cb(io::detail::drop_event{.cause = io::detail::drop_cause::arq_shed, .transport = io::locality::remote});
         return sr::window_full;
     }
     if(!c.m_backpressure.admit(payload, fragmented))
     {
-        if(c.m_on_error)
-            c.m_on_error(io::io_error::would_block);
+        if(c.m_on_error_cb)
+            c.m_on_error_cb(io::io_error::would_block);
         return sr::window_full;
     }
     return sr::admitted;
@@ -211,8 +211,8 @@ void ensure_arq(Ch &c)
     c.m_arq->on_exhausted(
             [&c]
             {
-                if(c.m_on_error)
-                    c.m_on_error(io::io_error::timed_out);
+                if(c.m_on_error_cb)
+                    c.m_on_error_cb(io::io_error::timed_out);
             });
     c.m_arq->on_window_advance([&c] { drain_backpressure(c); });
 }
@@ -232,8 +232,8 @@ void deliver_reliable(Ch &c, std::uint16_t seq, bool fragmented, std::span<const
     auto payload = wire::decode_udp_segment(inner);
     if(!payload)
         return;
-    if(c.m_on_reliable)
-        c.m_on_reliable(seq, *payload);
+    if(c.m_on_reliable_cb)
+        c.m_on_reliable_cb(seq, *payload);
     ensure_arq(c);
     c.m_arq->on_segment(seq, fragmented, *payload);
 }

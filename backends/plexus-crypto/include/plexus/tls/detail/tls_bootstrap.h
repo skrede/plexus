@@ -37,8 +37,8 @@ public:
             , m_gate(
                       [this](std::span<const std::byte> bytes)
                       {
-                          if(m_drain)
-                              m_drain(bytes);
+                          if(m_drain_cb)
+                              m_drain_cb(bytes);
                       })
     {
     }
@@ -84,7 +84,7 @@ public:
 
     void bind_drain(io::detail::handshake_gate::drain_fn drain)
     {
-        m_drain = std::move(drain);
+        m_drain_cb = std::move(drain);
     }
 
     // Dial-side bootstrap: set SNI (best-effort) then run the client handshake. on_ready
@@ -94,7 +94,7 @@ public:
     void start_client_handshake(Channel &c, const std::string &host, plexus::detail::move_only_function<void()> on_ready)
     {
         c.mark_open();
-        m_on_ready = std::move(on_ready);
+        m_on_ready_cb = std::move(on_ready);
         if(!host.empty())
             (void)::SSL_set_tlsext_host_name(c.stream().native_handle(), host.c_str());
         do_handshake(c, ::asio::ssl::stream_base::client);
@@ -105,7 +105,7 @@ public:
     void start_server_handshake(Channel &c, plexus::detail::move_only_function<void()> on_ready)
     {
         c.mark_open();
-        m_on_ready = std::move(on_ready);
+        m_on_ready_cb = std::move(on_ready);
         do_handshake(c, ::asio::ssl::stream_base::server);
     }
 
@@ -126,15 +126,15 @@ private:
                                        c.start_read_loop();
                                        m_gate.mark_ready(); // drain whatever buffered while the
                                                             // handshake was in flight
-                                       if(m_on_ready)
-                                           m_on_ready();
+                                       if(m_on_ready_cb)
+                                           m_on_ready_cb();
                                    });
     }
 
     ::asio::ssl::context m_ssl_ctx;
     io::detail::handshake_gate m_gate; // open-before-data outbound buffer
-    io::detail::handshake_gate::drain_fn m_drain;
-    plexus::detail::move_only_function<void()> m_on_ready;
+    io::detail::handshake_gate::drain_fn m_drain_cb;
+    plexus::detail::move_only_function<void()> m_on_ready_cb;
 };
 
 }

@@ -87,14 +87,14 @@ public:
     // stream_inbound is bypassed on serial).
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
-        m_on_data = std::move(cb);
+        m_on_data_cb = std::move(cb);
     }
 
     // The non-fatal drop seam, distinct from on_protocol_close: a CRC mismatch fires here (the
     // frame was dropped and the link resynced), never tearing the channel down.
     void on_frame_dropped(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
-        m_on_frame_dropped = std::move(cb);
+        m_on_frame_dropped_cb = std::move(cb);
     }
 
     // Idempotent: the adopt ctor arms the loop once; a later transport start_read() is a no-op.
@@ -128,8 +128,8 @@ private:
         m_decorator.on_drop(
                 [this](wire::close_cause c)
                 {
-                    if(m_on_frame_dropped)
-                        m_on_frame_dropped(c);
+                    if(m_on_frame_dropped_cb)
+                        m_on_frame_dropped_cb(c);
                 });
     }
 
@@ -141,16 +141,16 @@ private:
         ::asio::post(stream().get_executor(),
                      [this, owned = std::move(owned)]
                      {
-                         if(m_on_data)
-                             m_on_data(std::span<const std::byte>{*owned});
+                         if(m_on_data_cb)
+                             m_on_data_cb(std::span<const std::byte>{*owned});
                      });
     }
 
     stream::crc_serial_inbound m_decorator;
     std::vector<std::byte> m_read_buf;
     bool m_reading{false};
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_frame_dropped;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_frame_dropped_cb;
 };
 
 }

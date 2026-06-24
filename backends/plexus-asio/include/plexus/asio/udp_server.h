@@ -120,12 +120,12 @@ public:
     // Installed by the transport: (sender, datagram bytes) per inbound completion.
     void on_datagram(plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> cb)
     {
-        m_on_datagram = std::move(cb);
+        m_on_datagram_cb = std::move(cb);
     }
 
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
 
     std::uint16_t port() const
@@ -210,8 +210,8 @@ private:
     std::size_t m_send_errors;
     std::size_t m_recv_resets;
     datagram::detail::send_queue<endpoint_type> m_send_queue;
-    plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
     bool m_open;
 };
 

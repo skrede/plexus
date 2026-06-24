@@ -23,15 +23,15 @@ namespace plexus::asio::detail {
 template<typename T>
 void report_dial_fail(T &t, const io::endpoint &ep, io::io_error e)
 {
-    if(t.m_on_dial_failed)
-        t.m_on_dial_failed(ep, e);
+    if(t.m_on_dial_failed_cb)
+        t.m_on_dial_failed_cb(ep, e);
 }
 
 template<typename T>
 void report_error(T &t, io::io_error e)
 {
-    if(t.m_on_error)
-        t.m_on_error(e);
+    if(t.m_on_error_cb)
+        t.m_on_error_cb(e);
 }
 
 // A dial-only transport still needs a bound source port, so bind an ephemeral local endpoint if
@@ -75,8 +75,8 @@ void resolve_dial(T &t, const io::endpoint &ep, udp_channel *raw)
     auto ch                   = t.m_dials.resolve(raw);
     if(!ch)
         return;
-    if(t.m_on_dialed)
-        t.m_on_dialed(std::move(ch), dialed);
+    if(t.m_on_dialed_cb)
+        t.m_on_dialed_cb(std::move(ch), dialed);
 }
 
 // COPY ep and erase the demux entry before fail erases the registry entry (which owns the ARQ
@@ -103,15 +103,15 @@ void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<cons
     auto *raw = ch.get();
     if(!t.m_demux.insert(from, raw))
     {
-        if(t.m_on_drop)
-            t.m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::demux_refused, .transport = io::locality::remote});
+        if(t.m_on_drop_cb)
+            t.m_on_drop_cb(io::detail::drop_event{.cause = io::detail::drop_cause::demux_refused, .transport = io::locality::remote});
         return; // peer cap reached: drop the flood
     }
     wire_teardown(t, *raw, from);
     t.m_dials.insert_accepted(raw, std::move(ch));
     send_handshake(t, from, T::hs_type::response, hs->mode, hs->initial_seq);
-    if(t.m_on_accepted)
-        t.m_on_accepted(t.m_dials.adopt_accepted(raw));
+    if(t.m_on_accepted_cb)
+        t.m_on_accepted_cb(t.m_dials.adopt_accepted(raw));
 }
 
 template<typename T>

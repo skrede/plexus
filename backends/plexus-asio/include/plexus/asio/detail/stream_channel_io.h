@@ -30,8 +30,8 @@ void stream_on_write_queue_full(Ch &c)
         ++c.m_dropped;
         return;
     }
-    if(c.m_on_error)
-        c.m_on_error(io::io_error::would_block);
+    if(c.m_on_error_cb)
+        c.m_on_error_cb(io::io_error::would_block);
 }
 
 template<typename Ch>
@@ -43,10 +43,10 @@ void stream_fail(Ch &c, const std::error_code &ec)
     c.m_egress.close(); // stop the drain so the failed write does not chain
     c.m_inbound.shutdown();
     auto mapped = detail::map_error(ec);
-    if(c.m_on_error)
-        c.m_on_error(mapped);
-    if(c.m_on_closed)
-        c.m_on_closed();
+    if(c.m_on_error_cb)
+        c.m_on_error_cb(mapped);
+    if(c.m_on_closed_cb)
+        c.m_on_closed_cb();
 }
 
 // A wire protocol violation: fire the protocol-close seam, then close() (on_closed only) — NEVER
@@ -54,8 +54,8 @@ void stream_fail(Ch &c, const std::error_code &ec)
 template<typename Ch>
 void stream_handle_protocol_close(Ch &c, wire::close_cause cause)
 {
-    if(c.m_on_protocol_close)
-        c.m_on_protocol_close(cause);
+    if(c.m_on_protocol_close_cb)
+        c.m_on_protocol_close_cb(cause);
     c.close();
 }
 
@@ -68,8 +68,8 @@ void stream_post_frame(Ch &c, const wire::complete_frame &frame)
     ::asio::post(c.m_io,
                  [&c, owned = std::move(owned)]
                  {
-                     if(c.m_on_data)
-                         c.m_on_data(static_cast<std::span<const std::byte>>(owned));
+                     if(c.m_on_data_cb)
+                         c.m_on_data_cb(static_cast<std::span<const std::byte>>(owned));
                  });
 }
 

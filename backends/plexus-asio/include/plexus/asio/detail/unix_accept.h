@@ -22,8 +22,8 @@ namespace plexus::asio::detail {
 template<typename L>
 void report(L &l, const std::error_code &ec)
 {
-    if(l.m_on_error)
-        l.m_on_error(detail::map_error(ec));
+    if(l.m_on_error_cb)
+        l.m_on_error_cb(detail::map_error(ec));
 }
 
 // ENOENT is success; any real conflict surfaces at the subsequent bind rather than here.
@@ -81,8 +81,8 @@ void adopt_peer(L &l, ::asio::local::stream_protocol::socket peer)
         return;
     }
     auto channel = std::make_unique<unix_channel>(l.m_io, std::move(peer), l.m_cfg, l.m_congestion, l.m_egress_capacity, l.m_socket_options);
-    if(l.m_on_accepted)
-        l.m_on_accepted(std::move(channel));
+    if(l.m_on_accepted_cb)
+        l.m_on_accepted_cb(std::move(channel));
 }
 
 template<typename L>

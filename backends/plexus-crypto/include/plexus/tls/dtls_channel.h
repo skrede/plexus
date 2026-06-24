@@ -93,19 +93,19 @@ public:
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
-        m_on_data = std::move(cb);
+        m_on_data_cb = std::move(cb);
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_closed = std::move(cb);
+        m_on_closed_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
-        m_on_protocol_close = std::move(cb);
+        m_on_protocol_close_cb = std::move(cb);
     }
 
     // The transport's private teardown seam, fired from the dtor (distinct from on_closed/on_error
@@ -113,7 +113,7 @@ public:
     // destroys the channel, so a later datagram is a clean MISS not a freed-pointer deref.
     void on_teardown(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_teardown = std::move(cb);
+        m_on_teardown_cb = std::move(cb);
     }
 
     // A fire-through datagram channel keeps no bounded egress queue (the handshake_gate buffers
@@ -134,7 +134,7 @@ public:
     // via handshake_fsm::on_external_complete from this edge). Set before driving.
     void on_external_complete(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_external_complete = std::move(cb);
+        m_on_external_complete_cb = std::move(cb);
     }
 
     // Kick the handshake: synthesize the ClientHello (client) / arm accept (server),
@@ -242,12 +242,12 @@ private:
     node_id m_node_id{};
     std::string m_node_name;
 
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()> m_on_closed;
-    plexus::detail::move_only_function<void()> m_on_teardown;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
-    plexus::detail::move_only_function<void()> m_on_external_complete;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+    plexus::detail::move_only_function<void()> m_on_closed_cb;
+    plexus::detail::move_only_function<void()> m_on_teardown_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
+    plexus::detail::move_only_function<void()> m_on_external_complete_cb;
 
     bool m_open{true};
     bool m_complete_fired{false};

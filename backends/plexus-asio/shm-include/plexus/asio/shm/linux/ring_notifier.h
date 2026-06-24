@@ -77,7 +77,7 @@ public:
 
     void arm(drain_fn drain)
     {
-        m_drain = std::move(drain);
+        m_drain_cb = std::move(drain);
         if(::io_uring_queue_init(k_ring_depth, &m_ring, 0) != 0)
             return; // bring-up failure: the seam stays inert (disarm is a no-op)
         m_ring_live = true;
@@ -179,8 +179,8 @@ private:
     {
         return [this, alive = m_alive]
         {
-            if(alive->load(std::memory_order_acquire) && m_drain)
-                m_drain();
+            if(alive->load(std::memory_order_acquire) && m_drain_cb)
+                m_drain_cb();
         };
     }
 
@@ -190,7 +190,7 @@ private:
     typename Policy::executor_type m_executor;
     std::atomic<std::uint32_t> &m_word;
     std::atomic<std::uint32_t> &m_park;
-    drain_fn m_drain;
+    drain_fn m_drain_cb;
 
     io_uring m_ring{};
     bool m_ring_live = false;
@@ -240,8 +240,8 @@ public:
 
     void arm(drain_fn drain)
     {
-        m_drain = std::move(drain);
-        m_evfd  = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+        m_drain_cb = std::move(drain);
+        m_evfd     = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
         if(m_evfd < 0)
             return;
         m_doorbell.emplace(executor_io(m_executor), m_evfd);
@@ -325,8 +325,8 @@ private:
     {
         return [this, alive = m_alive]
         {
-            if(alive->load(std::memory_order_acquire) && m_drain)
-                m_drain();
+            if(alive->load(std::memory_order_acquire) && m_drain_cb)
+                m_drain_cb();
         };
     }
 
@@ -336,7 +336,7 @@ private:
     typename Policy::executor_type m_executor;
     std::atomic<std::uint32_t> &m_word;
     std::atomic<std::uint32_t> &m_park;
-    drain_fn m_drain;
+    drain_fn m_drain_cb;
 
     std::atomic<bool> m_stop{false};
     std::thread m_waiter;

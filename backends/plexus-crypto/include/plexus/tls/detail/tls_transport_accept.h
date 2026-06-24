@@ -19,8 +19,8 @@ namespace plexus::tls::detail {
 template<typename T>
 void tls_report_dial_fail(T &t, const io::endpoint &ep, io::io_error e)
 {
-    if(t.m_on_dial_failed)
-        t.m_on_dial_failed(ep, e);
+    if(t.m_on_dial_failed_cb)
+        t.m_on_dial_failed_cb(ep, e);
 }
 
 // The handshake succeeded: resolve the channel OUT of the registry and deliver it. Copy ep before
@@ -31,8 +31,8 @@ void tls_resolve_dial(T &t, const io::endpoint &ep, tls_channel *raw)
 {
     const io::endpoint dialed = ep;
     auto ch                   = t.m_pending.resolve(raw);
-    if(ch && t.m_on_dialed)
-        t.m_on_dialed(std::move(ch), dialed);
+    if(ch && t.m_on_dialed_cb)
+        t.m_on_dialed_cb(std::move(ch), dialed);
 }
 
 // A handshake/verify failure: drop the dial through the registry's deferred-destroy (the channel

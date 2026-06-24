@@ -66,8 +66,8 @@ public:
         m_server.on_error(
                 [this](io::io_error e)
                 {
-                    if(m_on_error)
-                        m_on_error(e);
+                    if(m_on_error_cb)
+                        m_on_error_cb(e);
                 });
     }
 
@@ -90,19 +90,19 @@ public:
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> cb)
     {
-        m_on_accepted = std::move(cb);
+        m_on_accepted_cb = std::move(cb);
     }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> cb)
     {
-        m_on_dialed = std::move(cb);
+        m_on_dialed_cb = std::move(cb);
     }
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
-        m_on_dial_failed = std::move(cb);
+        m_on_dial_failed_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
 
     // The drop-observability seam (null by default — zero cost when unobserved). The
@@ -110,7 +110,7 @@ public:
     // plain-UDP seam. The sink POSTS, so the spoof-flood refusal never fires inline.
     void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
     {
-        m_on_drop = std::move(cb);
+        m_on_drop_cb = std::move(cb);
     }
 
     void listen(const io::endpoint &ep)
@@ -206,11 +206,11 @@ private:
     std::size_t m_reassembly_budget; // always-on aggregate reassembly-memory DoS cap
     plexus::asio::detail::basic_inbound_demux<dtls_channel> m_demux;
     dial_registry m_registry; // the half-open dial table + the accepted table
-    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
+    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> m_on_dialed_cb;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
 };
 
 }

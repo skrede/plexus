@@ -36,19 +36,19 @@ public:
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> cb)
     {
-        m_on_accepted = std::move(cb);
+        m_on_accepted_cb = std::move(cb);
     }
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> cb)
     {
-        m_on_dialed = std::move(cb);
+        m_on_dialed_cb = std::move(cb);
     }
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
-        m_on_dial_failed = std::move(cb);
+        m_on_dial_failed_cb = std::move(cb);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
 
     void listen(const io::endpoint &ep)
@@ -74,8 +74,8 @@ public:
                                            return report_dial_fail(ep, detail::map_error(ec));
                                        Traits::after_connect(*ch, m_no_delay);
                                        ch->start_read();
-                                       if(m_on_dialed)
-                                           m_on_dialed(std::move(ch), ep);
+                                       if(m_on_dialed_cb)
+                                           m_on_dialed_cb(std::move(ch), ep);
                                    });
     }
 
@@ -99,14 +99,14 @@ protected:
         m_listener.on_accepted(
                 [this](std::unique_ptr<Channel> ch)
                 {
-                    if(m_on_accepted)
-                        m_on_accepted(std::move(ch));
+                    if(m_on_accepted_cb)
+                        m_on_accepted_cb(std::move(ch));
                 });
         m_listener.on_error(
                 [this](io::io_error e)
                 {
-                    if(m_on_error)
-                        m_on_error(e);
+                    if(m_on_error_cb)
+                        m_on_error_cb(e);
                 });
     }
 
@@ -122,8 +122,8 @@ protected:
 private:
     void report_dial_fail(const io::endpoint &ep, io::io_error e)
     {
-        if(m_on_dial_failed)
-            m_on_dial_failed(ep, e);
+        if(m_on_dial_failed_cb)
+            m_on_dial_failed_cb(ep, e);
     }
 
     ::asio::io_context &m_io;
@@ -133,10 +133,10 @@ private:
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;
     stream_socket_options m_socket_options;
-    plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> m_on_dialed_cb;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
 };
 
 }
