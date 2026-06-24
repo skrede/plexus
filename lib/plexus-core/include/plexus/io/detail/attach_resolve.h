@@ -15,18 +15,17 @@
 
 namespace plexus::io::detail {
 
-// Fold the transcript (cipher_offer ‖ chosen ‖ protocol_version ‖ both nonces, fixed order) into
-// the digest through the injected seam. A stripped/forced offer changes the digest, so the
-// recomputed proof — and the derived keys — differ (downgrade refusal). Writes
-// facts.transcript_digest.
+// Fold the transcript (cipher_offer ‖ chosen ‖ protocol_version ‖ both nonces, in this fixed
+// order) into the digest: a stripped/forced offer changes the digest, hence the recomputed
+// proof and derived keys (downgrade refusal).
 template<typename Frame>
 void compute_transcript(const security_seam &seam, security::attach_facts &facts, const security_negotiation &negotiation, const Frame &frame)
 {
     std::array<std::byte, 1 + 1 + 1 + 16 + 16> transcript{};
-    std::size_t                                n = 0;
-    transcript[n++]                              = static_cast<std::byte>(frame.cipher_offer);
-    transcript[n++]                              = static_cast<std::byte>(frame.chosen_cipher);
-    transcript[n++]                              = static_cast<std::byte>(wire::k_protocol_version);
+    std::size_t n   = 0;
+    transcript[n++] = static_cast<std::byte>(frame.cipher_offer);
+    transcript[n++] = static_cast<std::byte>(frame.chosen_cipher);
+    transcript[n++] = static_cast<std::byte>(wire::k_protocol_version);
     for(auto b : negotiation.initiator_nonce)
         transcript[n++] = b;
     for(auto b : negotiation.responder_nonce)
@@ -36,10 +35,8 @@ void compute_transcript(const security_seam &seam, security::attach_facts &facts
         facts.transcript_digest = digest;
 }
 
-// Assemble facts + negotiation from a decoded handshake frame (request or response — both carry
-// the identical attach region). The peer's own_nonce is, locally, the peer_nonce the proof must
-// cover (anti-reflection); initiator/responder ids and nonces are pinned by local role. The
-// transcript folds through the seam only when engaged. No crypto runs here beyond that fold.
+// The peer's own_nonce is, locally, the peer_nonce the proof must cover (anti-reflection);
+// initiator/responder ids and nonces are pinned by local role.
 template<typename Pending, typename Frame>
 void assemble_pending(Pending &out, const std::array<std::byte, 16> &own_nonce, const security_seam *seam, bool engaged, const Frame &frame, security::attach_role local_role,
                       const node_id &peer_id, const node_id &self_id)
@@ -62,9 +59,8 @@ void assemble_pending(Pending &out, const std::array<std::byte, 16> &own_nonce, 
     out.negotiation.transcript_digest = out.facts.transcript_digest;
 }
 
-// Compute the proof the dialer verifies: reconstruct the DIALER's attach_facts view (role and
-// nonces swapped to the dialer's standpoint) and MAC it under the shared PSK. A disengaged prover
-// returns a zero proof (the accept-any path).
+// Reconstruct the dialer's attach_facts view (role and nonces swapped to its standpoint) and
+// MAC it under the shared PSK. A disengaged prover returns a zero proof.
 template<typename Prover>
 std::array<std::byte, wire::k_handshake_proof_len> response_proof(const Prover &prover, security::attach_facts dialer_view)
 {

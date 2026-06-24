@@ -16,19 +16,12 @@
 
 namespace plexus::io::detail {
 
-// The per-scheme select + sink-wiring glue for multiplexing_transport, relocated by friendship:
-// each helper reaches the mux's member pack / selector / hook / forwarding sinks through the mux
-// reference. The mux_candidate / member_prefers_local_fast types stay namespace-level in the mux header.
-
-// Wrap a member's minted concrete channel into the erased polymorphic_byte_channel.
 template<typename C>
 std::unique_ptr<polymorphic_byte_channel> mux_wrap(std::unique_ptr<C> ch)
 {
     return std::make_unique<polymorphic_byte_channel>(std::make_unique<channel_adapter<C>>(std::move(ch)));
 }
 
-// Install one member's four completion sinks, each forwarding the wrapped channel / edge up to the
-// mux's own erased sink (a no-op until the mux owner installs it). RELOCATION of wire_member.
 template<typename Mux, typename M>
 // NOLINTNEXTLINE(readability-function-size)
 void wire_member(Mux &mux, M &m)
@@ -60,8 +53,6 @@ void wire_member(Mux &mux, M &m)
             });
 }
 
-// Append member I to the candidate array iff it serves ep.scheme within tier (the per-scheme,
-// per-tier eligibility filter). The local_fast_eligible flag is the member type's compile-time property.
 template<typename Mux, std::size_t I, typename Candidates>
 void mux_consider(const Mux &, const endpoint &ep, transport_kind tier, Candidates &out, std::size_t &count)
 {

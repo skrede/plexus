@@ -11,26 +11,20 @@
 #include <string_view>
 #include <unordered_map>
 
-// These live in plexus::io::detail. The upgrade coordinator reaches them by namespace
-// fall-through. Inside this namespace plexus::detail must be fully qualified — io::detail
-// shadows it.
+// Inside plexus::io::detail, plexus::detail must be fully qualified — io::detail shadows it.
 namespace plexus::io::detail {
 
-// One held companion lane for a (peer, fqn). Exactly one lane is engaged per pair — the up-edge
-// role decides — and both lanes are keyed identically, so the lookups treat them uniformly. The
-// per-message route is an injected predicate the minting medium constructs: fits(bytes) is true
-// when this message rides the companion channel, false when it falls back to the wire. An empty
-// fits (the subscriber lane, or a publisher medium with no size gate) routes nothing on its own.
+// fits(bytes) is the minting medium's injected route predicate: true when the message rides
+// the companion channel, false when it falls back to the wire. An empty fits routes nothing.
 template<typename Channel, typename Receive>
 struct coordinator_ring
 {
-    std::string                                           fqn;
-    std::unique_ptr<Channel>                              channel; // publisher lane
-    plexus::detail::move_only_function<bool(std::size_t)> fits;    // per-message route predicate
-    Receive                                               receive; // subscriber lane
+    std::string fqn;
+    std::unique_ptr<Channel> channel;
+    plexus::detail::move_only_function<bool(std::size_t)> fits;
+    Receive receive;
 };
 
-// The per-peer held lanes, keyed by node_name.
 template<typename Channel, typename Receive>
 using coordinator_held = std::unordered_map<std::string, std::vector<coordinator_ring<Channel, Receive>>>;
 
@@ -56,8 +50,7 @@ bool any_holder(const coordinator_held<Channel, Receive> &held, std::string_view
     return false;
 }
 
-// Drop the (peer, fqn) lane; returns true if the peer's whole list emptied (so the caller erases
-// the peer key).
+// Returns true when the peer's whole list emptied, so the caller erases the peer key.
 template<typename Channel, typename Receive>
 bool erase_ring(coordinator_held<Channel, Receive> &held, std::string_view node_name, std::string_view fqn)
 {
@@ -73,11 +66,8 @@ bool erase_ring(coordinator_held<Channel, Receive> &held, std::string_view node_
     return false;
 }
 
-// The publish fan's per-message route: the held companion channel when the message fits the
-// medium's injected predicate, else nullptr so the pair keeps the wire sub.channel (the
-// dual-delivery fail-safe). An unheld pair, an empty predicate, or an over-cap message resolves
-// to nullptr. The held map is taken mutably: the route invokes the medium's fits predicate (a
-// move_only_function with a non-const call operator).
+// Returns the companion channel when the message fits, else nullptr so the pair keeps the wire
+// channel. Taken mutably: fits is a move_only_function with a non-const call operator.
 template<typename Channel, typename Receive>
 Channel *route_companion(coordinator_held<Channel, Receive> &held, std::string_view node_name, std::string_view fqn, std::size_t bytes)
 {

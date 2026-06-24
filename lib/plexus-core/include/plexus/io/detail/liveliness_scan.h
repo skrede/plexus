@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_LIVELINESS_SCAN_H
 
 #include "plexus/io/liveness_event.h"
+
 #include "plexus/io/detail/endpoint_liveness.h"
 
 #include "plexus/node_id.h"
@@ -15,8 +16,6 @@ namespace plexus::io::detail {
 
 using deadline_key = std::pair<node_id, std::uint64_t>;
 
-// Edge-latched deadline check: fire once when the data gap first exceeds the period; clear the
-// latch when the gap falls back under it. A 0 period leaves the axis inert.
 inline std::optional<liveness_event> check_deadline(const deadline_key &key, endpoint_liveness &s, std::uint64_t now)
 {
     if(s.deadline_period_ns == 0)
@@ -32,8 +31,6 @@ inline std::optional<liveness_event> check_deadline(const deadline_key &key, end
     return std::nullopt;
 }
 
-// Edge-latched lease check: fire once when the presence gap first exceeds the lease; clear the
-// latch when presence resumes. A 0 lease leaves the axis inert.
 inline std::optional<liveness_event> check_lease(const node_id &id, endpoint_liveness &s, std::uint64_t now)
 {
     if(s.lease_ns == 0)
@@ -49,8 +46,6 @@ inline std::optional<liveness_event> check_lease(const node_id &id, endpoint_liv
     return std::nullopt;
 }
 
-// The per-tick scan over both axes: each axis fires exactly once per lapse via fire(event), keyed
-// per-(endpoint, topic) for deadlines and per-endpoint for leases.
 template<typename Fire>
 void scan_liveness(std::map<deadline_key, endpoint_liveness> &deadlines, std::map<node_id, endpoint_liveness> &leases, std::uint64_t now, Fire &&fire)
 {

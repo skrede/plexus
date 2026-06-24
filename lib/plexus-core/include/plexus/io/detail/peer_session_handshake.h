@@ -14,17 +14,19 @@ static wire::handshake_status status_for(handshake_outcome outcome) noexcept
 {
     switch(outcome)
     {
-        case handshake_outcome::reject_version:      return wire::handshake_status::version_incompatible;
-        case handshake_outcome::reject_identity:     return wire::handshake_status::identity_conflict;
-        case handshake_outcome::reject_unauthorized: return wire::handshake_status::unauthorized;
-        default:                                     return wire::handshake_status::accepted;
+        case handshake_outcome::reject_version:
+            return wire::handshake_status::version_incompatible;
+        case handshake_outcome::reject_identity:
+            return wire::handshake_status::identity_conflict;
+        case handshake_outcome::reject_unauthorized:
+            return wire::handshake_status::unauthorized;
+        default:
+            return wire::handshake_status::accepted;
     }
 }
 
-// The one place self identity/versions are stamped onto the wire. A secured node (an
-// engaged seam) advertises its AEAD posture in the cipher offer/chosen so the peer's
-// posture gate sees a secured-vs-secured pair; a plain node leaves them zero. The
-// key_id/own_nonce/cipher bits are read from the held negotiator (minted once per start).
+// A secured node advertises its AEAD posture in cipher_offer/chosen so the peer's posture gate
+// sees a secured-vs-secured pair; a plain node leaves them zero.
 template<typename Session>
 wire::handshake_request self_request(const Session &s) noexcept
 {
@@ -43,7 +45,7 @@ wire::handshake_request self_request(const Session &s) noexcept
             .proof                    = {}};
 }
 
-// Handshake control always carries session_id 0 (it is what mints the epoch).
+// Handshake control always carries session_id 0 — it is what mints the epoch.
 template<typename Session>
 void send_control(Session &s, wire::msg_type type)
 {
@@ -59,15 +61,13 @@ void send_handshake_request(Session &s)
     send_control(s, wire::msg_type::handshake_req);
 }
 
-// The response is the one leg the local node proves on: it stamps the transcript-bound,
-// reflection-resistant proof the dialer verifies on its on_response. The proof MACs the
-// DIALER's facts-view so the dialer — recomputing under the shared PSK with its mirror
-// view — matches byte for byte. A request carries no proof (a 1-RTT PSK dialer cannot prove
-// before seeing the responder's nonce). The proof is stamped only when the prover is engaged.
+// The response is the one leg the local node proves on: a request carries no proof (a 1-RTT
+// PSK dialer cannot prove before seeing the responder's nonce). The proof MACs the dialer's
+// facts-view so the dialer, recomputing under the shared PSK with its mirror view, matches.
 template<typename Session>
 void send_handshake_response(Session &s, handshake_outcome outcome)
 {
-    const auto               r = self_request(s);
+    const auto r = self_request(s);
     wire::handshake_response resp{.id                       = r.id,
                                   .version_major            = r.version_major,
                                   .version_minor            = r.version_minor,

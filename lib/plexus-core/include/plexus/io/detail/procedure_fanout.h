@@ -4,8 +4,8 @@
 #include "plexus/io/observation_events.h"
 
 #include "plexus/wire/frame.h"
-#include "plexus/wire/subscribe.h"
 #include "plexus/wire/rpc_frame.h"
+#include "plexus/wire/subscribe.h"
 #include "plexus/wire/rpc_status.h"
 #include "plexus/wire/frame_codec.h"
 
@@ -15,16 +15,12 @@
 
 namespace plexus::io::detail {
 
-// Forward-declared because reply_status() calls it before its definition below.
+// Forward-declared: reply_status() calls it before its definition below.
 template<typename Forwarder, typename Channel>
 void send_data(Forwarder &f, Channel &channel, wire::msg_type type, std::span<const std::byte> inner, std::uint64_t session_id);
 
-// The rpc observation fan: hand the call/serve/reply edge to the engine sink (which posts a
-// snapshot to the observer fan-out); absent = one branch. The surfaced view is envelope-only (the
-// correlation_id, and status for a reply) — the param/return spans are transient, so no
-// borrowed-span dangles into the deferred turn and no per-call copy is imposed. RELOCATION of the
-// forwarder body — the sinks live on the forwarder; these read them through a friend reference.
-
+// The surfaced view is envelope-only (correlation_id, plus status for a reply): the param/return
+// spans are transient, so no borrowed span dangles into the deferred turn.
 template<typename Forwarder>
 void emit_rpc_call(Forwarder &f, std::string_view fqn, std::uint64_t corr_id)
 {
@@ -46,11 +42,8 @@ void emit_rpc_reply(Forwarder &f, std::string_view fqn, std::uint64_t corr_id, w
         f.m_on_rpc_reply(fqn, rpc_reply_view{.correlation_id = corr_id, .status = status});
 }
 
-// reply_status: frame an rpc_response carrying the request's correlation_id back to the peer
-// (source = procedure) and send it through reused scratch. The correlation_id alone matches the
-// response to its pending request; the type tag words are reserved zeroes carrying no type-matching
-// authority (matching is subscribe-time discovery), so the response writes them 0 rather than
-// echoing.
+// correlation_id alone matches the response to its pending request; the type-tag words carry no
+// matching authority (matching is subscribe-time discovery), so the response writes them 0.
 template<typename Forwarder, typename Channel>
 void reply_status(Forwarder &f, Channel &channel, const wire::bidirectional_header &req_hdr, wire::rpc_status status, std::span<const std::byte> return_data, std::uint64_t session_id)
 {
@@ -64,10 +57,8 @@ void reply_status(Forwarder &f, Channel &channel, const wire::bidirectional_head
     send_data(f, channel, wire::msg_type::rpc_response, f.m_resp_scratch, session_id);
 }
 
-// send_data: emit a DATA frame (rpc_request / rpc_response) carrying the per-send session_id epoch
-// so the receive-side staleness gate can fire. Absence keeps the unestablished sentinel 0 — the
-// epoch is per-peer, passed per send (a node-shared forwarder fans to many peers), never a
-// forwarder-wide member.
+// The session_id epoch is per-peer, passed per send (a node-shared forwarder fans to many
+// peers), never a forwarder-wide member; 0 is the unestablished sentinel.
 template<typename Forwarder, typename Channel>
 void send_data(Forwarder &f, Channel &channel, wire::msg_type type, std::span<const std::byte> inner, std::uint64_t session_id)
 {
@@ -76,7 +67,6 @@ void send_data(Forwarder &f, Channel &channel, wire::msg_type type, std::span<co
     channel.send(f.m_frame_scratch);
 }
 
-// send_subscribe: emit the procedure subscribe (a CONTROL frame, session-pre) for an attach.
 template<typename Forwarder, typename Channel>
 void send_subscribe(Forwarder &f, Channel &channel, std::string_view fqn, std::uint64_t hash)
 {

@@ -12,10 +12,8 @@
 
 namespace plexus::io::detail {
 
-// Stamp the header-derived metadata at the ONE point the decoded frame_header is still
-// live alongside the data (the router strips it before deliver). source_timestamp is the
-// publisher's wire stamp; reception_timestamp is receiver-stamped from the same clock the
-// codec uses; from_intra_process is the channel's latched tier verdict.
+// Stamped at the one point the decoded frame_header is still live alongside the data (the
+// router strips it before deliver). reception_timestamp uses the same clock the codec uses.
 template<typename Session>
 message_info assemble_message_info(Session &s, const wire::frame_header &hdr)
 {
@@ -26,13 +24,9 @@ message_info assemble_message_info(Session &s, const wire::frame_header &hdr)
     return info;
 }
 
-// Precedence: a per-session info/bytes seam (the test/cold-path install) wins when set;
-// otherwise the node-shared route (threaded by the registry, so it survives a reconnect
-// rebuild) delivers. has_source_identity is read from the gid flag and passed to BOTH
-// deliver paths: the producer emits the varint counter per ITS topic declaration, so even
-// the bytes-only 2-arg path must honor the flag to land the data span correctly. The gid's
-// node_id half is m_ctx.peer_id — the PINNED session peer — never a node_id from the frame.
-// None set = silent drop. RELOCATION of the session body (a friend).
+// A per-session seam wins when set; otherwise the node-shared route delivers. Every path must
+// honor has_source_identity to land the data span correctly, and pins the source to
+// m_ctx.peer_id (never a node_id from the frame). None set = silent drop.
 template<typename Session>
 // NOLINTNEXTLINE(readability-function-size)
 void deliver_session_data(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner)
@@ -60,10 +54,8 @@ void deliver_session_data(Session &s, const wire::frame_header &hdr, std::span<c
     s.m_messages.deliver(s.m_msg_peer, inner, s.m_ctx.peer_id, has_source_identity, [](std::string_view, std::span<const std::byte>) {});
 }
 
-// The object-lane receive tail: resolve the carrier's topic_hash to its fqn (recorded at
-// demand time), hand it up the route, then RELEASE the reference the channel delivered. An
-// unresolvable hash is warn-and-dropped and still released — never delivered, never leaked.
-// No session_id staleness gate: this lane never crosses a reconnect boundary.
+// Every path releases the carrier reference the channel delivered: an unresolvable hash is
+// warned and dropped but still released, never leaked.
 template<typename Session>
 void deliver_session_object(Session &s, const object_carrier &c)
 {
