@@ -1,133 +1,25 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SUPPORT_LOSS_REORDER_SHIM_H
 #define HPP_GUARD_PLEXUS_TESTS_SUPPORT_LOSS_REORDER_SHIM_H
 
+#include "support/loss_reorder_scheduler.h"
+
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
 
-#include <deque>
 #include <array>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <algorithm>
-
-// A deterministic, fixed-seed loss/reorder relay on the datagram wire between a client and
-// a server UDP socket: each client->server datagram is forwarded, optionally dropped, or
-// held and re-emitted out of order. Decisions come from an LCG seeded at construction, so
-// the re-injected sequence is byte-identical across runs (the empirical-reproducibility
-// property the fragment sweep and the lossy-link bench cell depend on; no std::random).
 
 namespace plexus::testing {
 
-// A deterministic LCG (Numerical Recipes constants), copied verbatim from the anti-replay
-// window sweep so the loss schedule is byte-identical across runs and platforms.
-class shim_lcg
-{
-public:
-    explicit shim_lcg(std::uint64_t seed) noexcept
-            : m_state(seed)
-    {
-    }
-
-    std::uint64_t next() noexcept
-    {
-        m_state = m_state * 6364136223846793005ull + 1442695040888963407ull;
-        return m_state >> 17u;
-    }
-
-    // A fixed-point fraction comparison in [0, 1): returns true with probability ~num/den.
-    bool hits(std::uint32_t num, std::uint32_t den) noexcept
-    {
-        return den != 0 && static_cast<std::uint32_t>(next() % den) < num;
-    }
-
-    std::size_t bounded(std::size_t n) noexcept
-    {
-        return n == 0 ? 0 : static_cast<std::size_t>(next() % n);
-    }
-
-private:
-    std::uint64_t m_state;
-};
-
-// The shim's configuration: a loss fraction expressed as loss_num/loss_den (so a
-// fixed-seed integer decision stays RNG-free), a bounded reorder depth (0 = in order),
-// and the LCG seed. Required-with-default knobs set once at construction — never a mutable
-// setter (the determinism contract: the schedule is fixed at construction).
-struct loss_reorder_config
-{
-    std::uint32_t loss_num      = 0;
-    std::uint32_t loss_den      = 100;
-    std::size_t   reorder_depth = 0;
-    std::uint64_t seed          = 0x9E3779B97F4A7C15ull;
-};
-
-// A pure (no-IO) deterministic loss/reorder scheduler over an opaque datagram stream.
-// drive() consumes one datagram and returns the SET of datagrams to emit now (possibly
-// empty if it is dropped or held for reorder; possibly several when a held burst flushes).
-// flush() drains any datagrams still held in the reorder buffer at end-of-stream. The
-// emitted order across a fixed input + seed is identical on every run, asserted by the
-// shim's own self-test.
-class loss_reorder_scheduler
-{
-public:
-    explicit loss_reorder_scheduler(loss_reorder_config cfg)
-            : m_cfg(cfg)
-            , m_rng(cfg.seed)
-    {
-    }
-
-    [[nodiscard]] std::vector<std::vector<std::byte>> drive(std::span<const std::byte> datagram)
-    {
-        std::vector<std::vector<std::byte>> out;
-        if(m_rng.hits(m_cfg.loss_num, m_cfg.loss_den))
-        {
-            ++m_dropped;
-            return out;
-        }
-        std::vector<std::byte> dg(datagram.begin(), datagram.end());
-        if(m_cfg.reorder_depth == 0)
-        {
-            out.push_back(std::move(dg));
-            return out;
-        }
-        m_hold.push_back(std::move(dg));
-        if(m_hold.size() > m_cfg.reorder_depth)
-            out.push_back(take_held());
-        return out;
-    }
-
-    [[nodiscard]] std::vector<std::vector<std::byte>> flush()
-    {
-        std::vector<std::vector<std::byte>> out;
-        while(!m_hold.empty())
-            out.push_back(take_held());
-        return out;
-    }
-
-    [[nodiscard]] std::size_t dropped() const noexcept { return m_dropped; }
-
-private:
-    // Pull one held datagram at a seed-chosen position so the re-emission order is shuffled
-    // within the bounded window (not strictly FIFO) yet deterministic.
-    std::vector<std::byte> take_held()
-    {
-        const std::size_t      idx = m_rng.bounded(m_hold.size());
-        std::vector<std::byte> dg  = std::move(m_hold[idx]);
-        m_hold.erase(m_hold.begin() + static_cast<std::ptrdiff_t>(idx));
-        return dg;
-    }
-
-    loss_reorder_config                m_cfg;
-    shim_lcg                           m_rng;
-    std::deque<std::vector<std::byte>> m_hold;
-    std::size_t                        m_dropped = 0;
-};
-
-// A live UDP relay applying the deterministic scheduler at the wire boundary; replies are
-// piped back untouched (the loss model is one-directional on the client->server leg).
+// A live UDP relay applying the deterministic loss_reorder_scheduler at the wire boundary between
+// a client and a server socket: each client->server datagram is forwarded, dropped, or held and
+// re-emitted out of order; replies are piped back untouched (the loss model is one-directional on
+// the client->server leg). The schedule is byte-identical across runs (the empirical-
+// reproducibility property the fragment sweep and lossy-link bench cell depend on; no std::random).
 class loss_reorder_relay
 {
 public:
@@ -142,9 +34,18 @@ public:
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const { return m_front.local_endpoint().port(); }
-    [[nodiscard]] std::size_t   dropped() const noexcept { return m_sched.dropped(); }
-    [[nodiscard]] std::size_t   forwarded() const noexcept { return m_forwarded; }
+    [[nodiscard]] std::uint16_t port() const
+    {
+        return m_front.local_endpoint().port();
+    }
+    [[nodiscard]] std::size_t dropped() const noexcept
+    {
+        return m_sched.dropped();
+    }
+    [[nodiscard]] std::size_t forwarded() const noexcept
+    {
+        return m_forwarded;
+    }
 
 private:
     void emit_to_server(std::vector<std::byte> dg)
@@ -155,17 +56,16 @@ private:
 
     void recv_front()
     {
-        m_front.async_receive_from(
-                ::asio::buffer(m_front_buf), m_from,
-                [this](std::error_code ec, std::size_t n)
-                {
-                    if(ec)
-                        return;
-                    m_client_ep = m_from;
-                    for(auto &dg : m_sched.drive(std::span<const std::byte>{m_front_buf.data(), n}))
-                        emit_to_server(std::move(dg));
-                    recv_front();
-                });
+        m_front.async_receive_from(::asio::buffer(m_front_buf), m_from,
+                                   [this](std::error_code ec, std::size_t n)
+                                   {
+                                       if(ec)
+                                           return;
+                                       m_client_ep = m_from;
+                                       for(auto &dg : m_sched.drive(std::span<const std::byte>{m_front_buf.data(), n}))
+                                           emit_to_server(std::move(dg));
+                                       recv_front();
+                                   });
     }
 
     void recv_back()
@@ -176,8 +76,7 @@ private:
                                       if(ec)
                                           return;
                                       if(m_client_ep.port() != 0)
-                                          m_front.send_to(::asio::buffer(m_back_buf.data(), n),
-                                                          m_client_ep);
+                                          m_front.send_to(::asio::buffer(m_back_buf.data(), n), m_client_ep);
                                       recv_back();
                                   });
     }

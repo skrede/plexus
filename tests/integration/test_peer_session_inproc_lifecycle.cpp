@@ -15,9 +15,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -39,8 +48,8 @@ using manual_session = plexus::io::peer_session<manual_policy>;
 using manual_msg     = plexus::io::message_forwarder<manual_policy>;
 using manual_rpc     = plexus::io::procedure_forwarder<manual_policy>;
 
-// A lone requester on the manual clock with no responder ever answering: the
-// handshake never completes, so the armed handshake timer is what resolves it.
+// A lone requester with no responder answering: the handshake never completes, so the armed
+// handshake timer resolves it.
 struct timeout_harness
 {
     inproc_bus<manual_clock>      bus;
@@ -48,8 +57,8 @@ struct timeout_harness
     inproc_channel<manual_clock>  peer_ch{ex}; // a silent peer that never responds
 
     plexus::log::null_logger sink;
-    manual_msg messages{sink};
-    manual_rpc procedures{ex, std::chrono::hours(1), sink};
+    manual_msg               messages{sink};
+    manual_rpc               procedures{ex, std::chrono::hours(1), sink};
 
     plexus::io::peer_context<manual_policy> ctx; // the record owns the dialer channel
     manual_session                          requester;
@@ -58,12 +67,14 @@ struct timeout_harness
             : ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}
             , requester(ctx, ex, make_cfg(0x02), timeout, messages, procedures, false, sink)
     {
-        ctx.channel->connect_to(
-                peer_ch.local_endpoint()); // sends land on a peer that never replies
+        ctx.channel->connect_to(peer_ch.local_endpoint()); // sends land on a peer that never replies
         requester.start();
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 }
@@ -78,7 +89,7 @@ TEST_CASE("inproc peer_session: a handshake that never completes aborts once the
         const auto      deadline = std::chrono::milliseconds(50);
         timeout_harness h(deadline);
 
-        // Before the deadline: the request was sent but no response arrived — no abort.
+        // Before the deadline: request sent, no response arrived — no abort.
         h.drive();
         REQUIRE(!h.requester.is_complete());
 
@@ -92,9 +103,8 @@ TEST_CASE("inproc peer_session: a handshake that never completes aborts once the
 
 namespace {
 
-// A manual-clock pair stood up through the manual-clock transport rendezvous (no
-// hand-dial) so the handshake CAN complete before the deadline; used to prove the
-// timer is cancelled on completion (no later abort fires).
+// A manual-clock pair stood up through the transport rendezvous (no hand-dial) so the handshake
+// CAN complete before the deadline.
 struct manual_link
 {
     inproc_bus<manual_clock>       bus;
@@ -102,10 +112,10 @@ struct manual_link
     inproc_transport<manual_clock> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    manual_msg req_messages{sink};
-    manual_msg resp_messages{sink};
-    manual_rpc req_procedures{ex, std::chrono::hours(1), sink};
-    manual_rpc resp_procedures{ex, std::chrono::hours(1), sink};
+    manual_msg               req_messages{sink};
+    manual_msg               resp_messages{sink};
+    manual_rpc               req_procedures{ex, std::chrono::hours(1), sink};
+    manual_rpc               resp_procedures{ex, std::chrono::hours(1), sink};
 
     plexus::io::peer_context<manual_policy> req_ctx;  // the dialer slot's per-peer record
     plexus::io::peer_context<manual_policy> resp_ctx; // the accepted slot's per-peer record
@@ -119,25 +129,25 @@ struct manual_link
                 {
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
-                    responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages,
-                                      resp_procedures, true, sink);
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages, resp_procedures, true, sink);
                     responder->start();
                 });
         transport.on_dialed(
-                [this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch,
-                                const plexus::io::endpoint &)
+                [this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch, const plexus::io::endpoint &)
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
-                    requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages,
-                                      req_procedures, false, sink);
+                    requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages, req_procedures, false, sink);
                     requester->start();
                 });
         transport.listen({"inproc", "svc"});
         transport.dial({"inproc", "svc"});
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 }
@@ -156,8 +166,7 @@ TEST_CASE("inproc peer_session: completing before the deadline cancels the timer
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
 
-        // Advance well past the (now-cancelled) deadline: NO abort fires; the
-        // session stays complete with its minted epoch intact.
+        // Advance well past the (now-cancelled) deadline: NO abort fires, epoch intact.
         const auto epoch = l.requester->session_id();
         manual_clock::advance(deadline + std::chrono::seconds(10));
         l.drive();
@@ -166,8 +175,7 @@ TEST_CASE("inproc peer_session: completing before the deadline cancels the timer
     }
 }
 
-TEST_CASE("inproc peer_session: teardown drains the forwarders and resets the epoch latch",
-          "[integration][peer_session][inproc]")
+TEST_CASE("inproc peer_session: teardown drains the forwarders and resets the epoch latch", "[integration][peer_session][inproc]")
 {
     link l;
     l.drive();
@@ -183,8 +191,7 @@ TEST_CASE("inproc peer_session: teardown drains the forwarders and resets the ep
     REQUIRE(!l.responder->is_complete());
     REQUIRE(l.responder->peer_session_id() == 0);
 
-    // After teardown the responder no longer fans toward its peer: a publish from
-    // the responder reaches nobody (detach_all dropped the fan-out entry).
+    // After teardown the responder no longer fans toward its peer (detach_all dropped the entry).
     l.resp_messages.attach_for_fanout(l.responder->msg_peer(), "back");
     l.resp_messages.detach_all(l.responder->msg_peer());
     l.resp_messages.publish("back", as_bytes(std::string{"y"}), l.responder->session_id());

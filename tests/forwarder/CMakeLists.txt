@@ -63,7 +63,8 @@ catch_discover_tests(test_procedure_forwarder TEST_PREFIX "forwarder.")
 # LATCH-NOALLOC retention gate over a non-allocating sink Policy. Links the core,
 # wire, and inproc layers; selected by the `forwarder.` ctest prefix and by `latch`
 # Catch2 tags so `ctest -R latch` and `ctest -R forwarder` both pick it up.
-add_executable(test_latch_forwarder test_latch_forwarder.cpp test_latch_forwarder_churn.cpp)
+add_executable(test_latch_forwarder test_latch_forwarder.cpp test_latch_forwarder_churn.cpp
+    test_latch_forwarder_alloc.cpp)
 
 target_include_directories(test_latch_forwarder PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)

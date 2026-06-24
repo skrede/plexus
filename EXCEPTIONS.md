@@ -5,10 +5,10 @@ in `conventions.md` (functions <=25 lines, files <=200 lines, comments included)
 exception is earned only when a unit is one cohesive whole that splitting would *harm* —
 scattering shared state across files or forcing an artificial-purity layer.
 
-Every row here must agree with an in-code `// over-limit: <reason>` marker at the site,
-and the justification must match. The size gate cross-checks both directions and fails
-the build on any unlisted overage, any marker without a row, or any row whose unit is no
-longer over the limit. There are no silent exceptions.
+A row here is the sole sanction for an over-limit unit — there is no in-code marker; the
+justification is bookkeeping and bookkeeping never lives in the code. The size gate fails
+the build on any unlisted overage, and on any stale row: one whose unit has dropped back
+under the limit, or that names no scanned file at all. There are no silent exceptions.
 
 | Path | Kind | Justification |
 | ---- | ---- | ------------- |
@@ -58,6 +58,7 @@ longer over the limit. There are no silent exceptions.
 | tests/integration/test_recorder_defaults_sweep.cpp | file | One cohesive recorder-defaults sweep; the per-payload recall cells and the decimation guarantees share the one saturating-burst harness at the shipped ring budget, so splitting them scatters that shared sweep fixture. |
 | tests/integration/test_shared_receive_route.cpp | file | One cohesive node-shared receive-route matrix; the install-once, reconnect-survival, and per-session-yield cells share the one routing_engine route harness, so splitting them scatters that shared fixture. |
 | tests/integration/test_mcap_transcode.cpp | file | One cohesive flat-stream-to-MCAP transcode round-trip; the capture, transcode, and read-back-mapping assertions share the one live-session-to-mcap-file pipeline, so splitting them scatters that shared pipeline state. |
+| tests/integration/test_obs_tap_points_common.h | file | One cohesive data-path tap-point oracle fixture; the manual clock/policy, the engine aliases and id/config helpers, and the two harnesses (the N-subscriber publish fan and the caller/provider RPC pair) are one shared scaffold every tap-point test drives, so splitting the harnesses scatters that shared clock/policy/helper state. |
 | tests/integration/test_pcap_transcode.cpp | file | One cohesive flat-stream-to-pcapng transcode round-trip; the single end-to-end capture-transcode-parse pipeline is one whole over a shared captured session, so it cannot split without scattering that pipeline state. |
 | tests/integration/test_node_xproc_shm.cpp | file | One cohesive cross-process shared-memory proof; the forked same_host_transports rendezvous + medium assertion is one end-to-end pipeline over a shared /dev/shm region, so it cannot split without scattering that cross-process state. |
 | tests/integration/test_tls_channel_backpressure_asio.cpp | file | One cohesive real-TLS bounded-outbox hardening leg; the single congestion=drop/block scenario drives the one shared mutual-TLS loopback + stalled-write harness, so it cannot split without scattering that shared socket/TLS state. |
@@ -75,7 +76,6 @@ longer over the limit. There are no silent exceptions.
 | tests/shm/test_shm_mux.cpp | file | One cohesive mux-join selection matrix; the member-satisfies / prefer-hook / fallback cells share the one stub-broker mux-composition harness, and that shared fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs without scattering that one harness into over-budget shells. |
 | tests/shm/test_shm_wire_fallback_node.cpp | file | One cohesive wire_fallback production-seam matrix; the per-mode prefer-hook cells share the one node-declare-path shm broker + mux harness, and that shared fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs without scattering that one harness into over-budget shells. |
 | tests/shm/test_shm_dual_delivery.cpp | file | One cohesive dual-delivery cross-process proof; the single end-to-end SHM-ring + wire-loopback round-trip is one pipeline over a shared converged region and reactor bridge, so it cannot split without scattering that shared cross-process pipeline state. |
-| tests/shm/test_shm_teardown_race.cpp | file | One cohesive wake-vs-teardown race proof (asan-targeted); the single forked producer signaling at the moment of channel+bridge teardown is one end-to-end pipeline over a shared region and reactor bridge, so it cannot split without scattering that shared state. |
 | tests/shm/test_shm_notifier_bridge.cpp | file | One cohesive wakeup->reactor bridge matrix; the cells share the one forked producer + io_uring-futex reactor-bridge harness over a converged region, and that shared fixture preamble plus its produce helpers cannot split across TUs without scattering that shared cross-process bridge state into near-empty per-cell shells. |
 | tests/shm/test_shm_geometry_defaults.cpp | file | One cohesive safe-defaults + fail-closed geometry matrix; the cells share the one heap-backed stub-broker registry harness, so splitting them scatters that shared broker fixture into near-empty per-cell shells. |
 | tests/shm/test_shm_ring_memory_query.cpp | file | One cohesive ring-memory-cost query matrix; the cells share the one recording stub-broker registry harness that captures the requested slab sizes, so splitting them scatters that shared recording-broker fixture into near-empty per-cell shells. |

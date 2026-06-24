@@ -15,41 +15,38 @@
 
 namespace plexus::io::detail {
 
-// The fixed number of egress priority bands one destination is split into. Kept a
-// small constant so the per-destination band cost is bounded; the exact count is to
-// be substantiated at the fan-out benchmark, not fixed by feel.
+// The fixed number of egress priority bands one destination is split into. A small
+// constant bounds the per-destination band cost; the exact count is to be substantiated
+// at the fan-out benchmark, not fixed by feel.
 constexpr std::size_t k_egress_bands = 4;
 
-// The fixed per-band message capacity (a setup-time bound). The per-destination
-// memory ceiling is k_egress_bands * k_band_depth * max_payload; the depth is to be
-// swept at the fan-out benchmark rather than fixed by feel.
+// The fixed per-band message capacity (a setup-time bound). The per-destination memory
+// ceiling is k_egress_bands * k_band_depth * max_payload; the depth is to be swept at
+// the fan-out benchmark, not fixed by feel.
 constexpr std::size_t k_band_depth = 256;
 
-// Map a priority to a band index: realtime -> 0 (highest drain priority) ...
-// background -> 3. The drain order is ascending band index = descending priority, so
-// the inversion subtracts the enum value from the top band; the result is clamped to
-// the last band for a hypothetical out-of-range value.
+// Map a priority to a band index: realtime -> 0 (highest drain priority) ... background
+// -> 3. Drain order is ascending band index = descending priority, so the inversion
+// subtracts the enum value from the top band, clamped to the last band out-of-range.
 inline std::size_t band_of(priority p) noexcept
 {
     const std::size_t inverted = k_egress_bands - 1 - static_cast<std::size_t>(p);
     return std::min(inverted, k_egress_bands - 1);
 }
 
-// One destination's N priority bands of frame-owner handles. Each band is a
-// fixed-depth FIFO ring whose slots are grown ONCE (cloning the history_ring
-// grow-once / assign-into-slot pattern) and reused thereafter, so a steady
-// enqueue/pop loop allocates nothing of its own. A slot holds a wire_bytes owner
-// addref-shared from the forwarder's frame-once-fan-to-N buffer (one frame alloc per
-// publish, shared across destinations — never a per-slot byte copy), and PINS that
-// owner resident until drain hands it to channel.send. A band at capacity applies the
-// per-message congestion policy: block and drop_newest REFUSE the new frame (resident
-// set untouched, a counter bumped), drop_oldest EVICTS the oldest resident slot
-// (advance the FIFO head, releasing that one owner) and admits the new frame into the
-// freed tail, so the resident count stays k_band_depth.
+// One destination's N priority bands of frame-owner handles. Each band is a fixed-depth
+// FIFO ring whose slots are grown ONCE (history_ring grow-once / assign-into-slot pattern)
+// and reused thereafter, so a steady enqueue/pop loop allocates nothing of its own. A slot
+// holds a wire_bytes owner addref-shared from the forwarder's frame-once-fan-to-N buffer
+// (one frame alloc per publish, shared across destinations — never a per-slot byte copy),
+// and PINS that owner resident until drain hands it to channel.send. A band at capacity
+// applies the per-message congestion policy: block and drop_newest REFUSE the new frame
+// (resident set untouched, a counter bumped), drop_oldest EVICTS the oldest resident slot
+// (advance the FIFO head, releasing that owner) and admits into the freed tail (so the
+// resident count stays k_band_depth).
 class priority_band_queue
 {
 public:
-    // True when any band holds a frame.
     [[nodiscard]] bool has_work() const noexcept
     {
         for(const auto &b : m_bands)
@@ -58,27 +55,24 @@ public:
         return false;
     }
 
-    // Admit a framed-buffer owner into the given band under the per-message congestion
-    // mode (sharing the owner — addref, no byte copy). A non-full band admits regardless
-    // of mode; a full band applies the policy: block and drop_newest refuse (return
-    // false), drop_oldest evicts the oldest and admits (return true).
+    // Admit a framed-buffer owner into the given band under the per-message congestion mode
+    // (addref, no byte copy). Returns false only when a full band refuses (block/drop_newest).
     bool enqueue(std::size_t band, io::congestion congestion, wire_bytes<> frame)
     {
         return m_bands[band].push(congestion, std::move(frame));
     }
 
-    // As enqueue, but returns the drop cause that the admission incurred (drop_cause::none
-    // on a clean admit; drop_oldest when a full band evicted its oldest to admit; drop_newest
-    // / blocked when a full band refused the new frame). The per-(topic, band) drop counter
-    // is bumped from this verdict at the forwarder fan-out site.
+    // As enqueue, but returns the admission's drop cause (none on a clean admit; drop_oldest
+    // when a full band evicted to admit; drop_newest/blocked when a full band refused). The
+    // per-(topic, band) drop counter is bumped from this verdict at the fan-out site.
     drop_cause enqueue_with_verdict(std::size_t band, io::congestion congestion, wire_bytes<> frame)
     {
         return m_bands[band].push_with_verdict(congestion, std::move(frame));
     }
 
-    // The front owner of the highest non-empty band (lowest index), or nullptr when no
-    // band holds work. The owner stays band-resident (pinning the bytes) until the caller
-    // hands it to channel.send and then calls pop_highest — the in-flight-safe ordering.
+    // The front owner of the highest non-empty band (lowest index), or nullptr when no band
+    // holds work. The owner stays band-resident (pinning the bytes) until the caller hands it
+    // to channel.send THEN calls pop_highest — the in-flight-safe ordering.
     [[nodiscard]] const wire_bytes<> *front_highest() const
     {
         for(const auto &b : m_bands)
@@ -87,8 +81,7 @@ public:
         return nullptr;
     }
 
-    // Advance the FIFO tail of the highest non-empty band (the same band front_highest
-    // returned). A no-op when every band is empty.
+    // Advance the FIFO tail of the highest non-empty band (the one front_highest returned).
     void pop_highest()
     {
         for(auto &b : m_bands)
@@ -112,15 +105,13 @@ public:
     }
 
 private:
-    // A single band: a fixed-depth FIFO ring of frame-owner slots grown once and
-    // reused via move-assign, with a per-message congestion admission at capacity.
     struct band
     {
-        [[nodiscard]] bool empty() const noexcept { return m_count == 0; }
+        [[nodiscard]] bool empty() const noexcept
+        {
+            return m_count == 0;
+        }
 
-        // Admit into the slot one-past the tail, growing the ring to k_band_depth on
-        // first touch. At capacity the congestion mode decides: block/drop_newest
-        // refuse, drop_oldest evicts the front to make room (handled by the helper).
         // True iff the new frame was admitted (a refusing verdict — drop_newest/blocked —
         // is the only non-admit). Expressed over push_with_verdict so the two cannot diverge.
         bool push(io::congestion congestion, wire_bytes<> frame)
@@ -129,8 +120,7 @@ private:
             return cause != drop_cause::drop_newest && cause != drop_cause::blocked;
         }
 
-        // The verdict-returning admission: drop_cause::none on a clean admit, drop_oldest
-        // when a full band evicted to admit, drop_newest/blocked when a full band refused.
+        // The verdict-returning admission (see enqueue_with_verdict for the cause meanings).
         drop_cause push_with_verdict(io::congestion congestion, wire_bytes<> frame)
         {
             drop_cause cause = drop_cause::none;
@@ -148,18 +138,15 @@ private:
             return cause; // none on a clean admit, drop_oldest when an eviction made room
         }
 
-        // At a full band: block/drop_newest bump their counter and refuse (returning the
-        // refusing cause); drop_oldest recycles the oldest resident slot (pop() — never a
-        // free), bumps its counter and returns drop_oldest so the caller admits the new
-        // frame into the freed tail. The cause mirrors the per-cause counter it bumps.
+        // At a full band: block/drop_newest bump their counter and refuse; drop_oldest
+        // recycles the oldest resident slot (pop() — never a free), bumps its counter and
+        // returns drop_oldest so the caller admits into the freed tail.
         drop_cause evict_oldest_or_refuse_cause(io::congestion congestion)
         {
             switch(congestion)
             {
-                case io::congestion::block: ++m_blocked; return drop_cause::blocked;
-                case io::congestion::drop_newest:
-                    ++m_dropped_newest;
-                    return drop_cause::drop_newest;
+                case io::congestion::block:       ++m_blocked; return drop_cause::blocked;
+                case io::congestion::drop_newest: ++m_dropped_newest; return drop_cause::drop_newest;
                 case io::congestion::drop_oldest:
                     pop();
                     ++m_dropped_oldest;
@@ -168,7 +155,10 @@ private:
             return drop_cause::blocked;
         }
 
-        [[nodiscard]] const wire_bytes<> &front() const { return m_slots[m_head]; }
+        [[nodiscard]] const wire_bytes<> &front() const
+        {
+            return m_slots[m_head];
+        }
 
         // Advance the FIFO head and release the popped slot's owner (the bytes are now
         // pinned by the channel's send queue), so the band holds no stale reference.
@@ -179,9 +169,18 @@ private:
             --m_count;
         }
 
-        [[nodiscard]] std::size_t dropped_oldest() const noexcept { return m_dropped_oldest; }
-        [[nodiscard]] std::size_t dropped_newest() const noexcept { return m_dropped_newest; }
-        [[nodiscard]] std::size_t blocked() const noexcept { return m_blocked; }
+        [[nodiscard]] std::size_t dropped_oldest() const noexcept
+        {
+            return m_dropped_oldest;
+        }
+        [[nodiscard]] std::size_t dropped_newest() const noexcept
+        {
+            return m_dropped_newest;
+        }
+        [[nodiscard]] std::size_t blocked() const noexcept
+        {
+            return m_blocked;
+        }
 
         std::vector<wire_bytes<>> m_slots;
         std::size_t               m_head{0};
