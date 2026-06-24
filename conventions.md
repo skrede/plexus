@@ -119,9 +119,11 @@ standard-library headers third. Order matters only when something must precede s
 for a real reason.
 
 - The three major sections are separated by one blank line.
-- Within a major section, group includes by folder into intermediate sections, also separated
-  by one blank line. Only one blank line between any two sections.
-- Within a section, sort first by line length, then alphabetically among equal lengths.
+- Within a major section, group includes by folder. The folder groups are ordered
+  **alphabetically by folder path** and separated by one blank line. Only one blank line between
+  any two groups.
+- Within a folder group, sort by the include's **file-name length, shortest first**; file names
+  of equal length sort alphabetically.
 
 ## Naming
 
@@ -138,12 +140,22 @@ for a real reason.
   constructor is a pure aggregate that carries *no* defaults at all — brace-initialized at every use, no
   in-declaration initializers; it has nothing to move. The moment one member wants a default, the type
   takes a constructor.
+- **The constructor's init list is written in member-declaration order.** Members initialize in
+  declaration order regardless of the init-list order, so the two must agree (no `-Wreorder`). This
+  has a consequence for the member triangle below: a member consumed by another member's constructor
+  must be **declared before** its consumer, and that initialization dependency **overrides the length
+  triangle** — the triangle is the shape where dependencies leave it free, never at the cost of a
+  correct construction order.
 
 ## Class layout
 
 Order a class body so the data is visible before the operations on it:
 
 ```
+class T
+{
+    // leading private nested helper types (if any)
+
 public:
     constructor(s)
     public functions
@@ -151,9 +163,21 @@ public:
 private:
     members          // data first, right after private:
     private functions
+};
 ```
 
-The member triangle (above) orders the members within that leading block.
+A private nested helper type a class needs may lead the class body, before `public:`. The member
+triangle (above) orders the members within the leading private data block, subject to the
+initialization-order constraint in **Construction**.
+
+## Types and attributes
+
+- **Spell out return types.** Do not write `auto` as a function's return type — the named type is
+  what a reader looks for first, and `auto` makes the code harder to read and understand. The only
+  exception is a return type that is genuinely unspellable (a lambda / closure), where `auto` is
+  unavoidable. `auto` for a *local variable* is fine where the initializer makes the type obvious.
+- **No `[[nodiscard]]`. Ever.** Do not decorate declarations with attributes the compiler does not
+  require — they are visual noise. Keep attributes to the few the language genuinely needs.
 
 ## Header guards and namespaces
 
@@ -174,6 +198,12 @@ The member triangle (above) orders the members within that leading block.
 ## Lifetimes and ownership
 
 - Structural, single-owner lifetimes. The owner sequences teardown.
+- **Raw pointers are an anti-pattern — avoid them as far as possible.** Use a `unique_ptr` for sole
+  ownership and a `shared_ptr` for genuinely shared ownership; for everything else, pass and store
+  **references**. The system composes this way: an owner holds the long-lived utilities and hands
+  them out by reference (a context object the parts reach through), so a non-owner never needs a
+  pointer. A raw pointer survives only where absence is a real, modelled state (a nullable lookup
+  result) — and even there prefer a reference or `std::optional` where it fits.
 - A non-owning relationship that *must outlive* its holder is a **reference, not a raw pointer** — a
   reference says "not optional, not owned" without the nullability a pointer implies. Store it as
   `std::reference_wrapper<T>` when it lives in a container that needs assignability (a `std::vector`
@@ -202,12 +232,15 @@ make the next name easy to find.
 - **Downward waterfall.** When a signature or declaration wraps, each continuation line is *longer
   than or equal to* the one above it, so the wrapped arguments slope downward and the eye falls to
   the next one.
-- **Member triangle.** Order a struct's members by type-name length, then size names so each whole
-  line is no longer than the next — the members form the same downward slope. Semantic grouping wins
-  when it helps: keep the callbacks together even if a shorter line lands among them, and end-align a
-  group that reads better aligned. Shape serves reading, never the reverse.
+- **Member triangle.** Order a class's members by overall declaration-line length, shortest first —
+  the type name dictates the order — so the members form a downward slope. A **single space** precedes
+  each name; names are *not* aligned into a column (only consecutive `=` assignments are aligned).
+  Semantic grouping wins when it helps: keep the callbacks together even if a shorter line lands among
+  them. The triangle yields to initialization order (see **Construction**); shape serves reading,
+  never the reverse.
 - **Logical blank lines.** A blank line inside a function separates logical parts — set-up from the
-  work, one phase from the next — the way a paragraph break does.
+  work, one phase from the next — the way a paragraph break does. Separate each member function from
+  the next with a single blank line; the leading data members are packed together with none.
 
 ## English
 
