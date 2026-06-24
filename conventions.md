@@ -119,9 +119,9 @@ standard-library headers third. Order matters only when something must precede s
 for a real reason.
 
 - The three major sections are separated by one blank line.
-- Within a major section, group includes by folder. The folder groups are ordered
-  **alphabetically by folder path** and separated by one blank line. Only one blank line between
-  any two groups.
+- Within a major section, group includes by folder, separated by one blank line. In the project
+  section the file's **own subsystem comes first** (its own folder/module), then the remaining
+  project folder groups. Only one blank line between any two groups.
 - Within a folder group, sort by the include's **file-name length, shortest first**; file names
   of equal length sort alphabetically.
 
