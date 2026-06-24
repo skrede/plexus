@@ -130,6 +130,7 @@ inline void decode_wire(wire::reader &r, decoded_record &rec)
 
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 inline bool decode_record_body(std::span<const std::byte> body, decoded_record &rec)
 {
     wire::reader r{body};

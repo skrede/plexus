@@ -82,6 +82,7 @@ public:
     }
 
 private:
+    // NOLINTNEXTLINE(readability-function-size)
     void dispatch(const wire::frame_header &hdr, std::span<const std::byte> inner)
     {
         switch(hdr.type)

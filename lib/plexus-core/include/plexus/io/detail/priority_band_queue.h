@@ -15,14 +15,10 @@
 
 namespace plexus::io::detail {
 
-// The fixed number of egress priority bands one destination is split into. A small
-// constant bounds the per-destination band cost; the exact count is to be substantiated
-// at the fan-out benchmark, not fixed by feel.
+// The fixed number of egress priority bands one destination is split into; a small constant bounds the per-destination band cost.
 constexpr std::size_t k_egress_bands = 4;
 
-// The fixed per-band message capacity (a setup-time bound). The per-destination memory
-// ceiling is k_egress_bands * k_band_depth * max_payload; the depth is to be swept at
-// the fan-out benchmark, not fixed by feel.
+// The fixed per-band message capacity (a setup-time bound); the per-destination memory ceiling is k_egress_bands * k_band_depth * max_payload.
 constexpr std::size_t k_band_depth = 256;
 
 // Map a priority to a band index: realtime -> 0 (highest drain priority) ... background
