@@ -7,10 +7,8 @@
 
 namespace plexus::detail {
 
-// A spin-loop pause hint: lowers the spin's contention + power cost on a busy
-// retry (PAUSE on x86, YIELD on aarch64), a no-op fallback elsewhere. NOT a
-// scheduler yield -- the spin stays on-core, so a bounded wait catches the
-// awaited transition (a back-to-back arrival, a clearing pin) at low latency.
+// A spin-loop pause hint (PAUSE on x86, YIELD on aarch64, no-op elsewhere). NOT a
+// scheduler yield: the spin stays on-core.
 inline void cpu_relax() noexcept
 {
 #if defined(__x86_64__) || defined(__i386__)

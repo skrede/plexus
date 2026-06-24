@@ -10,12 +10,8 @@
 
 namespace plexus {
 
-// The carrier the receive seam hands up: a non-owning view over wire bytes plus
-// a Policy-selected owner handle whose lifetime bounds the view (FORK-M). The
-// owner defaults to std::shared_ptr<const void> — the type-erased handle the
-// wire reassembler's shared_bytes already exposes — but a Policy may select a
-// cheaper owner (intrusive refcount, arena ticket) for the MCU profile. No
-// parsing happens here; the bytes are opaque.
+// A non-owning view over wire bytes plus an owner handle whose lifetime bounds
+// the view.
 template<typename ByteOwner = std::shared_ptr<const void>>
 class wire_bytes
 {
@@ -30,8 +26,6 @@ public:
     {
     }
 
-    // A complete_frame hands its payload up as wire_bytes: the view aliases the
-    // shared buffer's bytes, the owner keeps them alive past the source's scope.
     wire_bytes(const wire::shared_bytes &bytes)
             : m_view(static_cast<std::span<const std::byte>>(bytes))
             , m_owner(bytes.owner())
@@ -63,7 +57,7 @@ public:
 
 private:
     std::span<const std::byte> m_view;
-    owner_type                 m_owner{};
+    owner_type m_owner{};
 };
 
 }

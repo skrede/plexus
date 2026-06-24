@@ -10,46 +10,28 @@
 namespace plexus::detail {
 
 #if defined(__cpp_lib_move_only_function) && __cpp_lib_move_only_function >= 202110L
-// The C++23 path: the real std::move_only_function. The macro IS the guard, so this
-// branch is byte-stable — only the C++20-floor fallback below changes (the SBO
-// retrofit). The PC build at gnu++20 does NOT satisfy this macro and takes the
-// fallback; the pinned on-target GCC at gnu++23 does, and the fallback is inert there.
 template<typename Sig>
 using move_only_function = std::move_only_function<Sig>;
 #else
 
-// Inline storage budget for the fallback's small-buffer optimization. MEASURED, not
-// guessed: 136 bytes is the size of the largest callable any seam in the codebase
-// wraps (the observability deliver sink's [&engine, fqn=std::string, message_info,
-// message_view] closure). Every production seam closure (transport/timer/on_data and
-// the posted tasks) is <= 136 bytes, so they all live inline with zero heap; a larger
-// callable spills to the heap. max_align_t alignment admits any over-aligned callable
-// inline within the budget.
+// MEASURED: 136 bytes is the largest callable any seam in the codebase wraps, so
+// every production seam closure lives inline with zero heap; larger callables spill.
 inline constexpr std::size_t k_move_only_fn_sbo = 136;
 
-// Minimal move-only function wrapper for toolchains without
-// std::move_only_function (the C++20 floor). Unlike std::function it admits
-// move-only callables; it is the handler type the byte_channel / timer / Policy
-// concepts are expressed over so the seam never forces a copyable callable. Small
-// callables are stored inline (the SBO buffer); larger ones spill to the heap.
+// A C++20-floor move-only function for toolchains lacking std::move_only_function.
 template<typename Sig>
 class move_only_function;
 
 template<typename R, typename... Args>
 class move_only_function<R(Args...)>
 {
-    // A callable F is stored inline (in the SBO buffer) when it fits the budget, is
-    // not over-aligned, and moves without throwing — otherwise it spills to the heap
-    // and the buffer holds a single owning F*.
+    // Inline when it fits the budget, is not over-aligned, and moves without throwing;
+    // otherwise the buffer holds a single owning F*.
     template<typename F>
     static constexpr bool fits_inline = sizeof(F) <= k_move_only_fn_sbo && alignof(F) <= alignof(std::max_align_t) && std::is_nothrow_move_constructible_v<F>;
 
-    // The type-erased operation table: invoke the target, relocate it from a source
-    // buffer into a destination buffer (move-construct + destroy the inline object, or
-    // hand over the heap pointer), and destroy+free it. relocate leaves the source
-    // empty of the target, so the caller need only clear the source's m_ops. A null
-    // m_ops is the empty state. A manual vtable so an inline target needs no heap node
-    // and no virtual base.
+    // A manual vtable so an inline target needs no heap node and no virtual base.
+    // relocate leaves the source empty of the target; a null m_ops is the empty state.
     struct ops_t
     {
         R (*invoke)(std::byte *buf, Args... args);

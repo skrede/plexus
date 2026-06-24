@@ -12,13 +12,8 @@
 
 namespace plexus::discovery {
 
-// Live fixed-table discovery: a developer-provided {name -> service} table, no real
-// mDNS. browse() fires the callback once per CURRENT entry and RETAINS the callback,
-// so a later advertise() notifies every retained browser live (a late joiner is seen
-// without a re-browse). advertise() replaces a same-name entry in place rather than
-// appending a duplicate, so re-advertising a node updates its record. The table and
-// the browsers are trusted developer input, so there is no untrusted network parsing
-// here. stop() drops the retained browsers.
+// Fixed-table discovery. browse() retains its callback so a later advertise()
+// notifies every live browser; advertise() replaces a same-name entry in place.
 class static_discovery final : public discovery
 {
 public:
@@ -51,7 +46,7 @@ public:
     }
 
 private:
-    std::vector<service_info>      m_table;
+    std::vector<service_info> m_table;
     std::vector<resolved_callback> m_browsers;
 };
 
