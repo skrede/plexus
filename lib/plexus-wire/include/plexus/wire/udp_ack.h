@@ -3,50 +3,41 @@
 
 #include "plexus/wire/cursor.h"
 
+#include <span>
 #include <array>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <span>
-#include <vector>
 
 namespace plexus::wire {
 
-// The reliable-ARQ inner control discriminator. A reliable_arq (kind=1) datagram
-// self-identifies by a LEADING control byte so ONE inbound demux path handles both a
-// data segment and an ack/nack control frame. The marker values start at 2 — disjoint
-// from the handshake control bytes (request=0, response=1, which are recognized by a
-// stricter exactly-one-byte handshake decode) so the three inner-frame families never
-// alias: a handshake frame is exactly [0|1]; a data segment is [segment][payload..];
-// an ack frame is [ack][cumulative:2][hole-bitmap..]. The seq the segment carries
-// lives in the OUTER udp_envelope, not here.
+// The reliable-ARQ inner control discriminator, a LEADING control byte so ONE inbound demux
+// path handles both a data segment and an ack frame. The marker values start at 2, disjoint from
+// the handshake control bytes (request=0, response=1), so the three inner-frame families never
+// alias: a handshake frame is exactly [0|1], a data segment is [segment][payload..], an ack is
+// [ack][cumulative:2][hole-bitmap..]. The segment's seq lives in the OUTER udp_envelope.
 enum class udp_arq_kind : std::uint8_t
 {
     segment = 2,
     ack     = 3,
 };
 
-// A cumulative + selective acknowledgment. `cumulative` is the highest in-order seq
-// the receiver has delivered (expected - 1, the left edge the sender's window may
-// slide to); the selective bitmap names the buffered holes ABOVE the cumulative edge
-// the sender must selectively retransmit — bit i set means (cumulative + 2 + i) was
-// received out of order and need not be resent. A bounded fixed bitmap (no hot-path
-// alloc): a 256-bit (32-byte) window of holes, ample for the default send window.
+// A cumulative + selective acknowledgment. `cumulative` is the highest in-order seq delivered
+// (expected - 1, the left edge the sender's window may slide to); in the selective bitmap, bit i
+// set means (cumulative + 2 + i) was received out of order and need not be resent.
 struct udp_ack
 {
-    // bitmap_bits names the holes ABOVE the cumulative edge a single ack can describe.
-    // The send window may legitimately EXCEED this count: holes beyond offset bitmap_bits
-    // are not nameable in the selective bitmap and fall back to per-segment RTO-driven
-    // retransmit (idempotent at the receiver). The reliable ARQ binds its window's upper
-    // sweep bound to this constant via a static_assert (see udp_reliable_arq.h) so a future
-    // window sweep cannot silently pick a width whose excess is undescribable by surprise.
+    // Holes beyond bitmap_bits are not nameable in the selective bitmap and fall back to
+    // per-segment RTO-driven retransmit (idempotent at the receiver). The reliable ARQ binds its
+    // window's upper sweep bound to this constant via a static_assert (see udp_reliable_arq.h).
     static constexpr std::size_t bitmap_bytes = 32; // 256 holes named per ack
     static constexpr std::size_t bitmap_bits  = bitmap_bytes * 8;
 
-    std::uint16_t                          cumulative{0};
+    std::uint16_t cumulative{0};
     std::array<std::uint8_t, bitmap_bytes> selective{}; // bit i -> (cumulative+2+i) received
 
-    [[nodiscard]] bool hole_received(std::size_t i) const noexcept
+    bool hole_received(std::size_t i) const noexcept
     {
         return i < bitmap_bits && (selective[i >> 3] & (1u << (i & 7u))) != 0u;
     }
@@ -61,8 +52,7 @@ struct udp_ack
 // The inner ack control frame on the wire: [ack-marker:1][cumulative:2][bitmap:32].
 constexpr std::size_t udp_ack_frame_size = 1 + 2 + udp_ack::bitmap_bytes;
 
-// Encode an ack into a caller-owned buffer reused across sends (no per-ack alloc
-// after warm-up). The leading marker self-identifies the frame to the inbound demux.
+// Encode an ack into a caller-owned buffer reused across sends.
 inline void encode_udp_ack_into(std::vector<std::byte> &out, const udp_ack &ack)
 {
     out.resize(udp_ack_frame_size);
@@ -73,9 +63,8 @@ inline void encode_udp_ack_into(std::vector<std::byte> &out, const udp_ack &ack)
     w.bytes(std::span<const std::byte>{reinterpret_cast<const std::byte *>(ack.selective.data()), udp_ack::bitmap_bytes});
 }
 
-// Decode an untrusted ack control frame. Fail-closed: a frame that is not exactly the
-// fixed ack size, or whose leading marker is not the ack discriminator, decodes to
-// nullopt (the caller drops it). The size check precedes every read.
+// Decode an untrusted ack control frame, fail-closed: a frame not exactly the fixed ack size, or
+// whose leading marker is not the ack discriminator, decodes to nullopt.
 inline std::optional<udp_ack> decode_udp_ack(std::span<const std::byte> frame)
 {
     if(frame.size() != udp_ack_frame_size)
@@ -91,9 +80,8 @@ inline std::optional<udp_ack> decode_udp_ack(std::span<const std::byte> frame)
     return ack;
 }
 
-// Wrap a reliable data payload behind the segment marker: [segment-marker:1][payload].
-// The marker keeps a data segment distinguishable from an ack on the one demux path;
-// the segment's seq rides the outer envelope. Reused buffer, no per-send alloc.
+// Wrap a reliable data payload behind the segment marker: [segment-marker:1][payload]. Reused
+// caller buffer.
 inline void encode_udp_segment_into(std::vector<std::byte> &out, std::span<const std::byte> payload)
 {
     out.resize(1 + payload.size());
@@ -102,8 +90,8 @@ inline void encode_udp_segment_into(std::vector<std::byte> &out, std::span<const
     w.bytes(payload);
 }
 
-// Strip the segment marker, returning the inner payload. Fail-closed: an empty frame
-// or a non-segment marker yields nullopt (the caller drops / dispatches elsewhere).
+// Strip the segment marker, returning the inner payload. Fail-closed: an empty frame or a
+// non-segment marker yields nullopt.
 inline std::optional<std::span<const std::byte>> decode_udp_segment(std::span<const std::byte> frame)
 {
     reader r{frame};
@@ -112,13 +100,12 @@ inline std::optional<std::span<const std::byte>> decode_udp_segment(std::span<co
     return r.rest();
 }
 
-// Classify a reliable_arq inner frame by its leading marker WITHOUT decoding it. Used
-// by the channel's single demux path to fan a kind=1 inner frame to on_segment vs
-// on_ack. A frame too short or with an unknown marker yields nullopt (dropped).
+// Classify a reliable_arq inner frame by its leading marker WITHOUT decoding it. A frame too
+// short or with an unknown marker yields nullopt.
 inline std::optional<udp_arq_kind> peek_udp_arq_kind(std::span<const std::byte> frame)
 {
     reader r{frame};
-    auto   marker = r.u8();
+    auto marker = r.u8();
     if(!r.ok())
         return std::nullopt;
     if(marker == static_cast<std::uint8_t>(udp_arq_kind::segment))

@@ -15,25 +15,15 @@
 
 namespace plexus::wire {
 
-// over-limit: one frame-reassembly window; the partial-frame accumulate, the hole/offset track,
-// and the complete-and-emit steps share the one assembly buffer, so splitting them scatters the
-// hole/offset state (cohesive with detail/reassembler.h's reason).
-
-// Owning, shareable wire-payload buffer. A complete_frame's bytes are held
-// behind a shared_ptr so the receive seam can hand a zero-copy owning handle to
-// the consumer: this is the Policy-selected byte-owner seam in concrete form,
-// the handle whose lifetime bounds the non-owning view that wire_bytes exposes.
-// Implicitly converts to std::span so the wire::decode_* call sites consume it
-// unchanged.
+// Owning, shareable wire-payload buffer held behind a shared_ptr so the receive seam can hand
+// a zero-copy owning handle to the consumer. Implicitly converts to std::span so the
+// wire::decode_* call sites consume it unchanged.
 class shared_bytes
 {
 public:
     shared_bytes() = default;
 
-    // Implicit by design: a complete_frame's payload is naturally assigned/
-    // constructed from an owning byte vector (the reassembler and consumers
-    // both do `frame.payload = <vector>`), and the conversion is an
-    // unambiguous ownership transfer into the shared buffer.
+    // Implicit by design: an unambiguous ownership transfer of an owning byte vector.
     shared_bytes(std::vector<std::byte> bytes)
             : m_owner(std::make_shared<const std::vector<std::byte>>(std::move(bytes)))
     {
@@ -83,11 +73,9 @@ private:
 
 struct complete_frame
 {
-    // header is the decoded POD; payload is the FULL header-on frame (the
-    // serialized header followed by its inner bytes), one contiguous owner, so
-    // the receive seam carries this owner straight to delivery instead of
-    // re-prepending the header downstream.
     frame_header header;
+    // The FULL header-on frame (serialized header followed by its inner bytes), one contiguous
+    // owner, so the receive seam carries it straight to delivery without re-prepending.
     shared_bytes payload;
 };
 
@@ -103,7 +91,7 @@ enum class feed_error : uint8_t
 struct feed_result
 {
     std::vector<complete_frame> frames;
-    feed_error                  error{feed_error::none};
+    feed_error error{feed_error::none};
 };
 
 class frame_reassembler
@@ -175,7 +163,7 @@ public:
                 auto payload_span = remaining.subspan(0, m_pending_header.payload_len);
 
                 std::vector<std::byte> framed(header_size + m_pending_header.payload_len);
-                auto                   header_bytes = encode_header(m_pending_header);
+                auto header_bytes = encode_header(m_pending_header);
                 writer{std::span<std::byte>{framed}}.bytes(header_bytes);
                 if(!payload_span.empty())
                     std::memcpy(framed.data() + header_size, payload_span.data(), payload_span.size());
@@ -198,23 +186,20 @@ public:
         m_pending_header = {};
     }
 
-    [[nodiscard]] std::size_t buffered_bytes() const
+    std::size_t buffered_bytes() const
     {
         return live_bytes();
     }
 
-    // A frame is mid-assembly when its header is decoded (reading_payload) or any
-    // unconsumed bytes sit buffered (a partial header). False only when idle between frames.
-    [[nodiscard]] bool frame_in_progress() const
+    bool frame_in_progress() const
     {
         return m_state == state::reading_payload || live_bytes() != 0;
     }
 
-    // The declared payload length of the in-progress frame once its header is
-    // decoded (reading_payload); nullopt while the size is still unknown (a
-    // partial header). Lets the no-progress timer key its deadline off declared
-    // size rather than buffered bytes.
-    [[nodiscard]] std::optional<std::size_t> pending_payload_len() const
+    // The declared payload length once the header is decoded; nullopt while the size is still
+    // unknown (a partial header), so the no-progress timer keys off declared size, not buffered
+    // bytes.
+    std::optional<std::size_t> pending_payload_len() const
     {
         if(m_state == state::reading_payload)
             return m_pending_header.payload_len;
@@ -222,15 +207,13 @@ public:
     }
 
 private:
-    // The cap bounds the LIVE (unconsumed) tail, not the physical buffer: the cursor
-    // changes WHEN consumed bytes are reclaimed, never how many live bytes may be held.
-    [[nodiscard]] std::size_t live_bytes() const
+    std::size_t live_bytes() const
     {
         return m_buffer.size() - m_consumed;
     }
 
-    // Reclaim the consumed prefix once it dominates the buffer, amortizing the front
-    // erase across feeds instead of paying an O(n) tail memmove on every frame boundary.
+    // Reclaim the consumed prefix once it dominates the buffer, amortizing the front erase
+    // across feeds instead of an O(n) tail memmove on every frame boundary.
     void compact()
     {
         if(m_consumed != 0 && m_consumed >= m_buffer.size() - m_consumed)
@@ -240,11 +223,11 @@ private:
         }
     }
 
-    state                  m_state{state::reading_header};
-    std::size_t            m_max_payload_size;
-    std::size_t            m_buffered_bytes_cap;
-    std::size_t            m_consumed{0};
-    frame_header           m_pending_header{};
+    state m_state{state::reading_header};
+    std::size_t m_max_payload_size;
+    std::size_t m_buffered_bytes_cap;
+    std::size_t m_consumed{0};
+    frame_header m_pending_header{};
     std::vector<std::byte> m_buffer;
 };
 

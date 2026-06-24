@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_WIRE_FETCH_LATCHED_H
 #define HPP_GUARD_PLEXUS_WIRE_FETCH_LATCHED_H
 
-#include "plexus/wire/byte_order.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/byte_order.h"
 
 #include <span>
 #include <vector>
@@ -12,13 +12,9 @@
 
 namespace plexus::wire {
 
-// The consumer-paced PULL request for a latched topic's retained history: a
-// subscriber that chose delivery=pull asks for the most-recent max_samples retained
-// frames on its own schedule rather than at the producer's pace. The reply is the
-// data frames themselves (no reply control frame). max_samples is an attacker-
-// controlled count over an unauthenticated transport, so the server caps the reply
-// at min(max_samples, ring.count(), k_fetch_cap) — a huge or wrapping value can
-// never force more than the retained count of owned ring frames.
+// The consumer-paced PULL request for a latched topic's retained history. max_samples is
+// attacker-controlled, so the server caps the reply at min(max_samples, ring.count(),
+// k_fetch_cap) — a huge or wrapping value can never force more than the retained ring count.
 struct fetch_latched_request
 {
     uint64_t topic_hash;
@@ -43,9 +39,8 @@ inline std::vector<std::byte> encode_fetch_latched_request(const fetch_latched_r
     return buf;
 }
 
-// Decode a fetch_latched_request from an untrusted payload. The size guard is the
-// bounds-safe gate: a payload shorter than the fixed 12 bytes is rejected to nullopt
-// before any read (fixed-width, no length prefix => no over-read, no allocation).
+// Decode from an untrusted payload. A payload shorter than the fixed 12 bytes is rejected
+// before any read.
 inline std::optional<fetch_latched_request> decode_fetch_latched_request(std::span<const std::byte> payload)
 {
     if(payload.size() < detail::fetch_latched_request_size)

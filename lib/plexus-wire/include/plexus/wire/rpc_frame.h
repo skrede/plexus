@@ -16,23 +16,20 @@ namespace plexus::wire {
 
 struct rpc_request_decode_result
 {
-    bidirectional_header       header;
+    bidirectional_header header;
     std::span<const std::byte> param_data;
 };
 
 struct rpc_response_decode_result
 {
-    bidirectional_header       header;
-    rpc_status                 status;
+    bidirectional_header header;
+    rpc_status status;
     std::span<const std::byte> return_data;
 };
 
-// Decode cutoff for the response status byte. The retained enumerators are
-// sparse (6, 7, 9-17, 19 are reserved gaps with no defined value), so a bare
-// "<= highest" range check could yield an undefined enumerator. The switch
-// enumerates ONLY the nine defined values; an out-of-range byte or a reserved
-// in-range gap matches no case, returns false, and the frame is rejected — so no
-// undefined rpc_status enumerator is ever constructed.
+// Decode cutoff for the response status byte. The enumerators are sparse (6, 7, 9-17, 19 are
+// reserved gaps), so the switch enumerates ONLY the nine defined values; any other byte returns
+// false and the frame is rejected, so no undefined rpc_status enumerator is ever constructed.
 inline bool is_defined_rpc_status(std::uint8_t byte) noexcept
 {
     switch(static_cast<rpc_status>(byte))
@@ -45,7 +42,8 @@ inline bool is_defined_rpc_status(std::uint8_t byte) noexcept
         case rpc_status::deserialize_failed:
         case rpc_status::topic_not_found:
         case rpc_status::peer_disconnected:
-        case rpc_status::rpc_response_orphan: return true;
+        case rpc_status::rpc_response_orphan:
+            return true;
     }
     return false;
 }
@@ -90,9 +88,7 @@ inline std::optional<rpc_response_decode_result> decode_rpc_response(std::span<c
     return rpc_response_decode_result{.header = decoded->header, .status = static_cast<rpc_status>(status_byte), .return_data = decoded->data.subspan(1)};
 }
 
-// Zero-alloc dispatch overloads: frame into a caller-owned buffer reused across
-// calls (the forwarder's hot path). The allocating returns above stay for
-// one-shot callers.
+// Frame into a caller-owned buffer reused across calls (the forwarder's hot path).
 inline void encode_rpc_request_into(std::vector<std::byte> &out, const bidirectional_header &hdr, std::span<const std::byte> param_data)
 {
     encode_bidirectional_into(out, hdr, param_data);

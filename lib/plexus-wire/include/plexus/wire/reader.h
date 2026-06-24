@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_WIRE_READER_H
 #define HPP_GUARD_PLEXUS_WIRE_READER_H
 
-#include "plexus/wire/byte_order.h"
 #include "plexus/wire/varint.h"
+#include "plexus/wire/byte_order.h"
 #include "plexus/wire/length_prefixed.h"
 
 #include <span>
@@ -13,13 +13,10 @@
 
 namespace plexus::wire {
 
-// Sequential big-endian field reader over an untrusted span. Each fixed-width read
-// checks remaining() >= width once; on underrun it latches ok() == false and every
-// later read is a no-op returning a zero sentinel, so a decode body reads its whole
-// field list then tests ok() once -- this per-read bound also catches a truncation
-// between fields. varint() / length_prefixed() delegate to the validated read_varint
-// / read_length_prefixed guards (the LEB128 cap and the pre-multiply overflow / no-
-// wrap checks live there).
+// Sequential big-endian field reader over an untrusted span. On underrun it latches
+// ok() == false and every later read is a no-op returning a zero sentinel, so a decode
+// body reads its whole field list then tests ok() once. varint() / length_prefixed()
+// delegate to the validated read_varint / read_length_prefixed bounds guards.
 class reader
 {
 public:
@@ -28,15 +25,15 @@ public:
     {
     }
 
-    [[nodiscard]] bool ok() const noexcept
+    bool ok() const noexcept
     {
         return m_ok;
     }
-    [[nodiscard]] std::size_t consumed() const noexcept
+    std::size_t consumed() const noexcept
     {
         return m_offset;
     }
-    [[nodiscard]] std::size_t remaining() const noexcept
+    std::size_t remaining() const noexcept
     {
         return m_data.size() - m_offset;
     }
@@ -107,15 +104,15 @@ public:
         return *payload;
     }
 
-    [[nodiscard]] std::span<const std::byte> rest() const noexcept
+    std::span<const std::byte> rest() const noexcept
     {
         return m_data.subspan(m_offset);
     }
 
 private:
     std::span<const std::byte> m_data;
-    std::size_t                m_offset{0};
-    bool                       m_ok{true};
+    std::size_t m_offset{0};
+    bool m_ok{true};
 
     bool take(std::size_t width) noexcept
     {

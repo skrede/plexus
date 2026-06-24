@@ -10,10 +10,8 @@ namespace plexus::wire {
 
 namespace detail {
 
-// CRC-32C (Castagnoli) uses the polynomial 0x1EDC6F41; the bit-reflected form
-// 0x82F63B78 drives the table-driven LSB-first variant used for byte-stream
-// checksums (iSCSI/ext4/Btrfs, RFC 3720). The table is built at compile time so
-// there is no static-init singleton and no first-call cost.
+// CRC-32C (Castagnoli, RFC 3720): polynomial 0x1EDC6F41, bit-reflected form
+// 0x82F63B78 for the table-driven LSB-first variant.
 inline constexpr std::uint32_t k_crc32c_poly_reflected = 0x82F63B78u;
 
 constexpr std::array<std::uint32_t, 256> build_crc32c_table() noexcept
@@ -33,11 +31,9 @@ inline constexpr std::array<std::uint32_t, 256> k_crc32c_table = build_crc32c_ta
 
 }
 
-// Continue a CRC-32C over `data`, chaining from a prior running value so a
-// multi-chunk record can be checksummed without concatenation: crc32c(b) ==
-// crc32c(b.subspan(n), crc32c(b.first(n))). The seed defaults to the standard
-// initial value, so crc32c(data) is the one-shot checksum.
-[[nodiscard]] inline std::uint32_t crc32c(std::span<const std::byte> data, std::uint32_t seed = 0u) noexcept
+// Chains from a prior running value, so a multi-chunk record checksums without
+// concatenation: crc32c(b) == crc32c(b.subspan(n), crc32c(b.first(n))).
+inline std::uint32_t crc32c(std::span<const std::byte> data, std::uint32_t seed = 0u) noexcept
 {
     std::uint32_t crc = ~seed;
     for(std::byte b : data)

@@ -9,12 +9,8 @@ namespace plexus::wire {
 
 constexpr std::size_t header_size = 28;
 
-// Maximum reassembled-frame payload size. The reassembler's ctor reads this
-// as the default upper bound on payload_len. plexus is serializer-agnostic and
-// moves opaque bytes, so the cap exists purely as a denial-of-service bound on
-// untrusted input. The static_assert pins it below INT_MAX so the byte-count
-// stays representable as a signed int across every downstream consumer that
-// hands the span to a size-parameterized API.
+// Default upper bound on payload_len: a denial-of-service cap on untrusted input. The
+// static_assert pins it below INT_MAX so the byte-count stays representable as a signed int.
 constexpr std::size_t k_max_reassembler_payload_bytes = 16 * 1024 * 1024;
 static_assert(k_max_reassembler_payload_bytes < std::numeric_limits<int>::max(),
               "k_max_reassembler_payload_bytes must stay below INT_MAX so the "
@@ -23,11 +19,9 @@ static_assert(k_max_reassembler_payload_bytes < std::numeric_limits<int>::max(),
 constexpr std::byte magic_byte_0{0x56};
 constexpr std::byte magic_byte_1{0x50};
 
-// Wire-stable message-type byte. Append-only: a value is NEVER reordered or
-// reused. heartbeat (0x0C) fills the additive slot beyond subscribe_response: it is
-// a session-level presence assert that rides WITHIN the current protocol version (a
-// new msg_type is byte-identical to a peer that never emits one), so introducing it
-// requires no protocol bump. Further control types take 0x0D+.
+// Wire-stable message-type byte. Append-only: a value is NEVER reordered or reused; a new
+// msg_type takes the next free integer (0x0D+) and is byte-identical to a peer that never
+// emits it, so it rides WITHIN the current protocol version with no bump.
 enum class msg_type : uint8_t
 {
     unidirectional     = 0x01,
@@ -54,35 +48,22 @@ enum class endpoint_source_type : uint8_t
     plexus    = 0x08
 };
 
-// frame_header.flags bit allocation. The flags byte was always written 0 in
-// v0.1.x; this is the FIRST allocated bit. k_flag_source_identity signals that a
-// flag-gated, varint-encoded endpoint counter is appended after the fixed header
-// (the receiver reconstructs the publisher_gid as session.node_id ‖ counter). The
-// bit is RESERVED here so the v3 layout is fully specified, but the varint region
-// is not yet encoded or decoded: a frame with the bit CLEAR is byte-identical to a
-// freshly-bumped v3 no-flag frame. Append-only: a new flag takes the next free bit.
+// frame_header.flags bit allocation. Append-only: a new flag takes the next free bit; a frame
+// with a bit CLEAR is byte-identical to a frame that never sets it. k_flag_source_identity
+// signals a flag-gated varint endpoint counter appended after the fixed header (the receiver
+// reconstructs the publisher_gid as session.node_id ‖ counter). The bit is RESERVED — the
+// layout is specified but the varint region is not yet encoded or decoded. Bit 0x02 is RESERVED
+// for a future on-wire priority/control signal; bits 0x04..0x80 remain free.
 constexpr std::uint8_t k_flag_source_identity = 0x01;
-
-// The next free frame-header flag bit (0x02) is RESERVED (documented, NOT encoded)
-// for a future on-wire priority/control signal — e.g. a relay topology preserving
-// egress priority across a hop. It is unencoded and unread today, so a frame with
-// it CLEAR is byte-identical to a no-flag frame (exactly as k_flag_source_identity
-// was reserved before it was wired). Bits 0x04..0x80 remain free. A later signal
-// rides this reservation WITHIN the current protocol version — no further bump.
 
 struct frame_header
 {
     msg_type type;
-    uint8_t  flags;
-    // Monotonic session-id minted on each successful handshake completion.
-    // 0 == unestablished sentinel: handshake control frames carry 0; the
-    // receiver-side staleness gate latches the first non-zero observation
-    // and drops subsequent frames whose session_id differs. Drawn from a u64
-    // epoch well that wraps back to 1 (never 0) to preserve the sentinel
-    // semantics; the u64 width retires the 255-reconnect wrap window a reused
-    // slot's u8 epoch cycled through. It does not by itself fix an accepted slot
-    // that restarts its epoch from 1 on re-accept — that is a separate slot-reuse
-    // concern, untouched here.
+    uint8_t flags;
+    // Monotonic session-id minted on each handshake completion. 0 == unestablished sentinel:
+    // handshake control frames carry 0; the receiver-side staleness gate latches the first
+    // non-zero observation and drops frames whose session_id differs. Drawn from a u64 epoch
+    // well that wraps back to 1 (never 0) to preserve the sentinel.
     uint64_t session_id;
     uint64_t timestamp_ns;
     uint64_t payload_len;

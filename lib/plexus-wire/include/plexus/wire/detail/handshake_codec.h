@@ -12,9 +12,9 @@
 
 namespace plexus::wire {
 
-// Decode cutoff for the response status byte: the switch enumerates ONLY the defined values; an
-// out-of-range byte or a reserved in-range gap matches no case, returns false, and the frame is
-// rejected — so no undefined handshake_status enumerator is ever constructed.
+// Decode cutoff for the response status byte: the switch enumerates ONLY the defined values, so
+// any other byte returns false and the frame is rejected — no undefined enumerator is ever
+// constructed.
 inline bool is_defined_handshake_status(std::uint8_t byte) noexcept
 {
     switch(static_cast<handshake_status>(byte))
@@ -23,13 +23,14 @@ inline bool is_defined_handshake_status(std::uint8_t byte) noexcept
         case handshake_status::version_incompatible:
         case handshake_status::identity_conflict:
         case handshake_status::rejected_unknown:
-        case handshake_status::unauthorized:         return true;
+        case handshake_status::unauthorized:
+            return true;
     }
     return false;
 }
 
-// Write the shared 87-byte prefix common to both messages (id, versions, fingerprint, the attach
-// region, proof). The response encoder appends the trailing status byte after it.
+// Write the shared 87-byte prefix common to both messages; the response encoder appends the
+// trailing status byte after it.
 template<typename Msg>
 void write_handshake_prefix(writer &w, const Msg &m)
 {
@@ -47,8 +48,8 @@ void write_handshake_prefix(writer &w, const Msg &m)
     w.bytes(m.proof);
 }
 
-// Read the shared 87-byte prefix into the message (id, versions, fingerprint, attach region,
-// proof). The response decoder reads the trailing status byte after it.
+// Read the shared 87-byte prefix into the message; the response decoder reads the trailing
+// status byte after it.
 template<typename Msg>
 void read_handshake_prefix(reader &r, Msg &m)
 {
@@ -100,7 +101,7 @@ inline std::optional<handshake_request> decode_handshake_request(std::span<const
     if(payload.size() < handshake_request_size)
         return std::nullopt;
     handshake_request req{};
-    reader            r{payload};
+    reader r{payload};
     read_handshake_prefix(r, req);
     return req;
 }
@@ -110,7 +111,7 @@ inline std::optional<handshake_response> decode_handshake_response(std::span<con
     if(payload.size() < handshake_response_size)
         return std::nullopt;
     handshake_response resp{};
-    reader             r{payload};
+    reader r{payload};
     read_handshake_prefix(r, resp);
     const auto status_byte = r.u8();
     if(!is_defined_handshake_status(status_byte))

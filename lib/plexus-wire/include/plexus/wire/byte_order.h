@@ -9,9 +9,7 @@
 
 namespace plexus::wire::detail {
 
-// C++20 constexpr byte reversal for unsigned integer widths (a stand-in for
-// std::byteswap, which is C++23). The shift/mask form is constexpr-correct on
-// every supported toolchain and lowers to a single bswap on optimizing builds.
+// C++20 constexpr stand-in for std::byteswap (C++23).
 template<typename T>
 constexpr T byteswap(T value) noexcept
 {

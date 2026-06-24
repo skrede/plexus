@@ -11,9 +11,8 @@
 
 namespace plexus::wire {
 
-// Sequential big-endian field writer over a caller-pre-sized region: it fills the
-// buffer at an auto-advancing cursor and never grows it, preserving the no-hot-path-
-// allocation contract of the codecs' `_into` writers.
+// Sequential big-endian field writer over a caller-pre-sized region: it fills the buffer
+// at an auto-advancing cursor and never grows it (the codecs' no-hot-path-alloc contract).
 class writer
 {
 public:
@@ -57,8 +56,7 @@ public:
         m_offset += blob.size();
     }
 
-    // LEB128-encode `value` at the cursor, byte-identical to write_varint (the caller
-    // sizes the region for varint_size(value)).
+    // LEB128-encode `value` at the cursor, byte-identical to write_varint.
     void varint(std::uint64_t value) noexcept
     {
         do
@@ -71,14 +69,14 @@ public:
         } while(value != 0);
     }
 
-    [[nodiscard]] std::size_t offset() const noexcept
+    std::size_t offset() const noexcept
     {
         return m_offset;
     }
 
 private:
     std::span<std::byte> m_region;
-    std::size_t          m_offset{0};
+    std::size_t m_offset{0};
 };
 
 }

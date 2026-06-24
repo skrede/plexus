@@ -14,7 +14,7 @@
 
 namespace plexus::wire {
 
-// Write the fixed 30-byte QoS region at p (caller guarantees 30 writable bytes).
+// Caller guarantees 30 writable bytes at p.
 inline void write_qos_region(std::byte *p, const subscribe_qos_region &qos)
 {
     wire::detail::write_u8(p + detail::k_qos_durability_off, qos.durability);
@@ -31,8 +31,8 @@ inline void write_qos_region(std::byte *p, const subscribe_qos_region &qos)
 
 namespace detail {
 
-// Write the fixed prefix (topic_hash, type_hash, source) + the two uint16-prefixed string
-// fields, advancing p. The trailing QoS region is appended by the caller when present.
+// Write the fixed prefix + the two uint16-prefixed string fields, advancing p. The trailing QoS
+// region is appended by the caller when present.
 inline std::byte *write_subscribe_head(std::byte *p, const subscribe_request &req)
 {
     wire::detail::write_u64(p, req.topic_hash);
@@ -58,9 +58,9 @@ inline std::byte *write_subscribe_head(std::byte *p, const subscribe_request &re
     return p;
 }
 
-// Decode the trailing flag-gated QoS region into req (untrusted input): a present region must
-// match the fixed size EXACTLY and stay within the per-callsite cap, else false (consumed is
-// advanced on success only, so a malformed region never over-reads).
+// Decode the trailing flag-gated QoS region (untrusted): a present region must match the fixed
+// size EXACTLY and stay within the per-callsite cap, else false (consumed advances on success
+// only, so a malformed region never over-reads).
 inline bool read_subscribe_qos(std::span<const std::byte> payload, std::size_t &consumed, subscribe_request &req)
 {
     auto region = read_length_prefixed<uint16_t>(payload, consumed);
@@ -89,7 +89,7 @@ inline std::vector<std::byte> encode_subscribe_request(const subscribe_request &
     if(req.has_qos)
         total += 2 + detail::k_qos_region_size; // uint16_t length prefix + the fixed region
     std::vector<std::byte> buf(total);
-    auto                  *p = detail::write_subscribe_head(buf.data(), req);
+    auto *p = detail::write_subscribe_head(buf.data(), req);
     if(req.has_qos)
     {
         wire::detail::write_u16(p, static_cast<uint16_t>(detail::k_qos_region_size));
@@ -106,13 +106,13 @@ inline std::optional<subscribe_request> decode_subscribe_request(std::span<const
         return std::nullopt;
 
     subscribe_request req{};
-    auto             *p = payload.data();
-    req.topic_hash      = wire::detail::read_u64(p);
-    req.type_hash       = wire::detail::read_u64(p + 8);
-    req.source          = static_cast<endpoint_source_type>(wire::detail::read_u8(p + 16));
+    auto *p        = payload.data();
+    req.topic_hash = wire::detail::read_u64(p);
+    req.type_hash  = wire::detail::read_u64(p + 8);
+    req.source     = static_cast<endpoint_source_type>(wire::detail::read_u8(p + 16));
 
     std::size_t consumed = detail::subscribe_request_fixed_prefix;
-    auto        fqn_span = read_length_prefixed<uint16_t>(payload, consumed);
+    auto fqn_span        = read_length_prefixed<uint16_t>(payload, consumed);
     if(!fqn_span || fqn_span->size() > detail::k_max_fqn)
         return std::nullopt;
     req.fqn.assign(reinterpret_cast<const char *>(fqn_span->data()), fqn_span->size());

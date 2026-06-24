@@ -3,58 +3,44 @@
 
 #include "plexus/wire/cursor.h"
 
+#include <span>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <span>
-#include <vector>
 
 namespace plexus::wire {
 
-// The UDP outer wrapper around one opaque inner frame. Unlike the stream frame
-// header this is a datagram-only envelope: a published message maps to exactly
-// one datagram, so there is no length prefix (the datagram boundary is the
-// framing) and no MAC (the authenticated path rides a future encrypted transport,
-// not this cleartext-equivalent envelope). Serializer-agnostic: the inner frame
-// is passed through verbatim and never inspected.
+// The UDP outer wrapper around one opaque inner frame: a datagram-only envelope with no length
+// prefix (the datagram boundary is the framing) and no MAC. The inner frame is passed through
+// verbatim and never inspected.
 //
 //   offset  size  field
 //   ------  ----  ----------------------------------------------------------------
 //    0       1    ver_flags  bit7..6 = envelope kind (0 = best_effort, 1 = reliable
-//                            ARQ); bit0 = FRAGMENTED (reserved, always 0 — fragment
-//                            index/count append later WITHOUT reshape); bits 5..1
+//                            ARQ); bit0 = FRAGMENTED (reserved, always 0); bits 5..1
 //                            reserved 0.
-//    1       2    seq        uint16, big-endian. best_effort: the dedup seq.
-//                            reliable: the sliding-window sequence number. Sized for
-//                            the reliable window (wrap-safe to a 2^15 window), wide
-//                            enough that best_effort dedup keeps working unchanged.
-//                            This is new-on-the-UDP-envelope only — it does NOT
-//                            touch the stream frame header and is NOT a protocol bump.
+//    1       2    seq        uint16, big-endian. best_effort: the dedup seq. reliable:
+//                            the sliding-window sequence number (wrap-safe to 2^15).
 //    3       ..   frame      the opaque inner frame, passed through verbatim.
 //
-// The ver_flags kind discriminator is the seam a future authenticated/encrypted
-// datagram path keys on to bypass the dedup + ARQ engine entirely (that path owns
-// its own anti-replay and handshake retransmit). Reserved here; nothing is built.
+// The ver_flags kind discriminator is the seam a future authenticated/encrypted datagram path
+// keys on to bypass the dedup + ARQ engine. Reserved here; nothing is built.
 constexpr std::size_t udp_envelope_overhead = 3;
 
 // A fragmented datagram carries a 10-byte sub-header AFTER the 3-byte envelope:
 //
 //   offset  size  field
 //   ------  ----  ----------------------------------------------------------------
-//    3       2    msg_id     uint16, big-endian. Groups the fragments of one logical
-//                            message; the reassembler keys its partial-message table on it.
+//    3       2    msg_id     uint16, big-endian. Groups the fragments of one message.
 //    5       4    frag_idx   uint32, big-endian. This fragment's 0-based position.
-//    9       4    frag_cnt   uint32, big-endian. The total fragment count for the message.
-//   13       ..   bytes      this fragment's slice of the payload, passed through verbatim.
+//    9       4    frag_cnt   uint32, big-endian. The total fragment count.
+//   13       ..   bytes      this fragment's slice, passed through verbatim.
 //
-// frag_idx/frag_cnt are uint32 because the fragment count of one message is bounded by
-// the message size over the minimum fragment payload, which can exceed the uint16 range;
-// the field width must not be the limiter on how large a message may fragment. msg_id
-// stays uint16 deliberately: it does NOT count fragments — it groups them, and is sized to
-// exceed the bounded reassembler's in-flight table, so an id wrap cannot alias a live entry
-// even at a far larger per-message fragment count. This sub-header is APPENDED only when the
-// FRAGMENTED bit is set, so the common single-datagram path keeps the 3-byte overhead with
-// zero fragmentation cost.
+// frag_idx/frag_cnt are uint32: the fragment count can exceed the uint16 range, so the field
+// width must not limit how large a message may fragment. msg_id stays uint16 — it groups, not
+// counts, and is sized to exceed the bounded reassembler's in-flight table so an id wrap cannot
+// alias a live entry. The sub-header is APPENDED only when the FRAGMENTED bit is set.
 constexpr std::size_t udp_fragment_subheader       = 10;
 constexpr std::size_t udp_fragment_header_overhead = udp_envelope_overhead + udp_fragment_subheader;
 
@@ -70,9 +56,8 @@ constexpr std::uint8_t udp_kind_shift     = 6u;
 constexpr std::uint8_t udp_kind_mask      = 0b1100'0000u;
 constexpr std::uint8_t udp_fragmented_bit = 0b0000'0001u;
 
-// Pack the kind discriminator into bits 7..6 and the FRAGMENTED flag into bit0. The
-// flag defaults false, so the existing single-datagram wrap is byte-unchanged; bits 5..1
-// stay 0 (reserved). A fragmenting send passes fragmented=true to set bit0.
+// Pack the kind discriminator into bits 7..6 and the FRAGMENTED flag into bit0 (bits 5..1 stay
+// reserved 0).
 inline std::uint8_t pack_ver_flags(udp_envelope_kind kind, bool fragmented = false) noexcept
 {
     auto bits = static_cast<std::uint8_t>(static_cast<std::uint8_t>(kind) << udp_kind_shift);
@@ -85,28 +70,24 @@ inline std::uint8_t pack_ver_flags(udp_envelope_kind kind, bool fragmented = fal
 
 struct udp_decode_result
 {
-    udp_envelope_kind          kind;
-    std::uint16_t              seq;
+    udp_envelope_kind kind;
+    std::uint16_t seq;
     std::span<const std::byte> frame;
-    bool                       fragmented;
+    bool fragmented;
 };
 
-// The decoded fragment sub-header: the message-grouping id, this fragment's index and the total
-// count, plus the fragment's own payload slice (a view into the caller's frame). The reassembler
-// keys its table on these fields.
+// The decoded fragment sub-header plus the fragment's payload slice (a view into the caller's
+// frame).
 struct udp_fragment_header
 {
-    std::uint16_t              msg_id;
-    std::uint32_t              frag_idx;
-    std::uint32_t              frag_cnt;
+    std::uint16_t msg_id;
+    std::uint32_t frag_idx;
+    std::uint32_t frag_cnt;
     std::span<const std::byte> payload;
 };
 
 }
 
-// The wrap/unwrap/fragment codecs over the shapes above are relocated to
-// detail/udp_envelope_codec.h; the include keeps every wire::wrap_udp* / unwrap_udp /
-// *_fragment* call site resolving unchanged.
 #include "plexus/wire/detail/udp_envelope_codec.h"
 
 #endif
