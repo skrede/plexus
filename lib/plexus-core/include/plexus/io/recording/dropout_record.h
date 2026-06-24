@@ -15,9 +15,9 @@ namespace plexus::io::recording {
 // as ordinary data) — this is the ring overflowing, and it composes with it.
 struct dropout_record
 {
-    std::uint64_t    ts{};
-    std::uint32_t    count{};
-    std::uint64_t    bytes{};
+    std::uint64_t ts{};
+    std::uint32_t count{};
+    std::uint64_t bytes{};
     capture_fidelity max_fidelity{capture_fidelity::off};
 };
 
@@ -36,7 +36,7 @@ public:
             m_max_fidelity = fidelity;
     }
 
-    [[nodiscard]] bool pending() const noexcept
+    bool pending() const noexcept
     {
         return m_count != 0;
     }
@@ -51,8 +51,8 @@ public:
     }
 
 private:
-    std::uint32_t    m_count{0};
-    std::uint64_t    m_bytes{0};
+    std::uint32_t m_count{0};
+    std::uint64_t m_bytes{0};
     capture_fidelity m_max_fidelity{capture_fidelity::off};
 };
 

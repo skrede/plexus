@@ -53,12 +53,12 @@ public:
     {
     }
 
-    [[nodiscard]] std::size_t capacity() const noexcept
+    std::size_t capacity() const noexcept
     {
         return m_store.size();
     }
 
-    [[nodiscard]] std::size_t used() const noexcept
+    std::size_t used() const noexcept
     {
         return static_cast<std::size_t>(m_head.load(std::memory_order_acquire) - m_tail.load(std::memory_order_acquire));
     }
@@ -70,7 +70,7 @@ public:
     bool try_push(std::span<const std::byte> record) noexcept
     {
         std::array<std::byte, 10> len_buf{};
-        wire::writer              len_writer{len_buf};
+        wire::writer len_writer{len_buf};
         len_writer.varint(record.size());
         const std::size_t frame = len_writer.offset() + record.size();
         if(frame > capacity())
@@ -91,18 +91,18 @@ public:
     // The monotonic absolute byte counters. A freeze snapshots {head, tail} to bound a frozen
     // window over the held records (no copy, no alloc); both are absolute (never wrapped) so a
     // snapshot stays meaningful while overwrite continues past it.
-    [[nodiscard]] std::uint64_t head() const noexcept
+    std::uint64_t head() const noexcept
     {
         return m_head.load(std::memory_order_acquire);
     }
-    [[nodiscard]] std::uint64_t tail() const noexcept
+    std::uint64_t tail() const noexcept
     {
         return m_tail.load(std::memory_order_acquire);
     }
 
     // The byte at an absolute index, mapped into the store by modulo — the read a freeze
     // uses to decode the oldest resident record's timestamp from a snapshot's frozen tail.
-    [[nodiscard]] std::byte at(std::uint64_t pos) const noexcept
+    std::byte at(std::uint64_t pos) const noexcept
     {
         return m_store[static_cast<std::size_t>(pos % capacity())];
     }
@@ -115,8 +115,8 @@ public:
         std::size_t moved = 0;
         while(moved < max_bytes)
         {
-            std::uint64_t len    = 0;
-            std::size_t   header = 0;
+            std::uint64_t len  = 0;
+            std::size_t header = 0;
             if(!peek_length(len, header))
                 break;
 
@@ -137,9 +137,9 @@ public:
         std::size_t moved = 0;
         while(moved < max_bytes)
         {
-            std::uint64_t       len    = 0;
-            std::size_t         header = 0;
-            const std::uint64_t tail   = m_tail.load(std::memory_order_relaxed);
+            std::uint64_t len        = 0;
+            std::size_t header       = 0;
+            const std::uint64_t tail = m_tail.load(std::memory_order_relaxed);
             if(tail >= frozen_head || !peek_length(len, header))
                 break;
             if(tail + header + len > frozen_head)
@@ -152,7 +152,7 @@ public:
     }
 
 private:
-    [[nodiscard]] std::byte &slot(std::uint64_t pos) noexcept
+    std::byte &slot(std::uint64_t pos) noexcept
     {
         return m_store[static_cast<std::size_t>(pos % capacity())];
     }
@@ -167,8 +167,8 @@ private:
     {
         while(capacity() - used() < frame)
         {
-            std::uint64_t len    = 0;
-            std::size_t   header = 0;
+            std::uint64_t len  = 0;
+            std::size_t header = 0;
             if(!peek_length(len, header))
                 break;
             m_tail.store(m_tail.load(std::memory_order_relaxed) + header + len, std::memory_order_release);
@@ -180,12 +180,12 @@ private:
         if(used() == 0)
             return false;
         std::array<std::byte, 10> hdr{};
-        const std::uint64_t       tail  = m_tail.load(std::memory_order_relaxed);
-        const std::size_t         avail = std::min<std::size_t>(hdr.size(), used());
+        const std::uint64_t tail = m_tail.load(std::memory_order_relaxed);
+        const std::size_t avail  = std::min<std::size_t>(hdr.size(), used());
         for(std::size_t i = 0; i < avail; ++i)
             hdr[i] = slot(tail + i);
         std::size_t off = 0;
-        auto        v   = wire::read_varint({hdr.data(), avail}, off);
+        auto v          = wire::read_varint({hdr.data(), avail}, off);
         if(!v)
             return false;
         len    = *v;
@@ -202,9 +202,9 @@ private:
             sink.write({m_store.data(), static_cast<std::size_t>(n) - run});
     }
 
-    std::vector<std::byte>     m_owned;
-    std::span<std::byte>       m_store;
-    ring_policy                m_policy;
+    std::vector<std::byte> m_owned;
+    std::span<std::byte> m_store;
+    ring_policy m_policy;
     std::atomic<std::uint64_t> m_head{0};
     std::atomic<std::uint64_t> m_tail{0};
 };

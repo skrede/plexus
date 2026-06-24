@@ -117,7 +117,7 @@ public:
         m_frozen      = true;
     }
 
-    [[nodiscard]] bool frozen() const noexcept
+    bool frozen() const noexcept
     {
         return m_frozen;
     }
@@ -125,7 +125,7 @@ public:
     // The captured window's time-span = newest_ts - oldest_ts over the held records (0
     // when fewer than two records were captured). Latched at the freeze and read from the
     // envelopes' capture_ts, so it stays reportable after the window has drained.
-    [[nodiscard]] std::uint64_t captured_span() const noexcept
+    std::uint64_t captured_span() const noexcept
     {
         return m_span;
     }
@@ -161,34 +161,34 @@ private:
     // copy the framed record's small prefix into a stack buffer (the ring may wrap), skip
     // the [varint len][u8 category] header, and read the u64 capture_ts that every category
     // writes first. Returns the newest_ts (an empty window) when no record is resident.
-    [[nodiscard]] std::uint64_t read_oldest_ts(std::uint64_t from, std::uint64_t to) const noexcept
+    std::uint64_t read_oldest_ts(std::uint64_t from, std::uint64_t to) const noexcept
     {
         if(from >= to)
             return m_newest_ts;
         std::array<std::byte, 24> head{};
-        const std::size_t         n = std::min<std::size_t>(head.size(), static_cast<std::size_t>(to - from));
+        const std::size_t n = std::min<std::size_t>(head.size(), static_cast<std::size_t>(to - from));
         for(std::size_t i = 0; i < n; ++i)
             head[i] = m_ring.at(from + i);
         std::size_t off = 0;
-        const auto  len = wire::read_varint({head.data(), n}, off);
+        const auto len  = wire::read_varint({head.data(), n}, off);
         if(!len || off + 1u + sizeof(std::uint64_t) > n)
             return m_newest_ts;
         wire::reader r{std::span<const std::byte>{head.data() + off + 1u, sizeof(std::uint64_t)}};
         return r.u64();
     }
 
-    byte_sink           &m_sink;
+    byte_sink &m_sink;
     record_stream_writer m_writer;
-    byte_ring            m_ring;
-    clock_fn             m_clock;
-    freeze_when          m_pred;
-    std::size_t          m_drain_batch;
-    std::uint64_t        m_newest_ts{0};
-    std::uint64_t        m_oldest_ts{0};
-    std::uint64_t        m_span{0};
-    std::uint64_t        m_frozen_tail{0};
-    std::uint64_t        m_frozen_head{0};
-    bool                 m_frozen{false};
+    byte_ring m_ring;
+    clock_fn m_clock;
+    freeze_when m_pred;
+    std::size_t m_drain_batch;
+    std::uint64_t m_newest_ts{0};
+    std::uint64_t m_oldest_ts{0};
+    std::uint64_t m_span{0};
+    std::uint64_t m_frozen_tail{0};
+    std::uint64_t m_frozen_head{0};
+    bool m_frozen{false};
 };
 
 }
