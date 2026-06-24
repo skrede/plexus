@@ -16,18 +16,6 @@
 
 namespace plexus::io {
 
-// The subscription-endpoint half both forwarders share, held BY VALUE (not CRTP, no
-// shared_from_this — the authenticated_channel<Lower> composition idiom). It owns the
-// byte-identical bookkeeping: the peer identity, the per-fqn subscriber_registry, the
-// outgoing frame sequence counter, the per-(peer, fqn) refcount gate, and the
-// control/subscribe framing.
-//
-// The forwarders keep their own public attach/detach verbs and their own
-// remembered-demand state: the registry insertion (message threads qos + type_id),
-// the subscribe content (message carries a QoS region), the egress teardown (message
-// only), and the durable-demand ledger (message-only reconnect resurrection)
-// genuinely differ, so the verbs compose these endpoint primitives rather than being
-// lifted wholesale.
 template<typename Channel>
 class subscription_endpoint
 {
@@ -37,7 +25,7 @@ public:
     struct peer
     {
         channel_type &channel;
-        std::string   node_name;
+        std::string node_name;
     };
 
     subscriber_registry<channel_type> &registry() noexcept
@@ -54,15 +42,13 @@ public:
         return m_next_sequence++;
     }
 
-    // The 0->1 attach gate: true exactly on the transition that puts a wire subscribe
-    // on the channel; a later attach for the same pair bumps and returns false.
+    // True exactly on the 0->1 refcount transition (the one that puts a wire subscribe out).
     bool attach_gate(std::string_view node_name, std::string_view fqn)
     {
         return m_registry.bump_refcount(node_name, fqn) == 1u;
     }
 
-    // The 1->0 detach gate: true exactly on the transition that puts a wire
-    // unsubscribe on the channel; an unknown pair (sentinel) returns false.
+    // True exactly on the 1->0 transition (the one that puts a wire unsubscribe out).
     bool detach_gate(std::string_view node_name, std::string_view fqn)
     {
         return m_registry.drop_refcount(node_name, fqn) == 0u;
@@ -79,9 +65,7 @@ public:
         send_control(channel, wire::msg_type::subscribe, bytes);
     }
 
-    // Wrap an inner control payload in a frame_header so it carries the same framing as
-    // data and survives a reassembler-framed stream; session_id = 0 on every control
-    // frame. Reuses a member scratch to stay allocation-light.
+    // session_id = 0 on every control frame. Reuses a member scratch to stay allocation-light.
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
         wire::frame_header fhdr{.type = type, .flags = 0, .session_id = 0, .timestamp_ns = wire::now_timestamp_ns(), .payload_len = inner.size()};
@@ -91,8 +75,8 @@ public:
 
 private:
     subscriber_registry<channel_type> m_registry;
-    std::vector<std::byte>            m_control_scratch;
-    std::uint64_t                     m_next_sequence{0};
+    std::vector<std::byte> m_control_scratch;
+    std::uint64_t m_next_sequence{0};
 };
 
 }

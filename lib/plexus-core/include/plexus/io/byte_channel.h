@@ -1,11 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_BYTE_CHANNEL_H
 #define HPP_GUARD_PLEXUS_IO_BYTE_CHANNEL_H
 
-#include "plexus/wire/close_cause.h"
+#include "plexus/detail/compat.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
-#include "plexus/detail/compat.h"
+
+#include "plexus/wire/close_cause.h"
 
 #include <span>
 #include <cstddef>
@@ -13,40 +14,12 @@
 
 namespace plexus::io {
 
-// Concept admitting every per-connection byte-stream type the plexus io layer
-// drives: the backend-independent surface both the inproc and TCP channels
-// satisfy. send() + the on_* handler registration subsumes the underlying
-// async read / async write.
-//
-// Two deliberate departures from the precedent socket concept:
-//   * No executor-affinity member. Binding the channel to a backend executor
-//     handle welds the concept to one executor and one backend; demand for
-//     synchronization is expressed through the Policy's executor, not leaked
-//     into the io surface.
-//   * on_data delivery is ALWAYS posted onto the executor, never invoked
-//     synchronously from inside send()/feed(). Consumers may therefore call back
-//     into the channel from a handler without reentrancy hazards.
-//
-// on_data delivery contract (pinned, honored identically by every backend): the
-// delivered span is a COMPLETE frame — header-ON (a frame_header followed by its
-// inner payload), NOT the stripped inner payload. The inproc channel delivers
-// send() bytes verbatim (already header-on); the asio channel re-frames each
-// reassembled frame (header + payload) back into header-on bytes before posting.
-// A consumer therefore demuxes uniformly — typically by handing the span to a
-// frame_router, which owns the frame_header strip and the type switch. This is a
-// span-SEMANTICS contract, not a signature constraint: on_data stays
-// void(span<const std::byte>).
-//
-// on_error vs on_protocol_close are two DISTINCT close seams the session must
-// discriminate: on_error reports a network drop (the peer vanished / the link
-// failed), which re-dials; on_protocol_close reports a peer that misbehaved on
-// the wire (a framing violation or a no-progress/slowloris stall), which must
-// NOT re-dial. Every channel surfaces both — a byte-stream channel fires
-// on_protocol_close from its stream_inbound; a non-stream channel stores it and
-// never fires it (no partial frame is expressible without a byte stream).
-//
-// Handlers are plexus::detail::move_only_function so move-only callables are
-// admissible (no copyable-callable constraint).
+// Contract every backend honors identically: on_data is ALWAYS posted onto the
+// executor (never invoked synchronously from send()/feed()), so a handler may call
+// back into the channel without reentrancy hazard; the delivered span is a COMPLETE
+// header-on frame (a frame_header followed by its payload), NOT the stripped inner
+// payload. on_error and on_protocol_close are DISTINCT seams: on_error is a network
+// drop (re-dials); on_protocol_close is a wire-misbehaving peer (does NOT re-dial).
 template<typename C>
 concept byte_channel = requires(C &c, const C &cc, std::span<const std::byte> bytes, plexus::detail::move_only_function<void(std::span<const std::byte>)> on_data_cb,
                                 plexus::detail::move_only_function<void()> on_closed_cb, plexus::detail::move_only_function<void(io_error)> on_error_cb,

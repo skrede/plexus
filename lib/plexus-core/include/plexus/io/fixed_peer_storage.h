@@ -1,9 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_IO_FIXED_PEER_STORAGE_H
 #define HPP_GUARD_PLEXUS_IO_FIXED_PEER_STORAGE_H
 
-#include "plexus/io/endpoint.h"
 #include "plexus/node_id.h"
+
 #include "plexus/detail/fail_closed.h"
+
+#include "plexus/io/endpoint.h"
 
 #include <array>
 #include <cstddef>
@@ -11,18 +13,9 @@
 
 namespace plexus::io {
 
-// The constrained-target awareness backend: a dep-free, fixed-capacity flat array of
-// N node_id -> endpoint entries. It is the MCU-opt-in Storage policy for
-// basic_known_peers<Storage> — no heap, no new dependency, no std::map. node_id has a
-// defaulted operator<=> so equality is free; a linear scan over N (N is small, ~8-32) is
-// the whole lookup. The four operations (put/get/has/remove) match the std::map backend
-// surface exactly, so basic_known_peers delegates to either without change.
-//
-// FAIL-CLOSED CAPACITY: put overwrites a matching identity's slot or fills a free one. The
-// (N+1)-th DISTINCT identity (no match, no free slot) calls plexus::detail::fail_closed — a
-// DEFINED [[noreturn]] refusal (throw under exceptions, abort hook under
-// PLEXUS_NO_EXCEPTIONS), never an out-of-bounds write, a silent drop, or an undefined
-// terminate. A bounded peer table refuses to grow past its capacity.
+// The constrained-target (MCU) awareness backend: a dep-free, fixed-capacity flat array, a
+// linear scan over N. The (N+1)-th DISTINCT identity calls plexus::detail::fail_closed — a
+// DEFINED refusal, never an out-of-bounds write, a silent drop, or an undefined terminate.
 template<std::size_t N>
 class fixed_peer_storage
 {
@@ -68,9 +61,9 @@ public:
 private:
     struct entry
     {
-        node_id  id{};
+        node_id id{};
         endpoint ep{};
-        bool     occupied{false};
+        bool occupied{false};
     };
 
     entry *find(const node_id &id)

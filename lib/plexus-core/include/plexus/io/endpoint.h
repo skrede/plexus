@@ -5,9 +5,6 @@
 
 namespace plexus::io {
 
-// URI-style endpoint identifying a byte_channel peer. The scheme selects the
-// transport family ("tcp", "inproc", future: "unix", "serial"); address is
-// opaque to the concept and parsed by transport-specific code.
 struct endpoint
 {
     std::string scheme;

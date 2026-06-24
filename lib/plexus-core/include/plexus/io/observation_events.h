@@ -1,46 +1,35 @@
 #ifndef HPP_GUARD_PLEXUS_IO_OBSERVATION_EVENTS_H
 #define HPP_GUARD_PLEXUS_IO_OBSERVATION_EVENTS_H
 
+#include "plexus/node_id.h"
+#include "plexus/wire_bytes.h"
+
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/subscriber_qos.h"
 
 #include "plexus/wire/rpc_status.h"
-
-#include "plexus/wire_bytes.h"
-#include "plexus/node_id.h"
 
 #include <cstdint>
 #include <optional>
 
 namespace plexus::io {
 
-// The byte view the message/rpc taps surface: the non-owning span plus the
-// Policy-selected owner whose lifetime bounds it (the SAME carrier the receive seam
-// hands up). The tap borrows that owner — a delivered view shares the buffer the
-// channel surfaced, never a fresh copy.
 using message_view = wire_bytes<>;
 
-// The argument bytes a request-tap surfaces: the call's correlation id plus the
-// borrowed parameter view. No closure, no owned payload beyond the shared handle.
 struct rpc_view
 {
     std::uint64_t correlation_id{};
-    message_view  param{};
+    message_view param{};
 };
 
-// The result bytes a reply-tap surfaces: the correlation id the reply answers, the
-// wire-stable status byte, and the borrowed return view.
 struct rpc_reply_view
 {
-    std::uint64_t    correlation_id{};
+    std::uint64_t correlation_id{};
     wire::rpc_status status{wire::rpc_status::success};
-    message_view     value{};
+    message_view value{};
 };
 
-// The QoS transition a subscriber attach resolved to. The edges name where in the
-// attach a verdict landed: an offered topic admitted cleanly, admitted degraded, or
-// refused. Append-only — a new edge takes the next ordinal so a persisted record
-// keeps its meaning.
+// Append-only — a new edge takes the next ordinal so a persisted record keeps its meaning.
 enum class qos_edge : std::uint8_t
 {
     accepted     = 0,
@@ -49,23 +38,18 @@ enum class qos_edge : std::uint8_t
     unsubscribed = 3,
 };
 
-// A plain serializable QoS-change record in the drop_event spirit: scalars and a
-// node_id, no closure-with-context, so it timestamps, serializes, and multiplexes
-// onto a future event spine without preclusion. type_id is engaged only when the
-// subscriber declared one (absence is a distinct third state, never a sentinel zero).
+// type_id is engaged only when the subscriber declared one (absence is a distinct third state,
+// never a sentinel zero).
 struct qos_change_event
 {
-    qos_edge                     edge{qos_edge::accepted};
-    std::uint64_t                topic_hash{};
-    node_id                      peer{};
-    subscriber_qos               requested{};
-    rxo_verdict                  verdict{rxo_verdict::compatible};
+    qos_edge edge{qos_edge::accepted};
+    std::uint64_t topic_hash{};
+    node_id peer{};
+    subscriber_qos requested{};
+    rxo_verdict verdict{rxo_verdict::compatible};
     std::optional<std::uint64_t> type_id{};
 };
 
-// The node-declaration lifecycle edges, distinct from the per-peer connection liveness:
-// a node's own create/destroy. Append-only, in the drop_event spirit (a flat scalar +
-// node_id aggregate, no closure) so the record timestamps and serializes onto the spine.
 enum class participant_edge : std::uint8_t
 {
     created   = 0,
@@ -75,14 +59,10 @@ enum class participant_edge : std::uint8_t
 struct participant_event
 {
     participant_edge edge{participant_edge::created};
-    node_id          self{};
+    node_id self{};
 };
 
-// A topic-endpoint declaration lifecycle edge: a publisher's declaration and its handle
-// drop, a subscriber's registration and its retire. The fqn rides as a borrowed view
-// parameter on on_endpoint (matching the data-tap shape), not in the POD, so the record
-// stays a flat scalar aggregate. type_id is engaged only when declared (absence is a
-// distinct third state). Append-only.
+// Append-only. The fqn rides as a borrowed on_endpoint parameter, not in the POD.
 enum class endpoint_edge : std::uint8_t
 {
     publisher_declared    = 0,
@@ -93,8 +73,8 @@ enum class endpoint_edge : std::uint8_t
 
 struct endpoint_event
 {
-    endpoint_edge                edge{endpoint_edge::publisher_declared};
-    std::uint64_t                topic_hash{};
+    endpoint_edge edge{endpoint_edge::publisher_declared};
+    std::uint64_t topic_hash{};
     std::optional<std::uint64_t> type_id{};
 };
 

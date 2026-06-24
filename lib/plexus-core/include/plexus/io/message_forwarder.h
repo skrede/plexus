@@ -49,8 +49,8 @@ namespace plexus::io {
 
 struct remembered_demand
 {
-    std::string                  fqn;
-    subscriber_qos               qos;
+    std::string fqn;
+    subscriber_qos qos;
     std::optional<std::uint64_t> type_id; // nullopt = undeclared
 };
 
@@ -112,17 +112,17 @@ public:
 
     void publish(std::string_view fqn, std::span<const std::byte> payload, std::uint64_t session_id = 0)
     {
-        auto            hash  = wire::fqn_topic_hash(fqn);
-        const auto     *topic = m_endpoint.registry().entry_for(hash);
-        const auto     *subs  = topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
-        const topic_qos qos   = topic != nullptr ? topic->qos : topic_qos{};
+        auto hash           = wire::fqn_topic_hash(fqn);
+        const auto *topic   = m_endpoint.registry().entry_for(hash);
+        const auto *subs    = topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
+        const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
         if(subs == nullptr && !qos.latch)
             return;
 
         const std::optional<std::uint64_t> counter = topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
-        message_info                       pub_info{};
-        const wire_bytes<>                 framed = frame_publish(hash, payload, counter, session_id, pub_info);
-        const message_view                 bare   = bare_of(framed, counter);
+        message_info pub_info{};
+        const wire_bytes<> framed = frame_publish(hash, payload, counter, session_id, pub_info);
+        const message_view bare   = bare_of(framed, counter);
         emit_published(hash, fqn, bare);
 
         if(subs != nullptr)
@@ -133,11 +133,11 @@ public:
     wire_bytes<> frame_publish(std::uint64_t hash, std::span<const std::byte> payload, std::optional<std::uint64_t> counter, std::uint64_t session_id, message_info &pub_info)
     {
         wire::unidirectional_header uhdr{.source = wire::endpoint_source_type::publisher, .sequence = m_endpoint.next_sequence(), .topic_hash = hash};
-        wire::frame_header          fhdr{.type         = wire::msg_type::unidirectional,
-                                         .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
-                                         .session_id   = session_id,
-                                         .timestamp_ns = wire::now_timestamp_ns(),
-                                         .payload_len  = 0};
+        wire::frame_header fhdr{.type         = wire::msg_type::unidirectional,
+                                .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
+                                .session_id   = session_id,
+                                .timestamp_ns = wire::now_timestamp_ns(),
+                                .payload_len  = 0};
         pub_info.publication_sequence = uhdr.sequence;
         pub_info.source_timestamp     = fhdr.timestamp_ns;
         return frame_owned(fhdr, uhdr, payload, counter);
@@ -146,11 +146,11 @@ public:
     wire_bytes<> frame_object(const object_carrier &carrier, std::uint64_t hash, std::optional<std::uint64_t> counter, std::uint64_t session_id, std::span<const std::byte> bytes)
     {
         wire::unidirectional_header uhdr{.source = wire::endpoint_source_type::publisher, .sequence = carrier.sequence, .topic_hash = hash};
-        wire::frame_header          fhdr{.type         = wire::msg_type::unidirectional,
-                                         .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
-                                         .session_id   = session_id,
-                                         .timestamp_ns = carrier.source_timestamp,
-                                         .payload_len  = 0};
+        wire::frame_header fhdr{.type         = wire::msg_type::unidirectional,
+                                .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
+                                .session_id   = session_id,
+                                .timestamp_ns = carrier.source_timestamp,
+                                .payload_len  = 0};
         return frame_owned(fhdr, uhdr, bytes, counter);
     }
 
@@ -208,21 +208,21 @@ public:
     // NOLINTNEXTLINE(readability-function-size)
     void publish_object(std::string_view fqn, object_carrier carrier, EncodeFn &&encode, std::uint64_t session_id = 0)
     {
-        auto            hash    = wire::fqn_topic_hash(fqn);
-        const auto     *topic   = m_endpoint.registry().entry_for(hash);
-        const auto     *subs    = topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
-        const topic_qos qos     = topic != nullptr ? topic->qos : topic_qos{};
-        const bool      latched = qos.latch;
+        auto hash           = wire::fqn_topic_hash(fqn);
+        const auto *topic   = m_endpoint.registry().entry_for(hash);
+        const auto *subs    = topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
+        const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
+        const bool latched  = qos.latch;
 
         carrier.topic_hash = hash;
         carrier.sequence   = m_endpoint.next_sequence();
         if(carrier.source_timestamp == 0 && (topic == nullptr || topic->any_subscriber_wants_info))
             carrier.source_timestamp = wire::now_timestamp_ns();
 
-        wire_bytes<>                       framed;
-        bool                               encoded     = false;
-        const std::optional<std::uint64_t> counter     = topic != nullptr && topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
-        const auto                         encode_once = [&]
+        wire_bytes<> framed;
+        bool encoded                               = false;
+        const std::optional<std::uint64_t> counter = topic != nullptr && topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
+        const auto encode_once                     = [&]
         {
             if(encoded)
                 return;
@@ -230,7 +230,7 @@ public:
             framed  = frame_object(carrier, hash, counter, session_id, std::forward<EncodeFn>(encode)());
         };
 
-        const bool         capture_payload = m_capture_wants_payload_cb && m_capture_wants_payload_cb(hash);
+        const bool capture_payload = m_capture_wants_payload_cb && m_capture_wants_payload_cb(hash);
         const message_info obj_info{.publication_sequence = carrier.sequence, .source_timestamp = carrier.source_timestamp};
         if(capture_payload)
             encode_once();
@@ -402,8 +402,8 @@ private:
 
     static message_view bare_of(const wire_bytes<> &framed, std::optional<std::uint64_t> counter)
     {
-        const std::size_t                prefix = wire::header_size + wire::unidirectional_header_size + (counter ? wire::varint_size(*counter) : 0);
-        const std::span<const std::byte> view   = static_cast<std::span<const std::byte>>(framed);
+        const std::size_t prefix              = wire::header_size + wire::unidirectional_header_size + (counter ? wire::varint_size(*counter) : 0);
+        const std::span<const std::byte> view = static_cast<std::span<const std::byte>>(framed);
         return message_view{view.subspan(prefix), framed.owner()};
     }
 
@@ -429,8 +429,11 @@ private:
         const subscriber_qos sub = m_endpoint.registry().qos_for_subscriber(hash, p.channel);
         switch(sub.durability_mode)
         {
-            case durability::none:   return;
-            case durability::latest: p.channel.send(it->second.newest()); return;
+            case durability::none:
+                return;
+            case durability::latest:
+                p.channel.send(it->second.newest());
+                return;
             case durability::all:
                 {
                     auto count = it->second.count();
@@ -546,20 +549,20 @@ private:
         m_logger.warn(message);
     }
 
-    log::logger                                                                                                          &m_logger;
-    std::size_t                                                                                                           m_global_default;
-    endpoint_type                                                                                                         m_endpoint;
-    std::vector<remembered_demand>                                                                                        m_empty;
-    detail::egress_scheduler<channel_type, Policy>                                                                        m_egress;
-    std::unordered_map<std::uint64_t, detail::history_ring>                                                               m_retained;
-    std::unordered_map<std::string, std::vector<remembered_demand>>                                                       m_remote_topics;
-    plexus::detail::move_only_function<void(const detail::drop_event &)>                                                  m_on_drop_cb;
-    plexus::detail::move_only_function<bool(std::uint64_t)>                                                               m_capture_wants_payload_cb;
-    plexus::detail::move_only_function<void(const qos_change_event &)>                                                    m_on_qos_change_cb;
-    plexus::detail::move_only_function<void(const node_id &, std::uint64_t)>                                              m_on_data_stamp_cb;
-    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_view &)>                       m_on_published_cb;
-    plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view, std::size_t)>                   m_companion_route_cb;
-    plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition, demand_role)>          m_on_demand_transition_cb;
+    log::logger &m_logger;
+    std::size_t m_global_default;
+    endpoint_type m_endpoint;
+    std::vector<remembered_demand> m_empty;
+    detail::egress_scheduler<channel_type, Policy> m_egress;
+    std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
+    std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
+    plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
+    plexus::detail::move_only_function<bool(std::uint64_t)> m_capture_wants_payload_cb;
+    plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change_cb;
+    plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_view &)> m_on_published_cb;
+    plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view, std::size_t)> m_companion_route_cb;
+    plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition, demand_role)> m_on_demand_transition_cb;
     plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_info &, const message_view &)> m_on_delivered_cb;
 };
 

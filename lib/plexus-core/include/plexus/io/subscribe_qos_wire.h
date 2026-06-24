@@ -10,7 +10,6 @@
 
 namespace plexus::io {
 
-// The wire layer carries no core dependency, so the core<->wire QoS lift lives here.
 inline wire::subscribe_qos_region to_wire_region(const subscriber_qos &q)
 {
     std::uint8_t flags = 0;

@@ -1,13 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SUBSCRIBER_REGISTRY_H
 #define HPP_GUARD_PLEXUS_IO_SUBSCRIBER_REGISTRY_H
 
+#include "plexus/topic_qos.h"
+
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_qos.h"
+
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/keyed_refcount.h"
 #include "plexus/io/detail/priority_band_queue.h"
 #include "plexus/io/detail/subscriber_dispatch.h"
-#include "plexus/topic_qos.h"
 
 #include <string>
 #include <cstdint>
@@ -180,9 +182,9 @@ public:
 
 private:
     std::unordered_map<std::uint64_t, topic_entry> m_topics;
-    mutable std::uint64_t                          m_last_fqn_hash{0};
-    mutable const std::string                     *m_last_fqn{nullptr};
-    detail::keyed_refcount                         m_refcount;
+    mutable std::uint64_t m_last_fqn_hash{0};
+    mutable const std::string *m_last_fqn{nullptr};
+    detail::keyed_refcount m_refcount;
     // The per-node monotonic source-identity endpoint-counter allocator. Minted at
     // declare (cold path), never on the hot path. Starts at 1 so 0 stays free as an
     // "unminted" value if ever needed; gid uniqueness comes from node_id ‖ counter.
