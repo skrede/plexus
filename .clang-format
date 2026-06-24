@@ -1,30 +1,27 @@
 # Derived from the project's CLion code style (.idea/codeStyles/Project.xml),
-# refined so a format run reproduces the codebase's authored shape (indented,
-# column-aligned single-line case statements; aligned struct members). The
-# AlignConsecutive* settings keep those aligned constructs intact at a fixed
-# ColumnLimit of 185 (horizontal space is cheaper than vertical here), wide
-# enough that the documented aligned case statements and struct members are not
-# reflowed apart.
-# Requires clang-format 17+ (AlignConsecutiveShortCaseStatements).
-# SortIncludes is off because the project's include order (grouped by origin and
-# folder, sorted by line length then alphabetically) is not expressible here;
-# see CONVENTIONS.md. SortUsingDeclarations is off for the same reason: the
-# project authors declaration order deliberately and the formatter must not
-# reorder tokens (the tree-wide reflow is whitespace-only).
+# refined so a format run reproduces the codebase's authored shape: each case
+# label and its body on their own lines, a single space before a declared name
+# (names are not aligned into a column), but consecutive assignments aligned on the
+# `=`. The fixed ColumnLimit of 185 keeps wide signatures and aligned assignments on
+# one line (horizontal space is cheaper than vertical here).
+# SortIncludes is off because the project's include order (grouped by folder,
+# sorted by file-name length then alphabetically) is not expressible here; see
+# conventions.md. SortUsingDeclarations is off for the same reason: the project
+# authors declaration order deliberately and the formatter must not reorder tokens.
 ---
 Language: Cpp
 BasedOnStyle: LLVM
 AccessModifierOffset: -4
 AlignConsecutiveAssignments: Consecutive
-AlignConsecutiveDeclarations: Consecutive
+AlignConsecutiveDeclarations: None
 AlignOperands: false
 AlignTrailingComments: true
 AlignConsecutiveShortCaseStatements:
-  Enabled: true
+  Enabled: false
   AcrossEmptyLines: false
   AcrossComments: false
   AlignCaseColons: false
-AllowShortCaseLabelsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
 AllowShortEnumsOnASingleLine: false
 AlwaysBreakAfterDefinitionReturnType: false
