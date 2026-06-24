@@ -8,10 +8,6 @@
 
 namespace plexus::shm {
 
-// over-limit: cited cross-process ring layout + named lock-free algorithms (std/parking_lot
-// 3-state word, Vyukov, Dekker mutual-announce) + the cross-process layout invariants; the why
-// is load-bearing (the keep-list) and trimming the citations would lose the ABI/ordering record.
-
 // Cache-line size used to pad the hot atomics and the descriptor cells onto
 // their own lines, suppressing false sharing between producers and consumers.
 //
@@ -184,7 +180,7 @@ struct control_header_t
     // park/generation lines.
     alignas(k_cache_line) std::atomic<std::uint32_t> high_water;
 
-    [[nodiscard]] constexpr std::size_t cursor_region_capacity() const noexcept
+    constexpr std::size_t cursor_region_capacity() const noexcept
     {
         return static_cast<std::size_t>(consumer_capacity);
     }

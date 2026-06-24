@@ -17,71 +17,41 @@
 
 namespace plexus::shm {
 
-// over-limit: one Vyukov-sequenced lock-free ring; the claim/commit/consume cursor protocol
-// + the seq_cst overwrite-vs-pin Dekker handshake are one indivisible whole over the shared
-// header/cells/cursor atomics — the in-class index accessors only bind member state to the
-// layout (already in ring_layout.h) and pulling them out threads m_cells/m_slab/m_mask/
-// m_stride through every hot path, scattering the protocol without separating a responsibility.
-//
 // Lock-free, cross-process, offset-based MPMC broadcast ring: the Vyukov bounded MPMC queue
-// adapted to DESCRIPTOR cells (each fixed cache-line cell carries a slab byte offset + length
-// + the per-cell sequence; the variable-size payload lives in a separate fixed-stride slab
-// keyed 1:1 to the cells). It exposes the low-level claim/commit/consume mechanism the
-// loan/publish/take endpoints wrap, plus the broadcast overlay (per-consumer in-region
-// cursors) and the two backpressure modes io::reliability/io::congestion select. Header-only (the
-// atomics + offset math inline); it drives a caller-supplied control+cells span and a payload
-// slab span — the caller owns the mapping lifetime.
+// adapted to DESCRIPTOR cells (each carries a slab byte offset + length + the per-cell sequence;
+// the variable-size payload lives in a separate fixed-stride slab keyed 1:1 to the cells). The
+// broadcast overlay (the Disruptor gating idea over Vyukov) gives every subscriber its own read
+// cursor in the header's fixed-bound array; the producer reclamation gate is "the slowest
+// registered consumer has passed this slot" (a k_cursor_idle sentinel does not gate). reliable
+// blocks a cell until take_refcount==0 AND the slowest non-sentinel cursor is past it (a bounded
+// spin, no kernel object); best-effort overwrites latest but SKIPS pinned cells.
 //
-// BROADCAST OVERLAY (the Disruptor gating idea over Vyukov): every subscriber must observe
-// every committed slot, so each owns its own read cursor in the header's fixed-bound cursor
-// array. The producer reclamation gate is "the slowest registered consumer has passed this
-// slot"; a sentinel (k_cursor_idle) cursor does not gate.
-//
-// BACKPRESSURE: claim_with_policy threads the publisher's delivery class — reliable blocks a
-// cell until take_refcount==0 AND the slowest non-sentinel cursor is strictly past it (the
-// publisher does a bounded spin+backoff, no kernel object); best-effort overwrites latest but
-// SKIPS any pinned cell, with a full-lap-pinned congested fallback. take_refcount is acq_rel;
-// the reclamation-gating cursor loads/stores are acquire/release.
-//
-// CRASH STANCE (honest — crash-SAFE, NOT crash-LIVE): no cross-process lock is held, so a
-// dying process never corrupts the ring; but a producer that dies after the enqueue CAS
-// before the sequence release leaves a never-advancing cell, and a consumer that dies holding
-// a take() leaves take_refcount>0. Detect-and-reclaim is a DEFERRED hardening item.
-//
-// Non-copy/non-move owning service.
+// CRASH STANCE (crash-SAFE, NOT crash-LIVE): no cross-process lock is held, so a dying process
+// never corrupts the ring; but a producer that dies after the enqueue CAS before the sequence
+// release leaves a never-advancing cell, and a consumer that dies holding a take() leaves
+// take_refcount>0. Detect-and-reclaim is deferred.
 class broadcast_ring
 {
 public:
-    // Sentinel cursor position meaning "registered but not yet gating": a fresh
-    // cursor does not hold back reclamation until it reads its first slot.
+    // "registered but not yet gating": a fresh cursor does not hold back reclamation until it
+    // reads its first slot.
     static constexpr std::uint64_t k_cursor_idle = UINT64_MAX;
 
-    // No-progress bound on the reliable pin-clear spin: a reliable claim that has
-    // WON a position but finds it still pinned by a live take() relaxes the core,
-    // watching the slowest consumer cursor. The take pin is transient (the read
-    // releases it), and a consumer that is draining advances its cursor -- so the
-    // budget counts CONSECUTIVE relax turns during which the slowest cursor did NOT
-    // move and RESETS on every advance: a live-but-slow consumer keeps the producer
-    // blocking losslessly however slow it drains, while a genuinely wedged/dead pin
-    // holder (no cursor motion across a whole window) trips the budget. The unpinned
-    // happy path takes the budget zero times and is byte-identical. The window is the
-    // same back-to-back order the consumer empty-retry budget covers (the swept knee,
-    // shm-spin-budget-sweep-2026-06-14), here as the no-progress reset granularity.
+    // No-progress bound on the reliable pin-clear spin (shm-spin-budget-sweep-2026-06-14):
+    // CONSECUTIVE relax turns during which the slowest cursor did NOT move, RESET on every
+    // advance, so a live-but-slow consumer blocks the producer losslessly while a wedged/dead pin
+    // holder trips the budget. The unpinned happy path takes it zero times.
     static constexpr std::uint32_t k_pin_clear_spin_budget = 256;
 
-    // Result of a successful claim: the cell position (carries the lap) and a
-    // writable, 8-aligned slab span the caller fills before committing.
     struct claim_result
     {
-        std::uint64_t        position{0};
+        std::uint64_t position{0};
         std::span<std::byte> slab;
     };
 
-    // Result of a successful consume: the read-only slab span for the message
-    // and the cell position it was read from.
     struct consume_result
     {
-        std::uint64_t              position{0};
+        std::uint64_t position{0};
         std::span<const std::byte> slab;
     };
 
@@ -92,10 +62,8 @@ public:
     broadcast_ring(broadcast_ring &&)                 = delete;
     broadcast_ring &operator=(broadcast_ring &&)      = delete;
 
-    // Places the control header + cells over `control` and initializes every
-    // cell's sequence to its index per the Vyukov init. cell_count must be a
-    // power of two; slot_capacity > 0. The spans must already be sized for the
-    // geometry (control_region_bytes / slab_region_bytes).
+    // Initializes every cell's sequence to its index per the Vyukov init. cell_count must be a
+    // power of two; the spans must already be sized for the geometry.
     // NOLINTNEXTLINE(readability-function-size)
     static loan_status create(std::span<std::byte> control, std::span<std::byte> slab, std::uint64_t cell_count, std::uint64_t slot_capacity, broadcast_ring &out,
                               std::uint64_t consumer_capacity = k_max_consumers) noexcept
@@ -136,9 +104,8 @@ public:
         return loan_status::ok;
     }
 
-    // Attaches over already-mapped spans and re-reads + bounds-checks the config
-    // from the control header (never trusts a peer's separate value): magic +
-    // version, power-of-two cell_count, mask == cell_count - 1, and both region
+    // Re-reads + bounds-checks the config from the control header (never trusts a peer's separate
+    // value): magic + version, power-of-two cell_count, mask == cell_count - 1, and both region
     // sizes. A foreign or layout-incompatible region is rejected.
     static loan_status attach(std::span<std::byte> control, std::span<std::byte> slab, broadcast_ring &out) noexcept
     {
@@ -162,9 +129,8 @@ public:
         return loan_status::ok;
     }
 
-    // Claims a free cell for a message of `size` bytes under the reliable policy
-    // with no consumer gating. size>slot_capacity -> rejected; a free cell won ->
-    // ok; ring full -> congested.
+    // The reliable claim with no consumer gating: size>slot_capacity -> rejected; a free cell
+    // won -> ok; ring full -> congested.
     // NOLINTNEXTLINE(readability-function-size)
     loan_status claim(std::size_t size, claim_result &out) noexcept
     {
@@ -174,9 +140,9 @@ public:
         std::uint64_t pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
         for(;;)
         {
-            cell_t             &c   = cell_at(pos);
+            cell_t &c               = cell_at(pos);
             const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-            const std::int64_t  dif = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(pos);
+            const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(pos);
             if(dif == 0)
             {
                 if(m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
@@ -231,9 +197,9 @@ public:
     // congested (the caller steps its cursor forward by one without delivering).
     loan_status consume(std::uint64_t cursor, consume_result &out) noexcept
     {
-        cell_t             &c   = cell_at(cursor);
+        cell_t &c               = cell_at(cursor);
         const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-        const std::int64_t  dif = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(cursor + 1);
+        const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(cursor + 1);
         if(dif < 0)
             return loan_status::empty;
         if(dif > 0)
@@ -329,8 +295,8 @@ public:
     // (the position moved) from a wedged/dead one (it did not).
     std::uint64_t slowest_consumer_position() const noexcept
     {
-        std::uint64_t       slowest = k_cursor_idle;
-        const std::uint32_t scan    = m_header->high_water.load(std::memory_order_acquire);
+        std::uint64_t slowest    = k_cursor_idle;
+        const std::uint32_t scan = m_header->high_water.load(std::memory_order_acquire);
         for(std::uint32_t i = 0; i < scan; ++i)
         {
             if(m_header->cursors[i].active.load(std::memory_order_acquire) == 0)
@@ -452,7 +418,7 @@ private:
     bool occupant_committed(std::uint64_t position) const noexcept
     {
         const std::uint64_t seq = m_cells[position & m_mask].sequence.load(std::memory_order_acquire);
-        const std::int64_t  dif = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(position);
+        const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(position);
         return dif == 0 || dif == 1 - static_cast<std::int64_t>(m_cell_count);
     }
 
@@ -562,13 +528,13 @@ private:
 
     std::span<std::byte> m_control;
     std::span<std::byte> m_slab;
-    control_header_t    *m_header{nullptr};
-    cell_t              *m_cells{nullptr};
-    std::uint64_t        m_cell_count{0};
-    std::uint64_t        m_slot_capacity{0};
-    std::uint64_t        m_mask{0};
-    std::uint64_t        m_stride{0};
-    std::uint64_t        m_consumer_capacity{0};
+    control_header_t *m_header{nullptr};
+    cell_t *m_cells{nullptr};
+    std::uint64_t m_cell_count{0};
+    std::uint64_t m_slot_capacity{0};
+    std::uint64_t m_mask{0};
+    std::uint64_t m_stride{0};
+    std::uint64_t m_consumer_capacity{0};
 };
 
 static_assert(broadcast_ring::k_cursor_idle == UINT64_MAX, "an idle (registered-but-not-gating) cursor must read as the max sentinel");

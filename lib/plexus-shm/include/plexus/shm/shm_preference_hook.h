@@ -12,21 +12,18 @@
 
 namespace plexus::shm {
 
-// The same-medium preference hook: prefer the upgrade-capable candidate when the pair is
-// upgrade-eligible AND the medium acquire succeeds, else fall back to the AF_UNIX candidate. This
-// is the FIRST case where a tier (local) resolves to >1 candidate, and it is NOT a pure positional
-// order: it depends on the RUNTIME acquire success (a forced broker failure must fall back to the
-// stream). The hook reads the per-candidate local_fast_eligible flag, then consults the injected
-// can_acquire probe (captured by move-only function so the erased hook stays decoupled from the
-// concrete member type). The probe captures the member by reference; the member outlives the mux.
+// Prefer the upgrade-capable candidate when the pair is upgrade-eligible AND the medium
+// acquire succeeds, else fall back to the AF_UNIX candidate. NOT a pure positional order:
+// it depends on the RUNTIME acquire success (a forced broker failure must fall back to the
+// stream). The probe captures the member by reference; the member outlives the mux.
 template<typename Member>
-[[nodiscard]] inline io::selection_hook prefer_upgradeable_hook(Member &member)
+inline io::selection_hook prefer_upgradeable_hook(Member &member)
 {
     plexus::detail::move_only_function<bool(const io::endpoint &)> can_acquire = [&member](const io::endpoint &ep) { return member.can_acquire(ep); };
     return [probe = std::move(can_acquire)](const io::endpoint &ep, std::span<const io::mux_candidate> candidates) mutable -> std::size_t
     {
-        std::size_t fallback      = candidates.front().index; // the first candidate (stream)
-        bool        have_fallback = false;
+        std::size_t fallback = candidates.front().index; // the first candidate (stream)
+        bool have_fallback   = false;
         for(const io::mux_candidate &c : candidates)
         {
             if(c.local_fast_eligible)

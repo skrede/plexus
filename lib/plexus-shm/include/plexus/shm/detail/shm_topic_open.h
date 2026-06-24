@@ -11,13 +11,9 @@
 #include <cstdint>
 #include <optional>
 
-// The family's own detail namespace: the registry body reaches these helpers through a bare
-// detail:: lookup that resolves here by fall-through from plexus::shm.
 namespace plexus::shm::detail {
 
-// A cheap existence probe for the consumer attach-first path: a successful read-only attach
-// proves the region is live (the handle is discarded). A miss returns false (the consumer
-// then mints).
+// A successful read-only attach proves the region is live (the handle is discarded).
 template<typename Registry>
 bool topic_region_exists(Registry &r, const std::string &ctrl_name)
 {
@@ -25,9 +21,8 @@ bool topic_region_exists(Registry &r, const std::string &ctrl_name)
     return r.m_broker.attach(ctrl_name, probe) == shm::region_status::ok;
 }
 
-// The creator path: it owns both regions, stamps a fresh ring at the resolved consumer
-// capacity, and unlinks on teardown. The OS-allocator leg of the fail-closed gate (the
-// ceiling was already cleared in topic_open_ring) names the OS bound on a slab-create failure.
+// The creator path: owns both regions, stamps a fresh ring, unlinks on teardown. The
+// OS-allocator leg of the fail-closed gate names the OS bound on a slab-create failure.
 template<typename Registry, typename Entry>
 shm::acquire_result topic_mint(Registry &r, Entry &e, const std::string &slab_name, const shm::ring_geometry &geom, std::uint64_t consumer_capacity)
 {
@@ -43,8 +38,8 @@ shm::acquire_result topic_mint(Registry &r, Entry &e, const std::string &slab_na
     return shm::acquire_result::created;
 }
 
-// The attacher path: maps the peer's existing regions and re-reads the geometry from the
-// control header (never unlinks).
+// The attacher path: maps the peer's regions and re-reads the geometry from the control
+// header (never unlinks).
 template<typename Registry, typename Entry>
 shm::acquire_result topic_join(Registry &r, Entry &e, const std::string &ctrl_name, const std::string &slab_name)
 {
@@ -55,25 +50,23 @@ shm::acquire_result topic_join(Registry &r, Entry &e, const std::string &ctrl_na
     return shm::acquire_result::attached;
 }
 
-// Mints or attaches the two regions for (fqn, direction) and binds the entry's ring over them.
-// amode decides the collision policy: reclaim_stale unlinks an existing name on create (the
-// single-owner dial ring reclaims a crashed creator's orphan); join_live NEVER unlinks (a live
-// co-host peer already mapped this companion ring) — it attaches FIRST when the region exists,
-// and mints only when none does yet, so the peer arriving second JOINs and both converge.
+// Mints or attaches the two regions for (fqn, direction) and binds the entry's ring. amode is
+// the collision policy: reclaim_stale unlinks an existing name on create; join_live NEVER
+// unlinks (it attaches first when the region exists, mints only when none does, so two co-host
+// peers converge on the one ring).
 template<typename Registry, typename Entry>
 // NOLINTNEXTLINE(readability-function-size)
 shm::acquire_result topic_open_ring(Registry &r, Entry &e, const std::string &fqn, shm::ring_direction direction, std::uint32_t max_payload, shm::ring_geometry_mode mode,
                                     std::uint32_t consumer_capacity, shm::acquire_mode amode)
 {
-    const std::string                  ctrl_name = shm::region_name_for(fqn, direction, r.m_region_ns);
-    const std::string                  slab_name = ctrl_name + ".s";
-    const std::optional<std::uint32_t> want      = max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{max_payload};
-    const std::uint64_t                capacity  = consumer_capacity == 0 ? shm::k_max_consumers : consumer_capacity;
-    const shm::ring_geometry           geom      = shm::ring_geometry_for(want, mode, consumer_capacity);
+    const std::string ctrl_name             = shm::region_name_for(fqn, direction, r.m_region_ns);
+    const std::string slab_name             = ctrl_name + ".s";
+    const std::optional<std::uint32_t> want = max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{max_payload};
+    const std::uint64_t capacity            = consumer_capacity == 0 ? shm::k_max_consumers : consumer_capacity;
+    const shm::ring_geometry geom           = shm::ring_geometry_for(want, mode, consumer_capacity);
 
-    // The ceiling leg of the fail-closed gate is a PURE query (no broker touch): reject an
-    // over-ceiling reliable ring before any region is minted, so an oversize declaration never
-    // orphans the control region. The ask is the slab the ring would size (it dominates).
+    // Reject an over-ceiling ring before any region is minted (a pure query, no broker touch),
+    // so an oversize declaration never orphans the control region.
     const std::uint64_t ask = shm::slab_region_bytes(geom.cell_count, geom.slot_capacity);
     if(ask > r.m_max_ring_slab_bytes)
     {

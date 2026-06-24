@@ -19,21 +19,13 @@ namespace test {
 struct handle_test_access;
 }
 
-// Move-only, read-only consumer handle. bytes() aliases the slab slot the take
-// pinned; the take_refcount keeps the slot from being recycled while this handle
-// (or a wire_bytes aliasing it) is alive.
-//
-// Lifetime invariant: release decrements take_refcount EXACTLY ONCE. reclaim() is
-// idempotent -- it decrements once then nulls the back-pointer so a moved-from
-// handle's destructor and a move-assign target both no-op.
-//
-// as_wire_bytes() is the zero-copy read seam (the move-only owner reshape): it builds a
-// plexus::wire_bytes<shm_slot_owner> whose move-only intrusive owner pins the SAME
-// take_refcount, so the slot stays pinned for the deserialized view's lifetime
-// independently of this handle. There is no reference-counted heap handle
-// anywhere on this path -- the owner is a bare intrusive refcount pointer. An
-// 8-aligned slot base plus that owner is exactly the alias precondition a codec's
-// deserialize takes instead of the copy-to-align fallback.
+// Move-only, read-only consumer handle. bytes() aliases the slab slot the take pinned;
+// the take_refcount keeps the slot from being recycled while this handle (or a wire_bytes
+// aliasing it) is alive. reclaim() decrements take_refcount EXACTLY ONCE then nulls the
+// back-pointer, so a moved-from handle's destructor and a move-assign target both no-op.
+// as_wire_bytes() takes a FRESH pin on the SAME take_refcount, so the returned view stays
+// pinned independently of this handle; an 8-aligned slot base plus that owner is the alias
+// precondition a codec's deserialize takes instead of the copy-to-align fallback.
 class taken_message
 {
 public:
@@ -74,28 +66,22 @@ public:
         return *this;
     }
 
-    // Read-only view aliasing the slab slot. Calling this on an empty or moved-from
-    // handle is caller misuse (assert).
+    // Read-only view aliasing the slab slot.
     std::span<const std::byte> bytes() const
     {
         assert(m_payload != nullptr && "taken_message::bytes() on an empty or moved-from handle");
         return {m_payload, m_length};
     }
 
-    // A wire_bytes aliasing the slot, owner-pinned via a move-only shm_slot_owner.
-    // It takes a FRESH pin so the returned view's lifetime is independent of this
-    // handle. Calling this on an empty or moved-from handle is caller misuse.
     ::plexus::wire_bytes<shm_slot_owner> as_wire_bytes() const
     {
         assert(m_payload != nullptr && "taken_message::as_wire_bytes() on an empty or moved-from handle");
         return ::plexus::wire_bytes<shm_slot_owner>(std::span<const std::byte>(m_payload, m_length), shm_slot_owner(m_refcount));
     }
 
-    // The adopt tag: the slot_subscriber has ALREADY pinned the slot via the ring's
-    // Dekker-safe pin_if_current (the seq_cst announce + recheck the best_effort
-    // overwrite race needs). This ctor ADOPTS that existing pin rather than adding a
-    // second one (the carry-forward "must not double-pin" rule) -- the handle owns
-    // the one held pin and releases it exactly once on reclaim().
+    // The slot_subscriber has ALREADY pinned the slot via the ring's Dekker-safe
+    // pin_if_current; the adopting ctor ADOPTS that pin rather than adding a second
+    // (the "must not double-pin" rule) and releases it once on reclaim().
     struct adopt_pin_t
     {
     };
@@ -114,9 +100,8 @@ private:
             m_refcount->fetch_add(1, std::memory_order_acq_rel); // pin at take()
     }
 
-    // Adopting ctor: takes ownership of a pin the caller already holds (no
-    // fetch_add). reclaim() still decrements once, so the held pin is released
-    // exactly once when the handle dies.
+    // Adopts a pin the caller already holds (no fetch_add); reclaim() still releases it
+    // exactly once.
     taken_message(adopt_pin_t, const std::byte *payload, std::size_t length, std::atomic<std::uint32_t> *refcount) noexcept
             : m_payload(payload)
             , m_length(length)
@@ -124,8 +109,6 @@ private:
     {
     }
 
-    // Decrements take_refcount once then nulls the back-pointer. noexcept +
-    // idempotent so the move/destructor paths release exactly once.
     void reclaim() noexcept
     {
         if(m_refcount != nullptr)
@@ -136,8 +119,8 @@ private:
         m_refcount = nullptr;
     }
 
-    const std::byte            *m_payload{nullptr};
-    std::size_t                 m_length{0};
+    const std::byte *m_payload{nullptr};
+    std::size_t m_length{0};
     std::atomic<std::uint32_t> *m_refcount{nullptr};
 };
 

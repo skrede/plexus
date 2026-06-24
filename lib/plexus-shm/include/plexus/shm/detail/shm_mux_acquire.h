@@ -12,28 +12,25 @@
 #include <string>
 #include <cstdint>
 
-// The family's own detail namespace: the shm_mux_member body reaches these helpers through a
-// bare detail:: lookup that resolves here by fall-through from plexus::shm.
 namespace plexus::shm::detail {
 
-// The per-fqn provisioned geometry the shm member keys by topic: the publisher's effective
-// payload width, the declared mode, and the declared consumer capacity (0 = the shipped floor).
-// Producer-side, never wire-advertised.
+// The per-fqn provisioned geometry the shm member keys by topic. Producer-side, never
+// wire-advertised (consumer_capacity 0 = the shipped floor).
 struct shm_provisioned
 {
-    std::uint32_t           max_payload       = 0;
-    shm::ring_geometry_mode mode              = shm::ring_geometry_mode::reliable_preserving;
-    std::uint32_t           consumer_capacity = 0;
+    std::uint32_t max_payload       = 0;
+    shm::ring_geometry_mode mode    = shm::ring_geometry_mode::reliable_preserving;
+    std::uint32_t consumer_capacity = 0;
 };
 
 // The resolved acquire arguments for one (fqn, direction): the request direction (publisher)
-// sizes the ring from the provisioned width; the response direction (subscriber) passes 0 and
-// falls back to the default ring. upgrade_ring_max_payload is the direction authority.
+// sizes from the provisioned width; the response direction (subscriber) passes 0 (the default
+// ring).
 struct shm_resolved_geometry
 {
-    std::uint32_t           max_payload;
+    std::uint32_t max_payload;
     shm::ring_geometry_mode mode;
-    std::uint32_t           consumer_capacity;
+    std::uint32_t consumer_capacity;
 };
 
 template<typename Member>
@@ -47,10 +44,8 @@ shm_resolved_geometry mux_resolve(const Member &m, const std::string &fqn, shm::
 }
 
 // Mint a channel over the ring for ep, acquiring it first unless a prior can_acquire probe
-// already holds it (channel_for is then already non-null — reuse that held reference so the
-// refcount stays at one held by the minted channel). Returns nullptr on a broker failure.
-// ep.address is the fqn the deterministic region name derives from. RELOCATION of the member
-// body — it is a friend, so it reaches the registry/geometry map through the member reference.
+// already holds it (channel_for non-null — reuse that held reference so the refcount stays at
+// one held by the minted channel). nullptr on a broker failure. ep.address is the fqn.
 template<typename Member>
 auto mux_open(Member &m, const io::endpoint &ep, shm::acquire_mode amode = shm::acquire_mode::reclaim_stale) -> std::unique_ptr<typename Member::channel_type>
 {

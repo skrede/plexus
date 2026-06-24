@@ -8,17 +8,10 @@
 namespace plexus::shm {
 
 // The move-only, intrusive wire_bytes owner that pins a ring slot's take_refcount
-// for the lifetime of a deserialized view (the loan reshape: no reference-counted
-// heap handle). It is the SHM-local owner the zero-copy take() path selects for
-// its returned wire_bytes<shm_slot_owner>; the universal default wire_bytes owner
-// of the other policies (the type-erased heap handle) is UNCHANGED.
-//
-// It pins on construction (fetch_add) and unpins EXACTLY ONCE on destruction
-// (fetch_sub), so the slot the view aliases is never recycled by a best-effort
-// overwrite while the view is alive. Copy is deleted; move steals the back-pointer
-// and nulls the source so a moved-from owner's destructor no-ops. A
-// default-constructed (null) owner pins and unpins nothing — it is the empty
-// wire_bytes default-owner case.
+// for the lifetime of a deserialized view. It pins on construction (fetch_add) and
+// unpins EXACTLY ONCE on destruction (fetch_sub), so the slot the view aliases is
+// never recycled by a best-effort overwrite while the view is alive. Move steals
+// the back-pointer and nulls the source so a moved-from owner's destructor no-ops.
 class shm_slot_owner
 {
 public:

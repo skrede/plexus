@@ -25,12 +25,10 @@
 
 namespace plexus::shm {
 
-// The per-topic byte_channel the shm mux member hands up: wraps ONE live ring behind the
-// byte_channel verbs the multiplexer erases. send memcpy-publishes into the slab and wakes the
-// cross-process consumer; the notifier-driven drain pumps received messages into on_data as
-// header-on bytes. close() releases the ring (refcount tears it down + unlinks at 1->0).
-// on_protocol_close never fires (no byte-stream framing on a ring). Borrows the registry +
-// channel BY REFERENCE; the registry outlives every channel it mints.
+// The per-topic byte_channel the shm mux member hands up, wrapping ONE live ring behind the
+// byte_channel verbs the multiplexer erases. close() releases the ring (refcount tears it
+// down + unlinks at 1->0). on_protocol_close never fires (no byte-stream framing on a ring).
+// The registry outlives every channel it mints.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_byte_channel
@@ -55,9 +53,8 @@ public:
             m_registry.release(m_fqn, ring_direction::request);
     }
 
-    // memcpy into the slab -> publish -> signal. An oversize payload surfaces message_too_large;
-    // a stalled reliable path surfaces would_block. The channel stays open either way (the bytes
-    // never left the node) — the publisher learns the send failed rather than a silent drop.
+    // An oversize payload surfaces message_too_large, a stalled reliable path would_block; the
+    // channel stays open either way so the publisher learns the send failed rather than a silent drop.
     void send(std::span<const std::byte> data)
     {
         const loan_status st = m_channel.send(data);
@@ -75,7 +72,7 @@ public:
         }
     }
 
-    // Release the ring back to the registry (idempotent: a second close is a no-op).
+    // Idempotent: a second close is a no-op.
     void close()
     {
         if(m_released)
@@ -86,13 +83,12 @@ public:
             m_on_closed();
     }
 
-    [[nodiscard]] io::endpoint remote_endpoint() const
+    io::endpoint remote_endpoint() const
     {
         return m_remote;
     }
 
-    // Install the data sink and pump whatever is already pending: this channel routes drained
-    // bytes to ITS sink, re-draining here and on each pump() the owner drives off a wake.
+    // Install the data sink and pump whatever is already pending.
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
@@ -116,23 +112,20 @@ public:
         m_on_protocol_close = std::move(cb);
     }
 
-    // send() memcpys straight into the shared-memory slab (no bounded userspace egress queue):
-    // the ring's own io::congestion verdict is surfaced inline at send time, so this channel
-    // keeps no queued backlog. Reports 0 ("always accepts") — the in-slab fire-through signal.
-    [[nodiscard]] std::size_t backpressured() const noexcept
+    // send() memcpys straight into the slab with no bounded egress queue, so this channel keeps
+    // no backlog. Reports 0 ("always accepts").
+    std::size_t backpressured() const noexcept
     {
         return 0;
     }
 
-    // The stable per-construction egress key (distinct so a reconnect cannot alias a freed
-    // member's entry); a mux-composed shm member keys the scheduler band map as a stream member.
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    // Distinct per construction so a reconnect cannot alias a freed member's entry.
+    std::uint64_t scheduler_key() const noexcept
     {
         return m_scheduler_key;
     }
 
-    // Drain every pending message into on_data as header-on bytes, driven by the owner on each
-    // notifier wake (the registry's own drain discards; this delivers).
+    // Driven by the owner on each notifier wake (the registry's own drain discards; this delivers).
     void pump()
     {
         if(!m_on_data)
@@ -142,31 +135,30 @@ public:
     }
 
 private:
-    // The drop edge is reported straight off send() as drop_cause::blocked. The engine binds
-    // m_on_drop to its posted drop_sink, so the emit reaches the fan-out POSTED.
+    // The engine binds m_on_drop to its posted drop_sink, so the emit reaches the fan-out POSTED.
     void emit_drop()
     {
         if(m_on_drop)
             m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::blocked, .transport = io::locality::local});
     }
 
-    registry_type                                                           &m_registry;
-    shm_channel<Notifier>                                                   &m_channel;
-    std::string                                                              m_fqn;
-    io::endpoint                                                             m_remote;
-    std::uint64_t                                                            m_scheduler_key{io::detail::next_scheduler_key()};
-    bool                                                                     m_released = false;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)>     m_on_data;
-    plexus::detail::move_only_function<void()>                               m_on_closed;
-    plexus::detail::move_only_function<void(io::io_error)>                   m_on_error;
+    registry_type &m_registry;
+    shm_channel<Notifier> &m_channel;
+    std::string m_fqn;
+    io::endpoint m_remote;
+    std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()};
+    bool m_released = false;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
+    plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
-    plexus::detail::move_only_function<void(wire::close_cause)>              m_on_protocol_close;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
 };
 
-// The RAII receive lane over a co-host companion ring: holds ONE request-direction ring
-// refcount, drained by the registry's armed notifier (posted on the node executor — NO drain
-// thread). Destruction clears the sink BEFORE dropping the refcount (disarm-before-destroy), so
-// a wake in flight never delivers onto a torn-down sink and a release at 1->0 unmaps the ring.
+// The RAII receive lane over a co-host companion ring, drained by the registry's armed
+// notifier (posted on the node executor, NO drain thread). Destruction clears the sink BEFORE
+// dropping the refcount (disarm-before-destroy), so a wake in flight never delivers onto a
+// torn-down sink and a release at 1->0 unmaps the ring.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_companion_consumer
@@ -191,7 +183,7 @@ public:
 
 private:
     registry_type &m_registry;
-    std::string    m_fqn;
+    std::string m_fqn;
 };
 
 }
