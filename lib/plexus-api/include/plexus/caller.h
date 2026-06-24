@@ -29,39 +29,29 @@
 
 namespace plexus {
 
-// deadline is optional because ABSENCE is meaningful: absent = use the forwarder's
-// construction-time default, distinct from any concrete override.
+// deadline absent uses the forwarder's construction-time default.
 struct call_options
 {
     std::optional<std::chrono::nanoseconds> deadline{};
 };
 
-// The codec slots are template-template parameters (a codec FAMILY over one value type, not a
-// finished codec); the response family defaults to the request family (the symmetric form).
-// The bytes endpoint is the caller<void, no_codec, no_codec> specialization; caller<> selects
-// it via the defaulted parameters (the defaults live in node.h's forward declaration, seen
-// first). no_codec is a sentinel family, never instantiated.
 template<typename Sig, template<typename> class CReq, template<typename> class CRes>
 class caller;
 
-// The bytes calling endpoint. CALLBACK-ONLY — there is no blocking/future form (a blocking
-// call on the borrowed single-thread loop is a deadlock by construction). The completion is
-// void(expected<reply, std::error_code>).
+// CALLBACK-ONLY: there is no blocking/future form (a blocking call on the borrowed
+// single-thread loop is a deadlock by construction).
 //
-// PROVIDER RESOLUTION (single-provider): a call targets the FIRST connection-order peer with a
-// complete session (a node refuses a second LOCAL registration on one fqn, so in-process the
-// provider is unique). A call with NO connected provider does NOT hang/buffer/queue — the
-// completion is POSTED carrying call_errc::no_provider; a wrong-aim resolves no_handler through
-// the per-call deadline path.
+// PROVIDER RESOLUTION: a call targets the first connection-order peer with a complete session.
+// A call with NO connected provider does NOT hang/buffer/queue — the completion is POSTED
+// carrying call_errc::no_provider.
 //
 // LIFETIME: a caller must NOT outlive its node. Dropping the handle does NOT cancel an in-flight
 // call — a completion already handed to the forwarder runs to resolution (the asio convention:
-// the operation owns its completion). A moved-from handle is inert.
+// the operation owns its completion).
 template<>
 class caller<void, no_codec, no_codec>
 {
 public:
-    // An ABSENT wire status is the facade no_provider verdict that never rode the wire.
     using on_reply_fn = io::on_reply_fn;
 
     template<typename Policy, typename... NodeTs>
@@ -71,8 +61,6 @@ public:
     {
     }
 
-    // Resolve the first connected provider and dispatch; on no provider, POST the no_provider
-    // completion (never inline).
     template<typename Completion>
     void call(std::span<const std::byte> param, Completion &&completion)
     {
@@ -101,17 +89,13 @@ private:
     }
 
     io::endpoint_seam m_seam{};
-    std::string       m_fqn;
+    std::string m_fqn;
 };
 
-// The typed calling endpoint: an encode/decode adaptation around the bytes caller. There is NO
-// inproc fast path for RPC by design — a request/response always rides bytes.
-//
-// The completion adapter maps the wire reply: success decodes Res via CRes (a decode failure →
-// deserialize_failed); a well-formed varint error-leg reconstructs the provider's error VALUE
-// under provider_category (value preserved, category erased); an empty/MALFORMED error-leg
-// falls back to from_rpc_status (the interop fallback — a hostile varint never crashes nor
-// half-decodes).
+// An encode/decode adaptation around the bytes caller. The completion adapter maps the wire
+// reply: success decodes Res via CRes (a decode failure → deserialize_failed); a well-formed
+// varint error-leg reconstructs the provider's error VALUE under provider_category (value
+// preserved, category erased); an empty/malformed error-leg falls back to from_rpc_status.
 template<typename Res, typename Req, template<typename> class CReq, template<typename> class CRes>
     requires typed_codec<CReq<Req>> && typed_codec<CRes<Res>>
 class caller<Res(Req), CReq, CRes>
@@ -159,9 +143,9 @@ private:
     }
 
     io::endpoint_seam m_seam{};
-    request_codec     m_req_codec;
-    response_codec    m_res_codec;
-    std::string       m_fqn;
+    request_codec m_req_codec;
+    response_codec m_res_codec;
+    std::string m_fqn;
 };
 
 }

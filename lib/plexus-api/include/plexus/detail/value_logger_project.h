@@ -9,9 +9,6 @@
 #include <string>
 #include <string_view>
 
-// The per-topic CSV/jsonl/text projection helpers for value_logger, relocated out of the handle.
-// Each is a free-function template over the logger's heap state (St holds buffer/slot/projection/
-// out/header_written); HasProjection selects the value_projection path vs the operator<< floor.
 namespace plexus::detail {
 
 template<bool HasProjection, typename St>
@@ -89,9 +86,15 @@ void vl_format_record(St &s, const io::message_info &info)
 {
     switch(s.format)
     {
-        case log_format::csv:   vl_format_csv<HasProjection>(s, info); break;
-        case log_format::jsonl: vl_format_json<HasProjection>(s); break;
-        case log_format::text:  vl_format_text<HasProjection>(s, info); break;
+        case log_format::csv:
+            vl_format_csv<HasProjection>(s, info);
+            break;
+        case log_format::jsonl:
+            vl_format_json<HasProjection>(s);
+            break;
+        case log_format::text:
+            vl_format_text<HasProjection>(s, info);
+            break;
     }
 }
 

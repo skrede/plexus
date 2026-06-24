@@ -5,8 +5,6 @@
 
 namespace plexus {
 
-// The public result vocabulary. These aliases ARE the stable names; the eventual
-// std::expected cutover is a one-line swap in detail/expected.h, invisible here.
 template<typename T, typename E>
 using expected = detail::expected<T, E>;
 

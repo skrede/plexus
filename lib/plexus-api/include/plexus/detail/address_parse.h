@@ -1,9 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_DETAIL_ADDRESS_PARSE_H
 #define HPP_GUARD_PLEXUS_DETAIL_ADDRESS_PARSE_H
 
-#include "plexus/io/endpoint.h"
 #include "plexus/node_id.h"
+
 #include "plexus/discovery/contact_card.h"
+
+#include "plexus/io/endpoint.h"
 
 #include <string>
 #include <vector>
@@ -17,9 +19,9 @@ namespace plexus::detail {
 inline std::optional<std::uint16_t> port_of_value(std::string_view v)
 {
     std::uint16_t port{};
-    const char   *first = v.data();
-    const char   *last  = v.data() + v.size();
-    const auto    res   = std::from_chars(first, last, port);
+    const char *first = v.data();
+    const char *last  = v.data() + v.size();
+    const auto res    = std::from_chars(first, last, port);
     if(res.ec != std::errc{} || res.ptr != last)
         return std::nullopt;
     return port;
@@ -33,9 +35,8 @@ inline std::optional<plexus::node_id> card_node_id(const std::vector<std::pair<s
     return std::nullopt;
 }
 
-// The host portion of a "host:port" address, with any trailing ":port" stripped.
-// An IPv6-style address (multiple colons) is left verbatim — only a single
-// trailing host:port pair is split.
+// An IPv6-style address (multiple colons) is left verbatim — only a single trailing host:port
+// pair is split.
 inline std::string host_of(const std::string &address)
 {
     const auto colon = address.rfind(':');
@@ -44,7 +45,6 @@ inline std::string host_of(const std::string &address)
     return address.substr(0, colon);
 }
 
-// The first "plexus/<scheme>/port" key in card order, resolved to {scheme, host:port}.
 inline std::optional<io::endpoint> first_port_endpoint(const std::vector<std::pair<std::string, std::string>> &card, const std::string &host)
 {
     constexpr std::string_view k_prefix = "plexus/";
@@ -65,8 +65,8 @@ inline std::optional<io::endpoint> first_port_endpoint(const std::vector<std::pa
     return std::nullopt;
 }
 
-// Parse the explicit port out of a "host:port" listen address (guarded — a missing
-// or non-numeric port yields absence, the auto-assign-not-advertisable precondition).
+// A missing or non-numeric port yields absence (fail-closed): an auto-assigned port is not
+// advertisable.
 inline std::optional<std::uint16_t> port_of(const std::string &address)
 {
     const auto colon = address.rfind(':');

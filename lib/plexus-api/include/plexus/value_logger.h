@@ -26,30 +26,20 @@
 
 namespace plexus {
 
-// The default projection: an empty tag selecting the streamable text floor. It satisfies
-// no value_projection, so a value_logger with no supplied projection formats through the
-// operator<< floor for a streamable value type.
+// An empty tag selecting the streamable text floor: it satisfies no value_projection, so a
+// value_logger with no supplied projection formats through the operator<< floor.
 struct no_projection
 {
 };
 
-// The typed value_logger: a subscriber<Codec> whose success branch, instead of invoking
-// a user callback, formats one decoded value to a printable record (a CSV row, a
-// JSON-Lines object, or a text line) on a consumer-owned ostream. The codec decodes
-// bytes->T; an opt-in value_projection formats T->columns/fields, and a type with no
-// projection falls back to the streamable text floor. BOTH the codec and the projection
-// live here at the handle — never in the capture store/tap. A decode failure is counted
-// and dropped, never a partial T or a partial line.
+// A subscriber<Codec> whose success branch formats one decoded value to a printable record on a
+// consumer-owned ostream rather than invoking a user callback. It registers BOTH a bytes leg
+// (decode->format) and a process-tier object-dispatch leg (recover the concrete T from the
+// carrier, format with no decode) under ONE registration id.
 //
-// Like subscriber<Codec> it registers BOTH a bytes leg (decode->format) and a process-
-// tier object-dispatch leg (recover the concrete T from the carrier, format with no
-// decode) under ONE registration id, so an in-process typed publish that rides the
-// zero-serialization lane still reaches the logger without forcing an encode.
-//
-// LIFETIME: a value_logger must NOT outlive its node nor the ostream it writes to (both
-// are borrowed). The decode + format state lives in a heap block the handle owns; the
-// node's stored adapter references it by raw pointer and is retired before the block is
-// freed. Move-only; a moved-from handle is inert.
+// LIFETIME: a value_logger must NOT outlive its node nor the ostream it writes to (both are
+// borrowed). The decode + format state lives in a heap block the handle owns; the node's stored
+// adapter references it by raw pointer and is retired before the block is freed.
 template<typename Codec, typename Projection>
 class value_logger
 {
@@ -70,13 +60,13 @@ public:
                       "value_projection (column names + emit_fields/emit_json) or be "
                       "streamable to an ostream (the operator<< text floor).");
 
-        const auto         identity = resolve_identity(m_state->codec, opts.type_id);
-        io::subscriber_qos qos      = opts.qos;
-        qos.posture                 = opts.posture;
-        qos.wants_message_info      = true;
+        const auto identity    = resolve_identity(m_state->codec, opts.type_id);
+        io::subscriber_qos qos = opts.qos;
+        qos.posture            = opts.posture;
+        qos.wants_message_info = true;
 
-        state *st            = m_state.get();
-        auto   bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info) { st->on_bytes(bytes, info); };
+        state *st          = m_state.get();
+        auto bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info) { st->on_bytes(bytes, info); };
 
         io::object_dispatch dispatch = [st](const io::object_carrier &carrier, const io::message_info &info) { st->on_object(carrier, info); };
 
@@ -85,8 +75,8 @@ public:
         m_retire       = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
-    // The count of inbound frames whose decode failed — dropped, never a partial line.
-    [[nodiscard]] std::size_t decode_failed() const noexcept
+    // Inbound frames whose decode failed — dropped, never a partial line.
+    std::size_t decode_failed() const noexcept
     {
         return m_state->decode_failed;
     }
@@ -106,32 +96,31 @@ public:
 private:
     static constexpr bool has_projection = value_projection<Projection, value_type>;
 
-    // The heap-stable decode + format state the node's adapter references by raw pointer.
-    // It owns the codec, the projection, the reused decode slot, the reused format buffer
-    // (cleared+reused per record so the steady loop allocates nothing), the failure
-    // counter, and the CSV header-emitted-once latch.
+    // The slot and buffer are cleared and reused per record so the steady loop allocates nothing.
     struct state
     {
-        Codec         codec;
-        Projection    projection;
-        log_format    format;
+        Codec codec;
+        Projection projection;
+        log_format format;
         std::ostream &out;
-        value_type    slot{};
-        std::string   buffer;
-        std::size_t   decode_failed{};
-        bool          header_written{};
+        value_type slot;
+        std::string buffer;
+        std::size_t decode_failed;
+        bool header_written;
 
         state(Codec c, Projection p, log_format fmt, std::ostream &o)
                 : codec(std::move(c))
                 , projection(std::move(p))
                 , format(fmt)
                 , out(o)
+                , slot{}
+                , decode_failed{}
+                , header_written{}
         {
         }
 
-        // Decode into the reused slot. Success formats the record into the reused buffer and
-        // writes it; failure increments the counter and drops — never a partial line. The
-        // CSV/jsonl/text projection lives in detail/value_logger_project.h (relocation).
+        // Success formats the record into the reused buffer and writes it; failure increments the
+        // counter and drops — never a partial line.
         void on_bytes(std::span<const std::byte> bytes, const io::message_info &info)
         {
             auto decoded = codec.decode(bytes, slot);
@@ -144,9 +133,8 @@ private:
             out << buffer;
         }
 
-        // The object leg: the demux native-key-matched, so recover the concrete T from the carrier
-        // (no decode) into the reused slot and format it — the SAME projection path. A view-type
-        // value_type aliases the carrier slot for the format duration only (this call's scope).
+        // Recover the concrete T from the carrier (no decode) and format it through the SAME
+        // projection path. A view-type value_type aliases the carrier slot for this call only.
         void on_object(const io::object_carrier &carrier, const io::message_info &info)
         {
             slot = *static_cast<const value_type *>(carrier.slot->object);
@@ -155,7 +143,7 @@ private:
         }
     };
 
-    std::unique_ptr<state>                     m_state;
+    std::unique_ptr<state> m_state;
     plexus::detail::move_only_function<void()> m_retire;
 };
 

@@ -12,23 +12,20 @@ namespace plexus::detail {
 template<typename T>
 class loan_slab;
 
-// One pool slot: aligned storage for a T, its io::loan_slot refcount control, a back-pointer to
-// the owning slab (so the static release routes a freed slot home), and the intrusive freelist
-// link.
+// owner is the back-pointer the static release follows to route a freed slot home.
 template<typename T>
 struct loan_slab_node
 {
     alignas(T) std::byte storage[sizeof(T)];
-    io::loan_slot   control;
-    loan_slab<T>   *owner;
+    io::loan_slot control;
+    loan_slab<T> *owner;
     loan_slab_node *next_free;
 };
 
-// The fixed-capacity slab backing a loan_pool: the slot array (the ONLY allocation) is built once
-// at construction; thereafter pop/push reuse slots through an intrusive freelist with no further
-// allocation. The slab owns the array and the freelist head; a move steals both by pointer and
-// re-stamps every slot's owner so a later release routes home (a stale owner would push onto a
-// dead slab — a use-after-free).
+// The fixed-capacity slab backing a loan_pool. The slot array is the only allocation, built once at
+// construction; thereafter pop/push reuse slots through an intrusive freelist with no further
+// allocation. A move re-stamps every slot's owner so a later release routes home — a stale owner
+// would push onto a dead slab, a use-after-free.
 template<typename T>
 class loan_slab
 {
@@ -37,6 +34,7 @@ public:
 
     explicit loan_slab(std::size_t capacity)
             : m_slots(new node[capacity])
+            , m_free(nullptr)
             , m_capacity(capacity)
     {
         for(std::size_t i = 0; i < capacity; ++i)
@@ -93,15 +91,14 @@ public:
         m_free       = n;
     }
 
-    [[nodiscard]] std::size_t capacity() const noexcept
+    std::size_t capacity() const noexcept
     {
         return m_capacity;
     }
 
 private:
-    // Destroy the object in place and return its slot to the freelist. The node is recovered from
-    // the control member's offset, and its slab from the back-pointer stamped at build — the
-    // producer's concrete type is known statically here, never a cast across an erased boundary.
+    // The node is recovered from its control member's offset, its slab from the back-pointer — T is
+    // known statically here, never a cast across an erased boundary.
     static void release_slot(io::loan_slot *control) noexcept
     {
         node *n = reinterpret_cast<node *>(reinterpret_cast<std::byte *>(control) - offsetof(node, control));
@@ -116,8 +113,8 @@ private:
             m_slots[i].owner = this;
     }
 
-    node       *m_slots;
-    node       *m_free{};
+    node *m_slots;
+    node *m_free;
     std::size_t m_capacity;
 };
 

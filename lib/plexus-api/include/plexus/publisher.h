@@ -26,41 +26,27 @@
 
 namespace plexus {
 
-// The bytes endpoint is the publisher<void> specialization; publisher<> selects it via the
-// defaulted Codec (the default lives in node.h's forward declaration, seen first).
 template<typename Codec>
 class publisher;
 
-// pool_depth is required-with-default 8 (a provisional geometry the perf rig substantiates);
-// an explicit type_id overrides the codec's own (resolve_identity's explicit-wins precedence).
+// An explicit type_id overrides the codec's own. shm_geometry / capture are optional because
+// absence is meaningful: unset falls back to the node-level default, present overrides per topic.
 struct typed_publisher_options
 {
-    topic_qos                    qos{};
-    bool                         emit_source_identity = false;
-    std::size_t                  pool_depth           = 8;
+    topic_qos qos{};
+    bool emit_source_identity = false;
+    std::size_t pool_depth    = 8;
     std::optional<type_identity> type_id{};
-
-    // optional because ABSENCE is meaningful: unset falls back to the node-level default,
-    // present overrides per topic — "not declared" is distinct from "declared as the default".
-    // Producer-side same-host provisioning only, never wire-advertised, never RxO.
     std::optional<shm::shm_geometry> shm_geometry{};
-
-    // optional because ABSENCE is meaningful (the shm_geometry precedent): unset falls back to
-    // the node-level recording_qos, present overrides the recording fidelity for this topic.
     std::optional<recording_qos> capture{};
 };
 
-// The bytes publishing endpoint: the ctor is the registration (declare the topic, mint the gid);
-// publish is a direct forwarder call carrying no type erasure (only the cold retire is erased).
-//
 // LIFETIME: a publisher must NOT outlive its node (member-init aggregation, node ref first, so
 // reverse destruction retires the handle before the node). A moved-from handle is inert.
 template<>
 class publisher<void>
 {
 public:
-    // Templated over <Policy, NodeTs...> so it binds across the node's transport pack; the
-    // captured seam carries no Policy.
     template<typename Policy, typename... NodeTs>
     publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {}, bool emit_source_identity = false,
               std::optional<shm::shm_geometry> shm_geometry = std::nullopt)
@@ -70,7 +56,6 @@ public:
         m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt, shm_geometry ? &*shm_geometry : nullptr, std::nullopt);
     }
 
-    // A moved-from publisher has a null seam ctx and must not be published through.
     void publish(std::span<const std::byte> bytes)
     {
         m_seam.publish(m_seam.ctx, m_fqn, bytes);
@@ -102,13 +87,12 @@ public:
 
 private:
     io::endpoint_seam m_seam{};
-    std::string       m_fqn;
+    std::string m_fqn;
 };
 
-// The typed publishing endpoint: the ctor declares the topic with its resolved type identity (the
-// gate a strict subscriber matches) and owns a fixed loan pool. On pool exhaustion publish takes
-// the serialize path and bumps loan_exhausted() — never blocks, never allocates. Lifetime as
-// publisher<void>.
+// The ctor declares the topic with its resolved type identity (the gate a strict subscriber
+// matches) and owns a fixed loan pool. On pool exhaustion publish takes the serialize path and
+// bumps loan_exhausted() — never blocks, never allocates. Lifetime as publisher<void>.
 template<typename Codec>
 class publisher
 {
@@ -132,7 +116,7 @@ public:
     }
 
     // Borrow a slot to construct a value in place (zero-copy publish); an empty loan signals
-    // pool exhaustion, which the caller checks via valid() only to react to itself.
+    // pool exhaustion.
     template<typename... Args>
     detail::loan<value_type> borrow(Args &&...args)
     {
@@ -148,8 +132,8 @@ public:
         detail::publish_value(*this, value);
     }
 
-    // The readable exhaustion signal: publishes that degraded to the serialize path.
-    [[nodiscard]] std::size_t loan_exhausted() const noexcept
+    // Publishes that degraded to the serialize path.
+    std::size_t loan_exhausted() const noexcept
     {
         return m_loan_exhausted;
     }
@@ -181,13 +165,13 @@ private:
     template<typename P, typename V>
     friend void detail::publish_value(P &, const V &);
 
-    io::endpoint_seam             m_seam{};
-    std::string                   m_fqn;
-    Codec                         m_codec;
-    type_identity                 m_identity;
+    io::endpoint_seam m_seam{};
+    std::string m_fqn;
+    Codec m_codec;
+    type_identity m_identity;
     detail::loan_pool<value_type> m_pool;
-    wire_bytes<>                  m_scratch;
-    std::size_t                   m_loan_exhausted{};
+    wire_bytes<> m_scratch;
+    std::size_t m_loan_exhausted{};
 };
 
 }

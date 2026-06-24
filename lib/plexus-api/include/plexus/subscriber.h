@@ -26,35 +26,24 @@
 
 namespace plexus {
 
-// The bytes endpoint is the subscriber<void> specialization; subscriber<> selects it via the
-// defaulted Codec (the default lives in node.h's forward declaration, seen first).
 template<typename Codec>
 class subscriber;
 
 // posture is the typed attach gate (lenient attaches to an untyped producer; strict refuses).
-// on_decode_failure is optional because absence is meaningful: the default is drop+count+warn,
-// present hands the raw bytes + errc instead. An explicit type_id overrides the codec's own.
+// on_decode_failure absent is drop+count+warn, present hands the raw bytes + errc. An explicit
+// type_id overrides the codec's own; capture absent falls back to the node-level recording_qos.
 struct typed_subscriber_options
 {
-    io::subscriber_qos                                                              qos{};
-    io::attach_posture                                                              posture = io::attach_posture::lenient;
-    std::optional<type_identity>                                                    type_id{};
+    io::subscriber_qos qos{};
+    io::attach_posture posture = io::attach_posture::lenient;
+    std::optional<type_identity> type_id{};
     std::optional<std::function<void(std::span<const std::byte>, std::error_code)>> on_decode_failure{};
-
-    // optional because ABSENCE is meaningful (the shm_geometry/publisher precedent): unset
-    // falls back to the node-level recording_qos, present overrides this topic's fidelity.
     std::optional<recording_qos> capture{};
 };
 
-// The bytes subscribing endpoint: the CONSTRUCTOR installs a STANDING topic-level demand,
-// fanning the per-peer subscribe to every known peer now and to each later-discovered peer.
-// The callback accepts a 2- or 3-arg form, dispatched at construction with if constexpr (a
-// 2-arg callback costs nothing for the metadata it ignores).
-//
 // LIFETIME: a subscriber must NOT outlive its node (member-init aggregation, node ref first).
-// Dropping the handle retires the demand: it stops the callback and, when it was the last
-// local subscriber for the fqn, unsubscribes the topic from every fanned peer. A moved-from
-// handle is inert, so no callback ever fires through a dropped subscriber.
+// Dropping the handle retires the demand and, when it was the last local subscriber for the
+// fqn, unsubscribes the topic from every fanned peer.
 template<>
 class subscriber<void>
 {
@@ -68,12 +57,11 @@ public:
     template<typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const io::subscriber_qos &qos, Cb cb)
     {
-        // A 2-arg callback consumes no message_info, so it never wants the receive-side clock
-        // read. Carried on the LOCAL qos only — never the subscribe wire region.
+        // wants_message_info is carried on the LOCAL qos only, never the subscribe wire region.
         io::subscriber_qos local_qos = qos;
         local_qos.wants_message_info = std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>;
         io::endpoint_seam seam       = n.endpoint_seam_for();
-        const auto        rid =
+        const auto rid =
                 seam.register_subscriber(seam.ctx, fqn, local_qos, plexus::detail::adapt_bytes_callback(std::move(cb)), std::nullopt, nullptr, io::object_dispatch{}, std::nullopt);
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
@@ -94,17 +82,15 @@ private:
     plexus::detail::move_only_function<void()> m_retire;
 };
 
-// The typed subscribing endpoint: the CONSTRUCTOR installs a standing typed demand, registering
-// BOTH a bytes decode adapter and a process-tier object-dispatch entry (native-key-checked)
-// under ONE registration id, so retire is atomic. A decode failure is dropped+counted+warned.
-// The callback accepts a 1- or 2-arg form, the arity resolved ONCE at registration.
+// The ctor registers BOTH a bytes decode adapter and a process-tier object-dispatch entry
+// (native-key-checked) under ONE registration id, so retire is atomic.
 //
 // VIEW-T LIFETIME: a view-type value_type (aliasing the decode span / carrier slot) is valid
 // for the callback invocation ONLY; deferred consumption must copy out before the return.
 //
 // LIFETIME: a subscriber must NOT outlive its node. The decode state lives in a heap block the
 // handle owns; the node's adapters reference it by raw pointer and are retired before the block
-// is freed. A moved-from handle is inert.
+// is freed.
 template<typename Codec>
 class subscriber
 {
@@ -128,21 +114,20 @@ public:
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
 
-        const auto         identity = resolve_identity(m_state->codec, opts.type_id);
-        io::subscriber_qos qos      = opts.qos;
-        qos.posture                 = opts.posture;
-        // A 1-arg callback wants no message_info; a 2-arg wants it UNLESS the qos opted out.
-        // Carried on the LOCAL qos only — never the subscribe wire region.
+        const auto identity    = resolve_identity(m_state->codec, opts.type_id);
+        io::subscriber_qos qos = opts.qos;
+        qos.posture            = opts.posture;
+        // wants_message_info is carried on the LOCAL qos only, never the subscribe wire region.
         qos.wants_message_info = std::is_invocable_v<Cb &, const value_type &, const io::message_info &> && opts.qos.wants_message_info;
 
         io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto        rid  = plexus::detail::register_typed(seam, fqn, qos, m_state.get(), identity.type_id, &io::detail::type_key<value_type>,
+        const auto rid         = plexus::detail::register_typed(seam, fqn, qos, m_state.get(), identity.type_id, &io::detail::type_key<value_type>,
                                                                 opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
         m_retire               = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
     // Inbound frames whose decode failed — dropped, never a partial T.
-    [[nodiscard]] std::size_t decode_failed() const noexcept
+    std::size_t decode_failed() const noexcept
     {
         return m_state->decode_failed;
     }
@@ -160,7 +145,7 @@ public:
     }
 
 private:
-    std::unique_ptr<state>                     m_state;
+    std::unique_ptr<state> m_state;
     plexus::detail::move_only_function<void()> m_retire;
 };
 

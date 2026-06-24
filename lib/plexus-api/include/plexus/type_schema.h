@@ -8,27 +8,20 @@
 
 namespace plexus {
 
-// The host-side, consumer-declared self-description of one wire type: the offline-decode
-// key a recorder writes into the stream preamble so a projector resolves a codec/schema for
-// the raw bytes a sample carries. A plain designated-initializer value aggregate (no raw
-// pointers, no owning members), the public sibling of recording_qos / type_identity. Core
-// never interprets the fields — it lays them down verbatim and reads them back.
+// A consumer-declared self-description of one wire type, written into a recorder's stream
+// preamble so an offline projector resolves a codec/schema for a sample's raw bytes. An empty
+// schema_encoding declares an opaque type; schema_name / schema_data are meaningful only
+// beside a non-empty schema_encoding.
 //
-// The fields follow the required-vs-meaningful-absence discipline:
-//   - type_id + message_encoding are required to decode a sample (the key the sample's
-//     recorded type_id resolves against, and how its bytes are framed for the projector);
-//   - schema_encoding "" declares an opaque type (schemaId 0) the projector treats as raw —
-//     schema_name / schema_data are meaningful ONLY beside a non-empty schema_encoding.
-//
-// LIFETIME: the string_views and span ALIAS the caller's bytes; they are copied into the
-// stream preamble synchronously inside make_recorder's returned recorder ctor, so the
-// referenced bytes must outlive that call (they need not outlive the recorder).
+// The string_views and span alias the caller's bytes and are copied into the preamble
+// synchronously inside the recorder ctor make_recorder returns, so the referenced bytes must
+// outlive that call (they need not outlive the recorder).
 struct type_schema
 {
-    std::uint64_t              type_id{};
-    std::string_view           message_encoding{};
-    std::string_view           schema_name{};
-    std::string_view           schema_encoding{};
+    std::uint64_t type_id{};
+    std::string_view message_encoding{};
+    std::string_view schema_name{};
+    std::string_view schema_encoding{};
     std::span<const std::byte> schema_data{};
 };
 

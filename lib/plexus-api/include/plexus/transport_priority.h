@@ -7,8 +7,6 @@
 
 namespace plexus {
 
-// The reordered transport preference. A pure type-level tag carrying no state; delivered as a
-// ctor tag and read by type only.
 template<typename... Ordered>
 struct transport_priority
 {
@@ -16,14 +14,11 @@ struct transport_priority
 
 namespace detail {
 
-// How many times T appears in a pack.
 template<typename T, typename... Pack>
 inline constexpr std::size_t count_in = (0 + ... + (std::is_same_v<T, Pack> ? 1 : 0));
 
-// Ordered... is a permutation of Declared... iff the sizes match AND every declared type
-// appears exactly once among Ordered AND every ordered type appears exactly once among
-// Declared. The two symmetric folds together reject a forgotten transport (count 0), a
-// duplicate (count 2), and an extra/unknown type (size mismatch + the symmetric fold).
+// The two symmetric folds together reject a forgotten transport (count 0), a duplicate
+// (count 2), and an extra/unknown type (size mismatch).
 template<typename Ordered, typename Declared>
 struct is_permutation_of;
 
@@ -35,8 +30,6 @@ struct is_permutation_of<transport_priority<Ordered...>, std::tuple<Declared...>
 
 }
 
-// The builder: NodeType pins the declared transport pack; create<Ordered...>() validates the
-// ordering is a permutation of that pack at compile time and mints the tag.
 template<typename NodeType>
 struct priority_builder
 {

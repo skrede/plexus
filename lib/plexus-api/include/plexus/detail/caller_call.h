@@ -22,32 +22,28 @@
 
 namespace plexus {
 
-// The wire+local attribution split for a reply, mirroring io::message_info. Populated honestly: a
-// field the response leg does not surface stays in its documented absent state rather than a
-// fabricated value. Only provider_identity (the resolved provider node_id) and reception_timestamp
-// (receiver-stamped) are genuine; the rest are not echoed on the rpc_response wire / on_response
-// seam, so they stay absent (0 / false).
+// Only provider_identity and reception_timestamp are genuine; the response leg does not echo the
+// rest, so they stay absent (0 / false) rather than carrying a fabricated value.
 struct reply_info
 {
     std::optional<publisher_gid> provider_identity{};
-    std::uint64_t                source_timestamp{};
-    std::uint64_t                reception_timestamp{};
-    bool                         from_intra_process{};
+    std::uint64_t source_timestamp{};
+    std::uint64_t reception_timestamp{};
+    bool from_intra_process{};
 };
 
-// A VIEW into the response frame's return bytes (valid for the completion invocation only, never
-// retained) plus the reply_info attribution.
+// bytes views the response frame's return bytes — valid for the completion invocation only, never
+// retained.
 struct reply
 {
     std::span<const std::byte> bytes;
-    reply_info                 info;
+    reply_info info;
 };
 
 namespace detail {
 
-// Route the bytes reply leg to the completion: an ABSENT wire status is the facade no_provider
-// verdict that never rode the wire; success carries the return bytes + provider attribution; any
-// other status maps through from_rpc_status. RELOCATION of caller<void>::dispatch.
+// An absent wire status is the no_provider verdict that never rode the wire; success carries the
+// return bytes plus provider attribution; any other status maps through from_rpc_status.
 template<typename Completion>
 void dispatch_bytes_call(const io::endpoint_seam &seam, std::string_view fqn, std::span<const std::byte> param, Completion &&completion,
                          std::optional<std::chrono::nanoseconds> deadline)
@@ -73,9 +69,6 @@ void dispatch_bytes_call(const io::endpoint_seam &seam, std::string_view fqn, st
             deadline);
 }
 
-// Route the typed reply to an expected: an absent status is the no_provider verdict; success
-// decodes Res via the codec (a decode failure -> deserialize_failed); the error leg is handled
-// below.
 template<typename Res, typename ResponseCodec>
 expected<Res, std::error_code> resolve_typed_reply(std::optional<wire::rpc_status> status, std::span<const std::byte> bytes, ResponseCodec &res_codec)
 {
@@ -89,9 +82,9 @@ expected<Res, std::error_code> resolve_typed_reply(std::optional<wire::rpc_statu
             return result{std::move(value)};
         return result{unexpect, make_error_code(call_errc::deserialize_failed)};
     }
-    // A well-formed varint error-leg reconstructs the provider's error VALUE under
-    // provider_category (value preserved, category erased); an empty/MALFORMED leg falls back to
-    // from_rpc_status (the interop fallback — a hostile varint never crashes nor half-decodes).
+    // A well-formed varint error-leg reconstructs the provider's error value under
+    // provider_category (value preserved, category erased); an empty or malformed leg falls back to
+    // from_rpc_status, so a hostile varint never crashes nor half-decodes.
     if(*status == wire::rpc_status::error)
     {
         std::size_t consumed = 0;
@@ -101,9 +94,8 @@ expected<Res, std::error_code> resolve_typed_reply(std::optional<wire::rpc_statu
     return result{unexpect, make_error_code(from_rpc_status(*status))};
 }
 
-// Dispatch the encoded request and route the reply through resolve_typed_reply. The codec is
-// copied into the completion so the closure stays self-contained against a mid-flight move of the
-// handle. RELOCATION of the typed caller's dispatch.
+// The codec is copied into the completion so the closure stays self-contained against a mid-flight
+// move of the handle.
 template<typename Res, typename ResponseCodec, typename Completion>
 void dispatch_typed_call(const io::endpoint_seam &seam, std::string_view fqn, std::span<const std::byte> encoded, ResponseCodec res_codec, Completion &&completion,
                          std::optional<std::chrono::nanoseconds> deadline)
