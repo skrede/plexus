@@ -18,10 +18,8 @@
 
 namespace plexus::crypto::detail {
 
-// The per-datagram seal/open AEAD path for datagram_authenticated_channel, relocated by
-// friendship. RELOCATION ONLY — the seal/open calls, the nonce construction, the epoch/key
-// handling, and the RFC 4303/9147 verify-before-commit order are byte-identical to the channel
-// bodies they replace.
+// The per-datagram seal/open AEAD path for datagram_authenticated_channel: the seal/open calls, the
+// nonce construction, the epoch/key handling, and the RFC 4303/9147 verify-before-commit order.
 
 template<typename Ch>
 void emit_drop(Ch &c, io::detail::drop_cause cause, io::locality transport = io::locality::remote)
@@ -94,16 +92,16 @@ void datagram_on_lower_data(Ch &c, std::span<const std::byte> bytes)
         emit_drop(c, io::detail::drop_cause::tamper);
         return;
     }
-    const std::uint64_t seq        = Ch::read_seq(bytes.data());
-    const auto          epoch_byte = static_cast<std::uint8_t>(bytes[Ch::k_seq_len]);
-    const auto          header     = bytes.subspan(Ch::k_seq_len + 1, wire::header_size);
-    const auto          sealed     = bytes.subspan(Ch::k_seq_len + 1 + wire::header_size);
+    const std::uint64_t seq = Ch::read_seq(bytes.data());
+    const auto epoch_byte   = static_cast<std::uint8_t>(bytes[Ch::k_seq_len]);
+    const auto header       = bytes.subspan(Ch::k_seq_len + 1, wire::header_size);
+    const auto sealed       = bytes.subspan(Ch::k_seq_len + 1 + wire::header_size);
 
     // RFC 4303 §3.4.3 order: verify the tag BEFORE committing any replay/epoch state. The
     // candidate key is resolved without advancing the epoch; only a successful open commits the
     // epoch advance and marks the sequence seen.
     aead_key candidate{};
-    bool     advances_epoch = false;
+    bool advances_epoch = false;
     if(!candidate_key_for(c, epoch_byte, candidate, advances_epoch))
     {
         ++c.m_tamper_dropped;

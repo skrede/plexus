@@ -79,7 +79,7 @@ public:
         m_lower.close();
     }
 
-    [[nodiscard]] io::endpoint remote_endpoint() const
+    io::endpoint remote_endpoint() const
     {
         return m_lower.remote_endpoint();
     }
@@ -101,15 +101,15 @@ public:
         m_on_protocol_close = std::move(cb);
     }
 
-    [[nodiscard]] std::uint32_t send_epoch() const noexcept
+    std::uint32_t send_epoch() const noexcept
     {
         return m_send_epoch;
     }
-    [[nodiscard]] std::uint64_t send_sequence() const noexcept
+    std::uint64_t send_sequence() const noexcept
     {
         return m_send_seq;
     }
-    [[nodiscard]] std::size_t backpressured() const
+    std::size_t backpressured() const
     {
         return m_lower.backpressured();
     }
@@ -131,21 +131,21 @@ private:
         m_lower.on_data([this](std::span<const std::byte> bytes) { detail::stream_aead_on_lower_data(*this, bytes); });
     }
 
-    Lower                                                               &m_lower;
-    aead_cipher_id                                                       m_cipher;
-    aead_key                                                             m_send_key;
-    aead_key                                                             m_recv_key;
-    std::uint32_t                                                        m_send_epoch;
-    std::uint32_t                                                        m_recv_epoch;
-    std::uint64_t                                                        m_rekey_threshold;
-    std::uint64_t                                                        m_send_seq{0};
-    std::uint64_t                                                        m_recv_seq{0};
-    std::vector<std::byte>                                               m_seal_scratch;
-    std::vector<std::byte>                                               m_open_scratch;
-    std::vector<std::byte>                                               m_send_frame;
-    std::vector<std::byte>                                               m_recv_frame;
+    Lower &m_lower;
+    aead_cipher_id m_cipher;
+    aead_key m_send_key;
+    aead_key m_recv_key;
+    std::uint32_t m_send_epoch;
+    std::uint32_t m_recv_epoch;
+    std::uint64_t m_rekey_threshold;
+    std::uint64_t m_send_seq{0};
+    std::uint64_t m_recv_seq{0};
+    std::vector<std::byte> m_seal_scratch;
+    std::vector<std::byte> m_open_scratch;
+    std::vector<std::byte> m_send_frame;
+    std::vector<std::byte> m_recv_frame;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void(wire::close_cause)>          m_on_protocol_close;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
 };
 
 }

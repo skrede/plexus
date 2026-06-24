@@ -35,7 +35,7 @@ using shared_ssl_ctx = std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)>;
 // this same namespace returns an asio::ssl::context for the same parameter list —
 // two functions differing only in return type are ill-formed, so the DTLS variant
 // that hands back a raw refcounted SSL_CTX* carries a distinct name.
-[[nodiscard]] shared_ssl_ctx share_dtls_context(const tls_credential &cred);
+shared_ssl_ctx share_dtls_context(const tls_credential &cred);
 
 }
 

@@ -44,13 +44,13 @@ public:
     }
 
     template<typename Io>
-    [[nodiscard]] Stream make_stream(Io &io)
+    Stream make_stream(Io &io)
     {
         return Stream{io, m_ssl_ctx};
     }
 
     template<typename Io, typename Socket>
-    [[nodiscard]] Stream make_stream(Io &io, Socket connected)
+    Stream make_stream(Io &io, Socket connected)
     {
         (void)io;
         return Stream{std::move(connected), m_ssl_ctx};
@@ -131,9 +131,9 @@ private:
                                    });
     }
 
-    ::asio::ssl::context                       m_ssl_ctx;
-    io::detail::handshake_gate                 m_gate; // open-before-data outbound buffer
-    io::detail::handshake_gate::drain_fn       m_drain;
+    ::asio::ssl::context m_ssl_ctx;
+    io::detail::handshake_gate m_gate; // open-before-data outbound buffer
+    io::detail::handshake_gate::drain_fn m_drain;
     plexus::detail::move_only_function<void()> m_on_ready;
 };
 

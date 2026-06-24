@@ -71,7 +71,7 @@ public:
     void start(const io::endpoint &bind_ep)
     {
         std::error_code ec;
-        auto            ep = plexus::asio::detail::parse(bind_ep.address, ec);
+        auto ep = plexus::asio::detail::parse(bind_ep.address, ec);
         if(ec)
             return report(ec);
         m_acceptor.open(ep.protocol(), ec);
@@ -97,10 +97,10 @@ public:
         m_accepting.clear();
     }
 
-    [[nodiscard]] uint16_t port() const
+    uint16_t port() const
     {
         std::error_code ec;
-        auto            ep = m_acceptor.local_endpoint(ec);
+        auto ep = m_acceptor.local_endpoint(ec);
         return ec ? 0u : ep.port();
     }
 
@@ -172,18 +172,18 @@ private:
             m_on_error(plexus::asio::detail::map_error(ec));
     }
 
-    ::asio::io_context                                                    &m_io;
-    ::asio::ip::tcp::acceptor                                              m_acceptor;
-    const tls_credential                                                  &m_cred;
-    stream::stream_inbound_config                                          m_cfg;
-    bool                                                                   m_no_delay;
-    io::congestion                                                         m_congestion;
-    io::egress_capacity                                                    m_egress_capacity;
-    plexus::asio::stream_socket_options                                    m_socket_options;
-    io::pending_dial_registry<tls_channel, std::monostate>                 m_accepting; // accepted-table owner
+    ::asio::io_context &m_io;
+    ::asio::ip::tcp::acceptor m_acceptor;
+    const tls_credential &m_cred;
+    stream::stream_inbound_config m_cfg;
+    bool m_no_delay;
+    io::congestion m_congestion;
+    io::egress_capacity m_egress_capacity;
+    plexus::asio::stream_socket_options m_socket_options;
+    io::pending_dial_registry<tls_channel, std::monostate> m_accepting; // accepted-table owner
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(io::io_error)>                 m_on_error;
-    bool                                                                   m_running{false};
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    bool m_running{false};
 };
 
 }

@@ -12,9 +12,9 @@
 
 namespace plexus::tls::detail {
 
-// The connect / handshake-pump + dial-resolution glue for tls_transport, relocated by friendship:
-// each helper reaches the listener/credential/pending-dial members through the transport
-// reference. Names carry a tls_ prefix where a bare name would collide with dtls_transport's glue.
+// The connect / handshake-pump + dial-resolution glue for tls_transport: each helper reaches the
+// listener/credential/pending-dial members through the transport reference. Names carry a tls_
+// prefix where a bare name would collide with dtls_transport's glue.
 
 template<typename T>
 void tls_report_dial_fail(T &t, const io::endpoint &ep, io::io_error e)
@@ -30,7 +30,7 @@ template<typename T>
 void tls_resolve_dial(T &t, const io::endpoint &ep, tls_channel *raw)
 {
     const io::endpoint dialed = ep;
-    auto               ch     = t.m_pending.resolve(raw);
+    auto ch                   = t.m_pending.resolve(raw);
     if(ch && t.m_on_dialed)
         t.m_on_dialed(std::move(ch), dialed);
 }

@@ -44,18 +44,9 @@ struct ssl_st;
 
 namespace plexus::tls {
 
-// over-limit: one cohesive DTLS channel surface; the byte_channel verbs + the OpenSSL/BIO/gate/
-// reassembler member state are one whole and the record-pump bodies already live in the .cpp
-// exception (no inline body remains to relocate), so the declaration surface + its member
-// invariants cannot be split without scattering the channel's shared SSL/fragment state.
-//
-// byte_channel for the secure-best_effort DTLS datagram transport: a per-peer facade over the
-// shared UDP socket, driving an OpenSSL DTLS 1.2 state machine through a BIO pair (the record pump
-// lives in the .cpp with raw OpenSSL). Single-owner, bare `this`, posted on_data. Inbound
-// BIO_write+SSL_read drain; outbound SSL_write+BIO_read drain to server.send_to; complete fires
-// ONCE on init-finished AND verify_result==X509_V_OK AND a non-null peer cert (else fail-closed);
-// DTLSv1_get_timeout arms the retransmit timer. After completion the peer SPKI digest is node_id
-// and the cert subject node_name — NO plexus wire frame crosses the datagram channel.
+// complete fires ONCE on init-finished AND verify_result==X509_V_OK AND a non-null peer cert
+// (else fail-closed). After completion the peer SPKI digest is node_id and the cert subject
+// node_name — NO plexus wire frame crosses the datagram channel.
 class dtls_channel
 {
 public:
@@ -95,11 +86,10 @@ public:
     // internal BIO). No on_closed post (a this-capturing post could outlive the channel).
     ~dtls_channel();
 
-    // The seven byte_channel verbs.
     void send(std::span<const std::byte> bytes);
     void close();
 
-    [[nodiscard]] io::endpoint remote_endpoint() const;
+    io::endpoint remote_endpoint() const;
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
@@ -128,14 +118,14 @@ public:
 
     // A fire-through datagram channel keeps no bounded egress queue (the handshake_gate buffers
     // only during the handshake), so it reports 0 — "always accepts".
-    [[nodiscard]] std::size_t backpressured() const noexcept
+    std::size_t backpressured() const noexcept
     {
         return 0;
     }
 
     // The stable per-construction egress-scheduler key (unique per object so a reused heap address
     // cannot bleed a stale band entry across).
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    std::uint64_t scheduler_key() const noexcept
     {
         return m_scheduler_key;
     }
@@ -156,25 +146,25 @@ public:
     // recv loop — the channel owns no socket): feed the external BIO + drive SSL_read.
     void deliver_inbound(std::span<const std::byte> datagram);
 
-    [[nodiscard]] const ::asio::ip::udp::endpoint &dest() const noexcept
+    const ::asio::ip::udp::endpoint &dest() const noexcept
     {
         return m_dest;
     }
-    [[nodiscard]] bool is_open() const noexcept
+    bool is_open() const noexcept
     {
         return m_open;
     }
-    [[nodiscard]] bool complete() const noexcept
+    bool complete() const noexcept
     {
         return m_complete_fired;
     }
 
     // The cert-derived peer identity, valid only after on_external_complete fired.
-    [[nodiscard]] const node_id &peer_node_id() const noexcept
+    const node_id &peer_node_id() const noexcept
     {
         return m_node_id;
     }
-    [[nodiscard]] const std::string &peer_node_name() const noexcept
+    const std::string &peer_node_name() const noexcept
     {
         return m_node_name;
     }
@@ -182,7 +172,7 @@ public:
 private:
     // The configurable SSL_set_mtu record budget (both set-points consult this so unpinning
     // honors the ctor value at construction AND at the post-handshake completion re-assert).
-    [[nodiscard]] long dtls_mtu() const noexcept
+    long dtls_mtu() const noexcept
     {
         return static_cast<long>(m_record_mtu);
     }
@@ -190,7 +180,7 @@ private:
     void secure_send(std::span<const std::byte> bytes);
     // The post-handshake encrypted per-record budget (DTLS_get_data_mtu, capped by the logical
     // ceiling); the fragmenter splits against THIS so each fragment rides one DTLS record.
-    [[nodiscard]] std::size_t record_budget() const noexcept;
+    std::size_t record_budget() const noexcept;
     // Split an oversize-but-fragmentable frame across numbered records (each one FRAGMENTED-bit
     // envelope); a frame beyond the bounded max-message size is rejected, not fragmented.
     void send_large(std::span<const std::byte> bytes);
@@ -208,21 +198,21 @@ private:
     void publish_cookie_ex_data();
     void capture_peer_identity();
 
-    ::asio::io_context          &m_io;
-    plexus::asio::udp_server    &m_server;
-    ::asio::ip::udp::endpoint    m_dest;
+    ::asio::io_context &m_io;
+    plexus::asio::udp_server &m_server;
+    ::asio::ip::udp::endpoint m_dest;
     io::security::cookie_secret &m_cookie_state;
-    role                         m_role;
-    std::size_t                  m_max_payload;
-    std::size_t                  m_record_mtu;
-    std::size_t                  m_max_message_bytes;
-    std::size_t                  m_reassembly_budget;
-    std::chrono::milliseconds    m_reassembly_timeout;
-    std::uint64_t                m_scheduler_key{io::detail::next_scheduler_key()}; // stable per-construction egress key
+    role m_role;
+    std::size_t m_max_payload;
+    std::size_t m_record_mtu;
+    std::size_t m_max_message_bytes;
+    std::size_t m_reassembly_budget;
+    std::chrono::milliseconds m_reassembly_timeout;
+    std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()}; // stable per-construction egress key
 
-    detail::shared_ssl_ctx   m_ssl_ctx; // up_ref'd shared SSL_CTX
-    ssl_st                  *m_ssl{nullptr};
-    void                    *m_external_bio{nullptr}; // BIO* (opaque in the header)
+    detail::shared_ssl_ctx m_ssl_ctx; // up_ref'd shared SSL_CTX
+    ssl_st *m_ssl{nullptr};
+    void *m_external_bio{nullptr}; // BIO* (opaque in the header)
     plexus::asio::asio_timer m_retransmit;
 
     // The open-before-data gate, in DROP-PRESERVING / ready-edge mode: a pre-ready send is
@@ -241,23 +231,23 @@ private:
     // encodes into m_frag_scratch (reused); the bounded reassembler (built lazily on the first
     // inbound fragment) sits on the decrypted drain_inbound path. Its timeout timer is cancelled
     // in the dtor FIRST so a post-teardown fire is a guarded no-op.
-    std::vector<std::byte>            m_frag_scratch;  // reused fragment-encode buffer
-    std::uint16_t                     m_out_msg_id{0}; // per-message fragment grouping id (sender)
+    std::vector<std::byte> m_frag_scratch; // reused fragment-encode buffer
+    std::uint16_t m_out_msg_id{0};         // per-message fragment grouping id (sender)
     std::unique_ptr<reassembler_type> m_reassembler;
 
     // The verify-time depth-0 leaf facts the verify callback stashes through the per-instance SSL
     // ex_data slot (the ONE cert extraction per handshake). The completion edge derives node_id
     // (first 16 bytes of spki_sha256) + node_name (subject) from it.
     io::security::cert_facts m_peer_facts;
-    node_id                  m_node_id{};
-    std::string              m_node_name;
+    node_id m_node_id{};
+    std::string m_node_name;
 
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                           m_on_closed;
-    plexus::detail::move_only_function<void()>                           m_on_teardown;
-    plexus::detail::move_only_function<void(io::io_error)>               m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)>          m_on_protocol_close;
-    plexus::detail::move_only_function<void()>                           m_on_external_complete;
+    plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void()> m_on_teardown;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
+    plexus::detail::move_only_function<void()> m_on_external_complete;
 
     bool m_open{true};
     bool m_complete_fired{false};

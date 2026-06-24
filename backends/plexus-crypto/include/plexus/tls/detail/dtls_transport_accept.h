@@ -17,9 +17,9 @@
 
 namespace plexus::tls::detail {
 
-// The listener / accept / cookie-exchange + dial-resolution glue for dtls_transport, relocated by
-// friendship: each helper reaches the server/demux/dial-table members through the transport
-// reference. The OpenSSL handshake pump stays in dtls_channel.
+// The listener / accept / cookie-exchange + dial-resolution glue for dtls_transport: each helper
+// reaches the server/demux/dial-table members through the transport reference. The OpenSSL
+// handshake pump stays in dtls_channel.
 
 template<typename T>
 void report_dial_fail(T &t, const io::endpoint &ep, io::io_error e)
@@ -79,7 +79,7 @@ void drop_accept(T &t, dtls_channel *raw)
 template<typename T>
 void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<const std::byte> bytes)
 {
-    auto  ch  = std::make_unique<dtls_channel>(t.m_io, t.m_server, from, t.m_cred, t.m_cookie, dtls_channel::role::server, t.m_max_payload, dtls_channel::default_record_mtu,
+    auto ch   = std::make_unique<dtls_channel>(t.m_io, t.m_server, from, t.m_cred, t.m_cookie, dtls_channel::role::server, t.m_max_payload, dtls_channel::default_record_mtu,
                                                t.m_max_message_bytes, t.m_reassembly_budget);
     auto *raw = ch.get();
     if(!t.m_demux.insert(from, raw))
@@ -110,7 +110,7 @@ template<typename T>
 void resolve_dial(T &t, const io::endpoint &ep, dtls_channel *raw)
 {
     const io::endpoint dialed = ep;
-    auto               ch     = t.m_registry.resolve(raw);
+    auto ch                   = t.m_registry.resolve(raw);
     if(!ch)
         return;
     if(t.m_on_dialed)

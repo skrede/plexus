@@ -38,7 +38,7 @@ struct tls_traits
     static io::endpoint format_endpoint(const stream_type &stream)
     {
         std::error_code ec;
-        auto            ep = stream.lowest_layer().remote_endpoint(ec);
+        auto ep = stream.lowest_layer().remote_endpoint(ec);
         if(ec)
             return {"tls", ""};
         return {"tls", ep.address().to_string() + ":" + std::to_string(ep.port())};

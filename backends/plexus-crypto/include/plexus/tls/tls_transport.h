@@ -89,7 +89,7 @@ public:
     // scheme (a network path, so locality confinement excludes it). Read at compile time to route.
     using channel_type = tls_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"tls"};
-    static constexpr io::transport_kind              mux_tier = io::transport_kind::remote;
+    static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> cb)
     {
@@ -113,7 +113,7 @@ public:
         m_listener.start(ep);
     }
 
-    [[nodiscard]] uint16_t port() const
+    uint16_t port() const
     {
         return m_listener.port();
     }
@@ -121,10 +121,10 @@ public:
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;
-        auto            target = plexus::asio::detail::parse(ep.address, pec);
+        auto target = plexus::asio::detail::parse(ep.address, pec);
         if(pec)
             return detail::tls_report_dial_fail(*this, ep, plexus::asio::detail::map_error(pec));
-        auto  ch  = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
+        auto ch   = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
         raw->socket().async_connect(target,
                                     [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable
@@ -148,9 +148,6 @@ public:
     }
 
 private:
-    // The connect/handshake-pump + dial-resolution glue is relocated to
-    // detail/tls_transport_accept.h (relocation by friendship): each helper reaches the
-    // listener/credential/pending-dial members below through the transport reference.
     template<typename U>
     friend void detail::tls_report_dial_fail(U &, const io::endpoint &, io::io_error);
     template<typename U>
@@ -160,19 +157,19 @@ private:
     template<typename U>
     friend void detail::tls_run_handshake(U &, std::unique_ptr<tls_channel>, tls_channel *, const io::endpoint &);
 
-    ::asio::io_context                                                                          &m_io;
-    const tls_credential                                                                        &m_cred;
-    tls_listener                                                                                 m_listener;
-    stream::stream_inbound_config                                                                m_cfg;
-    bool                                                                                         m_no_delay;
-    io::congestion                                                                               m_congestion;
-    io::egress_capacity                                                                          m_egress_capacity;
-    plexus::asio::stream_socket_options                                                          m_socket_options;
-    io::pending_dial_registry<tls_channel, std::monostate>                                       m_pending; // transport-owned half-open dials
-    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)>                       m_on_accepted;
+    ::asio::io_context &m_io;
+    const tls_credential &m_cred;
+    tls_listener m_listener;
+    stream::stream_inbound_config m_cfg;
+    bool m_no_delay;
+    io::congestion m_congestion;
+    io::egress_capacity m_egress_capacity;
+    plexus::asio::stream_socket_options m_socket_options;
+    io::pending_dial_registry<tls_channel, std::monostate> m_pending; // transport-owned half-open dials
+    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)>                 m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)>                                       m_on_error;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
 };
 
 }

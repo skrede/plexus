@@ -19,7 +19,7 @@ namespace plexus::tls::detail {
 // NAT-shared address. The first byte is the total payload length the cookie cb
 // reads back. This bridges asio -> bytes for the cookie; the core cookie_secret
 // binds the already-packed peer-addr span.
-[[nodiscard]] std::vector<unsigned char> pack_peer_addr(const ::asio::ip::udp::endpoint &ep);
+std::vector<unsigned char> pack_peer_addr(const ::asio::ip::udp::endpoint &ep);
 
 }
 

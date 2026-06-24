@@ -15,10 +15,9 @@
 
 namespace plexus::crypto::detail {
 
-// The per-frame seal/open AEAD path for the stream authenticated_channel, relocated by
-// friendship. RELOCATION ONLY — the seal/open calls, the nonce construction, the rekey-forward
-// epoch/key chain (RFC 9147), and the tag-fail-to-protocol-close routing are byte-identical to the
-// channel bodies they replace.
+// The per-frame seal/open AEAD path for the stream authenticated_channel: the seal/open calls, the
+// nonce construction, the rekey-forward epoch/key chain (RFC 9147), and the tag-fail-to-protocol-
+// close routing.
 
 template<typename Ch>
 void rekey_send(Ch &c)

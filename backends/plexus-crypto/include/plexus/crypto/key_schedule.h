@@ -5,8 +5,8 @@
 
 #include <span>
 #include <array>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 namespace plexus::crypto {
 
@@ -42,8 +42,8 @@ struct derived_keys
 // protocol version, both nonces); a tampered offer derives different keys, so the
 // downgrade fails closed at the first AEAD frame. Its assembly is the handshake
 // bridge's job — it is PASSED IN here.
-[[nodiscard]] bool derive_keys(std::span<const std::byte> psk, std::span<const std::byte, 16> initiator_nonce, std::span<const std::byte, 16> responder_nonce,
-                               std::span<const std::byte, 32> transcript_digest, derived_keys &out);
+bool derive_keys(std::span<const std::byte> psk, std::span<const std::byte, 16> initiator_nonce, std::span<const std::byte, 16> responder_nonce,
+                 std::span<const std::byte, 32> transcript_digest, derived_keys &out);
 
 }
 

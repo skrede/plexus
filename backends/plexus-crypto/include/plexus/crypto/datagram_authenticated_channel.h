@@ -73,7 +73,7 @@ public:
         m_lower.close();
     }
 
-    [[nodiscard]] io::endpoint remote_endpoint() const
+    io::endpoint remote_endpoint() const
     {
         return m_lower.remote_endpoint();
     }
@@ -106,19 +106,19 @@ public:
         m_on_drop = std::move(cb);
     }
 
-    [[nodiscard]] std::size_t dropped_count() const noexcept
+    std::size_t dropped_count() const noexcept
     {
         return m_replay_dropped + m_tamper_dropped;
     }
-    [[nodiscard]] std::size_t replay_count() const noexcept
+    std::size_t replay_count() const noexcept
     {
         return m_replay_dropped;
     }
-    [[nodiscard]] std::size_t tamper_dropped_count() const noexcept
+    std::size_t tamper_dropped_count() const noexcept
     {
         return m_tamper_dropped;
     }
-    [[nodiscard]] std::size_t backpressured() const
+    std::size_t backpressured() const
     {
         return m_lower.backpressured();
     }
@@ -155,21 +155,21 @@ private:
         return seq;
     }
 
-    Lower                                                                   &m_lower;
-    aead_cipher_id                                                           m_cipher;
-    aead_key                                                                 m_send_key;
-    aead_key                                                                 m_recv_key;
-    std::uint32_t                                                            m_send_epoch;
-    std::uint32_t                                                            m_recv_epoch;
-    std::uint64_t                                                            m_send_seq{0};
-    anti_replay_window<>                                                     m_window;
-    std::size_t                                                              m_replay_dropped{0};
-    std::size_t                                                              m_tamper_dropped{0};
-    std::vector<std::byte>                                                   m_seal_scratch;
-    std::vector<std::byte>                                                   m_open_scratch;
-    std::vector<std::byte>                                                   m_send_frame;
-    std::vector<std::byte>                                                   m_recv_frame;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)>     m_on_data;
+    Lower &m_lower;
+    aead_cipher_id m_cipher;
+    aead_key m_send_key;
+    aead_key m_recv_key;
+    std::uint32_t m_send_epoch;
+    std::uint32_t m_recv_epoch;
+    std::uint64_t m_send_seq{0};
+    anti_replay_window<> m_window;
+    std::size_t m_replay_dropped{0};
+    std::size_t m_tamper_dropped{0};
+    std::vector<std::byte> m_seal_scratch;
+    std::vector<std::byte> m_open_scratch;
+    std::vector<std::byte> m_send_frame;
+    std::vector<std::byte> m_recv_frame;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
 };
 

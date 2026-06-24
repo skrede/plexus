@@ -18,7 +18,7 @@ inline bool derive_forward(const aead_key &from, aead_key &out)
 {
     std::array<std::byte, 16> nonce{};
     std::array<std::byte, 32> transcript{};
-    derived_keys              d{};
+    derived_keys d{};
     if(!derive_keys(std::span<const std::byte>{from}, nonce, nonce, transcript, d))
         return false;
     out = d.k_send;

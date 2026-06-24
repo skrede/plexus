@@ -45,7 +45,7 @@ public:
     // replay/too-old sequence is rejected without sliding the window (RFC 4303 §3.4.3:
     // the ICV is verified before the replay window is advanced); check_and_set then
     // commits the slide only after a successful open.
-    [[nodiscard]] replay_verdict would_accept(std::uint64_t seq) const noexcept
+    replay_verdict would_accept(std::uint64_t seq) const noexcept
     {
         if(!m_seen_any)
             return replay_verdict::accept;
@@ -59,7 +59,7 @@ public:
         return replay_verdict::accept;
     }
 
-    [[nodiscard]] replay_verdict check_and_set(std::uint64_t seq) noexcept
+    replay_verdict check_and_set(std::uint64_t seq) noexcept
     {
         if(!m_seen_any)
         {
@@ -91,7 +91,7 @@ public:
         m_seen_any = false;
     }
 
-    [[nodiscard]] std::uint64_t highest() const noexcept
+    std::uint64_t highest() const noexcept
     {
         return m_highest;
     }
@@ -106,7 +106,7 @@ private:
     {
         m_bitmap[b / k_word_bits] |= (1ull << (b % k_word_bits));
     }
-    [[nodiscard]] bool test_bit(std::size_t b) const noexcept
+    bool test_bit(std::size_t b) const noexcept
     {
         return (m_bitmap[b / k_word_bits] & (1ull << (b % k_word_bits))) != 0u;
     }
@@ -128,7 +128,7 @@ private:
         for(std::size_t i = k_words; i-- > 0;)
         {
             const std::size_t src = i - word_shift;
-            std::uint64_t     w   = (i >= word_shift) ? (m_bitmap[src] << bit_shift) : 0u;
+            std::uint64_t w       = (i >= word_shift) ? (m_bitmap[src] << bit_shift) : 0u;
             if(bit_shift != 0 && i > word_shift)
                 w |= m_bitmap[src - 1] >> (k_word_bits - bit_shift);
             m_bitmap[i] = w;
@@ -147,8 +147,8 @@ private:
     }
 
     std::array<std::uint64_t, k_words> m_bitmap{};
-    std::uint64_t                      m_highest{0};
-    bool                               m_seen_any{false};
+    std::uint64_t m_highest{0};
+    bool m_seen_any{false};
 };
 
 }
