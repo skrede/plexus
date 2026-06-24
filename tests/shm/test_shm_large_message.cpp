@@ -2,9 +2,9 @@
 // cells share the one cross-process publisher/subscriber mux-acquire harness, and that shared
 // fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs without
 // scattering that one harness into over-budget shells.
-#include "plexus/shm/futex_notifier_primitive.h"
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/region_handle.h"
+#include "plexus/native/futex_notifier_primitive.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/region_handle.h"
 
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry.h"
@@ -53,8 +53,8 @@
 
 namespace pio = plexus::io::shm;
 using plexus::io::endpoint;
-using plexus::shm::posix_shm_region_broker;
-using plexus::shm::region_handle;
+using plexus::native::posix_shm_region_broker;
+using plexus::native::region_handle;
 
 namespace {
 
@@ -75,7 +75,7 @@ struct futex_signal_notifier
     void signal() noexcept
     {
         if(generation)
-            plexus::shm::notifier_signal(*generation);
+            plexus::native::notifier_signal(*generation);
     }
     void arm(plexus::detail::move_only_function<void()>) {}
     void disarm() noexcept {}

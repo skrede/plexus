@@ -5,7 +5,7 @@
 
 #include "plexus/asio/asio_policy.h"
 
-#include "plexus/shm/posix_shm_region_broker.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
 #include "plexus/io/shm/shm_mux_member.h"
 
@@ -24,14 +24,14 @@ namespace plexus::asio::shm {
 // the member type and its construction recipe ALONE — it pulls in no tls/dtls/udp/openssl,
 // so a lean (crypto-free) composition can compose shared memory without dragging in the
 // secure or datagram backends. The all-backends and the lean compositions both include it.
-using shm_member = io::shm::shm_mux_member<::plexus::shm::posix_shm_region_broker,
+using shm_member = io::shm::shm_mux_member<::plexus::native::posix_shm_region_broker,
                                            ring_notifier<muxify<asio_policy>>>;
 
 // The notifier-binder for the bridge: capture the io_context and emplace a ring_notifier
 // over (executor, word) once the registry binds each ring. Free function so the lambda
 // shape lives in one place.
 [[nodiscard]] inline io::shm::shm_topic_registry<
-        ::plexus::shm::posix_shm_region_broker, ring_notifier<muxify<asio_policy>>>::notifier_binder
+        ::plexus::native::posix_shm_region_broker, ring_notifier<muxify<asio_policy>>>::notifier_binder
 make_bridge_binder(::asio::io_context &io)
 {
     return [&io](std::optional<ring_notifier<muxify<asio_policy>>> &slot,
@@ -46,7 +46,7 @@ make_bridge_binder(::asio::io_context &io)
 // region_ns is the static shm-region namespace: empty (the default) shares rings by topic,
 // a distinct namespace isolates this application's same-host shm from unrelated co-host apps.
 [[nodiscard]] inline shm_member make_shm_member(::asio::io_context                     &io,
-                                                ::plexus::shm::posix_shm_region_broker &broker,
+                                                ::plexus::native::posix_shm_region_broker &broker,
                                                 io::reliability rel  = io::reliability::reliable,
                                                 io::congestion  cong = io::congestion::block,
                                                 std::string     region_ns = {})
@@ -56,7 +56,7 @@ make_bridge_binder(::asio::io_context &io)
 
 }
 
-namespace plexus::shm {
+namespace plexus::native {
 
 // The per-leaf factory transport_set finds by ADL on the broker argument: it lets the
 // shm-agnostic transport_set.h build an shm leaf from {io, broker} WITHOUT including this

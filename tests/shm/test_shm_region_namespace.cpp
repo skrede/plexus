@@ -1,5 +1,5 @@
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/region_handle.h"
 
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry.h"
@@ -28,8 +28,8 @@
 // existing shm rings are unchanged (back-compat, asserted at the naming layer here too).
 
 namespace pio = plexus::io::shm;
-using plexus::shm::posix_shm_region_broker;
-using plexus::shm::region_handle;
+using plexus::native::posix_shm_region_broker;
+using plexus::native::region_handle;
 
 namespace {
 

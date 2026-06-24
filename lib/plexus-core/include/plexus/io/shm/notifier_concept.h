@@ -10,7 +10,7 @@ namespace plexus::io::shm {
 // The notifier seam: the three-op cross-process wakeup interface the ring channel
 // borrows BY REFERENCE, defined in core so no core translation unit ever pulls a
 // kernel futex header or an asio header. The wakeup MECHANISM is the backend's —
-// the compiled plexus-shm futex primitive and the plexus-asio reactor bridge each
+// the compiled plexus-native futex primitive and the plexus-asio reactor bridge each
 // SATISFY this same seam; only the wakeup primitive swaps (io_uring futex-wait
 // thread-free primary, the bounded-thread+eventfd bridge as the portable floor).
 //

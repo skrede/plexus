@@ -1261,7 +1261,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # ring, the parent asserting the MEDIUM (the region maps iff co-host) plus byte-exact
     # delivery over >=2 runs and the forced-distinct-fingerprint wire fallback. Gated to the
     # Linux shared-memory node composition (the /dev/shm region naming + the shm member are
-    # Linux-only); the broker + the region naming come from plexus::shm/plexus::asio::shm.
+    # Linux-only); the broker + the region naming come from plexus::native/plexus::asio::shm.
     if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::asio::shm)
         add_executable(test_node_xproc_shm test_node_xproc_shm.cpp)
         target_link_libraries(test_node_xproc_shm PRIVATE
@@ -1270,7 +1270,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
             plexus::wire
             plexus::asio
             plexus::asio::shm
-            plexus::shm
+            plexus::native
             Catch2::Catch2WithMain)
         catch_discover_tests(test_node_xproc_shm TEST_PREFIX "integration.")
     endif()

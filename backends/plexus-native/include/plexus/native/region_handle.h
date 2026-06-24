@@ -1,11 +1,11 @@
-#ifndef HPP_GUARD_PLEXUS_SHM_REGION_HANDLE_H
-#define HPP_GUARD_PLEXUS_SHM_REGION_HANDLE_H
+#ifndef HPP_GUARD_PLEXUS_NATIVE_REGION_HANDLE_H
+#define HPP_GUARD_PLEXUS_NATIVE_REGION_HANDLE_H
 
 #include <span>
 #include <string>
 #include <cstddef>
 
-namespace plexus::shm {
+namespace plexus::native {
 
 class posix_shm_region_broker;
 

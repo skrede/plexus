@@ -1,4 +1,4 @@
-#include "plexus/shm/machine_fingerprint.h"
+#include "plexus/native/machine_fingerprint.h"
 
 #include "plexus/io/host_fingerprint.h"
 #include "plexus/io/shm/ring_layout.h"
@@ -10,8 +10,8 @@ namespace pio = plexus::io::shm;
 TEST_CASE("shm.same_host_roundtrip the machine fingerprint is deterministic and non-null",
           "[shm][same_host_roundtrip]")
 {
-    const plexus::io::host_fingerprint a = plexus::shm::read_machine_fingerprint();
-    const plexus::io::host_fingerprint b = plexus::shm::read_machine_fingerprint();
+    const plexus::io::host_fingerprint a = plexus::native::read_machine_fingerprint();
+    const plexus::io::host_fingerprint b = plexus::native::read_machine_fingerprint();
 
     // Determinism within a host: two reads agree (the inputs are stable -- NOT a
     // cached static).

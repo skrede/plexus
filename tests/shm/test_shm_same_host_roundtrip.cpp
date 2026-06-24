@@ -1,6 +1,6 @@
-#include "plexus/shm/machine_fingerprint.h"
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/region_handle.h"
+#include "plexus/native/machine_fingerprint.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/region_handle.h"
 
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry.h"
@@ -27,8 +27,8 @@
 // Looped N>=100; the ctest binary is re-run >=3 times for reproducibility.
 
 namespace pio = plexus::io::shm;
-using plexus::shm::posix_shm_region_broker;
-using plexus::shm::region_handle;
+using plexus::native::posix_shm_region_broker;
+using plexus::native::region_handle;
 
 namespace {
 

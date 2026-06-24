@@ -4,9 +4,9 @@
 // shared cross-process bridge state into near-empty per-cell shells.
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/region_handle.h"
-#include "plexus/shm/futex_notifier_primitive.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/region_handle.h"
+#include "plexus/native/futex_notifier_primitive.h"
 
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry.h"
@@ -46,8 +46,8 @@
 // Looped N>=100 in-body; the ctest binary is re-run >=3 times for reproducibility.
 
 namespace pio = plexus::io::shm;
-using plexus::shm::posix_shm_region_broker;
-using plexus::shm::region_handle;
+using plexus::native::posix_shm_region_broker;
+using plexus::native::region_handle;
 
 namespace {
 
@@ -113,7 +113,7 @@ bool produce(const std::string &fqn)
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
         return false;
 
-    plexus::shm::notifier_signal(ring.notify_generation());
+    plexus::native::notifier_signal(ring.notify_generation());
     return true;
 }
 
@@ -141,7 +141,7 @@ bool produce_gated(const std::string &fqn)
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
         return false;
 
-    plexus::shm::notifier_signal(ring.notify_generation(), ring.park_state());
+    plexus::native::notifier_signal(ring.notify_generation(), ring.park_state());
     return true;
 }
 

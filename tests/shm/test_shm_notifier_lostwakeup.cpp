@@ -1,4 +1,4 @@
-#include "plexus/shm/futex_notifier_primitive.h"
+#include "plexus/native/futex_notifier_primitive.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -53,7 +53,7 @@ bool consumer_wait_for_signal(shared_word *w)
     w->child_armed.store(1, std::memory_order_release);
     // Loop over spurious wakes until the word actually advances.
     while(w->generation.load(std::memory_order_acquire) == last_seen)
-        plexus::shm::notifier_wait(w->generation, last_seen);
+        plexus::native::notifier_wait(w->generation, last_seen);
     return true;
 }
 
@@ -80,7 +80,7 @@ TEST_CASE("shm.notifier_lostwakeup the wake crosses address spaces", "[shm][noti
         // the while-loop guard make the wake delivery correct regardless of timing.
         while(w->child_armed.load(std::memory_order_acquire) == 0)
             ; // spin until armed
-        plexus::shm::notifier_signal(w->generation);
+        plexus::native::notifier_signal(w->generation);
 
         int status = 0;
         while(::waitpid(pid, &status, 0) < 0)
@@ -113,13 +113,13 @@ TEST_CASE("shm.notifier_lostwakeup a publish between drain and wait is delivered
 
         // The publish lands AFTER the drain but BEFORE the wait (the interleave the
         // protocol must survive): bump the generation past last_seen.
-        plexus::shm::notifier_signal(w->generation);
+        plexus::native::notifier_signal(w->generation);
         REQUIRE(w->generation.load(std::memory_order_acquire) != last_seen);
 
         // The consumer now waits on the STALE last_seen. Because the word already
         // moved, the wait returns immediately and the consumer re-drains -- the
         // publish is delivered, not lost. (A correct wait does not block here.)
-        plexus::shm::notifier_wait(w->generation, last_seen);
+        plexus::native::notifier_wait(w->generation, last_seen);
 
         // On return the word is still past last_seen: the consumer's re-drain loop
         // sees the new generation and delivers the publish.

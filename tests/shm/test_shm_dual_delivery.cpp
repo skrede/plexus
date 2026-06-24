@@ -3,9 +3,9 @@
 // so it cannot split without scattering that shared cross-process pipeline state.
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/region_handle.h"
-#include "plexus/shm/futex_notifier_primitive.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/region_handle.h"
+#include "plexus/native/futex_notifier_primitive.h"
 
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry.h"
@@ -52,8 +52,8 @@
 // same fqn). Looped N>=3 in-body; the binary is re-run >=3 process runs for reproducibility.
 
 namespace pio = plexus::io::shm;
-using plexus::shm::posix_shm_region_broker;
-using plexus::shm::region_handle;
+using plexus::native::posix_shm_region_broker;
+using plexus::native::region_handle;
 
 namespace {
 
@@ -109,7 +109,7 @@ bool produce_shm(const std::string &fqn)
     std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
         return false;
-    plexus::shm::notifier_signal(ring.notify_generation());
+    plexus::native::notifier_signal(ring.notify_generation());
     return true;
 }
 

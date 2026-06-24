@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_SHM_POSIX_SHM_REGION_BROKER_H
-#define HPP_GUARD_PLEXUS_SHM_POSIX_SHM_REGION_BROKER_H
+#ifndef HPP_GUARD_PLEXUS_NATIVE_POSIX_SHM_REGION_BROKER_H
+#define HPP_GUARD_PLEXUS_NATIVE_POSIX_SHM_REGION_BROKER_H
 
-#include "plexus/shm/region_handle.h"
+#include "plexus/native/region_handle.h"
 
 #include "plexus/io/shm/region_broker_concept.h"
 
@@ -11,7 +11,7 @@
 #include <cstddef>
 #include <string_view>
 
-namespace plexus::shm {
+namespace plexus::native {
 
 // POSIX shared-memory backend satisfying the core region_broker concept.
 // Synchronous (no io_context/strand): create allocates + maps a named region,
@@ -26,7 +26,7 @@ class posix_shm_region_broker
 {
 public:
     // The associated handle the concept names (typename T::region_handle).
-    using region_handle = plexus::shm::region_handle;
+    using region_handle = plexus::native::region_handle;
 
     // Per-region size policy ceiling. A create request above this fast-fails
     // with too_large BEFORE any syscall -- a deliberate, documented bound
@@ -58,8 +58,8 @@ public:
     plexus::io::shm::region_status attach(std::string_view name, region_handle &out);
 
     // Injection point for an attach-time authorization check. Default-allow; a
-    // stricter-than-uid policy is filled in by a later phase with no signature
-    // churn. A move-only predicate (the project move-only-callback convention).
+    // stricter-than-uid policy can be supplied with no signature churn. A
+    // move-only predicate (the project move-only-callback convention).
     void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)> policy);
 
 private:
@@ -78,7 +78,7 @@ private:
 
 }
 
-static_assert(::plexus::io::shm::region_broker<::plexus::shm::posix_shm_region_broker>,
+static_assert(::plexus::io::shm::region_broker<::plexus::native::posix_shm_region_broker>,
               "posix_shm_region_broker must satisfy the core region_broker concept");
 
 #endif

@@ -1,8 +1,8 @@
 // over-limit: one cohesive bilateral demand-driven convergence proof (xproc); the cells share
 // the one two-process independent-acquire harness over a converged named ring, and that shared
 // fixture preamble cannot split across TUs without scattering that shared cross-process state.
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/region_handle.h"
 
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/dispatch_hint.h"
@@ -40,8 +40,8 @@
 // Looped in-body; the ctest binary is re-run >=3 process runs for reproducibility.
 
 namespace pio = plexus::io::shm;
-using plexus::shm::posix_shm_region_broker;
-using plexus::shm::region_handle;
+using plexus::native::posix_shm_region_broker;
+using plexus::native::region_handle;
 
 namespace {
 

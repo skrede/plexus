@@ -1,11 +1,11 @@
-#include "plexus/shm/region_handle.h"
+#include "plexus/native/region_handle.h"
 
 #include <utility>
 
 #include <unistd.h>
 #include <sys/mman.h>
 
-namespace plexus::shm {
+namespace plexus::native {
 
 region_handle::region_handle(int fd, void *base, std::size_t length, std::string name,
                              bool owns_name) noexcept

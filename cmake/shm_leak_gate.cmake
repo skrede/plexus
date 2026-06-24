@@ -1,14 +1,15 @@
 # The seam assertion: no Linux shared-memory primitive may appear in the generic
-# library tree. The scan set is the WHOLE lib/ tree minus the two allowlisted
-# backend dirs (lib/plexus-shm and the gated asio reactor root under
-# shm-include/.../linux) -- the only places such a primitive may legitimately
-# live. The match runs against a comment-filtered view of each file (// line
-# comments stripped, /* */ block-comment token mentions surfaced as a fatal
-# error) because the generic ring headers describe the futex protocol in prose;
-# the gate keys on actual #include / code tokens, never on comment text. This
-# file is self-dispatching: included from the build it registers an ALL custom
-# target that re-invokes it via -P (cross-platform, no bash dependency); run
-# with -DLEAK_GATE_SCAN it performs the scan.
+# library tree. The scan set is the WHOLE lib/ tree -- the POSIX bodies live in
+# the backends tree (backends/plexus-native carries the compiled shm mechanism,
+# the gated asio reactor root under shm-include/.../linux carries the bridge), so
+# after they moved out of lib/ no such primitive may appear under lib/ at all.
+# The match runs against a comment-filtered view of each file (// line comments
+# stripped, /* */ block-comment token mentions surfaced as a fatal error) because
+# the generic ring headers describe the futex protocol in prose; the gate keys on
+# actual #include / code tokens, never on comment text. This file is
+# self-dispatching: included from the build it registers an ALL custom target
+# that re-invokes it via -P (cross-platform, no bash dependency); run with
+# -DLEAK_GATE_SCAN it performs the scan.
 
 # The Linux shm primitives that may appear ONLY in the allowlisted backend dirs.
 set(LEAK_TOKENS
@@ -26,16 +27,19 @@ if(NOT LEAK_GATE_SCAN)
         COMMAND ${CMAKE_COMMAND}
                 -DLEAK_GATE_SCAN=ON
                 -DLEAK_GATE_LIB_DIR=${PROJECT_SOURCE_DIR}/lib
+                -DLEAK_GATE_BACKENDS_DIR=${PROJECT_SOURCE_DIR}/backends
                 -P ${CMAKE_CURRENT_LIST_FILE}
         COMMENT "Asserting the generic library tree carries no platform shm primitives"
         VERBATIM)
     return()
 endif()
 
-# The two dirs where the primitives legitimately live, excluded by path prefix.
+# The dirs where the primitives legitimately live, excluded by path prefix. They
+# sit under backends/, outside the lib/ scan below, so these excludes are a
+# defensive record of the legitimate homes rather than load-bearing filters.
 set(LEAK_ALLOWLIST
-    "${LEAK_GATE_LIB_DIR}/plexus-shm/"
-    "${LEAK_GATE_LIB_DIR}/plexus-asio/shm-include/plexus/asio/shm/linux/")
+    "${LEAK_GATE_BACKENDS_DIR}/plexus-native/"
+    "${LEAK_GATE_BACKENDS_DIR}/plexus-asio/shm-include/plexus/asio/shm/linux/")
 
 file(GLOB_RECURSE _scan_files
     "${LEAK_GATE_LIB_DIR}/*.h"
@@ -104,7 +108,7 @@ foreach(_file IN LISTS _scan_files)
         if(_ct)
             message(FATAL_ERROR
                 "shm leak gate: Linux shm primitive '${_ct}' in the generic tree at ${_file}:${_lineno} "
-                "(it may appear only under lib/plexus-shm or the gated asio shm-include/.../linux dir)")
+                "(it may appear only under backends/plexus-native or the gated asio shm-include/.../linux dir)")
         endif()
     endforeach()
 endforeach()

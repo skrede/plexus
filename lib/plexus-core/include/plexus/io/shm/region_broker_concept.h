@@ -46,7 +46,7 @@ struct create_options
 
 // The broker seam: the region create/attach surface the ring + registry borrow BY
 // REFERENCE, defined in core so no core translation unit ever pulls a POSIX
-// memory-mapping header. The compiled plexus-shm backend SATISFIES it with the
+// memory-mapping header. The compiled plexus-native backend SATISFIES it with the
 // shm-open / memory-map bodies,
 // typed against an associated region_handle the backend provides (a move-only RAII
 // mapping). create() mints a region under a deterministic name (region_name_for);

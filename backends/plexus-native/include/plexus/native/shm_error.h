@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_SHM_SHM_ERROR_H
-#define HPP_GUARD_PLEXUS_SHM_SHM_ERROR_H
+#ifndef HPP_GUARD_PLEXUS_NATIVE_SHM_ERROR_H
+#define HPP_GUARD_PLEXUS_NATIVE_SHM_ERROR_H
 
 #include <cstdint>
 
-namespace plexus::shm {
+namespace plexus::native {
 
 // The backend-internal status the POSIX region calls map a raw errno onto. Leads
 // with ok exactly as the core io_error / region_status families do, so the status

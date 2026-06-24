@@ -1,7 +1,7 @@
 # Shared-memory backend tests: the cross-process (fork) xproc harness, the
 # MAP_SHARED round-trip behavioral-oracle placeholder, and the io_uring
 # FUTEX_WAIT ⇄ reactor de-risking spike. Only built when PLEXUS_ENABLE_SHM_BACKEND
-# is ON (plexus::shm exists only under the gate); the `shm.` ctest prefix lets
+# is ON (plexus::native exists only under the gate); the `shm.` ctest prefix lets
 # `ctest -R shm` select it. Auto-discovered by the tests glob.
 if(NOT PLEXUS_ENABLE_SHM_BACKEND)
     return()
@@ -33,13 +33,13 @@ target_include_directories(test_shm_scaffold PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_scaffold PRIVATE
-    plexus::shm
+    plexus::native
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_scaffold TEST_PREFIX "shm.")
 
 # The header-only broadcast ring + loan/take core. These TUs include ONLY the
-# core headers under plexus/io/shm/ — they need no plexus::shm backend link
+# core headers under plexus/io/shm/ — they need no plexus::native backend link
 # (the ring drives a caller-supplied anonymous mapped span), proving the core is
 # POSIX/asio-free. They link plexus::core for the core include path and the
 # xproc harness header path.
@@ -156,7 +156,7 @@ catch_discover_tests(test_shm_seams TEST_PREFIX "shm.")
 
 # The POSIX region broker: create mints a 0600 /dev/shm region (creator owns the
 # unlink), attach maps an existing one, unlink_stale_on_create reclaims an orphan,
-# and an oversize create fast-fails before any syscall. Links plexus::shm for the
+# and an oversize create fast-fails before any syscall. Links plexus::native for the
 # compiled broker bodies (shm_open/mmap/ftruncate/shm_unlink).
 add_executable(test_shm_region_broker test_shm_region_broker.cpp)
 
@@ -164,7 +164,7 @@ target_include_directories(test_shm_region_broker PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_region_broker PRIVATE
-    plexus::shm
+    plexus::native
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_region_broker TEST_PREFIX "shm.")
@@ -172,14 +172,14 @@ catch_discover_tests(test_shm_region_broker TEST_PREFIX "shm.")
 # The cross-process futex notifier: the wake crosses address spaces (the
 # no-PRIVATE-flag proof, a forked producer waking a forked consumer on a shared
 # MAP_SHARED word) and the drain-before-wait protocol delivers an interleaved
-# publish (lost-wakeup-safe). Links plexus::shm for the raw SYS_futex bodies.
+# publish (lost-wakeup-safe). Links plexus::native for the raw SYS_futex bodies.
 add_executable(test_shm_notifier_lostwakeup test_shm_notifier_lostwakeup.cpp)
 
 target_include_directories(test_shm_notifier_lostwakeup PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_notifier_lostwakeup PRIVATE
-    plexus::shm
+    plexus::native
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_notifier_lostwakeup TEST_PREFIX "shm.")
@@ -188,14 +188,14 @@ catch_discover_tests(test_shm_notifier_lostwakeup TEST_PREFIX "shm.")
 # pure predicate, so zero-wake-when-spinning is asserted off the syscall), a spinning
 # consumer leaves the gated signal NOTIFIED parking nobody, and a forked parked
 # consumer is still woken across address spaces by the two-arg gated signal (the
-# lost-wakeup guard on the gated path). Links plexus::shm for the raw SYS_futex bodies.
+# lost-wakeup guard on the gated path). Links plexus::native for the raw SYS_futex bodies.
 add_executable(test_shm_wake_gating test_shm_wake_gating.cpp)
 
 target_include_directories(test_shm_wake_gating PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_wake_gating PRIVATE
-    plexus::shm
+    plexus::native
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_wake_gating TEST_PREFIX "shm.")
@@ -204,7 +204,7 @@ catch_discover_tests(test_shm_wake_gating TEST_PREFIX "shm.")
 # deterministically-named regions with no exchange (the machine fingerprint + the
 # direction-discriminated region naming), one creates + publishes, the other
 # attaches + consumes, and a real value round-trips byte-equal over the MAP_SHARED
-# broadcast ring. Links plexus::shm (broker + fingerprint) + plexus::wire (the fqn
+# broadcast ring. Links plexus::native (broker + fingerprint) + plexus::wire (the fqn
 # hash the region naming routes through).
 add_executable(test_shm_same_host_roundtrip test_shm_same_host_roundtrip.cpp
     test_shm_same_host_fingerprint.cpp)
@@ -213,7 +213,7 @@ target_include_directories(test_shm_same_host_roundtrip PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_same_host_roundtrip PRIVATE
-    plexus::shm
+    plexus::native
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -229,7 +229,7 @@ target_include_directories(test_shm_region_namespace PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_region_namespace PRIVATE
-    plexus::shm
+    plexus::native
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -357,10 +357,10 @@ if(LIBURING_FOUND)
 
     # The spike links plexus::asio for the asio include path ONLY — it probes
     # whether an io_uring CQE can be reaped THROUGH the user's asio reactor (the
-    # spike question). The backend target plexus-shm itself stays asio-free;
+    # spike question). The backend target plexus-native itself stays asio-free;
     # this asio dependency lives in the spike test executable, never in the lib.
     target_link_libraries(spike_iouring_futex PRIVATE
-        plexus::shm
+        plexus::native
         plexus::asio
         PkgConfig::LIBURING
         Catch2::Catch2WithMain)
@@ -370,7 +370,7 @@ if(LIBURING_FOUND)
     # The wakeup -> reactor bridge functional proof: a forked producer publishes +
     # signals the in-region notify word; the parent's io_uring-futex bridge, armed on
     # a user-owned io_context, reaps the CQE on a reactor turn and posts the drain.
-    # Links plexus::asio (the bridge + its asio include path), plexus::shm (the broker
+    # Links plexus::asio (the bridge + its asio include path), plexus::native (the broker
     # + the futex primitive the bridge's signal() delegates to), plexus::wire (the fqn
     # hash the region naming routes through), and liburing (the io_uring the bridge
     # drives). The bridge is the only asio-coupled shared-memory piece (the core +
@@ -383,7 +383,7 @@ if(LIBURING_FOUND)
     target_link_libraries(test_shm_notifier_bridge PRIVATE
         plexus::asio
         plexus::asio::shm
-        plexus::shm
+        plexus::native
         plexus::wire
         Catch2::Catch2WithMain)
 
@@ -402,7 +402,7 @@ if(LIBURING_FOUND)
     target_link_libraries(test_shm_teardown_race PRIVATE
         plexus::asio
         plexus::asio::shm
-        plexus::shm
+        plexus::native
         plexus::wire
         Catch2::Catch2WithMain)
 
@@ -421,7 +421,7 @@ if(LIBURING_FOUND)
     target_link_libraries(test_shm_dual_delivery PRIVATE
         plexus::asio
         plexus::asio::shm
-        plexus::shm
+        plexus::native
         plexus::wire
         Catch2::Catch2WithMain)
 
@@ -441,7 +441,7 @@ if(LIBURING_FOUND)
             plexus::wire
             plexus::asio
             plexus::asio::shm
-            plexus::shm
+            plexus::native
             plexus::crypto
             Catch2::Catch2WithMain)
 
@@ -465,7 +465,7 @@ if(LIBURING_FOUND)
         plexus::wire
         plexus::asio
         plexus::asio::shm
-        plexus::shm
+        plexus::native
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_node_composition TEST_PREFIX "shm.")
@@ -484,7 +484,7 @@ if(LIBURING_FOUND)
         plexus::wire
         plexus::asio
         plexus::asio::shm
-        plexus::shm
+        plexus::native
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_transport_set TEST_PREFIX "shm.")
@@ -503,7 +503,7 @@ if(LIBURING_FOUND)
         plexus::wire
         plexus::asio
         plexus::asio::shm
-        plexus::shm
+        plexus::native
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_same_host_transports TEST_PREFIX "shm.")
@@ -523,7 +523,7 @@ if(LIBURING_FOUND)
         plexus::wire
         plexus::asio
         plexus::asio::shm
-        plexus::shm
+        plexus::native
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_same_host_fingerprint_node TEST_PREFIX "shm.")
@@ -570,7 +570,7 @@ catch_discover_tests(test_medium_coordinator TEST_PREFIX "shm.")
 # acquire from their OWN dispatch hint (no hint on the wire), converge on the same
 # deterministically-named ring, and round-trip a value over it; the publisher sizes
 # the ring via max_payload, a no-max_payload upgrade falls back to the default
-# geometry. Links plexus::shm (the POSIX broker + the ring) + plexus::wire (the fqn
+# geometry. Links plexus::native (the POSIX broker + the ring) + plexus::wire (the fqn
 # hash the region naming routes through).
 add_executable(test_shm_bilateral test_shm_bilateral.cpp)
 
@@ -578,7 +578,7 @@ target_include_directories(test_shm_bilateral PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_bilateral PRIVATE
-    plexus::shm
+    plexus::native
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -590,7 +590,7 @@ catch_discover_tests(test_shm_bilateral TEST_PREFIX "shm.")
 # subscriber, per notifier variant (futex-wake shmn + reactor-reaped/spin shmr;
 # busy-poll shm excluded). The large cells run >= 2 times per ctest invocation. The
 # probe-higher cell proves reliable_preserving fails closed above the ceiling while
-# explicit best_effort_large round-trips. Links plexus::shm (the POSIX broker + the
+# explicit best_effort_large round-trips. Links plexus::native (the POSIX broker + the
 # futex primitive) + plexus::wire (the fqn-hash region naming).
 add_executable(test_shm_large_message test_shm_large_message.cpp)
 
@@ -598,7 +598,7 @@ target_include_directories(test_shm_large_message PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_large_message PRIVATE
-    plexus::shm
+    plexus::native
     plexus::wire
     Catch2::Catch2WithMain)
 
@@ -610,14 +610,14 @@ catch_discover_tests(test_shm_large_message TEST_PREFIX "shm.")
 # unlink_stale_on_create reclaims the orphan and mints a FRESH (zero-filled)
 # region, proving the orphan's stale bytes do not leak through. The bounded
 # crash-orphan mitigation; looped N>=100, the binary re-run >=3 times. Links
-# plexus::shm for the compiled broker (shm_open/ftruncate/shm_unlink).
+# plexus::native for the compiled broker (shm_open/ftruncate/shm_unlink).
 add_executable(test_shm_stale_reclaim test_shm_stale_reclaim.cpp)
 
 target_include_directories(test_shm_stale_reclaim PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_stale_reclaim PRIVATE
-    plexus::shm
+    plexus::native
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_stale_reclaim TEST_PREFIX "shm.")
@@ -628,7 +628,7 @@ catch_discover_tests(test_shm_stale_reclaim TEST_PREFIX "shm.")
 # (verified byte-exact cross-process), a message over the cap rides the same-host wire.
 # The carrying medium is ASSERTED per message via a per-channel tap (proven, not assumed),
 # the over-cap cell repeats in one invocation, and a ring-less subscriber still receives
-# both over the wire (the dual-delivery rescue). Links plexus::shm (the POSIX broker + the
+# both over the wire (the dual-delivery rescue). Links plexus::native (the POSIX broker + the
 # futex primitive the live ring acquires) + plexus::wire (the fqn-hash region naming + the
 # forwarder framing) + plexus::inproc (the test Policy's executor/timer substrate).
 add_executable(test_shm_wire_fallback test_shm_wire_fallback.cpp)
@@ -638,7 +638,7 @@ target_include_directories(test_shm_wire_fallback PRIVATE
 
 target_link_libraries(test_shm_wire_fallback PRIVATE
     plexus::core
-    plexus::shm
+    plexus::native
     plexus::wire
     plexus::inproc
     Catch2::Catch2WithMain)
@@ -651,7 +651,7 @@ catch_discover_tests(test_shm_wire_fallback TEST_PREFIX "shm.")
 # (provisioned by the SAME set_topic_geometry the node declare path calls) declines the
 # ring so its same-host channel is the WIRE (the fail-safe); the two reliable-ring modes
 # prefer SHM unchanged. The declined probe holds no refcount, and an over-cap message
-# crosses a real process boundary byte-exact (repeated). Links plexus::shm (the POSIX
+# crosses a real process boundary byte-exact (repeated). Links plexus::native (the POSIX
 # broker) + plexus::wire (the fqn-hash region naming).
 add_executable(test_shm_wire_fallback_node test_shm_wire_fallback_node.cpp)
 
@@ -660,7 +660,7 @@ target_include_directories(test_shm_wire_fallback_node PRIVATE
 
 target_link_libraries(test_shm_wire_fallback_node PRIVATE
     plexus::core
-    plexus::shm
+    plexus::native
     plexus::wire
     Catch2::Catch2WithMain)
 

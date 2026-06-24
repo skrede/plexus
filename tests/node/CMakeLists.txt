@@ -25,7 +25,7 @@ if(PLEXUS_ENABLE_CRYPTO_BACKEND)
     list(APPEND _consume_components crypto)
 endif()
 if(PLEXUS_ENABLE_SHM_BACKEND)
-    list(APPEND _consume_components shm)
+    list(APPEND _consume_components native)
 endif()
 add_test(NAME node.install_consume
     COMMAND ${CMAKE_COMMAND}

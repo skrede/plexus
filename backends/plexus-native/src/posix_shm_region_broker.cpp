@@ -1,5 +1,5 @@
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/shm_error.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/shm_error.h"
 
 #include <utility>
 
@@ -10,7 +10,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-namespace plexus::shm {
+namespace plexus::native {
 
 namespace {
 

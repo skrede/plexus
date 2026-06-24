@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_SHM_LINUX_RING_NOTIFIER_H
 #define HPP_GUARD_PLEXUS_ASIO_SHM_LINUX_RING_NOTIFIER_H
 
-#include "plexus/shm/futex_notifier_primitive.h"
+#include "plexus/native/futex_notifier_primitive.h"
 
 #include "plexus/io/shm/notifier_concept.h"
 #include "plexus/io/shm/ring_layout.h"
@@ -52,7 +52,7 @@ namespace plexus::asio::shm {
 // the build is correct either way).
 //
 // Construction binds the executor + the in-region word; signal() delegates to
-// the compiled plexus-shm futex primitive (the producer-side wake), so a
+// the compiled plexus-native futex primitive (the producer-side wake), so a
 // producer in this or any peer process drives the same word the wait rides on.
 // Borrows the executor + word BY REFERENCE; non-copy/non-move (the io_uring +
 // the registered eventfd + the asio descriptor hold stable addresses, and the
@@ -92,7 +92,7 @@ public:
     // The producer wake: bump the shared generation word (release) and wake a parked
     // consumer — the gated primitive skips the FUTEX_WAKE syscall when no waiter is
     // parked (a spinning consumer costs the producer zero wakes).
-    void signal() noexcept { ::plexus::shm::notifier_signal(m_word, m_park); }
+    void signal() noexcept { ::plexus::native::notifier_signal(m_word, m_park); }
 
     // Register the consumer drain and begin watching the word. Brings up the
     // private io_uring, registers the CQE-doorbell eventfd onto the user's
@@ -292,7 +292,7 @@ public:
     ring_notifier_threaded(ring_notifier_threaded &&)                 = delete;
     ring_notifier_threaded &operator=(ring_notifier_threaded &&)      = delete;
 
-    void signal() noexcept { ::plexus::shm::notifier_signal(m_word, m_park); }
+    void signal() noexcept { ::plexus::native::notifier_signal(m_word, m_park); }
 
     void arm(drain_fn drain)
     {
@@ -320,7 +320,7 @@ public:
         if(m_waiter.joinable())
         {
             m_stop.store(true, std::memory_order_release);
-            ::plexus::shm::notifier_signal(m_word); // wake it so the wait returns
+            ::plexus::native::notifier_signal(m_word); // wake it so the wait returns
             m_waiter.join();
         }
         if(m_doorbell)
@@ -359,7 +359,7 @@ private:
             // Clear back to EMPTY on return: a producer bumping while the reactor
             // drains is not gated off a stale PARKED.
             m_park.store(::plexus::io::shm::k_park_parked, std::memory_order_release);
-            ::plexus::shm::notifier_wait(m_word, last_seen);
+            ::plexus::native::notifier_wait(m_word, last_seen);
             m_park.store(::plexus::io::shm::k_park_empty, std::memory_order_release);
             last_seen = m_word.load(std::memory_order_acquire);
         }

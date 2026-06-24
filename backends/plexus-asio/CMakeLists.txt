@@ -49,7 +49,7 @@ install(EXPORT plexusAsioTargets
 # part) has no path to plexus/asio/shm/linux/* — the directory boundary is a real
 # compile barrier, not a convention. Linking plexus::asio gives the composition's
 # cross-root includes (udp/asio/unix transports) their include/ path back, and
-# plexus::shm supplies the broker the liburing-bearing headers compose over.
+# plexus::native supplies the broker the liburing-bearing headers compose over.
 if(PLEXUS_ENABLE_SHM_BACKEND)
     add_library(plexus-asio-shm INTERFACE)
     add_library(plexus::asio::shm ALIAS plexus-asio-shm)
@@ -66,7 +66,7 @@ if(PLEXUS_ENABLE_SHM_BACKEND)
 
     target_link_libraries(plexus-asio-shm INTERFACE
         plexus::asio
-        plexus::shm
+        plexus::native
         PkgConfig::LIBURING)
 
     target_compile_features(plexus-asio-shm INTERFACE cxx_std_20)

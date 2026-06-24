@@ -2,7 +2,7 @@
 // share the one node-declare-path shm broker + mux harness, and that shared fixture preamble
 // alone exceeds the file ceiling, so the cells cannot split across TUs without scattering that
 // one harness into over-budget shells.
-#include "plexus/shm/posix_shm_region_broker.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
 #include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/notifier_concept.h"
@@ -63,7 +63,7 @@
 namespace pio   = plexus::io::shm;
 namespace pcore = plexus::io;
 using plexus::io::endpoint;
-using plexus::shm::posix_shm_region_broker;
+using plexus::native::posix_shm_region_broker;
 
 namespace {
 

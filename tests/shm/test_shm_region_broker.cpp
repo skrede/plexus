@@ -1,5 +1,5 @@
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/region_handle.h"
 
 #include "plexus/io/shm/region_broker_concept.h"
 
@@ -21,8 +21,8 @@
 // in the header). These cases run in-process (the cross-process round-trip is a
 // separate xproc proof).
 
-using plexus::shm::posix_shm_region_broker;
-using plexus::shm::region_handle;
+using plexus::native::posix_shm_region_broker;
+using plexus::native::region_handle;
 namespace pio = plexus::io::shm;
 
 static_assert(pio::region_broker<posix_shm_region_broker>,

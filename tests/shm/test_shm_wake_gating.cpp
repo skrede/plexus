@@ -1,4 +1,4 @@
-#include "plexus/shm/futex_notifier_primitive.h"
+#include "plexus/native/futex_notifier_primitive.h"
 
 #include "plexus/io/shm/ring_layout.h"
 
@@ -55,7 +55,7 @@ bool consumer_park_and_wait(shared_state *s)
     s->park_state.store(k_park_parked, std::memory_order_release);
     s->child_armed.store(1, std::memory_order_release);
     while(s->generation.load(std::memory_order_acquire) == last_seen)
-        plexus::shm::notifier_wait(s->generation, last_seen);
+        plexus::native::notifier_wait(s->generation, last_seen);
     return true;
 }
 
@@ -67,9 +67,9 @@ TEST_CASE("shm.wake_gating the wake decision is gated off the prior park-state",
     // The zero-wake-when-spinning claim, asserted off the syscall: a producer wakes
     // ONLY when the consumer was PARKED. EMPTY (spinning) and NOTIFIED (a wake is
     // already pending) skip the FUTEX_WAKE entirely.
-    REQUIRE(plexus::shm::should_wake(k_park_empty) == false);
-    REQUIRE(plexus::shm::should_wake(k_park_parked) == true);
-    REQUIRE(plexus::shm::should_wake(k_park_notified) == false);
+    REQUIRE(plexus::native::should_wake(k_park_empty) == false);
+    REQUIRE(plexus::native::should_wake(k_park_parked) == true);
+    REQUIRE(plexus::native::should_wake(k_park_notified) == false);
 }
 
 TEST_CASE("shm.wake_gating a spinning consumer leaves the gated signal NOTIFIED and parks nobody",
@@ -90,7 +90,7 @@ TEST_CASE("shm.wake_gating a spinning consumer leaves the gated signal NOTIFIED 
         s->park_state.store(k_park_empty, std::memory_order_relaxed);
 
         const std::uint32_t before = s->generation.load(std::memory_order_acquire);
-        plexus::shm::notifier_signal(s->generation, s->park_state);
+        plexus::native::notifier_signal(s->generation, s->park_state);
 
         REQUIRE(s->generation.load(std::memory_order_acquire) != before);
         REQUIRE(s->park_state.load(std::memory_order_acquire) == k_park_notified);
@@ -126,7 +126,7 @@ TEST_CASE("shm.wake_gating a parked consumer is woken by the gated signal across
         // PARKED and the wake is issued.
         while(s->child_armed.load(std::memory_order_acquire) == 0)
             ; // spin until the child has parked
-        plexus::shm::notifier_signal(s->generation, s->park_state);
+        plexus::native::notifier_signal(s->generation, s->park_state);
 
         int status = 0;
         while(::waitpid(pid, &status, 0) < 0)

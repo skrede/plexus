@@ -1,6 +1,6 @@
 #include "plexus/asio/same_host_transports.h"
 
-#include "plexus/shm/machine_fingerprint.h"
+#include "plexus/native/machine_fingerprint.h"
 
 #include "plexus/io/host_fingerprint.h"
 
@@ -39,7 +39,7 @@ TEST_CASE("shm.same_host_fingerprint_node make_node default-fills the real machi
 
     const plexus::io::host_fingerprint effective = node.router().local_fingerprint();
     REQUIRE_FALSE(effective.is_null());
-    REQUIRE(effective == plexus::shm::read_machine_fingerprint());
+    REQUIRE(effective == plexus::native::read_machine_fingerprint());
 }
 
 TEST_CASE("shm.same_host_fingerprint_node make_node preserves an explicit fingerprint",
@@ -54,7 +54,7 @@ TEST_CASE("shm.same_host_fingerprint_node make_node preserves an explicit finger
     id[0] = std::byte{0x4D};
 
     plexus::node_options        opts{};
-    const plexus::io::host_fingerprint forced{plexus::shm::read_machine_fingerprint().value ^ 0xA5A5A5A5u};
+    const plexus::io::host_fingerprint forced{plexus::native::read_machine_fingerprint().value ^ 0xA5A5A5A5u};
     opts.handshake.local_fingerprint = forced;
     REQUIRE_FALSE(forced.is_null());
 

@@ -3,9 +3,9 @@
 // shared region and reactor bridge, so it cannot split without scattering that shared state.
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/region_handle.h"
-#include "plexus/shm/futex_notifier_primitive.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/region_handle.h"
+#include "plexus/native/futex_notifier_primitive.h"
 
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry.h"
@@ -46,8 +46,8 @@
 // Looped N>=100 over the interleaving; the asan binary is re-run >=3 times.
 
 namespace pio = plexus::io::shm;
-using plexus::shm::posix_shm_region_broker;
-using plexus::shm::region_handle;
+using plexus::native::posix_shm_region_broker;
+using plexus::native::region_handle;
 
 namespace {
 
@@ -113,13 +113,13 @@ bool flood(const std::string &fqn, coord *c)
     // landing exactly as disarm() runs is the race the asan proof must clear.
     for(int i = 0; i < 2000; ++i)
     {
-        plexus::shm::notifier_signal(ring.notify_generation());
+        plexus::native::notifier_signal(ring.notify_generation());
         if(c->tearing_down.load(std::memory_order_acquire) == 1 && i > 50)
             break; // a few more after the consumer began tearing down, then stop
     }
     // A final burst strictly during/after the teardown signal.
     for(int i = 0; i < 64; ++i)
-        plexus::shm::notifier_signal(ring.notify_generation());
+        plexus::native::notifier_signal(ring.notify_generation());
     c->producer_done.store(1, std::memory_order_release);
     return true;
 }

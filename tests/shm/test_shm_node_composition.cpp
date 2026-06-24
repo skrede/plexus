@@ -6,7 +6,7 @@
 #include "plexus/node.h"
 #include "plexus/node_options.h"
 
-#include "plexus/shm/posix_shm_region_broker.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
 #include "plexus/discovery/static_discovery.h"
 
@@ -39,7 +39,7 @@ TEST_CASE("shm.node_composition a variadic node composes shm+unix+tcp from its b
                                   pasio::asio_transport>;
 
     ::asio::io_context                   io;
-    plexus::shm::posix_shm_region_broker broker;
+    plexus::native::posix_shm_region_broker broker;
     plexus::discovery::static_discovery  disc{{}};
 
     auto                  shm = pasio::shm::make_shm_member(io, broker);
@@ -61,7 +61,7 @@ TEST_CASE("shm.node_composition the shm-bearing node brings up a same-host liste
                                   pasio::asio_transport>;
 
     ::asio::io_context                   io;
-    plexus::shm::posix_shm_region_broker broker;
+    plexus::native::posix_shm_region_broker broker;
     plexus::discovery::static_discovery  disc{{}};
 
     auto                  shm = pasio::shm::make_shm_member(io, broker);

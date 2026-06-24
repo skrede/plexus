@@ -1,4 +1,4 @@
-#include "plexus/shm/futex_notifier_primitive.h"
+#include "plexus/native/futex_notifier_primitive.h"
 
 #include <climits>
 
@@ -7,7 +7,7 @@
 #include <sys/eventfd.h>
 #include <sys/syscall.h>
 
-namespace plexus::shm {
+namespace plexus::native {
 
 namespace {
 

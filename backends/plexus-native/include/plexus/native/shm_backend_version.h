@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_SHM_SHM_BACKEND_VERSION_H
-#define HPP_GUARD_PLEXUS_SHM_SHM_BACKEND_VERSION_H
+#ifndef HPP_GUARD_PLEXUS_NATIVE_SHM_BACKEND_VERSION_H
+#define HPP_GUARD_PLEXUS_NATIVE_SHM_BACKEND_VERSION_H
 
 #include <string_view>
 
@@ -9,7 +9,7 @@
 // land. It also gives a link-AND-RUN handle to assert the gated target was
 // actually linked, not merely compiled.
 
-namespace plexus::shm {
+namespace plexus::native {
 
 std::string_view backend_version() noexcept;
 

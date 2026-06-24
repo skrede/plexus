@@ -1,12 +1,12 @@
-#ifndef HPP_GUARD_PLEXUS_SHM_FUTEX_NOTIFIER_PRIMITIVE_H
-#define HPP_GUARD_PLEXUS_SHM_FUTEX_NOTIFIER_PRIMITIVE_H
+#ifndef HPP_GUARD_PLEXUS_NATIVE_FUTEX_NOTIFIER_PRIMITIVE_H
+#define HPP_GUARD_PLEXUS_NATIVE_FUTEX_NOTIFIER_PRIMITIVE_H
 
 #include "plexus/io/shm/ring_layout.h"
 
 #include <atomic>
 #include <cstdint>
 
-namespace plexus::shm {
+namespace plexus::native {
 
 // The wake decision for the gated overload: a FUTEX_WAKE is issued only when the
 // park-state word the consumer published was PARKED. EMPTY means the consumer is
@@ -20,11 +20,11 @@ namespace plexus::shm {
 
 // The irreducible cross-process wakeup primitives: the raw by-address futex
 // signal/wait pair the ring's notify_generation word rides on, plus the raw
-// eventfd the Wave-4 reactor bridge edge-triggers. These are the syscall bodies
+// eventfd the asio reactor bridge edge-triggers. These are the syscall bodies
 // (mechanism), so they live in the compiled backend, NOT the header-only core --
 // no core translation unit ever pulls the kernel futex header. The asio reactor
-// bridge (a later wave) composes these behind the core notifier concept; this
-// header exposes only the bare primitives.
+// bridge composes these behind the core notifier concept; this header exposes
+// only the bare primitives.
 
 // Bump the shared generation word (release, so a waiter that wakes observes every
 // prior payload write) THEN wake every waiter blocked on its address. The wakeup
@@ -55,9 +55,9 @@ void notifier_signal(std::atomic<std::uint32_t> &generation,
 // immediately).
 void notifier_wait(std::atomic<std::uint32_t> &generation, std::uint32_t last_seen) noexcept;
 
-// A raw, non-blocking eventfd (the Wave-4 fallback-bridge edge source: the
-// futex-watcher writes it, the asio reactor reads it). Returns the fd, or -1 on
-// failure (errno set). The caller owns the fd lifetime (close()).
+// A raw, non-blocking eventfd (the fallback-bridge edge source: the futex-watcher
+// writes it, the asio reactor reads it). Returns the fd, or -1 on failure (errno
+// set). The caller owns the fd lifetime (close()).
 int make_notifier_eventfd() noexcept;
 
 }

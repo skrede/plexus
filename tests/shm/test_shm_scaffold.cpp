@@ -1,6 +1,6 @@
 #include "support/xproc_harness.h"
 
-#include "plexus/shm/shm_backend_version.h"
+#include "plexus/native/shm_backend_version.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -9,19 +9,16 @@
 #include <atomic>
 #include <cstdint>
 
-// The behavioral-oracle placeholder the later waves fill with the real ring /
-// notifier xproc cases. It does NOT implement any SHM transport logic — it only
-// proves two host facts the whole phase rests on: (1) the gated plexus::shm
-// target links and runs (backend_version is a real linked symbol), and (2) a
-// forked child and its parent actually share an anonymous MAP_SHARED page so a
-// value written by the child is observed by the parent across the address-space
-// boundary. Looped N>=100 per feedback_no_success_from_single_run.
+// Proves two host facts: (1) the gated plexus::native backend links and runs
+// (backend_version is a real linked symbol), and (2) a forked child and its
+// parent share an anonymous MAP_SHARED page, so a value written by the child is
+// observed by the parent across the address-space boundary.
 
 using namespace plexus::testing;
 
 TEST_CASE("scaffold: the gated shm backend links and runs", "[shm][scaffold]")
 {
-    REQUIRE(plexus::shm::backend_version() == "0.1.0");
+    REQUIRE(plexus::native::backend_version() == "0.1.0");
 }
 
 TEST_CASE("scaffold: a value round-trips through MAP_SHARED across fork", "[shm][scaffold]")

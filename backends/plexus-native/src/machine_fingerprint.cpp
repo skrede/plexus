@@ -1,4 +1,4 @@
-#include "plexus/shm/machine_fingerprint.h"
+#include "plexus/native/machine_fingerprint.h"
 
 #include "plexus/wire/topic_hash.h"
 
@@ -7,7 +7,7 @@
 
 #include <unistd.h>
 
-namespace plexus::shm {
+namespace plexus::native {
 
 namespace {
 

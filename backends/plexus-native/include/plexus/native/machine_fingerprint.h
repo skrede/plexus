@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_SHM_MACHINE_FINGERPRINT_H
-#define HPP_GUARD_PLEXUS_SHM_MACHINE_FINGERPRINT_H
+#ifndef HPP_GUARD_PLEXUS_NATIVE_MACHINE_FINGERPRINT_H
+#define HPP_GUARD_PLEXUS_NATIVE_MACHINE_FINGERPRINT_H
 
 #include "plexus/io/host_fingerprint.h"
 
-namespace plexus::shm {
+namespace plexus::native {
 
 // Read this machine's identity (the kernel machine-id + hostname) and derive the
 // core host_fingerprint VALUE the same-host decision compares. The READ is the

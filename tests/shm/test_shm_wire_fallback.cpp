@@ -2,8 +2,8 @@
 // share the one live shm broker + forwarder fan-out harness and its per-channel tap, and that
 // shared fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs
 // without scattering that one harness into over-budget shells.
-#include "plexus/shm/posix_shm_region_broker.h"
-#include "plexus/shm/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/region_handle.h"
 
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry_mode.h"
@@ -57,8 +57,8 @@
 
 namespace pio = plexus::io::shm;
 using plexus::io::endpoint;
-using plexus::shm::posix_shm_region_broker;
-using plexus::shm::region_handle;
+using plexus::native::posix_shm_region_broker;
+using plexus::native::region_handle;
 
 namespace {
 

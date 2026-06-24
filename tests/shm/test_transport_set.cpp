@@ -6,7 +6,7 @@
 #include "plexus/node.h"
 #include "plexus/node_options.h"
 
-#include "plexus/shm/posix_shm_region_broker.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
 #include "plexus/discovery/static_discovery.h"
 
@@ -28,7 +28,7 @@ TEST_CASE("shm.transport_set an shm-bearing set mints a node from {io, broker}",
           "[shm][mux][node][transport_set]")
 {
     ::asio::io_context                   io;
-    plexus::shm::posix_shm_region_broker broker;
+    plexus::native::posix_shm_region_broker broker;
     plexus::discovery::static_discovery  disc{{}};
 
     pasio::transport_set<pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport> ts{

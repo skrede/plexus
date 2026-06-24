@@ -24,8 +24,8 @@
 #if PLEXUS_SAME_HOST_SHM
     #include "plexus/asio/shm/linux/shm_member.h"
 
-    #include "plexus/shm/machine_fingerprint.h"
-    #include "plexus/shm/posix_shm_region_broker.h"
+    #include "plexus/native/machine_fingerprint.h"
+    #include "plexus/native/posix_shm_region_broker.h"
 #endif
 
 #include <asio/io_context.hpp>
@@ -102,7 +102,7 @@ public:
                                  node_options opts)
     {
         if(opts.handshake.local_fingerprint.is_null())
-            opts.handshake.local_fingerprint = ::plexus::shm::read_machine_fingerprint();
+            opts.handshake.local_fingerprint = ::plexus::native::read_machine_fingerprint();
         return m_set.template make_node<asio_policy>(disc, id, opts);
     }
 #else
@@ -115,7 +115,7 @@ public:
 
 private:
 #if PLEXUS_SAME_HOST_SHM
-    ::plexus::shm::posix_shm_region_broker m_broker;
+    ::plexus::native::posix_shm_region_broker m_broker;
 #endif
     set_type m_set;
 };
