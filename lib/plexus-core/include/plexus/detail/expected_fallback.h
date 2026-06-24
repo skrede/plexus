@@ -62,7 +62,7 @@ public:
     {
         return m_storage.index() == 0;
     }
-    [[nodiscard]] constexpr bool has_value() const noexcept
+    constexpr bool has_value() const noexcept
     {
         return m_storage.index() == 0;
     }
@@ -93,48 +93,48 @@ public:
         return &std::get<0>(m_storage);
     }
 
-    [[nodiscard]] constexpr T &value() &
+    constexpr T &value() &
     {
         return std::get<0>(m_storage);
     }
-    [[nodiscard]] constexpr const T &value() const &
+    constexpr const T &value() const &
     {
         return std::get<0>(m_storage);
     }
-    [[nodiscard]] constexpr T &&value() &&
+    constexpr T &&value() &&
     {
         return std::get<0>(std::move(m_storage));
     }
-    [[nodiscard]] constexpr const T &&value() const &&
+    constexpr const T &&value() const &&
     {
         return std::get<0>(std::move(m_storage));
     }
 
-    [[nodiscard]] constexpr E &error() &
+    constexpr E &error() &
     {
         return std::get<1>(m_storage).value;
     }
-    [[nodiscard]] constexpr const E &error() const &
+    constexpr const E &error() const &
     {
         return std::get<1>(m_storage).value;
     }
-    [[nodiscard]] constexpr E &&error() &&
+    constexpr E &&error() &&
     {
         return std::get<1>(std::move(m_storage)).value;
     }
-    [[nodiscard]] constexpr const E &&error() const &&
+    constexpr const E &&error() const &&
     {
         return std::get<1>(std::move(m_storage)).value;
     }
 
     template<typename U>
-    [[nodiscard]] constexpr T value_or(U &&fallback) const &
+    constexpr T value_or(U &&fallback) const &
     {
         return has_value() ? **this : static_cast<T>(std::forward<U>(fallback));
     }
 
     template<typename U>
-    [[nodiscard]] constexpr T value_or(U &&fallback) &&
+    constexpr T value_or(U &&fallback) &&
     {
         return has_value() ? std::move(**this) : static_cast<T>(std::forward<U>(fallback));
     }
@@ -167,24 +167,24 @@ public:
     {
         return m_storage.index() == 0;
     }
-    [[nodiscard]] constexpr bool has_value() const noexcept
+    constexpr bool has_value() const noexcept
     {
         return m_storage.index() == 0;
     }
 
-    [[nodiscard]] constexpr E &error() &
+    constexpr E &error() &
     {
         return std::get<1>(m_storage).value;
     }
-    [[nodiscard]] constexpr const E &error() const &
+    constexpr const E &error() const &
     {
         return std::get<1>(m_storage).value;
     }
-    [[nodiscard]] constexpr E &&error() &&
+    constexpr E &&error() &&
     {
         return std::get<1>(std::move(m_storage)).value;
     }
-    [[nodiscard]] constexpr const E &&error() const &&
+    constexpr const E &&error() const &&
     {
         return std::get<1>(std::move(m_storage)).value;
     }

@@ -24,13 +24,13 @@ namespace plexus {
 struct publisher_gid
 {
     plexus::node_id m_node_id{};
-    std::uint64_t   m_endpoint_counter{};
+    std::uint64_t m_endpoint_counter{};
 
-    [[nodiscard]] const plexus::node_id &node_id() const noexcept
+    const plexus::node_id &node_id() const noexcept
     {
         return m_node_id;
     }
-    [[nodiscard]] std::uint64_t endpoint_counter() const noexcept
+    std::uint64_t endpoint_counter() const noexcept
     {
         return m_endpoint_counter;
     }

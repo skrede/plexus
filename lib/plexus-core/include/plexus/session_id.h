@@ -22,7 +22,7 @@ struct session_id
 {
     std::uint64_t m_value{};
 
-    [[nodiscard]] std::uint64_t value() const noexcept
+    std::uint64_t value() const noexcept
     {
         return m_value;
     }

@@ -30,7 +30,7 @@ inline constexpr std::string_view k_card_schema_key  = "plexus/schema";
 
 struct listening_transport
 {
-    std::string   transport;
+    std::string transport;
     std::uint16_t port;
 };
 
@@ -39,7 +39,7 @@ namespace detail {
 inline std::string hex_encode(const node_id &id)
 {
     static constexpr char digits[] = "0123456789abcdef";
-    std::string           out;
+    std::string out;
     out.reserve(id.size() * 2);
     for(const std::byte b : id)
     {
@@ -54,7 +54,7 @@ inline std::string hex_encode(const node_id &id)
 // untrusted multicast input, so it is strict: exactly 32 lowercase hex characters
 // produce the 16-byte id; any other length, any uppercase or non-hex character, or
 // an embedded NUL yields nullopt. A caller must never note a peer on nullopt.
-[[nodiscard]] inline std::optional<node_id> hex_decode(std::string_view hex)
+inline std::optional<node_id> hex_decode(std::string_view hex)
 {
     node_id id{};
     if(hex.size() != id.size() * 2)
@@ -90,7 +90,7 @@ inline std::string port_key(std::string_view transport)
 
 // Assemble the card for one node (one record per node): the authenticated node_id,
 // a "plexus/<transport>/port" key per listening transport, and the schema version.
-[[nodiscard]] inline std::vector<std::pair<std::string, std::string>> assemble_contact_card(const node_id &id, const std::vector<listening_transport> &transports)
+inline std::vector<std::pair<std::string, std::string>> assemble_contact_card(const node_id &id, const std::vector<listening_transport> &transports)
 {
     std::vector<std::pair<std::string, std::string>> card;
     card.reserve(transports.size() + 2);
@@ -103,7 +103,7 @@ inline std::string port_key(std::string_view transport)
 
 // Read a "plexus/<transport>/port" value back out of a browsed card so a peer dials
 // the advertised endpoint with no hardcoded port. Absent or unparsable yields none.
-[[nodiscard]] inline std::optional<std::uint16_t> read_transport_port(const std::vector<std::pair<std::string, std::string>> &card, std::string_view transport)
+inline std::optional<std::uint16_t> read_transport_port(const std::vector<std::pair<std::string, std::string>> &card, std::string_view transport)
 {
     const std::string key = detail::port_key(transport);
     for(const auto &[k, v] : card)
@@ -111,8 +111,8 @@ inline std::string port_key(std::string_view transport)
         if(k != key)
             continue;
         std::uint16_t port{};
-        const char   *first = v.data();
-        const char   *last  = v.data() + v.size();
+        const char *first = v.data();
+        const char *last  = v.data() + v.size();
         if(std::from_chars(first, last, port).ec == std::errc{})
             return port;
         return std::nullopt;
