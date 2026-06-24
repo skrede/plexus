@@ -38,7 +38,7 @@ struct encode_thunk
 // (a function, not a closure) so it lowers to a plain function pointer; the lambda's own
 // captures are reached through state, never copied into the thunk.
 template<typename Fn>
-[[nodiscard]] encode_thunk make_encode_thunk(Fn &fn) noexcept
+encode_thunk make_encode_thunk(Fn &fn) noexcept
 {
     return encode_thunk{&fn, [](void *state) -> std::span<const std::byte> { return (*static_cast<Fn *>(state))(); }};
 }
@@ -65,7 +65,7 @@ using object_dispatch = plexus::detail::move_only_function<void(const object_car
 // the carrier's slot. A NULL native_key marks a bytes-only subscription with no entry.
 struct object_entry
 {
-    const void     *native_key{};
+    const void *native_key{};
     object_dispatch dispatch;
 };
 

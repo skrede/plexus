@@ -18,7 +18,7 @@ struct host_fingerprint
 {
     std::uint64_t value = 0;
 
-    [[nodiscard]] bool is_null() const noexcept
+    bool is_null() const noexcept
     {
         return value == 0;
     }
@@ -33,7 +33,7 @@ struct host_fingerprint
 // one. A null peer fingerprint is NEVER same-host (fail closed): the equality check
 // alone is insufficient because two null fingerprints would compare equal and
 // spuriously claim co-location.
-[[nodiscard]] inline bool is_same_host(host_fingerprint peer, host_fingerprint local) noexcept
+inline bool is_same_host(host_fingerprint peer, host_fingerprint local) noexcept
 {
     return !peer.is_null() && peer == local;
 }

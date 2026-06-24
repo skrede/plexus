@@ -60,7 +60,7 @@ public:
     // Move the channel out into a LOCAL, erase the entry, THEN return — the entry is
     // never read after the erase (copy-before-erase: the caller copies any value the
     // entry carries OUT before calling). Returns nullptr on a miss.
-    [[nodiscard]] std::unique_ptr<Channel> resolve(Channel *raw)
+    std::unique_ptr<Channel> resolve(Channel *raw)
     {
         auto it = m_pending.find(raw);
         if(it == m_pending.end())
@@ -85,7 +85,7 @@ public:
     }
 
     // Read the per-entry payload (the ARQ for UDP); nullptr on a miss.
-    [[nodiscard]] Payload *payload_of(Channel *raw)
+    Payload *payload_of(Channel *raw)
     {
         auto it = m_pending.find(raw);
         return it == m_pending.end() ? nullptr : &it->second.payload;
@@ -99,7 +99,7 @@ public:
 
     // Move an accepted channel out, erase, return (the demux raw ref stays intact — the
     // owner keeps routing inbound by endpoint). Returns nullptr on a miss.
-    [[nodiscard]] std::unique_ptr<Channel> adopt_accepted(Channel *raw)
+    std::unique_ptr<Channel> adopt_accepted(Channel *raw)
     {
         auto it = m_accepted.find(raw);
         if(it == m_accepted.end())
@@ -127,12 +127,12 @@ public:
             m_defer(std::move(channel));
     }
 
-    [[nodiscard]] std::size_t pending_size() const noexcept
+    std::size_t pending_size() const noexcept
     {
         return m_pending.size();
     }
 
-    [[nodiscard]] std::size_t accepted_size() const noexcept
+    std::size_t accepted_size() const noexcept
     {
         return m_accepted.size();
     }
@@ -149,11 +149,11 @@ private:
     struct entry
     {
         std::unique_ptr<Channel> channel;
-        Payload                  payload;
+        Payload payload;
     };
 
-    defer_destroy                                           m_defer;
-    std::unordered_map<Channel *, entry>                    m_pending;
+    defer_destroy m_defer;
+    std::unordered_map<Channel *, entry> m_pending;
     std::unordered_map<Channel *, std::unique_ptr<Channel>> m_accepted;
 };
 

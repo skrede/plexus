@@ -56,7 +56,7 @@ constexpr std::size_t k_unlimited_message_bytes = std::numeric_limits<std::size_
 // The per-message size ceiling for a topic: its declared per-topic override when set,
 // else the node default. A pure relation over topic_qos (no I/O) — co-located with the
 // size policy, mirroring qos_rxo.h's pure-relation placement.
-[[nodiscard]] constexpr std::size_t effective_max(const topic_qos &t, std::size_t global_default) noexcept
+constexpr std::size_t effective_max(const topic_qos &t, std::size_t global_default) noexcept
 {
     return t.max_message_bytes != 0 ? static_cast<std::size_t>(t.max_message_bytes) : global_default;
 }
@@ -107,10 +107,10 @@ using fragment_sink = plexus::detail::move_only_function<void(std::uint32_t frag
 // emits exactly one (frag_cnt == 1). Returns the fragment count emitted.
 inline std::uint32_t split(std::span<const std::byte> payload, std::size_t transport_budget, std::uint16_t /*msg_id*/, fragment_sink &sink, bool aead_decorated = false)
 {
-    const std::size_t budget   = effective_fragment_budget(transport_budget, aead_decorated);
-    const std::size_t total    = payload.size();
-    const std::size_t count    = total == 0 ? 1u : (total + budget - 1u) / budget;
-    const auto        frag_cnt = static_cast<std::uint32_t>(count);
+    const std::size_t budget = effective_fragment_budget(transport_budget, aead_decorated);
+    const std::size_t total  = payload.size();
+    const std::size_t count  = total == 0 ? 1u : (total + budget - 1u) / budget;
+    const auto frag_cnt      = static_cast<std::uint32_t>(count);
 
     for(std::size_t i = 0; i < count; ++i)
     {

@@ -20,7 +20,7 @@ namespace plexus::io {
 // initiator_id the dialing side's. The authenticated peer (the OTHER end) is whichever
 // the local node is not — the bridge passes the verified facts plus the local role and
 // reads the peer's half. This reads ONLY the authenticated binding, never a wire claim.
-[[nodiscard]] inline node_id authenticated_peer_id(const security::attach_facts &facts) noexcept
+inline node_id authenticated_peer_id(const security::attach_facts &facts) noexcept
 {
     return facts.role == security::attach_role::initiator ? facts.responder_id : facts.initiator_id;
 }
@@ -28,7 +28,7 @@ namespace plexus::io {
 // The TLS-path identity: the SPKI-derived node_id already computed for the verified
 // peer certificate (re-exported here so the host-identity accessor names one entry
 // point for both postures).
-[[nodiscard]] inline node_id authenticated_peer_id(const security::cert_facts &facts) noexcept
+inline node_id authenticated_peer_id(const security::cert_facts &facts) noexcept
 {
     return security::to_node_id(facts);
 }

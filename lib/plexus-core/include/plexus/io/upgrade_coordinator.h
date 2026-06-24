@@ -85,7 +85,7 @@ public:
     // The publish fan's per-message route: the retained companion channel for (node_name, fqn)
     // when this message fits the medium decision, else nullptr so it keeps the wire sub.channel
     // (the dual-delivery fail-safe). An unheld pair or an over-cap message resolves to nullptr.
-    [[nodiscard]] Channel *companion_for(std::string_view node_name, std::string_view fqn, std::size_t bytes)
+    Channel *companion_for(std::string_view node_name, std::string_view fqn, std::size_t bytes)
     {
         return detail::route_companion(m_held, node_name, fqn, bytes);
     }
@@ -150,23 +150,23 @@ private:
             m_hints.erase(std::string{fqn});
     }
 
-    [[nodiscard]] bool run_policy(bool same_host, dispatch_hint own_hint)
+    bool run_policy(bool same_host, dispatch_hint own_hint)
     {
         return m_policy ? m_policy(same_host, own_hint) : (same_host && any_set(own_hint));
     }
 
-    [[nodiscard]] dispatch_hint hint_for(std::string_view fqn) const
+    dispatch_hint hint_for(std::string_view fqn) const
     {
         auto it = m_hints.find(std::string{fqn});
         return it == m_hints.end() ? dispatch_hint::none : it->second;
     }
 
-    Registry                                                                               &m_registry;
-    std::unordered_map<std::string, ring_list>                                              m_held;
-    std::unordered_map<std::string, dispatch_hint>                                          m_hints;
-    plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)>             m_mint;
+    Registry &m_registry;
+    std::unordered_map<std::string, ring_list> m_held;
+    std::unordered_map<std::string, dispatch_hint> m_hints;
+    plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)> m_mint;
     plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> m_receive_mint;
-    plexus::detail::move_only_function<bool(bool, dispatch_hint)>                           m_policy;
+    plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
 };
 
 }

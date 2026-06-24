@@ -15,24 +15,22 @@
 
 namespace plexus::io {
 
-// over-limit: one transition table over a single handshake transcript; the on_* events
-// and resolve helpers all advance the shared m_state/m_peer_id/m_inbound_pending/
-// m_complete_emitted transcript, so splitting them scatters that shared state.
-//
-// Pure, sans-IO handshake state machine. Holds no asio / transport / logger types
-// and moves no bytes — fully testable in isolation. The bridge feeds it via the
-// on_* events and reacts to the returned fsm_step_result. The FSM does NOT log: it
-// returns abort/reject and the bridge logs at action-execution time.
+// Pure, sans-IO handshake state machine: holds no asio / transport / logger types and moves no
+// bytes. It does NOT log — it returns abort/reject and the bridge logs at action-execution time.
 class handshake_fsm
 {
 public:
     explicit handshake_fsm(const handshake_fsm_config &cfg) noexcept
-            : m_cfg(cfg)
+            : m_peer_id{}
+            , m_inbound_pending{false}
+            , m_state{peer_fsm_state::not_connected}
+            , m_complete_emitted{false}
+            , m_cfg(cfg)
+            , m_peer_fingerprint{}
+            , m_last_seen_their_protocol_version{0}
     {
     }
 
-    // Guarded to the pre-handshake states: a stray dial once handshaking or resolved
-    // must NOT regress an established session.
     fsm_step_result on_dial_started() noexcept
     {
         if(m_state == peer_fsm_state::not_connected || m_state == peer_fsm_state::dialing)
@@ -40,8 +38,6 @@ public:
         return {};
     }
 
-    // Guarded so a stray connected event on an already-handshaking session does not
-    // re-emit send_request.
     fsm_step_result on_outbound_connected() noexcept
     {
         if(m_state == peer_fsm_state::handshaking || m_state == peer_fsm_state::handshake_resolved)
@@ -50,9 +46,8 @@ public:
         return {.action = fsm_action::send_request};
     }
 
-    // Inbound handshake_request. inbound_is_bootstrap marks a fresh inbound with no
-    // counter-direction dial in flight (the common path under demand-driven lazy
-    // dial): it completes inbound-only rather than stranding the session.
+    // inbound_is_bootstrap marks a fresh inbound with no counter-direction dial in flight (the
+    // common path under demand-driven lazy dial): it completes inbound-only rather than stranding.
     fsm_step_result on_request(const wire::handshake_request &req, bool inbound_is_bootstrap, const security::attach_facts &facts = {}) noexcept
     {
         m_last_seen_their_protocol_version = req.protocol_version;
@@ -89,9 +84,8 @@ public:
         return {};
     }
 
-    // A crypto-handshake transport completed its own handshake (mutual cert verify
-    // already passed), so the session resolves with no plexus wire round-trip. Latched
-    // once via m_complete_emitted; on_torn_down resets it for a fresh cycle.
+    // A crypto-handshake transport completed its own mutual-cert handshake, so the session resolves
+    // with no plexus wire round-trip. Latched once via m_complete_emitted; on_torn_down resets it.
     fsm_step_result on_external_complete() noexcept
     {
         if(m_complete_emitted)
@@ -113,34 +107,28 @@ public:
     {
         return m_state;
     }
+
     std::uint8_t last_seen_their_protocol_version() const noexcept
     {
         return m_last_seen_their_protocol_version;
     }
 
-    // The peer's advertised same-host fingerprint, learned at the last validated
-    // request/response. Null (zero) until a frame is validated, and the conservative
-    // not-same-host value the session's is_same_host compare null-guards on.
     host_fingerprint last_seen_peer_fingerprint() const noexcept
     {
         return m_peer_fingerprint;
     }
+
     host_fingerprint local_fingerprint() const noexcept
     {
         return m_cfg.local_fingerprint;
     }
 
-    // The node-level admission gate (null = accept-any). The bridge reads it to decide
-    // whether an attach is security-engaged.
     const security::attach_policy *attach_policy() const noexcept
     {
         return m_cfg.attach_policy;
     }
 
 private:
-    // The exact-match protocol gate runs ahead of every compat / status check, and the
-    // identity-collision gate catches an equal node_id at validation so dedup never sees
-    // the equal case. Captures the learned peer id for the dedup arbitration.
     std::optional<fsm_step_result> validate(std::uint8_t peer_protocol_version, const node_id &peer_id, std::uint64_t peer_fingerprint,
                                             const security::attach_facts &facts = {}) noexcept
     {
@@ -155,9 +143,8 @@ private:
         return std::nullopt;
     }
 
-    // A fresh inbound bootstrap completes inbound-only (no counter-dial to arbitrate).
-    // A mid-dial inbound with an outbound in flight is the second arrival of a
-    // simultaneous connect: arbitrate and complete once.
+    // A fresh inbound bootstrap completes inbound-only (no counter-dial to arbitrate). A mid-dial
+    // inbound with an outbound in flight is the second arrival of a simultaneous connect: arbitrate.
     fsm_step_result resolve_inbound(bool inbound_is_bootstrap) noexcept
     {
         m_inbound_pending = true;
@@ -169,9 +156,6 @@ private:
         return {.action = fsm_action::send_response, .outcome = handshake_outcome::accept_inbound};
     }
 
-    // The response that closes a single-direction dial, or the second arrival of a
-    // simultaneous connect after on_request already completed (the latch no-ops it). A
-    // response with no outbound request ever sent is unsolicited: ignore it.
     fsm_step_result resolve_outbound() noexcept
     {
         if(m_state != peer_fsm_state::handshaking && m_state != peer_fsm_state::handshake_resolved)
@@ -188,6 +172,7 @@ private:
     {
         return m_state == peer_fsm_state::handshaking || m_state == peer_fsm_state::handshake_resolved;
     }
+
     fsm_step_result complete_inbound(dedup_decision dedup) noexcept
     {
         m_state            = peer_fsm_state::handshake_resolved;
@@ -200,9 +185,8 @@ private:
         return {.action = fsm_action::send_response, .outcome = handshake_outcome::accept_inbound};
     }
 
-    // Greater node_id keeps its outbound; the loser keeps the inbound it accepted. Both
-    // sides compute the same surviving connection (the equal case is rejected at
-    // validation, so the comparison is strict).
+    // Greater node_id keeps its outbound; the loser keeps the inbound it accepted. The equal case is
+    // rejected at validation, so the comparison is strict and both sides agree on the survivor.
     dedup_decision arbitrate_dedup() const noexcept
     {
         return m_cfg.self_id > m_peer_id ? dedup_decision::keep_outbound : dedup_decision::keep_inbound;
@@ -218,29 +202,29 @@ private:
         m_state = peer_fsm_state::not_connected;
         return {.action = fsm_action::abort, .outcome = reason};
     }
+
     fsm_step_result reject_version_result() noexcept
     {
         return abort_result(handshake_outcome::reject_version);
     }
+
     fsm_step_result identity_conflict_result() noexcept
     {
         return abort_result(handshake_outcome::reject_identity);
     }
+
     fsm_step_result reject_unauthorized_result() noexcept
     {
         return abort_result(handshake_outcome::reject_unauthorized);
     }
 
+    node_id m_peer_id;
+    bool m_inbound_pending;
+    peer_fsm_state m_state;
+    bool m_complete_emitted;
     handshake_fsm_config m_cfg;
-    node_id              m_peer_id{};
-    host_fingerprint     m_peer_fingerprint{};
-    peer_fsm_state       m_state{peer_fsm_state::not_connected};
-    std::uint8_t         m_last_seen_their_protocol_version{0};
-    bool                 m_inbound_pending{false};
-    // Latches true once a step has emitted complete. The matching second arrival of a
-    // simultaneous connect skips re-emitting complete so the bridge installs forwarders
-    // exactly once; on_torn_down clears it for a fresh cycle.
-    bool m_complete_emitted{false};
+    host_fingerprint m_peer_fingerprint;
+    std::uint8_t m_last_seen_their_protocol_version;
 };
 
 }

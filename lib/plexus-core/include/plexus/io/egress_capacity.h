@@ -29,17 +29,17 @@ struct egress_capacity
 {
     std::size_t bytes;
 
-    [[nodiscard]] static constexpr egress_capacity bounded_default() noexcept
+    static constexpr egress_capacity bounded_default() noexcept
     {
         return {1u * fragmentation_limits::max_message_size};
     }
 
-    [[nodiscard]] static constexpr egress_capacity deep(std::size_t multiple) noexcept
+    static constexpr egress_capacity deep(std::size_t multiple) noexcept
     {
         return {multiple * fragmentation_limits::max_message_size};
     }
 
-    [[nodiscard]] static constexpr egress_capacity of_bytes(std::size_t n) noexcept
+    static constexpr egress_capacity of_bytes(std::size_t n) noexcept
     {
         return {n};
     }

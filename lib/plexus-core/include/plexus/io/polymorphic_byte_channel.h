@@ -43,15 +43,15 @@ class concrete_channel_base
 public:
     virtual ~concrete_channel_base() = default;
 
-    virtual void                        send(std::span<const std::byte> data)                                             = 0;
-    virtual void                        close()                                                                           = 0;
-    [[nodiscard]] virtual endpoint      remote_endpoint() const                                                           = 0;
-    virtual void                        on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)  = 0;
-    virtual void                        on_closed(plexus::detail::move_only_function<void()> cb)                          = 0;
-    virtual void                        on_error(plexus::detail::move_only_function<void(io_error)> cb)                   = 0;
-    virtual void                        on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) = 0;
-    [[nodiscard]] virtual std::size_t   backpressured() const                                                             = 0;
-    [[nodiscard]] virtual std::uint64_t scheduler_key() const                                                             = 0;
+    virtual void send(std::span<const std::byte> data)                                             = 0;
+    virtual void close()                                                                           = 0;
+    virtual endpoint remote_endpoint() const                                                       = 0;
+    virtual void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)  = 0;
+    virtual void on_closed(plexus::detail::move_only_function<void()> cb)                          = 0;
+    virtual void on_error(plexus::detail::move_only_function<void(io_error)> cb)                   = 0;
+    virtual void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb) = 0;
+    virtual std::size_t backpressured() const                                                      = 0;
+    virtual std::uint64_t scheduler_key() const                                                    = 0;
 
     // The optional drop edge: a wrapped channel that surfaces unroutable/congested drops
     // (inproc, shm) forwards the engine's posted drop_sink down to its concrete on_drop;
@@ -79,7 +79,7 @@ public:
     {
         m_c->close();
     }
-    [[nodiscard]] endpoint remote_endpoint() const override
+    endpoint remote_endpoint() const override
     {
         return m_c->remote_endpoint();
     }
@@ -99,11 +99,11 @@ public:
     {
         m_c->on_protocol_close(std::move(cb));
     }
-    [[nodiscard]] std::size_t backpressured() const override
+    std::size_t backpressured() const override
     {
         return m_c->backpressured();
     }
-    [[nodiscard]] std::uint64_t scheduler_key() const override
+    std::uint64_t scheduler_key() const override
     {
         return m_c->scheduler_key();
     }
@@ -142,7 +142,7 @@ public:
     {
         m_impl->close();
     }
-    [[nodiscard]] endpoint remote_endpoint() const
+    endpoint remote_endpoint() const
     {
         return m_impl->remote_endpoint();
     }
@@ -162,11 +162,11 @@ public:
     {
         m_impl->on_protocol_close(std::move(cb));
     }
-    [[nodiscard]] std::size_t backpressured() const
+    std::size_t backpressured() const
     {
         return m_impl->backpressured();
     }
-    [[nodiscard]] std::uint64_t scheduler_key() const
+    std::uint64_t scheduler_key() const
     {
         return m_impl->scheduler_key();
     }

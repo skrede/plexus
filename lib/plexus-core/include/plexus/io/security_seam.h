@@ -19,11 +19,11 @@ namespace plexus::io {
 struct security_negotiation
 {
     std::array<std::byte, security::k_key_id_len> key_id{};
-    std::array<std::byte, 16>                     initiator_nonce{};
-    std::array<std::byte, 16>                     responder_nonce{};
-    std::array<std::byte, 32>                     transcript_digest{};
-    security::attach_role                         role{};
-    std::uint8_t                                  chosen_cipher{0};
+    std::array<std::byte, 16> initiator_nonce{};
+    std::array<std::byte, 16> responder_nonce{};
+    std::array<std::byte, 32> transcript_digest{};
+    security::attach_role role{};
+    std::uint8_t chosen_cipher{0};
 };
 
 // The type-erased, OpenSSL-free security seam injected once at session-spine
@@ -41,12 +41,12 @@ struct security_seam
     // const by every session (mirroring cookie_secret's mutable hmac seam).
     mutable plexus::detail::move_only_function<bool(std::span<const std::byte> transcript, std::span<std::byte, 32> out)> transcript;
 
-    [[nodiscard]] bool engaged() const noexcept
+    bool engaged() const noexcept
     {
         return static_cast<bool>(transcript);
     }
 
-    [[nodiscard]] bool compute(std::span<const std::byte> in, std::span<std::byte, 32> out) const
+    bool compute(std::span<const std::byte> in, std::span<std::byte, 32> out) const
     {
         return transcript(in, out);
     }
