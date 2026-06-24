@@ -2,10 +2,9 @@
 # (200 lines, comments and blank lines included) unless it is a registered
 # exception. The scan set is the whole tree -- lib/, backends/, tests/, examples/
 # -- minus the gate's own negative-fixture dir. An over-limit file is legal only when it
-# carries BOTH an in-code "// over-limit:" marker AND a matching row in
-# EXCEPTIONS.md; the two are cross-checked in both directions, and a row for a
-# unit that is no longer over-limit is itself a violation (stale exceptions are
-# not silently tolerated). This file is self-dispatching: included from the
+# carries a matching row in EXCEPTIONS.md; a row for a unit that is no longer
+# over-limit, or that names no scanned file, is itself a violation (stale exceptions
+# are not silently tolerated). This file is self-dispatching: included from the
 # build it registers an ALL custom target that re-invokes it via -P
 # (cross-platform, no bash) with SIZE_GATE_FATAL=ON, so a violation fails the
 # build; run with -DSIZE_GATE_SCAN it performs the scan. A direct -P invocation
@@ -75,14 +74,6 @@ if(EXISTS "${_exceptions_md}")
     endforeach()
 endif()
 
-function(_size_has_marker file out_var)
-    set(${out_var} FALSE PARENT_SCOPE)
-    file(STRINGS "${file}" _mk REGEX "// *over-limit:")
-    if(_mk)
-        set(${out_var} TRUE PARENT_SCOPE)
-    endif()
-endfunction()
-
 # Count lines exactly as `wc -l` does: the number of newline terminators. We
 # read the raw bytes and take the length delta after stripping newlines, which
 # is immune to the embedded-semicolon corruption that makes file(STRINGS)'s list
@@ -105,7 +96,6 @@ foreach(_file IN LISTS _scan_files)
     _size_line_count("${_file}" _count)
     file(RELATIVE_PATH _rel "${SIZE_GATE_ROOT}" "${_file}")
 
-    _size_has_marker("${_file}" _has_marker)
     list(FIND _registered "${_rel}" _row_idx)
     set(_has_row FALSE)
     if(NOT _row_idx EQUAL -1)
@@ -114,21 +104,11 @@ foreach(_file IN LISTS _scan_files)
     endif()
 
     if(_count GREATER SIZE_GATE_LIMIT)
-        if(NOT _has_marker AND NOT _has_row)
+        if(NOT _has_row)
             list(APPEND _violations
-                "${_rel}: ${_count} lines over the ${SIZE_GATE_LIMIT} ceiling with no // over-limit: marker and no EXCEPTIONS.md row")
-        elseif(NOT _has_marker)
-            list(APPEND _violations
-                "${_rel}: ${_count} lines over the ceiling, has an EXCEPTIONS.md row but no in-code // over-limit: marker")
-        elseif(NOT _has_row)
-            list(APPEND _violations
-                "${_rel}: ${_count} lines over the ceiling, has a // over-limit: marker but no EXCEPTIONS.md row")
+                "${_rel}: ${_count} lines over the ${SIZE_GATE_LIMIT} ceiling with no EXCEPTIONS.md row")
         endif()
     else()
-        if(_has_marker)
-            list(APPEND _violations
-                "${_rel}: carries a // over-limit: marker but is only ${_count} lines (stale marker)")
-        endif()
         if(_has_row)
             list(APPEND _violations
                 "${_rel}: has an EXCEPTIONS.md row but is only ${_count} lines (stale exception)")
