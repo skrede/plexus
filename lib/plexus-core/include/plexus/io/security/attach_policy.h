@@ -24,7 +24,7 @@ class attach_policy
 public:
     virtual ~attach_policy() = default;
 
-    [[nodiscard]] virtual bool decide(const attach_facts &facts) const noexcept = 0;
+    virtual bool decide(const attach_facts &facts) const noexcept = 0;
 };
 
 // One keyed pre-shared secret: the opaque id the handshake carries and the raw key
@@ -32,7 +32,7 @@ public:
 struct keyed_psk
 {
     std::array<std::byte, k_key_id_len> key_id;
-    std::vector<std::byte>              material;
+    std::vector<std::byte> material;
 };
 
 // The default attach_policy: a PSK keystore. decide() looks the key up by id (an
@@ -56,7 +56,7 @@ public:
                 plexus::detail::fail_closed("psk_keystore_policy: key material below minimum length");
     }
 
-    [[nodiscard]] bool decide(const attach_facts &facts) const noexcept override
+    bool decide(const attach_facts &facts) const noexcept override
     {
         const keyed_psk *key = lookup(facts.key_id);
         if(key == nullptr)
@@ -68,7 +68,7 @@ public:
     }
 
 private:
-    [[nodiscard]] const keyed_psk *lookup(const std::array<std::byte, k_key_id_len> &id) const noexcept
+    const keyed_psk *lookup(const std::array<std::byte, k_key_id_len> &id) const noexcept
     {
         for(const auto &k : m_keys)
             if(k.key_id == id)
@@ -78,7 +78,7 @@ private:
 
     // MAC the canonical proof input (assembled by attach_proof_input — the layout the
     // prover reproduces byte for byte) under this key's material.
-    [[nodiscard]] bool recompute_proof(const keyed_psk &key, const attach_facts &f, std::span<std::byte> out) const noexcept
+    bool recompute_proof(const keyed_psk &key, const attach_facts &f, std::span<std::byte> out) const noexcept
     {
         return m_hmac(key.material, attach_proof_input(f), out);
     }
@@ -96,7 +96,7 @@ private:
 class accept_any final : public attach_policy
 {
 public:
-    [[nodiscard]] bool decide(const attach_facts &) const noexcept override
+    bool decide(const attach_facts &) const noexcept override
     {
         return true;
     }
@@ -120,12 +120,12 @@ public:
     {
     }
 
-    [[nodiscard]] bool engaged() const noexcept
+    bool engaged() const noexcept
     {
         return m_engaged;
     }
 
-    [[nodiscard]] const std::array<std::byte, k_key_id_len> &key_id() const noexcept
+    const std::array<std::byte, k_key_id_len> &key_id() const noexcept
     {
         return m_key.key_id;
     }
@@ -134,7 +134,7 @@ public:
     // in `facts` are the prover's OWN view (its role, its own_nonce, the peer's nonce as
     // peer_nonce), so the verifier — recomputing under the same key with its mirror view
     // — matches. Returns false on a degraded MAC so the caller fails closed.
-    [[nodiscard]] bool prove(const attach_facts &facts, std::span<std::byte> out) const
+    bool prove(const attach_facts &facts, std::span<std::byte> out) const
     {
         return m_hmac(m_key.material, attach_proof_input(facts), out);
     }
@@ -145,7 +145,7 @@ private:
     // Invoked from the const prove() path; the C++20 fallback move_only_function has a
     // non-const call operator, so the seam holds the MAC mutable (mirroring cookie_secret).
     mutable hmac_fn m_hmac;
-    bool            m_engaged{false};
+    bool m_engaged{false};
 };
 
 }

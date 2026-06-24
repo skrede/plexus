@@ -34,11 +34,11 @@ public:
     virtual ~peer_cred_policy() = default;
 
     // True iff this local peer is authorized given its credentials. Non-throwing.
-    [[nodiscard]] virtual bool decide(const peer_cred &cred) const noexcept = 0;
+    virtual bool decide(const peer_cred &cred) const noexcept = 0;
 
     // True iff this policy admits a peer whose credentials cannot be read (Windows AF_UNIX).
     // accept_any returns true; any restrictive policy returns false (fail-closed at listen).
-    [[nodiscard]] virtual bool accepts_without_credentials() const noexcept = 0;
+    virtual bool accepts_without_credentials() const noexcept = 0;
 };
 
 // The default peer_cred_policy: admit every local peer (the explicit no-credential-check
@@ -49,11 +49,11 @@ public:
 class accept_any_peer_cred final : public peer_cred_policy
 {
 public:
-    [[nodiscard]] bool decide(const peer_cred &) const noexcept override
+    bool decide(const peer_cred &) const noexcept override
     {
         return true;
     }
-    [[nodiscard]] bool accepts_without_credentials() const noexcept override
+    bool accepts_without_credentials() const noexcept override
     {
         return true;
     }

@@ -88,14 +88,14 @@ public:
 
     // Compute the keyed MAC over [peer_addr || current_nonce] into out (k_cookie_len bytes).
     // Returns false on any hmac_fn failure (the caller fails the cookie closed).
-    [[nodiscard]] bool mint(std::span<const std::byte> peer_addr, std::span<std::byte> out) const
+    bool mint(std::span<const std::byte> peer_addr, std::span<std::byte> out) const
     {
         return mac(peer_addr, m_cur, out);
     }
 
     // True iff `cookie` constant-time-equals the MAC against the current OR previous
     // nonce (the rotation-straddle tolerance). A length mismatch rejects immediately.
-    [[nodiscard]] bool validate(std::span<const std::byte> peer_addr, std::span<const std::byte> cookie) const
+    bool validate(std::span<const std::byte> peer_addr, std::span<const std::byte> cookie) const
     {
         if(cookie.size() != k_cookie_len)
             return false;
@@ -109,16 +109,16 @@ public:
 
 private:
     // HMAC over the packed [peer_addr || nonce]: assemble the message once, MAC it.
-    [[nodiscard]] bool mac(std::span<const std::byte> peer_addr, const std::array<std::byte, 16> &nonce, std::span<std::byte> out) const
+    bool mac(std::span<const std::byte> peer_addr, const std::array<std::byte, 16> &nonce, std::span<std::byte> out) const
     {
         std::vector<std::byte> msg(peer_addr.begin(), peer_addr.end());
         msg.insert(msg.end(), nonce.begin(), nonce.end());
         return m_hmac(m_key, msg, out);
     }
 
-    std::array<std::byte, 32>             m_key{}; // process-random HMAC key
-    std::array<std::byte, 16>             m_cur{};
-    std::array<std::byte, 16>             m_prev{};
+    std::array<std::byte, 32> m_key{}; // process-random HMAC key
+    std::array<std::byte, 16> m_cur{};
+    std::array<std::byte, 16> m_prev{};
     std::chrono::steady_clock::time_point m_last_rotate{};
 
     // The injected functors are invoked from the const query paths (mint/validate). The

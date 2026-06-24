@@ -24,7 +24,7 @@ public:
     virtual ~verify_policy() = default;
 
     // True iff this peer is authorized given the extracted facts. Non-throwing.
-    [[nodiscard]] virtual bool decide(const cert_facts &facts) const noexcept = 0;
+    virtual bool decide(const cert_facts &facts) const noexcept = 0;
 };
 
 // The default verify_policy: an SPKI-fingerprint allowlist. Accepts iff the peer's
@@ -39,7 +39,7 @@ public:
     {
     }
 
-    [[nodiscard]] bool decide(const cert_facts &facts) const noexcept override
+    bool decide(const cert_facts &facts) const noexcept override
     {
         for(const auto &pin : m_pinned)
             if(pin == facts.spki_sha256)

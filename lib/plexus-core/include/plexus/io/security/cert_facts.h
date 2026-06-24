@@ -53,7 +53,7 @@ struct cert_facts
 // 32-byte SHA-256 SPKI digest (node_id is a 128-bit value). The full pin remains
 // the trust anchor in the verify decision; this is only the registry key — no second
 // SPKI extraction, the truncation reads the already-computed digest.
-[[nodiscard]] inline plexus::node_id to_node_id(const cert_facts &facts) noexcept
+inline plexus::node_id to_node_id(const cert_facts &facts) noexcept
 {
     plexus::node_id id{};
     for(std::size_t i = 0; i < id.size(); ++i)

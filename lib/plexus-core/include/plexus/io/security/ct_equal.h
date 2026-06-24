@@ -9,7 +9,7 @@ namespace plexus::io::security {
 // The constant-time compare: OR-accumulate the per-byte difference over ALL bytes
 // (no early return, no break mid-loop), then test the accumulator once. A near-miss
 // leaks no timing about which byte differs. A length mismatch rejects immediately.
-[[nodiscard]] inline bool ct_equal(std::span<const std::byte> a, std::span<const std::byte> b) noexcept
+inline bool ct_equal(std::span<const std::byte> a, std::span<const std::byte> b) noexcept
 {
     if(a.size() != b.size())
         return false;
