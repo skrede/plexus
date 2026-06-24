@@ -32,23 +32,23 @@ template<typename Session>
 void deliver_session_data(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner)
 {
     const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
-    if(s.m_on_message_with_info)
+    if(s.m_on_message_with_info_cb)
     {
         const message_info info = assemble_message_info(s, hdr);
         s.m_messages.deliver(s.m_msg_peer, inner, info, s.m_ctx.peer_id, has_source_identity,
-                             [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_with_info(fqn, data, mi); });
+                             [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_with_info_cb(fqn, data, mi); });
         return;
     }
-    if(s.m_on_message)
+    if(s.m_on_message_cb)
     {
-        s.m_messages.deliver(s.m_msg_peer, inner, s.m_ctx.peer_id, has_source_identity, [&s](std::string_view fqn, std::span<const std::byte> data) { s.m_on_message(fqn, data); });
+        s.m_messages.deliver(s.m_msg_peer, inner, s.m_ctx.peer_id, has_source_identity, [&s](std::string_view fqn, std::span<const std::byte> data) { s.m_on_message_cb(fqn, data); });
         return;
     }
-    if(s.m_on_message_route)
+    if(s.m_on_message_route_cb)
     {
         const message_info info = assemble_message_info(s, hdr);
         s.m_messages.deliver(s.m_msg_peer, inner, info, s.m_ctx.peer_id, has_source_identity,
-                             [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_route(fqn, data, mi); });
+                             [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_route_cb(fqn, data, mi); });
         return;
     }
     s.m_messages.deliver(s.m_msg_peer, inner, s.m_ctx.peer_id, has_source_identity, [](std::string_view, std::span<const std::byte>) {});
@@ -65,8 +65,8 @@ void deliver_session_object(Session &s, const object_carrier &c)
         s.m_logger.warn("plexus: peer_session object_topic_unknown");
         return release(c);
     }
-    if(s.m_on_object_route)
-        s.m_on_object_route(fqn, c);
+    if(s.m_on_object_route_cb)
+        s.m_on_object_route_cb(fqn, c);
     release(c);
 }
 

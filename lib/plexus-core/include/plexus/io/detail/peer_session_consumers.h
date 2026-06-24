@@ -77,8 +77,8 @@ void register_session_consumers(Session &s)
     s.m_router.on_heartbeat(
             [&s](std::span<const std::byte> inner)
             {
-                if(wire::decode_heartbeat(inner) && s.m_on_stamp_seen)
-                    s.m_on_stamp_seen(s.m_ctx.peer_id);
+                if(wire::decode_heartbeat(inner) && s.m_on_stamp_seen_cb)
+                    s.m_on_stamp_seen_cb(s.m_ctx.peer_id);
             });
 }
 

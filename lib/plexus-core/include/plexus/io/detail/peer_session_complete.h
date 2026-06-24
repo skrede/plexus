@@ -30,17 +30,17 @@ peer_kind session_kind(const Session &s) noexcept
 template<typename Session>
 void fire_lifecycle(Session &s, lifecycle_edge edge, handshake_outcome reason = handshake_outcome::none)
 {
-    if(!s.m_on_lifecycle)
+    if(!s.m_on_lifecycle_cb)
         return;
-    s.m_on_lifecycle(lifecycle_event{edge, s.m_ctx.peer_id, s.m_ctx.node_name, session_kind(s), reason});
+    s.m_on_lifecycle_cb(lifecycle_event{edge, s.m_ctx.peer_id, s.m_ctx.node_name, session_kind(s), reason});
 }
 
 template<typename Session>
 void fire_security(Session &s, security_kind kind, security_cause cause = security_cause::none)
 {
-    if(!s.m_on_security)
+    if(!s.m_on_security_cb)
         return;
-    s.m_on_security(security_event{kind, s.m_ctx.peer_id, cause});
+    s.m_on_security_cb(security_event{kind, s.m_ctx.peer_id, cause});
 }
 
 // has_ever_connected survives teardown: read its prior value, then latch it true — the read
@@ -150,13 +150,13 @@ void surface_subscribe_outcome(Session &s, const wire::subscribe_response &resp)
 {
     if(is_refusal(resp.status))
     {
-        if(s.m_on_subscribe_refused)
-            s.m_on_subscribe_refused(resp.topic_hash, resp.status);
+        if(s.m_on_subscribe_refused_cb)
+            s.m_on_subscribe_refused_cb(resp.topic_hash, resp.status);
     }
     else if(resp.status == wire::subscribe_status::subscribed_degraded)
     {
-        if(s.m_on_subscribe_degraded)
-            s.m_on_subscribe_degraded(resp.topic_hash, resp.degraded_flags);
+        if(s.m_on_subscribe_degraded_cb)
+            s.m_on_subscribe_degraded_cb(resp.topic_hash, resp.degraded_flags);
     }
 }
 

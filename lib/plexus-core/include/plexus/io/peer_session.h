@@ -101,8 +101,8 @@ public:
                     // genuine channel break drives the transport-drop reconnect.
                     if(e == io_error::would_block)
                         return;
-                    if(m_on_drop && !m_torn_down && !m_closed_for_protocol_error)
-                        m_on_drop();
+                    if(m_on_drop_cb && !m_torn_down && !m_closed_for_protocol_error)
+                        m_on_drop_cb();
                 });
         m_channel.on_protocol_close([this](wire::close_cause cause) { on_channel_protocol_close(cause); });
         if constexpr(requires(channel_type &c) { c.on_object([](const object_carrier &) {}); })
@@ -119,43 +119,43 @@ public:
     template<typename OnMessage>
     void on_message(OnMessage on_message)
     {
-        m_on_message = std::move(on_message);
+        m_on_message_cb = std::move(on_message);
     }
 
     template<typename OnMessageWithInfo>
     void on_message_with_info(OnMessageWithInfo cb)
     {
-        m_on_message_with_info = std::move(cb);
+        m_on_message_with_info_cb = std::move(cb);
     }
 
     void on_message_route(plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> cb)
     {
-        m_on_message_route = std::move(cb);
+        m_on_message_route_cb = std::move(cb);
     }
 
     void on_object_route(plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> cb)
     {
-        m_on_object_route = std::move(cb);
+        m_on_object_route_cb = std::move(cb);
     }
 
     void on_transport_drop(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_drop = std::move(cb);
+        m_on_drop_cb = std::move(cb);
     }
 
     void on_lifecycle(plexus::detail::move_only_function<void(const lifecycle_event &)> cb)
     {
-        m_on_lifecycle = std::move(cb);
+        m_on_lifecycle_cb = std::move(cb);
     }
 
     void on_stamp_seen(plexus::detail::move_only_function<void(const node_id &)> cb)
     {
-        m_on_stamp_seen = std::move(cb);
+        m_on_stamp_seen_cb = std::move(cb);
     }
 
     void on_security(plexus::detail::move_only_function<void(const security_event &)> cb)
     {
-        m_on_security = std::move(cb);
+        m_on_security_cb = std::move(cb);
     }
 
     void on_install_security(plexus::detail::move_only_function<void(const security_negotiation &)> cb)
@@ -185,12 +185,12 @@ public:
 
     void on_subscribe_refused(plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> cb)
     {
-        m_on_subscribe_refused = std::move(cb);
+        m_on_subscribe_refused_cb = std::move(cb);
     }
 
     void on_subscribe_degraded(plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> cb)
     {
-        m_on_subscribe_degraded = std::move(cb);
+        m_on_subscribe_degraded_cb = std::move(cb);
     }
 
     // The staleness gate runs before the router: a frame whose non-zero session_id differs from
@@ -331,16 +331,16 @@ private:
     std::chrono::nanoseconds m_handshake_timeout;
     typename message_forwarder<Policy>::peer m_msg_peer;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
-    plexus::detail::move_only_function<void()> m_on_drop;
-    plexus::detail::move_only_function<void(const node_id &)> m_on_stamp_seen;
-    plexus::detail::move_only_function<void(const security_event &)> m_on_security;
-    plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
-    plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> m_on_subscribe_degraded;
-    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message;
-    plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> m_on_object_route;
-    plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> m_on_subscribe_refused;
-    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_route;
-    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_with_info;
+    plexus::detail::move_only_function<void()> m_on_drop_cb;
+    plexus::detail::move_only_function<void(const node_id &)> m_on_stamp_seen_cb;
+    plexus::detail::move_only_function<void(const security_event &)> m_on_security_cb;
+    plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> m_on_subscribe_degraded_cb;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message_cb;
+    plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> m_on_object_route_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> m_on_subscribe_refused_cb;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_route_cb;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_with_info_cb;
 
     template<typename S>
     friend void detail::register_session_consumers(S &);
