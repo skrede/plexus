@@ -52,26 +52,26 @@ concept mux_member = requires(
 };
 
 // A per-candidate eligibility descriptor the selection hook reads to pick one member when a tier
-// resolves to N candidates: the member index + a compile-time flag (mux_prefers_shm) for whether
-// this candidate is the same-host fast-path (shared-memory) member. NOT a runtime acquire result —
-// the hook reads it to know WHICH candidate is the fast path, then decides at acquire time.
+// resolves to N candidates: the member index + a compile-time flag for whether this candidate is
+// the same-host fast-path member. Not a runtime acquire result — the hook reads it to know WHICH
+// candidate is the fast path, then decides at acquire time.
 struct mux_candidate
 {
     std::size_t index        = 0;
-    bool        shm_eligible = false;
+    bool        local_fast_eligible = false;
 };
 
-// Whether a member is the same-host shared-memory fast-path candidate. Defaults false;
-// a member opts in with `static constexpr bool mux_prefers_shm = true`. A trait (not a
-// concept requirement) so every existing member stays a valid mux_member unchanged.
+// Whether a member is the same-host fast-path candidate. Defaults false; a member opts in with
+// `static constexpr bool mux_prefers_local_fast = true`. A trait (not a concept requirement) so
+// every existing member stays a valid mux_member unchanged.
 template<typename M, typename = void>
-struct member_prefers_shm : std::false_type
+struct member_prefers_local_fast : std::false_type
 {
 };
 
 template<typename M>
-struct member_prefers_shm<M, std::void_t<decltype(M::mux_prefers_shm)>>
-        : std::bool_constant<M::mux_prefers_shm>
+struct member_prefers_local_fast<M, std::void_t<decltype(M::mux_prefers_local_fast)>>
+        : std::bool_constant<M::mux_prefers_local_fast>
 {
 };
 
@@ -96,7 +96,7 @@ struct first_candidate
 }
 
 // The per-scheme select + sink-wiring glue (relocation of the mux's candidate-collection and
-// wire_member helpers). Included here — after mux_candidate / member_prefers_shm are defined and
+// wire_member helpers). Included here — after mux_candidate / member_prefers_local_fast are defined and
 // before the class that befriends and calls it — to avoid a circular include.
 #include "plexus/io/detail/mux_dispatch.h"
 
@@ -118,7 +118,7 @@ public:
     template<std::size_t I>
     using member_type = std::remove_reference_t<std::tuple_element_t<I, std::tuple<Members...>>>;
     template<typename M>
-    static constexpr bool member_prefers_shm_v = member_prefers_shm<M>::value;
+    static constexpr bool member_prefers_local_fast_v = member_prefers_local_fast<M>::value;
 
     explicit multiplexing_transport(Members &...members, transport_selector selector = {},
                                     selection_hook hook = first_candidate{})

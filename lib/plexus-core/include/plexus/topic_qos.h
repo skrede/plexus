@@ -5,7 +5,7 @@
 #include "plexus/io/priority.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/dispatch_hint.h"
 
 #include <cstdint>
 
@@ -32,9 +32,9 @@ namespace plexus {
 // (default = "unset") WITHOUT reshaping the call sites. Plain fields with defaults:
 // plexus has no QoS negotiation, so there is no "unset" to distinguish.
 //
-// `dispatch` is the shared-memory eligibility hint (a FLAGS bitmask; none = 0 is
-// the absence): a same-host topic with any bit set prefers the shared-memory
-// medium, none keeps it on the local stream. `max_message_bytes` (0 = unset) is the
+// `dispatch` is the dispatch hint (a FLAGS bitmask; none = 0 is the absence): a
+// same-host topic with any bit set prefers the faster medium, none keeps it on the
+// local stream. `max_message_bytes` (0 = unset) is the
 // per-MESSAGE size authority for the topic: it is the per-topic override of the
 // node-level message ceiling that bounds the stream + datagram receive reassembly
 // and the send-side oversize-reject (resolved through io::effective_max); 0 falls
@@ -49,7 +49,7 @@ struct topic_qos
     io::reliability        reliability       = io::reliability::best_effort;
     io::congestion         congestion        = io::congestion::block;
     io::priority           priority          = io::priority::normal;
-    io::shm::dispatch_hint dispatch          = io::shm::dispatch_hint::none;
+    io::dispatch_hint      dispatch          = io::dispatch_hint::none;
     std::uint32_t          max_message_bytes = 0;
 
     // The publisher's OFFERED deadline/liveliness periods — the offered half of the

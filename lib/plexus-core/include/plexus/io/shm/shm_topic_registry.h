@@ -7,7 +7,7 @@
 #include "plexus/io/shm/region_broker_concept.h"
 #include "plexus/io/shm/ring_geometry.h"
 #include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/region_naming.h"
 #include "plexus/io/shm/shm_channel.h"
 #include "plexus/io/shm/shm_slot_owner.h"
 #include "plexus/io/shm/shm_acquire_result.h"

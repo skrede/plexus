@@ -1,14 +1,14 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_MACHINE_FINGERPRINT_H
 #define HPP_GUARD_PLEXUS_SHM_MACHINE_FINGERPRINT_H
 
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/host_fingerprint.h"
 
 namespace plexus::shm {
 
 // Read this machine's identity (the kernel machine-id + hostname) and derive the
 // core host_fingerprint VALUE the same-host decision compares. The READ is the
 // platform's irreducible mechanism so it lives in the compiled backend; the
-// COMPARE + the region NAMING stay in the header-only core (io/shm/same_host.h).
+// COMPARE stays in the header-only core (io/host_fingerprint.h).
 //
 // Determinism + host-distinctness are the only properties required: every process
 // on one host converges on the same value, two hosts diverge. It is the FNV-1a
@@ -21,7 +21,7 @@ namespace plexus::shm {
 // passes it down -- there is NO function-local static memoization here (the
 // no-static-singleton discipline). Calling it twice on one host returns the same
 // value because the inputs are stable, not because anything is cached.
-[[nodiscard]] plexus::io::shm::host_fingerprint read_machine_fingerprint();
+[[nodiscard]] plexus::io::host_fingerprint read_machine_fingerprint();
 
 }
 

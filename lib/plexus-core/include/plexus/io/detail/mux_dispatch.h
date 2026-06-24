@@ -18,7 +18,7 @@ namespace plexus::io::detail {
 
 // The per-scheme select + sink-wiring glue for multiplexing_transport, relocated by friendship:
 // each helper reaches the mux's member pack / selector / hook / forwarding sinks through the mux
-// reference. The mux_candidate / member_prefers_shm types stay namespace-level in the mux header.
+// reference. The mux_candidate / member_prefers_local_fast types stay namespace-level in the mux header.
 
 // Wrap a member's minted concrete channel into the erased polymorphic_byte_channel.
 template<typename C>
@@ -62,7 +62,7 @@ void wire_member(Mux &mux, M &m)
 }
 
 // Append member I to the candidate array iff it serves ep.scheme within tier (the per-scheme,
-// per-tier eligibility filter). The shm_eligible flag is the member type's compile-time property.
+// per-tier eligibility filter). The local_fast_eligible flag is the member type's compile-time property.
 template<typename Mux, std::size_t I, typename Candidates>
 void mux_consider(const Mux &, const endpoint &ep, transport_kind tier, Candidates &out,
                   std::size_t &count)
@@ -73,7 +73,7 @@ void mux_consider(const Mux &, const endpoint &ep, transport_kind tier, Candidat
     for(std::string_view scheme : M::mux_schemes)
         if(scheme == ep.scheme)
         {
-            out[count++] = mux_candidate{I, Mux::template member_prefers_shm_v<M>};
+            out[count++] = mux_candidate{I, Mux::template member_prefers_local_fast_v<M>};
             return;
         }
 }

@@ -1,4 +1,5 @@
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/host_fingerprint.h"
+#include "plexus/io/shm/region_naming.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -10,6 +11,8 @@
 // distinctness are the load-bearing properties.
 
 using namespace plexus::io::shm;
+using plexus::io::host_fingerprint;
+using plexus::io::is_same_host;
 
 TEST_CASE("same_host: a null peer fingerprint is never same-host", "[shm][same_host]")
 {

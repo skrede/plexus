@@ -252,8 +252,8 @@ public:
     std::uint32_t attempt_count(const node_id &id) const { return m_registry.attempt_count(id); }
     session_type *session_for(const node_id &id) { return m_registry.session_for(id); }
 
-    const known_peers    &known() const noexcept { return m_known; }
-    shm::host_fingerprint local_fingerprint() const noexcept
+    const known_peers   &known() const noexcept { return m_known; }
+    io::host_fingerprint local_fingerprint() const noexcept
     {
         return m_build.fsm_cfg.local_fingerprint;
     }
@@ -266,9 +266,8 @@ public:
     }
 
     // Passes the consumer-sovereign upgrade-policy hook to the coordinator (default-when-unset
-    // = attempt_shm_upgrade).
-    void
-    on_upgrade_policy(plexus::detail::move_only_function<bool(bool, shm::dispatch_hint)> policy)
+    // = same_host && any hint bit set).
+    void on_upgrade_policy(plexus::detail::move_only_function<bool(bool, dispatch_hint)> policy)
     {
         m_coordinator.on_policy(std::move(policy));
     }

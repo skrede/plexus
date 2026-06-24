@@ -1,26 +1,23 @@
 #ifndef HPP_GUARD_PLEXUS_IO_UPGRADE_CHANNEL_H
 #define HPP_GUARD_PLEXUS_IO_UPGRADE_CHANNEL_H
 
-#include "plexus/io/shm/ring_geometry_mode.h"
-
 #include "plexus/detail/compat.h"
 
 #include <memory>
-#include <cstdint>
+#include <cstddef>
 
 namespace plexus::io {
 
 // The transport-neutral mint result the engine's upgrade coordinator retains. A null channel
 // signals the gate DECLINED — the pair keeps the wire. The coordinator retains the channel
-// single-owner; mode + slot_capacity are the per-message route inputs. The mode is carried
-// opaquely as the upgrade-capable transport's own enum (an shm member fills it with its ring
-// geometry mode); the generic seam does not interpret it beyond the per-message route.
+// single-owner. fits is the per-message route predicate the minting medium constructs: true
+// when a message rides the companion channel, false when it falls back to the wire. The generic
+// seam never interprets the medium's geometry — it only calls fits.
 template<typename Channel>
 struct upgrade_mint
 {
-    std::unique_ptr<Channel> channel;
-    shm::ring_geometry_mode  mode          = shm::ring_geometry_mode::reliable_preserving;
-    std::uint64_t            slot_capacity = 0;
+    std::unique_ptr<Channel>                             channel;
+    plexus::detail::move_only_function<bool(std::size_t)> fits;
 };
 
 // A type-erased OWNER of the live receive companion: never called, it exists only to hold the

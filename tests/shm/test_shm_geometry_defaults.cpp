@@ -33,6 +33,7 @@
 // exact ask vs available — never a silent reliable -> best-effort downgrade.
 
 using namespace plexus::io::shm;
+using plexus::io::dispatch_hint;
 
 namespace {
 

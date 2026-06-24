@@ -4,7 +4,7 @@
 #include "plexus/io/handshake_protocol.h"
 #include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/attach_policy.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/host_fingerprint.h"
 
 #include "plexus/wire/handshake.h"
 
@@ -120,8 +120,8 @@ public:
     // The peer's advertised same-host fingerprint, learned at the last validated
     // request/response. Null (zero) until a frame is validated, and the conservative
     // not-same-host value the session's is_same_host compare null-guards on.
-    shm::host_fingerprint last_seen_peer_fingerprint() const noexcept { return m_peer_fingerprint; }
-    shm::host_fingerprint local_fingerprint() const noexcept { return m_cfg.local_fingerprint; }
+    host_fingerprint last_seen_peer_fingerprint() const noexcept { return m_peer_fingerprint; }
+    host_fingerprint local_fingerprint() const noexcept { return m_cfg.local_fingerprint; }
 
     // The node-level admission gate (null = accept-any). The bridge reads it to decide
     // whether an attach is security-engaged.
@@ -136,7 +136,7 @@ private:
                                             const security::attach_facts &facts = {}) noexcept
     {
         m_peer_id          = peer_id;
-        m_peer_fingerprint = shm::host_fingerprint{peer_fingerprint};
+        m_peer_fingerprint = host_fingerprint{peer_fingerprint};
         if(peer_protocol_version != wire::k_protocol_version)
             return reject_version_result();
         if(peer_id == m_cfg.self_id)
@@ -233,7 +233,7 @@ private:
 
     handshake_fsm_config  m_cfg;
     node_id               m_peer_id{};
-    shm::host_fingerprint m_peer_fingerprint{};
+    host_fingerprint m_peer_fingerprint{};
     peer_fsm_state        m_state{peer_fsm_state::not_connected};
     std::uint8_t          m_last_seen_their_protocol_version{0};
     bool                  m_inbound_pending{false};

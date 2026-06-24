@@ -10,14 +10,14 @@ TEST_CASE("udp selector: reliability_hint_of bridges the publisher's declared cl
 }
 
 TEST_CASE("udp selector: dispatch_class observably changes with the hint and leaves "
-          "shm_eligible_for intact",
+          "local_fast_eligible_for intact",
           "[udp][selector][dispatch]")
 {
     pio::transport_selector sel;
-    using pio::shm::dispatch_hint;
+    using pio::dispatch_hint;
 
     // The declared dispatch hint observably steers the verdict: a set hint prefers the
-    // fast path, none does not. For a LOCAL peer it coincides with shm_eligible_for.
+    // fast path, none does not. For a LOCAL peer it coincides with local_fast_eligible_for.
     const pio::endpoint unix_ep{"unix", "/tmp/s"};
     REQUIRE(sel.dispatch_class(unix_ep, dispatch_hint::frequent));
     REQUIRE_FALSE(sel.dispatch_class(unix_ep, dispatch_hint::none));
@@ -27,10 +27,10 @@ TEST_CASE("udp selector: dispatch_class observably changes with the hint and lea
     REQUIRE(sel.dispatch_class(tcp_ep, dispatch_hint::frequent));
     REQUIRE_FALSE(sel.dispatch_class(tcp_ep, dispatch_hint::none));
 
-    // shm_eligible_for is UNCHANGED: same-host AND a hint set -> true; a remote peer is
+    // local_fast_eligible_for is UNCHANGED: same-host AND a hint set -> true; a remote peer is
     // never shm-eligible even with a hint.
-    REQUIRE(sel.shm_eligible_for(unix_ep, dispatch_hint::frequent));
-    REQUIRE_FALSE(sel.shm_eligible_for(tcp_ep, dispatch_hint::frequent));
+    REQUIRE(sel.local_fast_eligible_for(unix_ep, dispatch_hint::frequent));
+    REQUIRE_FALSE(sel.local_fast_eligible_for(tcp_ep, dispatch_hint::frequent));
 }
 
 TEST_CASE("udp selector: the new verdicts preserve the pure value-object invariant",
@@ -38,7 +38,7 @@ TEST_CASE("udp selector: the new verdicts preserve the pure value-object invaria
 {
     pio::transport_selector a;
     pio::transport_selector b;
-    using pio::shm::dispatch_hint;
+    using pio::dispatch_hint;
 
     // Two independently constructed selectors agree on every new verdict; a verdict is
     // forced ONLY by a different (scheme, hint), never by mutating the selector.

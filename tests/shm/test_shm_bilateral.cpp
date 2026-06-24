@@ -5,10 +5,10 @@
 #include "plexus/shm/region_handle.h"
 
 #include "plexus/io/shm/broadcast_ring.h"
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/dispatch_hint.h"
 #include "plexus/io/shm/ring_geometry.h"
 #include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/region_naming.h"
 #include "plexus/io/shm/shm_selection.h"
 
 #include "plexus/io/congestion.h"
@@ -182,7 +182,7 @@ TEST_CASE("shm.bilateral demand-driven convergence: the hint gates each side's a
           "[shm][bilateral]")
 {
     using pio::attempt_shm_upgrade;
-    using pio::dispatch_hint;
+    using plexus::io::dispatch_hint;
 
     // The decision is purely local: same-host AND own-hint. NOTHING about the hint
     // rides the wire — both ends run THIS over their own state and converge on the

@@ -3,7 +3,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/reliability.h"
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/dispatch_hint.h"
 #include "plexus/io/reliability_requirement.h"
 
 #include <cstdint>
@@ -149,35 +149,21 @@ public:
                                           : reliability_hint::best_effort;
     }
 
-    // The general dispatch-consultation verdict: does a topic's declared dispatch hint
-    // prefer the fast path? It generalizes shm_eligible_for's same-host-only consumption
-    // to a transport-class PREFERENCE the broader selector exposes — the preference is
-    // true iff any hint bit is set. The locality tier governs what the SAME preference
-    // MEANS, not its value: for a LOCAL peer it is ACTIONABLE (it coincides with
-    // shm_eligible_for — the same-host shared-memory fast path); for a REMOTE peer it is
-    // ADVISORY, honest that the current mux has no datagram member to switch a remote peer
-    // to (the verdict records the preference; the routing is bounded by the member set).
-    // The endpoint is taken so a future member set can act on the tier; today the value is
-    // tier-independent by design. A pure value-object function — no ring, no member.
+    // Does a topic's dispatch hint prefer the fast path? A transport-class preference: true iff
+    // any hint bit is set. Tier-independent in value; the locality tier governs what it MEANS —
+    // actionable for a local peer, advisory for a remote one (no remote fast member exists today).
     [[nodiscard]] bool dispatch_class(const endpoint & /*tier governs meaning, not value*/,
-                                      shm::dispatch_hint h) const noexcept
+                                      dispatch_hint h) const noexcept
     {
-        return shm::shm_eligible(h);
+        return any_set(h);
     }
 
-    // The shared-memory eligibility decision: a (peer, topic) pair prefers
-    // the shared-memory medium iff it is SAME-HOST (the local tier) AND the topic
-    // carries a qualifying dispatch hint (any bit set). The two factors are
-    // independent and both necessary — locality alone keeps a same-host topic on
-    // AF_UNIX (the default), and a hint alone never reaches a remote peer over
-    // shared memory. This is a pure value-object function of the endpoint scheme +
-    // the hint, mirroring reliability_of_scheme: it holds no ring, no broker, and
-    // no acquired-set; it only answers "should this side ATTEMPT the ring acquire?"
-    // The actual acquire (and the dual-delivery wire fallback) is the registry's job.
-    [[nodiscard]] bool shm_eligible_for(const endpoint &ep, shm::dispatch_hint h) const noexcept
+    // Prefer the fast local medium for a (peer, topic): same-host (local tier) AND any dispatch-hint
+    // bit set — both necessary. A pure value-object verdict (no ring, no broker, no acquired-set); it
+    // only answers "attempt the fast-local acquire?". The acquire + any wire fallback is the registry's.
+    [[nodiscard]] bool local_fast_eligible_for(const endpoint &ep, dispatch_hint h) const noexcept
     {
-        return select(ep, reliability_hint::unspecified) == transport_kind::local &&
-                shm::shm_eligible(h);
+        return select(ep, reliability_hint::unspecified) == transport_kind::local && any_set(h);
     }
 };
 

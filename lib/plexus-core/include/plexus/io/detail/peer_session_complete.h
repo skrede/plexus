@@ -2,7 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_COMPLETE_H
 
 #include "plexus/io/peer_kind.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/host_fingerprint.h"
 #include "plexus/io/handshake_protocol.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/security_event.h"
@@ -115,7 +115,7 @@ template<typename Session>
 void record_same_host(Session &s) noexcept
 {
     s.m_ctx.same_host =
-            shm::is_same_host(s.m_fsm.last_seen_peer_fingerprint(), s.m_fsm.local_fingerprint());
+            is_same_host(s.m_fsm.last_seen_peer_fingerprint(), s.m_fsm.local_fingerprint());
 }
 
 // Re-emit every remembered subscribe for this peer through the counted subscribe(), so each

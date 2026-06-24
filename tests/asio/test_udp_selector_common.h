@@ -7,7 +7,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/transport_selector.h"
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/dispatch_hint.h"
 #include "plexus/io/reliability_requirement.h"
 
 #include <catch2/catch_test_macros.hpp>

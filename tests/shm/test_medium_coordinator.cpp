@@ -4,7 +4,8 @@
 // recorder-bound fixture into near-empty per-cell shells.
 #include "plexus/io/upgrade_coordinator.h"
 #include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/shm/shm_selection.h"
+#include "plexus/io/dispatch_hint.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/peer_context.h"
@@ -39,6 +40,7 @@
 using namespace plexus::io::shm;
 using plexus::io::demand_transition;
 using plexus::io::demand_role;
+using plexus::io::dispatch_hint;
 
 namespace {
 
@@ -91,7 +93,9 @@ struct gate_recorder
         if(!accept)
             return {};
         minted.emplace_back(fqn);
-        return {std::make_unique<fake_channel>(&live), mode, slot_capacity};
+        auto fits = [m = mode, cap = slot_capacity](std::size_t bytes)
+        { return route_message_medium(m, bytes, cap) == same_host_medium::shm; };
+        return {std::make_unique<fake_channel>(&live), std::move(fits)};
     }
 
     [[nodiscard]] std::size_t mints() const { return minted.size(); }
@@ -195,7 +199,7 @@ TEST_CASE("shm.coordinator a hint-less co-host 0->1 mints NOTHING", "[shm][coord
     gate_recorder gate;
     coordinator   c{reg};
     install_gate(c, gate);
-    // no set_topic_hint -> dispatch_hint::none -> shm_eligible false
+    // no set_topic_hint -> dispatch_hint::none -> no hint bit set, no upgrade
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
 

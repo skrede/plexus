@@ -665,10 +665,12 @@ private:
         io::endpoint_seam s{};
         s.ctx               = this;
         s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos, bool emit,
-                                 std::optional<std::uint64_t>          type_id,
-                                 std::optional<io::shm::shm_geometry>  shm_geometry,
+                                 std::optional<std::uint64_t> type_id, const void *geometry,
                                  std::optional<io::topic_capture_rule> capture)
         {
+            std::optional<io::shm::shm_geometry> shm_geometry;
+            if(geometry != nullptr)
+                shm_geometry = *static_cast<const io::shm::shm_geometry *>(geometry);
             static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry,
                                                              capture);
         };

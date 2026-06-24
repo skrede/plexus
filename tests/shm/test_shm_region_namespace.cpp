@@ -4,7 +4,7 @@
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry.h"
 #include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/region_naming.h"
 
 #include <catch2/catch_test_macros.hpp>
 

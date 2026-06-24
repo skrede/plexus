@@ -2,7 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_HANDSHAKE_PROTOCOL_H
 
 #include "plexus/io/security/attach_policy.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/host_fingerprint.h"
 
 #include "plexus/node_id.h"
 
@@ -77,7 +77,7 @@ struct handshake_fsm_config
     std::uint8_t                   version_minor;
     std::uint8_t                   compatible_version_major;
     std::uint8_t                   compatible_version_minor;
-    shm::host_fingerprint          local_fingerprint{};
+    host_fingerprint               local_fingerprint{};
     const security::attach_policy *attach_policy{nullptr};
 };
 

@@ -4,7 +4,7 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/security/attach_policy.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/host_fingerprint.h"
 
 #include "plexus/log/logger.h"
 
@@ -29,7 +29,7 @@ struct handshake_options
     std::uint8_t              version_minor{0};
     std::uint8_t              compatible_version_major{1};
     std::uint8_t              compatible_version_minor{0};
-    io::shm::host_fingerprint local_fingerprint{};
+    io::host_fingerprint      local_fingerprint{};
 };
 
 // Every node tunable in one plain, non-templated, designated-initializer-friendly

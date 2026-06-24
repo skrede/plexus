@@ -13,7 +13,7 @@
 //
 // dispatch (QOS-06): a dispatch-hinted topic observably changes dispatch_class vs a
 // hintless one; for a remote peer the verdict is advisory (the current mux has no
-// datagram member to switch to). shm_eligible_for is preserved beside the generalized
+// datagram member to switch to). local_fast_eligible_for is preserved beside the generalized
 // verdict.
 //
 // Each discriminating assertion is looped to pin reproducibility (the standing rule:
@@ -24,7 +24,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/transport_selector.h"
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/dispatch_hint.h"
 #include "plexus/io/reliability_requirement.h"
 #include "plexus/topic_qos.h"
 
@@ -97,7 +97,7 @@ TEST_CASE("transport steering: a declared dispatch hint observably steers the cl
           "[steering][dispatch]")
 {
     pio::transport_selector sel;
-    using pio::shm::dispatch_hint;
+    using pio::dispatch_hint;
 
     const plexus::topic_qos hinted_qos{.dispatch = dispatch_hint::frequent};
     const plexus::topic_qos hintless_qos{.dispatch = dispatch_hint::none};
@@ -115,8 +115,8 @@ TEST_CASE("transport steering: a declared dispatch hint observably steers the cl
         REQUIRE(sel.dispatch_class(tcp_ep, hinted_qos.dispatch));
         REQUIRE_FALSE(sel.dispatch_class(tcp_ep, hintless_qos.dispatch));
 
-        // shm_eligible_for is preserved beside the generalized verdict.
-        REQUIRE(sel.shm_eligible_for(unix_ep, hinted_qos.dispatch));
-        REQUIRE_FALSE(sel.shm_eligible_for(tcp_ep, hinted_qos.dispatch));
+        // local_fast_eligible_for is preserved beside the generalized verdict.
+        REQUIRE(sel.local_fast_eligible_for(unix_ep, hinted_qos.dispatch));
+        REQUIRE_FALSE(sel.local_fast_eligible_for(tcp_ep, hinted_qos.dispatch));
     }
 }

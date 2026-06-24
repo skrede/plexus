@@ -16,9 +16,9 @@
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/handshake_fsm.h"
 
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/host_fingerprint.h"
 #include "plexus/io/shm/shm_selection.h"
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/dispatch_hint.h"
 
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_transport.h"
@@ -41,7 +41,7 @@ using plexus::inproc::inproc_channel;
 using plexus::inproc::inproc_transport;
 using plexus::inproc::inproc_policy;
 using plexus::io::handshake_fsm_config;
-using plexus::io::shm::host_fingerprint;
+using plexus::io::host_fingerprint;
 using session       = plexus::io::peer_session<inproc_policy>;
 using msg_forwarder = plexus::io::message_forwarder<inproc_policy>;
 using rpc_forwarder = plexus::io::procedure_forwarder<inproc_policy>;
@@ -163,7 +163,7 @@ TEST_CASE("the same-host verdict gates shared-memory eligibility: a non-same-hos
 {
     using plexus::io::shm::select_same_host_medium;
     using plexus::io::shm::same_host_medium;
-    using plexus::io::shm::dispatch_hint;
+    using plexus::io::dispatch_hint;
 
     link l{k_host_a, k_host_b}; // distinct hosts
     l.drive();

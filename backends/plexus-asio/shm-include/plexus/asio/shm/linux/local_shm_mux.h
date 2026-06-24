@@ -20,7 +20,7 @@ namespace plexus::asio::shm {
 // transports, so it pulls in no tls/dtls/udp/openssl. A consumer that needs the local fast
 // path plus a plain-TCP remote, but no TLS, composes this and builds with the crypto
 // backend disabled. shm is the FIRST positional member so the preference hook (which scans
-// candidates for the shm_eligible flag) finds it, AF_UNIX is the same-host fallback, and
+// candidates for the local_fast_eligible flag) finds it, AF_UNIX is the same-host fallback, and
 // plain TCP is the cross-host stream. shm_member + make_shm_member come from shm_member.h.
 using local_shm_mux = io::multiplexing_transport<shm_member, unix_transport, asio_transport>;
 

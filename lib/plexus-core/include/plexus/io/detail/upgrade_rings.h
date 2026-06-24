@@ -1,34 +1,34 @@
-#ifndef HPP_GUARD_PLEXUS_IO_SHM_DETAIL_COORDINATOR_RINGS_H
-#define HPP_GUARD_PLEXUS_IO_SHM_DETAIL_COORDINATOR_RINGS_H
+#ifndef HPP_GUARD_PLEXUS_IO_DETAIL_UPGRADE_RINGS_H
+#define HPP_GUARD_PLEXUS_IO_DETAIL_UPGRADE_RINGS_H
 
-#include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/shm_selection.h"
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/detail/compat.h"
 
 #include <string>
 #include <vector>
 #include <cstddef>
-#include <cstdint>
 #include <memory>
 #include <algorithm>
 #include <string_view>
 #include <unordered_map>
 
-// These live in plexus::io::detail (NOT a new plexus::io::shm::detail namespace): introducing the
-// latter would shadow the bare detail:: lookups that sibling io/shm headers resolve to io::detail
-// (the io::detail-shadowing hazard). The upgrade_coordinator reaches them by fall-through.
-namespace plexus::io::detail {
+// These live in plexus::io::detail. The upgrade coordinator reaches them by namespace
+// fall-through. Inside this namespace plexus::detail must be fully qualified — io::detail
+// shadows it.
+namespace plexus::io::detail
+{
 
 // One held companion lane for a (peer, fqn). Exactly one lane is engaged per pair — the up-edge
-// role decides — and both lanes are keyed identically, so the lookups treat them uniformly.
+// role decides — and both lanes are keyed identically, so the lookups treat them uniformly. The
+// per-message route is an injected predicate the minting medium constructs: fits(bytes) is true
+// when this message rides the companion channel, false when it falls back to the wire. An empty
+// fits (the subscriber lane, or a publisher medium with no size gate) routes nothing on its own.
 template<typename Channel, typename Receive>
 struct coordinator_ring
 {
-    std::string              fqn;
-    std::unique_ptr<Channel> channel; // publisher lane
-    shm::ring_geometry_mode  mode          = shm::ring_geometry_mode::reliable_preserving;
-    std::uint64_t            slot_capacity = 0;
-    Receive                  receive; // subscriber lane
+    std::string                                              fqn;
+    std::unique_ptr<Channel>                                 channel; // publisher lane
+    plexus::detail::move_only_function<bool(std::size_t)>    fits;    // per-message route predicate
+    Receive                                                  receive; // subscriber lane
 };
 
 // The per-peer held lanes, keyed by node_name.
@@ -78,18 +78,22 @@ bool erase_ring(coordinator_held<Channel, Receive> &held, std::string_view node_
     return false;
 }
 
-// The publish fan's per-message route: the held companion channel when the message fits the medium
-// decision, else nullptr so the pair keeps the wire sub.channel (the dual-delivery fail-safe).
+// The publish fan's per-message route: the held companion channel when the message fits the
+// medium's injected predicate, else nullptr so the pair keeps the wire sub.channel (the
+// dual-delivery fail-safe). An unheld pair, an empty predicate, or an over-cap message resolves
+// to nullptr. The held map is taken mutably: the route invokes the medium's fits predicate (a
+// move_only_function with a non-const call operator).
 template<typename Channel, typename Receive>
-Channel *route_companion(const coordinator_held<Channel, Receive> &held, std::string_view node_name,
+Channel *route_companion(coordinator_held<Channel, Receive> &held, std::string_view node_name,
                          std::string_view fqn, std::size_t bytes)
 {
-    const auto *r = find_ring(held, node_name, fqn);
-    if(r == nullptr)
+    auto it = held.find(std::string{node_name});
+    if(it == held.end())
         return nullptr;
-    return shm::route_message_medium(r->mode, bytes, r->slot_capacity) == shm::same_host_medium::shm
-            ? r->channel.get()
-            : nullptr;
+    for(auto &r : it->second)
+        if(r.fqn == fqn)
+            return (r.fits && r.fits(bytes)) ? r.channel.get() : nullptr;
+    return nullptr;
 }
 
 }

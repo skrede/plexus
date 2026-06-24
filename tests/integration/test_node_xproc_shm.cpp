@@ -14,7 +14,8 @@
 
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/region_naming.h"
+#include "plexus/io/host_fingerprint.h"
 
 #include "plexus/discovery/static_discovery.h"
 #include "plexus/discovery/contact_card.h"
@@ -103,7 +104,7 @@ plexus::node_options dial_opts(bool eager)
 plexus::node_options distinct_fingerprint_opts(bool eager, std::uint64_t fp)
 {
     plexus::node_options opts        = dial_opts(eager);
-    opts.handshake.local_fingerprint = pio::host_fingerprint{fp};
+    opts.handshake.local_fingerprint = plexus::io::host_fingerprint{fp};
     return opts;
 }
 
@@ -237,7 +238,7 @@ int reap(pid_t pid)
 plexus::topic_qos companion_qos()
 {
     plexus::topic_qos qos;
-    qos.dispatch          = pio::dispatch_hint::frequent;
+    qos.dispatch          = plexus::io::dispatch_hint::frequent;
     qos.max_message_bytes = k_cap_bytes;
     return qos;
 }
@@ -310,7 +311,7 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
             // bilateral-LOCAL (each side decides from its own hint with no wire exchange), so
             // the subscriber must opt in for its receive companion to attach the co-host ring.
             plexus::io::subscriber_qos sub_qos;
-            sub_qos.dispatch = pio::dispatch_hint::frequent;
+            sub_qos.dispatch = plexus::io::dispatch_hint::frequent;
 
             // The subscriber's REAL user callback — the end of the delivery pipeline. It fires
             // for BOTH lanes: the fitting payload drained off the SHM companion ring AND the

@@ -16,7 +16,7 @@ namespace plexus::io {
 // upgrade-eligible AND the medium acquire succeeds, else fall back to the AF_UNIX candidate. This
 // is the FIRST case where a tier (local) resolves to >1 candidate, and it is NOT a pure positional
 // order: it depends on the RUNTIME acquire success (a forced broker failure must fall back to the
-// stream). The hook reads the per-candidate shm_eligible flag, then consults the injected
+// stream). The hook reads the per-candidate local_fast_eligible flag, then consults the injected
 // can_acquire probe (captured by move-only function so the erased hook stays decoupled from the
 // concrete member type). The probe captures the member by reference; the member outlives the mux.
 template<typename Member>
@@ -32,7 +32,7 @@ template<typename Member>
         bool        have_fallback = false;
         for(const io::mux_candidate &c : candidates)
         {
-            if(c.shm_eligible)
+            if(c.local_fast_eligible)
             {
                 if(probe(ep))
                     return c.index; // SHM-eligible AND the ring acquired: take the fast path

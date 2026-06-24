@@ -69,7 +69,7 @@ public:
             , m_fqn(fqn)
     {
         m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt,
-                                 shm_geometry, std::nullopt);
+                                 shm_geometry ? &*shm_geometry : nullptr, std::nullopt);
     }
 
     // A moved-from publisher has a null seam ctx and must not be published through.
@@ -125,7 +125,8 @@ public:
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
         m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity,
-                                 m_identity.type_id, opts.shm_geometry,
+                                 m_identity.type_id,
+                                 opts.shm_geometry ? &*opts.shm_geometry : nullptr,
                                  opts.capture ? std::optional{opts.capture->to_rule()}
                                               : std::nullopt);
     }

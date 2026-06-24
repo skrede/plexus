@@ -127,7 +127,7 @@ struct stream_member
 };
 
 // The composition the node builds for a shm-bearing pack: the shm member FIRST (the
-// preference hook scans for its shm_eligible flag), the stream member second (the
+// preference hook scans for its local_fast_eligible flag), the stream member second (the
 // fallback). The node installs prefer_upgradeable_hook(shm) over exactly this shape.
 using mux_t = pcore::multiplexing_transport<member_t, stream_member>;
 

@@ -2,8 +2,9 @@
 #define HPP_GUARD_PLEXUS_IO_SHM_SHM_SELECTION_H
 
 #include "plexus/io/shm/ring_geometry_mode.h"
-#include "plexus/io/shm/dispatch_hint.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/region_naming.h"
+#include "plexus/io/dispatch_hint.h"
+#include "plexus/io/host_fingerprint.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -37,7 +38,7 @@ enum class same_host_medium : std::uint8_t
                                                               host_fingerprint local,
                                                               dispatch_hint combined_hint) noexcept
 {
-    if(is_same_host(peer, local) && shm_eligible(combined_hint))
+    if(is_same_host(peer, local) && any_set(combined_hint))
         return same_host_medium::shm;
     return same_host_medium::stream;
 }
@@ -81,7 +82,7 @@ route_message_medium(ring_geometry_mode mode, std::size_t message_bytes,
 // upgrades regardless of the hint (the eligibility gate).
 [[nodiscard]] inline bool attempt_shm_upgrade(bool same_host, dispatch_hint own_hint) noexcept
 {
-    return same_host && shm_eligible(own_hint);
+    return same_host && any_set(own_hint);
 }
 
 // The ring-sizing authority for an upgrade THIS end drives: a publisher with

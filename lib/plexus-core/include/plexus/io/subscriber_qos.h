@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SUBSCRIBER_QOS_H
 #define HPP_GUARD_PLEXUS_IO_SUBSCRIBER_QOS_H
 
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/dispatch_hint.h"
 
 #include <cstdint>
 
@@ -109,12 +109,12 @@ struct subscriber_qos
     // wire region (a cross-process demand leak is forbidden).
     bool wants_message_info = true;
 
-    // The subscriber's own shared-memory eligibility hint: a same-host subscriber with
-    // any bit set rescues itself from a hint-less publisher (the bilateral OR — EITHER
-    // end's hint upgrades the pair). none = 0 is the absence (stay on the local stream).
-    // Local-only, never encoded into the subscribe wire region (the upgrade converges on
-    // local state with no wire exchange).
-    shm::dispatch_hint dispatch = shm::dispatch_hint::none;
+    // The subscriber's own dispatch hint: a same-host subscriber with any bit set rescues
+    // itself from a hint-less publisher (the bilateral OR — EITHER end's hint upgrades the
+    // pair). none = 0 is the absence (stay on the local stream). Local-only, never encoded
+    // into the subscribe wire region (the upgrade converges on local state with no wire
+    // exchange).
+    dispatch_hint dispatch = dispatch_hint::none;
 
     // A defaulted value-equality so a caller can ask "does this differ from the
     // friendly default?" before paying the wire region — the subscribe-out path

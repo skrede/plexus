@@ -10,7 +10,7 @@
 #include "plexus/io/shm/notifier_concept.h"
 #include "plexus/io/shm/shm_selection.h"
 #include "plexus/io/shm/shm_mux_member.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/region_naming.h"
 
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/byte_channel.h"

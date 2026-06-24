@@ -12,9 +12,8 @@
 #include <string>
 #include <cstdint>
 
-// These live in plexus::io::detail (NOT a new plexus::io::shm::detail namespace): a sibling
-// shm detail namespace would shadow the bare detail:: lookups the shm headers resolve to
-// io::detail. The reach is by namespace fall-through, matching coordinator_rings.h.
+// These live in plexus::io::detail: a sibling detail namespace under io/shm would shadow the
+// bare detail:: lookups these headers resolve to io::detail. The reach is by fall-through.
 namespace plexus::io::detail {
 
 // The per-fqn provisioned geometry the shm member keys by topic: the publisher's effective

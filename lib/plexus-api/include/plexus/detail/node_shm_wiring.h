@@ -5,6 +5,7 @@
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/polymorphic_byte_channel.h"
+#include "plexus/io/shm/shm_selection.h"
 #include "plexus/io/shm/shm_preference_hook.h"
 
 #include <span>
@@ -87,7 +88,12 @@ void install_same_host_upgrade(Engine &engine, Member &member)
                 if(!ch)
                     return {};
                 const auto g = member.resolved_geometry_for(key);
-                return {wrap_companion<engine_channel>(std::move(ch)), g.mode, g.slot_capacity};
+                // The medium constructs its per-message route at mint time: a message rides the
+                // ring when route_message_medium picks shm for the resolved mode + capacity.
+                auto fits = [mode = g.mode, cap = g.slot_capacity](std::size_t bytes)
+                { return io::shm::route_message_medium(mode, bytes, cap) ==
+                         io::shm::same_host_medium::shm; };
+                return {wrap_companion<engine_channel>(std::move(ch)), std::move(fits)};
             });
     // The SUBSCRIBER-side receive gate: attach the co-host ring as a consumer and route each
     // drained frame into the matching peer session (resolved by node_name). The drain is posted on

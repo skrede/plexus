@@ -2,7 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_SHM_DETAIL_SHM_TOPIC_OPEN_H
 
 #include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/region_naming.h"
 #include "plexus/io/shm/broadcast_ring.h"
 #include "plexus/io/shm/ring_geometry.h"
 #include "plexus/io/shm/shm_acquire_result.h"
@@ -11,9 +11,8 @@
 #include <cstdint>
 #include <optional>
 
-// These live in plexus::io::detail (NOT a new plexus::io::shm::detail namespace): a sibling
-// shm detail namespace would shadow the bare detail:: lookups the shm headers resolve to
-// io::detail. The reach is by namespace fall-through, matching coordinator_rings.h.
+// These live in plexus::io::detail: a sibling detail namespace under io/shm would shadow the
+// bare detail:: lookups these headers resolve to io::detail. The reach is by fall-through.
 namespace plexus::io::detail {
 
 // A cheap existence probe for the consumer attach-first path: a successful read-only attach

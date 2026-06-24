@@ -6,7 +6,7 @@
 #include "plexus/io/shm/notifier_concept.h"
 #include "plexus/io/shm/shm_selection.h"
 #include "plexus/io/shm/ring_geometry.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/region_naming.h"
 #include "plexus/io/shm/shm_channel.h"
 #include "plexus/io/shm/shm_slot_owner.h"
 #include "plexus/io/shm/shm_byte_channel.h"
@@ -61,7 +61,7 @@ using upgrade_policy_fn = bool (*)(bool same_host, dispatch_hint own_hint);
 //
 // The shared-memory mux member: the SECOND same-host (local-tier) transport, joining AF_UNIX
 // through the multiplexer's multi-member-per-tier seam. It satisfies mux_member (channel_type +
-// the "shm" scheme + the local tier) and opts into mux_prefers_shm so the preference hook finds
+// the "shm" scheme + the local tier) and opts into mux_prefers_local_fast so the preference hook finds
 // it. dial(ep) demand-acquires the ring for the topic (ep.address is the fqn) and mints an
 // shm_byte_channel on success / fires on_dial_failed otherwise; listen(ep) is the creator side.
 // It OWNS the registry (the sole ring-lifecycle owner) and borrows the broker by reference.
@@ -79,7 +79,7 @@ public:
 
     static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
     static constexpr io::transport_kind              mux_tier        = io::transport_kind::local;
-    static constexpr bool                            mux_prefers_shm = true;
+    static constexpr bool                            mux_prefers_local_fast = true;
 
     // bind_notifier constructs each ring's notifier over the in-region generation word
     // (required-with-default: a default-constructible notifier needs none). region_ns is the

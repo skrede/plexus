@@ -2,9 +2,8 @@
 #define HPP_GUARD_PLEXUS_IO_UPGRADE_COORDINATOR_H
 
 #include "plexus/io/upgrade_channel.h"
-#include "plexus/io/shm/shm_selection.h"
-#include "plexus/io/shm/dispatch_hint.h"
-#include "plexus/io/shm/detail/coordinator_rings.h"
+#include "plexus/io/dispatch_hint.h"
+#include "plexus/io/detail/upgrade_rings.h"
 #include "plexus/io/demand_transition.h"
 
 #include "plexus/detail/compat.h"
@@ -22,10 +21,11 @@ namespace plexus::io {
 // The per-(peer, topic) medium-selection coordinator: the JOIN of peer locality (the session's
 // same_host verdict), the per-(peer, fqn) demand up/down transition, and medium provisioning.
 // Engine-owned; it BORROWS the peer-session registry by reference and OWNS the live companion
-// ring channels it mints (no singleton, no shared_from_this — see shm_selection.h). The companion
-// lane is ADDITIVE: the wire attach is NEVER suppressed, so a declined / off-host / hint-less pair
-// simply keeps the wire. The gate is injected as one predicate; a composition with no upgrade
-// member leaves it unset, so the coordinator is inert.
+// ring channels it mints (no singleton, no shared_from_this). The companion lane is ADDITIVE: the
+// wire attach is NEVER suppressed, so a declined / off-host / hint-less pair simply keeps the
+// wire. The gate is injected as one predicate; a composition with no upgrade member leaves it
+// unset, so the coordinator is inert. The coordinator names no transport: it carries the
+// dispatch_hint opaquely and routes per-message through an injected predicate the medium builds.
 template<typename Registry, typename Channel>
 class upgrade_coordinator
 {
@@ -56,15 +56,17 @@ public:
         m_receive_mint = std::move(mint);
     }
 
-    // Override can only DECLINE; attempt_shm_upgrade still gates on same_host.
-    void on_policy(plexus::detail::move_only_function<bool(bool, shm::dispatch_hint)> policy)
+    // An injected medium policy reads the hint bits to decide an upgrade. Unset = the generic
+    // default (same_host && any hint bit set). The override can only further DECLINE — the
+    // default already gates on same_host.
+    void on_policy(plexus::detail::move_only_function<bool(bool, dispatch_hint)> policy)
     {
         m_policy = std::move(policy);
     }
 
     // Bilateral OR: EITHER end's hint upgrades the pair, so the bits accumulate per fqn. An
-    // fqn with no recorded hint resolves to none (not shm-eligible).
-    void set_topic_hint(std::string_view fqn, shm::dispatch_hint hint)
+    // fqn with no recorded hint resolves to none (no bit set).
+    void set_topic_hint(std::string_view fqn, dispatch_hint hint)
     {
         auto [it, inserted] = m_hints.try_emplace(std::string{fqn}, hint);
         if(!inserted)
@@ -134,10 +136,9 @@ private:
         if(!minted.channel)
             return; // gate declined (broker failure): the wire stays
         ring r;
-        r.fqn           = std::string{fqn};
-        r.channel       = std::move(minted.channel);
-        r.mode          = minted.mode;
-        r.slot_capacity = minted.slot_capacity;
+        r.fqn     = std::string{fqn};
+        r.channel = std::move(minted.channel);
+        r.fits    = std::move(minted.fits);
         m_held[std::string{node_name}].push_back(std::move(r));
     }
 
@@ -150,25 +151,24 @@ private:
             m_hints.erase(std::string{fqn});
     }
 
-    [[nodiscard]] bool run_policy(bool same_host, shm::dispatch_hint own_hint)
+    [[nodiscard]] bool run_policy(bool same_host, dispatch_hint own_hint)
     {
-        return m_policy ? m_policy(same_host, own_hint)
-                        : shm::attempt_shm_upgrade(same_host, own_hint);
+        return m_policy ? m_policy(same_host, own_hint) : (same_host && any_set(own_hint));
     }
 
-    [[nodiscard]] shm::dispatch_hint hint_for(std::string_view fqn) const
+    [[nodiscard]] dispatch_hint hint_for(std::string_view fqn) const
     {
         auto it = m_hints.find(std::string{fqn});
-        return it == m_hints.end() ? shm::dispatch_hint::none : it->second;
+        return it == m_hints.end() ? dispatch_hint::none : it->second;
     }
 
-    Registry                                                                    &m_registry;
-    std::unordered_map<std::string, ring_list>                                   m_held;
-    std::unordered_map<std::string, shm::dispatch_hint>                          m_hints;
-    plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)>   m_mint;
+    Registry                                                                  &m_registry;
+    std::unordered_map<std::string, ring_list>                                 m_held;
+    std::unordered_map<std::string, dispatch_hint>                             m_hints;
+    plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)> m_mint;
     plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)>
-                                                                       m_receive_mint;
-    plexus::detail::move_only_function<bool(bool, shm::dispatch_hint)> m_policy;
+                                                                  m_receive_mint;
+    plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
 };
 
 }

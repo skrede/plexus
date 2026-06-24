@@ -7,6 +7,8 @@
 // the stream; a cross-host pair is never shared-memory regardless of hint.
 
 using namespace plexus::io::shm;
+using plexus::io::dispatch_hint;
+using plexus::io::host_fingerprint;
 
 namespace {
 constexpr host_fingerprint k_host_a{0xa11};

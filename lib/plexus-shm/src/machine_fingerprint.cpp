@@ -33,7 +33,7 @@ std::string read_host_name()
 
 }
 
-plexus::io::shm::host_fingerprint read_machine_fingerprint()
+plexus::io::host_fingerprint read_machine_fingerprint()
 {
     // Concatenate machine-id + hostname under a unit-separator (0x1f cannot occur
     // in either field) so two distinct (id, host) splits never alias, then hash
@@ -43,7 +43,7 @@ plexus::io::shm::host_fingerprint read_machine_fingerprint()
     std::string keyed = read_machine_id();
     keyed.push_back('\x1f');
     keyed += read_host_name();
-    return plexus::io::shm::host_fingerprint{plexus::wire::fqn_topic_hash(keyed)};
+    return plexus::io::host_fingerprint{plexus::wire::fqn_topic_hash(keyed)};
 }
 
 }

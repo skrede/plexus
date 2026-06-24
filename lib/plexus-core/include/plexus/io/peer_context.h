@@ -3,7 +3,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/epoch_source.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/host_fingerprint.h"
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
 

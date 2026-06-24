@@ -4,7 +4,6 @@
 // scattering that one harness into over-budget shells.
 #include "plexus/io/shm/region_broker_concept.h"
 #include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/same_host.h"
 #include "plexus/io/shm/shm_mux_member.h"
 #include "plexus/io/shm/shm_slot_owner.h"
 
@@ -161,7 +160,7 @@ static_assert(pio::mux_member<shm_member>,
               "shm_mux_member must satisfy mux_member — channel_type + mux_schemes + mux_tier");
 static_assert(shm_member::mux_tier == pio::transport_kind::local,
               "the shm member rides the local (same-host) tier");
-static_assert(shm_member::mux_prefers_shm,
+static_assert(shm_member::mux_prefers_local_fast,
               "the shm member opts into the per-candidate same-host fast-path flag");
 static_assert(pio::upgradeable<shm_member>,
               "shm member must satisfy the generic upgrade capability — it is the reference "
@@ -216,8 +215,8 @@ struct dummy_stream_member
 static_assert(!pio::upgradeable<dummy_stream_member>,
               "a member without the acquire probe must not satisfy the upgrade capability");
 
-// The composition: the SHM member FIRST (the preference hook scans for its shm_eligible
-// flag), the stream member second (the fallback). Both serve the local tier + "shm", so a
+// The composition: the SHM member FIRST (the preference hook scans for its ring-acquire
+// probe), the stream member second (the fallback). Both serve the local tier + "shm", so a
 // same-host dial resolves to both candidates and the hook decides.
 using mux_t = pio::multiplexing_transport<shm_member, dummy_stream_member>;
 

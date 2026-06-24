@@ -10,7 +10,7 @@
 #include "plexus/io/shm/ring_geometry.h"
 #include "plexus/io/shm/ring_geometry_mode.h"
 #include "plexus/io/shm/ring_layout.h"
-#include "plexus/io/shm/same_host.h"
+#include "plexus/io/shm/region_naming.h"
 #include "plexus/io/shm/shm_mux_member.h"
 #include "plexus/io/shm/shm_slot_owner.h"
 #include "plexus/io/shm/shm_topic_registry.h"

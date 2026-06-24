@@ -1,4 +1,4 @@
-#include "plexus/io/shm/dispatch_hint.h"
+#include "plexus/io/dispatch_hint.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/topic_qos.h"
 
@@ -8,19 +8,19 @@
 
 // The dispatch_hint FLAGS type + the selector's locality x dispatch
 // SHM-eligibility decision. dispatch_hint is a bitmask modeled on
-// locality.h: none = 0 is the absence; shm_eligible(h) is true iff any bit is set;
+// locality.h: none = 0 is the absence; any_set(h) is true iff any bit is set;
 // the operators compose. topic_qos carries it (and max_message_bytes), both defaulting to
 // "unset". The selector gates SHM on same-host AND a qualifying hint.
 
-using plexus::io::shm::dispatch_hint;
-using plexus::io::shm::shm_eligible;
+using plexus::io::any_set;
+using plexus::io::dispatch_hint;
 
-TEST_CASE("dispatch_hint: none is the absence; any bit is shm_eligible", "[shm][dispatch_hint]")
+TEST_CASE("dispatch_hint: none is the absence; any bit is local_fast_eligible", "[shm][dispatch_hint]")
 {
-    REQUIRE_FALSE(shm_eligible(dispatch_hint::none));
-    REQUIRE(shm_eligible(dispatch_hint::frequent));
-    REQUIRE(shm_eligible(dispatch_hint::large));
-    REQUIRE(shm_eligible(dispatch_hint::priority));
+    REQUIRE_FALSE(any_set(dispatch_hint::none));
+    REQUIRE(any_set(dispatch_hint::frequent));
+    REQUIRE(any_set(dispatch_hint::large));
+    REQUIRE(any_set(dispatch_hint::priority));
 }
 
 TEST_CASE("dispatch_hint: the operators compose like locality's bitflags", "[shm][dispatch_hint]")
@@ -29,7 +29,7 @@ TEST_CASE("dispatch_hint: the operators compose like locality's bitflags", "[shm
 
     // The union sets both bits and clears the third.
     REQUIRE(static_cast<std::uint8_t>(both) == (1u | 2u));
-    REQUIRE(shm_eligible(both));
+    REQUIRE(any_set(both));
 
     // operator& isolates a single bit: both shares frequent, not priority.
     REQUIRE((both & dispatch_hint::frequent) == dispatch_hint::frequent);
@@ -38,7 +38,7 @@ TEST_CASE("dispatch_hint: the operators compose like locality's bitflags", "[shm
 
     // A unioned mask remains eligible even after masking out one bit, as long as a
     // bit survives.
-    REQUIRE(shm_eligible(both & dispatch_hint::frequent));
+    REQUIRE(any_set(both & dispatch_hint::frequent));
 }
 
 TEST_CASE("topic_qos default-constructs with dispatch == none and max_message_bytes == 0",
@@ -48,7 +48,7 @@ TEST_CASE("topic_qos default-constructs with dispatch == none and max_message_by
 
     REQUIRE(qos.dispatch == dispatch_hint::none);
     REQUIRE(qos.max_message_bytes == 0u);
-    REQUIRE_FALSE(shm_eligible(qos.dispatch));
+    REQUIRE_FALSE(any_set(qos.dispatch));
 }
 
 TEST_CASE("selector: same-host x qualifying hint is SHM-eligible", "[shm][dispatch_hint]")
@@ -60,15 +60,15 @@ TEST_CASE("selector: same-host x qualifying hint is SHM-eligible", "[shm][dispat
     const plexus::io::endpoint remote{"tcp", "10.0.0.1:7000"};
 
     // Same-host (unix/inproc) AND a hint -> eligible.
-    REQUIRE(selector.shm_eligible_for(same_host, dispatch_hint::frequent));
-    REQUIRE(selector.shm_eligible_for(inproc, dispatch_hint::large | dispatch_hint::priority));
+    REQUIRE(selector.local_fast_eligible_for(same_host, dispatch_hint::frequent));
+    REQUIRE(selector.local_fast_eligible_for(inproc, dispatch_hint::large | dispatch_hint::priority));
 
     // Same-host but no hint -> NOT eligible (stays on the local stream).
-    REQUIRE_FALSE(selector.shm_eligible_for(same_host, dispatch_hint::none));
+    REQUIRE_FALSE(selector.local_fast_eligible_for(same_host, dispatch_hint::none));
 
     // A hint over a remote peer -> NEVER eligible (a hint grants no cross-host reach).
-    REQUIRE_FALSE(selector.shm_eligible_for(remote, dispatch_hint::frequent));
-    REQUIRE_FALSE(selector.shm_eligible_for(remote, dispatch_hint::none));
+    REQUIRE_FALSE(selector.local_fast_eligible_for(remote, dispatch_hint::frequent));
+    REQUIRE_FALSE(selector.local_fast_eligible_for(remote, dispatch_hint::none));
 }
 
 TEST_CASE("selector: a topic_qos.dispatch drives the eligibility decision", "[shm][dispatch_hint]")
@@ -79,6 +79,6 @@ TEST_CASE("selector: a topic_qos.dispatch drives the eligibility decision", "[sh
     const plexus::topic_qos hinted{.dispatch = dispatch_hint::frequent};
     const plexus::topic_qos plain{};
 
-    REQUIRE(selector.shm_eligible_for(same_host, hinted.dispatch));
-    REQUIRE_FALSE(selector.shm_eligible_for(same_host, plain.dispatch));
+    REQUIRE(selector.local_fast_eligible_for(same_host, hinted.dispatch));
+    REQUIRE_FALSE(selector.local_fast_eligible_for(same_host, plain.dispatch));
 }
