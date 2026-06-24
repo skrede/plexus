@@ -46,8 +46,7 @@ public:
         return m_refcount.drop(node_name, fqn);
     }
 
-    void add_subscriber(std::uint64_t topic_hash, std::string_view fqn, Channel &channel,
-                        std::string_view node_name, const subscriber_qos &qos = subscriber_qos{},
+    void add_subscriber(std::uint64_t topic_hash, std::string_view fqn, Channel &channel, std::string_view node_name, const subscriber_qos &qos = subscriber_qos{},
                         std::optional<std::uint64_t> type_id = std::nullopt)
     {
         detail::add_topic_subscriber(m_topics, topic_hash, fqn, channel, node_name, qos, type_id);
@@ -61,8 +60,8 @@ public:
         if(it == m_topics.end())
             return subscriber_qos{};
         for(const auto &sub : it->second.subscribers)
-            if(sub.channel == &channel)
-                return sub.qos;
+            if(&sub.channel.get() == &channel)
+                return sub.sub_qos;
         return subscriber_qos{};
     }
 
@@ -71,9 +70,7 @@ public:
     // same hash leaves this qos intact (it only fills an empty fqn). An optional
     // producer type_id (std::nullopt = undeclared) is recorded alongside the qos —
     // the subscribe-time match authority.
-    void declare(std::uint64_t topic_hash, std::string_view fqn, topic_qos qos,
-                 std::optional<std::uint64_t> producer_type_id     = std::nullopt,
-                 bool                         emit_source_identity = false)
+    void declare(std::uint64_t topic_hash, std::string_view fqn, topic_qos qos, std::optional<std::uint64_t> producer_type_id = std::nullopt, bool emit_source_identity = false)
     {
         auto &entry = m_topics[topic_hash];
         if(entry.fqn.empty())
