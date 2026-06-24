@@ -43,6 +43,12 @@ it sits on screen:
 Readability is the goal, not SOLID or DRY orthodoxy. Group code that is read together. Split
 where it genuinely separates responsibilities — never to chase a number.
 
+Each scope does **one thing**, and the smaller that one thing is, the cleaner the code reads: a
+library does one thing, a namespace groups the types and functions working toward one thing, a class
+does one thing, a function does one thing. A unit that runs over its ceiling is usually the "one
+thing" drawn too broad — decompose it, do not widen the budget. (The genuinely-cohesive whole that
+splitting would *harm* is the registered exception below, not the default.)
+
 Forbidden:
 
 - **Salami-slicing** — carving a cohesive unit into fragments just to fit a limit.
@@ -65,16 +71,11 @@ splitting would *harm* — scattering shared state across files, or forcing an a
 layer. An exception is a considered decision, not a fallback; prefer decomposition, and reach
 for an exception only when decomposition would make the code worse.
 
-Every exception is registered in two places that must agree:
-
-1. A one-line marker at the site:
-   `// over-limit: one cohesive pub/sub engine; splitting scatters the shared registry + scratch state`
-2. An entry in **`EXCEPTIONS.md`** — the single, complete list of every sanctioned over-limit
-   unit, each with its justification.
-
-The size gate allows exactly the registered units and fails on any new or unlisted overage.
-CI cross-checks that `EXCEPTIONS.md` and the in-code markers match. There are no silent
-exceptions.
+Every exception is registered in **`EXCEPTIONS.md`** — the single, complete list of every
+sanctioned over-limit unit, each with its justification. There is **no in-code marker**: the
+justification is bookkeeping, and bookkeeping never belongs in the code. The size gate sanctions
+exactly the files `EXCEPTIONS.md` lists and fails on any unlisted overage, or on a stale row whose
+file has since dropped under the ceiling. There are no silent exceptions.
 
 ## Comments
 
@@ -93,10 +94,20 @@ Delete everything else. Never write:
 
 - comments that restate a name, signature, type, or obvious control flow in more words;
 - tables or lists that transcribe the lines of code beneath them;
-- sign-posting or narration ("this section does X", "first we … then we …").
+- sign-posting or narration ("this section does X", "first we … then we …");
+- bookkeeping or process markers — size-gate justifications, ledgers, "see the doc" pointers,
+  anything whose audience is the maintainer's process rather than the code's reader. That lives in
+  `EXCEPTIONS.md` or the planning tools, never in the source.
 
 A comment that merely repeats the next line is noise: it steals screen space, competes with
-the code, and rots out of sync. Cut it.
+the code, and rots out of sync. Cut it. Keep a multi-line comment tight — no blank `//`
+separator lines padding it out.
+
+A comment longer than a short tag goes on its **own line above** the code it explains, never
+trailing. A long trailing comment crowds the statement and forces the formatter to wrap the code
+beneath it into an ugly multi-line shape; the line above is where the eye looks first anyway. A
+brief trailing tag on a data line — a unit, an enumerator's value — is fine where it reads as part
+of that line.
 
 Comments count toward the size budget. A file that is 30% comments is usually
 30% over-commented, not a candidate for a bigger budget — trim first. Do not write a novel.
@@ -111,6 +122,38 @@ for a real reason.
 - Within a major section, group includes by folder into intermediate sections, also separated
   by one blank line. Only one blank line between any two sections.
 - Within a section, sort first by line length, then alphabetically among equal lengths.
+
+## Naming
+
+- A member holding a callback or hook (a `move_only_function`) takes a `_cb` suffix and groups with
+  the other callbacks in the member list — the suffix marks it as an injected behavior, not state.
+
+## Construction
+
+- Initialize a class's members in the **constructor's init list, never in-declaration** — one place,
+  one source of truth, so two defaults can never drift apart. A class with a constructor carries no
+  in-declaration member initializers.
+- A member wanting a default value is exactly what a constructor is for: **give the type a constructor**
+  and put the default in its init list. Do not leave the default in-declaration. The only type without a
+  constructor is a pure aggregate that carries *no* defaults at all — brace-initialized at every use, no
+  in-declaration initializers; it has nothing to move. The moment one member wants a default, the type
+  takes a constructor.
+
+## Class layout
+
+Order a class body so the data is visible before the operations on it:
+
+```
+public:
+    constructor(s)
+    public functions
+
+private:
+    members          // data first, right after private:
+    private functions
+```
+
+The member triangle (above) orders the members within that leading block.
 
 ## Header guards and namespaces
 
@@ -131,6 +174,10 @@ for a real reason.
 ## Lifetimes and ownership
 
 - Structural, single-owner lifetimes. The owner sequences teardown.
+- A non-owning relationship that *must outlive* its holder is a **reference, not a raw pointer** — a
+  reference says "not optional, not owned" without the nullability a pointer implies. Store it as
+  `std::reference_wrapper<T>` when it lives in a container that needs assignability (a `std::vector`
+  element, say). Reach for a smart pointer only when there is real shared or transferred ownership.
 - No `std::shared_from_this` / `std::enable_shared_from_this`.
 - No per-callback liveness guards that paper over a posted task outliving its target. If a
   posted closure can run after its target dies, fix the ownership and teardown sequencing —
@@ -138,10 +185,29 @@ for a real reason.
 
 ## Formatting and tooling
 
-- `.clang-format` is the formatter. Run it.
+- `.clang-format` is the formatter, and it is authoritative on its own for the mechanical rules:
+  185-column lines, comments never reflowed to fit the column, short functions never auto-collapsed
+  onto one line (the author decides), and includes left unsorted so the hand-ordering below holds.
+  Run it.
 - `.clang-tidy` is the linter and the size/complexity gate. It fails the build.
-- Apply both across the whole tree. A change is not done until both are clean — or its overage
-  is a registered exception.
+- Apply both across the whole tree. A change is not done until both are clean — or its overage is a
+  registered exception.
+
+### Shape (readability guidelines, not rigid rules)
+
+These shape the code for the human eye. They are judgment calls — a case that reads better the other
+way is a fine exception. The intent is the rule; the shapes are how it usually looks. The point is to
+make the next name easy to find.
+
+- **Downward waterfall.** When a signature or declaration wraps, each continuation line is *longer
+  than or equal to* the one above it, so the wrapped arguments slope downward and the eye falls to
+  the next one.
+- **Member triangle.** Order a struct's members by type-name length, then size names so each whole
+  line is no longer than the next — the members form the same downward slope. Semantic grouping wins
+  when it helps: keep the callbacks together even if a shorter line lands among them, and end-align a
+  group that reads better aligned. Shape serves reading, never the reverse.
+- **Logical blank lines.** A blank line inside a function separates logical parts — set-up from the
+  work, one phase from the next — the way a paragraph break does.
 
 ## English
 
