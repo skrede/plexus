@@ -47,7 +47,7 @@ inline std::size_t band_of(priority p) noexcept
 class priority_band_queue
 {
 public:
-    [[nodiscard]] bool has_work() const noexcept
+    bool has_work() const noexcept
     {
         for(const auto &b : m_bands)
             if(!b.empty())
@@ -73,7 +73,7 @@ public:
     // The front owner of the highest non-empty band (lowest index), or nullptr when no band
     // holds work. The owner stays band-resident (pinning the bytes) until the caller hands it
     // to channel.send THEN calls pop_highest — the in-flight-safe ordering.
-    [[nodiscard]] const wire_bytes<> *front_highest() const
+    const wire_bytes<> *front_highest() const
     {
         for(const auto &b : m_bands)
             if(!b.empty())
@@ -89,17 +89,17 @@ public:
                 return b.pop();
     }
 
-    [[nodiscard]] std::size_t dropped_oldest_count(std::size_t band) const noexcept
+    std::size_t dropped_oldest_count(std::size_t band) const noexcept
     {
         return m_bands[band].dropped_oldest();
     }
 
-    [[nodiscard]] std::size_t dropped_newest_count(std::size_t band) const noexcept
+    std::size_t dropped_newest_count(std::size_t band) const noexcept
     {
         return m_bands[band].dropped_newest();
     }
 
-    [[nodiscard]] std::size_t blocked_count(std::size_t band) const noexcept
+    std::size_t blocked_count(std::size_t band) const noexcept
     {
         return m_bands[band].blocked();
     }
@@ -107,7 +107,7 @@ public:
 private:
     struct band
     {
-        [[nodiscard]] bool empty() const noexcept
+        bool empty() const noexcept
         {
             return m_count == 0;
         }
@@ -145,8 +145,12 @@ private:
         {
             switch(congestion)
             {
-                case io::congestion::block:       ++m_blocked; return drop_cause::blocked;
-                case io::congestion::drop_newest: ++m_dropped_newest; return drop_cause::drop_newest;
+                case io::congestion::block:
+                    ++m_blocked;
+                    return drop_cause::blocked;
+                case io::congestion::drop_newest:
+                    ++m_dropped_newest;
+                    return drop_cause::drop_newest;
                 case io::congestion::drop_oldest:
                     pop();
                     ++m_dropped_oldest;
@@ -155,7 +159,7 @@ private:
             return drop_cause::blocked;
         }
 
-        [[nodiscard]] const wire_bytes<> &front() const
+        const wire_bytes<> &front() const
         {
             return m_slots[m_head];
         }
@@ -169,25 +173,25 @@ private:
             --m_count;
         }
 
-        [[nodiscard]] std::size_t dropped_oldest() const noexcept
+        std::size_t dropped_oldest() const noexcept
         {
             return m_dropped_oldest;
         }
-        [[nodiscard]] std::size_t dropped_newest() const noexcept
+        std::size_t dropped_newest() const noexcept
         {
             return m_dropped_newest;
         }
-        [[nodiscard]] std::size_t blocked() const noexcept
+        std::size_t blocked() const noexcept
         {
             return m_blocked;
         }
 
         std::vector<wire_bytes<>> m_slots;
-        std::size_t               m_head{0};
-        std::size_t               m_count{0};
-        std::size_t               m_dropped_oldest{0};
-        std::size_t               m_dropped_newest{0};
-        std::size_t               m_blocked{0};
+        std::size_t m_head{0};
+        std::size_t m_count{0};
+        std::size_t m_dropped_oldest{0};
+        std::size_t m_dropped_newest{0};
+        std::size_t m_blocked{0};
     };
 
     std::array<band, k_egress_bands> m_bands;

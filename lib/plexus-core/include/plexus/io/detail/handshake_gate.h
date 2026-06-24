@@ -67,12 +67,12 @@ public:
         m_ready = true;
     }
 
-    [[nodiscard]] bool is_ready() const noexcept
+    bool is_ready() const noexcept
     {
         return m_ready;
     }
 
-    [[nodiscard]] std::size_t buffered() const noexcept
+    std::size_t buffered() const noexcept
     {
         return m_buffer.size();
     }
@@ -85,9 +85,9 @@ public:
     }
 
 private:
-    drain_fn                           m_drain;
+    drain_fn m_drain;
     std::deque<std::vector<std::byte>> m_buffer;
-    bool                               m_ready{false};
+    bool m_ready{false};
 };
 
 }

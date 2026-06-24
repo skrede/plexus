@@ -32,9 +32,9 @@ template<typename Engine, typename Deliver>
 void fan_out(Engine &e, Deliver deliver)
 {
     const auto snapshot = e.m_observers;
-    for(auto *o : snapshot)
-        if(std::find(e.m_observers.begin(), e.m_observers.end(), o) != e.m_observers.end())
-            deliver(*o);
+    for(observer &o : snapshot)
+        if(std::any_of(e.m_observers.begin(), e.m_observers.end(), [&](const std::reference_wrapper<observer> &w) { return &w.get() == &o; }))
+            deliver(o);
 }
 
 template<typename Engine>

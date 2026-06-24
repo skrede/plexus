@@ -95,19 +95,19 @@ public:
 
     // The per-(destination, band) overflow counters, mirroring asio_channel::dropped_count():
     // each reads the destination's band counter, returning 0 for a destination with no queue.
-    [[nodiscard]] std::size_t dropped_oldest(Channel &ch, std::size_t band) const
+    std::size_t dropped_oldest(Channel &ch, std::size_t band) const
     {
         const auto it = m_queues.find(key_of(ch));
         return it == m_queues.end() ? 0u : it->second.dropped_oldest_count(band);
     }
 
-    [[nodiscard]] std::size_t dropped_newest(Channel &ch, std::size_t band) const
+    std::size_t dropped_newest(Channel &ch, std::size_t band) const
     {
         const auto it = m_queues.find(key_of(ch));
         return it == m_queues.end() ? 0u : it->second.dropped_newest_count(band);
     }
 
-    [[nodiscard]] std::size_t blocked(Channel &ch, std::size_t band) const
+    std::size_t blocked(Channel &ch, std::size_t band) const
     {
         const auto it = m_queues.find(key_of(ch));
         return it == m_queues.end() ? 0u : it->second.blocked_count(band);

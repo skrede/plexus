@@ -45,7 +45,7 @@ public:
         return remaining;
     }
 
-    [[nodiscard]] bool holds(std::string_view k1, std::string_view k2) const
+    bool holds(std::string_view k1, std::string_view k2) const
     {
         auto outer_it = m_counts.find(std::string{k1});
         if(outer_it == m_counts.end())

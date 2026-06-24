@@ -29,7 +29,7 @@ namespace plexus::io::detail {
 // its private post helpers (they are friends).
 
 template<typename Engine>
-[[nodiscard]] auto make_drop_sink(Engine &e)
+auto make_drop_sink(Engine &e)
 {
     return [&e](const drop_event &ev) { post_drop(e, ev); };
 }
@@ -39,13 +39,13 @@ template<typename Engine>
 // stamps the per-direction sequence; the peer identity is bound at the channel-mint point, so the
 // wire_record carries both offline cross-node loss-join keys.
 template<typename Engine>
-[[nodiscard]] auto make_wire_sink(Engine &e, const node_id &peer)
+auto make_wire_sink(Engine &e, const node_id &peer)
 {
     return [&e, peer](recording::wire_direction dir, std::uint64_t seq, std::span<const std::byte> bytes) { post_wire(e, dir, seq, peer, bytes); };
 }
 
 template<typename Engine>
-[[nodiscard]] auto make_publish_sink(Engine &e)
+auto make_publish_sink(Engine &e)
 {
     using policy_type = typename Engine::policy_type;
     return [&e](std::uint64_t hash, std::string_view fqn, const message_view &v)
@@ -57,7 +57,7 @@ template<typename Engine>
 }
 
 template<typename Engine>
-[[nodiscard]] auto make_deliver_sink(Engine &e)
+auto make_deliver_sink(Engine &e)
 {
     using policy_type = typename Engine::policy_type;
     return [&e](std::uint64_t hash, std::string_view fqn, const message_info &info, const message_view &v)
@@ -69,7 +69,7 @@ template<typename Engine>
 }
 
 template<typename Engine>
-[[nodiscard]] auto make_qos_change_sink(Engine &e)
+auto make_qos_change_sink(Engine &e)
 {
     using policy_type = typename Engine::policy_type;
     return [&e](const qos_change_event &ev)
@@ -81,7 +81,7 @@ template<typename Engine>
 }
 
 template<typename Engine, typename Edge>
-[[nodiscard]] auto make_rpc_sink(Engine &e, Edge edge)
+auto make_rpc_sink(Engine &e, Edge edge)
 {
     using policy_type = typename Engine::policy_type;
     return [&e, edge](std::string_view fqn, const auto &v)

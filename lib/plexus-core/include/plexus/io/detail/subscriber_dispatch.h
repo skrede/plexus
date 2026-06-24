@@ -22,10 +22,10 @@ namespace plexus::io::detail {
 template<typename Channel>
 struct registry_subscriber
 {
-    locality                        tier;
-    std::string                     node_name;
-    subscriber_qos                  sub_qos{};
-    std::optional<std::uint64_t>    type_id;
+    locality tier;
+    std::string node_name;
+    subscriber_qos sub_qos{};
+    std::optional<std::uint64_t> type_id;
     std::reference_wrapper<Channel> channel;
 };
 
@@ -39,13 +39,13 @@ struct band_drop_counters
 template<typename Channel>
 struct registry_topic_entry
 {
-    topic_qos                                              qos{};
-    std::string                                            fqn;
-    bool                                                   emit_source_identity{false};
-    bool                                                   any_subscriber_wants_info{true};
-    std::optional<std::uint64_t>                           producer_type_id;
-    std::optional<std::uint64_t>                           endpoint_counter;
-    std::vector<registry_subscriber<Channel>>              subscribers;
+    topic_qos qos{};
+    std::string fqn;
+    bool emit_source_identity{false};
+    bool any_subscriber_wants_info{true};
+    std::optional<std::uint64_t> producer_type_id;
+    std::optional<std::uint64_t> endpoint_counter;
+    std::vector<registry_subscriber<Channel>> subscribers;
     std::array<band_drop_counters, detail::k_egress_bands> drops{};
 };
 
@@ -65,10 +65,17 @@ inline void bump_band_drop(band_drop_counters &c, detail::drop_cause cause) noex
 {
     switch(cause)
     {
-        case detail::drop_cause::drop_oldest: ++c.dropped_oldest; return;
-        case detail::drop_cause::drop_newest: ++c.dropped_newest; return;
-        case detail::drop_cause::blocked:     ++c.blocked; return;
-        default:                              return;
+        case detail::drop_cause::drop_oldest:
+            ++c.dropped_oldest;
+            return;
+        case detail::drop_cause::drop_newest:
+            ++c.dropped_newest;
+            return;
+        case detail::drop_cause::blocked:
+            ++c.blocked;
+            return;
+        default:
+            return;
     }
 }
 
@@ -76,10 +83,14 @@ inline std::size_t read_band_drop(const band_drop_counters &c, detail::drop_caus
 {
     switch(cause)
     {
-        case detail::drop_cause::drop_oldest: return c.dropped_oldest;
-        case detail::drop_cause::drop_newest: return c.dropped_newest;
-        case detail::drop_cause::blocked:     return c.blocked;
-        default:                              return 0;
+        case detail::drop_cause::drop_oldest:
+            return c.dropped_oldest;
+        case detail::drop_cause::drop_newest:
+            return c.dropped_newest;
+        case detail::drop_cause::blocked:
+            return c.blocked;
+        default:
+            return 0;
     }
 }
 
