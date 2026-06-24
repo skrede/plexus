@@ -22,48 +22,37 @@
 
 namespace plexus::io::recording {
 
-// One decoded schema entry: a type id, its human name, and the four opaque self-description
-// fields a host projector reads. Owned — the preamble is parsed once, offline.
 struct schema_definition
 {
-    std::uint64_t          type_id{};
-    std::string            type_name;
-    std::string            message_encoding;
-    std::string            schema_name;
-    std::string            schema_encoding;
+    std::uint64_t type_id{};
+    std::string type_name;
+    std::string message_encoding;
+    std::string schema_name;
+    std::string schema_encoding;
     std::vector<std::byte> schema_data;
 };
 
-// The Definitions preamble decoded from a stream head: the node identity, the
-// recording-QoS default in force, the opaque schema table a host projector resolves
-// codecs from, and the crypto tap position the capture used. Owned — parsed once, offline.
 struct stream_definitions
 {
-    std::uint64_t                  clock_epoch{};
-    node_id                        node{};
-    topic_capture_rule             rule{};
+    std::uint64_t clock_epoch{};
+    node_id node{};
+    topic_capture_rule rule{};
     std::vector<schema_definition> schema;
-    capture_crypto_position        crypto_position{capture_crypto_position::cleartext};
+    capture_crypto_position crypto_position{capture_crypto_position::cleartext};
 };
 
-// The outcome of a recovery scan over a possibly-truncated/corrupt stream.
 struct recovery_result
 {
-    bool        header_ok{false};
+    bool header_ok{false};
     std::size_t recovered{0};
-    bool        trailing_partial_dropped{false};
-    bool        corruption_skipped{false};
+    bool trailing_partial_dropped{false};
+    bool corruption_skipped{false};
 };
 
-// The offline, host-side reader + crash-recovery scan over the validated wire::reader.
-// It never runs on the producer hot path and tolerates an arbitrary truncated/garbage
-// tail without UB (every field read is bounds-checked through the latched reader). The
-// scan reads the header + preamble, then iterates [varint len][payload] records (the
-// byte_ring framing IS the stream framing). The FIRST record whose length overruns the
-// remaining bytes is the truncation point — every complete prior record is recovered and
-// only the trailing partial is lost. A record whose CRC fails is corruption: the scan
-// resyncs forward to the next sync marker and resumes, so a corrupt span loses only its
-// own records, not the rest of the stream.
+// The first record whose length overruns the remaining bytes is the truncation point: every
+// complete prior record is recovered and only the trailing partial is lost. A record whose CRC
+// fails is corruption — the scan resyncs forward to the next sync marker and resumes, so a corrupt
+// span loses only its own records, not the rest of the stream.
 class record_stream_reader
 {
 public:
@@ -107,8 +96,7 @@ public:
         return true;
     }
 
-    // Scan the data section front-to-back, appending every recovered record to `out` and
-    // reporting the recovery accounting. Call read_definitions first.
+    // Call read_definitions first.
     // NOLINTNEXTLINE(readability-function-size)
     recovery_result recover(std::vector<decoded_record> &out)
     {
@@ -118,7 +106,7 @@ public:
         while(at < m_stream.size())
         {
             std::size_t len_off = at;
-            const auto  len     = wire::read_varint(m_stream, len_off);
+            const auto len      = wire::read_varint(m_stream, len_off);
             if(!len)
             {
                 res.trailing_partial_dropped = true;
@@ -139,8 +127,8 @@ public:
             decoded_record rec;
             if(!detail::validate_and_decode(payload, rec))
             {
-                // The length varint may itself be corrupt, so do NOT trust payload_end:
-                // resync by scanning forward for the next sync marker (byte-granular).
+                // The length varint may itself be corrupt, so do NOT trust payload_end: resync
+                // by scanning forward for the next sync marker, byte-granular.
                 res.corruption_skipped = true;
                 at                     = detail::resync_from(m_stream, at + 1);
                 continue;
@@ -154,7 +142,7 @@ public:
 
 private:
     std::span<const std::byte> m_stream;
-    std::size_t                m_cursor{0};
+    std::size_t m_cursor{0};
 };
 
 }

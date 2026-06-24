@@ -6,11 +6,6 @@
 
 namespace plexus::io::recording {
 
-// Where drained capture bytes land. The recorder owns the one canonical flat
-// encoding and hands the encoded bytes here; the sink chooses only the
-// DESTINATION (an in-memory buffer in tests, a serial/SD/file binding on the
-// MCU port), never the format — so it is a raw-byte drain, never a codec. A
-// buffering destination overrides flush() to commit; the default is a no-op.
 class byte_sink
 {
 public:

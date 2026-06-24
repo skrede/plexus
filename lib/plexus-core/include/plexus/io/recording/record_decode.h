@@ -17,44 +17,37 @@
 
 namespace plexus::io::recording {
 
-// One decoded record. The category selects which fields are meaningful; payload is the
-// raw bytes a sample carried (empty for a metadata-only sample or a non-sample record).
-// A host decoder resolves the codec for payload from the preamble's schema by type_id —
-// the reader never decodes the payload itself (serializer-agnostic).
 struct decoded_record
 {
-    record_category              category{record_category::sample};
-    std::uint64_t                capture_ts{};
-    std::uint64_t                topic_hash{};
-    std::uint64_t                publication_sequence{};
-    std::uint64_t                source_timestamp{};
-    std::uint64_t                reception_timestamp{};
+    record_category category{record_category::sample};
+    std::uint64_t capture_ts{};
+    std::uint64_t topic_hash{};
+    std::uint64_t publication_sequence{};
+    std::uint64_t source_timestamp{};
+    std::uint64_t reception_timestamp{};
     std::optional<std::uint64_t> type_id{};
-    capture_fidelity             fidelity{capture_fidelity::off};
-    std::uint8_t                 edge{};
-    std::uint8_t                 verdict{};
-    std::uint64_t                count{};
-    node_id                      peer{};
-    std::string                  fqn;
-    std::span<const std::byte>   payload{};
-    // The wire-frame join keys, distinct from a sample's publication_sequence so a
-    // packet-level loss join never collides with message identity. wire_seq is the
-    // decorator's own per-direction monotonic counter; payload carries the framed bytes.
+    capture_fidelity fidelity{capture_fidelity::off};
+    std::uint8_t edge{};
+    std::uint8_t verdict{};
+    std::uint64_t count{};
+    node_id peer{};
+    std::string fqn;
+    std::span<const std::byte> payload{};
     wire_direction wire_dir{wire_direction::out};
-    std::uint64_t  wire_seq{};
+    std::uint64_t wire_seq{};
 };
 
 namespace detail {
 
 inline void decode_sample(wire::reader &r, decoded_record &rec)
 {
-    rec.capture_ts              = r.u64();
-    rec.topic_hash              = r.u64();
-    rec.publication_sequence    = r.u64();
-    rec.source_timestamp        = r.u64();
-    rec.reception_timestamp     = r.u64();
-    const bool          present = r.u8() != 0;
-    const std::uint64_t id      = r.varint().value_or(0);
+    rec.capture_ts           = r.u64();
+    rec.topic_hash           = r.u64();
+    rec.publication_sequence = r.u64();
+    rec.source_timestamp     = r.u64();
+    rec.reception_timestamp  = r.u64();
+    const bool present       = r.u8() != 0;
+    const std::uint64_t id   = r.varint().value_or(0);
     if(present)
         rec.type_id = id;
     rec.fidelity             = static_cast<capture_fidelity>(r.u8());
@@ -74,12 +67,12 @@ inline void decode_drop(wire::reader &r, decoded_record &rec)
 
 inline void decode_qos(wire::reader &r, decoded_record &rec)
 {
-    rec.capture_ts              = r.u64();
-    rec.edge                    = r.u8();
-    rec.topic_hash              = r.u64();
-    rec.verdict                 = r.u8();
-    const bool          present = r.u8() != 0;
-    const std::uint64_t id      = r.varint().value_or(0);
+    rec.capture_ts         = r.u64();
+    rec.edge               = r.u8();
+    rec.topic_hash         = r.u64();
+    rec.verdict            = r.u8();
+    const bool present     = r.u8() != 0;
+    const std::uint64_t id = r.varint().value_or(0);
     if(present)
         rec.type_id = id;
 }
@@ -94,15 +87,15 @@ inline void decode_participant(wire::reader &r, decoded_record &rec)
 
 inline void decode_endpoint(wire::reader &r, decoded_record &rec)
 {
-    rec.capture_ts              = r.u64();
-    rec.edge                    = r.u8();
-    rec.topic_hash              = r.u64();
-    const bool          present = r.u8() != 0;
-    const std::uint64_t id      = r.varint().value_or(0);
+    rec.capture_ts         = r.u64();
+    rec.edge               = r.u8();
+    rec.topic_hash         = r.u64();
+    const bool present     = r.u8() != 0;
+    const std::uint64_t id = r.varint().value_or(0);
     if(present)
         rec.type_id = id;
     const std::uint64_t flen = r.varint().value_or(0);
-    const auto          name = r.bytes(static_cast<std::size_t>(flen));
+    const auto name          = r.bytes(static_cast<std::size_t>(flen));
     rec.fqn.assign(reinterpret_cast<const char *>(name.data()), name.size());
 }
 
@@ -124,9 +117,6 @@ inline void decode_dropout(wire::reader &r, decoded_record &rec)
     rec.fidelity = static_cast<capture_fidelity>(r.u8());
 }
 
-// Read the fields in the exact order wire_frame() wrote them: capture_ts, direction,
-// the per-direction sequence, the peer node_id bytes, then the varint-prefixed framed
-// bytes (surfaced through payload, the same opaque-bytes slot a sample uses).
 inline void decode_wire(wire::reader &r, decoded_record &rec)
 {
     rec.capture_ts = r.u64();
@@ -140,23 +130,38 @@ inline void decode_wire(wire::reader &r, decoded_record &rec)
 
 }
 
-// Decode one record body ([category][fields], CRC already stripped/validated) into rec.
-// Returns true iff every field read stayed in bounds (the latched reader's ok()).
 inline bool decode_record_body(std::span<const std::byte> body, decoded_record &rec)
 {
     wire::reader r{body};
     rec.category = static_cast<record_category>(r.u8());
     switch(rec.category)
     {
-        case record_category::sample:      detail::decode_sample(r, rec); break;
-        case record_category::drop:        detail::decode_drop(r, rec); break;
-        case record_category::qos_change:  detail::decode_qos(r, rec); break;
-        case record_category::participant: detail::decode_participant(r, rec); break;
-        case record_category::endpoint:    detail::decode_endpoint(r, rec); break;
-        case record_category::security:    detail::decode_security(r, rec); break;
-        case record_category::dropout:     detail::decode_dropout(r, rec); break;
-        case record_category::wire_frame:  detail::decode_wire(r, rec); break;
-        default:                           break;
+        case record_category::sample:
+            detail::decode_sample(r, rec);
+            break;
+        case record_category::drop:
+            detail::decode_drop(r, rec);
+            break;
+        case record_category::qos_change:
+            detail::decode_qos(r, rec);
+            break;
+        case record_category::participant:
+            detail::decode_participant(r, rec);
+            break;
+        case record_category::endpoint:
+            detail::decode_endpoint(r, rec);
+            break;
+        case record_category::security:
+            detail::decode_security(r, rec);
+            break;
+        case record_category::dropout:
+            detail::decode_dropout(r, rec);
+            break;
+        case record_category::wire_frame:
+            detail::decode_wire(r, rec);
+            break;
+        default:
+            break;
     }
     return r.ok();
 }

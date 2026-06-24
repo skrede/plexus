@@ -7,16 +7,9 @@
 
 namespace plexus::io::recording {
 
-// The leading discriminator of every record in the flat stream. Each enumerator
-// names a plexus-native record kind that maps to one observer edge (a sample, the
-// session/declaration lifecycle edges, the QoS/drop/security taps), plus the
-// recorder's own honesty record. The ordinals are wire-stable and append-only — a
-// persisted stream keeps its meaning across versions, so a new kind takes the next
-// free ordinal and an existing one is NEVER renumbered or removed.
-//
-// wire_frame carries the raw on-the-wire frame bytes (the encrypted/framed transport
-// form). It is produced when a recording_channel decorator is active on the transport;
-// a node without the wire opt-in mints bare channels and writes none.
+// The ordinals are wire-stable and append-only: a persisted stream keeps its meaning across
+// versions, so a new kind takes the next free ordinal and an existing one is NEVER renumbered or
+// removed.
 enum class record_category : std::uint8_t
 {
     sample        = 0,
@@ -33,19 +26,13 @@ enum class record_category : std::uint8_t
     wire_frame    = 11,
 };
 
-// A non-owning view of a record at the moment it is built, the shape a freeze
-// predicate keys on (the "trigger on anomaly" black-box semantic). It carries only
-// the scalar facts a predicate matches — the category, the capture instant, the topic
-// identity, and the drop cause / qos verdict an anomaly edge surfaces — so evaluating
-// it on the record-build turn copies nothing and allocates nothing. The raw payload is
-// never exposed here: a freeze fires on an edge's shape, not its bytes.
 struct record_envelope
 {
-    record_category        category{record_category::sample};
-    std::uint64_t          capture_ts{};
-    std::uint64_t          topic_hash{};
+    record_category category{record_category::sample};
+    std::uint64_t capture_ts{};
+    std::uint64_t topic_hash{};
     io::detail::drop_cause cause{io::detail::drop_cause::none};
-    std::uint8_t           verdict{};
+    std::uint8_t verdict{};
 };
 
 }

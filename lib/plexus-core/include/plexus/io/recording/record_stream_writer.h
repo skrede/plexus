@@ -25,36 +25,25 @@
 
 namespace plexus::io::recording {
 
-// One entry of the Definitions preamble's offline-decode key: a topic/type id mapped to a
-// human type name and four opaque self-description fields a host projector reads to resolve
-// a codec/schema for the raw bytes a sample carries. Core never interprets the fields — they
-// are bytes laid down verbatim, the same posture as type_name — so the stream holds no codec.
 struct type_schema_entry
 {
-    std::uint64_t              type_id{};
-    std::string_view           type_name{};
-    std::string_view           message_encoding{};
-    std::string_view           schema_name{};
-    std::string_view           schema_encoding{};
+    std::uint64_t type_id{};
+    std::string_view type_name{};
+    std::string_view message_encoding{};
+    std::string_view schema_name{};
+    std::string_view schema_encoding{};
     std::span<const std::byte> schema_data{};
 };
 
-// over-limit: one cohesive record encoder; the per-category encode verbs (sample/drop/qos/
-// participant/endpoint/security/wire_frame/dropout) all write through the ONE reused wire::writer
-// over the shared m_scratch and finish through seal()/m_aux, so splitting them scatters that shared
-// scratch + CRC-seal discipline (the framing/CRC helpers are extracted to detail/record_frame.h).
-//
-// Encodes the flat append-only record stream into a caller-supplied scratch, returning each piece
-// as a contiguous span the caller frames (the byte_ring varint IS the per-record length prefix).
-// begin_stream emits the header + Definitions preamble; each record payload is
-// [u8 category][fields][crc32c] (the CRC covers category+fields so a recovery scan validates each
-// record). A sync_marker record lets the scan resync after a corrupt span. The scratch is grown
-// ONCE and reused, so the steady-state encode allocates nothing.
+// Each record payload is [u8 category][fields][crc32c]; the CRC covers category+fields so a
+// recovery scan validates each record. The scratch is grown once and reused, so the steady-state
+// encode allocates nothing.
 class record_stream_writer
 {
 public:
     explicit record_stream_writer(std::size_t scratch_bytes = 64u * 1024u)
-            : m_scratch(scratch_bytes)
+            : m_aux(256u)
+            , m_scratch(scratch_bytes)
     {
     }
 
@@ -85,9 +74,9 @@ public:
         return {m_scratch.data(), w.offset()};
     }
 
-    // The sync marker and the dropout record encode into a SEPARATE small scratch, never
-    // the record scratch: the recorder emits them around a record whose bytes already sit
-    // in the record scratch (an alias the main scratch must not clobber mid-admit).
+    // The sync marker and the dropout record encode into a SEPARATE small scratch, never the
+    // record scratch: the recorder emits them around a record whose bytes already sit in the
+    // record scratch, an alias the main scratch must not clobber mid-admit.
     std::span<const std::byte> sync_marker()
     {
         wire::writer w{m_aux};
@@ -95,9 +84,6 @@ public:
         return {m_aux.data(), w.offset()};
     }
 
-    // A sample (a captured message): topic identity + the metadata floor + an optional
-    // type_id + the raw payload bytes at the recorded fidelity. A metadata-only record
-    // passes an empty payload; the encoder never invokes a codec — payload is opaque.
     std::span<const std::byte> sample(std::uint64_t capture_ts, std::uint64_t topic_hash, const message_info &info, std::uint64_t type_id, bool type_id_present,
                                       capture_fidelity fidelity, std::span<const std::byte> payload)
     {
@@ -178,12 +164,6 @@ public:
         return seal(w.offset());
     }
 
-    // The wire-fidelity tier: the full framed transport bytes captured verbatim on one
-    // direction, plus the per-direction sequence and the peer identity the offline cross-
-    // node loss-join keys on. The bytes are opaque — the encoder never frames or transforms
-    // them (lossless capture), it lays them down behind a varint length exactly as sample()
-    // lays down its payload. Uses the SHARED m_scratch + seal() like sample() (m_aux stays
-    // reserved for the sync_marker / dropout records the recorder emits around it mid-admit).
     std::span<const std::byte> wire_frame(std::uint64_t capture_ts, wire_direction dir, std::uint64_t seq, const node_id &peer, std::span<const std::byte> bytes)
     {
         wire::writer w{m_scratch};
@@ -210,15 +190,13 @@ public:
     }
 
 private:
-    // Append the CRC over the record scratch front and return the [body][crc] payload (the
-    // recover-validated unit). The framing/CRC helpers live in detail/record_frame.h.
     std::span<const std::byte> seal(std::size_t body_len)
     {
         return detail::seal_in(m_scratch, body_len);
     }
 
+    std::vector<std::byte> m_aux;
     std::vector<std::byte> m_scratch;
-    std::vector<std::byte> m_aux = std::vector<std::byte>(256u);
 };
 
 }

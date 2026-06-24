@@ -25,10 +25,6 @@ enum class ring_policy : std::uint8_t
     drop_oldest = 1,
 };
 
-// over-limit: one cohesive SPSC byte ring; the try_push/drain/evict/peek/copy verbs all advance
-// the shared m_store/m_head/m_tail cursor protocol with release/acquire publication, so splitting
-// them scatters that single-producer/single-consumer cursor state across files.
-//
 // A bounded, grown-once, single-producer/single-consumer byte ring carrying length-prefixed
 // records [varint len][bytes]. The backing store is allocated ONCE (an owned vector, or a
 // caller-provided span for the MCU "statically provided" path) and never reallocates while pushing
