@@ -15,13 +15,6 @@
 
 namespace plexus::asio {
 
-// The AF_UNIX asio Policy: a near-verbatim clone of asio_policy swapping the
-// byte_channel to the local-stream unix_channel — the io_context executor (carried
-// by reference, the hot-path substrate), the steady-timer, and the
-// shared_ptr<const void> byte_owner are reused unchanged. The static post()
-// forwards onto the io_context. The static_assert below is the compile-time gate
-// proving the local-stream transport satisfies the same Policy seam as the TCP
-// transport — a second backend-within-asio data point for the concept.
 struct unix_policy
 {
     using executor_type     = ::asio::io_context &;

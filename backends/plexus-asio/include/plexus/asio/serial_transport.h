@@ -30,16 +30,11 @@
 namespace plexus::asio {
 
 // The host serial connector. A UART is point-to-point: there is no acceptor and serial_port has
-// no async_connect (opening a port is a synchronous open(name) + set_option line discipline), so
-// serial_transport implements transport_backend DIRECTLY — it does NOT derive from
-// stream_transport (which wraps a Listener accept-loop + an async-connect dial). Both verbs
-// collapse to open-port-and-read delivering ONE channel: listen(ep) via on_accepted (no endpoint
-// — an inbound channel is not dial-correlated), dial(ep) via on_dialed carrying the endpoint (the
-// engine's correlation key). On open failure dial reports on_dial_failed with a mapped io_error.
-// By convention the dialing end drives the handshake request (on_outbound_connected) and the
-// listening end takes the inbound bootstrap — the role is an endpoint config choice, no FSM
-// change. close() is a no-op: the one delivered channel owns the open port and tears it down on
-// destruction (there is no acceptor to stop).
+// no async_connect, so serial_transport implements transport_backend DIRECTLY (it does not derive
+// from stream_transport). Both verbs collapse to open-port-and-read delivering ONE channel:
+// listen(ep) via on_accepted, dial(ep) via on_dialed carrying the endpoint (the engine's
+// correlation key). close() is a no-op — the one delivered channel owns the open port and tears
+// it down on destruction.
 class serial_transport
 {
 public:
@@ -73,12 +68,11 @@ public:
         m_on_error = std::move(cb);
     }
 
-    // A listen is an open-and-read with no acceptor: the one channel arrives via on_accepted. An
-    // open failure surfaces on_error (a listen carries no endpoint to correlate a failure to).
+    // An open failure surfaces on_error (a listen carries no endpoint to correlate a failure to).
     void listen(const io::endpoint &ep)
     {
         std::error_code ec;
-        auto            ch = open_channel(ep, ec);
+        auto ch = open_channel(ep, ec);
         if(ec)
             return report_error(detail::map_error(ec));
         if(m_on_accepted)
@@ -90,29 +84,23 @@ public:
     void dial(const io::endpoint &ep)
     {
         std::error_code ec;
-        auto            ch = open_channel(ep, ec);
+        auto ch = open_channel(ep, ec);
         if(ec)
             return report_dial_fail(ep, detail::map_error(ec));
         if(m_on_dialed)
             m_on_dialed(std::move(ch), ep);
     }
 
-    // No acceptor to stop and no pending async dial to cancel — the delivered channel owns the
-    // open port and closes it on teardown.
     void close()
     {
     }
 
-    // The scheme this member serves + its locality tier: a directly-attached point-to-point UART
-    // is the most-local link, serving the "serial" scheme.
     static constexpr std::array<std::string_view, 1> mux_schemes{"serial"};
-    static constexpr io::transport_kind              mux_tier = io::transport_kind::local;
+    static constexpr io::transport_kind mux_tier = io::transport_kind::local;
 
 private:
-    // Open the named device, apply the parsed baud + the default line discipline, and adopt the
-    // configured port into a fresh serial_channel that immediately starts reading. The line
-    // discipline is applied HERE (on the open port, before adoption) rather than through the
-    // channel's socket-options hook so serial_traits::apply_socket_options stays a no-op.
+    // The line discipline is applied HERE (on the open port, before adoption) rather than through
+    // the channel's socket-options hook, so serial_traits::apply_socket_options stays a no-op.
     std::unique_ptr<serial_channel> open_channel(const io::endpoint &ep, std::error_code &ec)
     {
         const auto parsed = detail::parse_serial(ep.address, ec);
@@ -159,14 +147,14 @@ private:
             m_on_error(e);
     }
 
-    ::asio::io_context                                                                             &m_io;
-    stream::stream_inbound_config                                                                   m_cfg;
-    io::congestion                                                                                  m_congestion;
-    io::egress_capacity                                                                             m_egress;
-    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)>                       m_on_accepted;
+    ::asio::io_context &m_io;
+    stream::stream_inbound_config m_cfg;
+    io::congestion m_congestion;
+    io::egress_capacity m_egress;
+    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)>                    m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)>                                          m_on_error;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
 };
 
 }

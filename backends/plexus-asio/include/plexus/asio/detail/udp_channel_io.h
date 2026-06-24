@@ -22,16 +22,6 @@
 
 namespace plexus::asio::detail {
 
-// over-limit: one cohesive UDP I/O state machine; the send-large/fragment, the inbound
-// demux/dedup/reassembly, the ARQ build/fan, and the backpressure drain all advance the shared
-// channel members (the lazily-built ARQ + reassembler, the scratch buffers, the bounded queue),
-// so splitting them further scatters that shared I/O state with no readability gain.
-
-// The send/recv path + reliable-ARQ glue for udp_channel, relocated by friendship: each helper
-// reaches the channel's server/dest/scratch/ARQ/reassembler/backpressure members through the
-// channel reference. The ARQ itself lives in io/detail/udp_reliable_arq.h; this carries the
-// channel-side wiring (build, fan, drain) out of the channel header.
-
 template<typename Ch>
 void reject_oversize(Ch &c)
 {
@@ -40,21 +30,20 @@ void reject_oversize(Ch &c)
 }
 
 template<typename Ch>
-[[nodiscard]] bool exceeds_max_message(const Ch &c, std::size_t size) noexcept
+bool exceeds_max_message(const Ch &c, std::size_t size) noexcept
 {
     return size > c.m_max_message_bytes;
 }
 
-// best_effort split: each fragment is one FRAGMENTED-bit envelope carrying the wire sub-header +
-// slice, sent fire-and-forget. Any lost fragment leaves the message incomplete; the peer's
-// per-message reassembly timeout drops the WHOLE message.
+// Each fragment is a fire-and-forget FRAGMENTED-bit envelope; a lost fragment makes the peer's
+// per-message reassembly timeout drop the whole message.
 template<typename Ch>
 void send_best_effort_large(Ch &c, std::span<const std::byte> frame)
 {
     if(exceeds_max_message(c, frame.size()))
         return reject_oversize(c);
     const std::uint16_t msg_id = c.m_out_msg_id++;
-    io::fragment_sink   sink   = [&c, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
+    io::fragment_sink sink     = [&c, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
     {
         wire::wrap_udp_fragment_into(c.m_frag_scratch, wire::udp_envelope_kind::best_effort, c.m_out_seq++, msg_id, idx, cnt, slice);
         c.m_server.send_to(c.m_frag_scratch, c.m_dest);
@@ -62,8 +51,8 @@ void send_best_effort_large(Ch &c, std::span<const std::byte> frame)
     io::split(frame, c.m_max_payload, msg_id, sink);
 }
 
-// on_data is ALWAYS posted (the byte_channel contract). The owning vector keeps the bytes alive
-// across the post (the demux's recv buffer is reused immediately).
+// on_data is always posted (the byte_channel contract); the owning vector keeps the bytes alive
+// across the post (the demux reuses its recv buffer immediately).
 template<typename Ch>
 void post_on_data(Ch &c, std::span<const std::byte> frame)
 {
@@ -76,8 +65,7 @@ void post_on_data(Ch &c, std::span<const std::byte> frame)
                  });
 }
 
-// A reassembled message already owns its bytes once: carry the owner straight into the posted
-// closure (no second copy) and hand its span up.
+// Carry the already-owning bytes straight into the posted closure (no second copy).
 template<typename Ch>
 void post_on_data_owned(Ch &c, wire::shared_bytes owned)
 {
@@ -89,8 +77,6 @@ void post_on_data_owned(Ch &c, wire::shared_bytes owned)
                  });
 }
 
-// Build the bounded reassembler on first inbound fragment and wire its completion sink: an
-// assembled message POSTS on_data (the block is sans-IO; the channel owns the post).
 template<typename Ch>
 void ensure_reassembler(Ch &c)
 {
@@ -109,8 +95,6 @@ void ensure_reassembler(Ch &c)
             });
 }
 
-// A best_effort inbound fragment: decode its wire sub-header (fail-closed) and feed the bounded
-// reassembler; a completed message posts on_data via on_deliver.
 template<typename Ch>
 void feed_fragment(Ch &c, std::span<const std::byte> frame)
 {
@@ -121,14 +105,13 @@ void feed_fragment(Ch &c, std::span<const std::byte> frame)
     c.m_reassembler->feed(h->msg_id, h->frag_idx, h->frag_cnt, h->payload);
 }
 
-// A reliable in-order payload: if its ARQ seq was flagged FRAGMENTED, the payload is
-// [msg_id:2][idx:4][cnt:4][slice] — decode and feed the reassembler; else it is a whole reliable
-// message delivered byte-identically to the unfragmented path.
+// A FRAGMENTED-flagged reliable payload is [msg_id:2][idx:4][cnt:4][slice]: decode and feed the
+// reassembler; an unflagged one is a whole message.
 template<typename Ch>
 void deliver_reliable_inorder(Ch &c, bool fragmented, std::span<const std::byte> payload)
 {
     if(!fragmented)
-        return post_on_data(c, payload); // whole reliable message: unchanged path
+        return post_on_data(c, payload);
     ensure_reassembler(c);
     auto h = wire::decode_udp_fragment_header(payload);
     if(!h)
@@ -136,10 +119,8 @@ void deliver_reliable_inorder(Ch &c, bool fragmented, std::span<const std::byte>
     c.m_reassembler->feed(h->msg_id, h->frag_idx, h->frag_cnt, h->payload);
 }
 
-// The per-connection congestion safety net for the direct-send bypass paths. congestion=block
-// enqueues a window-full reliable frame into the bounded queue (the ack handler drains it); a
-// queue at its cap surfaces would_block. drop_newest sheds the frame at the publisher. Either way
-// publish() stays non-blocking.
+// block enqueues into the bounded queue (the ack handler drains it), would_block at its cap;
+// drop_newest sheds at the publisher. Either way publish() stays non-blocking.
 template<typename Ch>
 typename Ch::submit_result on_window_full(Ch &c, std::span<const std::byte> payload, bool fragmented)
 {
@@ -154,14 +135,13 @@ typename Ch::submit_result on_window_full(Ch &c, std::span<const std::byte> payl
     if(!c.m_backpressure.admit(payload, fragmented))
     {
         if(c.m_on_error)
-            c.m_on_error(io::io_error::would_block); // queue at cap: the stall edge
+            c.m_on_error(io::io_error::would_block);
         return sr::window_full;
     }
-    return sr::admitted; // accepted into the queue; will send on the next ack
+    return sr::admitted;
 }
 
-// Encode one reliable fragment as [msg_id:2][idx:4][cnt:4][slice] and submit it to the ARQ with
-// the fragmented flag set; a full window backpressures through the bounded queue.
+// Encode one fragment as [msg_id:2][idx:4][cnt:4][slice] and submit it FRAGMENTED-flagged.
 template<typename Ch>
 typename Ch::submit_result submit_reliable_fragment(Ch &c, std::uint16_t msg_id, std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
 {
@@ -172,10 +152,8 @@ typename Ch::submit_result submit_reliable_fragment(Ch &c, std::uint16_t msg_id,
     return on_window_full(c, c.m_frag_scratch, /*fragmented=*/true);
 }
 
-// reliable split: each fragment is submitted as one send_reliable segment ABOVE the ARQ, so a
-// lost fragment is selectively retransmitted and the message completes. The fragment's
-// msg_id/index/count ride INSIDE the segment payload; the FRAGMENTED envelope bit tells the peer
-// to route the in-order payload to the reassembler.
+// Each fragment is a send_reliable segment above the ARQ (selectively retransmitted on loss); the
+// FRAGMENTED envelope bit routes the peer's in-order payload to the reassembler.
 template<typename Ch>
 typename Ch::submit_result send_reliable_large(Ch &c, std::span<const std::byte> payload)
 {
@@ -185,16 +163,14 @@ typename Ch::submit_result send_reliable_large(Ch &c, std::span<const std::byte>
         return Ch::submit_result::window_full;
     }
     ensure_arq(c);
-    const std::uint16_t        msg_id = c.m_out_msg_id++;
-    typename Ch::submit_result last   = Ch::submit_result::admitted;
-    io::fragment_sink          sink   = [&c, msg_id, &last](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
+    const std::uint16_t msg_id      = c.m_out_msg_id++;
+    typename Ch::submit_result last = Ch::submit_result::admitted;
+    io::fragment_sink sink          = [&c, msg_id, &last](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
     { last = submit_reliable_fragment(c, msg_id, idx, cnt, slice); };
     io::split(payload, c.m_max_payload, msg_id, sink);
     return last;
 }
 
-// Re-submit queued frames while the send window has room: each admit pops one. A submit that
-// returns window_full stops the drain — the remainder waits for the next on_window_advance.
 template<typename Ch>
 void drain_backpressure(Ch &c)
 {
@@ -206,9 +182,6 @@ void drain_backpressure(Ch &c)
     }
 }
 
-// Build the selective-repeat ARQ on first reliable use and wire its actions: a (re)transmit wraps
-// a kind=1 data segment, an ack wraps a kind=1 ack frame, an in-order payload posts on_data, and
-// exhaustion surfaces a connection-fatal error.
 template<typename Ch>
 // NOLINTNEXTLINE(readability-function-size)
 void ensure_arq(Ch &c)
@@ -244,9 +217,6 @@ void ensure_arq(Ch &c)
     c.m_arq->on_window_advance([&c] { drain_backpressure(c); });
 }
 
-// Fan a kind=1 inner frame to the ARQ on the ONE inbound demux path: a data segment drives
-// on_segment (in-order delivery + ack), an ack drives on_ack (window slide). A test-installed raw
-// observer (m_on_reliable) sees the segment too. A frame whose marker is neither is dropped.
 template<typename Ch>
 void deliver_reliable(Ch &c, std::uint16_t seq, bool fragmented, std::span<const std::byte> inner)
 {
@@ -268,9 +238,8 @@ void deliver_reliable(Ch &c, std::uint16_t seq, bool fragmented, std::span<const
     c.m_arq->on_segment(seq, fragmented, *payload);
 }
 
-// Strip the envelope, dedup best_effort, route to the reassembler or post the inner frame. A
-// kind=1 datagram engages the ARQ only on a reliable_datagram-mode channel (mode, not envelope
-// kind alone, gates the engine — a spoofed datagram cannot spin up an unsolicited ARQ).
+// The channel mode (not the envelope kind alone) gates the ARQ, so a spoofed datagram cannot spin
+// up an unsolicited engine.
 template<typename Ch>
 void deliver_inbound(Ch &c, std::span<const std::byte> datagram)
 {

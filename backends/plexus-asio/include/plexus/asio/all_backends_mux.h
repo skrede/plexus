@@ -21,23 +21,12 @@
 
 namespace plexus::asio {
 
-// The all-backends composition: the core variadic multiplexer instantiated over the full
-// member set this build links — a local (AF_UNIX) stream, a remote (plain TCP) stream, a
-// secure (TLS-over-TCP) stream, a datagram (UDP, serving both "udp" and the reliable-ARQ
-// "udpr"), and a secure-datagram (DTLS-over-UDP) member. The member order matches the
-// positional ctor below; route_of resolves one member per endpoint over the pack at compile
-// time (locality wins, then scheme), reproducing the routing the engine drove before. A
-// build that wants fewer transports instantiates multiplexing_transport over its own member
-// subset directly — this alias is the convenience for the full set, not the only composition.
 using all_backends_mux = io::multiplexing_transport<unix_transport, asio_transport, tls::tls_transport, udp_transport, tls::dtls_transport>;
 
-// Construct the all-backends multiplexer over five caller-owned member transports. The
-// members are BORROWED (held by reference) and MUST outlive the returned object — the owner
-// sequences teardown so the mux is destroyed before any member fires a late completion. The
-// mux mints no credential; the secure members carry their own. Returns a prvalue constructed
-// in place (guaranteed elision) so the member callbacks capture the final address.
-[[nodiscard]] inline all_backends_mux make_all_backends_mux(unix_transport &local, asio_transport &remote, tls::tls_transport &secure, udp_transport &datagram,
-                                                            tls::dtls_transport &secure_datagram, io::transport_selector selector = {})
+// The members are BORROWED (held by reference) and MUST outlive the returned object — the
+// owner sequences teardown so the mux is destroyed before any member fires a late completion.
+inline all_backends_mux make_all_backends_mux(unix_transport &local, asio_transport &remote, tls::tls_transport &secure, udp_transport &datagram, tls::dtls_transport &secure_datagram,
+                                              io::transport_selector selector = {})
 {
     return all_backends_mux{local, remote, secure, datagram, secure_datagram, selector};
 }

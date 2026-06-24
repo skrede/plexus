@@ -11,11 +11,7 @@
 
 namespace plexus::asio::detail {
 
-// Parse a "host:port" address into a tcp::endpoint. A missing colon, an unparseable
-// host, or a malformed port sets ec — the dial/listen path then fails closed rather
-// than crashing on a malformed address. The port is parsed with std::from_chars (no
-// throw): non-numeric, trailing junk, or > 65535 all set ec and return {}. Shared by
-// the listener (bind) and the transport (dial) so the split lives in one place.
+// A missing colon, unparseable host, or out-of-range port sets ec and returns {} (fail closed).
 inline ::asio::ip::tcp::endpoint parse(const std::string &addr, std::error_code &ec)
 {
     auto colon = addr.rfind(':');
@@ -24,8 +20,8 @@ inline ::asio::ip::tcp::endpoint parse(const std::string &addr, std::error_code 
         ec = std::make_error_code(std::errc::invalid_argument);
         return {};
     }
-    auto          host     = addr.substr(0, colon);
-    auto          port_str = addr.substr(colon + 1);
+    auto host              = addr.substr(0, colon);
+    auto port_str          = addr.substr(colon + 1);
     unsigned long port_val = 0;
     auto [ptr, e]          = std::from_chars(port_str.data(), port_str.data() + port_str.size(), port_val);
     if(e != std::errc{} || ptr != port_str.data() + port_str.size() || port_val > 65535u)

@@ -13,10 +13,6 @@
 
 namespace plexus::asio {
 
-// steady_timer wrapper satisfying the plexus::timer concept. Mirrors mdnspp's
-// AsioTimer: both ctors take the executor (the io_context the Policy carries),
-// the second the constructibility constraint the timer concept requires; the
-// surface forwards straight onto ::asio::steady_timer.
 class asio_timer
 {
 public:
@@ -25,6 +21,7 @@ public:
     {
     }
 
+    // The error_code-taking ctor the timer concept's constructibility constraint requires.
     asio_timer(::asio::io_context &io, std::error_code &)
             : m_timer(io)
     {

@@ -14,21 +14,14 @@
 
 namespace plexus::asio::shm {
 
-// The lean same-host composition: shared memory + AF_UNIX + plain TCP, WITHOUT the secure
-// (TLS/DTLS) or datagram (UDP) members. This is the crypto-free counterpart to
-// all_backends_mux_shm — it includes only shm_member.h + the AF_UNIX and plain-TCP stream
-// transports, so it pulls in no tls/dtls/udp/openssl. A consumer that needs the local fast
-// path plus a plain-TCP remote, but no TLS, composes this and builds with the crypto
-// backend disabled. shm is the FIRST positional member so the preference hook (which scans
-// candidates for the local_fast_eligible flag) finds it, AF_UNIX is the same-host fallback, and
-// plain TCP is the cross-host stream. shm_member + make_shm_member come from shm_member.h.
+// The crypto-free counterpart to all_backends_mux_shm (shm + AF_UNIX + plain TCP): it pulls in no
+// tls/dtls/udp/openssl. shm is the FIRST positional member so the preference hook (which scans
+// candidates for the local_fast_eligible flag) finds it.
 using local_shm_mux = io::multiplexing_transport<shm_member, unix_transport, asio_transport>;
 
-// Construct the lean shm-bearing multiplexer over three caller-owned member transports,
-// injecting the same-host preference hook (prefer shm, fall back to AF_UNIX on a failed
-// ring acquire). The members are BORROWED and MUST outlive the returned object. Returns a
-// prvalue (guaranteed elision) so the member callbacks capture the final address.
-[[nodiscard]] inline local_shm_mux make_local_shm_mux(shm_member &shm, unix_transport &local, asio_transport &remote, io::transport_selector selector = {})
+// Injects the same-host preference hook (prefer shm, fall back to AF_UNIX on a failed ring
+// acquire). The members are BORROWED and MUST outlive the returned object.
+inline local_shm_mux make_local_shm_mux(shm_member &shm, unix_transport &local, asio_transport &remote, io::transport_selector selector = {})
 {
     return local_shm_mux{shm, local, remote, selector, ::plexus::shm::prefer_upgradeable_hook(shm)};
 }

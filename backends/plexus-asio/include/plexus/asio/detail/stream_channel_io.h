@@ -22,13 +22,6 @@
 
 namespace plexus::asio::detail {
 
-// The send-queue drive + read-loop glue for stream_channel, relocated by friendship: each helper
-// reaches the stream/inbound/egress/sink members through the channel reference. Names carry a
-// stream_ prefix where a bare name would collide with another channel's detail glue.
-
-// The per-connection congestion safety net for the direct-send bypass paths. drop_newest sheds
-// the frame at the publisher (counted); block surfaces would_block (the stall edge). Either way
-// the call returns without blocking.
 template<typename Ch>
 void stream_on_write_queue_full(Ch &c)
 {
@@ -47,7 +40,7 @@ void stream_fail(Ch &c, const std::error_code &ec)
     if(ec == ::asio::error::operation_aborted || !c.m_open)
         return;
     c.m_open = false;
-    c.m_egress.close(); // stop the serial drain so the failed write does not chain
+    c.m_egress.close(); // stop the drain so the failed write does not chain
     c.m_inbound.shutdown();
     auto mapped = detail::map_error(ec);
     if(c.m_on_error)
@@ -56,8 +49,8 @@ void stream_fail(Ch &c, const std::error_code &ec)
         c.m_on_closed();
 }
 
-// A peer that misbehaved on the wire: fire the distinct protocol-close seam, then tear down via
-// the on_closed-only close() path — NEVER fail()/on_error.
+// A wire protocol violation: fire the protocol-close seam, then close() (on_closed only) — NEVER
+// fail()/on_error.
 template<typename Ch>
 void stream_handle_protocol_close(Ch &c, wire::close_cause cause)
 {
@@ -66,9 +59,8 @@ void stream_handle_protocol_close(Ch &c, wire::close_cause cause)
     c.close();
 }
 
-// The stream_inbound on_frame target: the reassembler already materialized the full header-on
-// frame as the owning shared_bytes, so on_data delivers it verbatim. The posted closure CAPTURES
-// the owner, keeping the bytes alive past this call (the post runs later).
+// The posted closure captures the owner, keeping the bytes alive past this call (the post runs
+// later).
 template<typename Ch>
 void stream_post_frame(Ch &c, const wire::complete_frame &frame)
 {
@@ -102,10 +94,8 @@ void stream_do_read(Ch &c)
                                });
 }
 
-// The irreducible asio send-sink the stream send_queue block drives: gather the block-owned node
-// views into one ConstBufferSequence and issue a SINGLE async_write (asio lowers it to one
-// writev/WSASend; for TLS, OpenSSL coalesces the plaintext into fewer records). On a socket error
-// the channel fails (which closes the block), so the completion's open-guard stops the chain.
+// Gather the block-owned node views into one ConstBufferSequence and issue a SINGLE async_write
+// (asio lowers it to one writev/WSASend).
 template<typename Ch>
 stream::detail::send_queue::send_sink stream_make_send_sink(Ch &c)
 {

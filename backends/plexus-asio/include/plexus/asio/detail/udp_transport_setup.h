@@ -20,10 +20,6 @@
 
 namespace plexus::asio::detail {
 
-// The socket-setup + accept-loop + dial-resolution glue for udp_transport, relocated by
-// friendship: each helper reaches the transport's server/demux/dial-table members through the
-// transport reference. The per-peer handshake ARQ stays in io/detail/udp_handshake_arq.h.
-
 template<typename T>
 void report_dial_fail(T &t, const io::endpoint &ep, io::io_error e)
 {
@@ -38,8 +34,8 @@ void report_error(T &t, io::io_error e)
         t.m_on_error(e);
 }
 
-// Bind the shared socket to an ephemeral local endpoint if listen() has not already bound it: a
-// dial-only transport still needs a bound source port to send from and receive replies on.
+// A dial-only transport still needs a bound source port, so bind an ephemeral local endpoint if
+// listen() has not already bound the shared socket.
 template<typename T>
 void ensure_bound(T &t, const ::asio::ip::udp &proto)
 {
@@ -55,9 +51,8 @@ void send_handshake(T &t, const typename T::endpoint_type &dest, typename T::hs_
     t.m_server.send_to(t.m_hs_scratch, dest);
 }
 
-// The borrow-vs-own teardown seam: the engine owns the handed-out channel but the demux keeps a
-// non-owning ref, so the channel's dtor must drop that ref. The identity-guarded erase leaves a
-// same-endpoint re-dial untouched.
+// The engine owns the handed-out channel but the demux keeps a non-owning ref, so the channel's
+// dtor drops it; the identity-guarded erase leaves a same-endpoint re-dial untouched.
 template<typename T>
 void wire_teardown(T &t, udp_channel &ch, const typename T::endpoint_type &key)
 {
@@ -71,21 +66,21 @@ void resolve_paired(T &t, udp_channel *ch)
         (*arq)->on_paired_frame();
 }
 
-// COPY ep before resolve erases the entry: ep is bound to the pending entry's ARQ-closure
-// capture, which the erase destroys — re-emitting the freed reference is a use-after-free.
+// COPY ep before resolve erases the entry: ep is bound to the pending entry's ARQ-closure capture
+// that the erase destroys, so re-emitting the reference would be a use-after-free.
 template<typename T>
 void resolve_dial(T &t, const io::endpoint &ep, udp_channel *raw)
 {
     const io::endpoint dialed = ep;
-    auto               ch     = t.m_dials.resolve(raw);
+    auto ch                   = t.m_dials.resolve(raw);
     if(!ch)
         return;
     if(t.m_on_dialed)
         t.m_on_dialed(std::move(ch), dialed);
 }
 
-// COPY ep AND erase the demux entry out before fail erases the registry entry (the entry owns the
-// ARQ closure ep is bound to, and the channel whose dest the demux is keyed on is moved out).
+// COPY ep and erase the demux entry before fail erases the registry entry (which owns the ARQ
+// closure ep is bound to, and moves out the channel the demux is keyed on).
 template<typename T>
 void fail_dial(T &t, const io::endpoint &ep, udp_channel *raw)
 {
@@ -95,16 +90,15 @@ void fail_dial(T &t, const io::endpoint &ep, udp_channel *raw)
     report_dial_fail(t, failed, io::io_error::timed_out);
 }
 
-// A never-seen source: ONLY a handshake request synthesizes an accept (the source endpoint is not
-// trusted as identity — bare data is dropped; the demux cap bounds the spoof-flood). The
-// dialer-declared mode mints a symmetric channel and is echoed in the response.
+// ONLY a handshake request synthesizes an accept from a never-seen source (bare data is not
+// trusted as identity); the demux cap bounds the spoof-flood.
 template<typename T>
 void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<const std::byte> bytes)
 {
     auto hs = datagram::detail::decode_handshake(bytes);
     if(!hs || hs->type != T::hs_type::request)
         return;
-    auto  ch  = std::make_unique<udp_channel>(t.m_io, t.m_server, from, t.m_max_payload, t.m_arq_cfg, t.m_congestion, t.m_backpressure_bytes, hs->mode, hs->initial_seq,
+    auto ch   = std::make_unique<udp_channel>(t.m_io, t.m_server, from, t.m_max_payload, t.m_arq_cfg, t.m_congestion, t.m_backpressure_bytes, hs->mode, hs->initial_seq,
                                               t.m_global_default, t.m_reassembly_budget, t.m_reassembly_timeout);
     auto *raw = ch.get();
     if(!t.m_demux.insert(from, raw))
@@ -120,8 +114,6 @@ void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<cons
         t.m_on_accepted(t.m_dials.adopt_accepted(raw));
 }
 
-// A known peer: a handshake control frame drives the ARQ / replies; anything else is data the
-// channel deduplicates and posts.
 template<typename T>
 void route_to_peer(T &t, const typename T::endpoint_type &from, udp_channel *ch, std::span<const std::byte> bytes)
 {

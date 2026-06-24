@@ -9,10 +9,7 @@
 
 namespace plexus::asio::detail {
 
-// Maps a native asio error onto the backend-independent io_error the
-// byte_channel concept surfaces, so the channel/listener stay transport-neutral
-// to their consumers. EOF folds onto broken_pipe (a clean half-close is a
-// broken stream from the byte_channel's view).
+// EOF folds onto broken_pipe: a clean half-close is a broken stream to the byte_channel.
 inline io::io_error map_error(const std::error_code &ec)
 {
     if(ec == ::asio::error::connection_refused)

@@ -11,13 +11,8 @@
 
 namespace plexus::asio::detail {
 
-// The serial inbound read loop: it drives the CRC verify+resync decorator instead of
-// feeding the shared stream_inbound directly (the TCP/unix path), so the byte-stable
-// read-loop glue in stream_channel_io.h is left untouched. Raw bytes go to the
-// decorator; a CRC-verified complete frame is POSTED to on_data (the byte_channel posted-
-// delivery contract); a corrupt frame fires the non-fatal on_frame_dropped seam from
-// inside the decorator. A genuine read error routes through the channel's base fail()
-// (network-drop on_error + on_closed), exactly as the shared loop does.
+// Feed raw bytes to the CRC verify+resync decorator (a verified frame posts to on_data per the
+// byte_channel posted-delivery contract); a read error routes through the channel's base fail().
 template<typename Ch>
 void serial_do_read(Ch &c)
 {

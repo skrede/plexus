@@ -25,16 +25,12 @@
 
 namespace plexus::asio {
 
-// The host serial byte_channel: stream_channel over ::asio::serial_port with the serial open
-// path. Structurally the 4th instantiation of the shared stream_channel core (after TCP,
-// AF_UNIX, TLS) — a clone of unix_channel with the socket type swapped — PLUS the serial-only
-// CRC32C integrity decorator spliced in WITHOUT editing any shared stream_channel file:
-//   * egress: serial_bootstrap appends the 4-byte CRC32C trailer as a 2nd gather node.
-//   * inbound: this channel owns the CRC verify+resync decorator and runs its OWN read loop
-//     (serial_do_read) that drives it, instead of the shared stream_inbound feed — so a corrupt
-//     frame is dropped + magic-resynced (never closing the link) and a verified frame is posted
-//     to on_data. A failed CRC is surfaced through the SEPARATE non-fatal on_frame_dropped seam,
-//     leaving on_protocol_close strictly fatal.
+// The host serial byte_channel: stream_channel over ::asio::serial_port plus the serial-only
+// CRC32C integrity decorator. The egress appends a 4-byte CRC32C trailer (serial_bootstrap);
+// inbound runs its OWN read loop (serial_do_read) driving a CRC verify+resync decorator instead
+// of the shared stream_inbound feed, so a corrupt frame is dropped + magic-resynced (never
+// closing the link). A failed CRC surfaces through the non-fatal on_frame_dropped seam, leaving
+// on_protocol_close strictly fatal.
 struct serial_traits
 {
     static io::endpoint format_endpoint(const ::asio::serial_port &)
@@ -83,25 +79,25 @@ public:
             , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
     {
         wire_decorator();
-        start_read(); // the adopt ctor's read loop, now the decorator is constructed
+        // The adopt ctor's read loop, deferred until the decorator is constructed.
+        start_read();
     }
 
-    // Verified-frame delivery: the consumer's on_data is fed the CRC-verified clean
-    // header-on bytes the decorator emits (the base stream_inbound is bypassed on serial).
+    // The consumer's on_data is fed the CRC-verified bytes the decorator emits (the base
+    // stream_inbound is bypassed on serial).
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
     }
 
-    // The non-fatal drop seam, SEPARATE from on_protocol_close: a CRC mismatch fires here
-    // (the frame was dropped and the link resynced), never tearing the channel down.
+    // The non-fatal drop seam, distinct from on_protocol_close: a CRC mismatch fires here (the
+    // frame was dropped and the link resynced), never tearing the channel down.
     void on_frame_dropped(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
         m_on_frame_dropped = std::move(cb);
     }
 
-    // Idempotent: the adopt ctor arms the loop once; a later transport start_read() is a
-    // no-op (the executor-alone ctor leaves it for the transport's single explicit call).
+    // Idempotent: the adopt ctor arms the loop once; a later transport start_read() is a no-op.
     void start_read()
     {
         if(m_reading)
@@ -112,15 +108,15 @@ public:
     }
 
     // The serial read-loop seam (reached by detail::serial_do_read).
-    [[nodiscard]] ::asio::serial_port &serial_stream() noexcept
+    ::asio::serial_port &serial_stream() noexcept
     {
         return stream();
     }
-    [[nodiscard]] std::vector<std::byte> &serial_read_buf() noexcept
+    std::vector<std::byte> &serial_read_buf() noexcept
     {
         return m_read_buf;
     }
-    [[nodiscard]] stream::crc_serial_inbound &serial_decorator() noexcept
+    stream::crc_serial_inbound &serial_decorator() noexcept
     {
         return m_decorator;
     }
@@ -137,8 +133,8 @@ private:
                 });
     }
 
-    // Post an owning copy of the verified frame so the bytes survive the deferred delivery
-    // (the read buffer is reused on the next read) — the posted on_data contract.
+    // Post an owning copy so the bytes survive the deferred delivery — the read buffer is reused
+    // on the next read.
     void post_frame(std::span<const std::byte> frame)
     {
         auto owned = std::make_shared<std::vector<std::byte>>(frame.begin(), frame.end());
@@ -150,11 +146,11 @@ private:
                      });
     }
 
-    stream::crc_serial_inbound                                           m_decorator;
-    std::vector<std::byte>                                               m_read_buf;
-    bool                                                                 m_reading{false};
+    stream::crc_serial_inbound m_decorator;
+    std::vector<std::byte> m_read_buf;
+    bool m_reading{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void(wire::close_cause)>          m_on_frame_dropped;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_frame_dropped;
 };
 
 }

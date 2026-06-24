@@ -17,13 +17,8 @@
 
 namespace plexus::asio::detail {
 
-// The bind / per-datagram dispatch glue for udp_server, relocated by friendship: each helper
-// reaches the socket / send-queue / sink members through the server reference.
-
-// A transient send error is a per-datagram best-effort UDP failure (an unreachable destination, a
-// momentary buffer-full) the next datagram may not hit — discarded silently, the drain continues.
-// A fatal error means the socket is unusable going forward; everything not in that fatal set is
-// treated as transient so best-effort delivery is the default.
+// A transient send error (an unreachable destination, a momentary buffer-full) is best-effort UDP
+// loss the drain ignores; everything in the fatal set means the socket is unusable going forward.
 inline bool transient_send_error(const std::error_code &ec) noexcept
 {
     return ec != ::asio::error::bad_descriptor && ec != ::asio::error::operation_not_supported && ec != ::asio::error::network_down;
@@ -36,9 +31,7 @@ void server_report(S &s, const std::error_code &ec)
         s.m_on_error(detail::map_error(ec));
 }
 
-// The shared-queue congestion safety net at the byte cap: drop_newest sheds the overrun datagram
-// (counted), block surfaces would_block (the stall edge). Either way the call returns without
-// blocking and the queue never grows past the cap.
+// At the byte cap: drop_newest sheds the overrun datagram (counted), block surfaces would_block.
 template<typename S>
 void on_send_queue_full(S &s)
 {
@@ -51,8 +44,6 @@ void on_send_queue_full(S &s)
         s.m_on_error(io::io_error::would_block);
 }
 
-// The idle fast-path's synchronous send hit a non-would_block error: discriminate it exactly as
-// the async completion does (transient = counted UDP loss; fatal = reported once + queue closed).
 template<typename S>
 void on_sync_send_error(S &s, const std::error_code &ec)
 {
@@ -65,13 +56,8 @@ void on_sync_send_error(S &s, const std::error_code &ec)
     s.m_send_queue.close();
 }
 
-// The irreducible asio send-sink the send_queue block drives: send the block-owned node's bytes
-// and signal completion. At most one is outstanding (the block's serial discipline). The
-// completion discriminates the error class: a transient per-datagram failure is best-effort UDP
-// loss (counted, the drain chains past it); a fatal socket error closes the queue and is reported
-// once; an aborted/post-teardown completion is a guarded no-op.
 template<typename S>
-auto make_send_sink(S &s) -> typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink
+typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink make_send_sink(S &s)
 {
     using endpoint_type = typename S::endpoint_type;
     return [&s](std::span<const std::byte> bytes, const endpoint_type &dest, typename datagram::detail::send_queue<endpoint_type>::completion done)
@@ -94,9 +80,8 @@ auto make_send_sink(S &s) -> typename datagram::detail::send_queue<typename S::e
     };
 }
 
-// Apply the consumer-supplied socket-buffer overrides once, between open() and bind(). A 0
-// override leaves the kernel default; a setsockopt rejection is non-fatal best-effort (the sizes
-// are a throughput hint, not a correctness requirement).
+// Between open() and bind(): a 0 override leaves the kernel default; a setsockopt rejection is
+// non-fatal (the sizes are a throughput hint, not a correctness requirement).
 template<typename S>
 void apply_socket_buffers(S &s)
 {
@@ -110,9 +95,8 @@ void apply_socket_buffers(S &s)
 template<typename S>
 void do_receive(S &s);
 
-// A recv error: an aborted/post-teardown completion is a no-op; a spurious connection_reset (a
-// Windows ICMP port-unreachable surfaced on the next recv) re-arms silently (counted only); a
-// transient recv error is surfaced and the loop re-arms.
+// A spurious connection_reset (a Windows ICMP port-unreachable surfaced on the next recv) re-arms
+// silently; any other recv error is surfaced and the loop re-arms.
 template<typename S>
 void fail(S &s, const std::error_code &ec)
 {

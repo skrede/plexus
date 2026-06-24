@@ -29,17 +29,12 @@
 
 namespace plexus::asio {
 
-// The TCP byte_channel: stream_channel over ::asio::ip::tcp::socket with the plaintext
-// open path (sends reach the egress directly — no handshake gate). The traits carry the
-// only TCP-specific lines: the "tcp" scheme stamp, the host:port endpoint format, and the
-// shutdown_both enum. See stream_channel for the shared core + the on_data/on_protocol_close
-// contract.
 struct tcp_traits
 {
     static io::endpoint format_endpoint(const ::asio::ip::tcp::socket &sock)
     {
         std::error_code ec;
-        auto            ep = sock.remote_endpoint(ec);
+        auto ep = sock.remote_endpoint(ec);
         if(ec)
             return {"tcp", ""};
         return {"tcp", ep.address().to_string() + ":" + std::to_string(ep.port())};
@@ -59,14 +54,10 @@ struct tcp_traits
         return s;
     }
 
-    // Apply the portable buffer + keepalive knobs through asio (carries to every platform),
-    // then the granular keepalive intervals ONLY when the operator opted in — those have no
-    // portable asio option, so they go through the native handle behind a per-platform guard
-    // (only the Linux path is exercised on this host; macOS/Windows are compile-guarded and
-    // proven on-platform later). Every set is best-effort: a clamped/rejected knob keeps the
-    // socket usable, so the ec is swallowed (a buffer size is a throughput hint). The socket
-    // is taken as the lowest-layer basic_socket so the TLS channel routes its TCP lowest layer
-    // through this same hook (its lowest_layer_type IS basic_socket<tcp>, not tcp::socket).
+    // The socket is taken as the lowest-layer basic_socket so the TLS channel routes its TCP
+    // lowest layer through this same hook (its lowest_layer_type is basic_socket<tcp>, not
+    // tcp::socket). The granular keepalive intervals have no portable asio option, so they go
+    // through the native handle behind a per-platform guard; every set is best-effort.
     static void apply_socket_options(::asio::basic_socket<::asio::ip::tcp> &sock, const stream_socket_options &opts, std::error_code &ec)
     {
         if(opts.so_sndbuf != 0)

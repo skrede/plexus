@@ -15,12 +15,6 @@
 
 namespace plexus::asio {
 
-// The production asio Policy: bundles the io_context executor (carried by
-// reference, the hot-path substrate), the TCP byte_channel, and the steady-timer,
-// plus the shared_ptr<const void> byte_owner the receive seam binds wire_bytes
-// views to. The static post() forwards onto the io_context. The static_assert
-// below is the compile-time gate proving the production transport satisfies the
-// seam — the third backend-independent data point for the Policy concept.
 struct asio_policy
 {
     using executor_type     = ::asio::io_context &;

@@ -18,16 +18,12 @@
 
 namespace plexus::asio {
 
-// The AF_UNIX byte_channel: stream_channel over ::asio::local::stream_protocol::socket with
-// the plaintext open path. The traits carry the only AF_UNIX-specific lines: the "unix"
-// scheme stamp, the path-based endpoint format, and the shutdown_both enum. See
-// stream_channel for the shared core.
 struct unix_traits
 {
     static io::endpoint format_endpoint(const ::asio::local::stream_protocol::socket &sock)
     {
         std::error_code ec;
-        auto            ep = sock.remote_endpoint(ec);
+        auto ep = sock.remote_endpoint(ec);
         if(ec)
             return {"unix", ""};
         return {"unix", ep.path()};
@@ -47,8 +43,8 @@ struct unix_traits
         return s;
     }
 
-    // An explicit no-op: an AF_UNIX socket has no TCP keepalive, and SO_SNDBUF/SO_RCVBUF are
-    // non-diagnostic on a local socket — the knobs do not apply on this backend.
+    // A no-op: an AF_UNIX socket has no TCP keepalive, and SO_SNDBUF/SO_RCVBUF are non-diagnostic
+    // on a local socket.
     static void apply_socket_options(::asio::local::stream_protocol::socket &, const stream_socket_options &, std::error_code &) noexcept
     {
     }

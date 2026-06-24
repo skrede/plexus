@@ -19,9 +19,6 @@
 
 namespace plexus::asio::detail {
 
-// The bind/accept-loop glue for unix_listener, relocated by friendship: each helper reaches the
-// listener's acceptor/policy/sink members through the listener reference.
-
 template<typename L>
 void report(L &l, const std::error_code &ec)
 {
@@ -29,15 +26,14 @@ void report(L &l, const std::error_code &ec)
         l.m_on_error(detail::map_error(ec));
 }
 
-// Best-effort remove of a socket file: ENOENT is success; any real conflict surfaces at the
-// subsequent bind rather than here.
+// ENOENT is success; any real conflict surfaces at the subsequent bind rather than here.
 inline void unlink_path(const std::string &path)
 {
     (void)::unlink(path.c_str());
 }
 
-// Unwind a partially-started listener: close the opened acceptor and unlink the socket file
-// bind() created, so a failed start leaks neither the open acceptor nor the on-disk inode.
+// Close the acceptor and unlink the socket file bind() created so a failed start leaks neither the
+// open acceptor nor the on-disk inode.
 template<typename L>
 void abort_start(L &l, const std::error_code &ec)
 {
@@ -51,15 +47,13 @@ void abort_start(L &l, const std::error_code &ec)
     report(l, ec);
 }
 
-// Read the accepted peer's local credentials and run them past the injected policy. The read is
-// per-platform (Linux SO_PEERCRED, macOS/BSD getpeereid with pid=0); a read failure is itself a
-// refusal (fail-closed). NOTE: the macOS/BSD path is unverified on this Linux host (flagged for
-// CI).
+// A credential read failure is itself a refusal (fail-closed). The macOS/BSD getpeereid path is
+// unverified on this Linux host.
 template<typename L>
 bool admit_peer(const L &l, ::asio::local::stream_protocol::socket &peer)
 {
 #if defined(__linux__)
-    ::ucred     cred{};
+    ::ucred cred{};
     ::socklen_t len = sizeof(cred);
     if(::getsockopt(peer.native_handle(), SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0)
         return false;
@@ -76,8 +70,7 @@ bool admit_peer(const L &l, ::asio::local::stream_protocol::socket &peer)
 #endif
 }
 
-// Adopt or reject one accepted peer: a reject closes the socket fail-closed (no channel handed
-// up); an admit mints a unix_channel and hands it to on_accepted.
+// A rejected peer's socket is closed (fail-closed, no channel handed up).
 template<typename L>
 void adopt_peer(L &l, ::asio::local::stream_protocol::socket peer)
 {

@@ -36,34 +36,23 @@
 
 namespace plexus::asio {
 
-// AF_UNIX acceptor over ::asio::local::stream_protocol::acceptor. A protocol-type
-// swap of asio_listener plus the socket-file lifecycle — the only genuinely new
-// mechanics here. start(endpoint) parses the path, unlinks a STALE socket file
-// left by a crashed prior run (so bind cannot wedge with EADDRINUSE), opens, binds,
-// chmods the socket owner-only (0700), and listens, then loops accepting; each
-// accepted socket is adopted by a fresh unix_channel (already reading) and handed
-// to on_accepted as a unique_ptr owner. stop() removes the filesystem entry the
-// acceptor close leaves behind, but only a path THIS listener bound. There is NO
-// reuse_address (AF_UNIX has none) and NO port (the rendezvous is the path).
+// AF_UNIX acceptor over ::asio::local::stream_protocol::acceptor. start(endpoint) unlinks a STALE
+// socket file left by a crashed prior run (so bind cannot wedge with EADDRINUSE), binds under a
+// restrictive umask so the inode is created owner-only with no post-bind chmod window, then chmods
+// to the configured mode and listens. stop() unlinks only a path THIS listener bound.
 //
-// SECURITY CONTRACT (caller-owned): the socket path MUST live in a directory the
-// owner controls (not a world-writable shared tmp), so the unlink-before-bind cannot
-// be raced. The socket mode (0700 owner-only by default, a widened knob) is the access
-// boundary; the bind happens under a restrictive umask so the inode is created at the
-// mode atomically (no post-bind chmod window). An injected peer_cred_policy is
-// defense-in-depth ABOVE the mode: it judges {uid, gid, pid} at accept and refuses an
-// unauthorized local peer fail-closed (accept_any is the named default).
+// SECURITY CONTRACT (caller-owned): the socket path MUST live in a directory the owner controls
+// (not a world-writable shared tmp), so the unlink-before-bind cannot be raced. The socket mode
+// (0700 default, a widened knob) is the access boundary; the injected peer_cred_policy is
+// defense-in-depth ABOVE the mode, judging {uid, gid, pid} at accept and refusing an unauthorized
+// local peer fail-closed.
 class unix_listener
 {
 public:
-    // The default socket mode: owner-only 0700, the fail-closed boundary. The knob widens
-    // deliberately (e.g. 0770) — loosening is an informed choice, never a default.
+    // The fail-closed boundary. The knob widens deliberately (e.g. 0770) — loosening is an
+    // informed choice, never a default.
     static constexpr ::mode_t default_socket_mode = S_IRWXU;
 
-    // cfg is the node-level hardening config (required-WITH-default), stamped onto every
-    // channel this listener accepts. mode is the socket-file permission (required-WITH-
-    // default 0700). policy is the borrowed accept-time peer-credential allowlist
-    // (defense-in-depth; the named accept_any default admits every local peer).
     explicit unix_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {}, ::mode_t mode = default_socket_mode,
                            const io::security::peer_cred_policy &policy = io::security::shared_accept_any_peer_cred(), io::congestion congestion = io::congestion::block,
                            io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {})
@@ -99,7 +88,7 @@ public:
     void start(const io::endpoint &bind_ep)
     {
         std::error_code ec;
-        auto            ep = detail::parse_unix(bind_ep.address, ec);
+        auto ep = detail::parse_unix(bind_ep.address, ec);
         if(ec)
             return detail::report(*this, ec);
 #if !defined(__linux__) && !defined(__APPLE__) && !defined(__FreeBSD__)
@@ -146,8 +135,6 @@ public:
     }
 
 private:
-    // The bind/accept-loop glue is relocated to detail/unix_accept.h (relocation by friendship):
-    // each helper reaches the acceptor/policy/sink members below through the listener reference.
     template<typename L>
     friend void detail::report(L &, const std::error_code &);
     template<typename L>
@@ -159,18 +146,18 @@ private:
     template<typename L>
     friend void detail::do_accept(L &);
 
-    ::asio::io_context                                                     &m_io;
-    ::asio::local::stream_protocol::acceptor                                m_acceptor;
-    stream::stream_inbound_config                                           m_cfg;
-    ::mode_t                                                                m_mode;
-    const io::security::peer_cred_policy                                   *m_peer_policy; // borrowed; never owned
-    io::congestion                                                          m_congestion;
-    io::egress_capacity                                                     m_egress_capacity;
-    stream_socket_options                                                   m_socket_options;
-    std::string                                                             m_bound_path;
+    ::asio::io_context &m_io;
+    ::asio::local::stream_protocol::acceptor m_acceptor;
+    stream::stream_inbound_config m_cfg;
+    ::mode_t m_mode;
+    const io::security::peer_cred_policy *m_peer_policy; // borrowed; never owned
+    io::congestion m_congestion;
+    io::egress_capacity m_egress_capacity;
+    stream_socket_options m_socket_options;
+    std::string m_bound_path;
     plexus::detail::move_only_function<void(std::unique_ptr<unix_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(io::io_error)>                  m_on_error;
-    bool                                                                    m_running{false};
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    bool m_running{false};
 };
 
 }

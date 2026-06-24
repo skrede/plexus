@@ -38,53 +38,29 @@
 
 namespace plexus::asio {
 
-// over-limit: one cohesive UDP byte_channel; the public verbs + the per-peer envelope/dedup/ARQ/
-// reassembly/backpressure state are one whole (the byte_channel concept proof at file bottom
-// binds the surface together), so splitting the public face scatters that shared state — the
-// send/recv path + ARQ glue is already extracted to detail/udp_channel_io.h.
-//
-// The connectionless UDP byte_channel: plexus's first NON-STREAM channel. A udp_channel owns NO
-// socket — it is a per-peer facade over the ONE router-owned udp_server, storing the destination
-// endpoint plus the per-peer envelope/dedup state. send() wraps the frame in a udp_envelope and
-// calls server.send_to(dest); inbound is PUSHED in by the transport demux (deliver_inbound). A
-// frame past max_payload is FRAGMENTED across numbered datagrams; only a frame past the bounded
-// max-message size is REJECTED at publish. on_protocol_close is STORED and NEVER fired (the
-// byte_channel concept licenses this for a non-stream channel — a malformed datagram is dropped).
+// The connectionless UDP byte_channel: a udp_channel owns NO socket — it is a per-peer facade over
+// the ONE router-owned udp_server, storing the destination endpoint plus the per-peer
+// envelope/dedup state. Inbound is PUSHED in by the transport demux (deliver_inbound). A frame past
+// max_payload is FRAGMENTED across numbered datagrams; a frame past the max-message size is
+// REJECTED at publish. on_protocol_close is STORED and NEVER fired (a malformed datagram is dropped
+// — the byte_channel concept licenses this for a non-stream channel).
 class udp_channel
 {
 public:
-    // The per-channel payload budget the oversize-reject gates consult, relocated to the
-    // shared datagram::mtu_budget value-object so the channel and any future datagram backend
-    // read the SAME default instead of a scattered local literal. A caller MAY override it
-    // at construction (the required-with-default ctor arg below).
     static constexpr std::size_t default_max_payload = datagram::mtu_budget{}.max_payload;
-    // The bounded congestion=block backpressure BYTE budget (allocated at setup, never
-    // grown on the hot path): the not-yet-windowed fragments of a paced reliable message
-    // park here while the ARQ send window is full, drained by the next ack. This cap bounds
-    // ADDITIONAL backlog ONLY — it is a local back-pressure resource knob, NOT a message-size
-    // authority: the negotiated per-message ceiling (effective_max, enforced at publish) is
-    // the SOLE bound on a single message's size, so the live cap is floored at that ceiling
-    // (see m_backpressure construction) and a within-ceiling message's whole fragment backlog
-    // is always admissible regardless of this default. The default sizes the EXTRA backlog a
-    // producer outrunning the drain may pile up beyond one in-flight message; a sustained
-    // overrun still fails closed at the floored cap. A load-bearing knob — to be substantiated
-    // at the fan-out benchmark, not fixed by feel.
+    // The not-yet-windowed fragments of a paced reliable message park here while the ARQ send
+    // window is full. This bounds ADDITIONAL backlog ONLY: the per-message ceiling is the sole
+    // size authority, so the live cap is floored at that ceiling (see m_backpressure construction)
+    // and a within-ceiling message's whole fragment backlog is always admissible. The default
+    // sizes the EXTRA backlog a producer outrunning the drain may pile up past one in-flight
+    // message.
     static constexpr std::size_t default_backpressure_bytes = 1u * io::fragmentation_limits::max_message_size;
 
     using arq_type         = datagram::detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
     using reassembler_type = datagram::detail::reassembler<::asio::io_context &, asio_timer>;
 
-    // The reliable-ARQ config is a required-WITH-default ctor argument (the handshake-
-    // ladder pattern): production binds the swept defaults; a deterministic test binds a
-    // compressed config (a fast RTO / small cap) to exercise the SAME mechanics quickly.
-    // The congestion mode is the per-channel QoS choice (block = the safe reliable
-    // default; drop = the opt-out shed) threaded the same way; the backpressure byte
-    // budget bounds the block queue.
-    // max_message_bytes is the per-MESSAGE size ceiling (send-side oversize-reject AND
-    // the receive reassembler's per-message ceiling) — the channel's effective-max,
-    // distinct from max_payload (the per-FRAGMENT MTU budget). reassembly_budget is the
-    // always-on aggregate reassembly-memory cap. Both required-WITH-default (the shipped
-    // node-options constants); a transport stamps the topic-or-node effective-max here.
+    // max_message_bytes is the per-MESSAGE size ceiling (send-side oversize-reject AND the receive
+    // reassembler's per-message ceiling), distinct from max_payload (the per-FRAGMENT MTU budget).
     udp_channel(::asio::io_context &io, udp_server &server, ::asio::ip::udp::endpoint dest, std::size_t max_payload = default_max_payload, datagram::detail::udp_arq_config arq_cfg = {},
                 io::congestion congestion = io::congestion::block, std::size_t backpressure_bytes = default_backpressure_bytes,
                 datagram::detail::udp_channel_mode mode = datagram::detail::udp_channel_mode::best_effort, std::uint16_t initial_seq = 0,
@@ -99,13 +75,16 @@ public:
             , m_reassembly_timeout(reassembly_timeout)
             , m_arq_cfg(arq_cfg)
             , m_congestion(congestion)
-            // Floor the back-pressure cap at the per-message ceiling: the negotiated ceiling is
-            // the sole size authority, so a single within-ceiling message's full fragment backlog
-            // must always be admissible no matter how the operator tuned the back-pressure knob.
-            // The knob only raises the cap above the floor to allow EXTRA backlog past one message.
+            // Floor the cap at the per-message ceiling: a single within-ceiling message's full
+            // fragment backlog must always be admissible regardless of the back-pressure knob.
             , m_backpressure(std::max(backpressure_bytes, max_message_bytes))
+            , m_dropped(0)
             , m_mode(mode)
             , m_initial_seq(initial_seq)
+            , m_scheduler_key(io::detail::next_scheduler_key())
+            , m_out_seq(0)
+            , m_out_msg_id(0)
+            , m_open(true)
     {
     }
 
@@ -114,18 +93,13 @@ public:
     udp_channel(udp_channel &&)                 = delete;
     udp_channel &operator=(udp_channel &&)      = delete;
 
-    // The dtor tears the channel down but never posts on_closed (a this-capturing
-    // post could outlive the channel). close() posts on_closed. The ARQ's per-segment
-    // retransmit timers are cancelled FIRST so a timer firing after the channel dies is
-    // a cancelled no-op (the single-owner discipline — no shared_from_this).
+    // Never posts on_closed (a this-capturing post could outlive the channel); close() does. The
+    // ARQ retransmit timers are cancelled FIRST so a timer firing after the channel dies is a
+    // cancelled no-op.
     //
-    // LIFETIME (the owner's teardown burden, heavier here than on a stream channel):
-    // every inbound datagram posts a this-capturing delivery through post_on_data, so the
-    // channel has MORE in-flight posted-`this` surface than a stream channel (which posts
-    // only reassembled frames). The owner MUST drain/quiesce the executor before destroying
-    // the channel — a posted inbound delivery still dereferences this->m_on_data when it
-    // runs, and the dtor cannot cancel an already-posted handler (only the timers). This
-    // matches the routing_engine LIFETIME note and the codebase-wide posted-`this` contract.
+    // LIFETIME: every inbound datagram posts a this-capturing delivery through post_on_data, so the
+    // owner MUST drain/quiesce the executor before destroying the channel — the dtor cannot cancel
+    // an already-posted handler (only the timers).
     ~udp_channel()
     {
         m_open = false;
@@ -133,14 +107,14 @@ public:
             m_reassembler->cancel();
         if(m_arq)
             m_arq->cancel();
+        // Erase the transport demux ref BEFORE this object dies.
         if(m_on_teardown)
-            m_on_teardown(); // erase the transport demux ref BEFORE this object dies
+            m_on_teardown();
     }
 
-    // The single byte_channel send verb. A reliable_datagram-mode channel (the "udpr"
-    // route) dispatches to the in-order ARQ; a best_effort-mode channel (the "udp" route)
-    // is fire-and-forget. This is how the erased polymorphic_byte_channel — which exposes only
-    // send() — engages the ARQ on the flipped "udpr" route without a separate reliable verb.
+    // A reliable_datagram-mode channel dispatches to the in-order ARQ; a best_effort-mode channel
+    // is fire-and-forget. This is how the erased polymorphic_byte_channel (which exposes only
+    // send()) engages the ARQ on the "udpr" route without a separate reliable verb.
     void send(std::span<const std::byte> frame)
     {
         if(m_mode == datagram::detail::udp_channel_mode::reliable_datagram)
@@ -152,9 +126,9 @@ public:
             return;
         if(frame.size() + wire::udp_envelope_overhead > m_max_payload)
             return detail::send_best_effort_large(*this, frame);
+        // A whole single datagram: idle fast-path eligible.
         wire::wrap_udp_into(m_send_scratch, wire::udp_envelope_kind::best_effort, m_out_seq++, frame);
-        m_server.send_standalone_to(m_send_scratch,
-                                    m_dest); // a whole single datagram: idle fast-path eligible
+        m_server.send_standalone_to(m_send_scratch, m_dest);
     }
 
     void close()
@@ -162,34 +136,31 @@ public:
         if(!m_open)
             return;
         m_open = false;
+        // Posted, never synchronous: a this-capturing on_closed could otherwise run inline.
         ::asio::post(m_io,
                      [this]
                      {
                          if(m_on_closed)
                              m_on_closed();
-                     }); // posted, never synchronous
+                     });
     }
 
-    // The scheme reflects the channel's mode so a route is provable end-to-end: a
-    // best_effort channel reports "udp", a reliable_datagram channel reports "udpr". This
-    // lets the mux's "udpr" -> UDP+ARQ flip be test-pinned (the erased channel reports
-    // "udpr", proving it rode the datagram member in reliable mode, NOT the TCP stream).
-    [[nodiscard]] io::endpoint remote_endpoint() const
+    // The scheme reflects the channel's mode: a best_effort channel reports "udp", a
+    // reliable_datagram channel reports "udpr".
+    io::endpoint remote_endpoint() const
     {
         const char *scheme = m_mode == datagram::detail::udp_channel_mode::reliable_datagram ? "udpr" : "udp";
         return {scheme, m_dest.address().to_string() + ":" + std::to_string(m_dest.port())};
     }
 
-    [[nodiscard]] datagram::detail::udp_channel_mode mode() const noexcept
+    datagram::detail::udp_channel_mode mode() const noexcept
     {
         return m_mode;
     }
 
-    // The negotiated per-session ISN (RFC 6528) this channel's receiver expects as its
-    // first in-order seq; 0 on the legacy back-compat default. Behavior-only — it exposes
-    // the value already bound at construction so a caller can reason about which seqs sit
-    // below the receive window (a seq strictly below this is a provable duplicate).
-    [[nodiscard]] std::uint16_t initial_seq() const noexcept
+    // The negotiated per-session ISN (RFC 6528) the receiver expects as its first in-order seq;
+    // 0 on the legacy default. A seq strictly below this is a provable duplicate.
+    std::uint16_t initial_seq() const noexcept
     {
         return m_initial_seq;
     }
@@ -211,37 +182,26 @@ public:
         m_on_protocol_close = std::move(cb);
     }
 
-    // The drop-observability seam (null by default — zero cost when unobserved). The owner
-    // installs the engine's posted drop_sink; an ARQ shed at the publisher emits here, and
-    // the lazily-built reassembler's own drop sink is forwarded onto this one so a
-    // malformed/over-cap/timed-out fragment surfaces through the same edge. The sink POSTS,
-    // so neither the shed site nor a reassembler fragment fires the observer synchronously.
+    // An ARQ shed at the publisher emits here; the lazily-built reassembler's drop sink is
+    // forwarded onto this one. The sink POSTS, so no shed site fires the observer synchronously.
     void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
     {
         m_on_drop = std::move(cb);
     }
 
-    // The transport's private teardown seam, fired from the dtor — distinct from the
-    // consumer-facing on_closed/on_error the engine claims. The transport demuxes inbound
-    // by endpoint to a NON-owning raw ref; this lets it erase that ref when the engine
-    // (the channel's owner) destroys the channel, so a later datagram is a clean MISS
-    // rather than a freed-pointer deref.
+    // The transport's private teardown seam: the transport demuxes inbound by endpoint to a
+    // NON-owning raw ref, and erases that ref here when the owner destroys the channel, so a later
+    // datagram is a clean MISS rather than a freed-pointer deref.
     void on_teardown(plexus::detail::move_only_function<void()> cb)
     {
         m_on_teardown = std::move(cb);
     }
 
-    // Submit a payload on the RELIABLE in-order path: the selective-repeat ARQ stamps a
-    // seq, sends a kind=1 data segment, and retransmits under an adaptive RTO until the
-    // peer acks. The congestion mode decides a FULL send window:
-    //   * block (the safe reliable default): enqueue into the BOUNDED publish-side queue
-    //     allocated at setup; the next ack (on_window_advance) drains it by re-submitting
-    //     admissible frames, posted on the executor. publish() stays non-blocking — the
-    //     reliable guarantee is preserved (no drop), the io_context is NEVER blocked. A
-    //     queue at its cap surfaces would_block (the stall signal; never grows unbounded).
-    //   * drop: shed the new frame at the publisher (the opt-out of the guarantee).
-    // The ARQ is constructed lazily on first reliable use so a best_effort-only channel
-    // pays nothing. Oversize is rejected at publish (the marker byte joins the overhead).
+    // The selective-repeat ARQ stamps a seq, sends a data segment, and retransmits under an
+    // adaptive RTO until the peer acks. On a full window: block enqueues into the bounded
+    // publish-side queue (the next ack drains it, posted on the executor — non-blocking, no drop),
+    // drop sheds the new frame. The ARQ is constructed lazily on first reliable use so a
+    // best_effort-only channel pays nothing.
     using submit_result = arq_type::submit_result;
 
     submit_result send_reliable(std::span<const std::byte> payload)
@@ -257,67 +217,54 @@ public:
         return detail::on_window_full(*this, payload, /*fragmented=*/false);
     }
 
-    // The reliable-ARQ recv hook (kind=1). The data ARQ is wired here: a kind=1 datagram
-    // self-identifies (its inner control byte) as a data segment or an ack and is fanned
-    // to the ARQ on ONE inbound demux path (the kind discriminator is also the
-    // DTLS-bypass seam). An override may still observe raw reliable segments for tests.
     void on_reliable_segment(plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> cb)
     {
         m_on_reliable = std::move(cb);
     }
 
-    // Called BY the transport demux on each datagram for this peer — NOT a self-run
-    // recv loop (the channel owns no socket). Strip the envelope, dedup best_effort,
-    // post the inner frame. A malformed datagram is dropped (no on_protocol_close).
-    // Called BY the transport demux on each datagram for this peer (the channel owns no socket).
-    // The strip/dedup/route body is relocated to detail::deliver_inbound.
+    // Called BY the transport demux on each datagram for this peer (the channel owns no socket): it
+    // strips the envelope, dedups best_effort, and posts the inner frame. A malformed datagram is
+    // dropped (no on_protocol_close).
     void deliver_inbound(std::span<const std::byte> datagram)
     {
         detail::deliver_inbound(*this, datagram);
     }
 
-    // The stable per-construction id the egress scheduler keys its band map on (read via a
-    // capability probe): unique per object, so a reused heap address cannot bleed a stale
-    // band entry across — the same minted-once key every byte channel carries.
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    // Unique per object, so a reconnect at a reused heap address cannot bleed a stale band entry
+    // into the egress scheduler's band map.
+    std::uint64_t scheduler_key() const noexcept
     {
         return m_scheduler_key;
     }
 
-    [[nodiscard]] const ::asio::ip::udp::endpoint &dest() const noexcept
+    const ::asio::ip::udp::endpoint &dest() const noexcept
     {
         return m_dest;
     }
-    [[nodiscard]] bool is_open() const noexcept
+    bool is_open() const noexcept
     {
         return m_open;
     }
-    [[nodiscard]] io::congestion congestion_mode() const noexcept
+    io::congestion congestion_mode() const noexcept
     {
         return m_congestion;
     }
-    // The count of frames shed under congestion=drop (the future drop-observer's edge).
-    [[nodiscard]] std::size_t dropped_count() const noexcept
+    std::size_t dropped_count() const noexcept
     {
         return m_dropped;
     }
-    // The current backpressure-queue BYTE occupancy (congestion=block); 0 when the window
-    // drains. Byte-valued (not the frame count) so it shares the stream channel's occupancy
-    // contract and the egress scheduler's byte-denominated low-water gate compares like with like.
-    [[nodiscard]] std::size_t backpressured() const noexcept
+    // Byte-valued (not the frame count) so it shares the stream channel's occupancy contract and
+    // the egress scheduler's byte-denominated low-water gate compares like with like.
+    std::size_t backpressured() const noexcept
     {
         return m_backpressure.queued_bytes();
     }
-    // The backpressure-queue byte cap, read by the egress scheduler so its low-water gate tracks
-    // THIS channel's actual bound (lockstep with the channel's own admission).
-    [[nodiscard]] std::size_t write_queue_capacity() const noexcept
+    std::size_t write_queue_capacity() const noexcept
     {
         return m_backpressure.capacity();
     }
 
 private:
-    // The send/recv path + reliable-ARQ glue is relocated to detail/udp_channel_io.h (relocation
-    // by friendship): each helper reaches the members below through the channel reference.
     template<typename Ch>
     friend void detail::reject_oversize(Ch &);
     template<typename Ch>
@@ -349,43 +296,41 @@ private:
     template<typename Ch>
     friend void detail::deliver_inbound(Ch &, std::span<const std::byte>);
 
-    ::asio::io_context                                                                 &m_io;
-    udp_server                                                                         &m_server;
-    ::asio::ip::udp::endpoint                                                           m_dest;
-    std::size_t                                                                         m_max_payload;        // per-FRAGMENT MTU budget (NOT the message ceiling)
-    std::size_t                                                                         m_max_message_bytes;  // per-MESSAGE size ceiling (send + receive)
-    std::size_t                                                                         m_reassembly_budget;  // aggregate reassembly-memory cap (always-on)
-    std::chrono::milliseconds                                                           m_reassembly_timeout; // per-message reassembly reclaim window
-    datagram::detail::udp_arq_config                                                    m_arq_cfg;
-    io::congestion                                                                      m_congestion;
-    datagram::detail::udp_backpressure_queue                                            m_backpressure; // bounded congestion=block queue
-    std::size_t                                                                         m_dropped{0};   // congestion=drop shed count
-    datagram::detail::udp_channel_mode                                                  m_mode;         // best_effort vs reliable_datagram
-    std::uint16_t                                                                       m_initial_seq;  // negotiated per-session ISN (RFC 6528); 0 = legacy
-    std::uint64_t                                                                       m_scheduler_key{io::detail::next_scheduler_key()}; // stable per-construction egress key
-    std::uint16_t                                                                       m_out_seq{0};
-    std::uint16_t                                                                       m_out_msg_id{0}; // per-message fragment grouping id (sender)
-    wire::udp_dedup_window                                                              m_dedup;
-    std::vector<std::byte>                                                              m_send_scratch;
-    std::vector<std::byte>                                                              m_ack_scratch;
-    std::vector<std::byte>                                                              m_arq_inner;
-    std::vector<std::byte>                                                              m_frag_scratch; // reused fragment-encode buffer (allocated at setup)
-    std::unique_ptr<arq_type>                                                           m_arq;
-    std::unique_ptr<reassembler_type>                                                   m_reassembler;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)>                m_on_data;
-    plexus::detail::move_only_function<void()>                                          m_on_closed;
-    plexus::detail::move_only_function<void()>                                          m_on_teardown;
-    plexus::detail::move_only_function<void(io::io_error)>                              m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)>                         m_on_protocol_close;
+    ::asio::io_context &m_io;
+    udp_server &m_server;
+    ::asio::ip::udp::endpoint m_dest;
+    std::size_t m_max_payload;                      // per-FRAGMENT MTU budget (NOT the message ceiling)
+    std::size_t m_max_message_bytes;                // per-MESSAGE size ceiling (send + receive)
+    std::size_t m_reassembly_budget;                // aggregate reassembly-memory cap (always-on)
+    std::chrono::milliseconds m_reassembly_timeout; // per-message reassembly reclaim window
+    datagram::detail::udp_arq_config m_arq_cfg;
+    io::congestion m_congestion;
+    datagram::detail::udp_backpressure_queue m_backpressure;
+    std::size_t m_dropped;
+    datagram::detail::udp_channel_mode m_mode;
+    std::uint16_t m_initial_seq; // negotiated per-session ISN (RFC 6528); 0 = legacy
+    std::uint64_t m_scheduler_key;
+    std::uint16_t m_out_seq;
+    std::uint16_t m_out_msg_id;
+    wire::udp_dedup_window m_dedup;
+    std::vector<std::byte> m_send_scratch;
+    std::vector<std::byte> m_ack_scratch;
+    std::vector<std::byte> m_arq_inner;
+    std::vector<std::byte> m_frag_scratch;
+    std::unique_ptr<arq_type> m_arq;
+    std::unique_ptr<reassembler_type> m_reassembler;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
+    plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void()> m_on_teardown;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
     plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>)> m_on_reliable;
-    plexus::detail::move_only_function<void(const io::detail::drop_event &)>            m_on_drop;
-    bool                                                                                m_open{true};
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
+    bool m_open;
 };
 
 }
 
-static_assert(plexus::io::byte_channel<plexus::asio::udp_channel>,
-              "udp_channel must satisfy byte_channel WITHOUT reshaping the concept — the "
-              "NON-stream D2 proof");
+static_assert(plexus::io::byte_channel<plexus::asio::udp_channel>, "udp_channel must satisfy byte_channel WITHOUT reshaping the concept (the non-stream channel)");
 
 #endif
