@@ -3,7 +3,7 @@
 // establishes the session, then a best_effort frame flows dialer -> acceptor and the
 // accepting channel's on_data posts the IDENTICAL bytes. The two concept gates
 // (byte_channel<udp_channel>, transport_backend<udp_transport, udp_policy>) are restated
-// in the base TU so it is self-evidently the D2 proof.
+// in the base TU so it is self-evidently the proof.
 #pragma once
 
 #include "plexus/asio/udp_channel.h"

@@ -16,7 +16,7 @@
 // predicate AFTER the child has exited so the parent observes the child's
 // committed shared-memory writes without a fork-vs-write race. It also offers a
 // scoped /dev/shm region name that shm_unlink()s on teardown — test hygiene so a
-// crashed case never orphans a named region (T-19-01). Header-only; depends only
+// crashed case never orphans a named region. Header-only; depends only
 // on POSIX, never on a plexus target.
 
 namespace plexus::testing {
@@ -62,7 +62,7 @@ xproc_outcome run_forked(ParentFn &&parent, ChildFn &&child)
 }
 
 // A scoped named /dev/shm region: shm_unlink()s its name on destruction so no
-// test leaves a region behind even on an assertion failure (T-19-01). The name
+// test leaves a region behind even on an assertion failure. The name
 // is unique to the calling process to avoid collisions across concurrent ctest
 // shards.
 class scoped_shm_name

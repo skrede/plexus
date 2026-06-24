@@ -5,7 +5,7 @@
 
 #include <string>
 
-// The same-host identity layer: the null-guarded fingerprint compare (Pitfall 2)
+// The same-host identity layer: the null-guarded fingerprint compare
 // and the deterministic, direction-discriminated region naming. Both ends compute
 // the region name independently with no exchange, so determinism + direction
 // distinctness are the load-bearing properties.

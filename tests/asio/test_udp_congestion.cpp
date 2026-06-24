@@ -14,7 +14,7 @@
 // The load-bearing negative proof: congestion=block does NOT block the io_context. While
 // one channel's reliable window is saturated and back-pressured, a CONCURRENT best_effort
 // flow on another peer keeps flowing — the loop is servicing other work, not deadlocked
-// inside a publish (Pitfall 5 / T-15-12). Each scenario loops in-body and the ctest
+// inside a publish. Each scenario loops in-body and the ctest
 // invocation is re-run across >=3 process runs (a transport/timing claim is never made
 // from a single run).
 

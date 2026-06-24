@@ -60,7 +60,7 @@ TEST_CASE("send_queue caps on summed BYTES, not entry count — one large frame 
 
 TEST_CASE("send_queue near-cap boundary: byte accounting does not wrap and refuses correctly", "[io][send_queue]")
 {
-    // W1 overflow boundary: a frame at cap-1 bytes followed by a small frame whose sum
+    // overflow boundary: a frame at cap-1 bytes followed by a small frame whose sum
     // exceeds the cap must be refused (compare-before-add), and the running total must NOT
     // wrap below the cap and re-admit. Cap = 16; first frame = 15 bytes (cap-1).
     recorder   rec;

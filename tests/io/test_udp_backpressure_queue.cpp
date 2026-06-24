@@ -1,9 +1,9 @@
 // The udp_backpressure_queue block oracle: a pure sans-IO drive of the bounded
 // congestion=block parking queue (no socket, no ARQ). It proves the byte-accounting
 // admission discipline the reliable channel relies on — admit-into-an-owned-slot,
-// summed-payload-byte cap (NOT entry count), FIFO front/pop, and the W1 near-cap overflow
+// summed-payload-byte cap (NOT entry count), FIFO front/pop, and the near-cap overflow
 // boundary (compare-before-add so a crafted large-frame sequence cannot wrap the running
-// total below the cap and re-admit unboundedly, mitigating the T-23-D2 integer-overflow
+// total below the cap and re-admit unboundedly, mitigating the integer-overflow
 // threat). plexus::plexus only (header-only core; no backend link).
 
 #include "plexus/datagram/detail/send_queue.h"
@@ -70,7 +70,7 @@ TEST_CASE("udp_backpressure_queue caps on summed BYTES, not entry count", "[io][
 
 TEST_CASE("udp_backpressure_queue near-cap boundary: byte accounting does not wrap (W1)", "[io][backpressure]")
 {
-    // W1 / T-23-D2 overflow boundary: a frame at cap-1 bytes followed by a small frame
+    // overflow boundary: a frame at cap-1 bytes followed by a small frame
     // whose sum exceeds the cap is refused (compare-before-add), and the running total
     // does NOT wrap below the cap and re-admit. Cap = 32; first frame = 31 bytes (cap-1).
     queue q{32};

@@ -10,7 +10,7 @@
 // every survivor stays complete and is never re-dialed (its attempt_count unchanged).
 // A surrender-without-collateral leg arms a small max_attempts on the dialer and drops
 // ONE peer past the bound: is_dead(that id) while the others stay is_connected. Every
-// drop is a REAL socket().close() on the accepted end (Pitfall 1: close the accepted,
+// drop is a REAL socket().close() on the accepted end (close the accepted,
 // not the dialer's own end). The behavioral paths loop in-body; the ctest invocation
 // is re-run >=3 process runs (a live-networking claim is never made from one run).
 // Links plexus::inproc for the forwarder framing path the peers reuse.
@@ -121,7 +121,7 @@ struct peer_node
 
     // Close the accepted (responder) socket so the dialer's read loop sees the FIN —
     // the production drop route on the dialer's slot re-dials. Closing the accepted end
-    // (not the dialer's own) is what surfaces the drop on the dialer (Pitfall 1).
+    // (not the dialer's own) is what surfaces the drop on the dialer.
     void drop()
     {
         if(accepted)

@@ -33,7 +33,7 @@ TEST_CASE("dtls.cookie: the cookie verify callback rejects a forged cookie, loop
 
 TEST_CASE("dtls.failclosed: the ALPN select gate fails closed on a non-overlapping offer, looped", "[dtls][failclosed]")
 {
-    // R-2: the in-handshake ALPN gate. The server's plexus_alpn_select selects
+    // The in-handshake ALPN gate. The server's plexus_alpn_select selects
     // "plexus/1" when offered, else returns SSL_TLSEXT_ERR_ALERT_FATAL to FAIL the
     // handshake closed (no silent fallback to an unversioned protocol).
     constexpr int k_iterations = 100;

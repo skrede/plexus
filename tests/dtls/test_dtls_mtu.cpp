@@ -16,7 +16,7 @@ TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fra
     for(int i = 0; i < k_iterations; ++i)
     {
         // A high configured cap so DTLS_get_data_mtu (the encrypted-record budget) is
-        // the binding term of min(configured_cap, DTLS_get_data_mtu) (R-1).
+        // the binding term of min(configured_cap, DTLS_get_data_mtu).
         mtu_link l(srv, cli, /*max_payload=*/100000);
         l.handshake();
         REQUIRE(l.client_complete);
