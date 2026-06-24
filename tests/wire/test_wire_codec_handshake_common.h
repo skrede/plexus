@@ -63,14 +63,12 @@ inline handshake_request make_request(const std::array<std::byte, 16> &id)
                              .fingerprint              = 0x0123456789ABCDEFull,
                              .key_id                   = key_id_seed(),
                              .own_nonce                = nonce_seed(),
-                             .cipher_offer             = cipher_offer_bits::chacha20_poly1305 |
-                                     cipher_offer_bits::aes_256_gcm,
-                             .chosen_cipher = cipher_offer_bits::chacha20_poly1305,
-                             .proof         = proof_seed()};
+                             .cipher_offer             = cipher_offer_bits::chacha20_poly1305 | cipher_offer_bits::aes_256_gcm,
+                             .chosen_cipher            = cipher_offer_bits::chacha20_poly1305,
+                             .proof                    = proof_seed()};
 }
 
-inline handshake_response make_response(const std::array<std::byte, 16> &id,
-                                        handshake_status                 status)
+inline handshake_response make_response(const std::array<std::byte, 16> &id, handshake_status status)
 {
     return handshake_response{.id                       = id,
                               .version_major            = 0x11,
@@ -81,11 +79,10 @@ inline handshake_response make_response(const std::array<std::byte, 16> &id,
                               .fingerprint              = 0xFEDCBA9876543210ull,
                               .key_id                   = key_id_seed(),
                               .own_nonce                = nonce_seed(),
-                              .cipher_offer             = cipher_offer_bits::chacha20_poly1305 |
-                                      cipher_offer_bits::aes_256_gcm,
-                              .chosen_cipher = cipher_offer_bits::aes_256_gcm,
-                              .proof         = proof_seed(0xC1),
-                              .status        = status};
+                              .cipher_offer             = cipher_offer_bits::chacha20_poly1305 | cipher_offer_bits::aes_256_gcm,
+                              .chosen_cipher            = cipher_offer_bits::aes_256_gcm,
+                              .proof                    = proof_seed(0xC1),
+                              .status                   = status};
 }
 
 inline void check_request_equal(const handshake_request &a, const handshake_request &b)

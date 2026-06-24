@@ -14,10 +14,9 @@ TEST_CASE("dtls.mtu: a record MTU raised above the legacy 2048 drain buffer ride
     // so a record_mtu above 2048 silently corrupted records. Sizing the buffer from the
     // configured record_mtu fixes both. Drive a record budget well above 2048 and assert a
     // frame near that ceiling crosses as exactly ONE record, delivered byte-equal.
-    constexpr std::size_t k_record_mtu =
-            4096; // above the legacy 2048 buffer, below the 8192 ceiling
-    constexpr int k_iterations = 50;
-    int           proven       = 0;
+    constexpr std::size_t k_record_mtu = 4096; // above the legacy 2048 buffer, below the 8192 ceiling
+    constexpr int         k_iterations = 50;
+    int                   proven       = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         mtu_link l(srv, cli, /*max_payload=*/100000, k_record_mtu);
@@ -28,10 +27,9 @@ TEST_CASE("dtls.mtu: a record MTU raised above the legacy 2048 drain buffer ride
         // The single-record ceiling now tracks the raised record MTU (was pinned under 2048
         // by the old buffer). It lands within the AEAD-GCM + envelope overhead band below it.
         constexpr std::size_t k_max_record_overhead = 37u + plexus::wire::udp_envelope_overhead;
-        const std::size_t     cap = l.probe_one_record_ceiling(2200, k_record_mtu);
-        REQUIRE(cap > 2048); // exceeds the legacy fixed buffer
-        REQUIRE(cap >= k_record_mtu -
-                        k_max_record_overhead); // within the overhead band below the record MTU
+        const std::size_t     cap                   = l.probe_one_record_ceiling(2200, k_record_mtu);
+        REQUIRE(cap > 2048);                                  // exceeds the legacy fixed buffer
+        REQUIRE(cap >= k_record_mtu - k_max_record_overhead); // within the overhead band below the record MTU
         REQUIRE(cap < k_record_mtu);
 
         // The ceiling frame (> 2048 B) delivers intact as ONE record — pre-fix it was

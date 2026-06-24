@@ -86,7 +86,10 @@ public:
         m_bitmap     = 0;
     }
 
-    [[nodiscard]] std::size_t depth() const noexcept { return m_depth; }
+    [[nodiscard]] std::size_t depth() const noexcept
+    {
+        return m_depth;
+    }
 
 private:
     std::size_t   m_depth;

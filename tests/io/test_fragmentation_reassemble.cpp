@@ -4,9 +4,7 @@ using namespace fragmentation_fixture;
 
 namespace {
 
-using test_reassembler =
-        datagram::detail::reassembler<plexus::inproc::inproc_executor<testing::test_clock> &,
-                                      plexus::inproc::inproc_timer<testing::test_clock>>;
+using test_reassembler = datagram::detail::reassembler<plexus::inproc::inproc_executor<testing::test_clock> &, plexus::inproc::inproc_timer<testing::test_clock>>;
 
 std::vector<std::byte> seq_bytes(std::size_t n, int base)
 {
@@ -18,15 +16,13 @@ std::vector<std::byte> seq_bytes(std::size_t n, int base)
 
 }
 
-TEST_CASE("reassembler reassembles in-order fragments into one delivered message",
-          "[fragment][reassemble]")
+TEST_CASE("reassembler reassembles in-order fragments into one delivered message", "[fragment][reassemble]")
 {
     testing::harness h;
     test_reassembler r{h.ex};
 
     std::optional<std::vector<std::byte>> delivered;
-    r.on_deliver([&delivered](std::span<const std::byte> b)
-                 { delivered = std::vector<std::byte>(b.begin(), b.end()); });
+    r.on_deliver([&delivered](std::span<const std::byte> b) { delivered = std::vector<std::byte>(b.begin(), b.end()); });
 
     const auto a = seq_bytes(4, 0), b = seq_bytes(4, 100), c = seq_bytes(2, 200);
     CHECK(r.feed(1, 0, 3, a) == test_reassembler::outcome::admitted);
@@ -41,8 +37,7 @@ TEST_CASE("reassembler reassembles in-order fragments into one delivered message
     CHECK(r.held_bytes() == 0);
 }
 
-TEST_CASE("reassembler reassembles out-of-order fragments into exactly one message",
-          "[fragment][reassemble]")
+TEST_CASE("reassembler reassembles out-of-order fragments into exactly one message", "[fragment][reassemble]")
 {
     testing::harness h;
     test_reassembler r{h.ex};
@@ -67,8 +62,7 @@ TEST_CASE("reassembler reassembles out-of-order fragments into exactly one messa
     CHECK(std::equal(c.begin(), c.end(), got.begin() + 6));
 }
 
-TEST_CASE("reassembler reclaims a stalled partial on the per-message timeout",
-          "[fragment][reassemble]")
+TEST_CASE("reassembler reclaims a stalled partial on the per-message timeout", "[fragment][reassemble]")
 {
     testing::harness h;
     test_reassembler r{h.ex, {.per_message_timeout = 1000ms}};
@@ -87,8 +81,7 @@ TEST_CASE("reassembler reclaims a stalled partial on the per-message timeout",
     CHECK(r.held_bytes() == 0);
 }
 
-TEST_CASE("reassembler rejects a new partial that would breach the total-memory cap",
-          "[fragment][reassemble]")
+TEST_CASE("reassembler rejects a new partial that would breach the total-memory cap", "[fragment][reassemble]")
 {
     testing::harness h;
     const auto       one_msg = 10 + test_reassembler::structural_cost(2);
@@ -105,26 +98,21 @@ TEST_CASE("reassembler rejects a new partial that would breach the total-memory 
     CHECK(r.held_bytes() == one_msg);
 }
 
-TEST_CASE("reassembler fails closed on malformed fragments without indexing past the span",
-          "[fragment][reassemble]")
+TEST_CASE("reassembler fails closed on malformed fragments without indexing past the span", "[fragment][reassemble]")
 {
     testing::harness h;
     test_reassembler r{h.ex};
 
-    CHECK(r.feed(1, 5, 3, seq_bytes(4, 0)) ==
-          test_reassembler::outcome::dropped_malformed); // idx >= cnt
-    CHECK(r.feed(1, 0, 0, seq_bytes(4, 0)) ==
-          test_reassembler::outcome::dropped_malformed); // cnt == 0
-    CHECK(r.feed(1, 0, 0xFFFF, seq_bytes(4, 0)) ==
-          test_reassembler::outcome::dropped_malformed); // cnt over max
+    CHECK(r.feed(1, 5, 3, seq_bytes(4, 0)) == test_reassembler::outcome::dropped_malformed);      // idx >= cnt
+    CHECK(r.feed(1, 0, 0, seq_bytes(4, 0)) == test_reassembler::outcome::dropped_malformed);      // cnt == 0
+    CHECK(r.feed(1, 0, 0xFFFF, seq_bytes(4, 0)) == test_reassembler::outcome::dropped_malformed); // cnt over max
     CHECK(r.in_flight() == 0);
 
     // A duplicate fragment is ignored (the first wins), the message still completes once.
     int deliveries = 0;
     r.on_deliver([&](std::span<const std::byte>) { ++deliveries; });
     CHECK(r.feed(9, 0, 2, seq_bytes(3, 1)) == test_reassembler::outcome::admitted);
-    CHECK(r.feed(9, 0, 2, seq_bytes(3, 9)) ==
-          test_reassembler::outcome::admitted); // duplicate idx 0
+    CHECK(r.feed(9, 0, 2, seq_bytes(3, 9)) == test_reassembler::outcome::admitted); // duplicate idx 0
     CHECK(r.feed(9, 1, 2, seq_bytes(3, 2)) == test_reassembler::outcome::completed);
     CHECK(deliveries == 1);
 }

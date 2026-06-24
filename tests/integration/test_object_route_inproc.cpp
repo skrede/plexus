@@ -56,9 +56,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -87,11 +96,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -103,8 +108,7 @@ plexus::node_id make_id(std::uint8_t seed)
 
 reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 // A producer-side object slot with a counting release. value is the "live object"
@@ -122,8 +126,7 @@ object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
     p.slot.refs    = 1; // publish_object's caller owns one reference on entry
     p.slot.release = [](loan_slot *s)
     {
-        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) -
-                                                          offsetof(counted_payload, slot));
+        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) - offsetof(counted_payload, slot));
         ++owner->release_calls;
     };
     return object_carrier{0, tag, &p.value, 0, 0, &p.slot};
@@ -162,14 +165,15 @@ struct object_net
         b.listen(ep_b);
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
     plexus::io::peer_session<manual_policy> *b_live_inbound()
     {
         plexus::io::peer_session<manual_policy> *found = nullptr;
-        b.registry().for_each_connected(
-                [&](const plexus::node_id &, plexus::io::peer_session<manual_policy> &s)
-                { found = &s; });
+        b.registry().for_each_connected([&](const plexus::node_id &, plexus::io::peer_session<manual_policy> &s) { found = &s; });
         return found;
     }
 
@@ -199,9 +203,7 @@ struct object_net
     {
         auto *b_inbound = b_live_inbound();
         REQUIRE(b_inbound != nullptr);
-        b.messages().publish_object(
-                topic, make_carrier(p, k_tag), [&] { return encode_value(p.value); },
-                b_inbound->session_id());
+        b.messages().publish_object(topic, make_carrier(p, k_tag), [&] { return encode_value(p.value); }, b_inbound->session_id());
         drive();
     }
 };
@@ -256,8 +258,7 @@ TEST_CASE("object route: an object published on B reaches A's object route with 
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("object route: an unresolvable topic_hash releases and never delivers",
-          "[integration][routing][object][inproc]")
+TEST_CASE("object route: an unresolvable topic_hash releases and never delivers", "[integration][routing][object][inproc]")
 {
     manual_clock::reset();
     object_net net;
@@ -277,7 +278,7 @@ TEST_CASE("object route: an unresolvable topic_hash releases and never delivers"
     object_carrier c = make_carrier(p, k_tag);    // caller owns one reference (refs == 1)
     c.topic_hash     = 0xDEADBEEFu;               // a hash A has no fqn mapping for
     b_inbound->msg_peer().channel.send_object(c); // the bus addrefs; the delivery releases it again
-    plexus::io::release(c); // release the caller's own reference (as publish_object would)
+    plexus::io::release(c);                       // release the caller's own reference (as publish_object would)
     net.drive();
 
     REQUIRE(fires == 0);
@@ -285,8 +286,7 @@ TEST_CASE("object route: an unresolvable topic_hash releases and never delivers"
     REQUIRE(p.release_calls == 1);
 }
 
-TEST_CASE("object route: the route survives a forced reconnect rebuild without re-install (looped)",
-          "[integration][routing][object][inproc]")
+TEST_CASE("object route: the route survives a forced reconnect rebuild without re-install (looped)", "[integration][routing][object][inproc]")
 {
     constexpr int     k_reconnects = 6;
     const std::string topic        = "topic";
@@ -295,8 +295,7 @@ TEST_CASE("object route: the route survives a forced reconnect rebuild without r
 
     // Install the shared object route ONCE, before any session exists.
     std::vector<const void *> addrs;
-    net.a.on_object_route([&](std::string_view, const object_carrier &c)
-                          { addrs.push_back(c.slot->object); });
+    net.a.on_object_route([&](std::string_view, const object_carrier &c) { addrs.push_back(c.slot->object); });
 
     net.connect_and_wire(topic);
 

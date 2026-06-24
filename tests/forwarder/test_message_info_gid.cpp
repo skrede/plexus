@@ -20,7 +20,7 @@ TEST_CASE("message_info: declare(emit_source_identity) mints a stable, distinct 
     auto peer = make_peer(sub, "node-rx");
 
     plexus::log::null_logger sink;
-    forwarder fwd{sink};
+    forwarder                fwd{sink};
 
     // The decoded endpoint counter of the LAST frame captured on the wire (nullopt when
     // the frame's gid flag was clear).
@@ -65,8 +65,7 @@ TEST_CASE("message_info: declare(emit_source_identity) mints a stable, distinct 
     CHECK_FALSE(published_counter("gamma").has_value());
 }
 
-TEST_CASE("message_info: from_intra_process tracks the channel locality tier",
-          "[forwarder][message_info]")
+TEST_CASE("message_info: from_intra_process tracks the channel locality tier", "[forwarder][message_info]")
 {
     // from_intra_process is derived from the delivering channel's OWN endpoint scheme,
     // never from peer-supplied data: an inproc channel is a genuine same-process

@@ -125,8 +125,7 @@ public:
     // pack order; the node is returned as a prvalue, so guaranteed copy elision materializes
     // the non-movable node directly in the caller's storage (no move is required or attempted).
     template<typename Policy>
-    [[nodiscard]] node<Policy, Transports...>
-    make_node(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts)
+    [[nodiscard]] node<Policy, Transports...> make_node(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts)
     {
         return make_node_impl<Policy>(disc, id, opts, std::index_sequence_for<Transports...>{});
     }
@@ -159,9 +158,7 @@ private:
     };
 
     template<typename Policy, std::size_t... Is>
-    node<Policy, Transports...> make_node_impl(discovery::discovery  &disc,
-                                               const plexus::node_id &id, const node_options &opts,
-                                               std::index_sequence<Is...>)
+    node<Policy, Transports...> make_node_impl(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts, std::index_sequence<Is...>)
     {
         return node<Policy, Transports...>{m_io, disc, id, detail::leaf_at<Is>(m_storage)..., opts};
     }

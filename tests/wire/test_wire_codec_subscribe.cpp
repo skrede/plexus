@@ -4,11 +4,7 @@
 
 TEST_CASE("subscribe request round-trip", "[wire][subscribe]")
 {
-    subscribe_request req{.fqn        = "/node/topic",
-                          .type_name  = "MyMessage",
-                          .topic_hash = 0xDEADBEEF,
-                          .type_hash  = 0xCAFEBABE,
-                          .source     = endpoint_source_type::publisher};
+    subscribe_request req{.fqn = "/node/topic", .type_name = "MyMessage", .topic_hash = 0xDEADBEEF, .type_hash = 0xCAFEBABE, .source = endpoint_source_type::publisher};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);
@@ -35,11 +31,7 @@ TEST_CASE("subscribe response round-trip", "[wire][subscribe]")
 
 TEST_CASE("subscribe request with long strings", "[wire][subscribe]")
 {
-    subscribe_request req{.fqn        = std::string(500, '/'),
-                          .type_name  = std::string(300, 'T'),
-                          .topic_hash = 0xABCD,
-                          .type_hash  = 0xEF01,
-                          .source     = endpoint_source_type::signal};
+    subscribe_request req{.fqn = std::string(500, '/'), .type_name = std::string(300, 'T'), .topic_hash = 0xABCD, .type_hash = 0xEF01, .source = endpoint_source_type::signal};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);
@@ -129,14 +121,9 @@ TEST_CASE("subscribe response with created status", "[wire][subscribe]")
 // k_max_type_name in subscribe.h's detail namespace; the test does not import
 // the constants, it asserts the contract at the documented bound.
 
-TEST_CASE("decode_subscribe_request rejects oversized fqn beyond k_max_fqn",
-          "[wire][subscribe][oob]")
+TEST_CASE("decode_subscribe_request rejects oversized fqn beyond k_max_fqn", "[wire][subscribe][oob]")
 {
-    subscribe_request req{.fqn        = std::string(1025, '/'),
-                          .type_name  = "T",
-                          .topic_hash = 0xABCD,
-                          .type_hash  = 0xEF01,
-                          .source     = endpoint_source_type::signal};
+    subscribe_request req{.fqn = std::string(1025, '/'), .type_name = "T", .topic_hash = 0xABCD, .type_hash = 0xEF01, .source = endpoint_source_type::signal};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);
@@ -144,14 +131,9 @@ TEST_CASE("decode_subscribe_request rejects oversized fqn beyond k_max_fqn",
     CHECK_FALSE(decoded.has_value());
 }
 
-TEST_CASE("decode_subscribe_request rejects oversized type_name beyond k_max_type_name",
-          "[wire][subscribe][oob]")
+TEST_CASE("decode_subscribe_request rejects oversized type_name beyond k_max_type_name", "[wire][subscribe][oob]")
 {
-    subscribe_request req{.fqn        = "/topic",
-                          .type_name  = std::string(513, 'T'),
-                          .topic_hash = 0xABCD,
-                          .type_hash  = 0xEF01,
-                          .source     = endpoint_source_type::signal};
+    subscribe_request req{.fqn = "/topic", .type_name = std::string(513, 'T'), .topic_hash = 0xABCD, .type_hash = 0xEF01, .source = endpoint_source_type::signal};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);
@@ -159,14 +141,9 @@ TEST_CASE("decode_subscribe_request rejects oversized type_name beyond k_max_typ
     CHECK_FALSE(decoded.has_value());
 }
 
-TEST_CASE("decode_subscribe_request accepts fqn and type_name at the cap boundary",
-          "[wire][subscribe][oob]")
+TEST_CASE("decode_subscribe_request accepts fqn and type_name at the cap boundary", "[wire][subscribe][oob]")
 {
-    subscribe_request req{.fqn        = std::string(1024, '/'),
-                          .type_name  = std::string(512, 'T'),
-                          .topic_hash = 0xABCD,
-                          .type_hash  = 0xEF01,
-                          .source     = endpoint_source_type::signal};
+    subscribe_request req{.fqn = std::string(1024, '/'), .type_name = std::string(512, 'T'), .topic_hash = 0xABCD, .type_hash = 0xEF01, .source = endpoint_source_type::signal};
 
     auto encoded = encode_subscribe_request(req);
     auto decoded = decode_subscribe_request(encoded);

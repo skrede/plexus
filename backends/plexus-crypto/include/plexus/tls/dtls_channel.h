@@ -65,8 +65,7 @@ public:
         server
     };
 
-    using reassembler_type =
-            datagram::detail::reassembler<::asio::io_context &, plexus::asio::asio_timer>;
+    using reassembler_type = datagram::detail::reassembler<::asio::io_context &, plexus::asio::asio_timer>;
 
     // The per-channel LOGICAL payload ceiling — the upper term of min(max_payload,
     // DTLS_get_data_mtu). A caller MAY raise it above the single-datagram budget so the fragment
@@ -83,15 +82,9 @@ public:
     // ex_data, and set accept/connect state per role. max_message_bytes is the per-MESSAGE ceiling
     // (send-side oversize-reject + the reassembler's ceiling); reassembly_budget the aggregate
     // memory cap; reassembly_timeout the per-message reclaim window. All required-WITH-default.
-    dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
-                 ::asio::ip::udp::endpoint dest, const tls_credential &cred,
-                 io::security::cookie_secret &cookie_state, role r,
-                 std::size_t               max_payload       = default_max_payload,
-                 std::size_t               record_mtu        = default_record_mtu,
-                 std::size_t               max_message_bytes = io::global_default_max_message_bytes,
-                 std::size_t               reassembly_budget = io::reassembly_memory_budget,
-                 std::chrono::milliseconds reassembly_timeout =
-                         reassembler_type::config{}.per_message_timeout);
+    dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server, ::asio::ip::udp::endpoint dest, const tls_credential &cred, io::security::cookie_secret &cookie_state, role r,
+                 std::size_t max_payload = default_max_payload, std::size_t record_mtu = default_record_mtu, std::size_t max_message_bytes = io::global_default_max_message_bytes,
+                 std::size_t reassembly_budget = io::reassembly_memory_budget, std::chrono::milliseconds reassembly_timeout = reassembler_type::config{}.per_message_timeout);
 
     dtls_channel(const dtls_channel &)            = delete;
     dtls_channel &operator=(const dtls_channel &) = delete;
@@ -112,7 +105,10 @@ public:
     {
         m_on_data = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_closed = std::move(cb);
+    }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -132,11 +128,17 @@ public:
 
     // A fire-through datagram channel keeps no bounded egress queue (the handshake_gate buffers
     // only during the handshake), so it reports 0 — "always accepts".
-    [[nodiscard]] std::size_t backpressured() const noexcept { return 0; }
+    [[nodiscard]] std::size_t backpressured() const noexcept
+    {
+        return 0;
+    }
 
     // The stable per-construction egress-scheduler key (unique per object so a reused heap address
     // cannot bleed a stale band entry across).
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return m_scheduler_key; }
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    {
+        return m_scheduler_key;
+    }
 
     // Fires ONCE on a verified mutual completion (the transport resolves the FSM
     // via handshake_fsm::on_external_complete from this edge). Set before driving.
@@ -154,18 +156,36 @@ public:
     // recv loop — the channel owns no socket): feed the external BIO + drive SSL_read.
     void deliver_inbound(std::span<const std::byte> datagram);
 
-    [[nodiscard]] const ::asio::ip::udp::endpoint &dest() const noexcept { return m_dest; }
-    [[nodiscard]] bool                             is_open() const noexcept { return m_open; }
-    [[nodiscard]] bool complete() const noexcept { return m_complete_fired; }
+    [[nodiscard]] const ::asio::ip::udp::endpoint &dest() const noexcept
+    {
+        return m_dest;
+    }
+    [[nodiscard]] bool is_open() const noexcept
+    {
+        return m_open;
+    }
+    [[nodiscard]] bool complete() const noexcept
+    {
+        return m_complete_fired;
+    }
 
     // The cert-derived peer identity, valid only after on_external_complete fired.
-    [[nodiscard]] const node_id     &peer_node_id() const noexcept { return m_node_id; }
-    [[nodiscard]] const std::string &peer_node_name() const noexcept { return m_node_name; }
+    [[nodiscard]] const node_id &peer_node_id() const noexcept
+    {
+        return m_node_id;
+    }
+    [[nodiscard]] const std::string &peer_node_name() const noexcept
+    {
+        return m_node_name;
+    }
 
 private:
     // The configurable SSL_set_mtu record budget (both set-points consult this so unpinning
     // honors the ctor value at construction AND at the post-handshake completion re-assert).
-    [[nodiscard]] long dtls_mtu() const noexcept { return static_cast<long>(m_record_mtu); }
+    [[nodiscard]] long dtls_mtu() const noexcept
+    {
+        return static_cast<long>(m_record_mtu);
+    }
 
     void secure_send(std::span<const std::byte> bytes);
     // The post-handshake encrypted per-record budget (DTLS_get_data_mtu, capped by the logical
@@ -198,8 +218,7 @@ private:
     std::size_t                  m_max_message_bytes;
     std::size_t                  m_reassembly_budget;
     std::chrono::milliseconds    m_reassembly_timeout;
-    std::uint64_t                m_scheduler_key{
-            io::detail::next_scheduler_key()}; // stable per-construction egress key
+    std::uint64_t                m_scheduler_key{io::detail::next_scheduler_key()}; // stable per-construction egress key
 
     detail::shared_ssl_ctx   m_ssl_ctx; // up_ref'd shared SSL_CTX
     ssl_st                  *m_ssl{nullptr};
@@ -246,7 +265,6 @@ private:
 
 }
 
-static_assert(plexus::io::byte_channel<plexus::tls::dtls_channel>,
-              "dtls_channel must satisfy byte_channel — check the send/close/on_* surface");
+static_assert(plexus::io::byte_channel<plexus::tls::dtls_channel>, "dtls_channel must satisfy byte_channel — check the send/close/on_* surface");
 
 #endif

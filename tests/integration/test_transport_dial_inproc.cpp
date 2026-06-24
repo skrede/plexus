@@ -46,11 +46,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // A DIALED two-node inproc link — no hand-dial connect_to. The transport's
@@ -68,10 +64,10 @@ struct dial_link
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink};
+    msg_forwarder            resp_messages{sink};
+    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx;   // the dialer slot's per-peer record
     plexus::io::peer_context<inproc_policy> resp_ctx;  // the accepted slot's per-peer record
@@ -87,8 +83,7 @@ struct dial_link
                 {
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
-                    responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages,
-                                      resp_procedures, true, sink);
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages, resp_procedures, true, sink);
                     responder->start();
                 });
         transport.on_dialed(
@@ -96,18 +91,19 @@ struct dial_link
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
-                    requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages,
-                                      req_procedures, false, sink);
+                    requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages, req_procedures, false, sink);
                     requester->start();
                 });
-        transport.on_dial_failed([this](const plexus::io::endpoint &, plexus::io::io_error)
-                                 { dial_refused = true; });
+        transport.on_dial_failed([this](const plexus::io::endpoint &, plexus::io::io_error) { dial_refused = true; });
 
         transport.listen({"inproc", "svc"});
         transport.dial({"inproc", "svc"});
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 }
@@ -150,10 +146,8 @@ TEST_CASE("inproc transport: dialing an unregistered endpoint surfaces connectio
 
     std::optional<plexus::io::io_error> failed;
     bool                                dialed = false;
-    transport.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e)
-                             { failed = e; });
-    transport.on_dialed([&](std::unique_ptr<inproc_channel<>>, const plexus::io::endpoint &)
-                        { dialed = true; });
+    transport.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e) { failed = e; });
+    transport.on_dialed([&](std::unique_ptr<inproc_channel<>>, const plexus::io::endpoint &) { dialed = true; });
 
     transport.dial({"inproc", "nope"});
     ex.drain();

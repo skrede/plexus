@@ -2,8 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-TEST_CASE("reliability enforcement: scheme_is_reliable mirrors the selector's classification",
-          "[udp][enforcement][classifier]")
+TEST_CASE("reliability enforcement: scheme_is_reliable mirrors the selector's classification", "[udp][enforcement][classifier]")
 {
     using plexus::io::scheme_is_reliable;
     // udp is best_effort (NOT reliable); udpr/tcp/tls/unix/inproc satisfy reliable; an

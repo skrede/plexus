@@ -2,8 +2,7 @@
 
 using namespace stream_inbound_fixture;
 
-TEST_CASE("wire stream_inbound: bad magic raises invalid_magic once and cancels the timer",
-          "[wire][stream_inbound]")
+TEST_CASE("wire stream_inbound: bad magic raises invalid_magic once and cancels the timer", "[wire][stream_inbound]")
 {
     constexpr int k_iterations = 100;
     for(int iter = 0; iter < k_iterations; ++iter)
@@ -53,8 +52,7 @@ TEST_CASE("wire stream_inbound: a span past the buffered-bytes cap raises buffer
           "[wire][stream_inbound]")
 {
     // The over-cap span is large; allocate it once and reuse it across iterations.
-    const std::vector<std::byte> flood(k_max_reassembler_payload_bytes + header_size + 1,
-                                       std::byte{0x00});
+    const std::vector<std::byte> flood(k_max_reassembler_payload_bytes + header_size + 1, std::byte{0x00});
 
     constexpr int k_iterations = 100;
     for(int iter = 0; iter < k_iterations; ++iter)

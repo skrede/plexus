@@ -43,8 +43,7 @@ struct capture
     explicit capture(inproc_executor<> &ex)
             : sink(ex)
     {
-        sink.on_data([this](std::span<const std::byte> d)
-                     { frames.emplace_back(d.begin(), d.end()); });
+        sink.on_data([this](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
     }
 
     inproc_channel<>                    sink;
@@ -69,16 +68,14 @@ std::vector<std::string> data_bodies(const capture &cap)
         auto decoded = plexus::wire::decode_unidirectional(inner);
         if(!decoded)
             continue;
-        bodies.emplace_back(reinterpret_cast<const char *>(decoded->data.data()),
-                            decoded->data.size());
+        bodies.emplace_back(reinterpret_cast<const char *>(decoded->data.data()), decoded->data.size());
     }
     return bodies;
 }
 
 }
 
-TEST_CASE("a none+pull subscriber gets 0 on subscribe, then fetch_latched caps at min(max,count)",
-          "[fetch_latched][forwarder]")
+TEST_CASE("a none+pull subscriber gets 0 on subscribe, then fetch_latched caps at min(max,count)", "[fetch_latched][forwarder]")
 {
     // Reproducibility: the PULL delivery effects are proven over repeated runs.
     for(int iter = 0; iter < 50; ++iter)
@@ -92,7 +89,7 @@ TEST_CASE("a none+pull subscriber gets 0 on subscribe, then fetch_latched caps a
         const auto hash = plexus::wire::fqn_topic_hash("topic");
 
         plexus::log::null_logger sink;
-        forwarder fwd{sink};
+        forwarder                fwd{sink};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
         for(int i = 0; i < 5; ++i)
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));
@@ -120,8 +117,7 @@ TEST_CASE("a none+pull subscriber gets 0 on subscribe, then fetch_latched caps a
     }
 }
 
-TEST_CASE("fetch_latched against a never-declared topic replays zero frames (no crash)",
-          "[fetch_latched][forwarder]")
+TEST_CASE("fetch_latched against a never-declared topic replays zero frames (no crash)", "[fetch_latched][forwarder]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
@@ -130,7 +126,7 @@ TEST_CASE("fetch_latched against a never-declared topic replays zero frames (no 
     auto              peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder fwd{sink};
+    forwarder                fwd{sink};
     fwd.fetch_latched(peer, plexus::wire::fqn_topic_hash("nope"), 5);
     ex.drain();
     REQUIRE(data_bodies(cap).empty());

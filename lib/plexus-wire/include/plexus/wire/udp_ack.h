@@ -70,8 +70,7 @@ inline void encode_udp_ack_into(std::vector<std::byte> &out, const udp_ack &ack)
 
     w.u8(static_cast<std::uint8_t>(udp_arq_kind::ack));
     w.u16(ack.cumulative);
-    w.bytes(std::span<const std::byte>{reinterpret_cast<const std::byte *>(ack.selective.data()),
-                                       udp_ack::bitmap_bytes});
+    w.bytes(std::span<const std::byte>{reinterpret_cast<const std::byte *>(ack.selective.data()), udp_ack::bitmap_bytes});
 }
 
 // Decode an untrusted ack control frame. Fail-closed: a frame that is not exactly the
@@ -105,8 +104,7 @@ inline void encode_udp_segment_into(std::vector<std::byte> &out, std::span<const
 
 // Strip the segment marker, returning the inner payload. Fail-closed: an empty frame
 // or a non-segment marker yields nullopt (the caller drops / dispatches elsewhere).
-inline std::optional<std::span<const std::byte>>
-decode_udp_segment(std::span<const std::byte> frame)
+inline std::optional<std::span<const std::byte>> decode_udp_segment(std::span<const std::byte> frame)
 {
     reader r{frame};
     if(r.u8() != static_cast<std::uint8_t>(udp_arq_kind::segment))

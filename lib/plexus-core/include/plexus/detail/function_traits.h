@@ -26,12 +26,12 @@ concept deducible_handler = requires { static_cast<void>(&F::operator()); };
 template<typename F>
 struct callable_traits;
 
-#define PLEXUS_CALLABLE_TRAITS(QUALIFIERS)                                                         \
-    template<typename R, typename C, typename A>                                                   \
-    struct callable_traits<R (C::*)(A) QUALIFIERS>                                                 \
-    {                                                                                              \
-        using result_type   = R;                                                                   \
-        using argument_type = A;                                                                   \
+#define PLEXUS_CALLABLE_TRAITS(QUALIFIERS)                                                                                                                                              \
+    template<typename R, typename C, typename A>                                                                                                                                        \
+    struct callable_traits<R (C::*)(A) QUALIFIERS>                                                                                                                                      \
+    {                                                                                                                                                                                   \
+        using result_type   = R;                                                                                                                                                        \
+        using argument_type = A;                                                                                                                                                        \
     };
 
 PLEXUS_CALLABLE_TRAITS()
@@ -57,11 +57,11 @@ PLEXUS_CALLABLE_TRAITS(const && noexcept)
 template<typename F>
 struct leading_argument;
 
-#define PLEXUS_LEADING_ARGUMENT(QUALIFIERS)                                                        \
-    template<typename R, typename C, typename A0, typename... Rest>                                \
-    struct leading_argument<R (C::*)(A0, Rest...) QUALIFIERS>                                      \
-    {                                                                                              \
-        using type = A0;                                                                           \
+#define PLEXUS_LEADING_ARGUMENT(QUALIFIERS)                                                                                                                                             \
+    template<typename R, typename C, typename A0, typename... Rest>                                                                                                                     \
+    struct leading_argument<R (C::*)(A0, Rest...) QUALIFIERS>                                                                                                                           \
+    {                                                                                                                                                                                   \
+        using type = A0;                                                                                                                                                                \
     };
 
 PLEXUS_LEADING_ARGUMENT()
@@ -83,8 +83,7 @@ PLEXUS_LEADING_ARGUMENT(const && noexcept)
 // (const T&, message_info) — to the value type T it carries (reference and const stripped).
 template<typename F>
     requires deducible_handler<F>
-using subscriber_value_t =
-        std::remove_cvref_t<typename leading_argument<decltype(&F::operator())>::type>;
+using subscriber_value_t = std::remove_cvref_t<typename leading_argument<decltype(&F::operator())>::type>;
 
 // The deduced response type carried by an RPC handler's return: the Res of an
 // expected<Res, std::error_code>. Left undefined for any other return type so a handler
@@ -104,10 +103,8 @@ struct rpc_response<expected<Res, std::error_code>>
 // return's expected is unwrapped to recover Res.
 template<typename F>
     requires deducible_handler<F>
-using handler_signature_t =
-        typename rpc_response<typename callable_traits<decltype(&F::operator())>::result_type>::
-                type(std::remove_cvref_t<
-                        typename callable_traits<decltype(&F::operator())>::argument_type>);
+using handler_signature_t = typename rpc_response<typename callable_traits<decltype(&F::operator())>::result_type>::type(
+        std::remove_cvref_t<typename callable_traits<decltype(&F::operator())>::argument_type>);
 
 }
 

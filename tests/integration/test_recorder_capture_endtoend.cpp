@@ -4,8 +4,7 @@
 
 using namespace recorder_capture_fixture;
 
-TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session and recovers it",
-          "[recorder_capture][e2e]")
+TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session and recovers it", "[recorder_capture][e2e]")
 {
     // This section exercises the runtime behavior of node.make_recorder + the recorder RAII
     // handle: public-API attach -> live multi-topic capture -> cooperative drain on the
@@ -38,16 +37,13 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
                 qos.latch = true;
                 plexus::publisher<>  pub_a{n, "topic.a", qos};
                 plexus::publisher<>  pub_b{n, "topic.b", qos};
-                plexus::subscriber<> sub_a{n, "topic.a",
-                                           [](std::span<const std::byte>, const message_info &) {}};
-                plexus::subscriber<> sub_b{n, "topic.b",
-                                           [](std::span<const std::byte>, const message_info &) {}};
+                plexus::subscriber<> sub_a{n, "topic.a", [](std::span<const std::byte>, const message_info &) {}};
+                plexus::subscriber<> sub_b{n, "topic.b", [](std::span<const std::byte>, const message_info &) {}};
                 fx.drive();
 
                 for(int i = 0; i < per_topic; ++i)
                 {
-                    const std::array<std::byte, 4> mk{std::byte(0xA0), std::byte(i & 0xff),
-                                                      std::byte{0xBE}, std::byte{0xEF}};
+                    const std::array<std::byte, 4> mk{std::byte(0xA0), std::byte(i & 0xff), std::byte{0xBE}, std::byte{0xEF}};
                     pub_a.publish(mk);
                     pub_b.publish(mk);
                     fx.drive(); // the published tap posts; the cooperative drain ships to sink

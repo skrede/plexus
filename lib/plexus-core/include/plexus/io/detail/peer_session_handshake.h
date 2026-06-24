@@ -47,11 +47,7 @@ wire::handshake_request self_request(const Session &s) noexcept
 template<typename Session>
 void send_control(Session &s, wire::msg_type type)
 {
-    wire::frame_header fhdr{.type         = type,
-                            .flags        = 0,
-                            .session_id   = 0,
-                            .timestamp_ns = wire::now_timestamp_ns(),
-                            .payload_len  = s.m_payload_scratch.size()};
+    wire::frame_header fhdr{.type = type, .flags = 0, .session_id = 0, .timestamp_ns = wire::now_timestamp_ns(), .payload_len = s.m_payload_scratch.size()};
     wire::encode_frame_into(s.m_frame_scratch, fhdr, s.m_payload_scratch);
     s.m_channel.send(s.m_frame_scratch);
 }

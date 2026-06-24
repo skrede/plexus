@@ -24,12 +24,9 @@ struct relay_link
             , server(io, server_cred)
             , client(io, client_cred)
     {
-        server.on_accepted([this](std::unique_ptr<ptls::dtls_channel> ch)
-                           { accepted = std::move(ch); });
-        client.on_dialed([this](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &)
-                         { dialed = std::move(ch); });
-        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error)
-                              { dial_failed = true; });
+        server.on_accepted([this](std::unique_ptr<ptls::dtls_channel> ch) { accepted = std::move(ch); });
+        client.on_dialed([this](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &) { dialed = std::move(ch); });
+        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error) { dial_failed = true; });
 
         server.listen({"dtls", "127.0.0.1:0"});
         link = std::make_unique<pdt::relay>(io, server.port());
@@ -39,9 +36,7 @@ struct relay_link
 
 }
 
-TEST_CASE(
-        "dtls.verify: a cross-pinned pair accepts; mis-pin / unpinned / empty fail closed, looped",
-        "[dtls][verify]")
+TEST_CASE("dtls.verify: a cross-pinned pair accepts; mis-pin / unpinned / empty fail closed, looped", "[dtls][verify]")
 {
     pdt::identity_fixture srv("v_srv");
     pdt::identity_fixture cli("v_cli");
@@ -69,9 +64,7 @@ TEST_CASE(
         for(int i = 0; i < k_iterations; ++i)
         {
             relay_link l(pdt::pin_one(srv, other.digest), pdt::pin_one(cli, srv.digest));
-            pdt::pump_until(
-                    l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); },
-                    std::chrono::milliseconds{1500});
+            pdt::pump_until(l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); }, std::chrono::milliseconds{1500});
             REQUIRE(l.accepted == nullptr);
             REQUIRE(l.dialed == nullptr);
             ++closed;
@@ -85,9 +78,7 @@ TEST_CASE(
         for(int i = 0; i < k_iterations; ++i)
         {
             relay_link l(pdt::pin_one(srv, cli.digest), pdt::pin_one(cli, other.digest));
-            pdt::pump_until(
-                    l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); },
-                    std::chrono::milliseconds{1500});
+            pdt::pump_until(l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); }, std::chrono::milliseconds{1500});
             REQUIRE(l.dialed == nullptr);
             REQUIRE(l.accepted == nullptr);
             ++closed;
@@ -101,9 +92,7 @@ TEST_CASE(
         for(int i = 0; i < k_iterations; ++i)
         {
             relay_link l(pdt::pin_none(srv), pdt::pin_one(cli, srv.digest));
-            pdt::pump_until(
-                    l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); },
-                    std::chrono::milliseconds{1500});
+            pdt::pump_until(l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); }, std::chrono::milliseconds{1500});
             REQUIRE(l.accepted == nullptr);
             REQUIRE(l.dialed == nullptr);
             ++closed;
@@ -112,8 +101,7 @@ TEST_CASE(
     }
 }
 
-TEST_CASE("dtls.dial_abort: an io_context destroyed mid-handshake leaks nothing, looped",
-          "[dtls][dial_abort]")
+TEST_CASE("dtls.dial_abort: an io_context destroyed mid-handshake leaks nothing, looped", "[dtls][dial_abort]")
 {
     pdt::identity_fixture srv("ab_srv");
     pdt::identity_fixture cli("ab_cli");
@@ -133,8 +121,7 @@ TEST_CASE("dtls.dial_abort: an io_context destroyed mid-handshake leaks nothing,
         ptls::dtls_transport client(io, client_cred);
 
         bool dialed = false;
-        client.on_dialed([&](std::unique_ptr<ptls::dtls_channel>, const pdt::pio::endpoint &)
-                         { dialed = true; });
+        client.on_dialed([&](std::unique_ptr<ptls::dtls_channel>, const pdt::pio::endpoint &) { dialed = true; });
 
         server.listen({"dtls", "127.0.0.1:0"});
         auto link = std::make_unique<pdt::relay>(io, server.port());
@@ -151,8 +138,7 @@ TEST_CASE("dtls.dial_abort: an io_context destroyed mid-handshake leaks nothing,
     REQUIRE(aborted == k_iterations);
 }
 
-TEST_CASE("dtls.handshake_loss: the handshake completes through a lossy relay, looped",
-          "[dtls][handshake_loss]")
+TEST_CASE("dtls.handshake_loss: the handshake completes through a lossy relay, looped", "[dtls][handshake_loss]")
 {
     pdt::identity_fixture srv("loss_srv");
     pdt::identity_fixture cli("loss_cli");

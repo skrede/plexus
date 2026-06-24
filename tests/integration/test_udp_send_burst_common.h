@@ -53,11 +53,7 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 
 inline plexus::datagram::detail::udp_arq_config fast_arq()
 {
-    return plexus::datagram::detail::udp_arq_config{.window         = 64,
-                                                    .initial_rto    = ms{20},
-                                                    .min_rto        = ms{10},
-                                                    .max_rto        = ms{80},
-                                                    .max_retransmit = 12};
+    return plexus::datagram::detail::udp_arq_config{.window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{80}, .max_retransmit = 12};
 }
 
 inline std::vector<std::byte> bytes_of(const std::string &s)
@@ -104,14 +100,12 @@ struct pair_fixture
                 [this](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([this](std::span<const std::byte> b)
-                                      { received.push_back(str_of(b)); });
+                    accepted->on_data([this](std::span<const std::byte> b) { received.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [this] { return server.port() != 0; });
 
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
         pump_until(io, [this] { return dialed && accepted; });
     }

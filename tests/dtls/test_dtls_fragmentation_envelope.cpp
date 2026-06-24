@@ -13,18 +13,15 @@ namespace {
 // best-effort message that fits the kernel buffers reassembles byte-equal.
 struct large_link
 {
-    static constexpr std::size_t k_socket_buf =
-            4u * 1024u * 1024u; // the host rmem_max/wmem_max ceiling
+    static constexpr std::size_t k_socket_buf = 4u * 1024u * 1024u; // the host rmem_max/wmem_max ceiling
 
     ::asio::io_context           io;
     ptls::tls_credential         server_cred;
     ptls::tls_credential         client_cred;
     pio::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
     pio::security::cookie_secret client_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server            server_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf,
-                                             k_socket_buf};
-    pasio::udp_server            client_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf,
-                                             k_socket_buf};
+    pasio::udp_server            server_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
+    pasio::udp_server            client_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
     std::unique_ptr<ptls::dtls_channel> client_ch;
@@ -37,41 +34,27 @@ struct large_link
     std::vector<std::vector<std::byte>> client_to_server;
     std::vector<std::vector<std::byte>> server_to_client;
 
-    large_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id,
-               std::size_t max_message_bytes)
+    large_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id, std::size_t max_message_bytes)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
             , client_cred(pdt::pin_one(client_id, server_id.digest))
     {
         server_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
-        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"),
-                                            server_sock.port());
-        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"),
-                                            client_sock.port());
+        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), server_sock.port());
+        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"), client_sock.port());
 
         const std::size_t budget = max_message_bytes + 16u * 1024u * 1024u;
-        server_ch                = std::make_unique<ptls::dtls_channel>(
-                io, server_sock, client_ep, server_cred, server_cookie,
-                ptls::dtls_channel::role::server, max_message_bytes,
-                ptls::dtls_channel::default_record_mtu, max_message_bytes, budget,
-                std::chrono::milliseconds{60000});
-        client_ch = std::make_unique<ptls::dtls_channel>(
-                io, client_sock, server_ep, client_cred, client_cookie,
-                ptls::dtls_channel::role::client, max_message_bytes,
-                ptls::dtls_channel::default_record_mtu, max_message_bytes, budget,
-                std::chrono::milliseconds{60000});
+        server_ch                = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred, server_cookie, ptls::dtls_channel::role::server, max_message_bytes,
+                                                                        ptls::dtls_channel::default_record_mtu, max_message_bytes, budget, std::chrono::milliseconds{60000});
+        client_ch                = std::make_unique<ptls::dtls_channel>(io, client_sock, server_ep, client_cred, client_cookie, ptls::dtls_channel::role::client, max_message_bytes,
+                                                                        ptls::dtls_channel::default_record_mtu, max_message_bytes, budget, std::chrono::milliseconds{60000});
 
-        server_sock.on_datagram(
-                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
-                { client_to_server.emplace_back(b.begin(), b.end()); });
-        client_sock.on_datagram(
-                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
-                { server_to_client.emplace_back(b.begin(), b.end()); });
+        server_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) { client_to_server.emplace_back(b.begin(), b.end()); });
+        client_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) { server_to_client.emplace_back(b.begin(), b.end()); });
 
         server_ch->on_external_complete([this] { server_complete = true; });
         client_ch->on_external_complete([this] { client_complete = true; });
-        server_ch->on_data([this](std::span<const std::byte> d)
-                           { server_received.emplace_back(d.begin(), d.end()); });
+        server_ch->on_data([this](std::span<const std::byte> d) { server_received.emplace_back(d.begin(), d.end()); });
         client_ch->on_error([this](pio::io_error e) { client_error = e; });
     }
 
@@ -101,9 +84,7 @@ struct large_link
         }
     }
 
-    std::vector<std::byte> round_trip(std::size_t               size,
-                                      std::chrono::milliseconds timeout = std::chrono::milliseconds{
-                                              20000})
+    std::vector<std::byte> round_trip(std::size_t size, std::chrono::milliseconds timeout = std::chrono::milliseconds{20000})
     {
         server_received.clear();
         client_ch->send(std::span<const std::byte>{ramp(size)});
@@ -138,10 +119,8 @@ TEST_CASE("dtls.fragment: the lifted message ceiling fragments a message above t
     pdt::identity_fixture srv("env_srv");
     pdt::identity_fixture cli("env_cli");
 
-    constexpr std::size_t k_ceiling =
-            24u * 1024u * 1024u; // above 16 MB so a 16 MB send is admitted (not rejected)
-    constexpr std::size_t k_reliable =
-            3u * 1024u * 1024u; // the host-reliable best-effort ceiling (under rmem_max)
+    constexpr std::size_t k_ceiling  = 24u * 1024u * 1024u; // above 16 MB so a 16 MB send is admitted (not rejected)
+    constexpr std::size_t k_reliable = 3u * 1024u * 1024u;  // the host-reliable best-effort ceiling (under rmem_max)
 
     constexpr int k_iterations = 3;
     int           proven       = 0;

@@ -3,8 +3,7 @@
 TEST_CASE("reassembler extracts single complete frame", "[wire][reassembler]")
 {
     frame_reassembler      ra;
-    std::vector<std::byte> payload{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC},
-                                   std::byte{0xDD}, std::byte{0xEE}};
+    std::vector<std::byte> payload{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}, std::byte{0xDD}, std::byte{0xEE}};
     auto                   frame = make_frame(msg_type::unidirectional, 0, 1000, payload);
 
     auto result = ra.feed(frame);
@@ -125,11 +124,7 @@ TEST_CASE("reassembler reports payload too large error", "[wire][reassembler]")
 {
     frame_reassembler ra(100);
 
-    frame_header hdr{.type         = msg_type::unidirectional,
-                     .flags        = 0,
-                     .session_id   = 0,
-                     .timestamp_ns = 1000,
-                     .payload_len  = 200};
+    frame_header hdr{.type = msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 1000, .payload_len = 200};
     auto         header_bytes = encode_header(hdr);
 
     auto result = ra.feed(header_bytes);

@@ -65,7 +65,10 @@ public:
 
     // The firable predicate try_fire gates on, exposed so the executor can skip the
     // tick read entirely when nothing could fire.
-    [[nodiscard]] bool armed() const noexcept { return m_active && m_handler; }
+    [[nodiscard]] bool armed() const noexcept
+    {
+        return m_active && m_handler;
+    }
 
     bool try_fire(TickType_t now)
     {
@@ -94,8 +97,7 @@ private:
 
 inline bool freertos_executor::fire_due_timer()
 {
-    const bool any_armed = std::any_of(m_timers.begin(), m_timers.end(),
-                                       [](const freertos_timer *t) { return t->armed(); });
+    const bool any_armed = std::any_of(m_timers.begin(), m_timers.end(), [](const freertos_timer *t) { return t->armed(); });
     if(!any_armed)
         return false;
     const TickType_t now = now_ticks();

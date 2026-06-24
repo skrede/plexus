@@ -43,14 +43,22 @@ public:
         bool                   engaged{false};
     };
 
-    void
-    on_install_security(plexus::detail::move_only_function<void(const security_negotiation &)> cb)
+    void on_install_security(plexus::detail::move_only_function<void(const security_negotiation &)> cb)
     {
         m_install_security = std::move(cb);
     }
-    void set_security_seam(const security_seam *seam) noexcept { m_install_security_seam = seam; }
-    void set_attach_entropy(security::rand_fn rand) { m_rand = std::move(rand); }
-    void set_attach_prover(security::attach_prover prover) { m_prover = std::move(prover); }
+    void set_security_seam(const security_seam *seam) noexcept
+    {
+        m_install_security_seam = seam;
+    }
+    void set_attach_entropy(security::rand_fn rand)
+    {
+        m_rand = std::move(rand);
+    }
+    void set_attach_prover(security::attach_prover prover)
+    {
+        m_prover = std::move(prover);
+    }
 
     std::optional<node_id> authenticated_host_identity() const noexcept
     {
@@ -69,7 +77,10 @@ public:
             m_key_id = m_prover.key_id();
     }
 
-    const std::array<std::byte, 16> &own_nonce() const noexcept { return m_own_nonce; }
+    const std::array<std::byte, 16> &own_nonce() const noexcept
+    {
+        return m_own_nonce;
+    }
     const std::array<std::byte, wire::k_handshake_key_id_len> &key_id() const noexcept
     {
         return m_key_id;
@@ -79,8 +90,14 @@ public:
         return seam_engaged() ? wire::cipher_offer_bits::chacha20_poly1305 : 0;
     }
 
-    const pending_attach         &pending() const noexcept { return m_pending_attach; }
-    const security::attach_facts &facts() const noexcept { return m_pending_attach.facts; }
+    const pending_attach &pending() const noexcept
+    {
+        return m_pending_attach;
+    }
+    const security::attach_facts &facts() const noexcept
+    {
+        return m_pending_attach.facts;
+    }
 
     bool seam_engaged() const noexcept
     {
@@ -94,8 +111,7 @@ public:
     // proof covered). A refusal with no security posture is a plain unauthorized attach.
     security_kind classify_unauthorized() const noexcept
     {
-        return m_pending_attach.engaged ? security_kind::downgrade_refused
-                                        : security_kind::unauthorized_attach;
+        return m_pending_attach.engaged ? security_kind::downgrade_refused : security_kind::unauthorized_attach;
     }
 
     // Assemble facts + negotiation from a decoded handshake frame (request or response — both
@@ -103,13 +119,10 @@ public:
     // the peer_nonce the proof must cover (anti-reflection); initiator/responder ids and nonces
     // are pinned by local role. No crypto runs here.
     template<typename Frame>
-    void assemble(const Frame &frame, security::attach_role local_role, const node_id &peer_id,
-                  const node_id &self_id, bool policy_engaged)
+    void assemble(const Frame &frame, security::attach_role local_role, const node_id &peer_id, const node_id &self_id, bool policy_engaged)
     {
         pending_attach out;
-        detail::assemble_pending(out, m_own_nonce, m_install_security_seam,
-                                 policy_engaged && seam_engaged(), frame, local_role, peer_id,
-                                 self_id);
+        detail::assemble_pending(out, m_own_nonce, m_install_security_seam, policy_engaged && seam_engaged(), frame, local_role, peer_id, self_id);
         m_pending_attach = out;
     }
 
@@ -158,14 +171,20 @@ public:
         return true;
     }
 
-    void clear_identity() noexcept { m_authenticated_host_identity.reset(); }
-    bool engaged() const noexcept { return m_pending_attach.engaged; }
+    void clear_identity() noexcept
+    {
+        m_authenticated_host_identity.reset();
+    }
+    bool engaged() const noexcept
+    {
+        return m_pending_attach.engaged;
+    }
 
 private:
     plexus::detail::move_only_function<void(const security_negotiation &)> m_install_security;
-    const security_seam   *m_install_security_seam{nullptr};
-    pending_attach         m_pending_attach;
-    std::optional<node_id> m_authenticated_host_identity;
+    const security_seam                                                   *m_install_security_seam{nullptr};
+    pending_attach                                                         m_pending_attach;
+    std::optional<node_id>                                                 m_authenticated_host_identity;
     // m_peer_proof is the stable backing buffer the wire proof is latched into so the
     // facts.proof span outlives the synchronous gate decide().
     std::array<std::byte, 16>                           m_own_nonce{};

@@ -30,8 +30,7 @@ using plexus::crypto::k_rekey_message_threshold;
 
 namespace {
 
-constexpr std::uint64_t k_candidates[] = {1ull << 18, 1ull << 20, 1ull << 22, 1ull << 24,
-                                          1ull << 26};
+constexpr std::uint64_t k_candidates[] = {1ull << 18, 1ull << 20, 1ull << 22, 1ull << 24, 1ull << 26};
 
 std::vector<std::byte> bytes_of(std::string_view s)
 {
@@ -51,7 +50,7 @@ bool no_nonce_reuse(std::uint64_t threshold)
     // Exhaustive over the tractable cells; the larger cells inherit the same structural
     // monotonicity (a strictly increasing counter cannot revisit a value), spot-checked
     // by walking the final window where a wrap would first show.
-    const std::uint64_t window_start = threshold > (1ull << 16) ? threshold - (1ull << 16) : 0;
+    const std::uint64_t               window_start = threshold > (1ull << 16) ? threshold - (1ull << 16) : 0;
     std::unordered_set<std::uint64_t> seen;
     seen.reserve(threshold - window_start);
     for(std::uint64_t seq = window_start; seq < threshold; ++seq)
@@ -109,8 +108,7 @@ TEST_CASE("crypto.rekey_threshold the recorded grid margins are reproducible", "
     REQUIRE(margin_log2(1ull << 26) == 6);
 }
 
-TEST_CASE("crypto.rekey_threshold the chosen threshold is a swept cell with a large margin",
-          "[crypto][rekey]")
+TEST_CASE("crypto.rekey_threshold the chosen threshold is a swept cell with a large margin", "[crypto][rekey]")
 {
     bool is_swept_cell = false;
     for(std::uint64_t c : k_candidates)
@@ -126,8 +124,7 @@ TEST_CASE("crypto.rekey_threshold the chosen threshold is a swept cell with a la
     REQUIRE(k_rekey_message_threshold < k_aead_safety_bound);
 }
 
-TEST_CASE("crypto.rekey_threshold a rekey re-derives a fresh key (no reuse under an old key)",
-          "[crypto][rekey]")
+TEST_CASE("crypto.rekey_threshold a rekey re-derives a fresh key (no reuse under an old key)", "[crypto][rekey]")
 {
     const aead_key epoch0 = derive_send(0);
     const aead_key epoch1 = derive_send(1);

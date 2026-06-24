@@ -10,9 +10,7 @@ TEST_CASE("an armed anomaly predicate freezes on a synthetic drop edge", "[recor
     manual_clock          clk;
     pre_buffer_controller pre{sink, 4096, [&clk] { return clk(); }};
 
-    pre.on_anomaly(
-            [](const record_envelope &env)
-            { return env.category == record_category::drop && env.cause == drop_cause::arq_shed; });
+    pre.on_anomaly([](const record_envelope &env) { return env.category == record_category::drop && env.cause == drop_cause::arq_shed; });
 
     const auto body = payload_of(16, std::byte{0x22});
     for(int i = 0; i < 4; ++i)
@@ -30,17 +28,14 @@ TEST_CASE("an armed anomaly predicate freezes on a synthetic drop edge", "[recor
     REQUIRE(held.back().category == record_category::drop);
 }
 
-TEST_CASE("a deadline-miss edge rides the drop surface and freezes via the predicate",
-          "[recorder_capture][fdr]")
+TEST_CASE("a deadline-miss edge rides the drop surface and freezes via the predicate", "[recorder_capture][fdr]")
 {
     in_memory_byte_sink   sink;
     manual_clock          clk;
     pre_buffer_controller pre{sink, 4096, [&clk] { return clk(); }};
 
     // A deadline-miss is an observable drop edge; the predicate matches it like any anomaly.
-    pre.on_anomaly(
-            [](const record_envelope &env)
-            { return env.category == record_category::drop && env.cause == drop_cause::blocked; });
+    pre.on_anomaly([](const record_envelope &env) { return env.category == record_category::drop && env.cause == drop_cause::blocked; });
 
     const auto body = payload_of(16, std::byte{0x33});
     pre.record_sample(0x9, message_info{}, 0, false, capture_fidelity::payload, body);
@@ -57,8 +52,7 @@ TEST_CASE("a deadline-miss edge rides the drop surface and freezes via the predi
     REQUIRE(!decode_window(sink.bytes()).empty());
 }
 
-TEST_CASE("captured_span reports newest_ts - oldest_ts over the frozen window",
-          "[recorder_capture][fdr]")
+TEST_CASE("captured_span reports newest_ts - oldest_ts over the frozen window", "[recorder_capture][fdr]")
 {
     in_memory_byte_sink   sink;
     manual_clock          clk; // step 10: ts are 0,10,20,...

@@ -16,12 +16,8 @@ TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused,
             link l;
             l.drive();
             REQUIRE(l.complete());
-            l.prod_messages.declare("topic",
-                                    plexus::topic_qos{.reliability = reliability::best_effort});
-            l.subscriber->subscribe("topic",
-                                    subscriber_qos{.durability_mode = durability::none,
-                                                   .requested_reliability_reliable = true,
-                                                   .rxo = rxo_mode::strict});
+            l.prod_messages.declare("topic", plexus::topic_qos{.reliability = reliability::best_effort});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requested_reliability_reliable = true, .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.size() == 1);
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
@@ -37,12 +33,8 @@ TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused,
             link l;
             l.drive();
             REQUIRE(l.complete());
-            l.prod_messages.declare("topic",
-                                    plexus::topic_qos{.reliability = reliability::reliable});
-            l.subscriber->subscribe("topic",
-                                    subscriber_qos{.durability_mode = durability::none,
-                                                   .requested_reliability_reliable = true,
-                                                   .rxo = rxo_mode::strict});
+            l.prod_messages.declare("topic", plexus::topic_qos{.reliability = reliability::reliable});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requested_reliability_reliable = true, .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());
@@ -66,13 +58,9 @@ TEST_CASE("rxo compatibility: the same incompatible reliability pair connects un
         link l;
         l.drive();
         REQUIRE(l.complete());
-        l.prod_messages.declare("topic",
-                                plexus::topic_qos{.reliability = reliability::best_effort});
+        l.prod_messages.declare("topic", plexus::topic_qos{.reliability = reliability::best_effort});
         // The SAME best_effort/reliable mismatch under permissive: connect + surface.
-        l.subscriber->subscribe("topic",
-                                subscriber_qos{.durability_mode                = durability::none,
-                                               .requested_reliability_reliable = true,
-                                               .rxo = rxo_mode::permissive});
+        l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requested_reliability_reliable = true, .rxo = rxo_mode::permissive});
         l.drive();
         REQUIRE(l.refusals.empty());
         REQUIRE(l.degraded.size() == 1);                         // the observable FIRED
@@ -100,9 +88,7 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = false});
-            l.subscriber->subscribe(
-                    "topic",
-                    subscriber_qos{.durability_mode = durability::all, .rxo = rxo_mode::strict});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::all, .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.size() == 1);
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
@@ -112,9 +98,7 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = false});
-            l.subscriber->subscribe("topic",
-                                    subscriber_qos{.durability_mode = durability::all,
-                                                   .rxo             = rxo_mode::permissive});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::all, .rxo = rxo_mode::permissive});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.size() == 1);
@@ -126,9 +110,7 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = true});
-            l.subscriber->subscribe("topic",
-                                    subscriber_qos{.durability_mode = durability::all,
-                                                   .rxo             = rxo_mode::permissive});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::all, .rxo = rxo_mode::permissive});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());

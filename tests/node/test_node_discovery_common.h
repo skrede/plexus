@@ -41,9 +41,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 
 inline plexus::io::reconnect_config forever_cfg()
 {
-    return plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                        std::chrono::milliseconds(2000), std::nullopt,
-                                        std::nullopt};
+    return plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
 }
 
 inline plexus::node_options make_opts()
@@ -85,18 +83,13 @@ struct recording_browser
 
 inline bool has_key(const service_info &s, std::string_view key)
 {
-    return std::any_of(s.metadata.begin(), s.metadata.end(),
-                       [&](const auto &kv) { return kv.first == key; });
+    return std::any_of(s.metadata.begin(), s.metadata.end(), [&](const auto &kv) { return kv.first == key; });
 }
 
 inline bool has_port_key(const service_info &s)
 {
     return std::any_of(s.metadata.begin(), s.metadata.end(),
-                       [](const auto &kv)
-                       {
-                           return kv.first.rfind("plexus/", 0) == 0 && kv.first.size() > 5 &&
-                                   kv.first.substr(kv.first.size() - 5) == "/port";
-                       });
+                       [](const auto &kv) { return kv.first.rfind("plexus/", 0) == 0 && kv.first.size() > 5 && kv.first.substr(kv.first.size() - 5) == "/port"; });
 }
 
 } // namespace node_discovery_fixture

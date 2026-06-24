@@ -43,16 +43,13 @@ public:
     // The fixed retransmit ladder: the delay BEFORE retransmit attempt N (the first
     // transmit fires immediately at start, so index 0 = 250 ms guards transmit #1).
     // The proven-core schedule and the production default.
-    static constexpr schedule default_ladder{std::chrono::milliseconds{250},
-                                             std::chrono::milliseconds{500},
-                                             std::chrono::milliseconds{1000}};
+    static constexpr schedule default_ladder{std::chrono::milliseconds{250}, std::chrono::milliseconds{500}, std::chrono::milliseconds{1000}};
 
     // The ladder is a required-WITH-default ctor argument: production binds the proven
     // 250/500/1000 ms schedule; a deterministic test may bind a compressed ladder to
     // exercise the same retransmit/surrender mechanics quickly. NOT a mutable setter —
     // the schedule is fixed at construction, never a test-only post-hoc knob.
-    explicit udp_handshake_arq(typename Policy::executor_type executor,
-                               schedule                       ladder = default_ladder)
+    explicit udp_handshake_arq(typename Policy::executor_type executor, schedule ladder = default_ladder)
             : m_timer(executor)
             , m_ladder(ladder)
     {
@@ -72,7 +69,10 @@ public:
         m_on_established = std::move(cb);
     }
     // Called once when all 3 attempts are exhausted: a handshake-timeout abort.
-    void on_timeout(plexus::detail::move_only_function<void()> cb) { m_on_timeout = std::move(cb); }
+    void on_timeout(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_timeout = std::move(cb);
+    }
 
     // Send the first handshake frame (attempt #1) and arm the wait for its response.
     void start()
@@ -108,8 +108,14 @@ public:
         m_timer.cancel();
     }
 
-    [[nodiscard]] std::uint8_t attempts() const noexcept { return m_attempt; }
-    [[nodiscard]] bool         resolved() const noexcept { return m_resolved; }
+    [[nodiscard]] std::uint8_t attempts() const noexcept
+    {
+        return m_attempt;
+    }
+    [[nodiscard]] bool resolved() const noexcept
+    {
+        return m_resolved;
+    }
 
 private:
     // Arm the wait that guards the transmit just sent. The ladder entry for the

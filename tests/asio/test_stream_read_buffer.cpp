@@ -38,6 +38,5 @@ TEST_CASE("stream_read_buffer fails closed on a degenerate size", "[asio][stream
     REQUIRE(stream_read_buffer_size(0) == k_min_stream_read_buffer_bytes);
     REQUIRE(stream_read_buffer_size(0) > 0);
     // A sub-floor non-zero request floors too.
-    REQUIRE(stream_read_buffer_size(k_min_stream_read_buffer_bytes - 1)
-            == k_min_stream_read_buffer_bytes);
+    REQUIRE(stream_read_buffer_size(k_min_stream_read_buffer_bytes - 1) == k_min_stream_read_buffer_bytes);
 }

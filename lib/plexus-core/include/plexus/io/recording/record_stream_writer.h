@@ -58,10 +58,8 @@ public:
     {
     }
 
-    std::span<const std::byte>
-    begin_stream(std::uint64_t clock_epoch, const node_id &node, topic_capture_rule rule,
-                 std::span<const type_schema_entry> schema,
-                 capture_crypto_position            crypto = capture_crypto_position::cleartext)
+    std::span<const std::byte> begin_stream(std::uint64_t clock_epoch, const node_id &node, topic_capture_rule rule, std::span<const type_schema_entry> schema,
+                                            capture_crypto_position crypto = capture_crypto_position::cleartext)
     {
         wire::writer w{m_scratch};
         w.u32(k_stream_magic);
@@ -100,10 +98,8 @@ public:
     // A sample (a captured message): topic identity + the metadata floor + an optional
     // type_id + the raw payload bytes at the recorded fidelity. A metadata-only record
     // passes an empty payload; the encoder never invokes a codec — payload is opaque.
-    std::span<const std::byte> sample(std::uint64_t capture_ts, std::uint64_t topic_hash,
-                                      const message_info &info, std::uint64_t type_id,
-                                      bool type_id_present, capture_fidelity fidelity,
-                                      std::span<const std::byte> payload)
+    std::span<const std::byte> sample(std::uint64_t capture_ts, std::uint64_t topic_hash, const message_info &info, std::uint64_t type_id, bool type_id_present,
+                                      capture_fidelity fidelity, std::span<const std::byte> payload)
     {
         wire::writer w{m_scratch};
         w.u8(static_cast<std::uint8_t>(record_category::sample));
@@ -156,8 +152,7 @@ public:
         return seal(w.offset());
     }
 
-    std::span<const std::byte> endpoint(std::uint64_t capture_ts, std::string_view fqn,
-                                        const endpoint_event &e)
+    std::span<const std::byte> endpoint(std::uint64_t capture_ts, std::string_view fqn, const endpoint_event &e)
     {
         wire::writer w{m_scratch};
         w.u8(static_cast<std::uint8_t>(record_category::endpoint));
@@ -189,9 +184,7 @@ public:
     // them (lossless capture), it lays them down behind a varint length exactly as sample()
     // lays down its payload. Uses the SHARED m_scratch + seal() like sample() (m_aux stays
     // reserved for the sync_marker / dropout records the recorder emits around it mid-admit).
-    std::span<const std::byte> wire_frame(std::uint64_t capture_ts, wire_direction dir,
-                                          std::uint64_t seq, const node_id &peer,
-                                          std::span<const std::byte> bytes)
+    std::span<const std::byte> wire_frame(std::uint64_t capture_ts, wire_direction dir, std::uint64_t seq, const node_id &peer, std::span<const std::byte> bytes)
     {
         wire::writer w{m_scratch};
         w.u8(static_cast<std::uint8_t>(record_category::wire_frame));

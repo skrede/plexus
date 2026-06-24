@@ -39,7 +39,10 @@ struct egress_capacity
         return {multiple * fragmentation_limits::max_message_size};
     }
 
-    [[nodiscard]] static constexpr egress_capacity of_bytes(std::size_t n) noexcept { return {n}; }
+    [[nodiscard]] static constexpr egress_capacity of_bytes(std::size_t n) noexcept
+    {
+        return {n};
+    }
 };
 
 }

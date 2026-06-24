@@ -70,9 +70,15 @@ constexpr std::size_t k_kib = 1024;
 // bridge/dual-delivery proofs.
 struct spin_notifier
 {
-    void signal() noexcept {}
-    void arm(plexus::detail::move_only_function<void()>) {}
-    void disarm() noexcept {}
+    void signal() noexcept
+    {
+    }
+    void arm(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void disarm() noexcept
+    {
+    }
 };
 
 static_assert(pio::notifier<spin_notifier>, "spin_notifier must satisfy the notifier seam");
@@ -130,12 +136,25 @@ public:
             m_ring->send(data);
     }
 
-    void                   close() {}
-    [[nodiscard]] endpoint remote_endpoint() const { return endpoint{m_scheme, "peer"}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
-    void on_closed(plexus::detail::move_only_function<void()>) {}
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
+    void close()
+    {
+    }
+    [[nodiscard]] endpoint remote_endpoint() const
+    {
+        return endpoint{m_scheme, "peer"};
+    }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
+    {
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
 
     [[nodiscard]] std::size_t count(medium m) const
     {
@@ -145,13 +164,25 @@ public:
                 ++n;
         return n;
     }
-    [[nodiscard]] std::size_t   total() const { return m_carried.size(); }
-    [[nodiscard]] std::size_t   last_len() const { return m_last_len; }
-    [[nodiscard]] std::uint64_t last_hash() const { return m_last_hash; }
+    [[nodiscard]] std::size_t total() const
+    {
+        return m_carried.size();
+    }
+    [[nodiscard]] std::size_t last_len() const
+    {
+        return m_last_len;
+    }
+    [[nodiscard]] std::uint64_t last_hash() const
+    {
+        return m_last_hash;
+    }
 
     // Forget pre-publish control traffic (the subscribe_response the attach emits over
     // the wire channel) so the carried tally counts only data publishes.
-    void reset() { m_carried.clear(); }
+    void reset()
+    {
+        m_carried.clear();
+    }
 
 private:
     medium              m_kind;
@@ -195,8 +226,7 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
-                     0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -221,8 +251,7 @@ bool subscribe_and_check(const std::string &fqn, coord *c)
 
     posix_shm_region_broker broker;
     region_handle           ctrl, slab;
-    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
-       broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
+    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
     if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
@@ -263,9 +292,7 @@ struct route_result
     bool        subscriber_exited_clean = false;
 };
 
-route_result drive_round_trip(const std::string &fqn, std::size_t declared_payload,
-                              std::uint32_t capacity, std::size_t small_bytes,
-                              std::size_t large_bytes)
+route_result drive_round_trip(const std::string &fqn, std::size_t declared_payload, std::uint32_t capacity, std::size_t small_bytes, std::size_t large_bytes)
 {
     std::vector<std::byte> small(small_bytes, std::byte{0xAB});
     std::vector<std::byte> large(large_bytes, std::byte{0xCD});
@@ -284,9 +311,8 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     }
 
     posix_shm_region_broker broker;
-    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
-    member.set_topic_geometry(fqn, declared_payload,
-                              pio::shm_geometry{capacity, pio::ring_geometry_mode::wire_fallback});
+    member_t                member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    member.set_topic_geometry(fqn, declared_payload, pio::shm_geometry{capacity, pio::ring_geometry_mode::wire_fallback});
 
     std::unique_ptr<shm_channel> companion_ring;
     member.on_accepted([&](std::unique_ptr<shm_channel> ch) { companion_ring = std::move(ch); });
@@ -312,10 +338,7 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
             [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel *
             {
                 const auto g = member.resolved_geometry_for(std::string{route_fqn});
-                return pio::route_message_medium(g.mode, bytes, g.slot_capacity) ==
-                                pio::same_host_medium::shm
-                        ? &shm_tap
-                        : nullptr;
+                return pio::route_message_medium(g.mode, bytes, g.slot_capacity) == pio::same_host_medium::shm ? &shm_tap : nullptr;
             });
 
     forwarder::peer p{wire_tap, "peer-node"};
@@ -349,8 +372,7 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
 
 }
 
-TEST_CASE("shm.wire_fallback small rides the SHM ring, large rides the wire — medium asserted",
-          "[shm][wire_fallback]")
+TEST_CASE("shm.wire_fallback small rides the SHM ring, large rides the wire — medium asserted", "[shm][wire_fallback]")
 {
     // A capped ring at a small declared payload: ring_geometry_for keeps the small-tier
     // slot stride (4096), so the cap is 4096. A 1 KiB message fits the cap (SHM); a 64
@@ -373,8 +395,7 @@ TEST_CASE("shm.wire_fallback small rides the SHM ring, large rides the wire — 
     }
 }
 
-TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over the wire (rescue)",
-          "[shm][wire_fallback]")
+TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over the wire (rescue)", "[shm][wire_fallback]")
 {
     // The dual-delivery rescue: a wire_fallback subscriber whose companion ring is absent
     // (the hook never returns one) still receives EVERY message over its recorded wire
@@ -393,8 +414,7 @@ TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over 
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
     // The companion is ABSENT: the hook always declines (nullptr), so the forwarder keeps
     // every message on the recorded wire sub.channel — never a dropped large message.
-    fwd.on_companion_route([](std::string_view, std::string_view, std::size_t) -> tap_channel *
-                           { return nullptr; });
+    fwd.on_companion_route([](std::string_view, std::string_view, std::size_t) -> tap_channel * { return nullptr; });
 
     forwarder::peer p{wire_tap, "peer-node"};
     fwd.attach_for_fanout(p, fqn);
@@ -418,9 +438,8 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
     const std::string fqn = "topic.wfb.frameover." + std::to_string(::getpid());
 
     posix_shm_region_broker broker;
-    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
-    member.set_topic_geometry(fqn, 2 * k_kib,
-                              pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback});
+    member_t                member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    member.set_topic_geometry(fqn, 2 * k_kib, pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback});
 
     std::unique_ptr<shm_channel> companion_ring;
     member.on_accepted([&](std::unique_ptr<shm_channel> ch) { companion_ring = std::move(ch); });
@@ -437,10 +456,7 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
             [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel *
             {
                 const auto g = member.resolved_geometry_for(std::string{route_fqn});
-                return pio::route_message_medium(g.mode, bytes, g.slot_capacity) ==
-                                pio::same_host_medium::shm
-                        ? &shm_tap
-                        : nullptr;
+                return pio::route_message_medium(g.mode, bytes, g.slot_capacity) == pio::same_host_medium::shm ? &shm_tap : nullptr;
             });
 
     forwarder::peer p{wire_tap, "peer-node"};

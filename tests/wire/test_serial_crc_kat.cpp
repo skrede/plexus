@@ -81,8 +81,7 @@ TEST_CASE("crc32c kat: a representative serial frame", "[wire][crc32c][kat]")
     REQUIRE(crc32c(std::span<const std::byte>{frame}) == 0x8E2BC0E4u);
 }
 
-TEST_CASE("crc32c kat: seed-chaining a serial frame byte-equal to the one-shot",
-          "[wire][crc32c][kat]")
+TEST_CASE("crc32c kat: seed-chaining a serial frame byte-equal to the one-shot", "[wire][crc32c][kat]")
 {
     // The trailer decorator computes the CRC over two chunks (header then
     // payload) without concatenating them. This proves that zero-copy chained
@@ -103,8 +102,7 @@ TEST_CASE("crc32c kat: seed-chaining a serial frame byte-equal to the one-shot",
     frame.insert(frame.end(), payload.begin(), payload.end());
 
     const std::uint32_t one_shot = crc32c(std::span<const std::byte>{frame});
-    const std::uint32_t chained =
-        crc32c(payload, crc32c(std::span<const std::byte>{header_bytes}));
+    const std::uint32_t chained  = crc32c(payload, crc32c(std::span<const std::byte>{header_bytes}));
 
     REQUIRE(chained == one_shot);
     REQUIRE(chained == 0x8E2BC0E4u);

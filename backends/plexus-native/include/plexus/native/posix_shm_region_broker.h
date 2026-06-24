@@ -47,9 +47,7 @@ public:
     // creation mode (0600 owner-only default, the same-uid access floor);
     // opts.unlink_stale_on_create reclaims a crashed creator's orphan once. On
     // ok, `out` owns the name and unlinks it on release.
-    plexus::shm::region_status create(std::string_view name, std::size_t bytes,
-                                          const plexus::shm::create_options &opts,
-                                          region_handle                         &out);
+    plexus::shm::region_status create(std::string_view name, std::size_t bytes, const plexus::shm::create_options &opts, region_handle &out);
 
     // Maps an existing named region writable. The returned handle is an
     // attacher: it munmaps on release but never unlinks. The attach path is the
@@ -67,18 +65,14 @@ private:
     // closed AND the region unlinked (the creator owns the name). The attach mirror maps an
     // existing region's stat'd size and never unlinks. Both relocated out of create()/attach() so
     // each verb stays within the function ceiling.
-    static plexus::shm::region_status finish_create(int fd, std::size_t length,
-                                                        std::string canonical, region_handle &out);
-    static plexus::shm::region_status finish_attach(int fd, std::string canonical,
-                                                        region_handle &out);
+    static plexus::shm::region_status finish_create(int fd, std::size_t length, std::string canonical, region_handle &out);
+    static plexus::shm::region_status finish_attach(int fd, std::string canonical, region_handle &out);
 
-    plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{[](std::string_view)
-                                                                               { return true; }};
+    plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{[](std::string_view) { return true; }};
 };
 
 }
 
-static_assert(::plexus::shm::region_broker<::plexus::native::posix_shm_region_broker>,
-              "posix_shm_region_broker must satisfy the core region_broker concept");
+static_assert(::plexus::shm::region_broker<::plexus::native::posix_shm_region_broker>, "posix_shm_region_broker must satisfy the core region_broker concept");
 
 #endif

@@ -31,8 +31,7 @@ struct dial_link
                 [this](std::unique_ptr<ptls::dtls_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([this](std::span<const std::byte> d)
-                                      { server_received.emplace_back(d.begin(), d.end()); });
+                    accepted->on_data([this](std::span<const std::byte> d) { server_received.emplace_back(d.begin(), d.end()); });
                 });
         client.on_dialed(
                 [this](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &ep)
@@ -40,8 +39,7 @@ struct dial_link
                     dialed    = std::move(ch);
                     dialed_ep = ep;
                 });
-        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error)
-                              { dial_failed = true; });
+        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error) { dial_failed = true; });
 
         server.listen({"dtls", "127.0.0.1:0"});
         client.dial({"dtls", "127.0.0.1:" + std::to_string(server.port())});
@@ -107,9 +105,7 @@ TEST_CASE("dtls.external_complete: the FSM resolves with cert identity and no pl
 
         // An app frame flows decrypted — proves the resolved session is a live channel.
         const std::string      payload = "post-external-complete-frame";
-        std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()),
-                                     reinterpret_cast<const std::byte *>(payload.data()) +
-                                             payload.size());
+        std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()), reinterpret_cast<const std::byte *>(payload.data()) + payload.size());
         l.dialed->send(std::span<const std::byte>{frame});
         l.pump_until([&] { return !l.server_received.empty(); });
         REQUIRE(l.server_received.size() == 1);

@@ -34,7 +34,10 @@ class loaned_buffer
 public:
     loaned_buffer() = default;
 
-    ~loaned_buffer() { reclaim(); }
+    ~loaned_buffer()
+    {
+        reclaim();
+    }
 
     loaned_buffer(const loaned_buffer &)            = delete;
     loaned_buffer &operator=(const loaned_buffer &) = delete;
@@ -77,14 +80,23 @@ public:
     }
 
     // Capacity of the slot window in bytes.
-    std::size_t capacity() const noexcept { return m_capacity; }
+    std::size_t capacity() const noexcept
+    {
+        return m_capacity;
+    }
 
     // Record how many bytes the producer actually wrote; publish() commits this as
     // the descriptor payload length.
-    void set_filled(std::size_t filled) noexcept { m_filled = filled; }
+    void set_filled(std::size_t filled) noexcept
+    {
+        m_filled = filled;
+    }
 
     // Bytes recorded by set_filled (0 until set).
-    std::size_t filled() const noexcept { return m_filled; }
+    std::size_t filled() const noexcept
+    {
+        return m_filled;
+    }
 
 private:
     friend class slot_publisher;

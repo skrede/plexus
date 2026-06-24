@@ -2,8 +2,7 @@
 
 using namespace authenticated_channel_fixture;
 
-TEST_CASE("crypto.authenticated_channel round-trips across the 256-epoch boundary",
-          "[crypto][authenticated_channel]")
+TEST_CASE("crypto.authenticated_channel round-trips across the 256-epoch boundary", "[crypto][authenticated_channel]")
 {
     const auto keys = fixed_keys();
     wire_lower send_wire;
@@ -11,10 +10,8 @@ TEST_CASE("crypto.authenticated_channel round-trips across the 256-epoch boundar
     // A rekey every frame so a few hundred sends cross epoch 256 (the wire epoch byte
     // wraps 0xff -> 0x00) — the seal/open nonce epoch field must agree past 255.
     const std::uint64_t               threshold = 1;
-    authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys, 0,
-                                             threshold);
-    authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305,
-                                               swapped(keys), 0, threshold);
+    authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys, 0, threshold);
+    authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys), 0, threshold);
 
     std::vector<std::byte> delivered;
     bool                   closed = false;
@@ -35,8 +32,7 @@ TEST_CASE("crypto.authenticated_channel round-trips across the 256-epoch boundar
     REQUIRE(receiver.send_epoch() == 0); // the recv-side advance does not touch the send epoch
 }
 
-TEST_CASE("crypto.authenticated_channel fragment budget subtracts the AEAD overhead",
-          "[crypto][authenticated_channel]")
+TEST_CASE("crypto.authenticated_channel fragment budget subtracts the AEAD overhead", "[crypto][authenticated_channel]")
 {
     using plexus::io::effective_fragment_budget;
     using plexus::io::k_aead_fragment_overhead;

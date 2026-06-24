@@ -58,8 +58,7 @@ late_join one_late_join(std::span<const std::byte> payload, std::string_view fqn
 
     pasio::asio_listener                 listener(io);
     std::unique_ptr<pasio::asio_channel> server_channel;
-    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch)
-                         { server_channel = std::move(ch); });
+    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch) { server_channel = std::move(ch); });
     listener.start({"tcp", "127.0.0.1:0"});
     auto port = listener.port();
 
@@ -127,8 +126,7 @@ late_join one_late_join(std::span<const std::byte> payload, std::string_view fqn
 
 }
 
-TEST_CASE("asio latch replay delivers a late client the retained value over real TCP, looped",
-          "[integration][latch][asio]")
+TEST_CASE("asio latch replay delivers a late client the retained value over real TCP, looped", "[integration][latch][asio]")
 {
     const auto        payload = bytes_of("plexus-latched-retained-value");
     const std::string fqn     = "demo._plexus._tcp.local.";
@@ -150,8 +148,7 @@ TEST_CASE("asio latch replay delivers a late client the retained value over real
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("asio non-latched topic does not replay on a late subscribe, looped",
-          "[integration][latch][asio]")
+TEST_CASE("asio non-latched topic does not replay on a late subscribe, looped", "[integration][latch][asio]")
 {
     const auto        payload = bytes_of("plexus-live-only-no-replay");
     const std::string fqn     = "demo._plexus._tcp.local.";

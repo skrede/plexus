@@ -59,7 +59,9 @@ public:
         c.mark_open();
     }
 
-    void reset() noexcept {}
+    void reset() noexcept
+    {
+    }
 
 private:
     // The framed bytes carry their own header+payload; the trailer is crc32c over them,
@@ -69,10 +71,8 @@ private:
     {
         const auto header  = framed.first(plexus::wire::header_size);
         const auto payload = framed.subspan(plexus::wire::header_size);
-        auto       owner = std::make_shared<std::array<std::byte, plexus::stream::crc_trailer_size>>(
-                plexus::stream::crc_trailer(header, payload));
-        c.enqueue_egress_owned(
-                plexus::wire_bytes<>{std::span<const std::byte>{*owner}, std::move(owner)});
+        auto       owner   = std::make_shared<std::array<std::byte, plexus::stream::crc_trailer_size>>(plexus::stream::crc_trailer(header, payload));
+        c.enqueue_egress_owned(plexus::wire_bytes<>{std::span<const std::byte>{*owner}, std::move(owner)});
     }
 };
 

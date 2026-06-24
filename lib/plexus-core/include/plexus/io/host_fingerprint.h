@@ -18,7 +18,10 @@ struct host_fingerprint
 {
     std::uint64_t value = 0;
 
-    [[nodiscard]] bool is_null() const noexcept { return value == 0; }
+    [[nodiscard]] bool is_null() const noexcept
+    {
+        return value == 0;
+    }
 
     friend bool operator==(host_fingerprint a, host_fingerprint b) noexcept
     {

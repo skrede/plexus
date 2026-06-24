@@ -37,8 +37,7 @@ public:
     // lives in the header that route() otherwise strips before deliver. Handing it
     // alongside the inner payload is what keeps the forwarder header-aware ONLY on the
     // one path that needs it, without re-decoding the header downstream.
-    using data_consumer = plexus::detail::move_only_function<void(const wire::frame_header &,
-                                                                  std::span<const std::byte>)>;
+    using data_consumer = plexus::detail::move_only_function<void(const wire::frame_header &, std::span<const std::byte>)>;
 
     // The logger is a required, borrowed dependency — a peer_session always threads
     // its own logger into the router it owns; there is no defaulted sink.
@@ -47,18 +46,48 @@ public:
     {
     }
 
-    void on_unidirectional(data_consumer c) { m_unidirectional = std::move(c); }
-    void on_subscribe(consumer c) { m_subscribe = std::move(c); }
-    void on_fetch_latched(consumer c) { m_fetch_latched = std::move(c); }
-    void on_unsubscribe(consumer c) { m_unsubscribe = std::move(c); }
-    void on_subscribe_response(consumer c) { m_subscribe_response = std::move(c); }
-    void on_rpc_request(consumer c) { m_rpc_request = std::move(c); }
-    void on_rpc_response(consumer c) { m_rpc_response = std::move(c); }
-    void on_handshake_req(consumer c) { m_handshake_req = std::move(c); }
-    void on_handshake_resp(consumer c) { m_handshake_resp = std::move(c); }
+    void on_unidirectional(data_consumer c)
+    {
+        m_unidirectional = std::move(c);
+    }
+    void on_subscribe(consumer c)
+    {
+        m_subscribe = std::move(c);
+    }
+    void on_fetch_latched(consumer c)
+    {
+        m_fetch_latched = std::move(c);
+    }
+    void on_unsubscribe(consumer c)
+    {
+        m_unsubscribe = std::move(c);
+    }
+    void on_subscribe_response(consumer c)
+    {
+        m_subscribe_response = std::move(c);
+    }
+    void on_rpc_request(consumer c)
+    {
+        m_rpc_request = std::move(c);
+    }
+    void on_rpc_response(consumer c)
+    {
+        m_rpc_response = std::move(c);
+    }
+    void on_handshake_req(consumer c)
+    {
+        m_handshake_req = std::move(c);
+    }
+    void on_handshake_resp(consumer c)
+    {
+        m_handshake_resp = std::move(c);
+    }
     // The heartbeat is a session-level presence assert — inner-only, header-agnostic
     // — so it rides the plain consumer/fire path, not the header-bearing data path.
-    void on_heartbeat(consumer c) { m_heartbeat = std::move(c); }
+    void on_heartbeat(consumer c)
+    {
+        m_heartbeat = std::move(c);
+    }
 
     // Demux one complete (header-on) frame: decode the header, switch on its
     // type, and hand the inner payload to the registered consumer. A short/
@@ -106,7 +135,10 @@ private:
         m_unidirectional(hdr, inner);
     }
 
-    void drop(std::string_view message) { m_logger.warn(message); }
+    void drop(std::string_view message)
+    {
+        m_logger.warn(message);
+    }
 
     log::logger  &m_logger;
     data_consumer m_unidirectional;

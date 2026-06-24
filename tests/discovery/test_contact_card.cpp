@@ -2,8 +2,7 @@
 
 using namespace contact_card_fixture;
 
-TEST_CASE("contact_card carries exactly node_id, per-transport port keys, and the schema",
-          "[discovery][contact_card]")
+TEST_CASE("contact_card carries exactly node_id, per-transport port keys, and the schema", "[discovery][contact_card]")
 {
     const auto id   = node_id_of(1);
     const auto card = assemble_contact_card(id, {{"tcp", 5000}, {"udp", 5001}});
@@ -20,8 +19,7 @@ TEST_CASE("contact_card carries exactly node_id, per-transport port keys, and th
     REQUIRE(value_of(card, "node_id") == plexus::discovery::detail::hex_encode(id));
 }
 
-TEST_CASE("contact_card never carries topic, type, publisher, posture, or key-id data",
-          "[discovery][contact_card]")
+TEST_CASE("contact_card never carries topic, type, publisher, posture, or key-id data", "[discovery][contact_card]")
 {
     const auto card = assemble_contact_card(node_id_of(2), {{"tcp", 6000}});
 
@@ -32,8 +30,7 @@ TEST_CASE("contact_card never carries topic, type, publisher, posture, or key-id
     REQUIRE_FALSE(has_key(card, "key_id"));
 }
 
-TEST_CASE("contact_card node_id is the authenticated-peer identity, not a self-asserted value",
-          "[discovery][contact_card]")
+TEST_CASE("contact_card node_id is the authenticated-peer identity, not a self-asserted value", "[discovery][contact_card]")
 {
     // The advertised node_id comes from the authenticated attach binding (the id that
     // produced the validated proof), read via the host-identity accessor — never a
@@ -50,8 +47,7 @@ TEST_CASE("contact_card node_id is the authenticated-peer identity, not a self-a
     REQUIRE(value_of(card, "node_id") == plexus::discovery::detail::hex_encode(node_id_of(20)));
 }
 
-TEST_CASE("contact_card metadata carries verbatim through static_discovery",
-          "[discovery][contact_card]")
+TEST_CASE("contact_card metadata carries verbatim through static_discovery", "[discovery][contact_card]")
 {
     service_info advertised;
     advertised.name     = "node-a";
@@ -68,8 +64,7 @@ TEST_CASE("contact_card metadata carries verbatim through static_discovery",
     REQUIRE(resolved.front().metadata == advertised.metadata);
 }
 
-TEST_CASE("contact_card lets a browsing peer derive its dial port with no hardcoded port",
-          "[discovery][contact_card]")
+TEST_CASE("contact_card lets a browsing peer derive its dial port with no hardcoded port", "[discovery][contact_card]")
 {
     service_info advertised;
     advertised.name     = "node-b";
@@ -97,8 +92,7 @@ TEST_CASE("contact_card lets a browsing peer derive its dial port with no hardco
     REQUIRE_FALSE(read_transport_port(found.metadata, "serial").has_value());
 }
 
-TEST_CASE("hex_decode is the exact inverse of hex_encode for arbitrary node ids",
-          "[discovery][contact_card]")
+TEST_CASE("hex_decode is the exact inverse of hex_encode for arbitrary node ids", "[discovery][contact_card]")
 {
     // Property-style round-trip: decode(encode(id)) == id over a spread of ids.
     for(int seed = 0; seed < 256; ++seed)
@@ -110,8 +104,7 @@ TEST_CASE("hex_decode is the exact inverse of hex_encode for arbitrary node ids"
     }
 }
 
-TEST_CASE("hex_decode rejects everything but exactly 32 lowercase hex characters",
-          "[discovery][contact_card]")
+TEST_CASE("hex_decode rejects everything but exactly 32 lowercase hex characters", "[discovery][contact_card]")
 {
     // A valid 32-lower-hex baseline that decodes.
     const std::string valid = hex_encode(node_id_of(7));

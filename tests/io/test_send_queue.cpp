@@ -62,8 +62,7 @@ TEST_CASE("send_queue drains in FIFO order across a burst", "[io][send_queue]")
     REQUIRE_FALSE(q.sending());
 }
 
-TEST_CASE("send_queue close() clears a pending queue and guards a late completion",
-          "[io][send_queue]")
+TEST_CASE("send_queue close() clears a pending queue and guards a late completion", "[io][send_queue]")
 {
     recorder   rec;
     send_queue q{rec.sink()};

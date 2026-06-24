@@ -4,15 +4,13 @@
 
 using namespace recording_channel_fixture;
 
-TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame",
-          "[recording_channel][wire]")
+TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame", "[recording_channel][wire]")
 {
     auto                         *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::tuple<wire_direction, std::uint64_t, std::vector<std::byte>>> taps;
-    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b)
-               { taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end())); });
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) { taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end())); });
 
     const auto frame = blob(0x10, 64);
     ch.send(std::span<const std::byte>{frame});
@@ -26,15 +24,13 @@ TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame
     REQUIRE(std::get<2>(taps[0]) == frame);
 }
 
-TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN frame",
-          "[recording_channel][wire]")
+TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN frame", "[recording_channel][wire]")
 {
     auto                         *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::tuple<wire_direction, std::uint64_t, std::vector<std::byte>>> taps;
-    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b)
-               { taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end())); });
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) { taps.emplace_back(dir, seq, std::vector<std::byte>(b.begin(), b.end())); });
 
     std::vector<std::byte> upward;
     ch.on_data([&](std::span<const std::byte> b) { upward.assign(b.begin(), b.end()); });
@@ -51,8 +47,7 @@ TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN fra
     REQUIRE(std::get<2>(taps[0]) == frame);
 }
 
-TEST_CASE("recording_channel with no tap installed never fires the edge",
-          "[recording_channel][wire]")
+TEST_CASE("recording_channel with no tap installed never fires the edge", "[recording_channel][wire]")
 {
     auto                         *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};

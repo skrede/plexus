@@ -59,8 +59,7 @@ namespace stream_channel_unix_fixture {
 // stays short. Passed EXPLICITLY — the 30s default would make the leg glacial.
 inline stream::stream_inbound_config short_cfg()
 {
-    return stream::stream_inbound_config{.no_progress_floor = std::chrono::milliseconds(200),
-                                         .min_throughput_bytes_per_sec = 64};
+    return stream::stream_inbound_config{.no_progress_floor = std::chrono::milliseconds(200), .min_throughput_bytes_per_sec = 64};
 }
 
 // A per-instance owner-only temp directory + a SHORT socket path within it.

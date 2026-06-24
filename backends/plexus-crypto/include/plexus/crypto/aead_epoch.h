@@ -31,8 +31,7 @@ inline bool derive_forward(const aead_key &from, aead_key &out)
 // installs a fresh key, so an 8-bit epoch disambiguator is sufficient for (key,nonce)
 // uniqueness within a key's lifetime; the per-direction sequence guarantees within-epoch
 // uniqueness.
-inline std::array<std::byte, k_aead_nonce_len> make_nonce(std::uint32_t epoch,
-                                                          std::uint64_t seq) noexcept
+inline std::array<std::byte, k_aead_nonce_len> make_nonce(std::uint32_t epoch, std::uint64_t seq) noexcept
 {
     std::array<std::byte, k_aead_nonce_len> n{};
     for(std::size_t i = 0; i < 4; ++i)

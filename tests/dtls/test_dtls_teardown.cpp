@@ -48,7 +48,7 @@ struct close_notify_harness
     ptls::tls_credential                client_cred;
     plexus::io::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
     pasio::udp_server                   server_sock{io};
-    pasio::udp_server client_sock{io}; // a REAL client socket: the server sends here
+    pasio::udp_server                   client_sock{io}; // a REAL client socket: the server sends here
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
 
@@ -58,8 +58,7 @@ struct close_notify_harness
     std::vector<std::vector<std::byte>> server_to_client; // datagrams the server emitted
     bool                                server_complete{false};
 
-    close_notify_harness(const pdt::identity_fixture &server_id,
-                         const pdt::identity_fixture &client_id)
+    close_notify_harness(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
             , client_cred(pdt::pin_one(client_id, server_id.digest))
     {
@@ -67,15 +66,10 @@ struct close_notify_harness
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         // The server channel sends to the client's REAL bound socket, whose
         // on_datagram captures the server flights to feed into the raw client SSL.
-        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"),
-                                            client_sock.port());
+        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"), client_sock.port());
 
-        server_ch = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred,
-                                                         server_cookie,
-                                                         ptls::dtls_channel::role::server);
-        client_sock.on_datagram(
-                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
-                { server_to_client.emplace_back(b.begin(), b.end()); });
+        server_ch = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred, server_cookie, ptls::dtls_channel::role::server);
+        client_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) { server_to_client.emplace_back(b.begin(), b.end()); });
         server_ch->on_external_complete([this] { server_complete = true; });
 
         build_client();
@@ -114,8 +108,7 @@ struct close_notify_harness
             const int n = BIO_read(client_ext, buf.data(), static_cast<int>(buf.size()));
             if(n <= 0)
                 break;
-            server_ch->deliver_inbound(std::span<const std::byte>{
-                    reinterpret_cast<const std::byte *>(buf.data()), static_cast<std::size_t>(n)});
+            server_ch->deliver_inbound(std::span<const std::byte>{reinterpret_cast<const std::byte *>(buf.data()), static_cast<std::size_t>(n)});
         }
     }
 
@@ -134,8 +127,7 @@ struct close_notify_harness
     {
         server_ch->start_handshake();
         auto bound = std::chrono::steady_clock::now() + std::chrono::milliseconds{6000};
-        while((!server_complete || !SSL_is_init_finished(client_ssl)) &&
-              std::chrono::steady_clock::now() < bound)
+        while((!server_complete || !SSL_is_init_finished(client_ssl)) && std::chrono::steady_clock::now() < bound)
         {
             const int r = SSL_do_handshake(client_ssl);
             if(r <= 0)
@@ -184,12 +176,9 @@ struct dial_link
             , server(io, server_cred)
             , client(io, client_cred)
     {
-        server.on_accepted([this](std::unique_ptr<ptls::dtls_channel> ch)
-                           { accepted = std::move(ch); });
-        client.on_dialed([this](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &)
-                         { dialed = std::move(ch); });
-        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error)
-                              { dial_failed = true; });
+        server.on_accepted([this](std::unique_ptr<ptls::dtls_channel> ch) { accepted = std::move(ch); });
+        client.on_dialed([this](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &) { dialed = std::move(ch); });
+        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error) { dial_failed = true; });
 
         server.listen({"dtls", "127.0.0.1:0"});
         client.dial({"dtls", "127.0.0.1:" + std::to_string(server.port())});
@@ -244,9 +233,7 @@ TEST_CASE("dtls.teardown: an inbound datagram after the engine destroys a comple
         // server from the SAME source the demux is keyed on. The torn-down entry must be
         // gone, never a freed-pointer deref.
         const std::string      payload = "after-teardown-" + std::to_string(i);
-        std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()),
-                                     reinterpret_cast<const std::byte *>(payload.data()) +
-                                             payload.size());
+        std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()), reinterpret_cast<const std::byte *>(payload.data()) + payload.size());
         l.dialed->send(std::span<const std::byte>{frame});
         l.drain();
 
@@ -301,8 +288,7 @@ TEST_CASE("dtls.teardown: a consumer that destroys the channel in on_closed surv
     REQUIRE(survived == k_iterations);
 }
 
-TEST_CASE("dtls.demux: a re-insert on an existing sender OVERWRITES the stale channel pointer",
-          "[dtls][teardown]")
+TEST_CASE("dtls.demux: a re-insert on an existing sender OVERWRITES the stale channel pointer", "[dtls][teardown]")
 {
     // BL-01 secondary: insert must OVERWRITE (insert_or_assign), not no-op (emplace),
     // on an already-present key. A re-dial to a dest that still has a (stale) entry
@@ -326,14 +312,13 @@ TEST_CASE("dtls.demux: a re-insert on an existing sender OVERWRITES the stale ch
     REQUIRE(demux.size() == 1); // an overwrite does not grow the map
 }
 
-TEST_CASE("dtls.demux: the peer cap still bounds genuinely new senders after the insert change",
-          "[dtls][teardown]")
+TEST_CASE("dtls.demux: the peer cap still bounds genuinely new senders after the insert change", "[dtls][teardown]")
 {
     // The insert_or_assign change must not weaken the flood guard: NEW keys past the
     // cap are still refused, while an overwrite of a PRESENT key at the cap succeeds
     // (it does not grow the map).
     pdetail::basic_inbound_demux<ptls::dtls_channel> demux(/*max_peers=*/2);
-    auto *p = reinterpret_cast<ptls::dtls_channel *>(0x1000);
+    auto                                            *p = reinterpret_cast<ptls::dtls_channel *>(0x1000);
 
     ::asio::ip::udp::endpoint a(::asio::ip::make_address("127.0.0.1"), 1);
     ::asio::ip::udp::endpoint b(::asio::ip::make_address("127.0.0.1"), 2);

@@ -34,10 +34,19 @@ public:
     {
     }
 
-    [[nodiscard]] std::size_t size() const noexcept { return m_entries.size(); }
+    [[nodiscard]] std::size_t size() const noexcept
+    {
+        return m_entries.size();
+    }
 
-    [[nodiscard]] iterator begin() noexcept { return m_entries.begin(); }
-    [[nodiscard]] iterator end() noexcept { return m_entries.end(); }
+    [[nodiscard]] iterator begin() noexcept
+    {
+        return m_entries.begin();
+    }
+    [[nodiscard]] iterator end() noexcept
+    {
+        return m_entries.end();
+    }
 
     [[nodiscard]] iterator find(key_type key) noexcept
     {
@@ -56,13 +65,15 @@ public:
         return m_entries.insert(at, value_type{key, std::move(value)});
     }
 
-    void erase(iterator it) noexcept { m_entries.erase(it); }
+    void erase(iterator it) noexcept
+    {
+        m_entries.erase(it);
+    }
 
 private:
     iterator lower_bound(key_type key) noexcept
     {
-        return std::lower_bound(m_entries.begin(), m_entries.end(), key,
-                                [](const value_type &e, key_type k) { return e.first < k; });
+        return std::lower_bound(m_entries.begin(), m_entries.end(), key, [](const value_type &e, key_type k) { return e.first < k; });
     }
 
     std::size_t m_max_entries;
@@ -73,8 +84,7 @@ private:
 // admissible open charges at least min_entry_cost, so the cap admits at most this
 // many concurrent partials. Sized here (not tighter) so the byte cap stays the
 // binding backstop and the count limit never refuses an open the cap would admit.
-constexpr std::size_t cap_implied_max_partials(std::size_t total_memory_cap,
-                                               std::size_t min_entry_cost) noexcept
+constexpr std::size_t cap_implied_max_partials(std::size_t total_memory_cap, std::size_t min_entry_cost) noexcept
 {
     return total_memory_cap / min_entry_cost + 1u;
 }

@@ -148,8 +148,7 @@ TEST_CASE("serial resync: a byte-DROPPED (truncated) frame desyncs but the next 
     REQUIRE(recovered == k_iterations);
 }
 
-TEST_CASE("serial resync: corruption is non-fatal — neither on_protocol_close nor on_closed fires",
-          "[integration][serial][resync]")
+TEST_CASE("serial resync: corruption is non-fatal — neither on_protocol_close nor on_closed fires", "[integration][serial][resync]")
 {
     constexpr int k_iterations = 25;
     for(int iter = 0; iter < k_iterations; ++iter)

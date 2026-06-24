@@ -37,35 +37,65 @@ class observer
 public:
     virtual ~observer() = default;
 
-    virtual void on_peer_connected(const node_id &, std::string_view, peer_kind) {}
-    virtual void on_peer_disconnected(const node_id &, std::string_view, peer_kind) {}
-    virtual void on_peer_reconnected(const node_id &, std::string_view, peer_kind) {}
-    virtual void on_peer_dead(const node_id &, std::string_view, peer_kind) {}
-    virtual void on_peer_ready(const node_id &, std::string_view, peer_kind) {}
-    virtual void on_peer_rejected(const node_id &, std::string_view, handshake_outcome) {}
-    virtual void on_drop(const io::detail::drop_event &) {}
-    virtual void on_security(const security_event &) {}
+    virtual void on_peer_connected(const node_id &, std::string_view, peer_kind)
+    {
+    }
+    virtual void on_peer_disconnected(const node_id &, std::string_view, peer_kind)
+    {
+    }
+    virtual void on_peer_reconnected(const node_id &, std::string_view, peer_kind)
+    {
+    }
+    virtual void on_peer_dead(const node_id &, std::string_view, peer_kind)
+    {
+    }
+    virtual void on_peer_ready(const node_id &, std::string_view, peer_kind)
+    {
+    }
+    virtual void on_peer_rejected(const node_id &, std::string_view, handshake_outcome)
+    {
+    }
+    virtual void on_drop(const io::detail::drop_event &)
+    {
+    }
+    virtual void on_security(const security_event &)
+    {
+    }
 
     // The data-path taps, posted on the executor like the lifecycle edges. A publish
     // fires on_message_published once at the fan-out gate; on_message_delivered fires
     // once per destination, carrying the borrowed view (its owner shares the delivered
     // buffer — no copy). The rpc taps surface the borrowed call/serve/reply views, and
     // on_qos_change reports a subscriber attach's resolved verdict. All default-empty.
-    virtual void on_message_published(std::string_view, const message_view &) {}
+    virtual void on_message_published(std::string_view, const message_view &)
+    {
+    }
     virtual void on_message_delivered(std::string_view, const message_info &, const message_view &)
     {
     }
-    virtual void on_rpc_call(std::string_view, const rpc_view &) {}
-    virtual void on_rpc_serve(std::string_view, const rpc_view &) {}
-    virtual void on_rpc_reply(std::string_view, const rpc_reply_view &) {}
-    virtual void on_qos_change(const qos_change_event &) {}
+    virtual void on_rpc_call(std::string_view, const rpc_view &)
+    {
+    }
+    virtual void on_rpc_serve(std::string_view, const rpc_view &)
+    {
+    }
+    virtual void on_rpc_reply(std::string_view, const rpc_reply_view &)
+    {
+    }
+    virtual void on_qos_change(const qos_change_event &)
+    {
+    }
 
     // The declaration-lifecycle edges: a node's own create/destroy and a topic endpoint's
     // declare/drop/register/retire. They fire once per node or endpoint, not per message —
     // cold edges, so they are NOT gated by observes_data_path and post regardless of the
     // data-tap opt-in. fqn rides as a borrowed view valid for the call.
-    virtual void on_participant(const participant_event &) {}
-    virtual void on_endpoint(std::string_view, const endpoint_event &) {}
+    virtual void on_participant(const participant_event &)
+    {
+    }
+    virtual void on_endpoint(std::string_view, const endpoint_event &)
+    {
+    }
 
     // The wire-fidelity tap: one captured framed packet, posted on the executor. Unlike the
     // message edges it is NOT gated by observes_data_path — it gates STRUCTURALLY: a node
@@ -73,7 +103,9 @@ public:
     // captured frame, so the edge simply never fires (no per-frame runtime opt-in branch).
     // The carried wire_record's bytes are owned for the posted turn (the engine pins them
     // across the post). Default-empty like every other cold edge.
-    virtual void on_wire(const recording::wire_record &) {}
+    virtual void on_wire(const recording::wire_record &)
+    {
+    }
 
     // The data-path opt-in: the message/rpc/qos taps fire once per publish/destination/call,
     // so their posted fan-out is a HOT cost (an fqn copy + a posted closure per emit). The
@@ -81,7 +113,10 @@ public:
     // a node's always-on lifecycle machinery (and any observer that watches only connection
     // edges) pays nothing on the data path. Override to true to receive the data-path taps;
     // the default keeps the hot path one predictable branch for a lifecycle-only observer.
-    virtual bool observes_data_path() const { return false; }
+    virtual bool observes_data_path() const
+    {
+        return false;
+    }
 };
 
 }

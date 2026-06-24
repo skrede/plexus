@@ -2,8 +2,7 @@
 
 using namespace typed_pubsub_fixture;
 
-TEST_CASE("typed pub/sub: a bytes producer's encoded frame decodes to a value-equal T",
-          "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: a bytes producer's encoded frame decodes to a value-equal T", "[node][typed][pubsub]")
 {
     net n;
     n.connect();
@@ -24,8 +23,7 @@ TEST_CASE("typed pub/sub: a bytes producer's encoded frame decodes to a value-eq
     REQUIRE(got.front().value == 0xDEADBEEFu);
 }
 
-TEST_CASE("typed pub/sub: the fast path delivers by address with zero encodes",
-          "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: the fast path delivers by address with zero encodes", "[node][typed][pubsub]")
 {
     net n;
     n.connect();

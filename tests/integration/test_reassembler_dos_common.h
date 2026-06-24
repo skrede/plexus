@@ -37,9 +37,8 @@ using namespace std::chrono_literals;
 
 namespace reassembler_dos_fixture {
 
-using test_reassembler = plexus::datagram::detail::reassembler<
-        plexus::inproc::inproc_executor<plexus::testing::test_clock> &,
-        plexus::inproc::inproc_timer<plexus::testing::test_clock>>;
+using test_reassembler =
+        plexus::datagram::detail::reassembler<plexus::inproc::inproc_executor<plexus::testing::test_clock> &, plexus::inproc::inproc_timer<plexus::testing::test_clock>>;
 
 inline std::vector<std::byte> filler(std::size_t n)
 {

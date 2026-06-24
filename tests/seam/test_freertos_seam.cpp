@@ -17,8 +17,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 // The explicit witness at the test site (mirrors the gate in the header).
-static_assert(plexus::Policy<plexus::mcu::freertos_policy>,
-              "freertos_policy must satisfy Policy at the seam-test site");
+static_assert(plexus::Policy<plexus::mcu::freertos_policy>, "freertos_policy must satisfy Policy at the seam-test site");
 
 TEST_CASE("the generic core binds against the constrained-target Policy unchanged", "[seam]")
 {
@@ -30,15 +29,13 @@ TEST_CASE("the generic core binds against the constrained-target Policy unchange
     // substrate with no transport and no background thread.
     plexus::io::peer_context<plexus::mcu::freertos_policy> ctx;
 
-    REQUIRE(ctx.channel == nullptr);          // no live connection — transport-free
-    REQUIRE_FALSE(ctx.has_ever_connected);    // fresh record default
-    REQUIRE_FALSE(ctx.same_host);             // fail-closed default
+    REQUIRE(ctx.channel == nullptr);       // no live connection — transport-free
+    REQUIRE_FALSE(ctx.has_ever_connected); // fresh record default
+    REQUIRE_FALSE(ctx.same_host);          // fail-closed default
 
     // The channel_type alias the core derived from the Policy is the stub channel.
-    static_assert(
-            std::is_same_v<plexus::io::peer_context<plexus::mcu::freertos_policy>::channel_type,
-                           plexus::mcu::freertos_stub_channel>,
-            "the generic core derives the channel type straight from the Policy");
+    static_assert(std::is_same_v<plexus::io::peer_context<plexus::mcu::freertos_policy>::channel_type, plexus::mcu::freertos_stub_channel>,
+                  "the generic core derives the channel type straight from the Policy");
 }
 
 TEST_CASE("wire_bytes instantiates against the fixed in-place byte_owner", "[seam]")
@@ -52,6 +49,5 @@ TEST_CASE("wire_bytes instantiates against the fixed in-place byte_owner", "[sea
     REQUIRE(wb.empty());
     REQUIRE(wb.size() == 0);
 
-    static_assert(std::is_same_v<decltype(wb)::owner_type, plexus::mcu::mcu_byte_owner>,
-                  "the carrier binds the Policy-selected in-place owner");
+    static_assert(std::is_same_v<decltype(wb)::owner_type, plexus::mcu::mcu_byte_owner>, "the carrier binds the Policy-selected in-place owner");
 }

@@ -17,7 +17,9 @@ public:
     virtual ~byte_sink() = default;
 
     virtual void write(std::span<const std::byte> bytes) = 0;
-    virtual void flush() {}
+    virtual void flush()
+    {
+    }
 };
 
 }

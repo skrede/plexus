@@ -82,14 +82,16 @@ public:
     {
     }
 
-    void bind_drain(io::detail::handshake_gate::drain_fn drain) { m_drain = std::move(drain); }
+    void bind_drain(io::detail::handshake_gate::drain_fn drain)
+    {
+        m_drain = std::move(drain);
+    }
 
     // Dial-side bootstrap: set SNI (best-effort) then run the client handshake. on_ready
     // fires ONCE the secure channel is up, so the transport delivers the channel POST-
     // handshake — a verify-rejected peer never yields a live one (fail-closed).
     template<typename Channel>
-    void start_client_handshake(Channel &c, const std::string &host,
-                                plexus::detail::move_only_function<void()> on_ready)
+    void start_client_handshake(Channel &c, const std::string &host, plexus::detail::move_only_function<void()> on_ready)
     {
         c.mark_open();
         m_on_ready = std::move(on_ready);
@@ -107,7 +109,10 @@ public:
         do_handshake(c, ::asio::ssl::stream_base::server);
     }
 
-    void reset() { m_gate.reset(); }
+    void reset()
+    {
+        m_gate.reset();
+    }
 
 private:
     template<typename Channel>

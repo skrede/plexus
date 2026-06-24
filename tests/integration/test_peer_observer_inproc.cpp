@@ -67,9 +67,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -107,16 +116,11 @@ std::string to_string(std::span<const std::byte> b)
 // A handshake config advertising (version) and requiring (compatible) versions. The
 // default matched pair handshakes; a peer whose required-compatible exceeds the
 // other's advertised version rejects the other with version_incompatible.
-handshake_fsm_config make_cfg(std::uint8_t id_seed, std::uint8_t version = 1,
-                              std::uint8_t compatible = 1)
+handshake_fsm_config make_cfg(std::uint8_t id_seed, std::uint8_t version = 1, std::uint8_t compatible = 1)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = version,
-                                .version_minor            = 0,
-                                .compatible_version_major = compatible,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = version, .version_minor = 0, .compatible_version_major = compatible, .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -135,14 +139,12 @@ plexus::node_id inbound_slot(std::uint8_t n)
 
 reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 reconnect_config bounded_cfg(std::uint32_t max_attempts)
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            max_attempts, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), max_attempts, std::nullopt};
 }
 
 // Frame a subscribe_response exactly as the wire codec does, carrying the chosen
@@ -150,14 +152,9 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
 // decode + readiness-decrement path. Used to FORGE an unmatched ack.
 std::vector<std::byte> make_subscribe_response(std::uint64_t session_id)
 {
-    plexus::wire::subscribe_response resp{.topic_hash = 0x1234,
-                                          .status     = plexus::wire::subscribe_status::subscribed};
+    plexus::wire::subscribe_response resp{.topic_hash = 0x1234, .status = plexus::wire::subscribe_status::subscribed};
     auto                             payload = plexus::wire::encode_subscribe_response(resp);
-    plexus::wire::frame_header       hdr{.type         = plexus::wire::msg_type::subscribe_response,
-                                         .flags        = 0,
-                                         .session_id   = session_id,
-                                         .timestamp_ns = 0,
-                                         .payload_len  = payload.size()};
+    plexus::wire::frame_header       hdr{.type = plexus::wire::msg_type::subscribe_response, .flags = 0, .session_id = session_id, .timestamp_ns = 0, .payload_len = payload.size()};
     return plexus::wire::encode_frame(hdr, payload);
 }
 
@@ -179,17 +176,18 @@ struct two_node
     endpoint        ep_a{"inproc", "node-a"};
     endpoint        ep_b{"inproc", "node-b"};
 
-    explicit two_node(const reconnect_config &a_redial     = forever_cfg(),
-                      std::uint8_t            a_compatible = 1)
-            : a(transport_a, ex, make_cfg(0xA1, 1, a_compatible), k_long_timeout, a_redial, k_seed,
-                sink, false)
+    explicit two_node(const reconnect_config &a_redial = forever_cfg(), std::uint8_t a_compatible = 1)
+            : a(transport_a, ex, make_cfg(0xA1, 1, a_compatible), k_long_timeout, a_redial, k_seed, sink, false)
             , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false)
     {
         a.listen(ep_a);
         b.listen(ep_b);
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
     void advance(std::chrono::nanoseconds d)
     {
         manual_clock::advance(d);
@@ -285,11 +283,10 @@ TEST_CASE("inproc observer: dead fires once when the driver surrenders, and the 
         transport_t                   transport_c{ex, bus};
 
         plexus::log::null_logger sink;
-        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts),
-                 k_seed, sink, false);
-        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        recording_observer rec;
+        engine                   a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts), k_seed, sink, false);
+        engine                   b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine                   c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        recording_observer       rec;
         a.add_observer(rec);
 
         const auto id_b = make_id(0xB2);
@@ -384,8 +381,7 @@ TEST_CASE("inproc observer: on_peer_ready over the REAL loop, then the awaited p
         // fan-out (a never-firing ready would leave this empty).
         auto                    *a_to_b = net.a.session_for(net.id_b);
         std::vector<std::string> a_received;
-        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d)
-                           { a_received.emplace_back(to_string(d)); });
+        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(to_string(d)); });
 
         auto *b_inbound = net.b.session_for(inbound_slot(1));
         REQUIRE(b_inbound != nullptr);
@@ -532,7 +528,7 @@ TEST_CASE("inproc observer: calling engine.subscribe from inside an observer cal
         engine         *eng{nullptr};
         plexus::node_id target{};
         int             connected{0};
-        void on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
+        void            on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
         {
             ++connected;
             if(eng)

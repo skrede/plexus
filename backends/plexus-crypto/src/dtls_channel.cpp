@@ -25,17 +25,17 @@ void free_bio(BIO *b)
         BIO_free(b);
 }
 
-int to_int(std::size_t v) noexcept { return static_cast<int>(v); }
+int to_int(std::size_t v) noexcept
+{
+    return static_cast<int>(v);
+}
 
 }
 
 // NOLINTNEXTLINE(readability-function-size)
-dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server,
-                           ::asio::ip::udp::endpoint dest, const tls_credential &cred,
-                           io::security::cookie_secret &cookie_state, role r,
-                           std::size_t max_payload, std::size_t record_mtu,
-                           std::size_t max_message_bytes, std::size_t reassembly_budget,
-                           std::chrono::milliseconds reassembly_timeout)
+dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server, ::asio::ip::udp::endpoint dest, const tls_credential &cred,
+                           io::security::cookie_secret &cookie_state, role r, std::size_t max_payload, std::size_t record_mtu, std::size_t max_message_bytes,
+                           std::size_t reassembly_budget, std::chrono::milliseconds reassembly_timeout)
         : m_io(io)
         , m_server(server)
         , m_dest(std::move(dest))
@@ -140,8 +140,7 @@ void dtls_channel::send(std::span<const std::byte> bytes)
     if(bytes.size() + wire::udp_envelope_overhead > record_budget())
         return send_large(bytes);
     wire::wrap_udp_into(m_frag_scratch, wire::udp_envelope_kind::best_effort, 0, bytes);
-    m_gate.submit(
-            std::span<const std::byte>{m_frag_scratch}); // ready -> pass straight to secure_send
+    m_gate.submit(std::span<const std::byte>{m_frag_scratch}); // ready -> pass straight to secure_send
 }
 
 std::size_t dtls_channel::record_budget() const noexcept
@@ -150,8 +149,7 @@ std::size_t dtls_channel::record_budget() const noexcept
     // one DTLS record), capped by the configured logical ceiling — min(max_payload,
     // DTLS_get_data_mtu). This is the oversize-reject term AND the fragmenter's split budget.
     const long data_mtu = static_cast<long>(::DTLS_get_data_mtu(m_ssl));
-    return data_mtu > 0 ? std::min(m_max_payload, static_cast<std::size_t>(data_mtu))
-                        : m_max_payload;
+    return data_mtu > 0 ? std::min(m_max_payload, static_cast<std::size_t>(data_mtu)) : m_max_payload;
 }
 
 void dtls_channel::send_large(std::span<const std::byte> bytes)
@@ -163,14 +161,12 @@ void dtls_channel::send_large(std::span<const std::byte> bytes)
         return;
     }
     const std::uint16_t msg_id = m_out_msg_id++;
-    io::fragment_sink   sink =
-            [this, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
+    io::fragment_sink   sink   = [this, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
     {
         // Each fragment is one FRAGMENTED-bit envelope (kind is nominal — DTLS owns its own
         // anti-replay, so the seq field is unused) submitted through the ready gate; the per-
         // record budget bounds the wrapped fragment to one DTLS record (drop-whole on loss).
-        wire::wrap_udp_fragment_into(m_frag_scratch, wire::udp_envelope_kind::best_effort, 0,
-                                     msg_id, idx, cnt, slice);
+        wire::wrap_udp_fragment_into(m_frag_scratch, wire::udp_envelope_kind::best_effort, 0, msg_id, idx, cnt, slice);
         m_gate.submit(std::span<const std::byte>{m_frag_scratch});
     };
     io::split(bytes, record_budget(), msg_id, sink);
@@ -216,10 +212,7 @@ void dtls_channel::drain_outbound()
         // budget, no per-datagram scratch reallocation on the steady-state hot path):
         // udp_server's outbound queue owns each in-flight datagram's bytes across its
         // async_send_to, so the buffer is free to be overwritten by the next BIO_read on return.
-        m_server.send_to(
-                std::span<const std::byte>{reinterpret_cast<const std::byte *>(m_drain_buf.data()),
-                                           static_cast<std::size_t>(n)},
-                m_dest);
+        m_server.send_to(std::span<const std::byte>{reinterpret_cast<const std::byte *>(m_drain_buf.data()), static_cast<std::size_t>(n)}, m_dest);
     }
 }
 
@@ -262,9 +255,7 @@ void dtls_channel::drain_inbound()
             fail(io::io_error::broken_pipe);
             break;
         }
-        const std::span<const std::byte> plaintext{
-                reinterpret_cast<const std::byte *>(m_drain_buf.data()),
-                static_cast<std::size_t>(n)};
+        const std::span<const std::byte> plaintext{reinterpret_cast<const std::byte *>(m_drain_buf.data()), static_cast<std::size_t>(n)};
         // Strip the envelope every send wraps: the FRAGMENTED bit is the unambiguous
         // discriminator. A fragment record feeds the reassembler (a completed message posts
         // on_data); a whole record posts its inner frame directly. A malformed record (under
@@ -327,8 +318,7 @@ void dtls_channel::arm_retransmit()
     struct timeval tv{};
     if(::DTLSv1_get_timeout(m_ssl, &tv) != 1)
         return;
-    const auto ms = std::chrono::milliseconds(static_cast<std::int64_t>(tv.tv_sec) * 1000 +
-                                              static_cast<std::int64_t>(tv.tv_usec) / 1000);
+    const auto ms = std::chrono::milliseconds(static_cast<std::int64_t>(tv.tv_sec) * 1000 + static_cast<std::int64_t>(tv.tv_usec) / 1000);
     m_retransmit.cancel();
     m_retransmit.expires_after(ms);
     m_retransmit.async_wait(
@@ -405,10 +395,7 @@ void dtls_channel::ensure_reassembler()
     // The per-message ceiling, the aggregate budget, and the reclaim window are the threaded
     // node-options knobs, so a large message clears the receive bounds it must reach.
     m_reassembler = std::make_unique<reassembler_type>(
-            m_io,
-            reassembler_type::config{.max_message_size    = m_max_message_bytes,
-                                     .total_memory_cap    = m_reassembly_budget,
-                                     .per_message_timeout = m_reassembly_timeout});
+            m_io, reassembler_type::config{.max_message_size = m_max_message_bytes, .total_memory_cap = m_reassembly_budget, .per_message_timeout = m_reassembly_timeout});
     m_reassembler->on_deliver([this](std::span<const std::byte> msg) { post_on_data(msg); });
 }
 

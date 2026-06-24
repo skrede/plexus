@@ -38,13 +38,28 @@ public:
     {
     }
 
-    const std::byte *data() const noexcept { return m_view.data(); }
-    std::size_t      size() const noexcept { return m_view.size(); }
-    bool             empty() const noexcept { return m_view.empty(); }
+    const std::byte *data() const noexcept
+    {
+        return m_view.data();
+    }
+    std::size_t size() const noexcept
+    {
+        return m_view.size();
+    }
+    bool empty() const noexcept
+    {
+        return m_view.empty();
+    }
 
-    operator std::span<const std::byte>() const noexcept { return m_view; }
+    operator std::span<const std::byte>() const noexcept
+    {
+        return m_view;
+    }
 
-    const owner_type &owner() const noexcept { return m_owner; }
+    const owner_type &owner() const noexcept
+    {
+        return m_owner;
+    }
 
 private:
     std::span<const std::byte> m_view;

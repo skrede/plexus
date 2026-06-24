@@ -25,8 +25,7 @@ namespace ptls = plexus::tls;
 // path. The retransmit timer (armed during the pending handshake) must also be
 // canceled cleanly by the channel destructor (no timer-callback UAF after free).
 
-TEST_CASE("dtls.pending_abort: a transport destroyed mid-handshake frees the pending dial, looped",
-          "[dtls][pending_abort]")
+TEST_CASE("dtls.pending_abort: a transport destroyed mid-handshake frees the pending dial, looped", "[dtls][pending_abort]")
 {
     pdt::identity_fixture srv("pa_srv");
     pdt::identity_fixture cli("pa_cli");
@@ -45,10 +44,8 @@ TEST_CASE("dtls.pending_abort: a transport destroyed mid-handshake frees the pen
 
         bool dialed = false;
         bool failed = false;
-        client.on_dialed([&](std::unique_ptr<ptls::dtls_channel>, const pdt::pio::endpoint &)
-                         { dialed = true; });
-        client.on_dial_failed([&](const pdt::pio::endpoint &, pdt::pio::io_error)
-                              { failed = true; });
+        client.on_dialed([&](std::unique_ptr<ptls::dtls_channel>, const pdt::pio::endpoint &) { dialed = true; });
+        client.on_dial_failed([&](const pdt::pio::endpoint &, pdt::pio::io_error) { failed = true; });
 
         // 127.0.0.1:1 — a port nothing listens on; the ClientHello is sent, no peer
         // ever answers, the dial stays pending with the retransmit timer armed.
@@ -87,8 +84,7 @@ TEST_CASE("dtls.pending_abort: a silent listening server leaves the dial pending
         ptls::dtls_transport client(io, client_cred);
 
         bool dialed = false;
-        client.on_dialed([&](std::unique_ptr<ptls::dtls_channel>, const pdt::pio::endpoint &)
-                         { dialed = true; });
+        client.on_dialed([&](std::unique_ptr<ptls::dtls_channel>, const pdt::pio::endpoint &) { dialed = true; });
 
         server.listen({"dtls", "127.0.0.1:0"});
         auto link = std::make_unique<pdt::relay>(io, server.port());

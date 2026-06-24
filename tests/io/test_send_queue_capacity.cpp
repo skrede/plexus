@@ -2,8 +2,7 @@
 
 using namespace send_queue_fixture;
 
-TEST_CASE("send_queue default capacity is unbounded — the at-capacity signal is inert",
-          "[io][send_queue]")
+TEST_CASE("send_queue default capacity is unbounded — the at-capacity signal is inert", "[io][send_queue]")
 {
     recorder   rec;
     send_queue q{rec.sink()}; // default capacity
@@ -15,8 +14,7 @@ TEST_CASE("send_queue default capacity is unbounded — the at-capacity signal i
     REQUIRE(q.size() == 1000);
 }
 
-TEST_CASE("send_queue bounded capacity fires the at-capacity signal and refuses past the cap",
-          "[io][send_queue]")
+TEST_CASE("send_queue bounded capacity fires the at-capacity signal and refuses past the cap", "[io][send_queue]")
 {
     recorder   rec;
     send_queue q{rec.sink(), 2}; // finite BYTE budget of two (single-byte frames)
@@ -38,8 +36,7 @@ TEST_CASE("send_queue bounded capacity fires the at-capacity signal and refuses 
     REQUIRE(q.size() == 2);
 }
 
-TEST_CASE("send_queue caps on summed BYTES, not entry count — one large frame trips a byte budget",
-          "[io][send_queue]")
+TEST_CASE("send_queue caps on summed BYTES, not entry count — one large frame trips a byte budget", "[io][send_queue]")
 {
     recorder   rec;
     send_queue q{rec.sink(), 8}; // an 8-byte budget
@@ -61,8 +58,7 @@ TEST_CASE("send_queue caps on summed BYTES, not entry count — one large frame 
     REQUIRE(q.queued_bytes() == 8);
 }
 
-TEST_CASE("send_queue near-cap boundary: byte accounting does not wrap and refuses correctly",
-          "[io][send_queue]")
+TEST_CASE("send_queue near-cap boundary: byte accounting does not wrap and refuses correctly", "[io][send_queue]")
 {
     // W1 overflow boundary: a frame at cap-1 bytes followed by a small frame whose sum
     // exceeds the cap must be refused (compare-before-add), and the running total must NOT

@@ -4,8 +4,7 @@
 
 using namespace udp_send_burst_fixture;
 
-TEST_CASE("udp burst: N best_effort datagrams queued in one turn each arrive intact, in order",
-          "[udp][burst][reproducibility]")
+TEST_CASE("udp burst: N best_effort datagrams queued in one turn each arrive intact, in order", "[udp][burst][reproducibility]")
 {
     constexpr int k_iterations = 100;
     constexpr int k_burst      = 8;
@@ -24,8 +23,7 @@ TEST_CASE("udp burst: N best_effort datagrams queued in one turn each arrive int
         std::vector<std::string> sent;
         for(int i = 0; i < k_burst; ++i)
         {
-            std::string p = "burst-" + std::to_string(iter) + "-" + std::to_string(i) +
-                    std::string(static_cast<std::size_t>(i) * 7, 'x'); // size varies per leg
+            std::string p = "burst-" + std::to_string(iter) + "-" + std::to_string(i) + std::string(static_cast<std::size_t>(i) * 7, 'x'); // size varies per leg
             sent.push_back(p);
             h.dialed->send(bytes_of(p)); // queued; the scratch is reused on the next iteration
         }
@@ -37,8 +35,7 @@ TEST_CASE("udp burst: N best_effort datagrams queued in one turn each arrive int
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp burst: two channels over one server each send in the same turn without overlap",
-          "[udp][burst][reproducibility]")
+TEST_CASE("udp burst: two channels over one server each send in the same turn without overlap", "[udp][burst][reproducibility]")
 {
     constexpr int k_iterations = 100;
     int           proven       = 0;
@@ -55,9 +52,8 @@ TEST_CASE("udp burst: two channels over one server each send in the same turn wi
 
         std::vector<std::unique_ptr<pasio::udp_channel>> accepted;
         std::unique_ptr<pasio::udp_channel>              dia_a, dia_b;
-        std::vector<std::string> dialer_seen; // every payload the two dialers receive
-        server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch)
-                           { accepted.push_back(std::move(ch)); });
+        std::vector<std::string>                         dialer_seen; // every payload the two dialers receive
+        server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted.push_back(std::move(ch)); });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
@@ -66,15 +62,13 @@ TEST_CASE("udp burst: two channels over one server each send in the same turn wi
                 [&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
                 {
                     dia_a = std::move(ch);
-                    dia_a->on_data([&](std::span<const std::byte> b)
-                                   { dialer_seen.push_back(str_of(b)); });
+                    dia_a->on_data([&](std::span<const std::byte> b) { dialer_seen.push_back(str_of(b)); });
                 });
         client_b.on_dialed(
                 [&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
                 {
                     dia_b = std::move(ch);
-                    dia_b->on_data([&](std::span<const std::byte> b)
-                                   { dialer_seen.push_back(str_of(b)); });
+                    dia_b->on_data([&](std::span<const std::byte> b) { dialer_seen.push_back(str_of(b)); });
                 });
         client_a.dial({ep, host});
         client_b.dial({ep, host});

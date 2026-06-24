@@ -56,17 +56,34 @@ namespace {
 class test_lower
 {
 public:
-    void send(std::span<const std::byte> data) { m_last.assign(data.begin(), data.end()); }
-    void close() {}
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"test", ""}; }
+    void send(std::span<const std::byte> data)
+    {
+        m_last.assign(data.begin(), data.end());
+    }
+    void close()
+    {
+    }
+    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    {
+        return {"test", ""};
+    }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()>) {}
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
-    [[nodiscard]] std::size_t backpressured() const { return 0; }
+    void on_closed(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
+    {
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
+    [[nodiscard]] std::size_t backpressured() const
+    {
+        return 0;
+    }
 
     void feed(std::span<const std::byte> bytes)
     {
@@ -74,7 +91,10 @@ public:
             m_on_data(bytes);
     }
 
-    [[nodiscard]] const std::vector<std::byte> &last() const { return m_last; }
+    [[nodiscard]] const std::vector<std::byte> &last() const
+    {
+        return m_last;
+    }
 
 private:
     std::vector<std::byte>                                               m_last;
@@ -106,8 +126,7 @@ struct captured_frame
     std::vector<std::byte> bytes;
 };
 
-std::vector<captured_frame> frame_run(std::span<const std::byte> stream, wire_direction want,
-                                      const node_id &peer)
+std::vector<captured_frame> frame_run(std::span<const std::byte> stream, wire_direction want, const node_id &peer)
 {
     record_stream_reader r{stream};
     stream_definitions   defs;
@@ -136,13 +155,11 @@ std::vector<std::uint64_t> seqs_of(const std::vector<captured_frame> &run)
 // its own count), so the cross-node match aligns the runs by their byte-identical framed
 // payloads and the answer is the sender OUT seq of the unmatched frame. Pure structural
 // arithmetic over the two runs — no clock, no capture timestamp.
-std::optional<std::uint64_t> lost_out_seq(const std::vector<captured_frame> &sent,
-                                          const std::vector<captured_frame> &received)
+std::optional<std::uint64_t> lost_out_seq(const std::vector<captured_frame> &sent, const std::vector<captured_frame> &received)
 {
     for(const auto &s : sent)
     {
-        const bool seen = std::any_of(received.begin(), received.end(),
-                                      [&](const captured_frame &r) { return r.bytes == s.bytes; });
+        const bool seen = std::any_of(received.begin(), received.end(), [&](const captured_frame &r) { return r.bytes == s.bytes; });
         if(!seen)
             return s.seq;
     }
@@ -151,8 +168,7 @@ std::optional<std::uint64_t> lost_out_seq(const std::vector<captured_frame> &sen
 
 }
 
-TEST_CASE("two-node loss-join: an injected drop is a structural sequence gap, clock-skew-immune",
-          "[wire_loss_join][wire]")
+TEST_CASE("two-node loss-join: an injected drop is a structural sequence gap, clock-skew-immune", "[wire_loss_join][wire]")
 {
     constexpr int           k_runs   = 5;
     constexpr std::size_t   k_frames = 12;
@@ -172,10 +188,8 @@ TEST_CASE("two-node loss-join: an injected drop is a structural sequence gap, cl
         // nodes would be wrong. The loss reconstruction below never touches capture_ts.
         std::uint64_t sender_tick   = 0;
         std::uint64_t receiver_tick = 1'000'000'000ull; // +1s skew, monotonic on its own axis
-        flat_recorder sender_rec{sender_sink, 256u * 1024u,
-                                 [&sender_tick] { return ++sender_tick; }};
-        flat_recorder receiver_rec{receiver_sink, 256u * 1024u,
-                                   [&receiver_tick] { return receiver_tick += 1000; }};
+        flat_recorder sender_rec{sender_sink, 256u * 1024u, [&sender_tick] { return ++sender_tick; }};
+        flat_recorder receiver_rec{receiver_sink, 256u * 1024u, [&receiver_tick] { return receiver_tick += 1000; }};
         sender_rec.open(sender_id, plexus::io::topic_capture_rule{});
         receiver_rec.open(receiver_id, plexus::io::topic_capture_rule{});
 
@@ -186,10 +200,8 @@ TEST_CASE("two-node loss-join: an injected drop is a structural sequence gap, cl
 
         // The sender stamps its OUT run; the receiver stamps its IN run. The peer recorded on
         // each side is the OTHER node's identity (the slot the channel belongs to).
-        sender_ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b)
-                          { sender_rec.record_wire(dir, seq, receiver_id, b); });
-        receiver_ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b)
-                            { receiver_rec.record_wire(dir, seq, sender_id, b); });
+        sender_ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) { sender_rec.record_wire(dir, seq, receiver_id, b); });
+        receiver_ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte> b) { receiver_rec.record_wire(dir, seq, sender_id, b); });
 
         // The relay: every framed send the sender emits is ferried to the receiver's lower
         // feed (driving the receiver's IN tap) EXCEPT the one injected drop, which is silently

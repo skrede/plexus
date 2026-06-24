@@ -41,8 +41,7 @@ template<typename Engine>
 template<typename Engine>
 [[nodiscard]] auto make_wire_sink(Engine &e, const node_id &peer)
 {
-    return [&e, peer](recording::wire_direction dir, std::uint64_t seq,
-                      std::span<const std::byte> bytes) { post_wire(e, dir, seq, peer, bytes); };
+    return [&e, peer](recording::wire_direction dir, std::uint64_t seq, std::span<const std::byte> bytes) { post_wire(e, dir, seq, peer, bytes); };
 }
 
 template<typename Engine>
@@ -53,8 +52,7 @@ template<typename Engine>
     {
         if(!e.m_capture.should_emit(hash))
             return;
-        policy_type::post(e.m_executor, [&e, fqn = std::string{fqn}, v]
-                          { fan_out(e, [&](observer &o) { o.on_message_published(fqn, v); }); });
+        policy_type::post(e.m_executor, [&e, fqn = std::string{fqn}, v] { fan_out(e, [&](observer &o) { o.on_message_published(fqn, v); }); });
     };
 }
 
@@ -62,14 +60,11 @@ template<typename Engine>
 [[nodiscard]] auto make_deliver_sink(Engine &e)
 {
     using policy_type = typename Engine::policy_type;
-    return [&e](std::uint64_t hash, std::string_view fqn, const message_info &info,
-                const message_view &v)
+    return [&e](std::uint64_t hash, std::string_view fqn, const message_info &info, const message_view &v)
     {
         if(!e.m_capture.should_emit(hash))
             return;
-        policy_type::post(
-                e.m_executor, [&e, fqn = std::string{fqn}, info, v]
-                { fan_out(e, [&](observer &o) { o.on_message_delivered(fqn, info, v); }); });
+        policy_type::post(e.m_executor, [&e, fqn = std::string{fqn}, info, v] { fan_out(e, [&](observer &o) { o.on_message_delivered(fqn, info, v); }); });
     };
 }
 
@@ -81,8 +76,7 @@ template<typename Engine>
     {
         if(e.m_capture.observers_present() == 0)
             return;
-        policy_type::post(e.m_executor,
-                          [&e, ev] { fan_out(e, [&](observer &o) { o.on_qos_change(ev); }); });
+        policy_type::post(e.m_executor, [&e, ev] { fan_out(e, [&](observer &o) { o.on_qos_change(ev); }); });
     };
 }
 
@@ -94,8 +88,7 @@ template<typename Engine, typename Edge>
     {
         if(e.m_capture.observers_present() == 0)
             return;
-        policy_type::post(e.m_executor, [&e, edge, fqn = std::string{fqn}, v]
-                          { fan_out(e, [&](observer &o) { (o.*edge)(fqn, v); }); });
+        policy_type::post(e.m_executor, [&e, edge, fqn = std::string{fqn}, v] { fan_out(e, [&](observer &o) { (o.*edge)(fqn, v); }); });
     };
 }
 

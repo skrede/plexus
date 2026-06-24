@@ -38,9 +38,7 @@ int main()
     // The full non-shm node composes a routing_engine over the inproc substrate; name
     // it so the engine type the node owns is instantiated explicitly on the floor too.
     using engine_t = node_t::engine_type;
-    static_assert(std::is_same_v<engine_t,
-                                 plexus::io::routing_engine<policy, transport>>,
-                  "a single-transport node composes the engine directly over its policy");
+    static_assert(std::is_same_v<engine_t, plexus::io::routing_engine<policy, transport>>, "a single-transport node composes the engine directly over its policy");
 
     plexus::inproc::inproc_bus<>        bus;
     plexus::inproc::inproc_executor<>   executor{bus};
@@ -55,7 +53,9 @@ int main()
     // Construct + destruct: the ctor stands up the engine and the same-host wiring's
     // if-constexpr capability checks resolve to no-ops for the inproc member (no shm
     // member is present), proving the wiring compiles with no shm header in scope.
-    { node_t node{executor, disc, self, tr, opts}; }
+    {
+        node_t node{executor, disc, self, tr, opts};
+    }
 
     return 0;
 }

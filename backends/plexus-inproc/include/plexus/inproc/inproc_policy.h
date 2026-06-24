@@ -34,8 +34,6 @@ struct inproc_policy
 
 }
 
-static_assert(
-        plexus::Policy<plexus::inproc::inproc_policy>,
-        "inproc_policy must satisfy Policy — check the channel/timer constructors and post()");
+static_assert(plexus::Policy<plexus::inproc::inproc_policy>, "inproc_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

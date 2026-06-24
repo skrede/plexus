@@ -4,8 +4,7 @@
 
 TEST_CASE("unidirectional payload size is 17 + data", "[wire][data]")
 {
-    unidirectional_header hdr{
-            .source = endpoint_source_type::publisher, .sequence = 1, .topic_hash = 0xDEAD};
+    unidirectional_header  hdr{.source = endpoint_source_type::publisher, .sequence = 1, .topic_hash = 0xDEAD};
     std::vector<std::byte> data{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}};
 
     auto encoded = encode_unidirectional(hdr, data);
@@ -14,8 +13,7 @@ TEST_CASE("unidirectional payload size is 17 + data", "[wire][data]")
 
 TEST_CASE("unidirectional round-trip preserves fields and data", "[wire][data]")
 {
-    unidirectional_header hdr{
-            .source = endpoint_source_type::publisher, .sequence = 42, .topic_hash = 0xDEAD};
+    unidirectional_header  hdr{.source = endpoint_source_type::publisher, .sequence = 42, .topic_hash = 0xDEAD};
     std::vector<std::byte> data{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}};
 
     auto encoded = encode_unidirectional(hdr, data);
@@ -33,8 +31,7 @@ TEST_CASE("unidirectional round-trip preserves fields and data", "[wire][data]")
 
 TEST_CASE("unidirectional round-trips a flag-gated source-identity counter", "[wire][data][gid]")
 {
-    unidirectional_header hdr{
-            .source = endpoint_source_type::publisher, .sequence = 7, .topic_hash = 0xCAFE};
+    unidirectional_header   hdr{.source = endpoint_source_type::publisher, .sequence = 7, .topic_hash = 0xCAFE};
     std::vector<std::byte>  data{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}};
     constexpr std::uint64_t counter = 0x1234; // a multi-byte varint
 
@@ -50,11 +47,9 @@ TEST_CASE("unidirectional round-trips a flag-gated source-identity counter", "[w
     CHECK(decoded->data[2] == std::byte{0xCC});
 }
 
-TEST_CASE("unidirectional flag-clear encode is byte-identical to a no-counter frame",
-          "[wire][data][gid]")
+TEST_CASE("unidirectional flag-clear encode is byte-identical to a no-counter frame", "[wire][data][gid]")
 {
-    unidirectional_header hdr{
-            .source = endpoint_source_type::publisher, .sequence = 42, .topic_hash = 0xDEAD};
+    unidirectional_header  hdr{.source = endpoint_source_type::publisher, .sequence = 42, .topic_hash = 0xDEAD};
     std::vector<std::byte> data{std::byte{0x01}, std::byte{0x02}};
 
     auto without = encode_unidirectional(hdr, data);               // no counter argument
@@ -70,8 +65,7 @@ TEST_CASE("unidirectional flag-clear encode is byte-identical to a no-counter fr
 
 TEST_CASE("unidirectional decode rejects a truncated source-identity region", "[wire][data][gid]")
 {
-    unidirectional_header hdr{
-            .source = endpoint_source_type::publisher, .sequence = 1, .topic_hash = 0xBEEF};
+    unidirectional_header hdr{.source = endpoint_source_type::publisher, .sequence = 1, .topic_hash = 0xBEEF};
     // A 17B header followed by a lone continuation byte (0x80) with no terminator:
     // read_varint must return nullopt, so the whole decode fails (warn-and-drop) —
     // never an over-read past the buffer.
@@ -124,17 +118,12 @@ TEST_CASE("bidirectional decode fails on short payload", "[wire][data]")
 
 TEST_CASE("full frame round-trip with unidirectional payload", "[wire][data]")
 {
-    unidirectional_header uni_hdr{
-            .source = endpoint_source_type::signal, .sequence = 7, .topic_hash = 0xCAFE};
+    unidirectional_header  uni_hdr{.source = endpoint_source_type::signal, .sequence = 7, .topic_hash = 0xCAFE};
     std::vector<std::byte> data{std::byte{0xAA}, std::byte{0xBB}};
 
     auto payload = encode_unidirectional(uni_hdr, data);
 
-    frame_header fhdr{.type         = msg_type::unidirectional,
-                      .flags        = 0,
-                      .session_id   = 0,
-                      .timestamp_ns = 1000000,
-                      .payload_len  = 0};
+    frame_header fhdr{.type = msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 1000000, .payload_len = 0};
     auto         frame = encode_frame(fhdr, payload);
 
     CHECK(frame.size() == 28 + payload.size());

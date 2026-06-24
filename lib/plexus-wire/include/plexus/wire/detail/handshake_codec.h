@@ -73,8 +73,7 @@ inline void encode_handshake_request_into(std::vector<std::byte> &out, const han
     write_handshake_prefix(w, req);
 }
 
-inline void encode_handshake_response_into(std::vector<std::byte>   &out,
-                                           const handshake_response &resp)
+inline void encode_handshake_response_into(std::vector<std::byte> &out, const handshake_response &resp)
 {
     out.resize(handshake_response_size);
     writer w{out};
@@ -106,8 +105,7 @@ inline std::optional<handshake_request> decode_handshake_request(std::span<const
     return req;
 }
 
-inline std::optional<handshake_response>
-decode_handshake_response(std::span<const std::byte> payload)
+inline std::optional<handshake_response> decode_handshake_response(std::span<const std::byte> payload)
 {
     if(payload.size() < handshake_response_size)
         return std::nullopt;

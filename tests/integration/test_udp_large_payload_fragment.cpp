@@ -36,7 +36,10 @@ struct fragment_observer
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const { return front.local_endpoint().port(); }
+    [[nodiscard]] std::uint16_t port() const
+    {
+        return front.local_endpoint().port();
+    }
 
     void note_fragment(std::span<const std::byte> dg)
     {
@@ -62,31 +65,26 @@ struct fragment_observer
                                      client_ep = from;
                                      std::span<const std::byte> dg{front_buf.data(), n};
                                      note_fragment(dg);
-                                     auto copy = std::make_shared<std::vector<std::byte>>(
-                                             dg.begin(), dg.end());
-                                     back.async_send_to(::asio::buffer(*copy), server_ep,
-                                                        [copy](std::error_code, std::size_t) {});
+                                     auto copy = std::make_shared<std::vector<std::byte>>(dg.begin(), dg.end());
+                                     back.async_send_to(::asio::buffer(*copy), server_ep, [copy](std::error_code, std::size_t) {});
                                      recv_front();
                                  });
     }
 
     void recv_back()
     {
-        back.async_receive_from(
-                ::asio::buffer(back_buf), from,
-                [this](std::error_code ec, std::size_t n)
-                {
-                    if(ec)
-                        return;
-                    if(client_ep.port() != 0)
-                    {
-                        auto copy = std::make_shared<std::vector<std::byte>>(back_buf.data(),
-                                                                             back_buf.data() + n);
-                        front.async_send_to(::asio::buffer(*copy), client_ep,
-                                            [copy](std::error_code, std::size_t) {});
-                    }
-                    recv_back();
-                });
+        back.async_receive_from(::asio::buffer(back_buf), from,
+                                [this](std::error_code ec, std::size_t n)
+                                {
+                                    if(ec)
+                                        return;
+                                    if(client_ep.port() != 0)
+                                    {
+                                        auto copy = std::make_shared<std::vector<std::byte>>(back_buf.data(), back_buf.data() + n);
+                                        front.async_send_to(::asio::buffer(*copy), client_ep, [copy](std::error_code, std::size_t) {});
+                                    }
+                                    recv_back();
+                                });
     }
 };
 
@@ -110,7 +108,7 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
     //     is load-bearing;
     //   * exactly TWO distinct msg_ids are observed (one per message), and they differ by
     //     exactly one — msg_id advances per-message and does not wrap/collide.
-    constexpr std::size_t budget     = 128u; // the fragment floor -> the largest count
+    constexpr std::size_t budget     = 128u;                // the fragment floor -> the largest count
     constexpr std::size_t payload    = 16u * 1024u * 1024u; // ~131072 fragments per message
     constexpr std::size_t ceiling    = 20u * 1024u * 1024u;
     constexpr std::size_t reassembly = 48u * 1024u * 1024u;
@@ -151,11 +149,8 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
     pump_until(io, [&] { return server.port() != 0; });
 
     fragment_observer obs{io, server.port()};
-    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                     { dialed = std::move(ch); });
-    client.dial(
-            {"udp",
-             "127.0.0.1:" + std::to_string(obs.port())}); // best-effort: fragments are wire-visible
+    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
+    client.dial({"udp", "127.0.0.1:" + std::to_string(obs.port())}); // best-effort: fragments are wire-visible
     pump_until(io, [&] { return dialed && accepted; });
     REQUIRE(dialed != nullptr);
     REQUIRE(accepted != nullptr);

@@ -84,12 +84,10 @@ struct reading_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
-                                                   reading                   &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, reading &out) const
     {
         if(bytes.size() != 4)
-            return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+            return plexus::expected<void, std::error_code>{plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -97,7 +95,10 @@ struct reading_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {0x9A9A0001u, "reading"}; }
+    plexus::type_identity type_info() const
+    {
+        return {0x9A9A0001u, "reading"};
+    }
 };
 
 static_assert(plexus::typed_codec<reading_codec>);
@@ -115,9 +116,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options base_opts()
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = true;
     return opts;
@@ -125,9 +124,7 @@ plexus::node_options base_opts()
 
 // Drive a wire-capturing producer + a plain consumer over inproc, publish a run of typed
 // readings, drain the recorder, and return the accumulated flat capture bytes.
-std::vector<std::byte>
-capture_session(int                          count,
-                plexus::wire_crypto_position position = plexus::wire_crypto_position::cleartext)
+std::vector<std::byte> capture_session(int count, plexus::wire_crypto_position position = plexus::wire_crypto_position::cleartext)
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};
@@ -139,7 +136,7 @@ capture_session(int                          count,
 
     plexus::node_options consumer_opts = base_opts();
     plexus::node_options producer_opts = base_opts();
-    producer_opts.wire = plexus::wire_capture_qos{.enabled = true, .position = position};
+    producer_opts.wire                 = plexus::wire_capture_qos{.enabled = true, .position = position};
 
     bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, consumer_opts};
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};
@@ -175,8 +172,7 @@ capture_session(int                          count,
 // emits and surface the fields the assertions key on. No external dependency.
 std::uint16_t rd_u16(std::span<const std::byte> b, std::size_t off)
 {
-    return static_cast<std::uint16_t>(static_cast<std::uint8_t>(b[off])) |
-            static_cast<std::uint16_t>(static_cast<std::uint8_t>(b[off + 1])) << 8;
+    return static_cast<std::uint16_t>(static_cast<std::uint8_t>(b[off])) | static_cast<std::uint16_t>(static_cast<std::uint8_t>(b[off + 1])) << 8;
 }
 
 std::uint32_t rd_u32(std::span<const std::byte> b, std::size_t off)
@@ -206,8 +202,7 @@ struct parsed_pcapng
     std::vector<parsed_epb>      epbs;
 };
 
-bool span_contains(std::span<const std::byte> b, std::size_t off, std::size_t len,
-                   std::string_view needle)
+bool span_contains(std::span<const std::byte> b, std::size_t off, std::size_t len, std::string_view needle)
 {
     if(needle.empty() || len < needle.size())
         return false;
@@ -228,8 +223,7 @@ bool span_contains(std::span<const std::byte> b, std::size_t off, std::size_t le
 
 // Walk a block's options [code:u16][len:u16][value padded to 4] from opt_off..opt_end,
 // surfacing the epb_flags low-2-bits and whether a comment carries the crypto token.
-void parse_epb_options(std::span<const std::byte> b, std::size_t opt_off, std::size_t opt_end,
-                       parsed_epb &epb)
+void parse_epb_options(std::span<const std::byte> b, std::size_t opt_off, std::size_t opt_end, parsed_epb &epb)
 {
     while(opt_off + 4 <= opt_end)
     {
@@ -260,10 +254,9 @@ parsed_pcapng parse_pcapng(std::span<const std::byte> b)
 
         if(type == 0x0A0D0D0Au) // SHB
         {
-            out.shb_magic_ok          = rd_u32(b, body) == 0x1A2B3C4Du;
-            const std::size_t opt_off = body + 16; // magic + major + minor + section_length
-            out.shb_has_crypto_comment =
-                    span_contains(b, opt_off, at + total - 4 - opt_off, "plexus.crypto_position=");
+            out.shb_magic_ok           = rd_u32(b, body) == 0x1A2B3C4Du;
+            const std::size_t opt_off  = body + 16; // magic + major + minor + section_length
+            out.shb_has_crypto_comment = span_contains(b, opt_off, at + total - 4 - opt_off, "plexus.crypto_position=");
         }
         else if(type == 0x00000001u) // IDB
         {
@@ -272,8 +265,7 @@ parsed_pcapng parse_pcapng(std::span<const std::byte> b)
         else if(type == 0x00000006u) // EPB
         {
             parsed_epb epb;
-            epb.timestamp =
-                    static_cast<std::uint64_t>(rd_u32(b, body + 4)) << 32 | rd_u32(b, body + 8);
+            epb.timestamp              = static_cast<std::uint64_t>(rd_u32(b, body + 4)) << 32 | rd_u32(b, body + 8);
             epb.captured_len           = rd_u32(b, body + 12);
             epb.original_len           = rd_u32(b, body + 16);
             const std::size_t data_off = body + 20;
@@ -293,15 +285,13 @@ parsed_pcapng parse_pcapng(std::span<const std::byte> b)
 
 }
 
-TEST_CASE("pcap transcode round-trips a captured session through a parsed pcapng",
-          "[pcap_transcode][pcap]")
+TEST_CASE("pcap transcode round-trips a captured session through a parsed pcapng", "[pcap_transcode][pcap]")
 {
     const int  count = 8;
     const auto flat  = capture_session(count);
     REQUIRE(!flat.empty());
 
-    const auto out = std::filesystem::temp_directory_path() /
-            std::filesystem::path{"plexus_transcode_roundtrip.pcapng"};
+    const auto out = std::filesystem::temp_directory_path() / std::filesystem::path{"plexus_transcode_roundtrip.pcapng"};
     std::filesystem::remove(out);
 
     const auto result = plexus::tools::flat_to_pcap(flat, out);
@@ -354,18 +344,15 @@ TEST_CASE("pcap transcode round-trips a captured session through a parsed pcapng
     // build-dir path the CMake registration supplies. A write failure must never fail the test.
     std::ofstream fixture{std::filesystem::path{PLEXUS_QA_CAPTURE_PATH}, std::ios::binary};
     if(fixture)
-        fixture.write(reinterpret_cast<const char *>(flat.data()),
-                      static_cast<std::streamsize>(flat.size()));
+        fixture.write(reinterpret_cast<const char *>(flat.data()), static_cast<std::streamsize>(flat.size()));
 
     // The same session recorded with the ciphertext tap position: byte-identical wire frames,
     // but the projector stamps crypto_position=ciphertext into the SHB and every frame comment.
     // The QA gate reads that carried token to exercise the dissector's sealed-blob branch.
     const auto    cipher = capture_session(count, plexus::wire_crypto_position::ciphertext);
-    std::ofstream cipher_fixture{std::filesystem::path{PLEXUS_QA_CIPHER_CAPTURE_PATH},
-                                 std::ios::binary};
+    std::ofstream cipher_fixture{std::filesystem::path{PLEXUS_QA_CIPHER_CAPTURE_PATH}, std::ios::binary};
     if(cipher_fixture)
-        cipher_fixture.write(reinterpret_cast<const char *>(cipher.data()),
-                             static_cast<std::streamsize>(cipher.size()));
+        cipher_fixture.write(reinterpret_cast<const char *>(cipher.data()), static_cast<std::streamsize>(cipher.size()));
 
     std::filesystem::remove(out);
 }

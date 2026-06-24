@@ -4,8 +4,7 @@
 
 using namespace outofbox_ceiling_fixture;
 
-TEST_CASE("outofbox: an 8 MiB message round-trips over TCP at shipped defaults, looped",
-          "[outofbox][envelope8]")
+TEST_CASE("outofbox: an 8 MiB message round-trips over TCP at shipped defaults, looped", "[outofbox][envelope8]")
 {
     const auto body  = ramp_payload(k_shipped_ceiling);
     const auto frame = ceiling_frame(body);
@@ -24,11 +23,9 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over TCP at shipped defaults, 
                 [&](std::unique_ptr<pasio::asio_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> d)
-                                      { got.assign(d.begin(), d.end()); });
+                    accepted->on_data([&](std::span<const std::byte> d) { got.assign(d.begin(), d.end()); });
                 });
-        client.on_dialed([&](std::unique_ptr<pasio::asio_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::asio_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
 
         server.listen({"tcp", "127.0.0.1:0"});
         client.dial({"tcp", "127.0.0.1:" + std::to_string(server.port())});
@@ -45,8 +42,7 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over TCP at shipped defaults, 
     REQUIRE(proven == iterations);
 }
 
-TEST_CASE("outofbox: an 8 MiB message round-trips over AF_UNIX at shipped defaults, looped",
-          "[outofbox][envelope8]")
+TEST_CASE("outofbox: an 8 MiB message round-trips over AF_UNIX at shipped defaults, looped", "[outofbox][envelope8]")
 {
     const auto body  = ramp_payload(k_shipped_ceiling);
     const auto frame = ceiling_frame(body);
@@ -70,11 +66,9 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over AF_UNIX at shipped defaul
                 [&](std::unique_ptr<pasio::unix_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> d)
-                                      { got.assign(d.begin(), d.end()); });
+                    accepted->on_data([&](std::span<const std::byte> d) { got.assign(d.begin(), d.end()); });
                 });
-        client.on_dialed([&](std::unique_ptr<pasio::unix_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::unix_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
 
         server.listen({"unix", path});
         client.dial({"unix", path});

@@ -39,7 +39,10 @@ class taken_message
 public:
     taken_message() = default;
 
-    ~taken_message() { reclaim(); }
+    ~taken_message()
+    {
+        reclaim();
+    }
 
     taken_message(const taken_message &)            = delete;
     taken_message &operator=(const taken_message &) = delete;
@@ -84,10 +87,8 @@ public:
     // handle. Calling this on an empty or moved-from handle is caller misuse.
     ::plexus::wire_bytes<shm_slot_owner> as_wire_bytes() const
     {
-        assert(m_payload != nullptr &&
-               "taken_message::as_wire_bytes() on an empty or moved-from handle");
-        return ::plexus::wire_bytes<shm_slot_owner>(std::span<const std::byte>(m_payload, m_length),
-                                                    shm_slot_owner(m_refcount));
+        assert(m_payload != nullptr && "taken_message::as_wire_bytes() on an empty or moved-from handle");
+        return ::plexus::wire_bytes<shm_slot_owner>(std::span<const std::byte>(m_payload, m_length), shm_slot_owner(m_refcount));
     }
 
     // The adopt tag: the slot_subscriber has ALREADY pinned the slot via the ring's
@@ -104,8 +105,7 @@ private:
     friend class slot_subscriber;
     friend struct ::plexus::shm::test::handle_test_access;
 
-    taken_message(const std::byte *payload, std::size_t length,
-                  std::atomic<std::uint32_t> *refcount) noexcept
+    taken_message(const std::byte *payload, std::size_t length, std::atomic<std::uint32_t> *refcount) noexcept
             : m_payload(payload)
             , m_length(length)
             , m_refcount(refcount)
@@ -117,8 +117,7 @@ private:
     // Adopting ctor: takes ownership of a pin the caller already holds (no
     // fetch_add). reclaim() still decrements once, so the held pin is released
     // exactly once when the handle dies.
-    taken_message(adopt_pin_t, const std::byte *payload, std::size_t length,
-                  std::atomic<std::uint32_t> *refcount) noexcept
+    taken_message(adopt_pin_t, const std::byte *payload, std::size_t length, std::atomic<std::uint32_t> *refcount) noexcept
             : m_payload(payload)
             , m_length(length)
             , m_refcount(refcount)

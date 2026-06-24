@@ -18,15 +18,13 @@ TEST_CASE("handles: a subscriber is move-only", "[node][handles]")
     static_assert(std::is_nothrow_move_assignable_v<inproc_subscriber>);
 }
 
-TEST_CASE("handles: moving a subscriber transfers the demand; the moved-from dtor is a no-op",
-          "[node][handles]")
+TEST_CASE("handles: moving a subscriber transfers the demand; the moved-from dtor is a no-op", "[node][handles]")
 {
     net                      n;
     std::vector<std::string> got;
 
     {
-        inproc_subscriber s1{n.a, "topic",
-                             [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber s1{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         n.drive();
 
         // Move the live demand into s2, then double-move into s3. The moved-from s1/s2

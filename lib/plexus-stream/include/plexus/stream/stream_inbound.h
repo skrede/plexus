@@ -33,7 +33,7 @@ struct stream_inbound_config
     std::chrono::nanoseconds no_progress_floor{std::chrono::seconds{30}};
     std::size_t              min_throughput_bytes_per_sec{64 * 1024};
     std::size_t              max_payload_size{wire::k_max_reassembler_payload_bytes};
-    std::size_t buffered_bytes_cap{wire::k_max_reassembler_payload_bytes + wire::header_size};
+    std::size_t              buffered_bytes_cap{wire::k_max_reassembler_payload_bytes + wire::header_size};
 };
 
 // Stamp the per-MESSAGE receive ceiling and the aggregate reassembly-memory cap onto a
@@ -41,9 +41,7 @@ struct stream_inbound_config
 // buffered_bytes_cap held at the budget (and never below the ceiling + one header). The
 // node-options surface (transport ctor) threads the resolved values in — keeping the
 // no-progress tunables a node may already have set.
-[[nodiscard]] inline stream_inbound_config
-with_message_limits(stream_inbound_config cfg, std::size_t max_payload_size,
-                    std::size_t reassembly_budget) noexcept
+[[nodiscard]] inline stream_inbound_config with_message_limits(stream_inbound_config cfg, std::size_t max_payload_size, std::size_t reassembly_budget) noexcept
 {
     cfg.max_payload_size   = max_payload_size;
     cfg.buffered_bytes_cap = std::max(reassembly_budget, max_payload_size + wire::header_size);
@@ -103,7 +101,10 @@ public:
         reframe_timer(was_in_progress, !result.frames.empty());
     }
 
-    void shutdown() { m_timer.cancel(); }
+    void shutdown()
+    {
+        m_timer.cancel();
+    }
 
 private:
     // Drive the per-frame deadline across this feed's transitions. Idle between
@@ -143,8 +144,7 @@ private:
     {
         if(m_cfg.min_throughput_bytes_per_sec == 0)
             return std::chrono::nanoseconds{0};
-        const std::int64_t ns = static_cast<std::int64_t>(n) * 1'000'000'000 /
-                static_cast<std::int64_t>(m_cfg.min_throughput_bytes_per_sec);
+        const std::int64_t ns = static_cast<std::int64_t>(n) * 1'000'000'000 / static_cast<std::int64_t>(m_cfg.min_throughput_bytes_per_sec);
         return std::chrono::nanoseconds{ns};
     }
 

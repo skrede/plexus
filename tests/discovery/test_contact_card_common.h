@@ -41,14 +41,12 @@ inline plexus::node_id node_id_of(int seed)
     return id;
 }
 
-inline bool has_key(const std::vector<std::pair<std::string, std::string>> &card,
-                    const std::string                                      &key)
+inline bool has_key(const std::vector<std::pair<std::string, std::string>> &card, const std::string &key)
 {
     return std::ranges::any_of(card, [&](const auto &kv) { return kv.first == key; });
 }
 
-inline std::string value_of(const std::vector<std::pair<std::string, std::string>> &card,
-                            const std::string                                      &key)
+inline std::string value_of(const std::vector<std::pair<std::string, std::string>> &card, const std::string &key)
 {
     for(const auto &[k, v] : card)
         if(k == key)

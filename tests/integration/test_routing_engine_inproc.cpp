@@ -4,9 +4,7 @@
 
 using namespace routing_inproc_fixture;
 
-TEST_CASE(
-        "inproc routing: note_peer records awareness and dials NOTHING (awareness without connect)",
-        "[integration][routing][inproc]")
+TEST_CASE("inproc routing: note_peer records awareness and dials NOTHING (awareness without connect)", "[integration][routing][inproc]")
 {
     constexpr int k_iterations = 100;
     int           proven       = 0;

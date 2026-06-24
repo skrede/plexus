@@ -9,8 +9,7 @@ TEST_CASE("loss_shim drops a fixed-seed fraction deterministically across two ru
     // Two schedulers with the SAME config + seed must produce a byte-identical drop/emit
     // sequence over a fixed datagram stream — the reproducibility law the empirical sweeps
     // and the lossy benchmark cell rely on (no std::random anywhere in the path).
-    ptest::loss_reorder_config cfg{
-            .loss_num = 30, .loss_den = 100, .reorder_depth = 4, .seed = 0xABCDEF01u};
+    ptest::loss_reorder_config cfg{.loss_num = 30, .loss_den = 100, .reorder_depth = 4, .seed = 0xABCDEF01u};
 
     auto run_once = [&]
     {
@@ -18,8 +17,7 @@ TEST_CASE("loss_shim drops a fixed-seed fraction deterministically across two ru
         std::vector<std::vector<std::byte>> emitted;
         for(int i = 0; i < 500; ++i)
         {
-            std::vector<std::byte> dg{static_cast<std::byte>(i & 0xFF),
-                                      static_cast<std::byte>((i >> 8) & 0xFF)};
+            std::vector<std::byte> dg{static_cast<std::byte>(i & 0xFF), static_cast<std::byte>((i >> 8) & 0xFF)};
             for(auto &out : sched.drive(dg))
                 emitted.push_back(std::move(out));
         }
@@ -48,8 +46,7 @@ TEST_CASE("loss_shim drops a fixed-seed fraction deterministically across two ru
     REQUIRE(reordered);
 }
 
-TEST_CASE("loss_shim with zero loss and zero reorder is an order-preserving pass-through",
-          "[loss_shim]")
+TEST_CASE("loss_shim with zero loss and zero reorder is an order-preserving pass-through", "[loss_shim]")
 {
     ptest::loss_reorder_scheduler       sched{ptest::loss_reorder_config{}};
     std::vector<std::vector<std::byte>> emitted;

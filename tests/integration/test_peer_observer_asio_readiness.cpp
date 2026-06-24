@@ -33,8 +33,7 @@ TEST_CASE("observer over asio: on_peer_ready over the REAL loop, then the awaite
         // A's per-session sink — proving the subscribe round-trip wired the fan-out.
         auto                    *a_to_b = a.eng.session_for(id_b);
         std::vector<std::string> a_received;
-        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d)
-                           { a_received.emplace_back(to_string(d)); });
+        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(to_string(d)); });
 
         auto *b_inbound = b.eng.session_for(inbound_slot(1));
         REQUIRE(b_inbound != nullptr);
@@ -82,10 +81,9 @@ TEST_CASE("observer over asio: ready fires EXACTLY once per cycle across a real 
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE(
-        "observer over asio: premature-ready window — ready stays 1 across the reconnect-complete "
-        "predicate before the resurrected acks drain, becomes 2 only after over real TCP",
-        "[integration][observer][asio]")
+TEST_CASE("observer over asio: premature-ready window — ready stays 1 across the reconnect-complete "
+          "predicate before the resurrected acks drain, becomes 2 only after over real TCP",
+          "[integration][observer][asio]")
 {
     constexpr int k_iterations = 100;
     int           proven       = 0;

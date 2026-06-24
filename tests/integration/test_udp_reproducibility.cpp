@@ -4,8 +4,7 @@
 
 using namespace udp_repro_fixture;
 
-TEST_CASE("integration udp reproducibility: best_effort delivers the clean path every iteration",
-          "[integration][udp][reproducibility]")
+TEST_CASE("integration udp reproducibility: best_effort delivers the clean path every iteration", "[integration][udp][reproducibility]")
 {
     constexpr int k_iterations = 100;
     int           proven       = 0;
@@ -26,8 +25,7 @@ TEST_CASE("integration udp reproducibility: best_effort delivers the clean path 
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);

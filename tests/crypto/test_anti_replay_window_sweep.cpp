@@ -50,7 +50,10 @@ public:
         m_state = m_state * 6364136223846793005ull + 1442695040888963407ull;
         return m_state >> 17u;
     }
-    std::size_t bounded(std::size_t n) noexcept { return static_cast<std::size_t>(next() % n); }
+    std::size_t bounded(std::size_t n) noexcept
+    {
+        return static_cast<std::size_t>(next() % n);
+    }
 
 private:
     std::uint64_t m_state;
@@ -62,17 +65,14 @@ private:
 // datagram to reorder_depth (the representative bounded-reorder UDP model — a heavy-
 // tailed lingering model would have no finite window survive it and is not what a
 // control-loop link exhibits).
-std::vector<std::uint64_t> reordered_schedule(std::size_t count, std::size_t reorder_depth,
-                                              std::uint64_t seed)
+std::vector<std::uint64_t> reordered_schedule(std::size_t count, std::size_t reorder_depth, std::uint64_t seed)
 {
     lcg                                                  rng(seed);
     std::vector<std::pair<std::uint64_t, std::uint64_t>> keyed;
     keyed.reserve(count);
     for(std::size_t i = 0; i < count; ++i)
-        keyed.emplace_back(static_cast<std::uint64_t>(i) + rng.bounded(reorder_depth + 1),
-                           static_cast<std::uint64_t>(i));
-    std::stable_sort(keyed.begin(), keyed.end(),
-                     [](const auto &a, const auto &b) { return a.first < b.first; });
+        keyed.emplace_back(static_cast<std::uint64_t>(i) + rng.bounded(reorder_depth + 1), static_cast<std::uint64_t>(i));
+    std::stable_sort(keyed.begin(), keyed.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
     std::vector<std::uint64_t> arrival;
     arrival.reserve(count);
     for(const auto &k : keyed)
@@ -243,10 +243,10 @@ TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject r
     // window is clean only to ~1031, so it too false-rejects at the full realistic-link
     // depth — confirming 4096 is the smallest swept width that bears margin over it.
     constexpr std::size_t realistic_link_depth = 1042;
-    const auto            realistic = reordered_schedule(count, realistic_link_depth, seed);
+    const auto            realistic            = reordered_schedule(count, realistic_link_depth, seed);
 
     REQUIRE(false_rejects<64>(realistic) > 0);
-    REQUIRE(false_rejects<256>(realistic) > 0); // narrower than the realistic-link in-flight window
+    REQUIRE(false_rejects<256>(realistic) > 0);   // narrower than the realistic-link in-flight window
     REQUIRE(false_rejects<1024>(realistic) > 0);  // clean only to ~1031, just short of ~1042
     REQUIRE(false_rejects<4096>(realistic) == 0); // the margin-bearing winner
 

@@ -35,7 +35,10 @@ struct backing_region
         m_data       = reinterpret_cast<std::byte *>(aligned);
         m_size       = bytes;
     }
-    std::span<std::byte> span() const noexcept { return {m_data, m_size}; }
+    std::span<std::byte> span() const noexcept
+    {
+        return {m_data, m_size};
+    }
 
 private:
     std::vector<std::byte> m_storage;
@@ -63,8 +66,7 @@ TEST_CASE("ring_dekker: best_effort overwrite never tears a live pin", "[shm][ri
     backing_region slab(slab_region_bytes(k_cells, k_slot));
 
     broadcast_ring ring;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) ==
-            loan_status::ok);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) == loan_status::ok);
 
     std::atomic<bool>          torn{false};
     std::atomic<std::uint64_t> pins_verified{0};
@@ -77,9 +79,7 @@ TEST_CASE("ring_dekker: best_effort overwrite never tears a live pin", "[shm][ri
                     broadcast_ring::claim_result claim;
                     loan_status                  st;
                     do
-                        st = ring.claim_with_policy(sizeof(payload),
-                                                    plexus::io::reliability::best_effort,
-                                                    plexus::io::congestion::drop_newest, claim);
+                        st = ring.claim_with_policy(sizeof(payload), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim);
                     while(st == loan_status::congested);
                     if(st != loan_status::ok)
                         continue;

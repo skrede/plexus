@@ -81,15 +81,17 @@ public:
         }
         else
         {
-            const drop_cause cause =
-                    m_queues[key_of(ch)].enqueue_with_verdict(band, congestion, std::move(frame));
+            const drop_cause cause = m_queues[key_of(ch)].enqueue_with_verdict(band, congestion, std::move(frame));
             drain(ch);
             return cause;
         }
     }
 
     // Drop a departed peer's bands (peer-death cleanup, called beside the registry removal).
-    void remove(Channel &ch) { m_queues.erase(key_of(ch)); }
+    void remove(Channel &ch)
+    {
+        m_queues.erase(key_of(ch));
+    }
 
     // The per-(destination, band) overflow counters, mirroring asio_channel::dropped_count():
     // each reads the destination's band counter, returning 0 for a destination with no queue.

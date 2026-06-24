@@ -30,14 +30,20 @@ public:
     {
     }
 
-    void expires_after(std::chrono::milliseconds dur) { m_timer.expires_after(dur); }
+    void expires_after(std::chrono::milliseconds dur)
+    {
+        m_timer.expires_after(dur);
+    }
 
     void async_wait(plexus::detail::move_only_function<void(std::error_code)> handler)
     {
         m_timer.async_wait(std::move(handler));
     }
 
-    void cancel() { m_timer.cancel(); }
+    void cancel()
+    {
+        m_timer.cancel();
+    }
 
 private:
     ::asio::steady_timer m_timer;
@@ -45,7 +51,6 @@ private:
 
 }
 
-static_assert(plexus::timer<plexus::asio::asio_timer>,
-              "asio_timer must satisfy plexus::timer — check expires_after/async_wait/cancel");
+static_assert(plexus::timer<plexus::asio::asio_timer>, "asio_timer must satisfy plexus::timer — check expires_after/async_wait/cancel");
 
 #endif

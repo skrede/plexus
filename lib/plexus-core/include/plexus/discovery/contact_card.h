@@ -90,24 +90,20 @@ inline std::string port_key(std::string_view transport)
 
 // Assemble the card for one node (one record per node): the authenticated node_id,
 // a "plexus/<transport>/port" key per listening transport, and the schema version.
-[[nodiscard]] inline std::vector<std::pair<std::string, std::string>>
-assemble_contact_card(const node_id &id, const std::vector<listening_transport> &transports)
+[[nodiscard]] inline std::vector<std::pair<std::string, std::string>> assemble_contact_card(const node_id &id, const std::vector<listening_transport> &transports)
 {
     std::vector<std::pair<std::string, std::string>> card;
     card.reserve(transports.size() + 2);
     card.emplace_back(std::string{k_card_node_id_key}, detail::hex_encode(id));
     for(const auto &t : transports)
         card.emplace_back(detail::port_key(t.transport), std::to_string(t.port));
-    card.emplace_back(std::string{k_card_schema_key},
-                      std::to_string(k_contact_card_schema_version));
+    card.emplace_back(std::string{k_card_schema_key}, std::to_string(k_contact_card_schema_version));
     return card;
 }
 
 // Read a "plexus/<transport>/port" value back out of a browsed card so a peer dials
 // the advertised endpoint with no hardcoded port. Absent or unparsable yields none.
-[[nodiscard]] inline std::optional<std::uint16_t>
-read_transport_port(const std::vector<std::pair<std::string, std::string>> &card,
-                    std::string_view                                        transport)
+[[nodiscard]] inline std::optional<std::uint16_t> read_transport_port(const std::vector<std::pair<std::string, std::string>> &card, std::string_view transport)
 {
     const std::string key = detail::port_key(transport);
     for(const auto &[k, v] : card)

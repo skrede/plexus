@@ -68,8 +68,7 @@ public:
     }
 
 private:
-    [[nodiscard]] const keyed_psk *
-    lookup(const std::array<std::byte, k_key_id_len> &id) const noexcept
+    [[nodiscard]] const keyed_psk *lookup(const std::array<std::byte, k_key_id_len> &id) const noexcept
     {
         for(const auto &k : m_keys)
             if(k.key_id == id)
@@ -79,8 +78,7 @@ private:
 
     // MAC the canonical proof input (assembled by attach_proof_input — the layout the
     // prover reproduces byte for byte) under this key's material.
-    [[nodiscard]] bool recompute_proof(const keyed_psk &key, const attach_facts &f,
-                                       std::span<std::byte> out) const noexcept
+    [[nodiscard]] bool recompute_proof(const keyed_psk &key, const attach_facts &f, std::span<std::byte> out) const noexcept
     {
         return m_hmac(key.material, attach_proof_input(f), out);
     }
@@ -98,7 +96,10 @@ private:
 class accept_any final : public attach_policy
 {
 public:
-    [[nodiscard]] bool decide(const attach_facts &) const noexcept override { return true; }
+    [[nodiscard]] bool decide(const attach_facts &) const noexcept override
+    {
+        return true;
+    }
 };
 
 // The attaching side's counterpart to psk_keystore_policy: the prover holds its OWN
@@ -119,7 +120,10 @@ public:
     {
     }
 
-    [[nodiscard]] bool engaged() const noexcept { return m_engaged; }
+    [[nodiscard]] bool engaged() const noexcept
+    {
+        return m_engaged;
+    }
 
     [[nodiscard]] const std::array<std::byte, k_key_id_len> &key_id() const noexcept
     {

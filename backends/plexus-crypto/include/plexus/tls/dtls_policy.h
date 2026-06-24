@@ -38,7 +38,6 @@ struct dtls_policy
 
 }
 
-static_assert(plexus::Policy<plexus::tls::dtls_policy>,
-              "dtls_policy must satisfy Policy — check the channel/timer constructors and post()");
+static_assert(plexus::Policy<plexus::tls::dtls_policy>, "dtls_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

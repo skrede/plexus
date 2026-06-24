@@ -40,7 +40,10 @@ public:
     inproc_executor(inproc_executor &&)                 = delete;
     inproc_executor &operator=(inproc_executor &&)      = delete;
 
-    void post(detail::move_only_function<void()> fn) { m_posted.push_back(std::move(fn)); }
+    void post(detail::move_only_function<void()> fn)
+    {
+        m_posted.push_back(std::move(fn));
+    }
 
     bool step()
     {
@@ -71,17 +74,22 @@ public:
             m_timers.push_back(t);
     }
 
-    void deregister_timer(inproc_timer<Clock> *t) noexcept { std::erase(m_timers, t); }
+    void deregister_timer(inproc_timer<Clock> *t) noexcept
+    {
+        std::erase(m_timers, t);
+    }
 
-    inproc_bus<Clock> &bus() noexcept { return m_bus; }
+    inproc_bus<Clock> &bus() noexcept
+    {
+        return m_bus;
+    }
 
 private:
     // The clock is read only here, and only when some timer could actually fire —
     // never for an armed-but-handlerless or cancelled timer.
     bool fire_due_timer()
     {
-        const bool any_armed = std::any_of(m_timers.begin(), m_timers.end(),
-                                           [](const inproc_timer<Clock> *t) { return t->armed(); });
+        const bool any_armed = std::any_of(m_timers.begin(), m_timers.end(), [](const inproc_timer<Clock> *t) { return t->armed(); });
         if(!any_armed)
             return false;
         const auto now = Clock::now();

@@ -2,8 +2,7 @@
 
 using namespace stream_send_queue_fixture;
 
-TEST_CASE("stream_send_queue default capacity is unbounded — the at-capacity signal is inert",
-          "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue default capacity is unbounded — the at-capacity signal is inert", "[io][stream_send_queue]")
 {
     recorder          rec;
     stream_send_queue q{rec.sink()};
@@ -15,9 +14,7 @@ TEST_CASE("stream_send_queue default capacity is unbounded — the at-capacity s
     REQUIRE(q.size() == 1000);
 }
 
-TEST_CASE(
-        "stream_send_queue bounded capacity fires the at-capacity signal and refuses past the cap",
-        "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue bounded capacity fires the at-capacity signal and refuses past the cap", "[io][stream_send_queue]")
 {
     recorder          rec;
     stream_send_queue q{rec.sink(), 2};
@@ -37,8 +34,7 @@ TEST_CASE(
     REQUIRE(q.size() == 2);
 }
 
-TEST_CASE("stream_send_queue admits a single frame LARGER than the cap onto an empty queue",
-          "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue admits a single frame LARGER than the cap onto an empty queue", "[io][stream_send_queue]")
 {
     // The decoupling contract: the byte cap bounds ADDITIONAL backlog, NOT a single message's
     // size — the per-message ceiling (enforced upstream at publish) is the sole size authority.
@@ -85,9 +81,7 @@ TEST_CASE("stream_send_queue caps on summed BYTES, not entry count", "[io][strea
     REQUIRE(q.queued_bytes() == 8);
 }
 
-TEST_CASE(
-        "stream_send_queue near-cap boundary: byte accounting does not wrap and refuses correctly",
-        "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue near-cap boundary: byte accounting does not wrap and refuses correctly", "[io][stream_send_queue]")
 {
     // Overflow boundary: a frame at cap-1 bytes followed by a small frame whose sum
     // exceeds the cap must be refused (compare-before-add), and the running total must

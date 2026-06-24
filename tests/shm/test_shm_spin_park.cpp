@@ -42,7 +42,10 @@ struct backing_region
         m_data       = reinterpret_cast<std::byte *>(aligned);
         m_size       = bytes;
     }
-    std::span<std::byte> span() const noexcept { return {m_data, m_size}; }
+    std::span<std::byte> span() const noexcept
+    {
+        return {m_data, m_size};
+    }
 
 private:
     std::vector<std::byte> m_storage;
@@ -61,8 +64,7 @@ struct fixture
 
     fixture()
     {
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) ==
-                loan_status::ok);
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) == loan_status::ok);
     }
 
     // Publish one 4-byte value through a reliable+block publisher.
@@ -88,8 +90,7 @@ TEST_CASE("shm.spin_park: budget 0 parks immediately on an empty ring", "[shm][s
     REQUIRE(sub.take(msg) == loan_status::empty); // no spin — the futex-park floor
 }
 
-TEST_CASE("shm.spin_park: a present message is taken regardless of the spin budget",
-          "[shm][spin_park]")
+TEST_CASE("shm.spin_park: a present message is taken regardless of the spin budget", "[shm][spin_park]")
 {
     for(std::uint32_t budget : {0u, 64u, 256u, 4096u})
     {
@@ -105,8 +106,7 @@ TEST_CASE("shm.spin_park: a present message is taken regardless of the spin budg
     }
 }
 
-TEST_CASE("shm.spin_park: a message landing during the spin window is caught without parking",
-          "[shm][spin_park]")
+TEST_CASE("shm.spin_park: a message landing during the spin window is caught without parking", "[shm][spin_park]")
 {
     constexpr int k_iterations   = 50;
     int           caught_by_spin = 0;
@@ -146,8 +146,7 @@ TEST_CASE("shm.spin_park: a message landing during the spin window is caught wit
     REQUIRE(caught_by_spin >= k_iterations - 2);
 }
 
-TEST_CASE("shm.spin_park: an idle subscriber with a budget terminates to empty (parks)",
-          "[shm][spin_park]")
+TEST_CASE("shm.spin_park: an idle subscriber with a budget terminates to empty (parks)", "[shm][spin_park]")
 {
     fixture         f;
     slot_subscriber sub{f.ring, /*spin_budget=*/100'000};

@@ -28,8 +28,8 @@ enum class drop_cause : std::uint8_t
     demux_refused,      // an inbound datagram refused by the per-peer demux cap
     arq_shed,           // a reliable frame shed at the publisher under congestion=drop
     unroutable,         // a process-tier packet to a partner the bus never minted / since vanished
-    closed_unsent, // bytes still queued when close() abandoned the backlog (TLS-safe teardown, no
-                   // flush)
+    closed_unsent,      // bytes still queued when close() abandoned the backlog (TLS-safe teardown, no
+                        // flush)
 };
 
 // A plain serializable drop record: cause, peer, topic, transport tier, band, and a

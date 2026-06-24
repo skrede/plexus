@@ -22,7 +22,10 @@ using plexus::io::from_wire_region;
 
 namespace {
 
-bool round_trips(const subscriber_qos &q) { return from_wire_region(to_wire_region(q)) == q; }
+bool round_trips(const subscriber_qos &q)
+{
+    return from_wire_region(to_wire_region(q)) == q;
+}
 
 }
 
@@ -65,7 +68,5 @@ TEST_CASE("subscribe_qos_wire: combinations of every flag and field round-trip t
                                        .rxo                            = rxo_mode::strict,
                                        .posture                        = attach_posture::strict}));
 
-    REQUIRE(round_trips(subscriber_qos{.durability_mode                = durability::all,
-                                       .requested_reliability_reliable = true,
-                                       .rxo                            = rxo_mode::strict}));
+    REQUIRE(round_trips(subscriber_qos{.durability_mode = durability::all, .requested_reliability_reliable = true, .rxo = rxo_mode::strict}));
 }

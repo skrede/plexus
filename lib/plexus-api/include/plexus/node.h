@@ -91,8 +91,7 @@ struct mux_selection<true, Transports...>
 };
 
 template<typename... Transports>
-using node_engine_transport =
-        typename mux_selection<sizeof...(Transports) == 1, Transports...>::transport;
+using node_engine_transport = typename mux_selection<sizeof...(Transports) == 1, Transports...>::transport;
 
 template<typename... Transports>
 using node_mux_glue = typename mux_selection<sizeof...(Transports) == 1, Transports...>::glue;
@@ -147,12 +146,10 @@ class value_logger;
 template<typename T>
 struct no_codec;
 
-template<typename Sig = void, template<typename> class CReq = no_codec,
-         template<typename> class CRes = CReq>
+template<typename Sig = void, template<typename> class CReq = no_codec, template<typename> class CRes = CReq>
 class caller;
 
-template<typename Sig = void, template<typename> class CReq = no_codec,
-         template<typename> class CRes = CReq>
+template<typename Sig = void, template<typename> class CReq = no_codec, template<typename> class CRes = CReq>
 class procedure;
 
 // The consumable public surface: a node composes a routing_engine over an injected substrate.
@@ -170,10 +167,7 @@ class procedure;
 // that shared state (the shm-wiring glue already extracted to detail/node_shm_wiring.h).
 template<typename Policy, typename... Transports>
     requires plexus::Policy<Policy> && (sizeof...(Transports) >= 1) &&
-        (sizeof...(Transports) == 1
-                 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>,
-                                         Policy>
-                 : (io::mux_member<Transports> && ...))
+        (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, Policy> : (io::mux_member<Transports> && ...))
 class node
 {
     // The endpoint handles are the ONLY construction path: the registration/retire seams are
@@ -198,8 +192,7 @@ public:
     using transport_tuple  = std::tuple<Transports...>;
 
     // The node_id is taken VERBATIM: plexus compares the identity, never mints or interprets it.
-    node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id,
-         Transports &...transports, const node_options &opts)
+    node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id, Transports &...transports, const node_options &opts)
             : m_id(id)
             , m_executor(executor)
             , m_disc(disc)
@@ -212,18 +205,14 @@ public:
             // ctor — that would invalidate the subsequent engine_leaf/resolve_hook reads.
             , m_glue(transports..., io::transport_selector{}, detail::resolve_hook(transports...))
             , m_leaf(engine_leaf(transports...))
-            , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout,
-                       opts.reconnect, opts.redial_seed, resolve_logger(opts), opts.dial_eagerly,
+            , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout, opts.reconnect, opts.redial_seed, resolve_logger(opts), opts.dial_eagerly,
                        opts.max_message_bytes)
     {
         // Install the node-shared routes ONCE, before any session is built (the
         // set-before-listen contract). Each fans a delivered frame to every callback locally
         // registered for its fqn; the object lane is native-key-checked (never a cast).
-        m_engine.on_message_route([this](std::string_view fqn, std::span<const std::byte> bytes,
-                                         const io::message_info &info)
-                                  { dispatch_message(fqn, bytes, info); });
-        m_engine.on_object_route([this](std::string_view fqn, const io::object_carrier &carrier)
-                                 { dispatch_object(fqn, carrier); });
+        m_engine.on_message_route([this](std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info) { dispatch_message(fqn, bytes, info); });
+        m_engine.on_object_route([this](std::string_view fqn, const io::object_carrier &carrier) { dispatch_object(fqn, carrier); });
         // Re-fan a standing demand to a peer that becomes ready AFTER it was registered.
         m_engine.add_observer(m_peer_watch);
         // Advertise the (port-less) card so a dial-only node is discoverable from birth, and
@@ -241,8 +230,7 @@ public:
 
     // The name-hash overload (OPT-IN): derives the node_id from the name; the verbatim ctor is
     // the primary path.
-    node(executor_type executor, discovery::discovery &disc, std::string_view name,
-         Transports &...transports, const node_options &opts)
+    node(executor_type executor, discovery::discovery &disc, std::string_view name, Transports &...transports, const node_options &opts)
             : node(executor, disc, detail::hash_node_id(name), transports..., opts)
     {
     }
@@ -290,14 +278,29 @@ public:
         }
     }
 
-    const plexus::node_id &id() const noexcept { return m_id; }
+    const plexus::node_id &id() const noexcept
+    {
+        return m_id;
+    }
 
     // Escape hatches: the live engine objects, for advanced peer-level work the topic-level
     // public verbs deliberately hide.
-    engine_type       &router() noexcept { return m_engine; }
-    const engine_type &router() const noexcept { return m_engine; }
-    auto              &message_forwarder() noexcept { return m_engine.messages(); }
-    executor_type      executor() const noexcept { return m_executor; }
+    engine_type &router() noexcept
+    {
+        return m_engine;
+    }
+    const engine_type &router() const noexcept
+    {
+        return m_engine;
+    }
+    auto &message_forwarder() noexcept
+    {
+        return m_engine.messages();
+    }
+    executor_type executor() const noexcept
+    {
+        return m_executor;
+    }
 
     // Object-lane deliveries dropped at the demux on a type-witness mismatch — the never-UB
     // backstop's readable signal (never a cast, never silent).
@@ -348,8 +351,7 @@ public:
     // A publisher has no callable to deduce from, so the codec is supplied as a finished type
     // (the pub/sub slots take finished codecs, not families).
     template<typename Codec>
-    auto advertise(std::string_view topic, const typed_publisher_options &opts = {},
-                   Codec codec = {})
+    auto advertise(std::string_view topic, const typed_publisher_options &opts = {}, Codec codec = {})
     {
         return publisher<Codec>{*this, topic, opts, std::move(codec)};
     }
@@ -358,21 +360,17 @@ public:
     // opts.format). The projection defaults to the operator<< text floor; both codec and
     // projection live only in the returned handle — never the tap.
     template<typename Codec, typename Projection = no_projection>
-    [[nodiscard]] auto log(std::string_view topic, const value_logger_options &opts,
-                           Codec codec = {}, Projection projection = {})
+    [[nodiscard]] auto log(std::string_view topic, const value_logger_options &opts, Codec codec = {}, Projection projection = {})
     {
-        return value_logger<Codec, Projection>(*this, topic, opts, std::move(codec),
-                                               std::move(projection));
+        return value_logger<Codec, Projection>(*this, topic, opts, std::move(codec), std::move(projection));
     }
 
     // The first-class consumer-sovereign capture verb (NOT the router() escape hatch): an RAII
     // recorder handle that registers its tap on the engine and deregisters before teardown. The
     // sink MUST outlive the handle; the drain rides this node's executor turns — no thread.
-    [[nodiscard]] recorder<engine_type, Policy> make_recorder(io::recording::byte_sink &sink,
-                                                              recorder_options          opts = {})
+    [[nodiscard]] recorder<engine_type, Policy> make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
     {
-        return recorder<engine_type, Policy>{m_engine, m_executor,      m_id,
-                                             sink,     std::move(opts), m_wire_crypto_position};
+        return recorder<engine_type, Policy>{m_engine, m_executor, m_id, sink, std::move(opts), m_wire_crypto_position};
     }
     // --------------------------------------------------------------------------------
 
@@ -388,30 +386,21 @@ private:
 
     // Register a standing subscriber: mint its id, store it, and fan its demand to every known
     // peer (the re-fan reaches each peer discovered later). Returns the id retire keys on.
-    registration_id
-    register_subscriber_seam(std::string_view fqn, const io::subscriber_qos &qos,
-                             plexus::detail::move_only_function<void(std::span<const std::byte>,
-                                                                     const io::message_info &)>
-                                                                   cb,
-                             std::optional<std::uint64_t>          type_id = std::nullopt,
-                             object_entry                          obj     = {},
-                             std::optional<io::topic_capture_rule> capture = std::nullopt)
+    registration_id register_subscriber_seam(std::string_view fqn, const io::subscriber_qos &qos,
+                                             plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb,
+                                             std::optional<std::uint64_t> type_id = std::nullopt, object_entry obj = {}, std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
         const registration_id rid = m_next_registration++;
-        m_subscriptions.push_back(
-                {rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
+        m_subscriptions.push_back({rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         // Thread the subscriber's own hint (the bilateral OR) and provision a co-host
         // subscriber-only default-geometry ring through the SAME path the publisher uses.
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
         provision_same_host_ring(fqn, subscriber_effective_bytes(qos), std::nullopt);
-        m_engine.post_endpoint(
-                fqn,
-                {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
+        m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
-            m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any,
-                               type_id);
+            m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any, type_id);
         return rid;
     }
 
@@ -419,17 +408,14 @@ private:
     // the topic from every peer it was fanned to.
     void retire_subscriber_seam(registration_id rid)
     {
-        auto it = std::find_if(m_subscriptions.begin(), m_subscriptions.end(),
-                               [&](const auto &e) { return e.first == rid; });
+        auto it = std::find_if(m_subscriptions.begin(), m_subscriptions.end(), [&](const auto &e) { return e.first == rid; });
         if(it == m_subscriptions.end())
             return;
         const std::string fqn = it->second.fqn;
         m_subscriptions.erase(it);
         if(!any_subscriber_for(fqn))
         {
-            m_engine.post_endpoint(fqn,
-                                   {io::endpoint_edge::subscriber_retired,
-                                    wire::fqn_topic_hash(fqn), std::nullopt});
+            m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired, wire::fqn_topic_hash(fqn), std::nullopt});
             for(const auto &peer : m_known_peers)
                 m_engine.unsubscribe(peer, fqn);
         }
@@ -438,17 +424,13 @@ private:
     // Declare a publisher's topic and mint its gid. The DECLARATION persists for the node's life
     // (stable identity for subscriber correlation); the HANDLE's lifetime is distinct
     // (retire_publisher_seam posts the handle-drop edge).
-    void declare_publisher_seam(std::string_view fqn, const topic_qos &qos,
-                                bool                                  emit_source_identity,
-                                std::optional<std::uint64_t>          type_id      = std::nullopt,
-                                std::optional<shm::shm_geometry>  shm_geometry = std::nullopt,
-                                std::optional<io::topic_capture_rule> capture      = std::nullopt)
+    void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity, std::optional<std::uint64_t> type_id = std::nullopt,
+                                std::optional<shm::shm_geometry> shm_geometry = std::nullopt, std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
         m_engine.messages().declare(fqn, qos, type_id, emit_source_identity);
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
-        m_engine.post_endpoint(
-                fqn, {io::endpoint_edge::publisher_declared, wire::fqn_topic_hash(fqn), type_id});
+        m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_declared, wire::fqn_topic_hash(fqn), type_id});
         // Resolution order: per-topic ?: the shm member's own default ?: shipped. Producer-side
         // same-host-local, never wire-advertised, never RxO. An absent per-topic override defers to
         // each shm member's default_geometry().
@@ -461,32 +443,24 @@ private:
     // for the node's life by design) — it surfaces the handle's observable lifetime only.
     void retire_publisher_seam(std::string_view fqn)
     {
-        m_engine.post_endpoint(
-                fqn,
-                {io::endpoint_edge::publisher_dropped, wire::fqn_topic_hash(fqn), std::nullopt});
+        m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_dropped, wire::fqn_topic_hash(fqn), std::nullopt});
     }
 
     // Record the topic's effective size + resolved geometry on the shm member, keyed by fqn,
     // BEFORE the dial/listen mints the ring. A composition with no shm member is a no-op. An absent
     // per-topic override resolves to each shm member's OWN default_geometry() (the member, not
     // node_options, owns the same-host ring default).
-    void provision_same_host_ring(std::string_view fqn, std::size_t effective_bytes,
-                                  std::optional<shm::shm_geometry> geom)
+    void provision_same_host_ring(std::string_view fqn, std::size_t effective_bytes, std::optional<shm::shm_geometry> geom)
     {
         std::string key{fqn};
-        for_each_shm_member([&](auto &m)
-                            { m.set_topic_geometry(key, effective_bytes,
-                                                   geom.value_or(m.default_geometry())); });
+        for_each_shm_member([&](auto &m) { m.set_topic_geometry(key, effective_bytes, geom.value_or(m.default_geometry())); });
     }
 
     // A subscriber-only ring sizes to the subscriber's requested per-message max, else the node
     // default — the consumer-rescues-itself default-geometry ring.
-    [[nodiscard]] std::size_t
-    subscriber_effective_bytes(const io::subscriber_qos &qos) const noexcept
+    [[nodiscard]] std::size_t subscriber_effective_bytes(const io::subscriber_qos &qos) const noexcept
     {
-        return qos.requested_max_message_bytes != 0
-                ? static_cast<std::size_t>(qos.requested_max_message_bytes)
-                : m_max_message_bytes;
+        return qos.requested_max_message_bytes != 0 ? static_cast<std::size_t>(qos.requested_max_message_bytes) : m_max_message_bytes;
     }
 
     // Source the upgrade policy from the shm member (it owns the default) and, when an shm member
@@ -526,17 +500,14 @@ private:
     }
 
     template<typename M>
-    static constexpr bool has_topic_geometry = requires(M &m) {
-        m.set_topic_geometry(std::string{}, std::size_t{}, shm::shm_geometry{});
-    };
+    static constexpr bool has_topic_geometry = requires(M &m) { m.set_topic_geometry(std::string{}, std::size_t{}, shm::shm_geometry{}); };
 
     // Resolve the FIRST connection-order peer with a complete session and route the call to it.
     // on_reply is fanned with an ENGAGED status + the resolved provider gid. With NO connected
     // provider, the completion is POSTED with an ABSENT status (the no_provider verdict, carried
     // out-of-band, never a fabricated rpc_status) — it never hangs, buffers, or queues.
     template<typename OnReply>
-    void call_seam(std::string_view fqn, std::span<const std::byte> param, OnReply on_reply,
-                   std::optional<std::chrono::nanoseconds> deadline)
+    void call_seam(std::string_view fqn, std::span<const std::byte> param, OnReply on_reply, std::optional<std::chrono::nanoseconds> deadline)
     {
         for(const auto &peer : m_known_peers)
         {
@@ -545,15 +516,11 @@ private:
                 continue;
             const std::optional<publisher_gid> provider{publisher_gid{peer, 0}};
             m_engine.procedures().call(
-                    session->rpc_peer(), fqn, param,
-                    [on_reply = std::move(on_reply),
-                     provider](wire::rpc_status status, std::span<const std::byte> bytes) mutable
-                    { on_reply(status, bytes, provider); },
-                    deadline, session->session_id());
+                    session->rpc_peer(), fqn, param, [on_reply = std::move(on_reply), provider](wire::rpc_status status, std::span<const std::byte> bytes) mutable
+                    { on_reply(status, bytes, provider); }, deadline, session->session_id());
             return;
         }
-        Policy::post(m_executor, [on_reply = std::move(on_reply)]() mutable
-                     { on_reply(std::nullopt, {}, std::nullopt); });
+        Policy::post(m_executor, [on_reply = std::move(on_reply)]() mutable { on_reply(std::nullopt, {}, std::nullopt); });
     }
 
     // The local-uniqueness gate: the served-FQN set is checked BEFORE the forwarder is touched,
@@ -588,14 +555,12 @@ private:
     void fan_demands_to(const plexus::node_id &id)
     {
         for(const auto &[rid, sub] : m_subscriptions)
-            m_engine.subscribe(id, sub.fqn, sub.qos, io::locality::any,
-                               io::reliability_requirement::any, sub.type_id);
+            m_engine.subscribe(id, sub.fqn, sub.qos, io::locality::any, io::reliability_requirement::any, sub.type_id);
     }
 
     // Fan a delivered frame to every callback registered for its fqn (both arities ride this one
     // path behind the 3-arg adapter). An fqn with no local subscriber is a silent no-op.
-    void dispatch_message(std::string_view fqn, std::span<const std::byte> bytes,
-                          const io::message_info &info)
+    void dispatch_message(std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info)
     {
         for(auto &[rid, sub] : m_subscriptions)
             if(sub.fqn == fqn)
@@ -630,8 +595,7 @@ private:
     // The per-subscriber message_info for an object dispatch. A subscriber that wants no info gets
     // a documented-0 stamp; one that wants it shares the at-most-once receive clock read across the
     // fan (reception/reception_read are threaded by reference so the clock is read on first need).
-    io::message_info object_info_for(const subscription &sub, const io::object_carrier &carrier,
-                                     std::uint64_t &reception, bool &reception_read) const
+    io::message_info object_info_for(const subscription &sub, const io::object_carrier &carrier, std::uint64_t &reception, bool &reception_read) const
     {
         io::message_info info{};
         info.publication_sequence = carrier.sequence;
@@ -651,8 +615,7 @@ private:
 
     bool any_subscriber_for(std::string_view fqn) const
     {
-        return std::any_of(m_subscriptions.begin(), m_subscriptions.end(),
-                           [&](const auto &e) { return e.second.fqn == fqn; });
+        return std::any_of(m_subscriptions.begin(), m_subscriptions.end(), [&](const auto &e) { return e.second.fqn == fqn; });
     }
 
     // Fill the type-erased outbound-verb seam the endpoint handles capture. Each verb is a
@@ -664,59 +627,39 @@ private:
     {
         io::endpoint_seam s{};
         s.ctx               = this;
-        s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos, bool emit,
-                                 std::optional<std::uint64_t> type_id, const void *geometry,
+        s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos, bool emit, std::optional<std::uint64_t> type_id, const void *geometry,
                                  std::optional<io::topic_capture_rule> capture)
         {
             std::optional<shm::shm_geometry> shm_geometry;
             if(geometry != nullptr)
                 shm_geometry = *static_cast<const shm::shm_geometry *>(geometry);
-            static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry,
-                                                             capture);
+            static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry, capture);
         };
-        s.publish = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes)
-        { static_cast<node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
-        s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier,
-                              io::encode_thunk encode)
-        {
-            static_cast<node *>(ctx)->m_engine.messages().publish_object(
-                    fqn, carrier, [&] { return io::invoke(encode); });
-        };
-        s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos,
-                                   io::bytes_cb cb, std::optional<std::uint64_t> type_id,
-                                   const void *native_key, io::object_dispatch dispatch,
-                                   std::optional<io::topic_capture_rule> capture) -> registration_id
-        {
-            return static_cast<node *>(ctx)->register_subscriber_seam(
-                    fqn, qos, std::move(cb), type_id, object_entry{native_key, std::move(dispatch)},
-                    capture);
-        };
-        s.retire_subscriber = [](void *ctx, registration_id rid)
-        { static_cast<node *>(ctx)->retire_subscriber_seam(rid); };
-        s.retire_publisher = [](void *ctx, std::string_view fqn)
-        { static_cast<node *>(ctx)->retire_publisher_seam(fqn); };
-        s.serve_procedure = [](void *ctx, std::string_view fqn, io::handler_fn handler)
-        { static_cast<node *>(ctx)->serve_procedure_seam(fqn, std::move(handler)); };
-        s.retire_procedure = [](void *ctx, std::string_view fqn)
-        { static_cast<node *>(ctx)->retire_procedure_seam(fqn); };
-        s.call = [](void *ctx, std::string_view fqn, std::span<const std::byte> param,
-                    io::on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
+        s.publish        = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes) { static_cast<node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
+        s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier, io::encode_thunk encode)
+        { static_cast<node *>(ctx)->m_engine.messages().publish_object(fqn, carrier, [&] { return io::invoke(encode); }); };
+        s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos, io::bytes_cb cb, std::optional<std::uint64_t> type_id, const void *native_key,
+                                   io::object_dispatch dispatch, std::optional<io::topic_capture_rule> capture) -> registration_id
+        { return static_cast<node *>(ctx)->register_subscriber_seam(fqn, qos, std::move(cb), type_id, object_entry{native_key, std::move(dispatch)}, capture); };
+        s.retire_subscriber = [](void *ctx, registration_id rid) { static_cast<node *>(ctx)->retire_subscriber_seam(rid); };
+        s.retire_publisher  = [](void *ctx, std::string_view fqn) { static_cast<node *>(ctx)->retire_publisher_seam(fqn); };
+        s.serve_procedure   = [](void *ctx, std::string_view fqn, io::handler_fn handler) { static_cast<node *>(ctx)->serve_procedure_seam(fqn, std::move(handler)); };
+        s.retire_procedure  = [](void *ctx, std::string_view fqn) { static_cast<node *>(ctx)->retire_procedure_seam(fqn); };
+        s.call              = [](void *ctx, std::string_view fqn, std::span<const std::byte> param, io::on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
         { static_cast<node *>(ctx)->call_seam(fqn, param, std::move(on_reply), deadline); };
         return s;
     }
     // --------------------------------------------------------------------------------
 
-    static io::handshake_fsm_config make_fsm_cfg(const plexus::node_id &id,
-                                                 const node_options    &opts)
+    static io::handshake_fsm_config make_fsm_cfg(const plexus::node_id &id, const node_options &opts)
     {
-        return io::handshake_fsm_config{
-                .self_id                  = id,
-                .version_major            = opts.handshake.version_major,
-                .version_minor            = opts.handshake.version_minor,
-                .compatible_version_major = opts.handshake.compatible_version_major,
-                .compatible_version_minor = opts.handshake.compatible_version_minor,
-                .local_fingerprint        = opts.handshake.local_fingerprint,
-                .attach_policy            = opts.attach_policy};
+        return io::handshake_fsm_config{.self_id                  = id,
+                                        .version_major            = opts.handshake.version_major,
+                                        .version_minor            = opts.handshake.version_minor,
+                                        .compatible_version_major = opts.handshake.compatible_version_major,
+                                        .compatible_version_minor = opts.handshake.compatible_version_minor,
+                                        .local_fingerprint        = opts.handshake.local_fingerprint,
+                                        .attach_policy            = opts.attach_policy};
     }
 
     log::logger &resolve_logger(const node_options &opts)
@@ -739,8 +682,7 @@ private:
     // backend fills the host from the resolved record; over static_discovery the node supplies it.
     void advertise_card()
     {
-        m_disc.advertise({m_service_name, io::endpoint{"", m_host},
-                          discovery::assemble_contact_card(m_id, m_listens)});
+        m_disc.advertise({m_service_name, io::endpoint{"", m_host}, discovery::assemble_contact_card(m_id, m_listens)});
     }
 
     // Parse a browsed card into an awareness entry, reject-on-failure (the card is untrusted
@@ -762,9 +704,9 @@ private:
         }
     }
 
-    plexus::node_id                             m_id;
-    executor_type                               m_executor;
-    discovery::discovery                       &m_disc;
+    plexus::node_id       m_id;
+    executor_type         m_executor;
+    discovery::discovery &m_disc;
     // The node owns its inert default logger and binds m_logger / the engine to it by reference
     // when no logger is supplied — declared immediately ABOVE m_logger so it is fully constructed
     // before resolve_logger binds either reference in the init-list. One owned sink, no global.

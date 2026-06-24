@@ -52,13 +52,10 @@ struct attach_facts
 // — a single source for the layout, no duplicate-and-drift.
 [[nodiscard]] inline std::vector<std::byte> attach_proof_input(const attach_facts &f)
 {
-    static constexpr std::array<std::byte, 13> label{
-            std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'u'},
-            std::byte{'s'}, std::byte{'-'}, std::byte{'a'}, std::byte{'t'}, std::byte{'t'},
-            std::byte{'a'}, std::byte{'c'}, std::byte{'h'}};
-    std::vector<std::byte> msg;
-    msg.reserve(label.size() + 1 + f.initiator_id.size() + f.responder_id.size() +
-                f.peer_nonce.size() + f.own_nonce.size() + f.transcript_digest.size());
+    static constexpr std::array<std::byte, 13> label{std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'u'}, std::byte{'s'}, std::byte{'-'},
+                                                     std::byte{'a'}, std::byte{'t'}, std::byte{'t'}, std::byte{'a'}, std::byte{'c'}, std::byte{'h'}};
+    std::vector<std::byte>                     msg;
+    msg.reserve(label.size() + 1 + f.initiator_id.size() + f.responder_id.size() + f.peer_nonce.size() + f.own_nonce.size() + f.transcript_digest.size());
     msg.insert(msg.end(), label.begin(), label.end());
     msg.push_back(static_cast<std::byte>(f.role));
     msg.insert(msg.end(), f.initiator_id.begin(), f.initiator_id.end());

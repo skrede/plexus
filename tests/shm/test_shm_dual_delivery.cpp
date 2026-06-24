@@ -74,8 +74,7 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
-                     0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -96,15 +95,13 @@ bool produce_shm(const std::string &fqn)
 {
     posix_shm_region_broker broker;
     region_handle           ctrl, slab;
-    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
-       broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
+    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
     if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
         return false;
     pio::broadcast_ring::claim_result claim;
-    if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable,
-                              plexus::io::congestion::block, claim) != pio::loan_status::ok)
+    if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) != pio::loan_status::ok)
         return false;
     std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
@@ -135,9 +132,7 @@ std::uint32_t wire_roundtrip_loopback(std::uint32_t payload)
 
 }
 
-TEST_CASE(
-        "shm.dual_delivery a same-host SHM topic and a cross-host wire topic coexist on one topic",
-        "[shm][dual_delivery]")
+TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic coexist on one topic", "[shm][dual_delivery]")
 {
     const std::string        fqn  = "topic.dual." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
@@ -162,27 +157,21 @@ TEST_CASE(
         // bridge on a user-owned io_context bound to the ring's notify word.
         posix_shm_region_broker broker;
         region_handle           ctrl, slab;
-        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
-                              pio::create_options{}, ctrl) == pio::region_status::ok);
-        REQUIRE(broker.create(slab_name(fqn),
-                              pio::slab_region_bytes(geom.cell_count, geom.slot_capacity),
-                              pio::create_options{}, slab) == pio::region_status::ok);
+        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
+        REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count,
-                                            geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
 
-        ::asio::io_context                            io;
-        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
-        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(
-                ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
+        ::asio::io_context                                              io;
+        plexus::asio::shm::ring_notifier<test_policy>                   bridge(io, ring.notify_generation());
+        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t shm_got = 0;
         bridge.arm(
                 [&]
                 {
-                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn
-                            deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
+                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
                     {
                         std::memcpy(&shm_got, wb.data(), sizeof(shm_got));
                         c->shm_value_seen.store(1u, std::memory_order_release);
@@ -198,8 +187,7 @@ TEST_CASE(
         const std::uint32_t wire_got = wire_roundtrip_loopback(k_payload);
 
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-        while(c->shm_value_seen.load(std::memory_order_acquire) == 0 &&
-              std::chrono::steady_clock::now() < deadline)
+        while(c->shm_value_seen.load(std::memory_order_acquire) == 0 && std::chrono::steady_clock::now() < deadline)
             io.run_for(std::chrono::milliseconds(20));
 
         bridge.disarm();

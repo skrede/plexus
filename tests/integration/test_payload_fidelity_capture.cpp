@@ -67,12 +67,10 @@ struct reading_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
-                                                   reading                   &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, reading &out) const
     {
         if(bytes.size() != 4)
-            return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+            return plexus::expected<void, std::error_code>{plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -80,7 +78,10 @@ struct reading_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {0x9A9A0001u, "reading"}; }
+    plexus::type_identity type_info() const
+    {
+        return {0x9A9A0001u, "reading"};
+    }
 };
 
 static_assert(plexus::typed_codec<reading_codec>);
@@ -98,9 +99,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options base_opts()
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = true;
     return opts;
@@ -108,8 +107,7 @@ plexus::node_options base_opts()
 
 }
 
-TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the framed buffer",
-          "[payload_fidelity_capture]")
+TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the framed buffer", "[payload_fidelity_capture]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};
@@ -178,8 +176,7 @@ TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the frame
 
         std::uint32_t recovered = 0;
         for(int i = 0; i < 4; ++i)
-            recovered |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(rec.payload[i]))
-                    << (8 * i);
+            recovered |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(rec.payload[i])) << (8 * i);
         REQUIRE(recovered == published);
     }
     REQUIRE(saw_payload_sample);

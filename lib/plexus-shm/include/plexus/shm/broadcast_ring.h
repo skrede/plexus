@@ -97,17 +97,14 @@ public:
     // power of two; slot_capacity > 0. The spans must already be sized for the
     // geometry (control_region_bytes / slab_region_bytes).
     // NOLINTNEXTLINE(readability-function-size)
-    static loan_status create(std::span<std::byte> control, std::span<std::byte> slab,
-                              std::uint64_t cell_count, std::uint64_t slot_capacity,
-                              broadcast_ring &out,
-                              std::uint64_t   consumer_capacity = k_max_consumers) noexcept
+    static loan_status create(std::span<std::byte> control, std::span<std::byte> slab, std::uint64_t cell_count, std::uint64_t slot_capacity, broadcast_ring &out,
+                              std::uint64_t consumer_capacity = k_max_consumers) noexcept
     {
         if(!is_power_of_two(cell_count) || slot_capacity == 0)
             return loan_status::rejected;
         if(consumer_capacity == 0 || consumer_capacity > k_max_consumers)
             return loan_status::rejected;
-        if(control.size() < control_region_bytes(cell_count) ||
-           slab.size() < slab_region_bytes(cell_count, slot_capacity))
+        if(control.size() < control_region_bytes(cell_count) || slab.size() < slab_region_bytes(cell_count, slot_capacity))
             return loan_status::rejected;
 
         auto *header = ::new(control.data()) control_header_t{};
@@ -135,8 +132,7 @@ public:
             cells[i].take_refcount.store(0, std::memory_order_relaxed);
         }
 
-        out.bind(control, slab, header, cells, cell_count, slot_capacity, cell_count - 1,
-                 consumer_capacity);
+        out.bind(control, slab, header, cells, cell_count, slot_capacity, cell_count - 1, consumer_capacity);
         return loan_status::ok;
     }
 
@@ -144,15 +140,13 @@ public:
     // from the control header (never trusts a peer's separate value): magic +
     // version, power-of-two cell_count, mask == cell_count - 1, and both region
     // sizes. A foreign or layout-incompatible region is rejected.
-    static loan_status attach(std::span<std::byte> control, std::span<std::byte> slab,
-                              broadcast_ring &out) noexcept
+    static loan_status attach(std::span<std::byte> control, std::span<std::byte> slab, broadcast_ring &out) noexcept
     {
         if(control.size() < sizeof(control_header_t))
             return loan_status::rejected;
 
         auto *header = std::launder(reinterpret_cast<control_header_t *>(control.data()));
-        if(header->magic != k_ring_magic || !is_power_of_two(header->cell_count) ||
-           header->slot_capacity == 0)
+        if(header->magic != k_ring_magic || !is_power_of_two(header->cell_count) || header->slot_capacity == 0)
             return loan_status::rejected;
         if(header->mask != header->cell_count - 1)
             return loan_status::rejected;
@@ -160,14 +154,11 @@ public:
             return loan_status::rejected;
 
         const std::uint64_t stride = round_up_8(header->slot_capacity);
-        if(control.size() < control_region_bytes(header->cell_count) ||
-           slab.size() < header->cell_count * stride)
+        if(control.size() < control_region_bytes(header->cell_count) || slab.size() < header->cell_count * stride)
             return loan_status::rejected;
 
-        auto *cells =
-                std::launder(reinterpret_cast<cell_t *>(control.data() + sizeof(control_header_t)));
-        out.bind(control, slab, header, cells, header->cell_count, header->slot_capacity,
-                 header->mask, header->consumer_capacity);
+        auto *cells = std::launder(reinterpret_cast<cell_t *>(control.data() + sizeof(control_header_t)));
+        out.bind(control, slab, header, cells, header->cell_count, header->slot_capacity, header->mask, header->consumer_capacity);
         return loan_status::ok;
     }
 
@@ -185,12 +176,10 @@ public:
         {
             cell_t             &c   = cell_at(pos);
             const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-            const std::int64_t  dif =
-                    static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(pos);
+            const std::int64_t  dif = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(pos);
             if(dif == 0)
             {
-                if(m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1,
-                                                               std::memory_order_relaxed))
+                if(m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
                     break;
             }
             else if(dif < 0)
@@ -208,8 +197,7 @@ public:
     // reliable -> congested when the slowest registered cursor has not passed the
     // cell (and spins out a transient pin); best-effort -> overwrite-latest,
     // skipping pinned cells, congested only when a full lap is pinned.
-    loan_status claim_with_policy(std::size_t size, io::reliability rel, io::congestion,
-                                  claim_result &out) noexcept
+    loan_status claim_with_policy(std::size_t size, io::reliability rel, io::congestion, claim_result &out) noexcept
     {
         if(size > m_slot_capacity)
             return loan_status::rejected;
@@ -229,8 +217,7 @@ public:
             return loan_status::rejected;
 
         cell_t &c = cell_at(position);
-        c.payload_offset.store(static_cast<std::uint64_t>(position & m_mask) * m_stride,
-                               std::memory_order_relaxed);
+        c.payload_offset.store(static_cast<std::uint64_t>(position & m_mask) * m_stride, std::memory_order_relaxed);
         c.payload_len.store(static_cast<std::uint32_t>(filled_len), std::memory_order_relaxed);
         c.sequence.store(position + 1, std::memory_order_release);
         return loan_status::ok;
@@ -246,8 +233,7 @@ public:
     {
         cell_t             &c   = cell_at(cursor);
         const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-        const std::int64_t  dif =
-                static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(cursor + 1);
+        const std::int64_t  dif = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(cursor + 1);
         if(dif < 0)
             return loan_status::empty;
         if(dif > 0)
@@ -265,8 +251,7 @@ public:
             return loan_status::congested;
 
         out.position = cursor;
-        out.slab     = const_slot_span(cursor).subspan(
-                0, static_cast<std::size_t>(len > m_slot_capacity ? m_slot_capacity : len));
+        out.slab     = const_slot_span(cursor).subspan(0, static_cast<std::size_t>(len > m_slot_capacity ? m_slot_capacity : len));
         return loan_status::ok;
     }
 
@@ -279,8 +264,7 @@ public:
         for(std::uint32_t i = 0; i < capacity; ++i)
         {
             std::uint32_t expected = 0;
-            if(m_header->cursors[i].active.compare_exchange_strong(expected, 1,
-                                                                   std::memory_order_acq_rel))
+            if(m_header->cursors[i].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
             {
                 m_header->cursors[i].position.store(k_cursor_idle, std::memory_order_release);
                 raise_high_water(i + 1);
@@ -326,7 +310,7 @@ public:
         cell_t &c = cell_at(cursor);
         c.take_refcount.fetch_add(1, std::memory_order_seq_cst); // announce the pin
         if(c.sequence.load(std::memory_order_seq_cst) == cursor + 1)
-            return true; // the slot is still our committed message: the pin holds
+            return true;                                         // the slot is still our committed message: the pin holds
         c.take_refcount.fetch_sub(1, std::memory_order_seq_cst); // overwritten: unpin
         return false;
     }
@@ -362,17 +346,29 @@ public:
     // shared memory). A producer in ANY process attached to this ring bumps it and
     // wakes a consumer blocked on it by address; the consumer's notifier
     // FUTEX_WAITs on this same word.
-    std::atomic<std::uint32_t> &notify_generation() noexcept { return m_header->notify_generation; }
+    std::atomic<std::uint32_t> &notify_generation() noexcept
+    {
+        return m_header->notify_generation;
+    }
 
     // The parked-waiter 3-state word in this ring's control header (in mapped
     // shared memory). A consumer's notifier park boundary toggles it
     // EMPTY/PARKED/NOTIFIED across processes; the producer's gated wake reads it to
     // skip the FUTEX_WAKE syscall when no waiter is parked. Mirrors
     // notify_generation()'s cross-process word accessor.
-    std::atomic<std::uint32_t> &park_state() noexcept { return m_header->park_state; }
+    std::atomic<std::uint32_t> &park_state() noexcept
+    {
+        return m_header->park_state;
+    }
 
-    std::uint64_t cell_count() const noexcept { return m_cell_count; }
-    std::uint64_t slot_capacity() const noexcept { return m_slot_capacity; }
+    std::uint64_t cell_count() const noexcept
+    {
+        return m_cell_count;
+    }
+    std::uint64_t slot_capacity() const noexcept
+    {
+        return m_slot_capacity;
+    }
 
     // The monotonic high-water of registered cursors (the largest index+1 ever
     // registered) that bounds the reliable-reclaim scan length.
@@ -382,10 +378,12 @@ public:
     }
 
 private:
-    static bool is_power_of_two(std::uint64_t v) noexcept { return v != 0 && (v & (v - 1)) == 0; }
+    static bool is_power_of_two(std::uint64_t v) noexcept
+    {
+        return v != 0 && (v & (v - 1)) == 0;
+    }
 
-    void bind(std::span<std::byte> control, std::span<std::byte> slab, control_header_t *header,
-              cell_t *cells, std::uint64_t cell_count, std::uint64_t slot_capacity,
+    void bind(std::span<std::byte> control, std::span<std::byte> slab, control_header_t *header, cell_t *cells, std::uint64_t cell_count, std::uint64_t slot_capacity,
               std::uint64_t mask, std::uint64_t consumer_capacity) noexcept
     {
         m_control           = control;
@@ -399,7 +397,10 @@ private:
         m_consumer_capacity = consumer_capacity;
     }
 
-    cell_t &cell_at(std::uint64_t position) noexcept { return m_cells[position & m_mask]; }
+    cell_t &cell_at(std::uint64_t position) noexcept
+    {
+        return m_cells[position & m_mask];
+    }
 
     // Monotonically raise the registered-consumer high-water to at least `want`.
     // A fresh cursor joins at tail_position(), so it cannot gate a reclaimable
@@ -409,9 +410,7 @@ private:
     void raise_high_water(std::uint32_t want) noexcept
     {
         std::uint32_t hw = m_header->high_water.load(std::memory_order_relaxed);
-        while(hw < want &&
-              !m_header->high_water.compare_exchange_weak(hw, want, std::memory_order_release,
-                                                          std::memory_order_relaxed))
+        while(hw < want && !m_header->high_water.compare_exchange_weak(hw, want, std::memory_order_release, std::memory_order_relaxed))
             ;
     }
 
@@ -452,10 +451,8 @@ private:
     // filled-and-lapped (stale bytes); dif==-cell_count is an in-flight peer.
     bool occupant_committed(std::uint64_t position) const noexcept
     {
-        const std::uint64_t seq =
-                m_cells[position & m_mask].sequence.load(std::memory_order_acquire);
-        const std::int64_t dif =
-                static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(position);
+        const std::uint64_t seq = m_cells[position & m_mask].sequence.load(std::memory_order_acquire);
+        const std::int64_t  dif = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(position);
         return dif == 0 || dif == 1 - static_cast<std::int64_t>(m_cell_count);
     }
 
@@ -488,8 +485,7 @@ private:
             // cannot fill: the slowest cursor must have drained the prior occupant.
             if(!consumers_passed(pos))
                 return loan_status::congested;
-            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1,
-                                                            std::memory_order_relaxed))
+            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
                 continue;
 
             // The position is now ours and contiguous. A consumer may still hold a
@@ -544,8 +540,7 @@ private:
                 pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
                 continue;
             }
-            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1,
-                                                            std::memory_order_relaxed))
+            if(!m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
                 continue;
 
             // Won the head; announce the claim and check the pin. Unpinned -> write.
@@ -576,8 +571,7 @@ private:
     std::uint64_t        m_consumer_capacity{0};
 };
 
-static_assert(broadcast_ring::k_cursor_idle == UINT64_MAX,
-              "an idle (registered-but-not-gating) cursor must read as the max sentinel");
+static_assert(broadcast_ring::k_cursor_idle == UINT64_MAX, "an idle (registered-but-not-gating) cursor must read as the max sentinel");
 
 }
 

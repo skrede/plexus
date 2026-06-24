@@ -18,9 +18,7 @@ namespace plexus::io::security {
 // only irreducible crypto primitive here; the core owns the rotation + validate logic
 // over this functor (the D-LITMUS bar — the decision needs no crypto lib). Returns
 // false on any MAC failure so the caller fails the cookie closed.
-using hmac_fn = plexus::detail::move_only_function<bool(std::span<const std::byte> key,
-                                                        std::span<const std::byte> msg,
-                                                        std::span<std::byte>       out_32)>;
+using hmac_fn = plexus::detail::move_only_function<bool(std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out_32)>;
 
 // The injected entropy seam: fill `out` with cryptographically-strong bytes. Returns
 // false on a degraded RNG so the caller refuses to install a zero/constant key.
@@ -97,8 +95,7 @@ public:
 
     // True iff `cookie` constant-time-equals the MAC against the current OR previous
     // nonce (the rotation-straddle tolerance). A length mismatch rejects immediately.
-    [[nodiscard]] bool validate(std::span<const std::byte> peer_addr,
-                                std::span<const std::byte> cookie) const
+    [[nodiscard]] bool validate(std::span<const std::byte> peer_addr, std::span<const std::byte> cookie) const
     {
         if(cookie.size() != k_cookie_len)
             return false;
@@ -112,8 +109,7 @@ public:
 
 private:
     // HMAC over the packed [peer_addr || nonce]: assemble the message once, MAC it.
-    [[nodiscard]] bool mac(std::span<const std::byte>       peer_addr,
-                           const std::array<std::byte, 16> &nonce, std::span<std::byte> out) const
+    [[nodiscard]] bool mac(std::span<const std::byte> peer_addr, const std::array<std::byte, 16> &nonce, std::span<std::byte> out) const
     {
         std::vector<std::byte> msg(peer_addr.begin(), peer_addr.end());
         msg.insert(msg.end(), nonce.begin(), nonce.end());

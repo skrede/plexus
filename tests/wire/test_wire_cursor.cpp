@@ -45,8 +45,7 @@ TEST_CASE("wire::writer/reader round-trip an opaque blob via bytes()", "[wire][c
     REQUIRE(std::equal(view.begin(), view.end(), blob.begin()));
 }
 
-TEST_CASE("wire::reader one byte short of a u64 fails closed without over-reading",
-          "[wire][cursor]")
+TEST_CASE("wire::reader one byte short of a u64 fails closed without over-reading", "[wire][cursor]")
 {
     std::array<std::byte, 7> short_buf{};
     reader                   r{short_buf};
@@ -69,8 +68,7 @@ TEST_CASE("wire::reader mid-field truncation between two fields fails closed", "
     REQUIRE_FALSE(r.ok());
 }
 
-TEST_CASE("wire::reader.varint() rejects an over-long continuation exactly like read_varint",
-          "[wire][cursor]")
+TEST_CASE("wire::reader.varint() rejects an over-long continuation exactly like read_varint", "[wire][cursor]")
 {
     std::array<std::byte, 11> overlong{};
     overlong.fill(std::byte{0x80});
@@ -85,8 +83,7 @@ TEST_CASE("wire::reader.varint() rejects an over-long continuation exactly like 
     REQUIRE_FALSE(r.ok());
 }
 
-TEST_CASE("wire::reader.varint() round-trips a well-formed varint and advances the cursor",
-          "[wire][cursor]")
+TEST_CASE("wire::reader.varint() round-trips a well-formed varint and advances the cursor", "[wire][cursor]")
 {
     std::vector<std::byte> buf;
     write_varint(buf, 300u);

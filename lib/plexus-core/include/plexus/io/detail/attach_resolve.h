@@ -20,8 +20,7 @@ namespace plexus::io::detail {
 // recomputed proof — and the derived keys — differ (downgrade refusal). Writes
 // facts.transcript_digest.
 template<typename Frame>
-void compute_transcript(const security_seam &seam, security::attach_facts &facts,
-                        const security_negotiation &negotiation, const Frame &frame)
+void compute_transcript(const security_seam &seam, security::attach_facts &facts, const security_negotiation &negotiation, const Frame &frame)
 {
     std::array<std::byte, 1 + 1 + 1 + 16 + 16> transcript{};
     std::size_t                                n = 0;
@@ -42,10 +41,8 @@ void compute_transcript(const security_seam &seam, security::attach_facts &facts
 // cover (anti-reflection); initiator/responder ids and nonces are pinned by local role. The
 // transcript folds through the seam only when engaged. No crypto runs here beyond that fold.
 template<typename Pending, typename Frame>
-void assemble_pending(Pending &out, const std::array<std::byte, 16> &own_nonce,
-                      const security_seam *seam, bool engaged, const Frame &frame,
-                      security::attach_role local_role, const node_id &peer_id,
-                      const node_id &self_id)
+void assemble_pending(Pending &out, const std::array<std::byte, 16> &own_nonce, const security_seam *seam, bool engaged, const Frame &frame, security::attach_role local_role,
+                      const node_id &peer_id, const node_id &self_id)
 {
     const bool initiator            = local_role == security::attach_role::initiator;
     out.engaged                     = engaged;
@@ -69,8 +66,7 @@ void assemble_pending(Pending &out, const std::array<std::byte, 16> &own_nonce,
 // nonces swapped to the dialer's standpoint) and MAC it under the shared PSK. A disengaged prover
 // returns a zero proof (the accept-any path).
 template<typename Prover>
-std::array<std::byte, wire::k_handshake_proof_len>
-response_proof(const Prover &prover, security::attach_facts dialer_view)
+std::array<std::byte, wire::k_handshake_proof_len> response_proof(const Prover &prover, security::attach_facts dialer_view)
 {
     std::array<std::byte, wire::k_handshake_proof_len> proof{};
     if(!prover.engaged())

@@ -38,11 +38,10 @@ TEST_CASE("wire fragment header carries a zero-length fragment payload", "[fragm
     CHECK(frag->payload.empty());
 }
 
-TEST_CASE("decode_udp_fragment_header fails closed one byte below the sub-header",
-          "[fragment][wire]")
+TEST_CASE("decode_udp_fragment_header fails closed one byte below the sub-header", "[fragment][wire]")
 {
     std::array<std::byte, wire::udp_fragment_subheader - 1> truncated{};
-    auto frag = wire::decode_udp_fragment_header(std::span<const std::byte>{truncated});
+    auto                                                    frag = wire::decode_udp_fragment_header(std::span<const std::byte>{truncated});
     CHECK_FALSE(frag.has_value());
 
     std::array<std::byte, 0> empty{};

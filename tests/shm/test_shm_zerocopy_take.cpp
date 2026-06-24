@@ -19,8 +19,7 @@
 
 using namespace plexus::shm;
 
-TEST_CASE("zerocopy_take: wire_bytes aliases the slot and pins the refcount",
-          "[shm][zerocopy_take]")
+TEST_CASE("zerocopy_take: wire_bytes aliases the slot and pins the refcount", "[shm][zerocopy_take]")
 {
     constexpr int k_iterations = 200;
     for(int i = 0; i < k_iterations; ++i)
@@ -63,8 +62,8 @@ TEST_CASE("zerocopy_take: a moved wire_bytes owner unpins exactly once", "[shm][
     std::atomic<std::uint32_t> refcount{0};
 
     {
-        taken_message msg = test::handle_test_access::make_taken(slot, sizeof(slot), &refcount);
-        plexus::wire_bytes<shm_slot_owner> a = msg.as_wire_bytes();
+        taken_message                      msg = test::handle_test_access::make_taken(slot, sizeof(slot), &refcount);
+        plexus::wire_bytes<shm_slot_owner> a   = msg.as_wire_bytes();
         REQUIRE(refcount.load() == 2); // handle pin + view pin
 
         // Move the owner out: the source becomes inert, the count is unchanged.

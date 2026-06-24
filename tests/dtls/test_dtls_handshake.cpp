@@ -34,29 +34,18 @@ struct channel_link
         server_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
 
-        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"),
-                                            server_sock.port());
-        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"),
-                                            client_sock.port());
+        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), server_sock.port());
+        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"), client_sock.port());
 
-        server_ch = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred,
-                                                         server_cookie,
-                                                         ptls::dtls_channel::role::server);
-        client_ch = std::make_unique<ptls::dtls_channel>(io, client_sock, server_ep, client_cred,
-                                                         client_cookie,
-                                                         ptls::dtls_channel::role::client);
+        server_ch = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred, server_cookie, ptls::dtls_channel::role::server);
+        client_ch = std::make_unique<ptls::dtls_channel>(io, client_sock, server_ep, client_cred, client_cookie, ptls::dtls_channel::role::client);
 
-        server_sock.on_datagram(
-                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
-                { client_to_server.emplace_back(b.begin(), b.end()); });
-        client_sock.on_datagram(
-                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
-                { server_to_client.emplace_back(b.begin(), b.end()); });
+        server_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) { client_to_server.emplace_back(b.begin(), b.end()); });
+        client_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) { server_to_client.emplace_back(b.begin(), b.end()); });
 
         server_ch->on_external_complete([this] { server_complete = true; });
         client_ch->on_external_complete([this] { client_complete = true; });
-        server_ch->on_data([this](std::span<const std::byte> d)
-                           { server_received.emplace_back(d.begin(), d.end()); });
+        server_ch->on_data([this](std::span<const std::byte> d) { server_received.emplace_back(d.begin(), d.end()); });
     }
 
     void pump_relays()
@@ -88,8 +77,7 @@ struct channel_link
 
 }
 
-TEST_CASE("dtls.channel_handshake: two channels complete a mutual handshake over loopback, looped",
-          "[dtls][handshake]")
+TEST_CASE("dtls.channel_handshake: two channels complete a mutual handshake over loopback, looped", "[dtls][handshake]")
 {
     pdt::identity_fixture server_id("ch_srv");
     pdt::identity_fixture client_id("ch_cli");
@@ -107,9 +95,7 @@ TEST_CASE("dtls.channel_handshake: two channels complete a mutual handshake over
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE(
-        "dtls.channel_identity: completion yields the peer SPKI node_id and cert-subject node_name",
-        "[dtls][handshake]")
+TEST_CASE("dtls.channel_identity: completion yields the peer SPKI node_id and cert-subject node_name", "[dtls][handshake]")
 {
     pdt::identity_fixture server_id("id_srv");
     pdt::identity_fixture client_id("id_cli");
@@ -126,16 +112,13 @@ TEST_CASE(
     REQUIRE(std::memcmp(l.server_ch->peer_node_id().data(), client_id.digest.data(), 16) == 0);
 }
 
-TEST_CASE("dtls.channel_appdata: an app frame flows decrypted post-handshake, looped",
-          "[dtls][handshake]")
+TEST_CASE("dtls.channel_appdata: an app frame flows decrypted post-handshake, looped", "[dtls][handshake]")
 {
     pdt::identity_fixture server_id("ad_srv");
     pdt::identity_fixture client_id("ad_cli");
 
     const std::string      payload = "secret-datagram-over-dtls";
-    std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()),
-                                 reinterpret_cast<const std::byte *>(payload.data()) +
-                                         payload.size());
+    std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()), reinterpret_cast<const std::byte *>(payload.data()) + payload.size());
 
     constexpr int k_iterations = 100;
     int           delivered    = 0;

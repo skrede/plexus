@@ -56,8 +56,7 @@ struct capture
     explicit capture(inproc_executor<> &ex)
             : sink(ex)
     {
-        sink.on_data([this](std::span<const std::byte> d)
-                     { frames.emplace_back(d.begin(), d.end()); });
+        sink.on_data([this](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
     }
 
     inproc_channel<>                    sink;
@@ -123,23 +122,19 @@ inline std::optional<std::uint64_t> first_subscribe_type_hash(const capture &cap
 // A test logger whose warn() bumps a counter — proves the warn-and-drop seam fires.
 struct counting_logger final : plexus::log::logger
 {
-    void        warn(std::string_view) override { ++count; }
+    void warn(std::string_view) override
+    {
+        ++count;
+    }
     std::size_t count{0};
 };
 
 // Builds a valid framed unidirectional message for the named fqn carrying body.
 inline std::vector<std::byte> make_data_frame(std::string_view fqn, const std::string &body)
 {
-    plexus::wire::unidirectional_header uhdr{.source =
-                                                     plexus::wire::endpoint_source_type::publisher,
-                                             .sequence   = 0,
-                                             .topic_hash = plexus::wire::fqn_topic_hash(fqn)};
-    auto                       inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
-    plexus::wire::frame_header fhdr{.type         = plexus::wire::msg_type::unidirectional,
-                                    .flags        = 0,
-                                    .session_id   = 0,
-                                    .timestamp_ns = 0,
-                                    .payload_len  = inner.size()};
+    plexus::wire::unidirectional_header uhdr{.source = plexus::wire::endpoint_source_type::publisher, .sequence = 0, .topic_hash = plexus::wire::fqn_topic_hash(fqn)};
+    auto                                inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
+    plexus::wire::frame_header          fhdr{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = inner.size()};
     return plexus::wire::encode_frame(fhdr, inner);
 }
 

@@ -62,13 +62,22 @@ public:
         if(m_sink)
             m_sink(std::span<const std::byte>{m_sent});
     }
-    void                               close() { m_closed = true; }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"test", ""}; }
+    void close()
+    {
+        m_closed = true;
+    }
+    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    {
+        return {"test", ""};
+    }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_closed = std::move(cb);
+    }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -77,7 +86,10 @@ public:
     {
         m_on_protocol_close = std::move(cb);
     }
-    [[nodiscard]] std::size_t backpressured() const { return 0; }
+    [[nodiscard]] std::size_t backpressured() const
+    {
+        return 0;
+    }
 
     void feed(std::span<const std::byte> bytes)
     {
@@ -94,24 +106,18 @@ public:
     plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
 
-static_assert(plexus::io::byte_channel<test_lower>,
-              "test_lower must satisfy byte_channel for the decorator test");
-static_assert(plexus::io::byte_channel<recording_channel<test_lower>>,
-              "recording_channel<test_lower> must satisfy byte_channel");
+static_assert(plexus::io::byte_channel<test_lower>, "test_lower must satisfy byte_channel for the decorator test");
+static_assert(plexus::io::byte_channel<recording_channel<test_lower>>, "recording_channel<test_lower> must satisfy byte_channel");
 
 // Structural-absence witness (compile-time): a bare channel type is NOT a recording_channel;
 // only an explicit specialization is. A default (non-wire) node's byte_channel_type — here the
 // inproc policy's — is a bare channel, so the decorator is absent at compile time, not gated by
 // a runtime branch. The decorated-vs-bare TYPE is fixed at the mint point.
-static_assert(!plexus::io::is_recording_channel_v<test_lower>,
-              "a bare channel must not be a recording_channel");
-static_assert(!plexus::io::is_recording_channel_v<plexus::io::polymorphic_byte_channel>,
-              "the erased channel must not be a recording_channel");
-static_assert(
-        !plexus::io::is_recording_channel_v<plexus::inproc::inproc_policy::byte_channel_type>,
-        "the default inproc channel_type must not be a recording_channel — structurally absent");
-static_assert(plexus::io::is_recording_channel_v<recording_channel<test_lower>>,
-              "an explicit recording_channel specialization must witness presence");
+static_assert(!plexus::io::is_recording_channel_v<test_lower>, "a bare channel must not be a recording_channel");
+static_assert(!plexus::io::is_recording_channel_v<plexus::io::polymorphic_byte_channel>, "the erased channel must not be a recording_channel");
+static_assert(!plexus::io::is_recording_channel_v<plexus::inproc::inproc_policy::byte_channel_type>,
+              "the default inproc channel_type must not be a recording_channel — structurally absent");
+static_assert(plexus::io::is_recording_channel_v<recording_channel<test_lower>>, "an explicit recording_channel specialization must witness presence");
 
 inline node_id make_node(std::uint8_t tag)
 {

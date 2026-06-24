@@ -46,7 +46,10 @@ public:
     }
 
     // The current base RTO (before any per-segment retransmit backoff).
-    [[nodiscard]] ms rto() const noexcept { return m_rto; }
+    [[nodiscard]] ms rto() const noexcept
+    {
+        return m_rto;
+    }
 
     // The backed-off RTO for a segment retransmitted `retransmits` times: the base RTO
     // doubled per prior retransmit (Karn's multiplicative backoff), capped at max.
@@ -58,7 +61,10 @@ public:
         return r;
     }
 
-    [[nodiscard]] bool seeded() const noexcept { return m_seeded; }
+    [[nodiscard]] bool seeded() const noexcept
+    {
+        return m_seeded;
+    }
 
 private:
     ms   m_min;

@@ -77,12 +77,10 @@ struct counting_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
-                                                   sample                    &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, sample &out) const
     {
         if(bytes.size() != 4)
-            return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+            return plexus::expected<void, std::error_code>{plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -90,7 +88,10 @@ struct counting_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {0xABCD1234u, "sample"}; }
+    plexus::type_identity type_info() const
+    {
+        return {0xABCD1234u, "sample"};
+    }
 };
 
 using typed_publisher  = plexus::publisher<counting_codec>;
@@ -109,9 +110,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0x9163u;
     opts.dial_eagerly = eager;
     return opts;
@@ -128,7 +127,10 @@ struct net
     inproc_node a{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/true)};
     inproc_node b{ex, disc, make_id(0x0B), tb, make_opts(/*eager=*/false)};
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
     void connect()
     {
@@ -185,8 +187,7 @@ result run_fast(std::size_t pool_depth, std::uint64_t iterations, std::uint64_t 
     const std::size_t allocs = plexus::testing::alloc_count();
 
     const double secs = std::chrono::duration<double>(t1 - t0).count();
-    return {secs * 1e9 / static_cast<double>(iterations),
-            static_cast<double>(allocs) / static_cast<double>(iterations), delivered - baseline};
+    return {secs * 1e9 / static_cast<double>(iterations), static_cast<double>(allocs) / static_cast<double>(iterations), delivered - baseline};
 }
 
 // The forced fallback (depth-0 pool): every publish(const T&) serializes through the codec.
@@ -220,8 +221,7 @@ result run_fallback(std::uint64_t iterations, std::uint64_t warm)
     const std::size_t allocs = plexus::testing::alloc_count();
 
     const double secs = std::chrono::duration<double>(t1 - t0).count();
-    return {secs * 1e9 / static_cast<double>(iterations),
-            static_cast<double>(allocs) / static_cast<double>(iterations), delivered - baseline};
+    return {secs * 1e9 / static_cast<double>(iterations), static_cast<double>(allocs) / static_cast<double>(iterations), delivered - baseline};
 }
 
 // The demand-driven-stamping A/B pair. Both cells run the typed object lane at the same
@@ -276,20 +276,19 @@ result run_stamp_cell(std::size_t pool_depth, std::uint64_t iterations, std::uin
     const std::size_t allocs = plexus::testing::alloc_count();
 
     const double secs = std::chrono::duration<double>(t1 - t0).count();
-    return {secs * 1e9 / static_cast<double>(iterations),
-            static_cast<double>(allocs) / static_cast<double>(iterations), iterations};
+    return {secs * 1e9 / static_cast<double>(iterations), static_cast<double>(allocs) / static_cast<double>(iterations), iterations};
 }
 
 result run_stamped(std::size_t pool_depth, std::uint64_t iterations, std::uint64_t warm)
 {
     std::uint64_t delivered = 0;
     std::uint64_t info_sink = 0;
-    auto          r = run_stamp_cell(pool_depth, iterations, warm,
-                                     [&](const sample &, const plexus::io::message_info &info)
-                                     {
+    auto          r         = run_stamp_cell(pool_depth, iterations, warm,
+                                             [&](const sample &, const plexus::io::message_info &info)
+                                             {
                                 ++delivered;
                                 info_sink += info.reception_timestamp;
-                                     });
+                                             });
     asm volatile("" : : "r,m"(info_sink) : "memory");
     return r;
 }
@@ -336,8 +335,7 @@ result run_bytes(std::uint64_t iterations, std::uint64_t warm)
     const std::size_t allocs = plexus::testing::alloc_count();
 
     const double secs = std::chrono::duration<double>(t1 - t0).count();
-    return {secs * 1e9 / static_cast<double>(iterations),
-            static_cast<double>(allocs) / static_cast<double>(iterations), delivered - baseline};
+    return {secs * 1e9 / static_cast<double>(iterations), static_cast<double>(allocs) / static_cast<double>(iterations), delivered - baseline};
 }
 
 }
@@ -347,8 +345,7 @@ int main(int argc, char **argv)
     const std::uint64_t iterations = argc > 1 ? std::strtoull(argv[1], nullptr, 10) : 2'000'000ull;
     const std::uint64_t warm       = 2000;
 
-    std::printf("typed inproc rig: iterations=%llu (no syscalls, single executor)\n",
-                static_cast<unsigned long long>(iterations));
+    std::printf("typed inproc rig: iterations=%llu (no syscalls, single executor)\n", static_cast<unsigned long long>(iterations));
     std::printf("  NOTE: CPU-exclusive run (host background load shut down for this measurement); "
                 "alloc figures are exact.\n\n");
 
@@ -385,8 +382,7 @@ int main(int argc, char **argv)
     for(std::size_t d : depths)
     {
         const result r = run_fast(d, iterations, warm);
-        std::printf("    %6zu  %14.1f  %16.4f%s\n", d, r.per_pub_ns, r.allocs_per_pub,
-                    r.delivered == iterations ? "" : "  [DELIVERY MISMATCH]");
+        std::printf("    %6zu  %14.1f  %16.4f%s\n", d, r.per_pub_ns, r.allocs_per_pub, r.delivered == iterations ? "" : "  [DELIVERY MISMATCH]");
     }
     return 0;
 }

@@ -8,8 +8,7 @@
 namespace plexus::dtls_test {
 
 template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred,
-                std::chrono::milliseconds timeout = std::chrono::milliseconds{6000})
+void pump_until(::asio::io_context &io, Pred pred, std::chrono::milliseconds timeout = std::chrono::milliseconds{6000})
 {
     auto bound = std::chrono::steady_clock::now() + timeout;
     while(!pred() && std::chrono::steady_clock::now() < bound)
@@ -20,8 +19,7 @@ void pump_until(::asio::io_context &io, Pred pred,
     }
 }
 
-inline void settle(::asio::io_context       &io,
-                   std::chrono::milliseconds window = std::chrono::milliseconds{40})
+inline void settle(::asio::io_context &io, std::chrono::milliseconds window = std::chrono::milliseconds{40})
 {
     auto bound = std::chrono::steady_clock::now() + window;
     while(std::chrono::steady_clock::now() < bound)

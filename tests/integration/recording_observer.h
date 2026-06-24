@@ -70,24 +70,21 @@ public:
         int destroyed{0};
     };
 
-    void on_peer_connected(const plexus::node_id &id, std::string_view,
-                           plexus::io::peer_kind  k) override
+    void on_peer_connected(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
     {
         auto &c = m_peers[id];
         ++c.connected;
         c.last_kind = k;
     }
 
-    void on_peer_disconnected(const plexus::node_id &id, std::string_view,
-                              plexus::io::peer_kind  k) override
+    void on_peer_disconnected(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
     {
         auto &c = m_peers[id];
         ++c.disconnected;
         c.last_kind = k;
     }
 
-    void on_peer_reconnected(const plexus::node_id &id, std::string_view,
-                             plexus::io::peer_kind  k) override
+    void on_peer_reconnected(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
     {
         auto &c = m_peers[id];
         ++c.reconnected;
@@ -101,16 +98,14 @@ public:
         c.last_kind = k;
     }
 
-    void on_peer_ready(const plexus::node_id &id, std::string_view,
-                       plexus::io::peer_kind  k) override
+    void on_peer_ready(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
     {
         auto &c = m_peers[id];
         ++c.ready;
         c.last_kind = k;
     }
 
-    void on_peer_rejected(const plexus::node_id        &id, std::string_view,
-                          plexus::io::handshake_outcome reason) override
+    void on_peer_rejected(const plexus::node_id &id, std::string_view, plexus::io::handshake_outcome reason) override
     {
         auto &c = m_peers[id];
         ++c.rejected;
@@ -122,8 +117,7 @@ public:
         ++m_topics[std::string{fqn}].published;
     }
 
-    void on_message_delivered(std::string_view                fqn, const plexus::io::message_info &,
-                              const plexus::io::message_view &view) override
+    void on_message_delivered(std::string_view fqn, const plexus::io::message_info &, const plexus::io::message_view &view) override
     {
         auto &t = m_topics[std::string{fqn}];
         ++t.delivered;
@@ -176,7 +170,10 @@ public:
     // Opt into the data-path taps: this observer counts the message/rpc edges, so the
     // engine must fan them here (a lifecycle-only observer leaves the default false and
     // pays nothing on the hot path).
-    bool observes_data_path() const override { return true; }
+    bool observes_data_path() const override
+    {
+        return true;
+    }
 
     // Per-peer accessor: an absent peer reads as all-zero (the default-constructed
     // counts), so a test can assert "this edge never fired" without a contains check.
@@ -197,7 +194,10 @@ public:
 
     // The single accepted peer is keyed by a synthetic inbound identity the test does
     // not pre-compute; expose the sole recorded peer for the accepting-node suites.
-    const counts &only_peer() const { return m_peers.empty() ? m_empty : m_peers.begin()->second; }
+    const counts &only_peer() const
+    {
+        return m_peers.empty() ? m_empty : m_peers.begin()->second;
+    }
 
     // Per-participant accessor: an unseen node_id reads as all-zero, mirroring for_peer.
     const participant_counts &for_participant(const plexus::node_id &id) const
@@ -214,7 +214,10 @@ public:
         return it == m_unsubscribed_by_hash.end() ? 0 : it->second;
     }
 
-    std::size_t recorded_peers() const { return m_peers.size(); }
+    std::size_t recorded_peers() const
+    {
+        return m_peers.size();
+    }
 
 private:
     std::map<plexus::node_id, counts>             m_peers;

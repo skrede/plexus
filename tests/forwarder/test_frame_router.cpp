@@ -2,8 +2,7 @@
 
 using namespace frame_router_fixture;
 
-TEST_CASE("frame_router dispatches each type to its registered consumer with the inner span",
-          "[forwarder][router]")
+TEST_CASE("frame_router dispatches each type to its registered consumer with the inner span", "[forwarder][router]")
 {
     counting_logger log;
     frame_router    router(log);
@@ -54,13 +53,12 @@ TEST_CASE("frame_router dispatches each type to its registered consumer with the
         std::string_view body;
         std::size_t     *hits;
     };
-    const std::array<arm, 6> arms{
-            {{wire::msg_type::unidirectional, "uni-inner", &uni},
-             {wire::msg_type::subscribe, "sub-inner", &sub},
-             {wire::msg_type::unsubscribe, "unsub-inner", &unsub},
-             {wire::msg_type::subscribe_response, "sub-resp-inner", &sub_resp},
-             {wire::msg_type::rpc_request, "rpc-req-inner", &rpc_req},
-             {wire::msg_type::rpc_response, "rpc-resp-inner", &rpc_resp}}};
+    const std::array<arm, 6> arms{{{wire::msg_type::unidirectional, "uni-inner", &uni},
+                                   {wire::msg_type::subscribe, "sub-inner", &sub},
+                                   {wire::msg_type::unsubscribe, "unsub-inner", &unsub},
+                                   {wire::msg_type::subscribe_response, "sub-resp-inner", &sub_resp},
+                                   {wire::msg_type::rpc_request, "rpc-req-inner", &rpc_req},
+                                   {wire::msg_type::rpc_response, "rpc-resp-inner", &rpc_resp}}};
 
     for(const auto &a : arms)
     {
@@ -76,8 +74,7 @@ TEST_CASE("frame_router dispatches each type to its registered consumer with the
     REQUIRE(log.count == 0); // no drop on the happy path
 }
 
-TEST_CASE("frame_router delivers a handshake_req / handshake_resp to a registered consumer",
-          "[forwarder][router]")
+TEST_CASE("frame_router delivers a handshake_req / handshake_resp to a registered consumer", "[forwarder][router]")
 {
     counting_logger log;
     frame_router    router(log);

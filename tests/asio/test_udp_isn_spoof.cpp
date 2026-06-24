@@ -11,10 +11,8 @@ TEST_CASE("udp isn: a spoofed seq=0 reliable-data segment is rejected on a non-z
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context   io;
-        pasio::udp_transport server{io, pasio::udp_channel::default_max_payload,
-                                    pasio::udp_transport::arq_type::default_ladder, fast_arq()};
-        pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs,
-                                    fast_arq()};
+        pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
+        pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
         std::vector<std::string>            delivered;
@@ -22,14 +20,12 @@ TEST_CASE("udp isn: a spoofed seq=0 reliable-data segment is rejected on a non-z
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> b)
-                                      { delivered.push_back(str_of(b)); });
+                    accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(accepted != nullptr);
@@ -89,8 +85,7 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
     std::vector<std::unique_ptr<pasio::udp_transport>> clients;
     for(int i = 0; i < k_sessions; ++i)
     {
-        auto c = std::make_unique<pasio::udp_transport>(io, pasio::udp_channel::default_max_payload,
-                                                        fast_hs, fast_arq());
+        auto c = std::make_unique<pasio::udp_transport>(io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq());
         c->dial({"udpr", "127.0.0.1:" + std::to_string(sniffer.port())});
         clients.push_back(std::move(c));
     }
@@ -104,10 +99,8 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
 
     std::vector<std::uint16_t> sorted = isns;
     std::sort(sorted.begin(), sorted.end());
-    const auto distinct = static_cast<std::size_t>(
-            std::distance(sorted.begin(), std::unique(sorted.begin(), sorted.end())));
-    REQUIRE(distinct >=
-            static_cast<std::size_t>(k_sessions - 2)); // ~no collisions over a 16-bit space
+    const auto distinct = static_cast<std::size_t>(std::distance(sorted.begin(), std::unique(sorted.begin(), sorted.end())));
+    REQUIRE(distinct >= static_cast<std::size_t>(k_sessions - 2)); // ~no collisions over a 16-bit space
 
     // No fixed step: a counter / single-stride sequence would show one dominant delta. Across
     // arrival order the consecutive deltas must vary (a CSPRNG yields a spread of deltas).
@@ -116,7 +109,6 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
     for(std::size_t i = 1; i < isns.size(); ++i)
         deltas.push_back(static_cast<int>(isns[i]) - static_cast<int>(isns[i - 1]));
     std::sort(deltas.begin(), deltas.end());
-    distinct_deltas = static_cast<std::size_t>(
-            std::distance(deltas.begin(), std::unique(deltas.begin(), deltas.end())));
+    distinct_deltas = static_cast<std::size_t>(std::distance(deltas.begin(), std::unique(deltas.begin(), deltas.end())));
     REQUIRE(distinct_deltas > deltas.size() / 2); // not a single repeating stride
 }

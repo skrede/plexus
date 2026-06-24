@@ -36,7 +36,6 @@ struct serial_policy
 
 }
 
-static_assert(plexus::Policy<plexus::asio::serial_policy>,
-              "serial_policy must satisfy Policy — check the channel/timer constructors and post()");
+static_assert(plexus::Policy<plexus::asio::serial_policy>, "serial_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

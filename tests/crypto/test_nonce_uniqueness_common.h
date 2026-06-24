@@ -45,13 +45,21 @@ public:
         if(m_sink)
             m_sink(std::span<const std::byte>{m_last});
     }
-    void                               close() {}
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"wire", ""}; }
+    void close()
+    {
+    }
+    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    {
+        return {"wire", ""};
+    }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_closed = std::move(cb);
+    }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -60,7 +68,10 @@ public:
     {
         m_on_protocol_close = std::move(cb);
     }
-    [[nodiscard]] std::size_t backpressured() const { return 0; }
+    [[nodiscard]] std::size_t backpressured() const
+    {
+        return 0;
+    }
 
     std::function<void(std::span<const std::byte>)>                      m_sink;
     std::vector<std::byte>                                               m_last;
@@ -116,19 +127,16 @@ inline std::uint64_t key_fingerprint(std::uint32_t session_salt, std::uint32_t e
 {
     // Each (session, epoch, direction) names a distinct derived key in the construction
     // under test; fold them into one value so the uniqueness set keys on key identity.
-    return (static_cast<std::uint64_t>(session_salt) << 40) ^
-            (static_cast<std::uint64_t>(epoch) << 8) ^ static_cast<std::uint64_t>(direction);
+    return (static_cast<std::uint64_t>(session_salt) << 40) ^ (static_cast<std::uint64_t>(epoch) << 8) ^ static_cast<std::uint64_t>(direction);
 }
 
 // Drive `count` sends through a sender keyed by `session_salt`, recording each emitted
 // (key, epoch, sequence, direction) tuple into `seen`. The pre-send (epoch, sequence)
 // reads ARE the nonce the decorator constructs for that frame.
-inline void drive_flow(std::set<nonce_tuple> &seen, std::uint32_t session_salt, std::uint64_t count,
-                       std::uint64_t rekey_threshold)
+inline void drive_flow(std::set<nonce_tuple> &seen, std::uint32_t session_salt, std::uint64_t count, std::uint64_t rekey_threshold)
 {
     wire_lower                        wire;
-    authenticated_channel<wire_lower> sender(wire, aead_cipher_id::chacha20_poly1305,
-                                             keys_for(session_salt), 0, rekey_threshold);
+    authenticated_channel<wire_lower> sender(wire, aead_cipher_id::chacha20_poly1305, keys_for(session_salt), 0, rekey_threshold);
     const auto                        frame = make_frame(session_salt, "n");
     for(std::uint64_t i = 0; i < count; ++i)
     {

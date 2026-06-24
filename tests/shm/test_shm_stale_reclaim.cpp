@@ -56,8 +56,7 @@ bool all_zero(const region_handle &h)
 
 }
 
-TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_stale_on_create",
-          "[shm][stale_reclaim]")
+TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_stale_on_create", "[shm][stale_reclaim]")
 {
     // A region name unique to this process so concurrent ctest shards never
     // collide. The bare logical name; the broker prepends its canonical prefix.
@@ -78,17 +77,14 @@ TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_s
                     // the child's live region and returns already_exists, never ok.
                     {
                         region_handle probe;
-                        if(broker.create(name, k_region_bytes, pio::create_options{}, probe) !=
-                           pio::region_status::already_exists)
+                        if(broker.create(name, k_region_bytes, pio::create_options{}, probe) != pio::region_status::already_exists)
                             return false;
                     }
 
                     // Reclaim: create WITH unlink_stale_on_create unlinks the orphan and
                     // mints a fresh region under the same name.
                     region_handle fresh;
-                    if(broker.create(name, k_region_bytes,
-                                     pio::create_options{.unlink_stale_on_create = true},
-                                     fresh) != pio::region_status::ok)
+                    if(broker.create(name, k_region_bytes, pio::create_options{.unlink_stale_on_create = true}, fresh) != pio::region_status::ok)
                         return false;
 
                     // The fresh region is the PARENT's: ftruncate zero-fills it, so the
@@ -104,8 +100,7 @@ TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_s
                 {
                     posix_shm_region_broker broker;
                     region_handle           orphan;
-                    if(broker.create(name, k_region_bytes, pio::create_options{}, orphan) !=
-                       pio::region_status::ok)
+                    if(broker.create(name, k_region_bytes, pio::create_options{}, orphan) != pio::region_status::ok)
                         ::_exit(1);
                     stamp_stale(orphan);
                     // _exit HERE -- inside the child, with `orphan` still in scope -- is

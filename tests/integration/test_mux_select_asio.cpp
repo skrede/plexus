@@ -28,8 +28,7 @@ namespace pasio = plexus::asio;
 namespace ptls  = plexus::tls;
 namespace pio   = plexus::io;
 
-static_assert(
-        plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
+static_assert(plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
 
 namespace {
 
@@ -68,8 +67,7 @@ struct remote_dial_link
                     dialed = std::move(ch);
                     dialed_ep.emplace(ep);
                 });
-        mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch)
-                        { accepted = std::move(ch); });
+        mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) { accepted = std::move(ch); });
 
         mux.listen({"tcp", "127.0.0.1:0"});
         mux.dial({"tcp", "127.0.0.1:" + std::to_string(remote.port())});
@@ -86,8 +84,7 @@ struct remote_dial_link
 
 }
 
-TEST_CASE("mux select: a remote endpoint dials over TCP through the erased channel, looped",
-          "[integration][mux][select][asio]")
+TEST_CASE("mux select: a remote endpoint dials over TCP through the erased channel, looped", "[integration][mux][select][asio]")
 {
     constexpr int k_iterations = 100;
     int           completed    = 0;
@@ -109,9 +106,7 @@ TEST_CASE("mux select: a remote endpoint dials over TCP through the erased chann
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE(
-        "mux select: an ACCEPTED TCP connection carries the tcp scheme through the erasure, looped",
-        "[integration][mux][select][asio]")
+TEST_CASE("mux select: an ACCEPTED TCP connection carries the tcp scheme through the erasure, looped", "[integration][mux][select][asio]")
 {
     constexpr int k_iterations = 100;
     int           completed    = 0;

@@ -38,25 +38,17 @@ void fan_out(Engine &e, Deliver deliver)
 }
 
 template<typename Engine>
-void post_edge(Engine &e, const lifecycle_event &ev,
-               void (observer::*edge)(const node_id &, std::string_view, peer_kind))
+void post_edge(Engine &e, const lifecycle_event &ev, void (observer::*edge)(const node_id &, std::string_view, peer_kind))
 {
     using policy_type = typename Engine::policy_type;
-    policy_type::post(
-            e.m_executor, [&e, ev, edge]
-            { fan_out(e, [&](observer &o) { (o.*edge)(ev.id, ev.node_name, ev.kind); }); });
+    policy_type::post(e.m_executor, [&e, ev, edge] { fan_out(e, [&](observer &o) { (o.*edge)(ev.id, ev.node_name, ev.kind); }); });
 }
 
 template<typename Engine>
 void post_rejected(Engine &e, const lifecycle_event &ev)
 {
     using policy_type = typename Engine::policy_type;
-    policy_type::post(e.m_executor,
-                      [&e, ev]
-                      {
-                          fan_out(e, [&](observer &o)
-                                  { o.on_peer_rejected(ev.id, ev.node_name, ev.reason); });
-                      });
+    policy_type::post(e.m_executor, [&e, ev] { fan_out(e, [&](observer &o) { o.on_peer_rejected(ev.id, ev.node_name, ev.reason); }); });
 }
 
 // The indirection that keeps a per-packet drop site off the synchronous observer path.
@@ -72,8 +64,7 @@ template<typename Engine>
 void post_security(Engine &e, const security_event &ev)
 {
     using policy_type = typename Engine::policy_type;
-    policy_type::post(e.m_executor,
-                      [&e, ev] { fan_out(e, [&](observer &o) { o.on_security(ev); }); });
+    policy_type::post(e.m_executor, [&e, ev] { fan_out(e, [&](observer &o) { o.on_security(ev); }); });
 }
 
 // Keeps the single-writer ring discipline (push only on the executor turn, never the io thread).
@@ -81,16 +72,14 @@ void post_security(Engine &e, const security_event &ev)
 // owned buffer carried BY MOVE into the turn and the span rebuilt over it. This copy-into-turn is
 // the inherent every-packet cost of wire capture.
 template<typename Engine>
-void post_wire(Engine &e, recording::wire_direction dir, std::uint64_t seq, const node_id &peer,
-               std::span<const std::byte> bytes)
+void post_wire(Engine &e, recording::wire_direction dir, std::uint64_t seq, const node_id &peer, std::span<const std::byte> bytes)
 {
     using policy_type = typename Engine::policy_type;
     std::vector<std::byte> owned(bytes.begin(), bytes.end());
     policy_type::post(e.m_executor,
                       [&e, dir, seq, peer, owned = std::move(owned)]
                       {
-                          const recording::wire_record rec{dir, seq, peer, 0u,
-                                                           std::span<const std::byte>{owned}};
+                          const recording::wire_record rec{dir, seq, peer, 0u, std::span<const std::byte>{owned}};
                           fan_out(e, [&](observer &o) { o.on_wire(rec); });
                       });
 }

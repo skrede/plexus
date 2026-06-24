@@ -88,13 +88,29 @@ struct tagged_channel
     {
     }
 
-    void                               send(std::span<const std::byte>) { ++sends; }
-    void                               close() {}
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {m_scheme, ""}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
-    void on_closed(plexus::detail::move_only_function<void()>) {}
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
+    void send(std::span<const std::byte>)
+    {
+        ++sends;
+    }
+    void close()
+    {
+    }
+    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    {
+        return {m_scheme, ""};
+    }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
+    {
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
 
     std::string m_scheme;
     std::size_t sends{0};
@@ -102,11 +118,21 @@ struct tagged_channel
 
 struct tagged_timer
 {
-    explicit tagged_timer(tagged_executor &) {}
-    tagged_timer(tagged_executor &, std::error_code &) {}
-    void expires_after(std::chrono::milliseconds) {}
-    void async_wait(plexus::detail::move_only_function<void(std::error_code)>) {}
-    void cancel() {}
+    explicit tagged_timer(tagged_executor &)
+    {
+    }
+    tagged_timer(tagged_executor &, std::error_code &)
+    {
+    }
+    void expires_after(std::chrono::milliseconds)
+    {
+    }
+    void async_wait(plexus::detail::move_only_function<void(std::error_code)>)
+    {
+    }
+    void cancel()
+    {
+    }
 };
 
 struct tagged_policy
@@ -116,7 +142,10 @@ struct tagged_policy
     using timer_type        = tagged_timer;
     using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
+    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
+    {
+        fn();
+    }
 };
 
 static_assert(plexus::Policy<tagged_policy>);
@@ -130,18 +159,12 @@ inline plexus::node_id make_id(std::uint8_t seed)
 
 inline plexus::io::handshake_fsm_config make_cfg(std::uint8_t seed)
 {
-    return plexus::io::handshake_fsm_config{.self_id                  = make_id(seed),
-                                            .version_major            = 1,
-                                            .version_minor            = 0,
-                                            .compatible_version_major = 1,
-                                            .compatible_version_minor = 0};
+    return plexus::io::handshake_fsm_config{.self_id = make_id(seed), .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 inline plexus::io::reconnect_config forever_cfg()
 {
-    return plexus::io::reconnect_config{std::chrono::milliseconds(100),
-                                        std::chrono::milliseconds(10000), std::nullopt,
-                                        std::nullopt};
+    return plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 }

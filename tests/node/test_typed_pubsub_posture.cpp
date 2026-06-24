@@ -2,8 +2,7 @@
 
 using namespace typed_pubsub_fixture;
 
-TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, escaped on opt-in",
-          "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, escaped on opt-in", "[node][typed][pubsub]")
 {
     SECTION("default: drop + count, node stays connected")
     {
@@ -54,8 +53,7 @@ TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, es
     }
 }
 
-TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, lenient admits",
-          "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, lenient admits", "[node][typed][pubsub]")
 {
     SECTION("strict: no delivery from an undeclared producer")
     {
@@ -96,14 +94,13 @@ TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, l
     }
 }
 
-TEST_CASE("typed pub/sub: a dropped typed subscriber delivers nothing on a later publish",
-          "[node][typed][pubsub]")
+TEST_CASE("typed pub/sub: a dropped typed subscriber delivers nothing on a later publish", "[node][typed][pubsub]")
 {
     net n;
     n.connect();
 
-    int  delivered = 0;
-    auto s = std::make_unique<typed_subscriber>(n.a, "topic", [&](const sample &) { ++delivered; });
+    int             delivered = 0;
+    auto            s         = std::make_unique<typed_subscriber>(n.a, "topic", [&](const sample &) { ++delivered; });
     counting_codec  codec;
     typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();

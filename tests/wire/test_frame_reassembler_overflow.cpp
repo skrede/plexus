@@ -1,7 +1,6 @@
 #include "test_frame_reassembler_common.h"
 
-TEST_CASE("reassembler reports buffer_overflow when buffered bytes exceed cap",
-          "[wire][reassembler]")
+TEST_CASE("reassembler reports buffer_overflow when buffered bytes exceed cap", "[wire][reassembler]")
 {
     // Cap below header_size so the bytes-cap branch fires before any decode_header
     // attempt. Mirrors the trickle-attacker shape: bytes accumulate without ever
@@ -32,8 +31,7 @@ TEST_CASE("reassembler accepts buffered bytes exactly at cap without error", "[w
     CHECK(ra.buffered_bytes() == small_cap);
 }
 
-TEST_CASE("reassembler reports buffer_overflow across feed calls when accumulated bytes exceed cap",
-          "[wire][reassembler]")
+TEST_CASE("reassembler reports buffer_overflow across feed calls when accumulated bytes exceed cap", "[wire][reassembler]")
 {
     // Two-step trickle: cap=20, feed 15 then 6 (total 21 > 20). Both feeds stay
     // below header_size individually so no decode_header runs until the cap fires.

@@ -14,8 +14,7 @@ namespace plexus {
 // mdnspp TimerLike shape — expires_after has no return constraint because a
 // steady-timer backend may return the count of cancelled waits.
 template<typename T>
-concept timer = requires(T &t, std::chrono::milliseconds dur,
-                         detail::move_only_function<void(std::error_code)> handler) {
+concept timer = requires(T &t, std::chrono::milliseconds dur, detail::move_only_function<void(std::error_code)> handler) {
     t.expires_after(dur);
     { t.async_wait(std::move(handler)) } -> std::same_as<void>;
     { t.cancel() } -> std::same_as<void>;
@@ -43,13 +42,9 @@ concept Policy =
             typename P::byte_channel_type;
             typename P::timer_type;
             typename P::byte_owner;
-        } && io::byte_channel<typename P::byte_channel_type> && timer<typename P::timer_type> &&
-        std::constructible_from<typename P::timer_type, typename P::executor_type> &&
-        std::constructible_from<typename P::timer_type, typename P::executor_type,
-                                std::error_code &> &&
-        requires(typename P::executor_type ex, detail::move_only_function<void()> fn) {
-            P::post(ex, std::move(fn));
-        };
+        } && io::byte_channel<typename P::byte_channel_type> && timer<typename P::timer_type> && std::constructible_from<typename P::timer_type, typename P::executor_type> &&
+        std::constructible_from<typename P::timer_type, typename P::executor_type, std::error_code &> &&
+        requires(typename P::executor_type ex, detail::move_only_function<void()> fn) { P::post(ex, std::move(fn)); };
 
 }
 

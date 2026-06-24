@@ -2,8 +2,7 @@
 
 using namespace history_ring_fixture;
 
-TEST_CASE("durability=all on a depth-N ring replays EXACTLY the last N oldest->newest",
-          "[history_ring][forwarder]")
+TEST_CASE("durability=all on a depth-N ring replays EXACTLY the last N oldest->newest", "[history_ring][forwarder]")
 {
     // Reproducibility: the exactly-N delivery effect is proven over repeated runs.
     for(int iter = 0; iter < 50; ++iter)
@@ -15,7 +14,7 @@ TEST_CASE("durability=all on a depth-N ring replays EXACTLY the last N oldest->n
         auto              peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder fwd{sink};
+        forwarder                fwd{sink};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
         for(int i = 0; i < 7; ++i) // N+k: publish v0..v6 with zero subscribers
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));
@@ -32,8 +31,7 @@ TEST_CASE("durability=all on a depth-N ring replays EXACTLY the last N oldest->n
     }
 }
 
-TEST_CASE("durability=all with fewer than N retained replays all of them oldest->newest",
-          "[history_ring][forwarder]")
+TEST_CASE("durability=all with fewer than N retained replays all of them oldest->newest", "[history_ring][forwarder]")
 {
     for(int iter = 0; iter < 50; ++iter)
     {
@@ -44,7 +42,7 @@ TEST_CASE("durability=all with fewer than N retained replays all of them oldest-
         auto              peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder fwd{sink};
+        forwarder                fwd{sink};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
         for(int i = 0; i < 3; ++i)
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));

@@ -25,8 +25,7 @@ inline std::optional<std::uint16_t> port_of_value(std::string_view v)
     return port;
 }
 
-inline std::optional<plexus::node_id>
-card_node_id(const std::vector<std::pair<std::string, std::string>> &card)
+inline std::optional<plexus::node_id> card_node_id(const std::vector<std::pair<std::string, std::string>> &card)
 {
     for(const auto &[k, v] : card)
         if(k == discovery::k_card_node_id_key)
@@ -46,9 +45,7 @@ inline std::string host_of(const std::string &address)
 }
 
 // The first "plexus/<scheme>/port" key in card order, resolved to {scheme, host:port}.
-inline std::optional<io::endpoint>
-first_port_endpoint(const std::vector<std::pair<std::string, std::string>> &card,
-                    const std::string                                      &host)
+inline std::optional<io::endpoint> first_port_endpoint(const std::vector<std::pair<std::string, std::string>> &card, const std::string &host)
 {
     constexpr std::string_view k_prefix = "plexus/";
     constexpr std::string_view k_suffix = "/port";
@@ -61,8 +58,7 @@ first_port_endpoint(const std::vector<std::pair<std::string, std::string>> &card
             continue;
         if(key.substr(key.size() - k_suffix.size()) != k_suffix)
             continue;
-        const std::string_view scheme =
-                key.substr(k_prefix.size(), key.size() - k_prefix.size() - k_suffix.size());
+        const std::string_view scheme = key.substr(k_prefix.size(), key.size() - k_prefix.size() - k_suffix.size());
         if(const auto port = port_of_value(v))
             return io::endpoint{std::string{scheme}, host + ":" + std::to_string(*port)};
     }

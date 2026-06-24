@@ -2,8 +2,7 @@
 
 using namespace stream_send_queue_fixture;
 
-TEST_CASE("stream_send_queue fail-on-error edge: a composer that closes the block stops the chain",
-          "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue fail-on-error edge: a composer that closes the block stops the chain", "[io][stream_send_queue]")
 {
     // The stream channel fails the channel on a socket error: it closes the block BEFORE
     // the completion would chain, so the post-close completion is a guarded no-op (the
@@ -30,8 +29,7 @@ namespace {
 // std::shared_ptr keeping the bytes alive. use_count() witnesses that the block holds a
 // reference to the owner across the in-flight write (the owner-lifetime invariant), and
 // the view's data() witnesses no intermediate copy (the queue passes the owner's bytes).
-plexus::wire_bytes<> owned_frame(std::initializer_list<int>               vals,
-                                 std::shared_ptr<std::vector<std::byte>> &keep)
+plexus::wire_bytes<> owned_frame(std::initializer_list<int> vals, std::shared_ptr<std::vector<std::byte>> &keep)
 {
     auto buf = std::make_shared<std::vector<std::byte>>();
     for(int v : vals)
@@ -42,8 +40,7 @@ plexus::wire_bytes<> owned_frame(std::initializer_list<int>               vals,
 
 }
 
-TEST_CASE("stream_send_queue gathers a multi-frame burst into ONE drain turn over N views",
-          "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue gathers a multi-frame burst into ONE drain turn over N views", "[io][stream_send_queue]")
 {
     // The gather-write: a drain turn with N>1 queued frames issues exactly ONE sink call
     // carrying a SEQUENCE of N views, not N separate calls. The first frame drives
@@ -129,8 +126,7 @@ TEST_CASE("stream_send_queue holds a wire_bytes owner with no copy and keeps it 
     REQUIRE(q.size() == 0);
 }
 
-TEST_CASE("stream_send_queue keeps ALL gathered owners alive until the single completion",
-          "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue keeps ALL gathered owners alive until the single completion", "[io][stream_send_queue]")
 {
     // The gather-write hazard: ONE completion for N frames, so ALL N owners must outlive
     // it. Gather three owner frames into one turn, drop every external reference, and

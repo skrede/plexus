@@ -27,8 +27,7 @@ namespace plexus {
 template<typename P, typename T>
 concept value_projection = requires(const P &p, const T &v, std::string &buf) {
     { p.columns() } -> std::ranges::range;
-    requires std::convertible_to<std::ranges::range_value_t<decltype(p.columns())>,
-                                 std::string_view>;
+    requires std::convertible_to<std::ranges::range_value_t<decltype(p.columns())>, std::string_view>;
     p.emit_fields(v, buf, char{});
     p.emit_json(v, buf);
 };

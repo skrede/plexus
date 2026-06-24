@@ -15,9 +15,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -58,10 +67,8 @@ TEST_CASE("locality confinement: a local-confined subscribe toward a tcp peer es
         demand_transport                              transport_b{ex, bus};
 
         plexus::log::null_logger sink;
-        demand_engine a(transport_a, ex, make_cfg(0xA1), std::chrono::hours(1), forever_cfg(),
-                        k_seed, sink, /*eager=*/false);
-        demand_engine b(transport_b, ex, make_cfg(0xB2), std::chrono::hours(1), forever_cfg(),
-                        k_seed, sink, /*eager=*/false);
+        demand_engine            a(transport_a, ex, make_cfg(0xA1), std::chrono::hours(1), forever_cfg(), k_seed, sink, /*eager=*/false);
+        demand_engine            b(transport_b, ex, make_cfg(0xB2), std::chrono::hours(1), forever_cfg(), k_seed, sink, /*eager=*/false);
         a.listen({"inproc", "node-a"});
         b.listen({"inproc", "node-b"});
 

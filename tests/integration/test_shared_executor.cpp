@@ -4,8 +4,7 @@
 
 using namespace shared_executor_fixture;
 
-TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context",
-          "[integration][asio]")
+TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context", "[integration][asio]")
 {
     ::asio::io_context io; // the SINGLE shared executor
 
@@ -15,9 +14,7 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     // executor — positive evidence the discovery path runs on `io`, not merely
     // that its callback was armed.
     pmdns::mdnspp_discovery         advertiser(io, "_plexus._tcp.local.");
-    plexus::discovery::service_info local{"probe._plexus._tcp.local.",
-                                          {"tcp", "127.0.0.1:5555"},
-                                          {{"node_id", "0011"}, {"plexus/tcp/port", "5555"}}};
+    plexus::discovery::service_info local{"probe._plexus._tcp.local.", {"tcp", "127.0.0.1:5555"}, {{"node_id", "0011"}, {"plexus/tcp/port", "5555"}}};
     advertiser.advertise(local);
 
     pmdns::mdnspp_discovery                          discovery(io, "_plexus._tcp.local.");
@@ -34,8 +31,7 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     // --- Transport round-trip on the SAME context ---
     pasio::asio_listener                 listener(io);
     std::unique_ptr<pasio::asio_channel> server_channel;
-    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch)
-                         { server_channel = std::move(ch); });
+    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch) { server_channel = std::move(ch); });
     listener.start({"tcp", "127.0.0.1:0"});
     auto port = listener.port();
 

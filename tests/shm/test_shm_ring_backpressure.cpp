@@ -2,8 +2,7 @@
 
 using namespace shm_ring_backpressure_fixture;
 
-TEST_CASE("ring_backpressure: best_effort overwrite skips a pinned slot",
-          "[shm][ring_backpressure]")
+TEST_CASE("ring_backpressure: best_effort overwrite skips a pinned slot", "[shm][ring_backpressure]")
 {
     fixture       f;
     std::uint32_t cursor_index = 0;
@@ -49,9 +48,7 @@ TEST_CASE("ring_backpressure: a full-lap-pinned ring returns congested", "[shm][
     // Every cell is pinned: a best_effort claim can find no recyclable slot and
     // returns congested as the bounded fallback (it never stomps a live take).
     broadcast_ring::claim_result claim;
-    REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort,
-                                     plexus::io::congestion::drop_newest,
-                                     claim) == loan_status::congested);
+    REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim) == loan_status::congested);
 
     // Unpin the lap.
     for(std::uint64_t i = 0; i < fixture::k_cells; ++i)
@@ -60,8 +57,7 @@ TEST_CASE("ring_backpressure: a full-lap-pinned ring returns congested", "[shm][
     f.ring.unregister_cursor(cursor_index);
 }
 
-TEST_CASE("ring_backpressure: a full-ring lap-behind reports lagged carrying the tail",
-          "[shm][ring_backpressure]")
+TEST_CASE("ring_backpressure: a full-ring lap-behind reports lagged carrying the tail", "[shm][ring_backpressure]")
 {
     fixture       f;
     std::uint32_t cursor_index = 0;

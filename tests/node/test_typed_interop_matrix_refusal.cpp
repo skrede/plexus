@@ -2,9 +2,7 @@
 
 using namespace typed_interop_fixture;
 
-TEST_CASE(
-        "typed interop cell 5: a declared type mismatch is refused, no delivery, session stays up",
-        "[node][typed][interop]")
+TEST_CASE("typed interop cell 5: a declared type mismatch is refused, no delivery, session stays up", "[node][typed][interop]")
 {
     net n;
     n.connect();
@@ -18,8 +16,7 @@ TEST_CASE(
     pub_codec.tag = 0x11111111u;
 
     std::vector<sample> got;
-    typed_subscriber    s{n.a, "topic", plexus::typed_subscriber_options{},
-                          [&](const sample &v) { got.push_back(v); }, sub_codec};
+    typed_subscriber    s{n.a, "topic", plexus::typed_subscriber_options{}, [&](const sample &v) { got.push_back(v); }, sub_codec};
     typed_publisher     p{n.b, "topic", plexus::typed_publisher_options{}, pub_codec};
     n.drive();
 
@@ -30,9 +27,7 @@ TEST_CASE(
     REQUIRE(n.a.router().is_connected(n.id_b)); // the session is not torn down
 }
 
-TEST_CASE(
-        "typed interop cell 8: a typed inproc publisher to a bytes subscriber takes the byte path",
-        "[node][typed][interop]")
+TEST_CASE("typed interop cell 8: a typed inproc publisher to a bytes subscriber takes the byte path", "[node][typed][interop]")
 {
     inproc_bus<>       bus;
     inproc_executor<>  ex{bus};
@@ -47,10 +42,9 @@ TEST_CASE(
     REQUIRE(sub_node.router().is_connected(pub_node.id()));
 
     std::vector<std::vector<std::byte>> got;
-    bytes_subscriber s{sub_node, "topic",
-                       [&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); }};
-    counting_codec   codec;
-    auto             encodes = codec.encodes;
+    bytes_subscriber                    s{sub_node, "topic", [&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); }};
+    counting_codec                      codec;
+    auto                                encodes = codec.encodes;
     // A borrowed loan would ride the fast path IF an eligible object subscriber existed; the
     // bytes subscriber has type_id nullopt so it is structurally ineligible. The publish
     // therefore serializes (encode invoked) and the bytes arrive as the encoding.
@@ -68,8 +62,7 @@ TEST_CASE(
     REQUIRE(encodes->load() == 1); // the byte path was taken: exactly one encode
 }
 
-TEST_CASE("typed interop cell 9: a strict typed subscriber refuses an undeclared producer",
-          "[node][typed][interop]")
+TEST_CASE("typed interop cell 9: a strict typed subscriber refuses an undeclared producer", "[node][typed][interop]")
 {
     net n;
     n.connect();
@@ -117,7 +110,10 @@ TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is
             return {};
         }
         // The SAME tag the sample codec declares — a deliberate misconfiguration.
-        plexus::type_identity type_info() const { return {0xABCD1234u, "other"}; }
+        plexus::type_identity type_info() const
+        {
+            return {0xABCD1234u, "other"};
+        }
     };
     static_assert(plexus::typed_codec<other_codec>);
 
@@ -125,10 +121,8 @@ TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is
     n.connect();
 
     int                            sample_calls = 0;
-    typed_subscriber               s{n.a, "topic", plexus::typed_subscriber_options{},
-                                     [&](const sample &) { ++sample_calls; }, counting_codec{}};
-    plexus::publisher<other_codec> p{n.b, "topic", plexus::typed_publisher_options{},
-                                     other_codec{}};
+    typed_subscriber               s{n.a, "topic", plexus::typed_subscriber_options{}, [&](const sample &) { ++sample_calls; }, counting_codec{}};
+    plexus::publisher<other_codec> p{n.b, "topic", plexus::typed_publisher_options{}, other_codec{}};
     n.drive();
 
     auto loan = p.borrow();

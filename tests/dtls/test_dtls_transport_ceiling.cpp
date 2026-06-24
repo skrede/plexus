@@ -40,8 +40,7 @@ struct ceiling_link
     std::vector<std::vector<std::byte>> server_received;
     std::optional<pio::io_error>        dialed_error;
 
-    ceiling_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id,
-                 std::size_t max_payload, std::size_t global_default, std::size_t reassembly_budget)
+    ceiling_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id, std::size_t max_payload, std::size_t global_default, std::size_t reassembly_budget)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
             , client_cred(pdt::pin_one(client_id, server_id.digest))
             , server(io, server_cred, max_payload, global_default, reassembly_budget)
@@ -51,8 +50,7 @@ struct ceiling_link
                 [this](std::unique_ptr<ptls::dtls_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([this](std::span<const std::byte> d)
-                                      { server_received.emplace_back(d.begin(), d.end()); });
+                    accepted->on_data([this](std::span<const std::byte> d) { server_received.emplace_back(d.begin(), d.end()); });
                 });
         client.on_dialed(
                 [this](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &)
@@ -60,8 +58,7 @@ struct ceiling_link
                     dialed = std::move(ch);
                     dialed->on_error([this](pio::io_error e) { dialed_error = e; });
                 });
-        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error)
-                              { dial_failed = true; });
+        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error) { dial_failed = true; });
 
         server.listen({"dtls", "127.0.0.1:0"});
         client.dial({"dtls", "127.0.0.1:" + std::to_string(server.port())});
@@ -108,9 +105,8 @@ TEST_CASE("dtls.transport_ceiling: a transport-configured LOW per-message ceilin
         l.dialed->send(std::span<const std::byte>{frame});
         l.pump_until([&] { return l.dialed_error.has_value(); }, std::chrono::milliseconds{500});
 
-        REQUIRE(l.dialed_error ==
-                pio::io_error::message_too_large); // the LOW ceiling threaded through
-        REQUIRE(l.server_received.empty());        // the oversize message never delivered
+        REQUIRE(l.dialed_error == pio::io_error::message_too_large); // the LOW ceiling threaded through
+        REQUIRE(l.server_received.empty());                          // the oversize message never delivered
         ++proven;
     }
     REQUIRE(proven == k_iterations);

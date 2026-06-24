@@ -41,15 +41,10 @@ inline std::optional<frame_header> decode_header(std::span<const std::byte> data
     reader r{data};
     r.u8();
     r.u8();
-    return frame_header{.type         = static_cast<msg_type>(r.u8()),
-                        .flags        = r.u8(),
-                        .session_id   = r.u64(),
-                        .timestamp_ns = r.u64(),
-                        .payload_len  = r.u64()};
+    return frame_header{.type = static_cast<msg_type>(r.u8()), .flags = r.u8(), .session_id = r.u64(), .timestamp_ns = r.u64(), .payload_len = r.u64()};
 }
 
-inline std::vector<std::byte> encode_frame(const frame_header        &hdr,
-                                           std::span<const std::byte> payload)
+inline std::vector<std::byte> encode_frame(const frame_header &hdr, std::span<const std::byte> payload)
 {
     auto adjusted        = hdr;
     adjusted.payload_len = payload.size();
@@ -68,8 +63,7 @@ inline std::vector<std::byte> encode_frame(const frame_header        &hdr,
 // encode_unidirectional_into, resize() reuses capacity so a steady-state loop
 // framing into the same out vector allocates nothing after warm-up. The header
 // is written in place ahead of the payload copy.
-inline void encode_frame_into(std::vector<std::byte> &out, const frame_header &hdr,
-                              std::span<const std::byte> payload)
+inline void encode_frame_into(std::vector<std::byte> &out, const frame_header &hdr, std::span<const std::byte> payload)
 {
     auto adjusted        = hdr;
     adjusted.payload_len = payload.size();

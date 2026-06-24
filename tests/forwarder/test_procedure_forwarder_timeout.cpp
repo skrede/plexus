@@ -19,9 +19,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 // The manual-clock inproc Policy: the same substrate as inproc_policy, but every
@@ -75,21 +84,21 @@ struct manual_link
         caller_tx.connect_to(provider_rx.local_endpoint());
         provider_tx.connect_to(caller_rx.local_endpoint());
 
-        provider_router.on_rpc_request([this](std::span<const std::byte> inner)
-                                       { provider.deliver_request(provider_peer, inner); });
-        caller_router.on_rpc_response([this](std::span<const std::byte> inner)
-                                      { caller.deliver_response(caller_peer, inner); });
+        provider_router.on_rpc_request([this](std::span<const std::byte> inner) { provider.deliver_request(provider_peer, inner); });
+        caller_router.on_rpc_response([this](std::span<const std::byte> inner) { caller.deliver_response(caller_peer, inner); });
         provider_rx.on_data([this](std::span<const std::byte> f) { provider_router.route(f); });
         caller_rx.on_data([this](std::span<const std::byte> f) { caller_router.route(f); });
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 }
 
-TEST_CASE("a call whose provider never replies fires exactly one timeout once the deadline passes",
-          "[procedure][timeout]")
+TEST_CASE("a call whose provider never replies fires exactly one timeout once the deadline passes", "[procedure][timeout]")
 {
     // Deterministic by construction: advance the manual clock PAST the deadline with
     // the provider serving nothing, then drain — the per-call timer fires exactly one
@@ -143,9 +152,7 @@ TEST_CASE("a call whose provider never replies fires exactly one timeout once th
     }
 }
 
-TEST_CASE(
-        "a call answered before the deadline fires success and no later timeout (cancel-on-match)",
-        "[procedure][timeout]")
+TEST_CASE("a call answered before the deadline fires success and no later timeout (cancel-on-match)", "[procedure][timeout]")
 {
     // The negative: a provider that DOES reply before the deadline resolves the call
     // with success; advancing the clock past the (now-cancelled) deadline afterward
@@ -156,9 +163,7 @@ TEST_CASE(
         const auto  deadline = std::chrono::milliseconds(50);
         manual_link link(deadline);
 
-        link.provider.serve("svc",
-                            [](std::span<const std::byte> param, manual_forwarder::reply_fn &reply)
-                            { reply(rpc_status::success, param); });
+        link.provider.serve("svc", [](std::span<const std::byte> param, manual_forwarder::reply_fn &reply) { reply(rpc_status::success, param); });
 
         int               fired = 0;
         rpc_status        got   = rpc_status::error;

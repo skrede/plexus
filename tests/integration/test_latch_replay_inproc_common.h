@@ -67,8 +67,7 @@ struct receive_sink
     std::vector<std::string> bodies;
 };
 
-inline forwarder::peer make_peer(inproc_channel<> &fwd_channel, receive_sink &sink,
-                                 std::string node_name)
+inline forwarder::peer make_peer(inproc_channel<> &fwd_channel, receive_sink &sink, std::string node_name)
 {
     fwd_channel.connect_to(sink.channel.local_endpoint());
     return forwarder::peer{fwd_channel, std::move(node_name)};

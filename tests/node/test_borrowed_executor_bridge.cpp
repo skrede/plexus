@@ -71,9 +71,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xB0D6E5u;
     opts.dial_eagerly = eager;
     return opts;
@@ -138,7 +136,10 @@ struct host_bridge
     inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
     inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
 
-    void pump() { ex.drain(); }
+    void pump()
+    {
+        ex.drain();
+    }
 
     void connect()
     {
@@ -154,8 +155,7 @@ struct host_bridge
 // Family 1: no thread is spawned by node construction or by a full pub/sub + call
 // round-trip — the OS thread count is identical before and after (Linux). The host owns
 // the only loop, and it is driven from the test thread.
-TEST_CASE("borrowed executor: no thread is spawned across construction and a full round-trip",
-          "[node][borrowed-executor]")
+TEST_CASE("borrowed executor: no thread is spawned across construction and a full round-trip", "[node][borrowed-executor]")
 {
 #ifdef __linux__
     const std::size_t before = os_thread_count();
@@ -165,14 +165,12 @@ TEST_CASE("borrowed executor: no thread is spawned across construction and a ful
     h.connect();
 
     std::vector<std::string> got;
-    inproc_subscriber sub{h.a, "topic",
-                          [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
-    inproc_publisher  pub{h.b, "topic"};
+    inproc_subscriber        sub{h.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_publisher         pub{h.b, "topic"};
 
-    inproc_procedure proc{
-            h.b, "rpc", [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply)
-            { reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param))); }};
-    inproc_caller call{h.a, "rpc"};
+    inproc_procedure proc{h.b, "rpc",
+                          [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply) { reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param))); }};
+    inproc_caller    call{h.a, "rpc"};
     h.pump();
 
     pub.publish(as_bytes("payload"));
@@ -199,8 +197,7 @@ TEST_CASE("borrowed executor: no thread is spawned across construction and a ful
 // sampled at several pipeline stages — after construction, after the subscribe demand,
 // and after the publish — and each time the work resolves ONLY once the host steps the
 // loop. The node never drives its own loop.
-TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop",
-          "[node][borrowed-executor]")
+TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop", "[node][borrowed-executor]")
 {
     host_bridge h;
     h.connect();
@@ -208,8 +205,7 @@ TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop"
     std::vector<std::string> got;
 
     // Sample point 1: a fresh subscriber's standing fan is posted, not run inline.
-    inproc_subscriber sub{h.a, "topic",
-                          [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_subscriber sub{h.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
     inproc_publisher  pub{h.b, "topic"};
     REQUIRE(got.empty());
 
@@ -231,17 +227,15 @@ TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop"
 // The round-trip is itself looped under the host pump: every iteration the host drives
 // the loop and the call completes, proving the no-own-loop property holds repeatedly, not
 // once.
-TEST_CASE("borrowed executor: the host-pumped round-trip is reproducible, looped",
-          "[node][borrowed-executor]")
+TEST_CASE("borrowed executor: the host-pumped round-trip is reproducible, looped", "[node][borrowed-executor]")
 {
     constexpr int k_iterations = 8;
     host_bridge   h;
     h.connect();
 
-    inproc_procedure proc{
-            h.b, "rpc", [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply)
-            { reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param))); }};
-    inproc_caller call{h.a, "rpc"};
+    inproc_procedure proc{h.b, "rpc",
+                          [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply) { reply(plexus::wire::rpc_status::success, as_bytes("reply:" + to_string(param))); }};
+    inproc_caller    call{h.a, "rpc"};
     h.pump();
 
     int proven = 0;

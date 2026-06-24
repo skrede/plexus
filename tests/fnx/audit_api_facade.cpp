@@ -45,7 +45,9 @@ int main()
     // Construct + destruct: the ctor builds the endpoint seam table (instantiating the
     // converted serve_procedure_seam fail_closed body), and the dtor runs the
     // #if __cpp_exceptions-guarded teardown.
-    { node_t node{executor, disc, self, tr, opts}; }
+    {
+        node_t node{executor, disc, self, tr, opts};
+    }
 
     return 0;
 }

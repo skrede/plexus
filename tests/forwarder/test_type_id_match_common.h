@@ -42,8 +42,7 @@ struct capture
     explicit capture(inproc_executor<> &ex)
             : sink(ex)
     {
-        sink.on_data([this](std::span<const std::byte> d)
-                     { frames.emplace_back(d.begin(), d.end()); });
+        sink.on_data([this](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
     }
 
     inproc_channel<>                    sink;

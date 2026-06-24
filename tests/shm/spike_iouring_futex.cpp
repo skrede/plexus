@@ -44,9 +44,7 @@ long futex_wake_shared(std::uint32_t *word, int count)
 TEST_CASE("spike: io_uring futex-wait CQE reaped through the asio reactor", "[shm][spike]")
 {
     // A MAP_SHARED futex word visible to a forked child across address spaces.
-    auto *word = static_cast<std::uint32_t *>(::mmap(nullptr, sizeof(std::uint32_t),
-                                                     PROT_READ | PROT_WRITE,
-                                                     MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+    auto *word = static_cast<std::uint32_t *>(::mmap(nullptr, sizeof(std::uint32_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(word != MAP_FAILED);
     *word = 0;
 

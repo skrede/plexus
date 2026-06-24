@@ -26,8 +26,7 @@ void serial_do_read(Ch &c)
                                       {
                                           if(ec)
                                               return c.fail(ec);
-                                          c.serial_decorator().feed(std::span<const std::byte>{
-                                                  c.serial_read_buf().data(), n});
+                                          c.serial_decorator().feed(std::span<const std::byte>{c.serial_read_buf().data(), n});
                                           if(c.serial_stream().is_open())
                                               serial_do_read(c);
                                       });

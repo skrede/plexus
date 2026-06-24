@@ -4,16 +4,14 @@
 
 using namespace recording_channel_fixture;
 
-TEST_CASE("recording_channel stamps strictly monotonic independent per-direction sequences",
-          "[recording_channel][wire]")
+TEST_CASE("recording_channel stamps strictly monotonic independent per-direction sequences", "[recording_channel][wire]")
 {
     auto                         *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::uint64_t> out_seq;
     std::vector<std::uint64_t> in_seq;
-    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte>)
-               { (dir == wire_direction::out ? out_seq : in_seq).push_back(seq); });
+    ch.on_wire([&](wire_direction dir, std::uint64_t seq, std::span<const std::byte>) { (dir == wire_direction::out ? out_seq : in_seq).push_back(seq); });
     // A self-loop: this channel's send feeds its own lower on_data, so each send produces
     // BOTH an OUT tap (the send counter) and an IN tap (the recv counter). The two counters
     // are independent, so each run is contiguous 0,1,2,... on its own axis.
@@ -27,8 +25,7 @@ TEST_CASE("recording_channel stamps strictly monotonic independent per-direction
     REQUIRE(in_seq == expected);  // the IN run is contiguous and independent
 }
 
-TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_frame",
-          "[recording_channel][wire][recorder]")
+TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_frame", "[recording_channel][wire][recorder]")
 {
     in_memory_byte_sink sink;
     std::uint64_t       tick = 0;

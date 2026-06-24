@@ -14,17 +14,12 @@ namespace {
 // leave, not how large a message may be. A generous retransmit budget covers loopback loss.
 inline plexus::datagram::detail::udp_arq_config paced_arq()
 {
-    return plexus::datagram::detail::udp_arq_config{.window         = 1024,
-                                                    .initial_rto    = ms{20},
-                                                    .min_rto        = ms{10},
-                                                    .max_rto        = ms{160},
-                                                    .max_retransmit = 40};
+    return plexus::datagram::detail::udp_arq_config{.window = 1024, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{160}, .max_retransmit = 40};
 }
 
 }
 
-TEST_CASE("outofbox: an 8 MiB message round-trips over udpr at shipped defaults, looped",
-          "[outofbox][envelope8]")
+TEST_CASE("outofbox: an 8 MiB message round-trips over udpr at shipped defaults, looped", "[outofbox][envelope8]")
 {
     // The datagram leg at shipped defaults: the per-channel back-pressure cap is the OLD
     // 4 MiB default, now floored at the 8 MiB shipped ceiling — so the message's full
@@ -63,20 +58,19 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over udpr at shipped defaults,
                                     pio::reassembly_memory_budget,
                                     pasio::udp_channel::default_backpressure_bytes,
                                     reassembly_timeout};
-        pasio::udp_transport client{
-                io,
-                budget,
-                pasio::udp_transport::arq_type::schedule{ms{20}, ms{40}, ms{80}},
-                paced_arq(),
-                pio::congestion::block,
-                demux::default_max_peers,
-                k_socket_buf,
-                k_socket_buf,
-                pasio::udp_server::default_send_queue_bytes,
-                pio::global_default_max_message_bytes,
-                pio::reassembly_memory_budget,
-                pasio::udp_channel::default_backpressure_bytes,
-                reassembly_timeout};
+        pasio::udp_transport client{io,
+                                    budget,
+                                    pasio::udp_transport::arq_type::schedule{ms{20}, ms{40}, ms{80}},
+                                    paced_arq(),
+                                    pio::congestion::block,
+                                    demux::default_max_peers,
+                                    k_socket_buf,
+                                    k_socket_buf,
+                                    pasio::udp_server::default_send_queue_bytes,
+                                    pio::global_default_max_message_bytes,
+                                    pio::reassembly_memory_budget,
+                                    pasio::udp_channel::default_backpressure_bytes,
+                                    reassembly_timeout};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
         std::vector<std::vector<std::byte>> got;
@@ -84,14 +78,12 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over udpr at shipped defaults,
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> b)
-                                      { got.emplace_back(b.begin(), b.end()); });
+                    accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);

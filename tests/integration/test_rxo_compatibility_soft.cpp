@@ -17,13 +17,8 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
             link l;
             l.drive();
             REQUIRE(l.complete());
-            l.prod_messages.declare("topic",
-                                    plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
-            l.subscriber->subscribe(
-                    "topic",
-                    subscriber_qos{.durability_mode             = durability::none,
-                                   .requested_max_message_bytes = 4u * 1024u * 1024u,
-                                   .rxo                         = rxo_mode::strict});
+            l.prod_messages.declare("topic", plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requested_max_message_bytes = 4u * 1024u * 1024u, .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.size() == 1);
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
@@ -38,13 +33,8 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
             link l;
             l.drive();
             REQUIRE(l.complete());
-            l.prod_messages.declare("topic",
-                                    plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
-            l.subscriber->subscribe(
-                    "topic",
-                    subscriber_qos{.durability_mode             = durability::none,
-                                   .requested_max_message_bytes = 4u * 1024u * 1024u,
-                                   .rxo                         = rxo_mode::permissive});
+            l.prod_messages.declare("topic", plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requested_max_message_bytes = 4u * 1024u * 1024u, .rxo = rxo_mode::permissive});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.size() == 1);
@@ -61,13 +51,8 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
             link l;
             l.drive();
             REQUIRE(l.complete());
-            l.prod_messages.declare("topic",
-                                    plexus::topic_qos{.max_message_bytes = 4u * 1024u * 1024u});
-            l.subscriber->subscribe(
-                    "topic",
-                    subscriber_qos{.durability_mode             = durability::none,
-                                   .requested_max_message_bytes = 16u * 1024u * 1024u,
-                                   .rxo                         = rxo_mode::strict});
+            l.prod_messages.declare("topic", plexus::topic_qos{.max_message_bytes = 4u * 1024u * 1024u});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requested_max_message_bytes = 16u * 1024u * 1024u, .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());
@@ -90,10 +75,7 @@ TEST_CASE("rxo compatibility: a requires source identity subscriber is refused a
             REQUIRE(l.complete());
             // The producer declares WITHOUT emit_source_identity (the 4th arg defaults false).
             l.prod_messages.declare("topic", plexus::topic_qos{});
-            l.subscriber->subscribe("topic",
-                                    subscriber_qos{.durability_mode          = durability::none,
-                                                   .requires_source_identity = true,
-                                                   .rxo                      = mode});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requires_source_identity = true, .rxo = mode});
             l.drive();
             // The always-hard floor: refused regardless of mode, and the degraded
             // observable must NOT fire (it is not a degradable field).
@@ -108,10 +90,7 @@ TEST_CASE("rxo compatibility: a requires source identity subscriber is refused a
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{}, std::nullopt,
                                     /*emit_source_identity=*/true);
-            l.subscriber->subscribe("topic",
-                                    subscriber_qos{.durability_mode          = durability::none,
-                                                   .requires_source_identity = true,
-                                                   .rxo                      = rxo_mode::strict});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requires_source_identity = true, .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());
@@ -134,10 +113,7 @@ TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under st
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.offered_deadline_ns = 200});
-            l.subscriber->subscribe("topic",
-                                    subscriber_qos{.durability_mode       = durability::none,
-                                                   .requested_deadline_ns = 100,
-                                                   .rxo                   = rxo_mode::strict});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requested_deadline_ns = 100, .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.size() == 1);
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
@@ -147,10 +123,7 @@ TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under st
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.offered_deadline_ns = 200});
-            l.subscriber->subscribe("topic",
-                                    subscriber_qos{.durability_mode       = durability::none,
-                                                   .requested_deadline_ns = 100,
-                                                   .rxo                   = rxo_mode::permissive});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requested_deadline_ns = 100, .rxo = rxo_mode::permissive});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.size() == 1);
@@ -162,10 +135,7 @@ TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under st
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.offered_deadline_ns = 0});
-            l.subscriber->subscribe("topic",
-                                    subscriber_qos{.durability_mode       = durability::none,
-                                                   .requested_deadline_ns = 100,
-                                                   .rxo                   = rxo_mode::strict});
+            l.subscriber->subscribe("topic", subscriber_qos{.durability_mode = durability::none, .requested_deadline_ns = 100, .rxo = rxo_mode::strict});
             l.drive();
             REQUIRE(l.refusals.empty());
             REQUIRE(l.degraded.empty());

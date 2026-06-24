@@ -64,13 +64,11 @@ struct loopback
 
     loopback()
     {
-        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch)
-                           { accepted = std::move(ch); });
+        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch) { accepted = std::move(ch); });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until([this] { return server.port() != 0; });
 
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
         pump_until([this] { return dialed != nullptr && accepted != nullptr; });
     }
@@ -145,8 +143,7 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
     pasio::udp_transport server{io};
 
     std::vector<std::unique_ptr<pasio::udp_channel>> accepted;
-    server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch)
-                       { accepted.push_back(std::move(ch)); });
+    server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted.push_back(std::move(ch)); });
     server.listen({"udp", "127.0.0.1:0"});
 
     auto pump = [&](auto pred)
@@ -163,8 +160,7 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
 
     pasio::udp_transport                first{io};
     std::unique_ptr<pasio::udp_channel> first_dialed;
-    first.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                    { first_dialed = std::move(ch); });
+    first.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { first_dialed = std::move(ch); });
     first.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
     pump([&] { return first_dialed != nullptr && accepted.size() == 1; });
     REQUIRE(accepted.size() == 1);
@@ -180,8 +176,7 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
 
     pasio::udp_transport                second{io};
     std::unique_ptr<pasio::udp_channel> second_dialed;
-    second.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                     { second_dialed = std::move(ch); });
+    second.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { second_dialed = std::move(ch); });
     second.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
     pump([&] { return second_dialed != nullptr && accepted.size() == 1; });
 

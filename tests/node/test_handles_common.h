@@ -54,9 +54,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 inline plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xC0FFEEu;
     opts.dial_eagerly = eager;
     return opts;
@@ -96,7 +94,10 @@ struct net
         REQUIRE(a.router().is_connected(id_b));
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
     std::size_t a_demand_for(const std::string &fqn)
     {

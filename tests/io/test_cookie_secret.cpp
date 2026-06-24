@@ -28,8 +28,7 @@ namespace {
 // rides in msg). No OpenSSL.
 hmac_fn fake_hmac()
 {
-    return [](std::span<const std::byte> key, std::span<const std::byte> msg,
-              std::span<std::byte> out)
+    return [](std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out)
     {
         if(out.size() != 32)
             return false;
@@ -39,11 +38,9 @@ hmac_fn fake_hmac()
             // message can cancel two distinct nonces). Deterministic over key||msg||i.
             unsigned acc = 0x811c9dc5u + static_cast<unsigned>(i);
             for(std::size_t k = 0; k < key.size(); ++k)
-                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u +
-                        static_cast<unsigned>(k);
+                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u + static_cast<unsigned>(k);
             for(std::size_t m = 0; m < msg.size(); ++m)
-                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u +
-                        static_cast<unsigned>(m + i);
+                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u + static_cast<unsigned>(m + i);
             out[i] = static_cast<std::byte>(acc & 0xffu);
         }
         return true;
@@ -73,8 +70,7 @@ std::vector<std::byte> addr_of(std::initializer_list<int> vals)
 
 }
 
-TEST_CASE("io.cookie_secret mint then validate round-trips against the current nonce",
-          "[io][cookie_secret]")
+TEST_CASE("io.cookie_secret mint then validate round-trips against the current nonce", "[io][cookie_secret]")
 {
     cookie_secret secret{fake_hmac(), counter_rand()};
     const auto    addr = addr_of({127, 0, 0, 1, 0x1f, 0x90});
@@ -88,8 +84,7 @@ TEST_CASE("io.cookie_secret mint then validate round-trips against the current n
     REQUIRE_FALSE(secret.validate(other, cookie));
 }
 
-TEST_CASE("io.cookie_secret accepts a cookie minted before one rotation (two-nonce straddle)",
-          "[io][cookie_secret]")
+TEST_CASE("io.cookie_secret accepts a cookie minted before one rotation (two-nonce straddle)", "[io][cookie_secret]")
 {
     cookie_secret secret{fake_hmac(), counter_rand()};
     const auto    addr = addr_of({192, 0, 2, 5, 0x04, 0xd2});
@@ -132,8 +127,7 @@ TEST_CASE("io.cookie_secret fails closed on a degraded rand_fn", "[io][cookie_se
     REQUIRE_THROWS([&] { cookie_secret secret{fake_hmac(), std::move(bad)}; }());
 }
 
-TEST_CASE("io.cookie_secret retains the prior nonces when a rotation's rand_fn fails",
-          "[io][cookie_secret]")
+TEST_CASE("io.cookie_secret retains the prior nonces when a rotation's rand_fn fails", "[io][cookie_secret]")
 {
     // A rand that succeeds for the ctor fills then fails: the rotation must RETAIN the prior
     // good nonces (the window does not advance), so a current cookie still validates.

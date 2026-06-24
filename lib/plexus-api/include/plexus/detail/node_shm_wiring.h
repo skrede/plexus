@@ -31,8 +31,7 @@ template<typename EngineChannel, typename C>
 std::unique_ptr<EngineChannel> wrap_companion(std::unique_ptr<C> ch)
 {
     if constexpr(std::is_same_v<EngineChannel, io::polymorphic_byte_channel>)
-        return std::make_unique<EngineChannel>(
-                std::make_unique<io::channel_adapter<C>>(std::move(ch)));
+        return std::make_unique<EngineChannel>(std::make_unique<io::channel_adapter<C>>(std::move(ch)));
     else
         return ch;
 }
@@ -90,9 +89,7 @@ void install_same_host_upgrade(Engine &engine, Member &member)
                 const auto g = member.resolved_geometry_for(key);
                 // The medium constructs its per-message route at mint time: a message rides the
                 // ring when route_message_medium picks shm for the resolved mode + capacity.
-                auto fits = [mode = g.mode, cap = g.slot_capacity](std::size_t bytes)
-                { return shm::route_message_medium(mode, bytes, cap) ==
-                         shm::same_host_medium::shm; };
+                auto fits = [mode = g.mode, cap = g.slot_capacity](std::size_t bytes) { return shm::route_message_medium(mode, bytes, cap) == shm::same_host_medium::shm; };
                 return {wrap_companion<engine_channel>(std::move(ch)), std::move(fits)};
             });
     // The SUBSCRIBER-side receive gate: attach the co-host ring as a consumer and route each
@@ -102,14 +99,11 @@ void install_same_host_upgrade(Engine &engine, Member &member)
     // peer-dead runs the dtor: clear sink, release ring). It captures the engine by reference (it
     // outlives the coordinator). A null handle declines: the subscriber keeps the wire.
     engine.on_upgrade_receive_gate(
-            [&member, &engine](std::string_view node_name,
-                               std::string_view fqn) -> io::upgrade_receive
+            [&member, &engine](std::string_view node_name, std::string_view fqn) -> io::upgrade_receive
             {
                 const std::string key{fqn};
                 const std::string peer{node_name};
-                auto              handle = member.mint_receive_companion(
-                        key, [&engine, peer](std::span<const std::byte> frame)
-                        { engine.inject_upgrade_receive(peer, frame); });
+                auto              handle = member.mint_receive_companion(key, [&engine, peer](std::span<const std::byte> frame) { engine.inject_upgrade_receive(peer, frame); });
                 if(!handle)
                     return {};
                 return {[h = std::move(handle)]() mutable { (void)h; }};

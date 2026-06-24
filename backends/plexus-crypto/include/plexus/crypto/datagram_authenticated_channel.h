@@ -47,8 +47,7 @@ template<typename Lower>
 class datagram_authenticated_channel
 {
 public:
-    datagram_authenticated_channel(Lower &lower, aead_cipher_id cipher, const derived_keys &keys,
-                                   std::uint32_t initial_epoch = 0)
+    datagram_authenticated_channel(Lower &lower, aead_cipher_id cipher, const derived_keys &keys, std::uint32_t initial_epoch = 0)
             : m_lower(lower)
             , m_cipher(cipher)
             , m_send_key(keys.k_send)
@@ -64,11 +63,20 @@ public:
     datagram_authenticated_channel(datagram_authenticated_channel &&)                 = delete;
     datagram_authenticated_channel &operator=(datagram_authenticated_channel &&)      = delete;
 
-    void send(std::span<const std::byte> data) { detail::datagram_send(*this, data); }
+    void send(std::span<const std::byte> data)
+    {
+        detail::datagram_send(*this, data);
+    }
 
-    void close() { m_lower.close(); }
+    void close()
+    {
+        m_lower.close();
+    }
 
-    [[nodiscard]] io::endpoint remote_endpoint() const { return m_lower.remote_endpoint(); }
+    [[nodiscard]] io::endpoint remote_endpoint() const
+    {
+        return m_lower.remote_endpoint();
+    }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
@@ -102,9 +110,18 @@ public:
     {
         return m_replay_dropped + m_tamper_dropped;
     }
-    [[nodiscard]] std::size_t replay_count() const noexcept { return m_replay_dropped; }
-    [[nodiscard]] std::size_t tamper_dropped_count() const noexcept { return m_tamper_dropped; }
-    [[nodiscard]] std::size_t backpressured() const { return m_lower.backpressured(); }
+    [[nodiscard]] std::size_t replay_count() const noexcept
+    {
+        return m_replay_dropped;
+    }
+    [[nodiscard]] std::size_t tamper_dropped_count() const noexcept
+    {
+        return m_tamper_dropped;
+    }
+    [[nodiscard]] std::size_t backpressured() const
+    {
+        return m_lower.backpressured();
+    }
 
 private:
     template<typename C>
@@ -116,14 +133,12 @@ private:
     template<typename C>
     friend void detail::datagram_on_lower_data(C &, std::span<const std::byte>);
 
-    static constexpr std::size_t k_seq_len = 8;
-    static constexpr std::size_t k_frame_overhead =
-            k_seq_len + 1 + wire::header_size + k_aead_tag_len;
+    static constexpr std::size_t k_seq_len        = 8;
+    static constexpr std::size_t k_frame_overhead = k_seq_len + 1 + wire::header_size + k_aead_tag_len;
 
     void wire_lower()
     {
-        m_lower.on_data([this](std::span<const std::byte> bytes)
-                        { detail::datagram_on_lower_data(*this, bytes); });
+        m_lower.on_data([this](std::span<const std::byte> bytes) { detail::datagram_on_lower_data(*this, bytes); });
     }
 
     static void write_seq(std::byte *p, std::uint64_t seq) noexcept
@@ -160,8 +175,7 @@ private:
 
 }
 
-static_assert(plexus::io::byte_channel<plexus::crypto::datagram_authenticated_channel<
-                      plexus::io::polymorphic_byte_channel>>,
+static_assert(plexus::io::byte_channel<plexus::crypto::datagram_authenticated_channel<plexus::io::polymorphic_byte_channel>>,
               "datagram_authenticated_channel must satisfy byte_channel — check the seven verbs");
 
 #endif

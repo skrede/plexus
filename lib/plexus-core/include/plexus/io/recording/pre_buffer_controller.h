@@ -48,8 +48,7 @@ public:
     using clock_fn    = plexus::detail::move_only_function<std::uint64_t()>;
     using freeze_when = plexus::detail::move_only_function<bool(const record_envelope &)>;
 
-    pre_buffer_controller(byte_sink &sink, std::size_t ring_bytes, clock_fn clock,
-                          std::size_t drain_batch_bytes = 64u * 1024u)
+    pre_buffer_controller(byte_sink &sink, std::size_t ring_bytes, clock_fn clock, std::size_t drain_batch_bytes = 64u * 1024u)
             : m_sink(sink)
             , m_ring(ring_bytes, ring_policy::drop_oldest)
             , m_clock(std::move(clock))
@@ -59,15 +58,15 @@ public:
 
     // Arm the anomaly predicate. Evaluated on every record-build turn; when it returns
     // true the freeze fires automatically (the same effect as a manual trigger()).
-    void on_anomaly(freeze_when pred) { m_pred = std::move(pred); }
+    void on_anomaly(freeze_when pred)
+    {
+        m_pred = std::move(pred);
+    }
 
-    void record_sample(std::uint64_t topic_hash, const message_info &info, std::uint64_t type_id,
-                       bool type_id_present, capture_fidelity fidelity,
-                       std::span<const std::byte> payload)
+    void record_sample(std::uint64_t topic_hash, const message_info &info, std::uint64_t type_id, bool type_id_present, capture_fidelity fidelity, std::span<const std::byte> payload)
     {
         const std::uint64_t ts = m_clock();
-        admit(m_writer.sample(ts, topic_hash, info, type_id, type_id_present, fidelity, payload),
-              ts, {record_category::sample, ts, topic_hash, io::detail::drop_cause::none, 0});
+        admit(m_writer.sample(ts, topic_hash, info, type_id, type_id_present, fidelity, payload), ts, {record_category::sample, ts, topic_hash, io::detail::drop_cause::none, 0});
     }
 
     void record_drop(const io::detail::drop_event &e)
@@ -79,38 +78,31 @@ public:
     void record_qos_change(const qos_change_event &e)
     {
         const std::uint64_t ts = m_clock();
-        admit(m_writer.qos_change(ts, e), ts,
-              {record_category::qos_change, ts, e.topic_hash, io::detail::drop_cause::none,
-               static_cast<std::uint8_t>(e.verdict)});
+        admit(m_writer.qos_change(ts, e), ts, {record_category::qos_change, ts, e.topic_hash, io::detail::drop_cause::none, static_cast<std::uint8_t>(e.verdict)});
     }
 
     void record_participant(const participant_event &e)
     {
         const std::uint64_t ts = m_clock();
-        admit(m_writer.participant(ts, e), ts,
-              {record_category::participant, ts, 0, io::detail::drop_cause::none, 0});
+        admit(m_writer.participant(ts, e), ts, {record_category::participant, ts, 0, io::detail::drop_cause::none, 0});
     }
 
     void record_endpoint(std::string_view fqn, const endpoint_event &e)
     {
         const std::uint64_t ts = m_clock();
-        admit(m_writer.endpoint(ts, fqn, e), ts,
-              {record_category::endpoint, ts, e.topic_hash, io::detail::drop_cause::none, 0});
+        admit(m_writer.endpoint(ts, fqn, e), ts, {record_category::endpoint, ts, e.topic_hash, io::detail::drop_cause::none, 0});
     }
 
     void record_security(const security_event &e)
     {
         const std::uint64_t ts = m_clock();
-        admit(m_writer.security(ts, e), ts,
-              {record_category::security, ts, 0, io::detail::drop_cause::none, 0});
+        admit(m_writer.security(ts, e), ts, {record_category::security, ts, 0, io::detail::drop_cause::none, 0});
     }
 
-    void record_wire(wire_direction dir, std::uint64_t seq, const node_id &peer,
-                     std::span<const std::byte> bytes)
+    void record_wire(wire_direction dir, std::uint64_t seq, const node_id &peer, std::span<const std::byte> bytes)
     {
         const std::uint64_t ts = m_clock();
-        admit(m_writer.wire_frame(ts, dir, seq, peer, bytes), ts,
-              {record_category::wire_frame, ts, 0, io::detail::drop_cause::none, 0});
+        admit(m_writer.wire_frame(ts, dir, seq, peer, bytes), ts, {record_category::wire_frame, ts, 0, io::detail::drop_cause::none, 0});
     }
 
     // Freeze a snapshot: capture {tail, head} (two index reads — NO buffer copy, no
@@ -125,12 +117,18 @@ public:
         m_frozen      = true;
     }
 
-    [[nodiscard]] bool frozen() const noexcept { return m_frozen; }
+    [[nodiscard]] bool frozen() const noexcept
+    {
+        return m_frozen;
+    }
 
     // The captured window's time-span = newest_ts - oldest_ts over the held records (0
     // when fewer than two records were captured). Latched at the freeze and read from the
     // envelopes' capture_ts, so it stays reportable after the window has drained.
-    [[nodiscard]] std::uint64_t captured_span() const noexcept { return m_span; }
+    [[nodiscard]] std::uint64_t captured_span() const noexcept
+    {
+        return m_span;
+    }
 
     // Drain a bounded batch of the frozen window into the sink; returns true while the
     // window still holds unread records. No thread — the caller drives it on its own turn.
@@ -145,7 +143,10 @@ public:
         return false;
     }
 
-    void flush() { m_sink.flush(); }
+    void flush()
+    {
+        m_sink.flush();
+    }
 
 private:
     void admit(std::span<const std::byte> record, std::uint64_t ts, const record_envelope &env)
@@ -165,8 +166,7 @@ private:
         if(from >= to)
             return m_newest_ts;
         std::array<std::byte, 24> head{};
-        const std::size_t         n =
-                std::min<std::size_t>(head.size(), static_cast<std::size_t>(to - from));
+        const std::size_t         n = std::min<std::size_t>(head.size(), static_cast<std::size_t>(to - from));
         for(std::size_t i = 0; i < n; ++i)
             head[i] = m_ring.at(from + i);
         std::size_t off = 0;

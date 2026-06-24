@@ -30,7 +30,10 @@ struct fake_channel
     {
     }
 
-    ~fake_channel() { ++*destroyed; }
+    ~fake_channel()
+    {
+        ++*destroyed;
+    }
 
     fake_channel(const fake_channel &)            = delete;
     fake_channel &operator=(const fake_channel &) = delete;
@@ -50,7 +53,10 @@ struct deferred_sink
         return [this](std::unique_ptr<fake_channel> ch) { parked.push_back(std::move(ch)); };
     }
 
-    void run() { parked.clear(); }
+    void run()
+    {
+        parked.clear();
+    }
 };
 
 }

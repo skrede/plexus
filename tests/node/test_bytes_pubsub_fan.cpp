@@ -2,15 +2,13 @@
 
 using namespace bytes_pubsub_fixture;
 
-TEST_CASE("bytes pub/sub: the 2-arg path is unchanged when a source-identity topic publishes",
-          "[node][pubsub]")
+TEST_CASE("bytes pub/sub: the 2-arg path is unchanged when a source-identity topic publishes", "[node][pubsub]")
 {
     net n;
     n.connect();
 
     std::vector<std::string> got;
-    inproc_subscriber        s{n.a, "topic",
-                               [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_subscriber        s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
     inproc_publisher         p{n.b, "topic", plexus::topic_qos{}, /*emit_source_identity=*/true};
     n.drive();
 
@@ -34,8 +32,7 @@ TEST_CASE("bytes pub/sub: the standing fan reaches a peer discovered AFTER the s
         // A subscribes with NO peer known yet (B has not been constructed-as-connected;
         // only A has listened). The demand is standing.
         std::vector<std::string> got;
-        inproc_subscriber s{n.a, "topic",
-                            [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber        s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         n.a.listen({"inproc", "host-a:5000"});
         n.drive();
 

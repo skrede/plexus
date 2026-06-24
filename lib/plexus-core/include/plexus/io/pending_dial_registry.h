@@ -127,9 +127,15 @@ public:
             m_defer(std::move(channel));
     }
 
-    [[nodiscard]] std::size_t pending_size() const noexcept { return m_pending.size(); }
+    [[nodiscard]] std::size_t pending_size() const noexcept
+    {
+        return m_pending.size();
+    }
 
-    [[nodiscard]] std::size_t accepted_size() const noexcept { return m_accepted.size(); }
+    [[nodiscard]] std::size_t accepted_size() const noexcept
+    {
+        return m_accepted.size();
+    }
 
     // Drop both tables (teardown). Destroys the held channels synchronously — the owner
     // calls clear() from its own close path, not from inside a channel's member call.

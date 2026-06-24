@@ -4,8 +4,7 @@
 
 using namespace priority_band_fixture;
 
-TEST_CASE("priority_band queue: a warm drop_oldest evict-and-admit loop allocates nothing",
-          "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: a warm drop_oldest evict-and-admit loop allocates nothing", "[priority_band][forwarder]")
 {
     priority_band_queue q;
     const std::size_t   b = band_of(priority::normal);
@@ -28,8 +27,7 @@ TEST_CASE("priority_band queue: a warm drop_oldest evict-and-admit loop allocate
     REQUIRE(after == before);
 }
 
-TEST_CASE("priority_band queue: a steady enqueue/pop loop allocates nothing after warm-up",
-          "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: a steady enqueue/pop loop allocates nothing after warm-up", "[priority_band][forwarder]")
 {
     priority_band_queue q;
     const wire_bytes<>  frame = owned(std::string(64, 'x'));

@@ -2,8 +2,7 @@
 
 using namespace shm_ring_backpressure_fixture;
 
-TEST_CASE("ring_backpressure: a skip tombstone at the cursor stays congested (one-slot step)",
-          "[shm][ring_backpressure]")
+TEST_CASE("ring_backpressure: a skip tombstone at the cursor stays congested (one-slot step)", "[shm][ring_backpressure]")
 {
     fixture       f;
     std::uint32_t cursor_index = 0;
@@ -31,8 +30,7 @@ TEST_CASE("ring_backpressure: a skip tombstone at the cursor stays congested (on
     f.ring.unregister_cursor(cursor_index);
 }
 
-TEST_CASE("ring_backpressure: a lapped subscriber recovers in one take (O(1) jump)",
-          "[shm][ring_backpressure]")
+TEST_CASE("ring_backpressure: a lapped subscriber recovers in one take (O(1) jump)", "[shm][ring_backpressure]")
 {
     fixture         f;
     slot_subscriber sub(f.ring);
@@ -66,8 +64,7 @@ TEST_CASE("ring_backpressure: a lapped subscriber recovers in one take (O(1) jum
     REQUIRE(read == 0x99999999u);
 }
 
-TEST_CASE("ring_backpressure: reliable gates on the slowest cursor (lossless)",
-          "[shm][ring_backpressure]")
+TEST_CASE("ring_backpressure: reliable gates on the slowest cursor (lossless)", "[shm][ring_backpressure]")
 {
     fixture       f;
     std::uint32_t cursor_index = 0;
@@ -82,9 +79,7 @@ TEST_CASE("ring_backpressure: reliable gates on the slowest cursor (lossless)",
         f.put(plexus::io::reliability::reliable, 0x44440000u | static_cast<std::uint32_t>(i));
 
     broadcast_ring::claim_result claim;
-    REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable,
-                                     plexus::io::congestion::block,
-                                     claim) == loan_status::congested);
+    REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) == loan_status::congested);
 
     // Consume every value in order: each must read back exactly what was written
     // (no value dropped), proving the reliable gate preserved the full sequence.
@@ -100,8 +95,7 @@ TEST_CASE("ring_backpressure: reliable gates on the slowest cursor (lossless)",
     }
 
     // The cursor has now advanced past the prior lap: a reliable claim succeeds.
-    REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable,
-                                     plexus::io::congestion::block, claim) == loan_status::ok);
+    REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) == loan_status::ok);
 
     f.ring.unregister_cursor(cursor_index);
 }

@@ -35,36 +35,29 @@ message_info assemble_message_info(Session &s, const wire::frame_header &hdr)
 // None set = silent drop. RELOCATION of the session body (a friend).
 template<typename Session>
 // NOLINTNEXTLINE(readability-function-size)
-void deliver_session_data(Session &s, const wire::frame_header &hdr,
-                          std::span<const std::byte> inner)
+void deliver_session_data(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner)
 {
     const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
     if(s.m_on_message_with_info)
     {
         const message_info info = assemble_message_info(s, hdr);
-        s.m_messages.deliver(
-                s.m_msg_peer, inner, info, s.m_ctx.peer_id, has_source_identity,
-                [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi)
-                { s.m_on_message_with_info(fqn, data, mi); });
+        s.m_messages.deliver(s.m_msg_peer, inner, info, s.m_ctx.peer_id, has_source_identity,
+                             [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_with_info(fqn, data, mi); });
         return;
     }
     if(s.m_on_message)
     {
-        s.m_messages.deliver(s.m_msg_peer, inner, s.m_ctx.peer_id, has_source_identity,
-                             [&s](std::string_view fqn, std::span<const std::byte> data)
-                             { s.m_on_message(fqn, data); });
+        s.m_messages.deliver(s.m_msg_peer, inner, s.m_ctx.peer_id, has_source_identity, [&s](std::string_view fqn, std::span<const std::byte> data) { s.m_on_message(fqn, data); });
         return;
     }
     if(s.m_on_message_route)
     {
         const message_info info = assemble_message_info(s, hdr);
         s.m_messages.deliver(s.m_msg_peer, inner, info, s.m_ctx.peer_id, has_source_identity,
-                             [&s](std::string_view fqn, std::span<const std::byte> data,
-                                  const message_info &mi) { s.m_on_message_route(fqn, data, mi); });
+                             [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_route(fqn, data, mi); });
         return;
     }
-    s.m_messages.deliver(s.m_msg_peer, inner, s.m_ctx.peer_id, has_source_identity,
-                         [](std::string_view, std::span<const std::byte>) {});
+    s.m_messages.deliver(s.m_msg_peer, inner, s.m_ctx.peer_id, has_source_identity, [](std::string_view, std::span<const std::byte>) {});
 }
 
 // The object-lane receive tail: resolve the carrier's topic_hash to its fqn (recorded at

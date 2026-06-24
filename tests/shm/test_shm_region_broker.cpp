@@ -25,8 +25,7 @@ using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
 namespace pio = plexus::shm;
 
-static_assert(pio::region_broker<posix_shm_region_broker>,
-              "the broker test fixes the concept satisfaction as a compile gate");
+static_assert(pio::region_broker<posix_shm_region_broker>, "the broker test fixes the concept satisfaction as a compile gate");
 
 namespace {
 
@@ -37,7 +36,10 @@ std::string unique_name(const char *tag)
     return std::string("regbroker.") + tag + "." + std::to_string(::getpid());
 }
 
-std::string dev_shm_path(const std::string &bare) { return std::string("/dev/shm/plexus.") + bare; }
+std::string dev_shm_path(const std::string &bare)
+{
+    return std::string("/dev/shm/plexus.") + bare;
+}
 
 // The mode bits (low 12) of a /dev/shm object, or -1 if it does not exist.
 int mode_of(const std::string &bare)
@@ -48,12 +50,14 @@ int mode_of(const std::string &bare)
     return static_cast<int>(st.st_mode & 07777);
 }
 
-bool exists(const std::string &bare) { return ::access(dev_shm_path(bare).c_str(), F_OK) == 0; }
+bool exists(const std::string &bare)
+{
+    return ::access(dev_shm_path(bare).c_str(), F_OK) == 0;
+}
 
 }
 
-TEST_CASE("shm.region_broker creates a 0600 region, attaches it, and unlinks on release",
-          "[shm][region_broker]")
+TEST_CASE("shm.region_broker creates a 0600 region, attaches it, and unlinks on release", "[shm][region_broker]")
 {
     posix_shm_region_broker broker;
     const std::string       name = unique_name("create");
@@ -63,8 +67,7 @@ TEST_CASE("shm.region_broker creates a 0600 region, attaches it, and unlinks on 
 
     {
         region_handle creator;
-        REQUIRE(broker.create(name, 4096, pio::create_options{}, creator) ==
-                pio::region_status::ok);
+        REQUIRE(broker.create(name, 4096, pio::create_options{}, creator) == pio::region_status::ok);
         REQUIRE(creator.valid());
         REQUIRE(creator.size() >= 4096);
 
@@ -90,8 +93,7 @@ TEST_CASE("shm.region_broker creates a 0600 region, attaches it, and unlinks on 
     REQUIRE_FALSE(exists(name));
 }
 
-TEST_CASE("shm.region_broker unlink_stale_on_create reclaims a pre-existing orphan",
-          "[shm][region_broker]")
+TEST_CASE("shm.region_broker unlink_stale_on_create reclaims a pre-existing orphan", "[shm][region_broker]")
 {
     posix_shm_region_broker broker;
     const std::string       name = unique_name("stale");
@@ -107,8 +109,7 @@ TEST_CASE("shm.region_broker unlink_stale_on_create reclaims a pre-existing orph
     // A plain create collides with the orphan.
     {
         region_handle h;
-        REQUIRE(broker.create(name, 4096, pio::create_options{}, h) ==
-                pio::region_status::already_exists);
+        REQUIRE(broker.create(name, 4096, pio::create_options{}, h) == pio::region_status::already_exists);
     }
 
     // With unlink_stale_on_create the broker reclaims the orphan and creates fresh.
@@ -124,8 +125,7 @@ TEST_CASE("shm.region_broker unlink_stale_on_create reclaims a pre-existing orph
     ::shm_unlink(canonical.c_str()); // belt-and-braces
 }
 
-TEST_CASE("shm.oversize a create above the ceiling fast-fails with no region created",
-          "[shm][oversize]")
+TEST_CASE("shm.oversize a create above the ceiling fast-fails with no region created", "[shm][oversize]")
 {
     posix_shm_region_broker broker;
     const std::string       name = unique_name("oversize");
@@ -156,6 +156,5 @@ TEST_CASE("shm.region_broker rejects a sliced or empty name", "[shm][region_brok
     posix_shm_region_broker broker;
     region_handle           h;
     REQUIRE(broker.create("", 4096, pio::create_options{}, h) == pio::region_status::failed);
-    REQUIRE(broker.create("has/slash", 4096, pio::create_options{}, h) ==
-            pio::region_status::failed);
+    REQUIRE(broker.create("has/slash", 4096, pio::create_options{}, h) == pio::region_status::failed);
 }

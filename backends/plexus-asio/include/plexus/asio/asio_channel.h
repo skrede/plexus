@@ -50,7 +50,10 @@ struct tcp_traits
         (void)sock.shutdown(::asio::ip::tcp::socket::shutdown_both, ec);
     }
 
-    static ::asio::ip::tcp::socket &lowest_layer(::asio::ip::tcp::socket &s) noexcept { return s; }
+    static ::asio::ip::tcp::socket &lowest_layer(::asio::ip::tcp::socket &s) noexcept
+    {
+        return s;
+    }
     static const ::asio::ip::tcp::socket &lowest_layer(const ::asio::ip::tcp::socket &s) noexcept
     {
         return s;
@@ -64,15 +67,12 @@ struct tcp_traits
     // socket usable, so the ec is swallowed (a buffer size is a throughput hint). The socket
     // is taken as the lowest-layer basic_socket so the TLS channel routes its TCP lowest layer
     // through this same hook (its lowest_layer_type IS basic_socket<tcp>, not tcp::socket).
-    static void apply_socket_options(::asio::basic_socket<::asio::ip::tcp> &sock,
-                                     const stream_socket_options &opts, std::error_code &ec)
+    static void apply_socket_options(::asio::basic_socket<::asio::ip::tcp> &sock, const stream_socket_options &opts, std::error_code &ec)
     {
         if(opts.so_sndbuf != 0)
-            (void)sock.set_option(
-                    ::asio::socket_base::send_buffer_size(static_cast<int>(opts.so_sndbuf)), ec);
+            (void)sock.set_option(::asio::socket_base::send_buffer_size(static_cast<int>(opts.so_sndbuf)), ec);
         if(opts.so_rcvbuf != 0)
-            (void)sock.set_option(
-                    ::asio::socket_base::receive_buffer_size(static_cast<int>(opts.so_rcvbuf)), ec);
+            (void)sock.set_option(::asio::socket_base::receive_buffer_size(static_cast<int>(opts.so_rcvbuf)), ec);
         if(!opts.keepalive)
             return;
         (void)sock.set_option(::asio::socket_base::keep_alive(true), ec);
@@ -94,13 +94,11 @@ private:
         if(opts.keepalive_idle_secs == 0 && opts.keepalive_interval_secs == 0)
             return;
         ::tcp_keepalive vals{};
-        vals.onoff         = 1;
-        vals.keepalivetime = opts.keepalive_idle_secs * 1000u;
-        vals.keepaliveinterval =
-                opts.keepalive_interval_secs * 1000u; // SIO_KEEPALIVE_VALS carries no count
-        DWORD written = 0;
-        (void)::WSAIoctl(static_cast<SOCKET>(fd), SIO_KEEPALIVE_VALS, &vals, sizeof(vals), nullptr,
-                         0, &written, nullptr, nullptr);
+        vals.onoff             = 1;
+        vals.keepalivetime     = opts.keepalive_idle_secs * 1000u;
+        vals.keepaliveinterval = opts.keepalive_interval_secs * 1000u; // SIO_KEEPALIVE_VALS carries no count
+        DWORD written          = 0;
+        (void)::WSAIoctl(static_cast<SOCKET>(fd), SIO_KEEPALIVE_VALS, &vals, sizeof(vals), nullptr, 0, &written, nullptr, nullptr);
 #else
         (void)fd;
         (void)opts;
@@ -118,28 +116,20 @@ private:
 #endif
 };
 
-class asio_channel : public stream_channel<::asio::ip::tcp::socket, tcp_traits,
-                                           detail::plaintext_bootstrap<::asio::ip::tcp::socket>>
+class asio_channel : public stream_channel<::asio::ip::tcp::socket, tcp_traits, detail::plaintext_bootstrap<::asio::ip::tcp::socket>>
 {
-    using base = stream_channel<::asio::ip::tcp::socket, tcp_traits,
-                                detail::plaintext_bootstrap<::asio::ip::tcp::socket>>;
+    using base = stream_channel<::asio::ip::tcp::socket, tcp_traits, detail::plaintext_bootstrap<::asio::ip::tcp::socket>>;
 
 public:
-    explicit asio_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {},
-                          io::congestion        congestion = io::congestion::block,
-                          io::egress_capacity   egress     = io::egress_capacity::bounded_default(),
-                          stream_socket_options opts       = {},
-                          std::size_t read_buffer_bytes    = k_stream_read_buffer_bytes)
+    explicit asio_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+                          io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {},
+                          std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
     {
     }
 
-    asio_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected,
-                 stream::stream_inbound_config cfg        = {},
-                 io::congestion              congestion = io::congestion::block,
-                 io::egress_capacity         egress     = io::egress_capacity::bounded_default(),
-                 stream_socket_options       opts       = {},
-                 std::size_t                 read_buffer_bytes = k_stream_read_buffer_bytes)
+    asio_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+                 io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {}, std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
     {
     }
@@ -147,7 +137,6 @@ public:
 
 }
 
-static_assert(plexus::io::byte_channel<plexus::asio::asio_channel>,
-              "asio_channel must satisfy byte_channel — check the seven verbs");
+static_assert(plexus::io::byte_channel<plexus::asio::asio_channel>, "asio_channel must satisfy byte_channel — check the seven verbs");
 
 #endif

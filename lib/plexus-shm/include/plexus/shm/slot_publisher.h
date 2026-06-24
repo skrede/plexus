@@ -61,7 +61,7 @@ public:
     loan_status loan(std::size_t size, loaned_buffer &out) noexcept
     {
         broadcast_ring::claim_result claim;
-        const loan_status st = m_ring.claim_with_policy(size, m_reliability, m_congestion, claim);
+        const loan_status            st = m_ring.claim_with_policy(size, m_reliability, m_congestion, claim);
         if(st != loan_status::ok)
             return st;
 
@@ -78,8 +78,14 @@ public:
         return m_ring.commit(spent.m_position, spent.m_filled);
     }
 
-    io::reliability delivery() const noexcept { return m_reliability; }
-    io::congestion  overflow() const noexcept { return m_congestion; }
+    io::reliability delivery() const noexcept
+    {
+        return m_reliability;
+    }
+    io::congestion overflow() const noexcept
+    {
+        return m_congestion;
+    }
 
     // The slowest registered consumer cursor -- the back-pressure progress signal a
     // blocking reliable producer watches to tell a live-but-slow consumer from a
@@ -91,8 +97,8 @@ public:
 
 private:
     broadcast_ring &m_ring;
-    io::reliability     m_reliability;
-    io::congestion      m_congestion;
+    io::reliability m_reliability;
+    io::congestion  m_congestion;
 };
 
 }

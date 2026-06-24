@@ -59,7 +59,10 @@ namespace detail {
 class call_error_category final : public std::error_category
 {
 public:
-    [[nodiscard]] const char *name() const noexcept override { return "plexus.call"; }
+    [[nodiscard]] const char *name() const noexcept override
+    {
+        return "plexus.call";
+    }
 
     [[nodiscard]] std::string message(int value) const override
     {
@@ -86,7 +89,10 @@ public:
 class provider_error_category final : public std::error_category
 {
 public:
-    [[nodiscard]] const char *name() const noexcept override { return "plexus.provider"; }
+    [[nodiscard]] const char *name() const noexcept override
+    {
+        return "plexus.provider";
+    }
 
     [[nodiscard]] std::string message(int value) const override
     {

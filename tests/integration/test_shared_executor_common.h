@@ -43,8 +43,7 @@ inline std::vector<std::byte> bytes_of(std::string_view s)
     return v;
 }
 
-inline std::string read_card_value(const std::vector<std::pair<std::string, std::string>> &card,
-                                   std::string_view                                        key)
+inline std::string read_card_value(const std::vector<std::pair<std::string, std::string>> &card, std::string_view key)
 {
     for(const auto &[k, v] : card)
         if(k == key)

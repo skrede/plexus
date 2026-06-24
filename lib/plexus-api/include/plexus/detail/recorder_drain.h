@@ -30,32 +30,24 @@ namespace plexus::detail {
 // records; once empty it goes quiescent and the next pushed edge re-arms it (kick()).
 struct recorder_block
 {
-    using mode_variant =
-            std::variant<io::recording::flat_recorder, io::recording::pre_buffer_controller>;
+    using mode_variant = std::variant<io::recording::flat_recorder, io::recording::pre_buffer_controller>;
 
-    recorder_block(io::recording::byte_sink &sink, const recorder_options &opts,
-                   io::recording::flat_recorder::clock_fn clock, std::size_t scratch_bytes)
+    recorder_block(io::recording::byte_sink &sink, const recorder_options &opts, io::recording::flat_recorder::clock_fn clock, std::size_t scratch_bytes)
             : machinery(make_machinery(sink, opts, std::move(clock), scratch_bytes))
     {
     }
 
-    static mode_variant make_machinery(io::recording::byte_sink              &sink,
-                                       const recorder_options                &opts,
-                                       io::recording::flat_recorder::clock_fn clock,
-                                       std::size_t                            scratch_bytes)
+    static mode_variant make_machinery(io::recording::byte_sink &sink, const recorder_options &opts, io::recording::flat_recorder::clock_fn clock, std::size_t scratch_bytes)
     {
         if(opts.mode == recording_mode::pre_buffer)
-            return mode_variant{std::in_place_type<io::recording::pre_buffer_controller>, sink,
-                                opts.ring_bytes, std::move(clock), opts.drain_batch_bytes};
-        return mode_variant{std::in_place_type<io::recording::flat_recorder>,
-                            sink,
-                            opts.ring_bytes,
-                            std::move(clock),
-                            opts.drain_batch_bytes,
-                            scratch_bytes};
+            return mode_variant{std::in_place_type<io::recording::pre_buffer_controller>, sink, opts.ring_bytes, std::move(clock), opts.drain_batch_bytes};
+        return mode_variant{std::in_place_type<io::recording::flat_recorder>, sink, opts.ring_bytes, std::move(clock), opts.drain_batch_bytes, scratch_bytes};
     }
 
-    bool pump() { return std::visit([](auto &m) { return m.pump(); }, machinery); }
+    bool pump()
+    {
+        return std::visit([](auto &m) { return m.pump(); }, machinery);
+    }
 
     // Re-arm the cooperative drain if it is quiescent — called from the observer turn after a
     // push, the event-driven resume.
@@ -80,30 +72,28 @@ struct recorder_block
 class recorder_variant_sink : public io::observer
 {
 public:
-    using type_id_resolver =
-            plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)>;
+    using type_id_resolver = plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)>;
 
     // The fidelity resolver maps a topic hash to its capture_policy-resolved tier so a recorded
     // sample is stamped with its true fidelity (unset falls back to payload); the type_id resolver
     // maps it to its registered producer type_id so the sample keys to the declared schema.
-    recorder_variant_sink(
-            recorder_block                                                         &blk,
-            plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> fidelity,
-            type_id_resolver                                                        type_id)
+    recorder_variant_sink(recorder_block &blk, plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> fidelity, type_id_resolver type_id)
             : m_block(blk)
             , m_fidelity_resolver(std::move(fidelity))
             , m_type_id_resolver(std::move(type_id))
     {
     }
 
-    bool observes_data_path() const override { return true; }
+    bool observes_data_path() const override
+    {
+        return true;
+    }
 
     void on_message_published(std::string_view fqn, const io::message_view &v) override
     {
         sample(fqn, m_empty_info, v);
     }
-    void on_message_delivered(std::string_view fqn, const io::message_info &info,
-                              const io::message_view &v) override
+    void on_message_delivered(std::string_view fqn, const io::message_info &info, const io::message_view &v) override
     {
         sample(fqn, info, v);
     }
@@ -135,14 +125,11 @@ public:
 private:
     void sample(std::string_view fqn, const io::message_info &info, const io::message_view &v)
     {
-        const std::uint64_t              hash  = wire::fqn_topic_hash(fqn);
-        const std::span<const std::byte> bytes = v;
-        const io::capture_fidelity       fidelity =
-                m_fidelity_resolver ? m_fidelity_resolver(hash) : io::capture_fidelity::payload;
-        const std::optional<std::uint64_t> id =
-                m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
-        record([&](auto &m)
-               { m.record_sample(hash, info, id.value_or(0), id.has_value(), fidelity, bytes); });
+        const std::uint64_t                hash     = wire::fqn_topic_hash(fqn);
+        const std::span<const std::byte>   bytes    = v;
+        const io::capture_fidelity         fidelity = m_fidelity_resolver ? m_fidelity_resolver(hash) : io::capture_fidelity::payload;
+        const std::optional<std::uint64_t> id       = m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
+        record([&](auto &m) { m.record_sample(hash, info, id.value_or(0), id.has_value(), fidelity, bytes); });
     }
 
     // Encode the edge into whichever discipline the variant holds, then re-arm the cooperative

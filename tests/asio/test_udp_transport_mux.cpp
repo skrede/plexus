@@ -62,11 +62,9 @@ struct mux_pair
 
     mux_pair()
     {
-        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch)
-                                    { accepted = std::move(ch); });
+        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) { accepted = std::move(ch); });
         dial_face.mux.on_dialed(
-                [this](std::unique_ptr<pio::polymorphic_byte_channel> ch,
-                       const plexus::io::endpoint                    &ep)
+                [this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const plexus::io::endpoint &ep)
                 {
                     dialed = std::move(ch);
                     dialed_ep.emplace(ep);
@@ -88,8 +86,7 @@ struct mux_pair
 
 }
 
-TEST_CASE("udp mux: a best_effort 'udp' dial routes to the UDP member and a frame flows end-to-end",
-          "[udp][mux][route]")
+TEST_CASE("udp mux: a best_effort 'udp' dial routes to the UDP member and a frame flows end-to-end", "[udp][mux][route]")
 {
     constexpr int k_iterations = 100;
     int           proven       = 0;
@@ -124,8 +121,7 @@ TEST_CASE("udp mux: a best_effort 'udp' dial routes to the UDP member and a fram
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp mux: a reliable 'tcp' dial routes to the TCP member, never touching UDP",
-          "[udp][mux][route]")
+TEST_CASE("udp mux: a reliable 'tcp' dial routes to the TCP member, never touching UDP", "[udp][mux][route]")
 {
     mux_pair n;
     n.listen_face.mux.listen({"tcp", "127.0.0.1:0"});
@@ -141,8 +137,7 @@ TEST_CASE("udp mux: a reliable 'tcp' dial routes to the TCP member, never touchi
     REQUIRE(n.listen_face.datagram.port() == 0);
 }
 
-TEST_CASE("udp mux: a reliable_datagram 'udpr' dial routes to the UDP+ARQ member, NEVER TCP",
-          "[udp][mux][route][flip]")
+TEST_CASE("udp mux: a reliable_datagram 'udpr' dial routes to the UDP+ARQ member, NEVER TCP", "[udp][mux][route][flip]")
 {
     // THE FLIP (the other half of the no-downgrade fix): the datagram-with-retransmit ARQ
     // now exists, so a "udpr" demand rides the UDP DATAGRAM member with the ARQ engaged —

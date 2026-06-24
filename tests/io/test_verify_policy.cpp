@@ -34,8 +34,7 @@ cert_facts facts_with(const std::array<std::byte, 32> &spki)
 
 }
 
-TEST_CASE("io.verify_policy spki_pin_policy accepts a pinned digest, rejects an unpinned one",
-          "[io][verify_policy]")
+TEST_CASE("io.verify_policy spki_pin_policy accepts a pinned digest, rejects an unpinned one", "[io][verify_policy]")
 {
     spki_pin_policy policy{{digest_of(1), digest_of(2), digest_of(3)}};
 

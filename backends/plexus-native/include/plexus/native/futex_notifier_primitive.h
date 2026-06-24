@@ -45,8 +45,7 @@ void notifier_signal(std::atomic<std::uint32_t> &generation) noexcept;
 // wait), which rules out the lost wakeup the one-arg always-wake form avoids by
 // waking unconditionally. The one-arg overload is retained UNCHANGED for the call
 // sites that have no park-state word.
-void notifier_signal(std::atomic<std::uint32_t> &generation,
-                     std::atomic<std::uint32_t> &park_state) noexcept;
+void notifier_signal(std::atomic<std::uint32_t> &generation, std::atomic<std::uint32_t> &park_state) noexcept;
 
 // Block on the generation word until it moves off `last_seen` (or a spurious
 // wake). The drain-before-wait protocol: a consumer reads the word, drains, then

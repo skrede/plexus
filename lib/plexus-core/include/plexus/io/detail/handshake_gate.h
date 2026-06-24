@@ -67,13 +67,22 @@ public:
         m_ready = true;
     }
 
-    [[nodiscard]] bool is_ready() const noexcept { return m_ready; }
+    [[nodiscard]] bool is_ready() const noexcept
+    {
+        return m_ready;
+    }
 
-    [[nodiscard]] std::size_t buffered() const noexcept { return m_buffer.size(); }
+    [[nodiscard]] std::size_t buffered() const noexcept
+    {
+        return m_buffer.size();
+    }
 
     // Drop the buffer (teardown). Leaves the ready flag intact — a torn-down gate is not
     // re-armed here; the owner reconstructs the block for a fresh handshake.
-    void reset() { m_buffer.clear(); }
+    void reset()
+    {
+        m_buffer.clear();
+    }
 
 private:
     drain_fn                           m_drain;

@@ -39,11 +39,12 @@ struct security_seam
     // 32-byte digest. Empty = no security posture engaged. Held mutable: the C++20
     // fallback move_only_function has a non-const call operator, and the seam is borrowed
     // const by every session (mirroring cookie_secret's mutable hmac seam).
-    mutable plexus::detail::move_only_function<bool(std::span<const std::byte> transcript,
-                                                    std::span<std::byte, 32>   out)>
-            transcript;
+    mutable plexus::detail::move_only_function<bool(std::span<const std::byte> transcript, std::span<std::byte, 32> out)> transcript;
 
-    [[nodiscard]] bool engaged() const noexcept { return static_cast<bool>(transcript); }
+    [[nodiscard]] bool engaged() const noexcept
+    {
+        return static_cast<bool>(transcript);
+    }
 
     [[nodiscard]] bool compute(std::span<const std::byte> in, std::span<std::byte, 32> out) const
     {

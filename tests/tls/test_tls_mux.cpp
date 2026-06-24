@@ -48,8 +48,7 @@ namespace pio   = plexus::io;
 // The full 32-byte SHA-256 SPKI digest — the core cert_facts::spki_sha256 field type.
 using spki_digest = std::array<std::byte, 32>;
 
-static_assert(
-        plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
+static_assert(plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
 
 namespace {
 
@@ -64,9 +63,7 @@ struct identity_fixture
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path() /
-                ("plexus_tls_mux_" + tag + "_" + std::to_string(::getpid()) + "_" +
-                 std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() / ("plexus_tls_mux_" + tag + "_" + std::to_string(::getpid()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
         key_path  = dir / "key.pem";
@@ -84,8 +81,7 @@ struct identity_fixture
 
     void generate()
     {
-        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"),
-                                                                 &EVP_PKEY_free);
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"), &EVP_PKEY_free);
         REQUIRE(pkey);
 
         std::unique_ptr<X509, decltype(&X509_free)> cert(X509_new(), &X509_free);
@@ -96,16 +92,12 @@ struct identity_fixture
         X509_set_pubkey(cert.get(), pkey.get());
 
         X509_NAME *name = X509_get_subject_name(cert.get());
-        X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-                                   reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1,
-                                   0);
+        X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1, 0);
         X509_set_issuer_name(cert.get(), name);
         REQUIRE(X509_sign(cert.get(), pkey.get(), EVP_sha256()) != 0);
 
         write_pem(cert.get(), pkey.get());
-        std::filesystem::permissions(
-                key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-                std::filesystem::perm_options::replace);
+        std::filesystem::permissions(key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, std::filesystem::perm_options::replace);
 
         auto d = ptls::spki_fingerprint(*cert.get());
         REQUIRE(d.has_value());
@@ -128,8 +120,7 @@ struct identity_fixture
 
 ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &peer_pin)
 {
-    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-            std::vector<spki_digest>{peer_pin});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(std::vector<spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -180,8 +171,7 @@ struct mux_pair
             : listen_face(io, pin_one(server_id, client_id.digest))
             , dial_face(io, pin_one(client_id, server_id.digest))
     {
-        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch)
-                                    { accepted = std::move(ch); });
+        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) { accepted = std::move(ch); });
         dial_face.mux.on_dialed(
                 [this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep)
                 {
@@ -203,8 +193,7 @@ constexpr int k_iterations = 100;
 
 }
 
-TEST_CASE("tls mux: the selector classifies tls and tcp as remote, unix and inproc as local",
-          "[tls][mux][select]")
+TEST_CASE("tls mux: the selector classifies tls and tcp as remote, unix and inproc as local", "[tls][mux][select]")
 {
     pio::transport_selector sel;
     const auto              reserved = pio::reliability_hint::unspecified;
@@ -246,8 +235,7 @@ TEST_CASE("tls mux: a tls dial routes to the secure member and the scheme surviv
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("tls mux: a tcp dial still routes to the plain-TCP member — tls and tcp coexist, looped",
-          "[tls][mux][route]")
+TEST_CASE("tls mux: a tcp dial still routes to the plain-TCP member — tls and tcp coexist, looped", "[tls][mux][route]")
 {
     identity_fixture server_id("srv");
     identity_fixture client_id("cli");

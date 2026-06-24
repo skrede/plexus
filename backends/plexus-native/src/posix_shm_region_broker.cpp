@@ -101,9 +101,7 @@ plexus::shm::region_status to_status(shm_error e)
 
 }
 
-plexus::shm::region_status posix_shm_region_broker::finish_create(int fd, std::size_t length,
-                                                                      std::string    canonical,
-                                                                      region_handle &out)
+plexus::shm::region_status posix_shm_region_broker::finish_create(int fd, std::size_t length, std::string canonical, region_handle &out)
 {
     if(::ftruncate(fd, static_cast<off_t>(length)) != 0)
     {
@@ -123,8 +121,7 @@ plexus::shm::region_status posix_shm_region_broker::finish_create(int fd, std::s
     return plexus::shm::region_status::ok;
 }
 
-plexus::shm::region_status posix_shm_region_broker::finish_attach(int fd, std::string canonical,
-                                                                      region_handle &out)
+plexus::shm::region_status posix_shm_region_broker::finish_attach(int fd, std::string canonical, region_handle &out)
 {
     struct stat st{};
     if(::fstat(fd, &st) != 0)
@@ -144,9 +141,7 @@ plexus::shm::region_status posix_shm_region_broker::finish_attach(int fd, std::s
     return plexus::shm::region_status::ok;
 }
 
-plexus::shm::region_status
-posix_shm_region_broker::create(std::string_view name, std::size_t bytes,
-                                const plexus::shm::create_options &opts, region_handle &out)
+plexus::shm::region_status posix_shm_region_broker::create(std::string_view name, std::size_t bytes, const plexus::shm::create_options &opts, region_handle &out)
 {
     out = region_handle{};
 
@@ -162,15 +157,13 @@ posix_shm_region_broker::create(std::string_view name, std::size_t bytes,
     if(const auto status = sanitize_region_name(name, canonical); status != shm_error::ok)
         return to_status(status);
 
-    const int fd = open_create_excl(canonical.c_str(), static_cast<mode_t>(opts.perms),
-                                    opts.unlink_stale_on_create);
+    const int fd = open_create_excl(canonical.c_str(), static_cast<mode_t>(opts.perms), opts.unlink_stale_on_create);
     if(fd < 0)
         return to_status(map_errno(errno));
     return finish_create(fd, page_round_up(bytes), std::move(canonical), out);
 }
 
-plexus::shm::region_status posix_shm_region_broker::attach(std::string_view name,
-                                                               region_handle   &out)
+plexus::shm::region_status posix_shm_region_broker::attach(std::string_view name, region_handle &out)
 {
     out = region_handle{};
 
@@ -187,8 +180,7 @@ plexus::shm::region_status posix_shm_region_broker::attach(std::string_view name
     return finish_attach(fd, std::move(canonical), out);
 }
 
-void posix_shm_region_broker::set_attach_policy(
-        plexus::detail::move_only_function<bool(std::string_view)> policy)
+void posix_shm_region_broker::set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)> policy)
 {
     m_attach_policy = std::move(policy);
 }

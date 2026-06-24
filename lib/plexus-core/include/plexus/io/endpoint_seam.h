@@ -40,8 +40,7 @@ struct encode_thunk
 template<typename Fn>
 [[nodiscard]] encode_thunk make_encode_thunk(Fn &fn) noexcept
 {
-    return encode_thunk{&fn, [](void *state) -> std::span<const std::byte>
-                        { return (*static_cast<Fn *>(state))(); }};
+    return encode_thunk{&fn, [](void *state) -> std::span<const std::byte> { return (*static_cast<Fn *>(state))(); }};
 }
 
 inline std::span<const std::byte> invoke(const encode_thunk &thunk)
@@ -54,17 +53,11 @@ inline std::span<const std::byte> invoke(const encode_thunk &thunk)
 // only rpc_status + spans), so the seam names them once here
 // instead of through a Policy-parameterized forwarder type. Spelled FULLY QUALIFIED as
 // plexus::detail::move_only_function — io::detail shadows plexus::detail in this scope.
-using reply_fn =
-        plexus::detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
-using handler_fn =
-        plexus::detail::move_only_function<void(std::span<const std::byte> param, reply_fn &)>;
-using on_reply_fn = plexus::detail::move_only_function<void(std::optional<wire::rpc_status>,
-                                                            std::span<const std::byte>,
-                                                            const std::optional<publisher_gid> &)>;
-using bytes_cb =
-        plexus::detail::move_only_function<void(std::span<const std::byte>, const message_info &)>;
-using object_dispatch =
-        plexus::detail::move_only_function<void(const object_carrier &, const message_info &)>;
+using reply_fn        = plexus::detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
+using handler_fn      = plexus::detail::move_only_function<void(std::span<const std::byte> param, reply_fn &)>;
+using on_reply_fn     = plexus::detail::move_only_function<void(std::optional<wire::rpc_status>, std::span<const std::byte>, const std::optional<publisher_gid> &)>;
+using bytes_cb        = plexus::detail::move_only_function<void(std::span<const std::byte>, const message_info &)>;
+using object_dispatch = plexus::detail::move_only_function<void(const object_carrier &, const message_info &)>;
 
 // The object-lane dispatch entry a typed subscriber registers alongside its bytes
 // adapter (under the one registration id). native_key is the process-local C++ type
@@ -89,25 +82,20 @@ struct endpoint_seam
     // geometry is an OPAQUE per-topic same-host provisioning override the node recovers (null =
     // none): the seam stays transport-name-free, mirroring ctx/encode_thunk's void*-erasure. It
     // points at a caller-stack value alive for this synchronous declare verb only.
-    void (*declare_publisher)(void *ctx, std::string_view fqn, const topic_qos &qos,
-                              bool emit_source_identity, std::optional<std::uint64_t> type_id,
-                              const void *geometry, std::optional<topic_capture_rule> capture);
+    void (*declare_publisher)(void *ctx, std::string_view fqn, const topic_qos &qos, bool emit_source_identity, std::optional<std::uint64_t> type_id, const void *geometry,
+                              std::optional<topic_capture_rule> capture);
     void (*publish)(void *ctx, std::string_view fqn, std::span<const std::byte> bytes);
-    void (*publish_object)(void *ctx, std::string_view fqn, const object_carrier &carrier,
-                           encode_thunk encode);
+    void (*publish_object)(void *ctx, std::string_view fqn, const object_carrier &carrier, encode_thunk encode);
 
-    std::uint64_t (*register_subscriber)(void *ctx, std::string_view fqn, const subscriber_qos &qos,
-                                         bytes_cb cb, std::optional<std::uint64_t> type_id,
-                                         const void *native_key, object_dispatch dispatch,
-                                         std::optional<topic_capture_rule> capture);
+    std::uint64_t (*register_subscriber)(void *ctx, std::string_view fqn, const subscriber_qos &qos, bytes_cb cb, std::optional<std::uint64_t> type_id, const void *native_key,
+                                         object_dispatch dispatch, std::optional<topic_capture_rule> capture);
     void (*retire_subscriber)(void *ctx, std::uint64_t rid);
     void (*retire_publisher)(void *ctx, std::string_view fqn);
 
     void (*serve_procedure)(void *ctx, std::string_view fqn, handler_fn handler);
     void (*retire_procedure)(void *ctx, std::string_view fqn);
 
-    void (*call)(void *ctx, std::string_view fqn, std::span<const std::byte> param,
-                 on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline);
+    void (*call)(void *ctx, std::string_view fqn, std::span<const std::byte> param, on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline);
 };
 
 }

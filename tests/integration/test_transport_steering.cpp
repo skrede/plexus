@@ -93,8 +93,7 @@ TEST_CASE("transport steering: the selector verdict mirrors the engine reliabili
         }
 }
 
-TEST_CASE("transport steering: a declared dispatch hint observably steers the class verdict",
-          "[steering][dispatch]")
+TEST_CASE("transport steering: a declared dispatch hint observably steers the class verdict", "[steering][dispatch]")
 {
     pio::transport_selector sel;
     using pio::dispatch_hint;
@@ -108,8 +107,7 @@ TEST_CASE("transport steering: a declared dispatch hint observably steers the cl
     for(int iter = 0; iter < k_reps; ++iter)
     {
         // The declared dispatch field observably changes the local fast-path verdict.
-        REQUIRE(sel.dispatch_class(unix_ep, hinted_qos.dispatch) !=
-                sel.dispatch_class(unix_ep, hintless_qos.dispatch));
+        REQUIRE(sel.dispatch_class(unix_ep, hinted_qos.dispatch) != sel.dispatch_class(unix_ep, hintless_qos.dispatch));
 
         // For a remote peer the verdict records the documented advisory preference.
         REQUIRE(sel.dispatch_class(tcp_ep, hinted_qos.dispatch));

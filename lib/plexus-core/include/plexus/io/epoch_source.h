@@ -29,7 +29,10 @@ public:
         return m_counter;
     }
 
-    std::uint64_t current() const noexcept { return m_counter; }
+    std::uint64_t current() const noexcept
+    {
+        return m_counter;
+    }
 
 private:
     std::uint64_t m_counter{0};
@@ -37,8 +40,7 @@ private:
 
 // Pin the mint width: the epoch feeds frame_header.session_id (u64), and a silent
 // narrowing here would reintroduce the wrap collision the widening retired.
-static_assert(std::is_same_v<decltype(epoch_source{}.next()), std::uint64_t>,
-              "epoch mint width must stay u64 so the session_id wire field never narrows");
+static_assert(std::is_same_v<decltype(epoch_source{}.next()), std::uint64_t>, "epoch mint width must stay u64 so the session_id wire field never narrows");
 
 }
 

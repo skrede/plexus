@@ -58,8 +58,7 @@ TEST_CASE("observer over asio: a real socket drop+redial fires reconnected (NOT 
         // re-dials over a fresh socket, re-handshaking. reconnected fires (not a second
         // connected); the dead session's tear_down fires disconnected.
         b.eng.session_for(inbound_slot(1))->tear_down();
-        pump_until(io,
-                   [&] { return rec.for_peer(id_b).reconnected == 1 && a.eng.is_connected(id_b); });
+        pump_until(io, [&] { return rec.for_peer(id_b).reconnected == 1 && a.eng.is_connected(id_b); });
 
         const auto &c = rec.for_peer(id_b);
         REQUIRE(a.eng.is_connected(id_b));

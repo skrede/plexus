@@ -2,8 +2,7 @@
 
 using namespace contact_card_fixture;
 
-TEST_CASE("static_discovery notifies a browser registered BEFORE a later advertise",
-          "[discovery][static_discovery]")
+TEST_CASE("static_discovery notifies a browser registered BEFORE a later advertise", "[discovery][static_discovery]")
 {
     static_discovery disco{{}};
 
@@ -20,8 +19,7 @@ TEST_CASE("static_discovery notifies a browser registered BEFORE a later adverti
     REQUIRE(seen.front() == "late-joiner");
 }
 
-TEST_CASE("static_discovery notifies EVERY retained browser on a later advertise",
-          "[discovery][static_discovery]")
+TEST_CASE("static_discovery notifies EVERY retained browser on a later advertise", "[discovery][static_discovery]")
 {
     static_discovery disco{{}};
 
@@ -40,8 +38,7 @@ TEST_CASE("static_discovery notifies EVERY retained browser on a later advertise
     REQUIRE(b.front() == "node-z");
 }
 
-TEST_CASE("static_discovery replaces a same-name entry in place instead of appending a duplicate",
-          "[discovery][static_discovery]")
+TEST_CASE("static_discovery replaces a same-name entry in place instead of appending a duplicate", "[discovery][static_discovery]")
 {
     static_discovery disco{{}};
 
@@ -67,8 +64,7 @@ TEST_CASE("static_discovery replaces a same-name entry in place instead of appen
     REQUIRE(read_transport_port(resolved.front().metadata, "tcp") == 6000);
 }
 
-TEST_CASE("static_discovery stop() drops retained browsers so a later advertise notifies none",
-          "[discovery][static_discovery]")
+TEST_CASE("static_discovery stop() drops retained browsers so a later advertise notifies none", "[discovery][static_discovery]")
 {
     static_discovery disco{{}};
 

@@ -53,12 +53,14 @@ public:
     {
     }
 
-    [[nodiscard]] std::size_t capacity() const noexcept { return m_store.size(); }
+    [[nodiscard]] std::size_t capacity() const noexcept
+    {
+        return m_store.size();
+    }
 
     [[nodiscard]] std::size_t used() const noexcept
     {
-        return static_cast<std::size_t>(m_head.load(std::memory_order_acquire) -
-                                        m_tail.load(std::memory_order_acquire));
+        return static_cast<std::size_t>(m_head.load(std::memory_order_acquire) - m_tail.load(std::memory_order_acquire));
     }
 
     // Frame and admit one record. Returns false without blocking or overwriting the
@@ -169,8 +171,7 @@ private:
             std::size_t   header = 0;
             if(!peek_length(len, header))
                 break;
-            m_tail.store(m_tail.load(std::memory_order_relaxed) + header + len,
-                         std::memory_order_release);
+            m_tail.store(m_tail.load(std::memory_order_relaxed) + header + len, std::memory_order_release);
         }
     }
 
@@ -195,8 +196,7 @@ private:
     void copy_out(std::uint64_t at, std::uint64_t n, byte_sink &sink)
     {
         const std::size_t first = static_cast<std::size_t>(at % capacity());
-        const std::size_t run =
-                std::min<std::size_t>(static_cast<std::size_t>(n), capacity() - first);
+        const std::size_t run   = std::min<std::size_t>(static_cast<std::size_t>(n), capacity() - first);
         sink.write({m_store.data() + first, run});
         if(run < n)
             sink.write({m_store.data(), static_cast<std::size_t>(n) - run});

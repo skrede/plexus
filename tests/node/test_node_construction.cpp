@@ -40,9 +40,7 @@ plexus::node_id make_id(std::uint8_t seed)
 
 plexus::io::reconnect_config forever_cfg()
 {
-    return plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                        std::chrono::milliseconds(2000), std::nullopt,
-                                        std::nullopt};
+    return plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
 }
 
 plexus::node_options make_opts()
@@ -69,35 +67,25 @@ struct host
 // The four injected-substrate omission proofs: the node is NOT constructible when any
 // required substrate element is missing (there is no owning convenience overload, so
 // omission is a compile error, asserted here as non-constructibility).
-static_assert(std::is_constructible_v<
-                      inproc_node, inproc_executor<> &, plexus::discovery::static_discovery &,
-                      const plexus::node_id &, inproc_transport<> &, const plexus::node_options &>,
-              "the node IS constructible with the full injected substrate");
+static_assert(
+        std::is_constructible_v<inproc_node, inproc_executor<> &, plexus::discovery::static_discovery &, const plexus::node_id &, inproc_transport<> &, const plexus::node_options &>,
+        "the node IS constructible with the full injected substrate");
 
-static_assert(!std::is_constructible_v<inproc_node>,
-              "omitting the entire substrate is a compile error");
-static_assert(!std::is_constructible_v<inproc_node, plexus::discovery::static_discovery &,
-                                       const plexus::node_id &, inproc_transport<> &,
-                                       const plexus::node_options &>,
+static_assert(!std::is_constructible_v<inproc_node>, "omitting the entire substrate is a compile error");
+static_assert(!std::is_constructible_v<inproc_node, plexus::discovery::static_discovery &, const plexus::node_id &, inproc_transport<> &, const plexus::node_options &>,
               "omitting the executor is a compile error");
-static_assert(!std::is_constructible_v<inproc_node, inproc_executor<> &, const plexus::node_id &,
-                                       inproc_transport<> &, const plexus::node_options &>,
+static_assert(!std::is_constructible_v<inproc_node, inproc_executor<> &, const plexus::node_id &, inproc_transport<> &, const plexus::node_options &>,
               "omitting the discovery is a compile error");
-static_assert(!std::is_constructible_v<inproc_node, inproc_executor<> &,
-                                       plexus::discovery::static_discovery &,
-                                       const plexus::node_id &, const plexus::node_options &>,
+static_assert(!std::is_constructible_v<inproc_node, inproc_executor<> &, plexus::discovery::static_discovery &, const plexus::node_id &, const plexus::node_options &>,
               "omitting the transport is a compile error");
-static_assert(!std::is_constructible_v<inproc_node, inproc_executor<> &,
-                                       plexus::discovery::static_discovery &,
-                                       const plexus::node_id &, inproc_transport<> &>,
+static_assert(!std::is_constructible_v<inproc_node, inproc_executor<> &, plexus::discovery::static_discovery &, const plexus::node_id &, inproc_transport<> &>,
               "omitting the options is a compile error");
 
 // The node pins `this` into engine callbacks (the borrowed-substrate posture).
 static_assert(!std::is_copy_constructible_v<inproc_node>);
 static_assert(!std::is_move_constructible_v<inproc_node>);
 
-TEST_CASE("node: constructs over the inproc substrate with a verbatim node_id",
-          "[node][construction]")
+TEST_CASE("node: constructs over the inproc substrate with a verbatim node_id", "[node][construction]")
 {
     host        h;
     const auto  id = make_id(0xA1);

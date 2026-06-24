@@ -78,13 +78,8 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, const attach_policy *policy 
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0,
-                                .local_fingerprint        = {},
-                                .attach_policy            = policy};
+    return handshake_fsm_config{
+            .self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0, .local_fingerprint = {}, .attach_policy = policy};
 }
 
 // A test attach_policy that accepts or refuses by a fixed verdict — the gate mechanism
@@ -92,7 +87,10 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, const attach_policy *policy 
 struct verdict_policy final : public attach_policy
 {
     bool               admit{true};
-    [[nodiscard]] bool decide(const attach_facts &) const noexcept override { return admit; }
+    [[nodiscard]] bool decide(const attach_facts &) const noexcept override
+    {
+        return admit;
+    }
 };
 
 // A deterministic transcript fold (NOT a hash — the bridge only needs determinism over
@@ -121,8 +119,7 @@ security_seam fake_seam()
 // mirrors the attach_policy oracle's fake_hmac so the prover and the policy agree.
 hmac_fn real_keyed_hmac()
 {
-    return [](std::span<const std::byte> key, std::span<const std::byte> msg,
-              std::span<std::byte> out)
+    return [](std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out)
     {
         if(out.size() != 32)
             return false;
@@ -130,11 +127,9 @@ hmac_fn real_keyed_hmac()
         {
             unsigned acc = 0x811c9dc5u + static_cast<unsigned>(i);
             for(std::size_t k = 0; k < key.size(); ++k)
-                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u +
-                        static_cast<unsigned>(k);
+                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u + static_cast<unsigned>(k);
             for(std::size_t m = 0; m < msg.size(); ++m)
-                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u +
-                        static_cast<unsigned>(m + i);
+                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u + static_cast<unsigned>(m + i);
             out[i] = static_cast<std::byte>(acc & 0xffu);
         }
         return true;
@@ -180,10 +175,10 @@ struct link
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink};
+    msg_forwarder            resp_messages{sink};
+    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
@@ -202,8 +197,7 @@ struct link
 
     // wire_install gates whether the AEAD install hook is set: a secured posture with NO
     // install hook is the auth-only configuration (admission without AEAD).
-    link(const attach_policy *req_policy, const attach_policy *resp_policy, bool secured,
-         bool wire_install = true, std::chrono::nanoseconds timeout = k_long_timeout)
+    link(const attach_policy *req_policy, const attach_policy *resp_policy, bool secured, bool wire_install = true, std::chrono::nanoseconds timeout = k_long_timeout)
     {
         if(secured)
         {
@@ -217,35 +211,26 @@ struct link
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
                     resp_ctx.peer_id   = make_cfg(0x02).self_id;
-                    responder.emplace(resp_ctx, ex, make_cfg(0x01, resp_policy), timeout,
-                                      resp_messages, resp_procedures, true, sink);
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01, resp_policy), timeout, resp_messages, resp_procedures, true, sink);
                     responder->set_security_seam(&resp_seam);
-                    responder->on_security([this](const security_event &ev)
-                                           { resp_security.push_back(ev); });
-                    responder->on_lifecycle([this](const lifecycle_event &ev)
-                                            { resp_lifecycle.push_back(ev); });
+                    responder->on_security([this](const security_event &ev) { resp_security.push_back(ev); });
+                    responder->on_lifecycle([this](const lifecycle_event &ev) { resp_lifecycle.push_back(ev); });
                     if(install)
-                        responder->on_install_security([this](const security_negotiation &)
-                                                       { ++resp_installs; });
+                        responder->on_install_security([this](const security_negotiation &) { ++resp_installs; });
                     responder->start();
                 });
         transport.on_dialed(
-                [this, req_policy, timeout, install](std::unique_ptr<inproc_channel<>> ch,
-                                                     const plexus::io::endpoint &)
+                [this, req_policy, timeout, install](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &)
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
                     req_ctx.peer_id   = make_cfg(0x01).self_id;
-                    requester.emplace(req_ctx, ex, make_cfg(0x02, req_policy), timeout,
-                                      req_messages, req_procedures, false, sink);
+                    requester.emplace(req_ctx, ex, make_cfg(0x02, req_policy), timeout, req_messages, req_procedures, false, sink);
                     requester->set_security_seam(&req_seam);
-                    requester->on_security([this](const security_event &ev)
-                                           { req_security.push_back(ev); });
-                    requester->on_lifecycle([this](const lifecycle_event &ev)
-                                            { req_lifecycle.push_back(ev); });
+                    requester->on_security([this](const security_event &ev) { req_security.push_back(ev); });
+                    requester->on_lifecycle([this](const lifecycle_event &ev) { req_lifecycle.push_back(ev); });
                     if(install)
-                        requester->on_install_security([this](const security_negotiation &)
-                                                       { ++req_installs; });
+                        requester->on_install_security([this](const security_negotiation &) { ++req_installs; });
                     requester->start();
                 });
 
@@ -253,7 +238,10 @@ struct link
         transport.dial({"inproc", "svc"});
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 // The PSK end-to-end rig: drives the REAL psk_keystore_policy on the security decision
@@ -268,10 +256,10 @@ struct psk_link
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink};
+    msg_forwarder            resp_messages{sink};
+    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
@@ -305,37 +293,28 @@ struct psk_link
                     // The responder admits the version/identity-valid request (no verifiable proof
                     // in flight one) — accept_any on its on_request leg — and stamps ITS proof on
                     // the response via the prover.
-                    responder.emplace(resp_ctx, ex, make_cfg(0x01, &m_accept_any), k_long_timeout,
-                                      resp_messages, resp_procedures, true, sink);
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01, &m_accept_any), k_long_timeout, resp_messages, resp_procedures, true, sink);
                     responder->set_security_seam(&resp_seam);
                     responder->set_attach_entropy(counter_rand(0x0a));
                     responder->set_attach_prover(attach_prover{responder_key, real_keyed_hmac()});
-                    responder->on_security([this](const security_event &ev)
-                                           { resp_security.push_back(ev); });
-                    responder->on_lifecycle([this](const lifecycle_event &ev)
-                                            { resp_lifecycle.push_back(ev); });
-                    responder->on_install_security([this](const security_negotiation &)
-                                                   { ++resp_installs; });
+                    responder->on_security([this](const security_event &ev) { resp_security.push_back(ev); });
+                    responder->on_lifecycle([this](const lifecycle_event &ev) { resp_lifecycle.push_back(ev); });
+                    responder->on_install_security([this](const security_negotiation &) { ++resp_installs; });
                     responder->start();
                 });
         transport.on_dialed(
-                [this, dialer_keystore](std::unique_ptr<inproc_channel<>> ch,
-                                        const plexus::io::endpoint &) mutable
+                [this, dialer_keystore](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &) mutable
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
                     req_ctx.peer_id   = make_cfg(0x01).self_id;
                     m_dialer_policy.emplace(std::move(dialer_keystore), real_keyed_hmac());
-                    requester.emplace(req_ctx, ex, make_cfg(0x02, &*m_dialer_policy),
-                                      k_long_timeout, req_messages, req_procedures, false, sink);
+                    requester.emplace(req_ctx, ex, make_cfg(0x02, &*m_dialer_policy), k_long_timeout, req_messages, req_procedures, false, sink);
                     requester->set_security_seam(&req_seam);
                     requester->set_attach_entropy(counter_rand(0x0b));
-                    requester->on_security([this](const security_event &ev)
-                                           { req_security.push_back(ev); });
-                    requester->on_lifecycle([this](const lifecycle_event &ev)
-                                            { req_lifecycle.push_back(ev); });
-                    requester->on_install_security([this](const security_negotiation &)
-                                                   { ++req_installs; });
+                    requester->on_security([this](const security_event &ev) { req_security.push_back(ev); });
+                    requester->on_lifecycle([this](const lifecycle_event &ev) { req_lifecycle.push_back(ev); });
+                    requester->on_install_security([this](const security_negotiation &) { ++req_installs; });
                     requester->start();
                 });
 
@@ -343,7 +322,10 @@ struct psk_link
         transport.dial({"inproc", "svc"});
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
 private:
     plexus::io::security::accept_any   m_accept_any;
@@ -370,8 +352,7 @@ int count_rejected(const std::vector<lifecycle_event> &evs, handshake_outcome re
 
 }
 
-TEST_CASE("io.security_attach a null policy proceeds with no security event (accept-any unchanged)",
-          "[io][security_attach]")
+TEST_CASE("io.security_attach a null policy proceeds with no security event (accept-any unchanged)", "[io][security_attach]")
 {
     link l{nullptr, nullptr, /*secured=*/false};
     l.drive();
@@ -476,19 +457,15 @@ std::vector<std::byte> matched_request(std::uint8_t peer_seed)
                                         .version_minor            = 0,
                                         .compatible_version_major = 1,
                                         .compatible_version_minor = 0,
-                                        .protocol_version = plexus::wire::k_protocol_version,
-                                        .fingerprint      = 0,
-                                        .key_id           = {},
-                                        .own_nonce        = {},
-                                        .cipher_offer     = 0x01,
-                                        .chosen_cipher    = 0x01,
-                                        .proof            = {}};
+                                        .protocol_version         = plexus::wire::k_protocol_version,
+                                        .fingerprint              = 0,
+                                        .key_id                   = {},
+                                        .own_nonce                = {},
+                                        .cipher_offer             = 0x01,
+                                        .chosen_cipher            = 0x01,
+                                        .proof                    = {}};
     auto                            payload = plexus::wire::encode_handshake_request(req);
-    plexus::wire::frame_header      hdr{.type         = plexus::wire::msg_type::handshake_req,
-                                        .flags        = 0,
-                                        .session_id   = 0,
-                                        .timestamp_ns = 0,
-                                        .payload_len  = payload.size()};
+    plexus::wire::frame_header      hdr{.type = plexus::wire::msg_type::handshake_req, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = payload.size()};
     return plexus::wire::encode_frame(hdr, payload);
 }
 
@@ -517,8 +494,7 @@ TEST_CASE("io.security_attach an auth-only + datagram configuration is refused (
 
     // A bootstrap responder so a single request completes the attach; the secured seam
     // is engaged but NO install hook is wired — the auth-only datagram configuration.
-    session responder{ctx, ex, make_cfg(0x08, &admit), k_long_timeout, messages, procedures, true,
-                      sink};
+    session responder{ctx, ex, make_cfg(0x08, &admit), k_long_timeout, messages, procedures, true, sink};
     responder.set_security_seam(&seam);
     responder.on_security([&](const security_event &ev) { security.push_back(ev); });
     responder.on_lifecycle([&](const lifecycle_event &ev) { lifecycle.push_back(ev); });
@@ -556,9 +532,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
                         k_long_timeout,
                         messages,
                         procedures,
-                        plexus::io::reconnect_config{std::chrono::milliseconds(100),
-                                                     std::chrono::milliseconds(10000), std::nullopt,
-                                                     std::nullopt},
+                        plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt},
                         /*redial_seed=*/1,
                         sink,
                         {},
@@ -570,8 +544,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
                         {}};
     // The production source of each session's install hook: the gated layer sets this once;
     // wire_security binds it per session, capturing that slot's channel. Here it just counts.
-    build.install_security_factory = [&installs](inproc_channel<> &, const security_negotiation &)
-    { ++installs; };
+    build.install_security_factory = [&installs](inproc_channel<> &, const security_negotiation &) { ++installs; };
 
     registry reg{transport, build};
 
@@ -592,8 +565,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
     REQUIRE(responder->authenticated_host_identity().has_value());
 }
 
-TEST_CASE("io.security_attach the REAL psk_keystore_policy admits a matching-key attach end to end",
-          "[io][security_attach]")
+TEST_CASE("io.security_attach the REAL psk_keystore_policy admits a matching-key attach end to end", "[io][security_attach]")
 {
     const auto      material = psk_material(0xA0);
     const keyed_psk key{psk_key_id(0x01), material};
@@ -615,8 +587,7 @@ TEST_CASE("io.security_attach the REAL psk_keystore_policy admits a matching-key
     REQUIRE(l.resp_security.empty());
 }
 
-TEST_CASE("io.security_attach the REAL psk_keystore_policy refuses a wrong-key attach end to end",
-          "[io][security_attach]")
+TEST_CASE("io.security_attach the REAL psk_keystore_policy refuses a wrong-key attach end to end", "[io][security_attach]")
 {
     // The responder proves under material M1; the dialer's keystore holds key_id 0x01 with
     // a DIFFERENT material M2 — the recomputed MAC differs, so the proof fails ct_equal.
@@ -637,8 +608,7 @@ TEST_CASE("io.security_attach the REAL psk_keystore_policy refuses a wrong-key a
     REQUIRE_FALSE(l.requester->is_complete());
 }
 
-TEST_CASE("io.security_attach the REAL psk_keystore_policy refuses a removed-key attach end to end",
-          "[io][security_attach]")
+TEST_CASE("io.security_attach the REAL psk_keystore_policy refuses a removed-key attach end to end", "[io][security_attach]")
 {
     // The responder proves under key_id 0x01, but the dialer's keystore omits it entirely
     // (a rotated-out / removed key): the lookup misses and the attach is refused without

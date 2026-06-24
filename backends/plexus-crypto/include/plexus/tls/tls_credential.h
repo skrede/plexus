@@ -39,8 +39,7 @@ public:
     // and the verify policy it must carry. Stitches itself into ex_data. The
     // policy is shared so every channel that shares this SSL_CTX sees the same
     // verify decision. Prefer load_credential() to mint one from disk paths.
-    tls_credential(std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> ctx,
-                   std::shared_ptr<const io::security::verify_policy>  policy) noexcept;
+    tls_credential(std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> ctx, std::shared_ptr<const io::security::verify_policy> policy) noexcept;
 
     tls_credential(const tls_credential &)            = delete;
     tls_credential &operator=(const tls_credential &) = delete;
@@ -48,11 +47,17 @@ public:
     tls_credential &operator=(tls_credential &&) noexcept;
     ~tls_credential();
 
-    [[nodiscard]] bool valid() const noexcept { return m_ssl_ctx != nullptr; }
+    [[nodiscard]] bool valid() const noexcept
+    {
+        return m_ssl_ctx != nullptr;
+    }
 
     // The owned SSL_CTX, complete-typed only in the crypto TU. A channel bumps
     // its refcount (SSL_CTX_up_ref) to back its per-channel asio::ssl::context.
-    [[nodiscard]] ssl_ctx_st &ssl_ctx() const noexcept { return *m_ssl_ctx; }
+    [[nodiscard]] ssl_ctx_st &ssl_ctx() const noexcept
+    {
+        return *m_ssl_ctx;
+    }
 
     [[nodiscard]] const std::shared_ptr<const io::security::verify_policy> &policy() const noexcept
     {
@@ -73,10 +78,8 @@ private:
 // SPKI digests as the default verify policy. Refuses a key file looser than 0600
 // (an information-disclosure boundary). Throws std::runtime_error on any load /
 // build failure (a misconfigured credential must never silently fall open).
-[[nodiscard]] tls_credential
-load_credential(const std::string &cert_path, const std::string &key_path,
-                std::shared_ptr<const io::security::verify_policy> policy,
-                tls_version                                        min_version = tls_version::v1_3);
+[[nodiscard]] tls_credential load_credential(const std::string &cert_path, const std::string &key_path, std::shared_ptr<const io::security::verify_policy> policy,
+                                             tls_version min_version = tls_version::v1_3);
 
 // Mint a mutual-auth DTLS credential from the same PEM cert + key on disk and the
 // same SPKI-pin verify policy the TLS credential uses (the phase-shared crypto
@@ -86,9 +89,7 @@ load_credential(const std::string &cert_path, const std::string &key_path,
 // installed. A factory (not a method-enum parameter) keeps the two build paths
 // readable and the DTLS-specific options out of the TLS path. Same 0600 key guard,
 // same fail-closed-on-error contract.
-[[nodiscard]] tls_credential
-load_dtls_credential(const std::string &cert_path, const std::string &key_path,
-                     std::shared_ptr<const io::security::verify_policy> policy);
+[[nodiscard]] tls_credential load_dtls_credential(const std::string &cert_path, const std::string &key_path, std::shared_ptr<const io::security::verify_policy> policy);
 
 }
 

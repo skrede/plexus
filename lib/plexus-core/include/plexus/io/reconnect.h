@@ -24,8 +24,7 @@ namespace plexus::io {
 // this seam — never a bare random_device{}() inline). The shift is capped at 20 so
 // the 64-bit scale cannot overflow.
 template<typename Rng>
-std::chrono::milliseconds compute_backoff(const reconnect_config &cfg, std::uint32_t attempt,
-                                          Rng &rng)
+std::chrono::milliseconds compute_backoff(const reconnect_config &cfg, std::uint32_t attempt, Rng &rng)
 {
     const auto shift   = std::min(attempt, std::uint32_t{20});
     auto       ceiling = cfg.min_delay * (std::uint64_t{1} << shift);
@@ -54,8 +53,7 @@ class reconnect
 public:
     using timer_type = typename Policy::timer_type;
 
-    reconnect(Transport &transport, typename Policy::executor_type executor,
-              const reconnect_config &cfg, io::endpoint endpoint, std::uint64_t seed = 0)
+    reconnect(Transport &transport, typename Policy::executor_type executor, const reconnect_config &cfg, io::endpoint endpoint, std::uint64_t seed = 0)
             : m_transport(transport)
             , m_cfg(cfg)
             , m_endpoint(std::move(endpoint))
@@ -66,11 +64,17 @@ public:
 
     // Fired just before each dial so the harness can tear down a dead incarnation
     // (the established-drop path) before the fresh channel arrives via on_dialed.
-    void on_redial(plexus::detail::move_only_function<void()> cb) { m_on_redial = std::move(cb); }
+    void on_redial(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_redial = std::move(cb);
+    }
 
     // Fired when a surrender bound is crossed: the session is reported dead and the
     // driver stops re-dialing.
-    void on_dead(plexus::detail::move_only_function<void()> cb) { m_on_dead = std::move(cb); }
+    void on_dead(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_dead = std::move(cb);
+    }
 
     // Begin the first dial. The first-attempt timestamp is read from the same Clock
     // the backoff timer uses so max_elapsed is provable on the virtual clock. The
@@ -106,7 +110,10 @@ public:
     // The dial produced a channel (the engine's on_dialed tail built — or will build —
     // the session): the in-flight gate re-opens so a later drop can re-dial. Connected
     // peers are additionally short-circuited by the engine's is_connected guard.
-    void mark_dial_settled() noexcept { m_dialing = false; }
+    void mark_dial_settled() noexcept
+    {
+        m_dialing = false;
+    }
 
     // An established session's transport dropped (broken_pipe/connection_reset on an
     // already-complete session). Back off and re-dial a fresh incarnation. A clean
@@ -117,8 +124,14 @@ public:
         schedule_redial();
     }
 
-    std::uint32_t attempt_count() const noexcept { return m_attempt; }
-    bool          is_surrendered() const noexcept { return m_surrendered; }
+    std::uint32_t attempt_count() const noexcept
+    {
+        return m_attempt;
+    }
+    bool is_surrendered() const noexcept
+    {
+        return m_surrendered;
+    }
 
 private:
     // A retry is committed here (the attempt counter advances at scheduling time so
@@ -150,14 +163,12 @@ private:
 
     bool surrendered() const noexcept
     {
-        return (m_cfg.max_attempts.has_value() && m_attempt >= *m_cfg.max_attempts) ||
-                (m_cfg.max_elapsed.has_value() && elapsed() >= *m_cfg.max_elapsed);
+        return (m_cfg.max_attempts.has_value() && m_attempt >= *m_cfg.max_attempts) || (m_cfg.max_elapsed.has_value() && elapsed() >= *m_cfg.max_elapsed);
     }
 
     std::chrono::milliseconds elapsed() const noexcept
     {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() -
-                                                                     m_first_attempt);
+        return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - m_first_attempt);
     }
 
     void report_dead()

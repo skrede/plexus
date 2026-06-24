@@ -22,18 +22,15 @@ inline constexpr std::size_t crc_trailer_size = 4;
 // It is the decorator's own framing concern ABOVE the byte-stable wire (the fixed
 // header is big-endian; the trailer is not part of that header), so its byte order is
 // self-consistent between this writer and the inbound reader, pinned by the KAT.
-[[nodiscard]] inline std::array<std::byte, crc_trailer_size>
-crc_trailer(std::span<const std::byte> header, std::span<const std::byte> payload) noexcept
+[[nodiscard]] inline std::array<std::byte, crc_trailer_size> crc_trailer(std::span<const std::byte> header, std::span<const std::byte> payload) noexcept
 {
     const std::uint32_t crc = wire::crc32c(payload, wire::crc32c(header));
-    return {std::byte(crc & 0xFFu), std::byte((crc >> 8) & 0xFFu), std::byte((crc >> 16) & 0xFFu),
-            std::byte((crc >> 24) & 0xFFu)};
+    return {std::byte(crc & 0xFFu), std::byte((crc >> 8) & 0xFFu), std::byte((crc >> 16) & 0xFFu), std::byte((crc >> 24) & 0xFFu)};
 }
 
 [[nodiscard]] inline std::uint32_t read_trailer_le(std::span<const std::byte> t) noexcept
 {
-    return std::to_integer<std::uint32_t>(t[0]) | (std::to_integer<std::uint32_t>(t[1]) << 8) |
-            (std::to_integer<std::uint32_t>(t[2]) << 16) |
+    return std::to_integer<std::uint32_t>(t[0]) | (std::to_integer<std::uint32_t>(t[1]) << 8) | (std::to_integer<std::uint32_t>(t[2]) << 16) |
             (std::to_integer<std::uint32_t>(t[3]) << 24);
 }
 
@@ -52,14 +49,19 @@ public:
     using emit = plexus::detail::move_only_function<void(std::span<const std::byte>)>;
     using drop = plexus::detail::move_only_function<void(wire::close_cause)>;
 
-    explicit crc_serial_inbound(
-            std::size_t max_payload = wire::k_max_reassembler_payload_bytes) noexcept
+    explicit crc_serial_inbound(std::size_t max_payload = wire::k_max_reassembler_payload_bytes) noexcept
             : m_max_payload(max_payload)
     {
     }
 
-    void on_match(emit cb) { m_on_match = std::move(cb); }
-    void on_drop(drop cb) { m_on_drop = std::move(cb); }
+    void on_match(emit cb)
+    {
+        m_on_match = std::move(cb);
+    }
+    void on_drop(drop cb)
+    {
+        m_on_drop = std::move(cb);
+    }
 
     void feed(std::span<const std::byte> bytes)
     {

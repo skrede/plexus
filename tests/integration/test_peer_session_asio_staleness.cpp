@@ -14,20 +14,14 @@ TEST_CASE("asio peer_session: the 3-arg callback reports NON-intra-process local
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l;
-        l.pump_until(
-                [&]
-                {
-                    return l.requester && l.responder && l.requester->is_complete() &&
-                            l.responder->is_complete();
-                });
+        l.pump_until([&] { return l.requester && l.responder && l.requester->is_complete() && l.responder->is_complete(); });
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
 
         plexus::io::message_info got{};
         bool                     got_one = false;
         l.responder->on_message_with_info(
-                [&](std::string_view, std::span<const std::byte> d,
-                    const plexus::io::message_info &mi)
+                [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi)
                 {
                     got     = mi;
                     got_one = true;
@@ -65,12 +59,7 @@ TEST_CASE("asio peer_session: the data-path staleness gate FIRES over TCP — a 
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l;
-        l.pump_until(
-                [&]
-                {
-                    return l.requester && l.responder && l.requester->is_complete() &&
-                            l.responder->is_complete();
-                });
+        l.pump_until([&] { return l.requester && l.responder && l.requester->is_complete() && l.responder->is_complete(); });
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
 

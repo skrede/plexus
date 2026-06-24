@@ -57,8 +57,7 @@ TEST_CASE("inproc channel delivers bytes only after drain, never synchronously",
     b.connect_to(a.local_endpoint());
 
     std::string received;
-    b.on_data([&](std::span<const std::byte> d)
-              { received.assign(reinterpret_cast<const char *>(d.data()), d.size()); });
+    b.on_data([&](std::span<const std::byte> d) { received.assign(reinterpret_cast<const char *>(d.data()), d.size()); });
 
     a.send(as_bytes(std::string{"hello"}));
     REQUIRE(received.empty()); // not delivered synchronously from send()

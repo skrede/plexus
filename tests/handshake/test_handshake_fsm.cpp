@@ -60,11 +60,7 @@ constexpr node_id id_with_head(std::uint8_t head) noexcept
 // pinned at (1,0). The compat floor is what peer (major,minor) is checked against.
 handshake_fsm_config config_for(node_id self) noexcept
 {
-    return handshake_fsm_config{.self_id                  = self,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = self, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // A request that passes every gate by default: matching protocol, compatible
@@ -612,16 +608,13 @@ TEST_CASE("G: dedup arbitration is greater-wins, symmetric, and convergent", "[h
     {
         // GENERATE over both orderings of an id pair; whichever side holds the
         // greater id must get keep_outbound and the other keep_inbound — mirrored.
-        auto pair = GENERATE(std::pair<node_id, node_id>{id_with_tail(0x80), id_with_tail(0x01)},
-                             std::pair<node_id, node_id>{id_with_tail(0x01), id_with_tail(0x80)},
+        auto pair = GENERATE(std::pair<node_id, node_id>{id_with_tail(0x80), id_with_tail(0x01)}, std::pair<node_id, node_id>{id_with_tail(0x01), id_with_tail(0x80)},
                              // The unsigned high-bit edge: a leading 0xFF outranks a leading 0x01.
-                             std::pair<node_id, node_id>{id_with_head(0xFF), id_with_head(0x01)},
-                             std::pair<node_id, node_id>{id_with_head(0x01), id_with_head(0xFF)});
+                             std::pair<node_id, node_id>{id_with_head(0xFF), id_with_head(0x01)}, std::pair<node_id, node_id>{id_with_head(0x01), id_with_head(0xFF)});
 
-        node_id mine   = pair.first;
-        node_id theirs = pair.second;
-        auto    expected =
-                mine > theirs ? dedup_decision::keep_outbound : dedup_decision::keep_inbound;
+        node_id mine     = pair.first;
+        node_id theirs   = pair.second;
+        auto    expected = mine > theirs ? dedup_decision::keep_outbound : dedup_decision::keep_inbound;
         REQUIRE(verdict_on_race(mine, theirs) == expected);
     }
 
@@ -630,8 +623,7 @@ TEST_CASE("G: dedup arbitration is greater-wins, symmetric, and convergent", "[h
         // A sanity pin that the array compare is unsigned-lexicographic: leading
         // 0xFF is strictly greater than leading 0x01.
         REQUIRE(id_with_head(0xFF) > id_with_head(0x01));
-        REQUIRE(verdict_on_race(id_with_head(0xFF), id_with_head(0x01)) ==
-                dedup_decision::keep_outbound);
+        REQUIRE(verdict_on_race(id_with_head(0xFF), id_with_head(0x01)) == dedup_decision::keep_outbound);
     }
 }
 

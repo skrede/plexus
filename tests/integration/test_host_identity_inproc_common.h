@@ -65,8 +65,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-inline handshake_fsm_config make_cfg(std::uint8_t                               id_seed,
-                                     const plexus::io::security::attach_policy *policy)
+inline handshake_fsm_config make_cfg(std::uint8_t id_seed, const plexus::io::security::attach_policy *policy)
 {
     return handshake_fsm_config{.self_id                  = make_id(id_seed),
                                 .version_major            = 1,
@@ -79,7 +78,10 @@ inline handshake_fsm_config make_cfg(std::uint8_t                               
 
 struct admit_policy final : public plexus::io::security::attach_policy
 {
-    [[nodiscard]] bool decide(const attach_facts &) const noexcept override { return true; }
+    [[nodiscard]] bool decide(const attach_facts &) const noexcept override
+    {
+        return true;
+    }
 };
 
 inline security_seam honest_seam()

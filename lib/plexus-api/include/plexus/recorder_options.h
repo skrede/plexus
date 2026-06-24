@@ -35,8 +35,7 @@ enum class recording_mode
 // typed fully-qualified to mirror the core seam.
 struct recorder_options
 {
-    using anomaly_predicate =
-            plexus::detail::move_only_function<bool(const io::recording::record_envelope &)>;
+    using anomaly_predicate = plexus::detail::move_only_function<bool(const io::recording::record_envelope &)>;
 
     recording_mode mode{recording_mode::continuous};
 

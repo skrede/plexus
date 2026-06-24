@@ -48,10 +48,8 @@ void ensure_bound(T &t, const ::asio::ip::udp &proto)
 }
 
 template<typename T>
-void send_handshake(
-        T &t, const typename T::endpoint_type &dest, typename T::hs_type type,
-        datagram::detail::udp_channel_mode mode = datagram::detail::udp_channel_mode::best_effort,
-        std::uint16_t                      initial_seq = 0)
+void send_handshake(T &t, const typename T::endpoint_type &dest, typename T::hs_type type, datagram::detail::udp_channel_mode mode = datagram::detail::udp_channel_mode::best_effort,
+                    std::uint16_t initial_seq = 0)
 {
     datagram::detail::encode_handshake_into(t.m_hs_scratch, type, mode, initial_seq);
     t.m_server.send_to(t.m_hs_scratch, dest);
@@ -106,16 +104,13 @@ void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<cons
     auto hs = datagram::detail::decode_handshake(bytes);
     if(!hs || hs->type != T::hs_type::request)
         return;
-    auto  ch = std::make_unique<udp_channel>(t.m_io, t.m_server, from, t.m_max_payload, t.m_arq_cfg,
-                                             t.m_congestion, t.m_backpressure_bytes, hs->mode,
-                                             hs->initial_seq, t.m_global_default,
-                                             t.m_reassembly_budget, t.m_reassembly_timeout);
+    auto  ch  = std::make_unique<udp_channel>(t.m_io, t.m_server, from, t.m_max_payload, t.m_arq_cfg, t.m_congestion, t.m_backpressure_bytes, hs->mode, hs->initial_seq,
+                                              t.m_global_default, t.m_reassembly_budget, t.m_reassembly_timeout);
     auto *raw = ch.get();
     if(!t.m_demux.insert(from, raw))
     {
         if(t.m_on_drop)
-            t.m_on_drop(io::detail::drop_event{.cause     = io::detail::drop_cause::demux_refused,
-                                               .transport = io::locality::remote});
+            t.m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::demux_refused, .transport = io::locality::remote});
         return; // peer cap reached: drop the flood
     }
     wire_teardown(t, *raw, from);
@@ -128,8 +123,7 @@ void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<cons
 // A known peer: a handshake control frame drives the ARQ / replies; anything else is data the
 // channel deduplicates and posts.
 template<typename T>
-void route_to_peer(T &t, const typename T::endpoint_type &from, udp_channel *ch,
-                   std::span<const std::byte> bytes)
+void route_to_peer(T &t, const typename T::endpoint_type &from, udp_channel *ch, std::span<const std::byte> bytes)
 {
     if(auto hs = datagram::detail::decode_handshake(bytes))
     {

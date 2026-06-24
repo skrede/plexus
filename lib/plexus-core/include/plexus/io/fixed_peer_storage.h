@@ -54,7 +54,10 @@ public:
         return std::nullopt;
     }
 
-    bool has(const node_id &id) const { return find(id) != nullptr; }
+    bool has(const node_id &id) const
+    {
+        return find(id) != nullptr;
+    }
 
     void remove(const node_id &id)
     {

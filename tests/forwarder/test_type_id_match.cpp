@@ -11,7 +11,7 @@ TEST_CASE("type_id_match: a matching type_id stays subscribed", "[forwarder][typ
     auto              peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder fwd{sink};
+    forwarder                fwd{sink};
     fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
     REQUIRE(fwd.attach_for_fanout(peer, "alpha", std::uint64_t{0xABCD}));
     ex.drain();
@@ -21,8 +21,7 @@ TEST_CASE("type_id_match: a matching type_id stays subscribed", "[forwarder][typ
     CHECK(*status == plexus::wire::subscribe_status::subscribed);
 }
 
-TEST_CASE("type_id_match: a mismatched type_id is refused with type_mismatch",
-          "[forwarder][type_id]")
+TEST_CASE("type_id_match: a mismatched type_id is refused with type_mismatch", "[forwarder][type_id]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
@@ -31,7 +30,7 @@ TEST_CASE("type_id_match: a mismatched type_id is refused with type_mismatch",
     auto              peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder fwd{sink};
+    forwarder                fwd{sink};
     fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
     // The subscriber declares a different type_id; the producer refuses it and does
     // NOT register the fan-out entry (attach_for_fanout returns false).
@@ -43,8 +42,7 @@ TEST_CASE("type_id_match: a mismatched type_id is refused with type_mismatch",
     CHECK(*status == plexus::wire::subscribe_status::type_mismatch);
 }
 
-TEST_CASE("type_id_match: an undeclared producer type accepts any subscriber type",
-          "[forwarder][type_id]")
+TEST_CASE("type_id_match: an undeclared producer type accepts any subscriber type", "[forwarder][type_id]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
@@ -53,7 +51,7 @@ TEST_CASE("type_id_match: an undeclared producer type accepts any subscriber typ
     auto              peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder fwd{sink};
+    forwarder                fwd{sink};
     // No declared producer type_id for "alpha": any subscriber type_id is accepted.
     REQUIRE(fwd.attach_for_fanout(peer, "alpha", std::uint64_t{0x1234}));
     ex.drain();
@@ -63,8 +61,7 @@ TEST_CASE("type_id_match: an undeclared producer type accepts any subscriber typ
     CHECK(*status == plexus::wire::subscribe_status::subscribed);
 }
 
-TEST_CASE("type_id_match: an undeclared subscriber type is accepted against a typed producer",
-          "[forwarder][type_id]")
+TEST_CASE("type_id_match: an undeclared subscriber type is accepted against a typed producer", "[forwarder][type_id]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
@@ -73,7 +70,7 @@ TEST_CASE("type_id_match: an undeclared subscriber type is accepted against a ty
     auto              peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder fwd{sink};
+    forwarder                fwd{sink};
     fwd.declare("alpha", plexus::topic_qos{}, std::uint64_t{0xABCD});
     // The subscriber declares no type_id (std::nullopt) — absence is not a mismatch.
     REQUIRE(fwd.attach_for_fanout(peer, "alpha", std::nullopt));

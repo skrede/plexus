@@ -48,8 +48,7 @@ TEST_CASE("liveliness monitor: a deregistered endpoint never fires (no resurrect
 
         const node_id       id         = make_id(0x55);
         const std::uint64_t topic_hash = 0xCAFEull;
-        m.register_endpoint(id, topic_hash,
-                            static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),
+        m.register_endpoint(id, topic_hash, static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),
                             static_cast<std::uint64_t>(std::chrono::nanoseconds(k_lease).count()));
         m.stamp_data(id, topic_hash);
 
@@ -78,9 +77,7 @@ TEST_CASE("liveliness monitor: a stamp allocates nothing in steady state")
     const node_id       id         = make_id(0x66);
     const std::uint64_t topic_hash = 0xD00Dull;
     // Warm the maps once (register grows the entries).
-    m.register_endpoint(id, topic_hash,
-                        static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),
-                        static_cast<std::uint64_t>(std::chrono::nanoseconds(k_lease).count()));
+    m.register_endpoint(id, topic_hash, static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()), static_cast<std::uint64_t>(std::chrono::nanoseconds(k_lease).count()));
 
     plexus::testing::reset_alloc_count();
     for(int i = 0; i < 1000; ++i)

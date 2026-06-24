@@ -18,9 +18,7 @@ TEST_CASE("integration.spine the wire unsubscribe (refcount 1->0) surfaces on_qo
         // The subscriber lives on B; its demand emits a wire subscribe toward A (the
         // demand-side attach). Retiring it (scope exit) is the last local sub, so B's
         // session detach fires the wire unsubscribe and its 1->0 on_qos_change edge.
-        plexus::subscriber<> sub{
-                fx.b, "wire-topic",
-                [](std::span<const std::byte>, const plexus::io::message_info &) {}};
+        plexus::subscriber<> sub{fx.b, "wire-topic", [](std::span<const std::byte>, const plexus::io::message_info &) {}};
         fx.drive();
         REQUIRE(rec.unsubscribed_for("wire-topic") == 0);
     }

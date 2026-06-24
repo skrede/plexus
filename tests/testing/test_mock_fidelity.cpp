@@ -47,8 +47,7 @@ TEST_CASE("mock byte_channel records sent bytes verbatim and in order", "[testin
     REQUIRE(ch.sent()[1] == second);
 }
 
-TEST_CASE("mock byte_channel delivers on_data posted, never synchronously",
-          "[testing][mock][fidelity]")
+TEST_CASE("mock byte_channel delivers on_data posted, never synchronously", "[testing][mock][fidelity]")
 {
     harness h;
     auto    ch = h.make_channel();
@@ -115,8 +114,7 @@ TEST_CASE("mock byte_channel returns the configured remote endpoint", "[testing]
     REQUIRE(ep.address == "node-7");
 }
 
-TEST_CASE("mock byte_channel advance drives posted inbound across a step",
-          "[testing][mock][fidelity]")
+TEST_CASE("mock byte_channel advance drives posted inbound across a step", "[testing][mock][fidelity]")
 {
     harness h;
     auto    ch = h.make_channel();

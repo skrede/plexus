@@ -60,13 +60,15 @@ struct relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const { return front.local_endpoint().port(); }
+    [[nodiscard]] std::uint16_t port() const
+    {
+        return front.local_endpoint().port();
+    }
 
     void send_to_server(std::span<const std::byte> dg)
     {
         auto copy = std::make_shared<std::vector<std::byte>>(dg.begin(), dg.end());
-        back.async_send_to(::asio::buffer(*copy), server_ep,
-                           [copy](std::error_code, std::size_t) {});
+        back.async_send_to(::asio::buffer(*copy), server_ep, [copy](std::error_code, std::size_t) {});
     }
 
     void recv_front()
@@ -114,21 +116,18 @@ struct relay
 
     void recv_back()
     {
-        back.async_receive_from(
-                ::asio::buffer(back_buf), from,
-                [this](std::error_code ec, std::size_t n)
-                {
-                    if(ec)
-                        return;
-                    if(client_ep.port() != 0) // server->client always passes
-                    {
-                        auto copy = std::make_shared<std::vector<std::byte>>(back_buf.data(),
-                                                                             back_buf.data() + n);
-                        front.async_send_to(::asio::buffer(*copy), client_ep,
-                                            [copy](std::error_code, std::size_t) {});
-                    }
-                    recv_back();
-                });
+        back.async_receive_from(::asio::buffer(back_buf), from,
+                                [this](std::error_code ec, std::size_t n)
+                                {
+                                    if(ec)
+                                        return;
+                                    if(client_ep.port() != 0) // server->client always passes
+                                    {
+                                        auto copy = std::make_shared<std::vector<std::byte>>(back_buf.data(), back_buf.data() + n);
+                                        front.async_send_to(::asio::buffer(*copy), client_ep, [copy](std::error_code, std::size_t) {});
+                                    }
+                                    recv_back();
+                                });
     }
 };
 

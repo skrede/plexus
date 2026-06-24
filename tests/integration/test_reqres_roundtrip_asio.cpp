@@ -4,8 +4,7 @@
 
 using namespace reqres_asio_fixture;
 
-TEST_CASE("req/res round-trips over real TCP loopback through plexus-asio, looped",
-          "[integration][reqres][asio]")
+TEST_CASE("req/res round-trips over real TCP loopback through plexus-asio, looped", "[integration][reqres][asio]")
 {
     // Loop the FULL roundtrip >=100 times in-body, each iteration an independent
     // listener+client+io_context — a live-networking claim is never asserted from a

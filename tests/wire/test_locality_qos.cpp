@@ -20,12 +20,14 @@ using plexus::io::tier_of;
 
 namespace {
 
-constexpr std::uint8_t bits(locality l) { return static_cast<std::uint8_t>(l); }
+constexpr std::uint8_t bits(locality l)
+{
+    return static_cast<std::uint8_t>(l);
+}
 
 }
 
-TEST_CASE("locality: each tier is a distinct power-of-two bit and any composes all three",
-          "[wire][locality]")
+TEST_CASE("locality: each tier is a distinct power-of-two bit and any composes all three", "[wire][locality]")
 {
     REQUIRE(bits(locality::process) == 1u);
     REQUIRE(bits(locality::local) == 2u);
@@ -48,8 +50,7 @@ TEST_CASE("locality: operator& intersects the tier bits", "[wire][locality]")
     REQUIRE(bits(locality::process & locality::remote) == 0u);
 }
 
-TEST_CASE("locality: operator~ masks back to any's three bits only (no high bits set)",
-          "[wire][locality]")
+TEST_CASE("locality: operator~ masks back to any's three bits only (no high bits set)", "[wire][locality]")
 {
     REQUIRE((~locality::process) == (locality::local | locality::remote));
     REQUIRE((~locality::local) == (locality::process | locality::remote));
@@ -67,8 +68,7 @@ TEST_CASE("locality: any_set is true iff the mask and the tier share a bit", "[w
     REQUIRE_FALSE(any_set(locality::remote, locality::local));
 }
 
-TEST_CASE("locality: tier_of classifies the transport scheme, fail-closed to remote on the unknown",
-          "[wire][locality]")
+TEST_CASE("locality: tier_of classifies the transport scheme, fail-closed to remote on the unknown", "[wire][locality]")
 {
     REQUIRE(tier_of("inproc") == locality::process);
     REQUIRE(tier_of("unix") == locality::local);
@@ -79,8 +79,7 @@ TEST_CASE("locality: tier_of classifies the transport scheme, fail-closed to rem
     REQUIRE(tier_of("") == locality::remote);
 }
 
-TEST_CASE("locality: topic_qos.reach defaults to any so an undeclared topic reaches every tier",
-          "[wire][locality]")
+TEST_CASE("locality: topic_qos.reach defaults to any so an undeclared topic reaches every tier", "[wire][locality]")
 {
     plexus::topic_qos qos{};
     REQUIRE(qos.reach == locality::any);

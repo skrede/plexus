@@ -65,8 +65,7 @@ std::vector<std::byte> encode_one_sample(const std::string &payload)
     message_info info{};
     info.publication_sequence = 42;
     info.source_timestamp     = 100;
-    ring.try_push(w.sample(11u, plexus::wire::fqn_topic_hash("topic/a"), info, 0xC0DEu, true,
-                           capture_fidelity::payload, bytes_of(payload)));
+    ring.try_push(w.sample(11u, plexus::wire::fqn_topic_hash("topic/a"), info, 0xC0DEu, true, capture_fidelity::payload, bytes_of(payload)));
 
     while(ring.drain(sink, 4096))
         ;
@@ -75,8 +74,7 @@ std::vector<std::byte> encode_one_sample(const std::string &payload)
 
 }
 
-TEST_CASE("projection input survives the input stream being freed before its payloads are read",
-          "[record_projection]")
+TEST_CASE("projection input survives the input stream being freed before its payloads are read", "[record_projection]")
 {
     const std::string payload = "the-quick-brown-fox-projection-payload";
 

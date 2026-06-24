@@ -76,12 +76,10 @@ struct counting_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
-                                                   sample                    &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, sample &out) const
     {
         if(bytes.size() != 4)
-            return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+            return plexus::expected<void, std::error_code>{plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -89,7 +87,10 @@ struct counting_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {0xABCD1234u, "sample"}; }
+    plexus::type_identity type_info() const
+    {
+        return {0xABCD1234u, "sample"};
+    }
 };
 
 static_assert(plexus::typed_codec<counting_codec>);
@@ -107,9 +108,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xA110Cu;
     opts.dial_eagerly = eager;
     return opts;
@@ -129,7 +128,10 @@ struct net
     inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
     inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
     void connect()
     {
@@ -141,9 +143,7 @@ struct net
 
 }
 
-TEST_CASE(
-        "typed inproc fast path: the warmed steady-state borrow->publish->drain loop is zero-alloc",
-        "[integration]")
+TEST_CASE("typed inproc fast path: the warmed steady-state borrow->publish->drain loop is zero-alloc", "[integration]")
 {
     constexpr int warm = 64;   // cycle the pool slots, the bus deque blocks, and the demux
     constexpr int K    = 4096; // the measured steady-state loop
@@ -188,7 +188,7 @@ TEST_CASE(
     const auto after = plexus::testing::alloc_count();
 
     REQUIRE(delivered - delivered_before == static_cast<std::size_t>(K)); // every publish delivered
-    REQUIRE(encodes->load() == encodes_before); // the fast path never encoded
+    REQUIRE(encodes->load() == encodes_before);                           // the fast path never encoded
     REQUIRE(last == 0xF0000000u + static_cast<std::uint32_t>(K - 1));
     REQUIRE(after - before == 0); // the zero-serialization steady-state loop allocated nothing
 }
@@ -235,8 +235,7 @@ TEST_CASE("typed inproc forced fallback: the serialize path's allocation is docu
 
     REQUIRE(delivered - delivered_before == static_cast<std::size_t>(K)); // delivered via bytes
     REQUIRE(encodes->load() - encodes_before == K);                       // every publish encoded
-    REQUIRE(p.loan_exhausted() ==
-            static_cast<std::size_t>(warm + K)); // the pool degraded every time
+    REQUIRE(p.loan_exhausted() == static_cast<std::size_t>(warm + K));    // the pool degraded every time
     // The fallback path allocates (the codec mints a fresh owner buffer per encode); this is
     // the documented contrast to the fast path's zero, not a gated invariant.
     SUCCEED("forced-fallback steady-loop allocations recorded: " + std::to_string(after - before));

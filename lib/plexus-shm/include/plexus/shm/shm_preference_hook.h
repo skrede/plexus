@@ -22,11 +22,8 @@ namespace plexus::shm {
 template<typename Member>
 [[nodiscard]] inline io::selection_hook prefer_upgradeable_hook(Member &member)
 {
-    plexus::detail::move_only_function<bool(const io::endpoint &)> can_acquire =
-            [&member](const io::endpoint &ep) { return member.can_acquire(ep); };
-    return [probe = std::move(can_acquire)](
-                   const io::endpoint                    &ep,
-                   std::span<const io::mux_candidate> candidates) mutable -> std::size_t
+    plexus::detail::move_only_function<bool(const io::endpoint &)> can_acquire = [&member](const io::endpoint &ep) { return member.can_acquire(ep); };
+    return [probe = std::move(can_acquire)](const io::endpoint &ep, std::span<const io::mux_candidate> candidates) mutable -> std::size_t
     {
         std::size_t fallback      = candidates.front().index; // the first candidate (stream)
         bool        have_fallback = false;

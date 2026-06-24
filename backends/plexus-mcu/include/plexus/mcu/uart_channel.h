@@ -49,14 +49,22 @@ public:
         detail::uart_write_all(m_port, std::span<const std::byte>{trailer});
     }
 
-    void                 close() {}
-    plexus::io::endpoint remote_endpoint() const { return {"serial", ""}; }
+    void close()
+    {
+    }
+    plexus::io::endpoint remote_endpoint() const
+    {
+        return {"serial", ""};
+    }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_closed = std::move(cb);
+    }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -79,12 +87,18 @@ public:
 
     // The observable overrun seam: a monotonic count of detected driver-ring overruns,
     // in addition to the one-shot on_error fire — a lost byte is visible, never swallowed.
-    [[nodiscard]] std::size_t overrun_count() const noexcept { return m_overrun_count; }
+    [[nodiscard]] std::size_t overrun_count() const noexcept
+    {
+        return m_overrun_count;
+    }
 
     // The observable dropped-frame seam: a monotonic count of CRC-mismatched frames the
     // decorator discarded and resynced past. This is the host on_frame_dropped seam in
     // count form — non-fatal by contract, so a corrupted frame is visible, never fatal.
-    [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped_count; }
+    [[nodiscard]] std::size_t dropped_count() const noexcept
+    {
+        return m_dropped_count;
+    }
 
 private:
     void wire_decorator()
@@ -126,20 +140,19 @@ private:
             m_on_error(plexus::io::io_error::would_block);
     }
 
-    uart_port_t                                m_port;
-    std::size_t                                m_rx_ring_ceiling;
-    std::size_t                                m_overrun_count{0};
-    std::size_t                                m_dropped_count{0};
-    std::array<std::byte, k_scratch_bytes>     m_scratch{};
-    plexus::stream::crc_serial_inbound           m_decorator;
+    uart_port_t                                                          m_port;
+    std::size_t                                                          m_rx_ring_ceiling;
+    std::size_t                                                          m_overrun_count{0};
+    std::size_t                                                          m_dropped_count{0};
+    std::array<std::byte, k_scratch_bytes>                               m_scratch{};
+    plexus::stream::crc_serial_inbound                                   m_decorator;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()>                           m_on_closed;
     plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
     plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
 
-static_assert(plexus::io::byte_channel<plexus::mcu::uart_channel>,
-              "uart_channel must satisfy byte_channel — check the seven verbs");
+static_assert(plexus::io::byte_channel<plexus::mcu::uart_channel>, "uart_channel must satisfy byte_channel — check the seven verbs");
 
 }
 

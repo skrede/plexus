@@ -37,34 +37,38 @@ namespace plexus::asio {
 //     leaving on_protocol_close strictly fatal.
 struct serial_traits
 {
-    static io::endpoint format_endpoint(const ::asio::serial_port &) { return {"serial", ""}; }
+    static io::endpoint format_endpoint(const ::asio::serial_port &)
+    {
+        return {"serial", ""};
+    }
 
-    static void shutdown(::asio::serial_port &port, std::error_code &ec) { (void)port.close(ec); }
+    static void shutdown(::asio::serial_port &port, std::error_code &ec)
+    {
+        (void)port.close(ec);
+    }
 
-    static ::asio::serial_port       &lowest_layer(::asio::serial_port &p) noexcept { return p; }
+    static ::asio::serial_port &lowest_layer(::asio::serial_port &p) noexcept
+    {
+        return p;
+    }
     static const ::asio::serial_port &lowest_layer(const ::asio::serial_port &p) noexcept
     {
         return p;
     }
 
-    static void apply_socket_options(::asio::serial_port &, const stream_socket_options &,
-                                     std::error_code &) noexcept
+    static void apply_socket_options(::asio::serial_port &, const stream_socket_options &, std::error_code &) noexcept
     {
     }
 };
 
-class serial_channel : public stream_channel<::asio::serial_port, serial_traits,
-                                             detail::serial_bootstrap<::asio::serial_port>>
+class serial_channel : public stream_channel<::asio::serial_port, serial_traits, detail::serial_bootstrap<::asio::serial_port>>
 {
-    using base = stream_channel<::asio::serial_port, serial_traits,
-                                detail::serial_bootstrap<::asio::serial_port>>;
+    using base = stream_channel<::asio::serial_port, serial_traits, detail::serial_bootstrap<::asio::serial_port>>;
 
 public:
-    explicit serial_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {},
-                            io::congestion        congestion = io::congestion::block,
-                            io::egress_capacity   egress = io::egress_capacity::bounded_default(),
-                            stream_socket_options opts   = {},
-                            std::size_t           read_buffer_bytes = k_stream_read_buffer_bytes)
+    explicit serial_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+                            io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {},
+                            std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
             , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
@@ -72,12 +76,8 @@ public:
         wire_decorator();
     }
 
-    serial_channel(::asio::io_context &io, ::asio::serial_port connected,
-                   stream::stream_inbound_config cfg        = {},
-                   io::congestion              congestion = io::congestion::block,
-                   io::egress_capacity         egress     = io::egress_capacity::bounded_default(),
-                   stream_socket_options       opts       = {},
-                   std::size_t                 read_buffer_bytes = k_stream_read_buffer_bytes)
+    serial_channel(::asio::io_context &io, ::asio::serial_port connected, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+                   io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {}, std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
             , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
@@ -112,9 +112,18 @@ public:
     }
 
     // The serial read-loop seam (reached by detail::serial_do_read).
-    [[nodiscard]] ::asio::serial_port      &serial_stream() noexcept { return stream(); }
-    [[nodiscard]] std::vector<std::byte>   &serial_read_buf() noexcept { return m_read_buf; }
-    [[nodiscard]] stream::crc_serial_inbound &serial_decorator() noexcept { return m_decorator; }
+    [[nodiscard]] ::asio::serial_port &serial_stream() noexcept
+    {
+        return stream();
+    }
+    [[nodiscard]] std::vector<std::byte> &serial_read_buf() noexcept
+    {
+        return m_read_buf;
+    }
+    [[nodiscard]] stream::crc_serial_inbound &serial_decorator() noexcept
+    {
+        return m_decorator;
+    }
 
 private:
     void wire_decorator()
@@ -141,7 +150,7 @@ private:
                      });
     }
 
-    stream::crc_serial_inbound                                             m_decorator;
+    stream::crc_serial_inbound                                           m_decorator;
     std::vector<std::byte>                                               m_read_buf;
     bool                                                                 m_reading{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
@@ -150,7 +159,6 @@ private:
 
 }
 
-static_assert(plexus::io::byte_channel<plexus::asio::serial_channel>,
-              "serial_channel must satisfy byte_channel — check the seven verbs");
+static_assert(plexus::io::byte_channel<plexus::asio::serial_channel>, "serial_channel must satisfy byte_channel — check the seven verbs");
 
 #endif

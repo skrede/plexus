@@ -91,7 +91,10 @@ public:
     stub_handle(stub_handle &&)                 = default;
     stub_handle &operator=(stub_handle &&)      = default;
 
-    std::span<std::byte> bytes() const { return {m_region->base, m_region->size}; }
+    std::span<std::byte> bytes() const
+    {
+        return {m_region->base, m_region->size};
+    }
 
 private:
     std::shared_ptr<region_store::region> m_region;
@@ -107,10 +110,12 @@ public:
     {
     }
 
-    void fail(bool on) noexcept { m_fail = on; }
+    void fail(bool on) noexcept
+    {
+        m_fail = on;
+    }
 
-    region_status create(std::string_view name, std::size_t bytes, const create_options &,
-                         region_handle &out)
+    region_status create(std::string_view name, std::size_t bytes, const create_options &, region_handle &out)
     {
         if(m_fail)
             return region_status::failed;
@@ -132,7 +137,9 @@ public:
         return region_status::ok;
     }
 
-    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>) {}
+    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>)
+    {
+    }
 
 private:
     region_store &m_store;
@@ -145,23 +152,25 @@ static_assert(region_broker<stub_broker>, "stub_broker must satisfy the region_b
 // wake): default-constructible so the registry's default binder builds it.
 struct stub_notifier
 {
-    void signal() noexcept {}
-    void arm(plexus::detail::move_only_function<void()>) {}
-    void disarm() noexcept {}
+    void signal() noexcept
+    {
+    }
+    void arm(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void disarm() noexcept
+    {
+    }
 };
 
 static_assert(notifier<stub_notifier>, "stub_notifier must satisfy the notifier seam");
 
 using shm_member = shm_mux_member<stub_broker, stub_notifier>;
 
-static_assert(pio::byte_channel<shm_byte_channel<stub_broker, stub_notifier>>,
-              "shm_byte_channel must satisfy byte_channel — the seven erased verbs");
-static_assert(pio::mux_member<shm_member>,
-              "shm_mux_member must satisfy mux_member — channel_type + mux_schemes + mux_tier");
-static_assert(shm_member::mux_tier == pio::transport_kind::local,
-              "the shm member rides the local (same-host) tier");
-static_assert(shm_member::mux_prefers_local_fast,
-              "the shm member opts into the per-candidate same-host fast-path flag");
+static_assert(pio::byte_channel<shm_byte_channel<stub_broker, stub_notifier>>, "shm_byte_channel must satisfy byte_channel — the seven erased verbs");
+static_assert(pio::mux_member<shm_member>, "shm_mux_member must satisfy mux_member — channel_type + mux_schemes + mux_tier");
+static_assert(shm_member::mux_tier == pio::transport_kind::local, "the shm member rides the local (same-host) tier");
+static_assert(shm_member::mux_prefers_local_fast, "the shm member opts into the per-candidate same-host fast-path flag");
 static_assert(pio::upgradeable<shm_member>,
               "shm member must satisfy the generic upgrade capability — it is the reference "
               "plug-in for the same-medium upgrade probe");
@@ -171,17 +180,38 @@ static_assert(pio::upgradeable<shm_member>,
 // case the hook decides). It records whether the mux routed the dial to it.
 struct dummy_stream_channel
 {
-    pio::endpoint               ep;
-    std::uint64_t               key = plexus::io::detail::next_scheduler_key();
-    void                        send(std::span<const std::byte>) {}
-    void                        close() {}
-    [[nodiscard]] pio::endpoint remote_endpoint() const { return ep; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
-    void on_closed(plexus::detail::move_only_function<void()>) {}
-    void on_error(plexus::detail::move_only_function<void(pio::io_error)>) {}
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
-    [[nodiscard]] std::size_t   backpressured() const noexcept { return 0; }
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return key; }
+    pio::endpoint ep;
+    std::uint64_t key = plexus::io::detail::next_scheduler_key();
+    void          send(std::span<const std::byte>)
+    {
+    }
+    void close()
+    {
+    }
+    [[nodiscard]] pio::endpoint remote_endpoint() const
+    {
+        return ep;
+    }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(pio::io_error)>)
+    {
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
+    [[nodiscard]] std::size_t backpressured() const noexcept
+    {
+        return 0;
+    }
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    {
+        return key;
+    }
 };
 
 struct dummy_stream_member
@@ -192,28 +222,33 @@ struct dummy_stream_member
 
     bool dialed = false;
 
-    void listen(const pio::endpoint &) {}
-    void dial(const pio::endpoint &) { dialed = true; }
-    void close() {}
-    void
-    on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>)>)
+    void listen(const pio::endpoint &)
     {
     }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>,
-                                                           const pio::endpoint &)>)
+    void dial(const pio::endpoint &)
+    {
+        dialed = true;
+    }
+    void close()
     {
     }
-    void
-    on_dial_failed(plexus::detail::move_only_function<void(const pio::endpoint &, pio::io_error)>)
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>)>)
     {
     }
-    void on_error(plexus::detail::move_only_function<void(pio::io_error)>) {}
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>, const pio::endpoint &)>)
+    {
+    }
+    void on_dial_failed(plexus::detail::move_only_function<void(const pio::endpoint &, pio::io_error)>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(pio::io_error)>)
+    {
+    }
 };
 
 // The negative pin: a wire-only member (no acquire probe) does NOT satisfy the capability, so
 // the concept is not vacuously true.
-static_assert(!pio::upgradeable<dummy_stream_member>,
-              "a member without the acquire probe must not satisfy the upgrade capability");
+static_assert(!pio::upgradeable<dummy_stream_member>, "a member without the acquire probe must not satisfy the upgrade capability");
 
 // The composition: the SHM member FIRST (the preference hook scans for its ring-acquire
 // probe), the stream member second (the fallback). Both serve the local tier + "shm", so a
@@ -222,8 +257,7 @@ using mux_t = pio::multiplexing_transport<shm_member, dummy_stream_member>;
 
 }
 
-TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member when it acquires",
-          "[shm][mux]")
+TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member when it acquires", "[shm][mux]")
 {
     constexpr int k_iterations  = 100;
     int           routed_to_shm = 0;
@@ -240,8 +274,7 @@ TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member
         // re-emits it; the dialed channel's scheme survives the erasure, so a "shm"-scheme
         // channel arriving here proves the SHM member served the dial.
         std::string dialed_scheme;
-        mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &)
-                      { dialed_scheme = ch->remote_endpoint().scheme; });
+        mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &) { dialed_scheme = ch->remote_endpoint().scheme; });
 
         mux.dial({"shm", "topic.same_host"});
 
@@ -255,8 +288,7 @@ TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member
     REQUIRE(routed_to_shm == k_iterations);
 }
 
-TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring acquire fails",
-          "[shm][mux]")
+TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring acquire fails", "[shm][mux]")
 {
     constexpr int k_iterations = 100;
     int           fell_back    = 0;
@@ -272,8 +304,7 @@ TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring a
         mux_t               mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
 
         std::string dialed_scheme;
-        mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &)
-                      { dialed_scheme = ch->remote_endpoint().scheme; });
+        mux.on_dialed([&](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &) { dialed_scheme = ch->remote_endpoint().scheme; });
 
         mux.dial({"shm", "topic.same_host"});
 
@@ -287,8 +318,7 @@ TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring a
     REQUIRE(fell_back == k_iterations);
 }
 
-TEST_CASE("shm.mux a congestion-blocked send drives on_drop with cause=blocked transport=local",
-          "[shm][mux][drop]")
+TEST_CASE("shm.mux a congestion-blocked send drives on_drop with cause=blocked transport=local", "[shm][mux][drop]")
 {
     // The same-host SHM tier is not a dark drop tier: a send into a full ring (the reliable
     // gate finds no recyclable slot with no consumer draining) surfaces the verdict off
@@ -304,8 +334,7 @@ TEST_CASE("shm.mux a congestion-blocked send drives on_drop with cause=blocked t
         shm_member   shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         std::unique_ptr<shm_member::channel_type> ch;
-        shm.on_dialed([&](std::unique_ptr<shm_member::channel_type> c, const pio::endpoint &)
-                      { ch = std::move(c); });
+        shm.on_dialed([&](std::unique_ptr<shm_member::channel_type> c, const pio::endpoint &) { ch = std::move(c); });
         shm.dial({"shm", "topic.blocked"});
         REQUIRE(ch);
 

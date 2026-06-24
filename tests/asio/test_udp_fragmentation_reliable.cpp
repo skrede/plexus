@@ -31,13 +31,15 @@ struct relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const { return front.local_endpoint().port(); }
+    [[nodiscard]] std::uint16_t port() const
+    {
+        return front.local_endpoint().port();
+    }
 
     [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
-        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq &&
-                wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
+        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
     }
 
     void to_server(std::span<const std::byte> dg)
@@ -81,8 +83,7 @@ struct relay
                                     if(ec)
                                         return;
                                     if(client_ep.port() != 0)
-                                        front.send_to(::asio::buffer(back_buf.data(), n),
-                                                      client_ep);
+                                        front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
                                     recv_back();
                                 });
     }
@@ -106,8 +107,7 @@ TEST_CASE("udp fragment reliable: a large payload reassembles byte-equal with a 
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context   io;
-        pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder,
-                                    fast_arq()};
+        pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
         pasio::udp_transport client{io, budget, fast_hs, fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
@@ -116,15 +116,13 @@ TEST_CASE("udp fragment reliable: a large payload reassembles byte-equal with a 
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> b)
-                                      { got.emplace_back(b.begin(), b.end()); });
+                    accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
         relay link{io, server.port()};
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);

@@ -74,8 +74,7 @@ class stub_handle
 public:
     stub_handle() = default;
 
-    stub_handle(region_store *store, std::string name, std::shared_ptr<region_store::region> region,
-                bool owns_name) noexcept
+    stub_handle(region_store *store, std::string name, std::shared_ptr<region_store::region> region, bool owns_name) noexcept
             : m_store(store)
             , m_name(std::move(name))
             , m_region(std::move(region))
@@ -83,7 +82,10 @@ public:
     {
     }
 
-    ~stub_handle() { reclaim(); }
+    ~stub_handle()
+    {
+        reclaim();
+    }
 
     stub_handle(const stub_handle &)            = delete;
     stub_handle &operator=(const stub_handle &) = delete;
@@ -113,7 +115,10 @@ public:
         return *this;
     }
 
-    std::span<std::byte> bytes() const { return {m_region->base, m_region->size}; }
+    std::span<std::byte> bytes() const
+    {
+        return {m_region->base, m_region->size};
+    }
 
 private:
     void reclaim() noexcept
@@ -148,8 +153,7 @@ public:
     {
     }
 
-    region_status create(std::string_view name, std::size_t bytes, const create_options &,
-                         region_handle &out)
+    region_status create(std::string_view name, std::size_t bytes, const create_options &, region_handle &out)
     {
         const std::string key{name};
         if(auto it = m_store.regions.find(key); it != m_store.regions.end() && it->second->live)
@@ -168,7 +172,9 @@ public:
         return region_status::ok;
     }
 
-    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>) {}
+    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>)
+    {
+    }
 
 private:
     region_store &m_store;
@@ -202,8 +208,13 @@ struct recording_notifier
             g_order.push_back("notify_dtor");
     }
 
-    void signal() noexcept {}
-    void arm(plexus::detail::move_only_function<void()>) { armed = true; }
+    void signal() noexcept
+    {
+    }
+    void arm(plexus::detail::move_only_function<void()>)
+    {
+        armed = true;
+    }
     void disarm() noexcept
     {
         if(armed)
@@ -221,8 +232,7 @@ TEST_CASE("shm.registry demand-drives the ring lifecycle by refcount", "[shm][re
 {
     region_store  store;
     stub_broker   creator_broker{store};
-    test_registry registry(creator_broker, plexus::io::reliability::reliable,
-                           plexus::io::congestion::block);
+    test_registry registry(creator_broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
     const std::string fqn = "topic.demo";
 
@@ -246,29 +256,24 @@ TEST_CASE("shm.registry demand-drives the ring lifecycle by refcount", "[shm][re
     REQUIRE(store.unlinks == 2); // control + slab
 }
 
-TEST_CASE("shm.registry a peer collision attaches and a subscriber-only acquire defaults geometry",
-          "[shm][registry]")
+TEST_CASE("shm.registry a peer collision attaches and a subscriber-only acquire defaults geometry", "[shm][registry]")
 {
     region_store  store;
     stub_broker   broker_a{store};
     stub_broker   broker_b{store};
-    test_registry creator(broker_a, plexus::io::reliability::best_effort,
-                          plexus::io::congestion::drop_newest);
-    test_registry attacher(broker_b, plexus::io::reliability::best_effort,
-                           plexus::io::congestion::drop_newest);
+    test_registry creator(broker_a, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+    test_registry attacher(broker_b, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
     const std::string fqn = "topic.shared";
 
     // The creator mints with an explicit max_payload (it sizes the ring).
-    REQUIRE(creator.acquire(fqn, ring_direction::request, /*max_payload=*/256) ==
-            acquire_result::created);
+    REQUIRE(creator.acquire(fqn, ring_direction::request, /*max_payload=*/256) == acquire_result::created);
 
     // A second registry over the same store collides on create and ATTACHES to the
     // peer's live regions -- the subscriber-only acquire (max_payload == 0) falls
     // back to the default geometry, but it re-reads the creator's geometry off the
     // control header, so the two ends agree.
-    REQUIRE(attacher.acquire(fqn, ring_direction::request, /*max_payload=*/0) ==
-            acquire_result::attached);
+    REQUIRE(attacher.acquire(fqn, ring_direction::request, /*max_payload=*/0) == acquire_result::attached);
 
     // A send over the creator's channel drains back over the attacher's channel: the
     // two registries share ONE ring through the deterministic name (round-trip proof
@@ -308,8 +313,7 @@ TEST_CASE("shm.registry disarms the notifier before the subscriber teardown", "[
     stub_broker  broker{store};
     g_order.clear();
 
-    test_registry registry(broker, plexus::io::reliability::reliable,
-                           plexus::io::congestion::block);
+    test_registry registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
     REQUIRE(registry.acquire("topic.order", ring_direction::request, 0) == acquire_result::created);
 
     // The release tears the entry down: disarm() fires (logging "disarm") BEFORE the

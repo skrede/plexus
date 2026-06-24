@@ -81,8 +81,7 @@ public:
 #else
     using set_type = transport_set<unix_transport, asio_transport>;
 
-    explicit same_host_transports(::asio::io_context               &io,
-                                  [[maybe_unused]] std::string_view region = "")
+    explicit same_host_transports(::asio::io_context &io, [[maybe_unused]] std::string_view region = "")
             : m_set(io)
     {
     }
@@ -98,16 +97,14 @@ public:
     // caller's aggregate. A null (zero) local_fingerprint is the fillable "no same-host signal"
     // default (same_host.h null-guard); a caller-supplied value is respected, never clobbered,
     // so the explicit-override path stays intact.
-    [[nodiscard]] auto make_node(discovery::discovery &disc, const plexus::node_id &id,
-                                 node_options opts)
+    [[nodiscard]] auto make_node(discovery::discovery &disc, const plexus::node_id &id, node_options opts)
     {
         if(opts.handshake.local_fingerprint.is_null())
             opts.handshake.local_fingerprint = ::plexus::native::read_machine_fingerprint();
         return m_set.template make_node<asio_policy>(disc, id, opts);
     }
 #else
-    [[nodiscard]] auto make_node(discovery::discovery &disc, const plexus::node_id &id,
-                                 const node_options &opts)
+    [[nodiscard]] auto make_node(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts)
     {
         return m_set.template make_node<asio_policy>(disc, id, opts);
     }

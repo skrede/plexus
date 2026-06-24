@@ -29,9 +29,7 @@ struct is_permutation_of;
 
 template<typename... Ordered, typename... Declared>
 struct is_permutation_of<transport_priority<Ordered...>, std::tuple<Declared...>>
-        : std::bool_constant<sizeof...(Ordered) == sizeof...(Declared) &&
-                             ((count_in<Declared, Ordered...> == 1) && ...) &&
-                             ((count_in<Ordered, Declared...> == 1) && ...)>
+        : std::bool_constant<sizeof...(Ordered) == sizeof...(Declared) && ((count_in<Declared, Ordered...> == 1) && ...) && ((count_in<Ordered, Declared...> == 1) && ...)>
 {
 };
 
@@ -45,12 +43,10 @@ struct priority_builder
     template<typename... Ordered>
     static constexpr transport_priority<Ordered...> create() noexcept
     {
-        static_assert(
-                detail::is_permutation_of<transport_priority<Ordered...>,
-                                          typename NodeType::transport_tuple>::value,
-                "plexus: transport_priority<...> must be a permutation of the node's transport "
-                "pack — every declared transport listed exactly once, no forgotten transport, "
-                "no duplicate, no unknown type");
+        static_assert(detail::is_permutation_of<transport_priority<Ordered...>, typename NodeType::transport_tuple>::value,
+                      "plexus: transport_priority<...> must be a permutation of the node's transport "
+                      "pack — every declared transport listed exactly once, no forgotten transport, "
+                      "no duplicate, no unknown type");
         return {};
     }
 };

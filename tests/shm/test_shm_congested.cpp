@@ -2,14 +2,12 @@
 
 using namespace shm_congested_fixture;
 
-TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off send()",
-          "[shm][congested]")
+TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off send()", "[shm][congested]")
 {
     ring_fixture<16, 64> f;
     // A best_effort + drop channel: it overwrites the latest and NEVER blocks; its
     // own gate returns congested only when a full lap is pinned by live takes.
-    shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::best_effort,
-                                       plexus::io::congestion::drop_newest);
+    shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
     // Pin every cell with a held take so no slot is recyclable. We pin directly on
     // the ring (the Dekker reader half) to set up the fully-congested state.
@@ -19,9 +17,7 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
     for(std::uint64_t i = 0; i < 16; ++i)
     {
         broadcast_ring::claim_result claim;
-        REQUIRE(f.ring.claim_with_policy(
-                        sizeof(std::uint32_t), plexus::io::reliability::best_effort,
-                        plexus::io::congestion::drop_newest, claim) == loan_status::ok);
+        REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim) == loan_status::ok);
         const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
         std::memcpy(claim.slab.data(), &v, sizeof(v));
         REQUIRE(f.ring.commit(claim.position, sizeof(v)) == loan_status::ok);
@@ -34,8 +30,7 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
     std::uint32_t payload = 0xFEEDFACEu;
     std::byte     bytes[sizeof(payload)];
     std::memcpy(bytes, &payload, sizeof(payload));
-    REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) ==
-            loan_status::congested);
+    REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) == loan_status::congested);
 
     // Release the lap so the fixture tears down clean.
     for(std::uint64_t i = 0; i < 16; ++i)
@@ -43,8 +38,7 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
     f.ring.unregister_cursor(idx);
 }
 
-TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging consumer",
-          "[shm][backpressure]")
+TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging consumer", "[shm][backpressure]")
 {
     constexpr std::uint64_t   k_cells = 16;
     constexpr int             k_total = 4000; // many laps so the producer must block repeatedly
@@ -55,8 +49,7 @@ TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging c
     // The channel's OWN subscriber is the sole registered cursor (the co-located
     // loopback) -- the reader thread drains it, advancing that cursor so the
     // back-pressured producer resumes.
-    shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable,
-                                       plexus::io::congestion::block);
+    shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
     std::atomic<bool> producer_done{false};
 
@@ -69,8 +62,7 @@ TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging c
     std::thread reader(
             [&]
             {
-                shm_channel<null_notifier>::deliver_fn deliver =
-                        [&](plexus::wire_bytes<shm_slot_owner> wb) { seen.push_back(as_u32(wb)); };
+                shm_channel<null_notifier>::deliver_fn deliver = [&](plexus::wire_bytes<shm_slot_owner> wb) { seen.push_back(as_u32(wb)); };
                 while(seen.size() < static_cast<std::size_t>(k_total))
                 {
                     channel.drain(deliver);

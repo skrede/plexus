@@ -36,11 +36,10 @@ class subscriber;
 // present hands the raw bytes + errc instead. An explicit type_id overrides the codec's own.
 struct typed_subscriber_options
 {
-    io::subscriber_qos           qos{};
-    io::attach_posture           posture = io::attach_posture::lenient;
-    std::optional<type_identity> type_id{};
-    std::optional<std::function<void(std::span<const std::byte>, std::error_code)>>
-            on_decode_failure{};
+    io::subscriber_qos                                                              qos{};
+    io::attach_posture                                                              posture = io::attach_posture::lenient;
+    std::optional<type_identity>                                                    type_id{};
+    std::optional<std::function<void(std::span<const std::byte>, std::error_code)>> on_decode_failure{};
 
     // optional because ABSENCE is meaningful (the shm_geometry/publisher precedent): unset
     // falls back to the node-level recording_qos, present overrides this topic's fidelity.
@@ -67,18 +66,15 @@ public:
     }
 
     template<typename Policy, typename... NodeTs, typename Cb>
-    subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const io::subscriber_qos &qos,
-               Cb cb)
+    subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const io::subscriber_qos &qos, Cb cb)
     {
         // A 2-arg callback consumes no message_info, so it never wants the receive-side clock
         // read. Carried on the LOCAL qos only — never the subscribe wire region.
         io::subscriber_qos local_qos = qos;
-        local_qos.wants_message_info =
-                std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>;
-        io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto        rid  = seam.register_subscriber(
-                seam.ctx, fqn, local_qos, plexus::detail::adapt_bytes_callback(std::move(cb)),
-                std::nullopt, nullptr, io::object_dispatch{}, std::nullopt);
+        local_qos.wants_message_info = std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>;
+        io::endpoint_seam seam       = n.endpoint_seam_for();
+        const auto        rid =
+                seam.register_subscriber(seam.ctx, fqn, local_qos, plexus::detail::adapt_bytes_callback(std::move(cb)), std::nullopt, nullptr, io::object_dispatch{}, std::nullopt);
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
@@ -113,10 +109,9 @@ template<typename Codec>
 class subscriber
 {
 public:
-    using value_type = typename Codec::value_type;
-    using typed_callback =
-            plexus::detail::move_only_function<void(const value_type &, const io::message_info &)>;
-    using state = plexus::detail::subscriber_state<Codec, value_type, typed_callback>;
+    using value_type     = typename Codec::value_type;
+    using typed_callback = plexus::detail::move_only_function<void(const value_type &, const io::message_info &)>;
+    using state          = plexus::detail::subscriber_state<Codec, value_type, typed_callback>;
 
     template<typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, Cb cb)
@@ -125,12 +120,8 @@ public:
     }
 
     template<typename Policy, typename... NodeTs, typename Cb>
-    subscriber(node<Policy, NodeTs...> &n, std::string_view fqn,
-               const typed_subscriber_options &opts, Cb cb, Codec codec = {})
-            : m_state(std::make_unique<state>(
-                      std::move(codec),
-                      plexus::detail::adapt_typed_callback<value_type>(std::move(cb)),
-                      opts.on_decode_failure))
+    subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const typed_subscriber_options &opts, Cb cb, Codec codec = {})
+            : m_state(std::make_unique<state>(std::move(codec), plexus::detail::adapt_typed_callback<value_type>(std::move(cb)), opts.on_decode_failure))
     {
         static_assert(typed_codec<Codec>,
                       "plexus: a typed subscriber needs a codec satisfying typed_codec "
@@ -142,19 +133,19 @@ public:
         qos.posture                 = opts.posture;
         // A 1-arg callback wants no message_info; a 2-arg wants it UNLESS the qos opted out.
         // Carried on the LOCAL qos only — never the subscribe wire region.
-        qos.wants_message_info =
-                std::is_invocable_v<Cb &, const value_type &, const io::message_info &> &&
-                opts.qos.wants_message_info;
+        qos.wants_message_info = std::is_invocable_v<Cb &, const value_type &, const io::message_info &> && opts.qos.wants_message_info;
 
         io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto        rid  = plexus::detail::register_typed(
-                seam, fqn, qos, m_state.get(), identity.type_id, &io::detail::type_key<value_type>,
-                opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
-        m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
+        const auto        rid  = plexus::detail::register_typed(seam, fqn, qos, m_state.get(), identity.type_id, &io::detail::type_key<value_type>,
+                                                                opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
+        m_retire               = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
     // Inbound frames whose decode failed — dropped, never a partial T.
-    [[nodiscard]] std::size_t decode_failed() const noexcept { return m_state->decode_failed; }
+    [[nodiscard]] std::size_t decode_failed() const noexcept
+    {
+        return m_state->decode_failed;
+    }
 
     subscriber(subscriber &&) noexcept            = default;
     subscriber &operator=(subscriber &&) noexcept = default;

@@ -22,7 +22,10 @@ struct session_id
 {
     std::uint64_t m_value{};
 
-    [[nodiscard]] std::uint64_t value() const noexcept { return m_value; }
+    [[nodiscard]] std::uint64_t value() const noexcept
+    {
+        return m_value;
+    }
 
     auto operator<=>(const session_id &) const = default;
 };

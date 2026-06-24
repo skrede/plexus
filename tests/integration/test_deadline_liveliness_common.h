@@ -60,9 +60,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -86,10 +95,8 @@ using engine      = plexus::io::routing_engine<manual_policy, transport_t, manua
 // Periods pinned above the tick granularity so an advance crosses a tick expiry (M1).
 constexpr auto k_period = k_tick_granularity * 3; // 300ms deadline
 constexpr auto k_lease  = k_tick_granularity * 8; // 800ms lease
-static_assert(k_period >= k_tick_granularity,
-              "a deadline period below the tick granularity never crosses a tick");
-static_assert(k_lease >= k_tick_granularity,
-              "a lease below the tick granularity never crosses a tick");
+static_assert(k_period >= k_tick_granularity, "a deadline period below the tick granularity never crosses a tick");
+static_assert(k_lease >= k_tick_granularity, "a lease below the tick granularity never crosses a tick");
 
 constexpr auto          k_long_timeout = std::chrono::hours(1);
 constexpr std::uint64_t k_seed         = 0xC0FFEEu;
@@ -109,11 +116,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 inline plexus::node_id make_id(std::uint8_t seed)
@@ -125,8 +128,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 
 inline reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 // A subscriber A and a publisher B over one bus. A demands B's topic with its chosen
@@ -161,7 +163,10 @@ struct net
         a.on_liveness([this](const liveness_event &ev) { events.push_back(ev); });
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
     void advance(std::chrono::nanoseconds d)
     {
         manual_clock::advance(d);

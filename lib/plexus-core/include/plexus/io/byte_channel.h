@@ -48,20 +48,17 @@ namespace plexus::io {
 // Handlers are plexus::detail::move_only_function so move-only callables are
 // admissible (no copyable-callable constraint).
 template<typename C>
-concept byte_channel =
-        requires(C &c, const C &cc, std::span<const std::byte> bytes,
-                 plexus::detail::move_only_function<void(std::span<const std::byte>)> on_data_cb,
-                 plexus::detail::move_only_function<void()>                           on_closed_cb,
-                 plexus::detail::move_only_function<void(io_error)>                   on_error_cb,
-                 plexus::detail::move_only_function<void(wire::close_cause)> on_protocol_close_cb) {
-            { c.send(bytes) } -> std::same_as<void>;
-            { c.close() } -> std::same_as<void>;
-            { cc.remote_endpoint() } -> std::same_as<endpoint>;
-            c.on_data(std::move(on_data_cb));
-            c.on_closed(std::move(on_closed_cb));
-            c.on_error(std::move(on_error_cb));
-            c.on_protocol_close(std::move(on_protocol_close_cb));
-        };
+concept byte_channel = requires(C &c, const C &cc, std::span<const std::byte> bytes, plexus::detail::move_only_function<void(std::span<const std::byte>)> on_data_cb,
+                                plexus::detail::move_only_function<void()> on_closed_cb, plexus::detail::move_only_function<void(io_error)> on_error_cb,
+                                plexus::detail::move_only_function<void(wire::close_cause)> on_protocol_close_cb) {
+    { c.send(bytes) } -> std::same_as<void>;
+    { c.close() } -> std::same_as<void>;
+    { cc.remote_endpoint() } -> std::same_as<endpoint>;
+    c.on_data(std::move(on_data_cb));
+    c.on_closed(std::move(on_closed_cb));
+    c.on_error(std::move(on_error_cb));
+    c.on_protocol_close(std::move(on_protocol_close_cb));
+};
 
 }
 

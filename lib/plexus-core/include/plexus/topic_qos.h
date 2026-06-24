@@ -43,14 +43,14 @@ namespace plexus {
 // shipped low-MiB target).
 struct topic_qos
 {
-    bool                   latch             = false;
-    std::uint32_t          depth             = 1;
-    io::locality           reach             = io::locality::any;
-    io::reliability        reliability       = io::reliability::best_effort;
-    io::congestion         congestion        = io::congestion::block;
-    io::priority           priority          = io::priority::normal;
-    io::dispatch_hint      dispatch          = io::dispatch_hint::none;
-    std::uint32_t          max_message_bytes = 0;
+    bool              latch             = false;
+    std::uint32_t     depth             = 1;
+    io::locality      reach             = io::locality::any;
+    io::reliability   reliability       = io::reliability::best_effort;
+    io::congestion    congestion        = io::congestion::block;
+    io::priority      priority          = io::priority::normal;
+    io::dispatch_hint dispatch          = io::dispatch_hint::none;
+    std::uint32_t     max_message_bytes = 0;
 
     // The publisher's OFFERED deadline/liveliness periods — the offered half of the
     // request-vs-offered deadline/lease contract. 0 = not offered = always compatible

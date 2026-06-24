@@ -28,26 +28,21 @@ TEST_CASE("node discovery: a peer's card lands in known(), own card skipped", "[
     REQUIRE(b.router().known().contains(id_a));
 }
 
-TEST_CASE("node discovery: malformed cards produce no awareness entry and no crash",
-          "[node][discovery]")
+TEST_CASE("node discovery: malformed cards produce no awareness entry and no crash", "[node][discovery]")
 {
     host        h;
     const auto  id_a = make_id(0xAA);
     inproc_node a{h.ex, h.disc, id_a, h.transport, make_opts()};
     a.listen({"inproc", "host-a:5000"});
 
-    const auto card_with = [](std::vector<std::pair<std::string, std::string>> md)
-    { return service_info{"peer", plexus::io::endpoint{"", "host-x"}, std::move(md)}; };
+    const auto card_with = [](std::vector<std::pair<std::string, std::string>> md) { return service_info{"peer", plexus::io::endpoint{"", "host-x"}, std::move(md)}; };
 
     // 31 hex chars (too short).
-    h.disc.advertise(
-            card_with({{"node_id", std::string(31, 'a')}, {"plexus/inproc/port", "9000"}}));
+    h.disc.advertise(card_with({{"node_id", std::string(31, 'a')}, {"plexus/inproc/port", "9000"}}));
     // Uppercase hex (hex_encode emits lowercase; uppercase is rejected).
-    h.disc.advertise(
-            card_with({{"node_id", std::string(32, 'A')}, {"plexus/inproc/port", "9000"}}));
+    h.disc.advertise(card_with({{"node_id", std::string(32, 'A')}, {"plexus/inproc/port", "9000"}}));
     // Non-hex garbage.
-    h.disc.advertise(
-            card_with({{"node_id", std::string(32, 'z')}, {"plexus/inproc/port", "9000"}}));
+    h.disc.advertise(card_with({{"node_id", std::string(32, 'z')}, {"plexus/inproc/port", "9000"}}));
     // Missing node_id key entirely.
     h.disc.advertise(card_with({{"plexus/inproc/port", "9000"}}));
     // A valid node_id but NO usable port key.
@@ -60,8 +55,7 @@ TEST_CASE("node discovery: malformed cards produce no awareness entry and no cra
 
     // A well-formed card AFTER the reject table still works (the handler did not wedge).
     const auto id_ok = make_id(0x5E);
-    h.disc.advertise(card_with({{"node_id", plexus::discovery::detail::hex_encode(id_ok)},
-                                {"plexus/inproc/port", "8100"}}));
+    h.disc.advertise(card_with({{"node_id", plexus::discovery::detail::hex_encode(id_ok)}, {"plexus/inproc/port", "8100"}}));
     REQUIRE(a.router().known().contains(id_ok));
     REQUIRE(a.router().known().lookup(id_ok)->address == "host-x:8100");
 }

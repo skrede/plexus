@@ -54,8 +54,7 @@ void datagram_send(Ch &c, std::span<const std::byte> data)
     Ch::write_seq(c.m_send_frame.data(), seq);
     c.m_send_frame[Ch::k_seq_len] = static_cast<std::byte>(c.m_send_epoch & 0xffu);
     std::copy(header.begin(), header.end(), c.m_send_frame.begin() + Ch::k_seq_len + 1);
-    std::copy(c.m_seal_scratch.begin(), c.m_seal_scratch.end(),
-              c.m_send_frame.begin() + Ch::k_seq_len + 1 + wire::header_size);
+    std::copy(c.m_seal_scratch.begin(), c.m_seal_scratch.end(), c.m_send_frame.begin() + Ch::k_seq_len + 1 + wire::header_size);
     c.m_lower.send(c.m_send_frame);
 }
 
@@ -121,9 +120,7 @@ void datagram_on_lower_data(Ch &c, std::span<const std::byte> bytes)
         if(verdict != replay_verdict::accept)
         {
             ++c.m_replay_dropped;
-            emit_drop(c,
-                      verdict == replay_verdict::reject_old ? io::detail::drop_cause::too_old
-                                                            : io::detail::drop_cause::replay);
+            emit_drop(c, verdict == replay_verdict::reject_old ? io::detail::drop_cause::too_old : io::detail::drop_cause::replay);
             return;
         }
     }
@@ -148,8 +145,7 @@ void datagram_on_lower_data(Ch &c, std::span<const std::byte> bytes)
 
     c.m_recv_frame.resize(wire::header_size + c.m_open_scratch.size());
     std::copy(header.begin(), header.end(), c.m_recv_frame.begin());
-    std::copy(c.m_open_scratch.begin(), c.m_open_scratch.end(),
-              c.m_recv_frame.begin() + wire::header_size);
+    std::copy(c.m_open_scratch.begin(), c.m_open_scratch.end(), c.m_recv_frame.begin() + wire::header_size);
     if(c.m_on_data)
         c.m_on_data(std::span<const std::byte>{c.m_recv_frame});
 }

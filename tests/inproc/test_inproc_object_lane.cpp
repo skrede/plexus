@@ -33,15 +33,13 @@ struct counted_payload
     loan_slot slot{};
 };
 
-object_carrier make_carrier(counted_payload &p, std::uint64_t topic, std::uint64_t tag,
-                            std::uint64_t seq = 0)
+object_carrier make_carrier(counted_payload &p, std::uint64_t topic, std::uint64_t tag, std::uint64_t seq = 0)
 {
     p.slot.object  = &p.value;
     p.slot.refs    = 0;
     p.slot.release = [](loan_slot *s)
     {
-        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) -
-                                                          offsetof(counted_payload, slot));
+        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) - offsetof(counted_payload, slot));
         ++owner->release_calls;
     };
     return object_carrier{topic, tag, &p.value, seq, 0, &p.slot};
@@ -63,8 +61,7 @@ struct pair_fixture
 
 }
 
-TEST_CASE("inproc object lane delivers the carrier to the partner with field fidelity",
-          "[inproc][object]")
+TEST_CASE("inproc object lane delivers the carrier to the partner with field fidelity", "[inproc][object]")
 {
     pair_fixture    fx;
     counted_payload p;
@@ -95,15 +92,13 @@ TEST_CASE("inproc object lane delivers the carrier to the partner with field fid
     REQUIRE(p.release_calls == 1);
 }
 
-TEST_CASE("inproc object lane preserves FIFO ordering with interleaved byte packets",
-          "[inproc][object]")
+TEST_CASE("inproc object lane preserves FIFO ordering with interleaved byte packets", "[inproc][object]")
 {
     pair_fixture    fx;
     counted_payload p0, p1;
 
     std::vector<std::string> order;
-    fx.b.on_data([&](std::span<const std::byte> d)
-                 { order.emplace_back(reinterpret_cast<const char *>(d.data()), d.size()); });
+    fx.b.on_data([&](std::span<const std::byte> d) { order.emplace_back(reinterpret_cast<const char *>(d.data()), d.size()); });
     fx.b.on_object(
             [&](const object_carrier &c)
             {
@@ -125,8 +120,7 @@ TEST_CASE("inproc object lane preserves FIFO ordering with interleaved byte pack
     REQUIRE(p1.slot.refs == 0u);
 }
 
-TEST_CASE("inproc object lane releases on a closed partner with no handler fire",
-          "[inproc][object]")
+TEST_CASE("inproc object lane releases on a closed partner with no handler fire", "[inproc][object]")
 {
     pair_fixture    fx;
     counted_payload p;

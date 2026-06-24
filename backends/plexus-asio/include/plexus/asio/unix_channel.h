@@ -38,49 +38,36 @@ struct unix_traits
         (void)sock.shutdown(::asio::local::stream_protocol::socket::shutdown_both, ec);
     }
 
-    static ::asio::local::stream_protocol::socket &
-    lowest_layer(::asio::local::stream_protocol::socket &s) noexcept
+    static ::asio::local::stream_protocol::socket &lowest_layer(::asio::local::stream_protocol::socket &s) noexcept
     {
         return s;
     }
-    static const ::asio::local::stream_protocol::socket &
-    lowest_layer(const ::asio::local::stream_protocol::socket &s) noexcept
+    static const ::asio::local::stream_protocol::socket &lowest_layer(const ::asio::local::stream_protocol::socket &s) noexcept
     {
         return s;
     }
 
     // An explicit no-op: an AF_UNIX socket has no TCP keepalive, and SO_SNDBUF/SO_RCVBUF are
     // non-diagnostic on a local socket — the knobs do not apply on this backend.
-    static void apply_socket_options(::asio::local::stream_protocol::socket &,
-                                     const stream_socket_options &, std::error_code &) noexcept
+    static void apply_socket_options(::asio::local::stream_protocol::socket &, const stream_socket_options &, std::error_code &) noexcept
     {
     }
 };
 
-class unix_channel
-        : public stream_channel<::asio::local::stream_protocol::socket, unix_traits,
-                                detail::plaintext_bootstrap<::asio::local::stream_protocol::socket>>
+class unix_channel : public stream_channel<::asio::local::stream_protocol::socket, unix_traits, detail::plaintext_bootstrap<::asio::local::stream_protocol::socket>>
 {
-    using base =
-            stream_channel<::asio::local::stream_protocol::socket, unix_traits,
-                           detail::plaintext_bootstrap<::asio::local::stream_protocol::socket>>;
+    using base = stream_channel<::asio::local::stream_protocol::socket, unix_traits, detail::plaintext_bootstrap<::asio::local::stream_protocol::socket>>;
 
 public:
-    explicit unix_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {},
-                          io::congestion        congestion = io::congestion::block,
-                          io::egress_capacity   egress     = io::egress_capacity::bounded_default(),
-                          stream_socket_options opts       = {},
-                          std::size_t read_buffer_bytes    = k_stream_read_buffer_bytes)
+    explicit unix_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+                          io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {},
+                          std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
     {
     }
 
-    unix_channel(::asio::io_context &io, ::asio::local::stream_protocol::socket connected,
-                 stream::stream_inbound_config cfg        = {},
-                 io::congestion              congestion = io::congestion::block,
-                 io::egress_capacity         egress     = io::egress_capacity::bounded_default(),
-                 stream_socket_options       opts       = {},
-                 std::size_t                 read_buffer_bytes = k_stream_read_buffer_bytes)
+    unix_channel(::asio::io_context &io, ::asio::local::stream_protocol::socket connected, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+                 io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {}, std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
     {
     }
@@ -88,7 +75,6 @@ public:
 
 }
 
-static_assert(plexus::io::byte_channel<plexus::asio::unix_channel>,
-              "unix_channel must satisfy byte_channel — check the seven verbs");
+static_assert(plexus::io::byte_channel<plexus::asio::unix_channel>, "unix_channel must satisfy byte_channel — check the seven verbs");
 
 #endif

@@ -48,13 +48,22 @@ public:
         if(m_sink)
             m_sink(std::span<const std::byte>{m_last});
     }
-    void                               close() { m_closed = true; }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"wire", ""}; }
+    void close()
+    {
+        m_closed = true;
+    }
+    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    {
+        return {"wire", ""};
+    }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_closed = std::move(cb);
+    }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -63,7 +72,10 @@ public:
     {
         m_on_protocol_close = std::move(cb);
     }
-    [[nodiscard]] std::size_t backpressured() const { return 0; }
+    [[nodiscard]] std::size_t backpressured() const
+    {
+        return 0;
+    }
 
     void feed(std::span<const std::byte> bytes)
     {
@@ -80,8 +92,7 @@ public:
     plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
 
-static_assert(plexus::io::byte_channel<wire_lower>,
-              "wire_lower must satisfy byte_channel for the decorator test");
+static_assert(plexus::io::byte_channel<wire_lower>, "wire_lower must satisfy byte_channel for the decorator test");
 
 inline derived_keys fixed_keys()
 {

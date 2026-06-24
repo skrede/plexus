@@ -52,9 +52,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -83,11 +92,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -108,8 +113,7 @@ plexus::node_id inbound_slot(std::uint8_t n)
 
 reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 struct two_node
@@ -120,8 +124,8 @@ struct two_node
     transport_t                   transport_b{ex, bus};
 
     plexus::log::null_logger sink;
-    engine a{transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false};
-    engine b{transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false};
+    engine                   a{transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false};
+    engine                   b{transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false};
 
     plexus::node_id id_b{make_id(0xB2)};
     endpoint        ep_a{"inproc", "node-a"};
@@ -133,7 +137,10 @@ struct two_node
         b.listen(ep_b);
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
     void advance(std::chrono::nanoseconds d)
     {
         manual_clock::advance(d);

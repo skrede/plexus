@@ -24,7 +24,10 @@ struct harness
     plexus::inproc::inproc_bus<test_clock>      bus;
     plexus::inproc::inproc_executor<test_clock> ex{bus};
 
-    harness() { test_clock::reset(); }
+    harness()
+    {
+        test_clock::reset();
+    }
 
     harness(const harness &)            = delete;
     harness &operator=(const harness &) = delete;
@@ -40,9 +43,15 @@ struct harness
     }
 
     // Drain posted work and pending deliveries to quiescence without moving time.
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
-    [[nodiscard]] mock_channel<test_clock> make_channel() { return mock_channel<test_clock>{ex}; }
+    [[nodiscard]] mock_channel<test_clock> make_channel()
+    {
+        return mock_channel<test_clock>{ex};
+    }
 
     [[nodiscard]] std::unique_ptr<mock_channel<test_clock>> make_channel_ptr()
     {

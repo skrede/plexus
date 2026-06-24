@@ -63,8 +63,7 @@ struct sink
     crc_serial_inbound make()
     {
         crc_serial_inbound dec;
-        dec.on_match([this](std::span<const std::byte> f)
-                     { emitted.emplace_back(reinterpret_cast<const char *>(f.data()), f.size()); });
+        dec.on_match([this](std::span<const std::byte> f) { emitted.emplace_back(reinterpret_cast<const char *>(f.data()), f.size()); });
         dec.on_drop(
                 [this](close_cause c)
                 {

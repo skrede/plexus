@@ -49,9 +49,7 @@ public:
     // framed messages into (node_name, fqn)'s receive path — the same entry the wire feeds —
     // returning a retained owner of the live receive companion (empty = declined). Unset =
     // the subscriber keeps only the wire receive path.
-    void on_receive_gate(plexus::detail::move_only_function<upgrade_receive(std::string_view,
-                                                                            std::string_view)>
-                                 mint)
+    void on_receive_gate(plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> mint)
     {
         m_receive_mint = std::move(mint);
     }
@@ -76,8 +74,7 @@ public:
     // The forwarder's on_demand_transition body. The up-edge role decides the lane (subscriber
     // attaches the receive companion, publisher mints the send companion); the down-edge drops
     // whichever lane this (peer, fqn) held — both teardown paths key the same way.
-    void on_edge(std::string_view node_name, std::string_view fqn, demand_transition dir,
-                 demand_role role)
+    void on_edge(std::string_view node_name, std::string_view fqn, demand_transition dir, demand_role role)
     {
         if(dir == demand_transition::up)
             on_up(node_name, fqn, role);
@@ -88,14 +85,16 @@ public:
     // The publish fan's per-message route: the retained companion channel for (node_name, fqn)
     // when this message fits the medium decision, else nullptr so it keeps the wire sub.channel
     // (the dual-delivery fail-safe). An unheld pair or an over-cap message resolves to nullptr.
-    [[nodiscard]] Channel *companion_for(std::string_view node_name, std::string_view fqn,
-                                         std::size_t bytes)
+    [[nodiscard]] Channel *companion_for(std::string_view node_name, std::string_view fqn, std::size_t bytes)
     {
         return detail::route_companion(m_held, node_name, fqn, bytes);
     }
 
     // Peer-dead teardown: dropping the held channels runs their destructors (releasing the ring).
-    void on_peer_dead(std::string_view node_name) { m_held.erase(std::string{node_name}); }
+    void on_peer_dead(std::string_view node_name)
+    {
+        m_held.erase(std::string{node_name});
+    }
 
 private:
     using ring      = detail::coordinator_ring<Channel, upgrade_receive>;
@@ -162,13 +161,12 @@ private:
         return it == m_hints.end() ? dispatch_hint::none : it->second;
     }
 
-    Registry                                                                  &m_registry;
-    std::unordered_map<std::string, ring_list>                                 m_held;
-    std::unordered_map<std::string, dispatch_hint>                             m_hints;
-    plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)> m_mint;
-    plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)>
-                                                                  m_receive_mint;
-    plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
+    Registry                                                                               &m_registry;
+    std::unordered_map<std::string, ring_list>                                              m_held;
+    std::unordered_map<std::string, dispatch_hint>                                          m_hints;
+    plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)>             m_mint;
+    plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> m_receive_mint;
+    plexus::detail::move_only_function<bool(bool, dispatch_hint)>                           m_policy;
 };
 
 }

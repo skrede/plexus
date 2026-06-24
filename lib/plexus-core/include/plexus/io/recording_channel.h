@@ -36,8 +36,7 @@ template<typename Lower>
 class recording_channel
 {
 public:
-    using wire_tap = plexus::detail::move_only_function<void(
-            recording::wire_direction, std::uint64_t, std::span<const std::byte>)>;
+    using wire_tap = plexus::detail::move_only_function<void(recording::wire_direction, std::uint64_t, std::span<const std::byte>)>;
 
     explicit recording_channel(std::unique_ptr<Lower> lower)
             : m_lower(std::move(lower))
@@ -65,9 +64,15 @@ public:
         m_lower->send(data);
     }
 
-    void close() { m_lower->close(); }
+    void close()
+    {
+        m_lower->close();
+    }
 
-    [[nodiscard]] endpoint remote_endpoint() const { return m_lower->remote_endpoint(); }
+    [[nodiscard]] endpoint remote_endpoint() const
+    {
+        return m_lower->remote_endpoint();
+    }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
@@ -105,17 +110,17 @@ public:
     }
 
     void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> cb)
-        requires requires(Lower                                                               &l,
-                          plexus::detail::move_only_function<void(const detail::drop_event &)> c) {
-            l.on_drop(std::move(c));
-        }
+        requires requires(Lower &l, plexus::detail::move_only_function<void(const detail::drop_event &)> c) { l.on_drop(std::move(c)); }
     {
         m_lower->on_drop(std::move(cb));
     }
 
     // The recorder-agnostic capture edge the engine installs a posted sink into. Null by
     // default — structural absence of a sink keeps the tap inert.
-    void on_wire(wire_tap cb) { m_on_wire = std::move(cb); }
+    void on_wire(wire_tap cb)
+    {
+        m_on_wire = std::move(cb);
+    }
 
 private:
     void wire_lower()
@@ -152,8 +157,6 @@ inline constexpr bool is_recording_channel_v<recording_channel<Lower>> = true;
 // The lossless decorator over the erased multi-transport channel is itself a byte_channel:
 // the seven-verb conformance is pinned so the decorated channel composes anywhere a bare one
 // does.
-static_assert(plexus::io::byte_channel<
-                      plexus::io::recording_channel<plexus::io::polymorphic_byte_channel>>,
-              "recording_channel must satisfy byte_channel — check the seven verbs");
+static_assert(plexus::io::byte_channel<plexus::io::recording_channel<plexus::io::polymorphic_byte_channel>>, "recording_channel must satisfy byte_channel — check the seven verbs");
 
 #endif

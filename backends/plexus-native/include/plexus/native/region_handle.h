@@ -39,13 +39,15 @@ public:
     [[nodiscard]] std::size_t size() const noexcept;
 
     // True for a live mapping, false for an empty or moved-from handle.
-    [[nodiscard]] bool valid() const noexcept { return m_base != nullptr; }
+    [[nodiscard]] bool valid() const noexcept
+    {
+        return m_base != nullptr;
+    }
 
 private:
     friend class posix_shm_region_broker;
 
-    region_handle(int fd, void *base, std::size_t length, std::string name,
-                  bool owns_name) noexcept;
+    region_handle(int fd, void *base, std::size_t length, std::string name, bool owns_name) noexcept;
 
     // Always munmaps, closes the fd, and unlinks the name only when this handle
     // owns it. noexcept + idempotent: nulls the members so a second invocation

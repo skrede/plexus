@@ -61,8 +61,7 @@ inline std::byte *write_subscribe_head(std::byte *p, const subscribe_request &re
 // Decode the trailing flag-gated QoS region into req (untrusted input): a present region must
 // match the fixed size EXACTLY and stay within the per-callsite cap, else false (consumed is
 // advanced on success only, so a malformed region never over-reads).
-inline bool read_subscribe_qos(std::span<const std::byte> payload, std::size_t &consumed,
-                               subscribe_request &req)
+inline bool read_subscribe_qos(std::span<const std::byte> payload, std::size_t &consumed, subscribe_request &req)
 {
     auto region = read_length_prefixed<uint16_t>(payload, consumed);
     if(!region)
@@ -86,8 +85,7 @@ inline bool read_subscribe_qos(std::span<const std::byte> payload, std::size_t &
 
 inline std::vector<std::byte> encode_subscribe_request(const subscribe_request &req)
 {
-    auto total =
-            detail::subscribe_request_fixed_prefix + 2 + req.fqn.size() + 2 + req.type_name.size();
+    auto total = detail::subscribe_request_fixed_prefix + 2 + req.fqn.size() + 2 + req.type_name.size();
     if(req.has_qos)
         total += 2 + detail::k_qos_region_size; // uint16_t length prefix + the fixed region
     std::vector<std::byte> buf(total);
@@ -122,8 +120,7 @@ inline std::optional<subscribe_request> decode_subscribe_request(std::span<const
     auto type_name_span = read_length_prefixed<uint16_t>(payload, consumed);
     if(!type_name_span || type_name_span->size() > detail::k_max_type_name)
         return std::nullopt;
-    req.type_name.assign(reinterpret_cast<const char *>(type_name_span->data()),
-                         type_name_span->size());
+    req.type_name.assign(reinterpret_cast<const char *>(type_name_span->data()), type_name_span->size());
 
     // No trailing bytes => the QoS region is absent and req.qos stays defaulted (a v3 producer
     // never wrote it). A present region is decoded under the bounds gate.
@@ -136,8 +133,7 @@ inline std::vector<std::byte> encode_subscribe_response(const subscribe_response
 {
     // A permissive degraded-accept appends the trailing degraded_flags byte; every other
     // response is the byte-identical 9-byte layout.
-    std::vector<std::byte> buf(resp.has_degraded ? subscribe_response_size + 1
-                                                 : subscribe_response_size);
+    std::vector<std::byte> buf(resp.has_degraded ? subscribe_response_size + 1 : subscribe_response_size);
     wire::detail::write_u64(buf.data(), resp.topic_hash);
     wire::detail::write_u8(buf.data() + 8, static_cast<uint8_t>(resp.status));
     if(resp.has_degraded)
@@ -145,14 +141,11 @@ inline std::vector<std::byte> encode_subscribe_response(const subscribe_response
     return buf;
 }
 
-inline std::optional<subscribe_response>
-decode_subscribe_response(std::span<const std::byte> payload)
+inline std::optional<subscribe_response> decode_subscribe_response(std::span<const std::byte> payload)
 {
     if(payload.size() < subscribe_response_size)
         return std::nullopt;
-    subscribe_response resp{
-            .topic_hash = wire::detail::read_u64(payload.data()),
-            .status     = static_cast<subscribe_status>(wire::detail::read_u8(payload.data() + 8))};
+    subscribe_response resp{.topic_hash = wire::detail::read_u64(payload.data()), .status = static_cast<subscribe_status>(wire::detail::read_u8(payload.data() + 8))};
     // The optional trailing degraded byte: present iff the response carried more than the 9-byte
     // floor. A bare 9-byte response from a v4 peer maps to "no degradation".
     if(payload.size() > subscribe_response_size)
@@ -170,8 +163,7 @@ inline std::vector<std::byte> encode_unsubscribe_request(const unsubscribe_reque
     return buf;
 }
 
-inline std::optional<unsubscribe_request>
-decode_unsubscribe_request(std::span<const std::byte> payload)
+inline std::optional<unsubscribe_request> decode_unsubscribe_request(std::span<const std::byte> payload)
 {
     if(payload.size() < detail::unsubscribe_request_size)
         return std::nullopt;
@@ -186,14 +178,11 @@ inline std::vector<std::byte> encode_unsubscribe_response(const unsubscribe_resp
     return buf;
 }
 
-inline std::optional<unsubscribe_response>
-decode_unsubscribe_response(std::span<const std::byte> payload)
+inline std::optional<unsubscribe_response> decode_unsubscribe_response(std::span<const std::byte> payload)
 {
     if(payload.size() < detail::unsubscribe_response_size)
         return std::nullopt;
-    return unsubscribe_response{
-            .topic_hash = wire::detail::read_u64(payload.data()),
-            .status = static_cast<unsubscribe_status>(wire::detail::read_u8(payload.data() + 8))};
+    return unsubscribe_response{.topic_hash = wire::detail::read_u64(payload.data()), .status = static_cast<unsubscribe_status>(wire::detail::read_u8(payload.data() + 8))};
 }
 }
 

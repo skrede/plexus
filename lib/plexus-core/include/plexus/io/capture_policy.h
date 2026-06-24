@@ -50,11 +50,20 @@ struct topic_capture_rule
 class capture_policy
 {
 public:
-    void set_default(topic_capture_rule rule) { m_default = rule; }
+    void set_default(topic_capture_rule rule)
+    {
+        m_default = rule;
+    }
 
-    topic_capture_rule default_rule() const noexcept { return m_default; }
+    topic_capture_rule default_rule() const noexcept
+    {
+        return m_default;
+    }
 
-    void set_topic(std::uint64_t hash, topic_capture_rule rule) { m_rules[hash] = rule; }
+    void set_topic(std::uint64_t hash, topic_capture_rule rule)
+    {
+        m_rules[hash] = rule;
+    }
 
     topic_capture_rule rule_for(std::uint64_t hash) const noexcept
     {
@@ -73,7 +82,10 @@ public:
 
     // The inert-when-unused short-circuit: false iff no topic selects payload-or-above and
     // no data-path observer is registered.
-    bool any_active() const noexcept { return m_observers_present > 0 || !m_rules.empty(); }
+    bool any_active() const noexcept
+    {
+        return m_observers_present > 0 || !m_rules.empty();
+    }
 
     // Does this topic want a payload encode for THIS record? True iff fidelity reaches
     // payload AND the decimation test admits the record this tick. Mutates the per-topic
@@ -95,13 +107,19 @@ public:
         return true;
     }
 
-    void add_observer() noexcept { ++m_observers_present; }
+    void add_observer() noexcept
+    {
+        ++m_observers_present;
+    }
     void remove_observer() noexcept
     {
         if(m_observers_present > 0)
             --m_observers_present;
     }
-    std::size_t observers_present() const noexcept { return m_observers_present; }
+    std::size_t observers_present() const noexcept
+    {
+        return m_observers_present;
+    }
 
 private:
     topic_capture_rule                                    m_default{};

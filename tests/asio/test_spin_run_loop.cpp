@@ -68,14 +68,12 @@ struct spin_loopback
                 [this](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([this](std::span<const std::byte> b)
-                                      { received.push_back(str_of(b)); });
+                    accepted->on_data([this](std::span<const std::byte> b) { received.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until([this] { return server.port() != 0; });
 
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch,
-                                const plexus::io::endpoint &) { dialed = std::move(ch); });
+        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
         pump_until([this] { return dialed != nullptr && accepted != nullptr; });
     }
@@ -113,8 +111,7 @@ void round_trips_at(std::uint32_t spin_budget)
 
 }
 
-TEST_CASE("spin_run_loop drives a live udp round-trip end-to-end at the default budget",
-          "[asio][spin]")
+TEST_CASE("spin_run_loop drives a live udp round-trip end-to-end at the default budget", "[asio][spin]")
 {
     round_trips_at(pasio::spin_run_loop::default_spin_budget);
 }

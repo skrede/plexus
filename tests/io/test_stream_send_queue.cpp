@@ -2,8 +2,7 @@
 
 using namespace stream_send_queue_fixture;
 
-TEST_CASE("stream_send_queue copies caller bytes into an owned node on enqueue",
-          "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue copies caller bytes into an owned node on enqueue", "[io][stream_send_queue]")
 {
     recorder          rec;
     stream_send_queue q{rec.sink()};
@@ -19,8 +18,7 @@ TEST_CASE("stream_send_queue copies caller bytes into an owned node on enqueue",
     REQUIRE(rec.calls[0][0] == bytes_of({1, 2, 3}));
 }
 
-TEST_CASE("stream_send_queue keeps at most one send-sink invocation outstanding",
-          "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue keeps at most one send-sink invocation outstanding", "[io][stream_send_queue]")
 {
     // The first enqueue drives immediately and alone; the next two park behind the
     // in-flight turn and gather into the NEXT turn. At most ONE turn is outstanding at a
@@ -67,8 +65,7 @@ TEST_CASE("stream_send_queue drains in FIFO order across a burst", "[io][stream_
     REQUIRE_FALSE(q.sending());
 }
 
-TEST_CASE("stream_send_queue close() clears a pending queue and guards a late completion",
-          "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue close() clears a pending queue and guards a late completion", "[io][stream_send_queue]")
 {
     recorder          rec;
     stream_send_queue q{rec.sink()};

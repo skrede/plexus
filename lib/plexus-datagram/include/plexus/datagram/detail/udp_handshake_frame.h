@@ -49,15 +49,10 @@ struct udp_handshake
 // alloc after warm-up). seq is 0: the handshake predates the dedup/ARQ sequence. The
 // inner frame is [hs_type, channel_mode, isn_lo, isn_hi] so the acceptor learns the class
 // AND the peer's per-session ISN; the ISN is little-endian.
-inline void encode_handshake_into(std::vector<std::byte> &out, udp_hs_type type,
-                                  udp_channel_mode mode        = udp_channel_mode::best_effort,
-                                  std::uint16_t    initial_seq = 0)
+inline void encode_handshake_into(std::vector<std::byte> &out, udp_hs_type type, udp_channel_mode mode = udp_channel_mode::best_effort, std::uint16_t initial_seq = 0)
 {
-    const std::byte inner[4]{static_cast<std::byte>(type), static_cast<std::byte>(mode),
-                             static_cast<std::byte>(initial_seq & 0xFF),
-                             static_cast<std::byte>((initial_seq >> 8) & 0xFF)};
-    wire::wrap_udp_into(out, wire::udp_envelope_kind::reliable_arq, 0,
-                        std::span<const std::byte>{inner, 4});
+    const std::byte inner[4]{static_cast<std::byte>(type), static_cast<std::byte>(mode), static_cast<std::byte>(initial_seq & 0xFF), static_cast<std::byte>((initial_seq >> 8) & 0xFF)};
+    wire::wrap_udp_into(out, wire::udp_envelope_kind::reliable_arq, 0, std::span<const std::byte>{inner, 4});
 }
 
 // Recognize a handshake control frame: a reliable_arq datagram whose inner frame is the
@@ -71,12 +66,10 @@ inline void encode_handshake_into(std::vector<std::byte> &out, udp_hs_type type,
 inline std::optional<udp_handshake> decode_handshake(std::span<const std::byte> datagram)
 {
     auto dec = wire::unwrap_udp(datagram);
-    if(!dec || dec->kind != wire::udp_envelope_kind::reliable_arq || dec->frame.empty() ||
-       dec->frame.size() == 3 || dec->frame.size() > 4)
+    if(!dec || dec->kind != wire::udp_envelope_kind::reliable_arq || dec->frame.empty() || dec->frame.size() == 3 || dec->frame.size() > 4)
         return std::nullopt;
     const auto v = std::to_integer<std::uint8_t>(dec->frame[0]);
-    if(v != static_cast<std::uint8_t>(udp_hs_type::request) &&
-       v != static_cast<std::uint8_t>(udp_hs_type::response))
+    if(v != static_cast<std::uint8_t>(udp_hs_type::request) && v != static_cast<std::uint8_t>(udp_hs_type::response))
         return std::nullopt;
     auto mode = udp_channel_mode::best_effort;
     if(dec->frame.size() >= 2)
@@ -88,8 +81,7 @@ inline std::optional<udp_handshake> decode_handshake(std::span<const std::byte> 
     }
     std::uint16_t isn = 0;
     if(dec->frame.size() == 4)
-        isn = static_cast<std::uint16_t>(std::to_integer<std::uint16_t>(dec->frame[2]) |
-                                         (std::to_integer<std::uint16_t>(dec->frame[3]) << 8));
+        isn = static_cast<std::uint16_t>(std::to_integer<std::uint16_t>(dec->frame[2]) | (std::to_integer<std::uint16_t>(dec->frame[3]) << 8));
     return udp_handshake{static_cast<udp_hs_type>(v), mode, isn};
 }
 

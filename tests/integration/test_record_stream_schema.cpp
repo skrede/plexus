@@ -4,8 +4,7 @@
 
 using namespace record_stream_fixture;
 
-TEST_CASE("recording_sink captures synthetic edges through the recorder to a byte_sink",
-          "[record_stream][recorder]")
+TEST_CASE("recording_sink captures synthetic edges through the recorder to a byte_sink", "[record_stream][recorder]")
 {
     in_memory_byte_sink sink;
     std::uint64_t       tick = 0;
@@ -54,28 +53,22 @@ TEST_CASE("recording_sink captures synthetic edges through the recorder to a byt
     REQUIRE(out[2].category == record_category::sample);
     REQUIRE(out[2].topic_hash == plexus::wire::fqn_topic_hash("sensor/imu"));
     REQUIRE(out[2].publication_sequence == 9);
-    const std::string got{reinterpret_cast<const char *>(out[2].payload.data()),
-                          out[2].payload.size()};
+    const std::string got{reinterpret_cast<const char *>(out[2].payload.data()), out[2].payload.size()};
     REQUIRE(got == body);
 }
 
-TEST_CASE("record stream round-trips the opaque schema table and crypto position offline",
-          "[record_stream]")
+TEST_CASE("record stream round-trips the opaque schema table and crypto position offline", "[record_stream]")
 {
     record_stream_writer w;
     in_memory_byte_sink  sink;
 
-    const std::array<std::byte, 4> blob_a{std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
-                                          std::byte{0x04}};
+    const std::array<std::byte, 4> blob_a{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04}};
     const std::array<std::byte, 2> blob_b{std::byte{0xFE}, std::byte{0xED}};
 
-    const std::array<type_schema_entry, 2> rows{
-            type_schema_entry{0xC0DEu, "vendor.Imu", "enc/a", "Imu.schema", "schema/a", blob_a},
-            type_schema_entry{0xBEEFu, "vendor.Gps", "enc/b", "Gps.schema", "schema/b", blob_b}};
+    const std::array<type_schema_entry, 2> rows{type_schema_entry{0xC0DEu, "vendor.Imu", "enc/a", "Imu.schema", "schema/a", blob_a},
+                                                type_schema_entry{0xBEEFu, "vendor.Gps", "enc/b", "Gps.schema", "schema/b", blob_b}};
 
-    sink.write(w.begin_stream(99u, make_node(7), topic_capture_rule{},
-                              std::span<const type_schema_entry>{rows},
-                              capture_crypto_position::ciphertext));
+    sink.write(w.begin_stream(99u, make_node(7), topic_capture_rule{}, std::span<const type_schema_entry>{rows}, capture_crypto_position::ciphertext));
 
     record_stream_reader r{sink.bytes()};
     stream_definitions   defs;
@@ -94,13 +87,11 @@ TEST_CASE("record stream round-trips the opaque schema table and crypto position
         REQUIRE(got.message_encoding == src.message_encoding);
         REQUIRE(got.schema_name == src.schema_name);
         REQUIRE(got.schema_encoding == src.schema_encoding);
-        REQUIRE(got.schema_data ==
-                std::vector<std::byte>(src.schema_data.begin(), src.schema_data.end()));
+        REQUIRE(got.schema_data == std::vector<std::byte>(src.schema_data.begin(), src.schema_data.end()));
     }
 }
 
-TEST_CASE("record stream recovers an empty schema table with a default crypto position",
-          "[record_stream]")
+TEST_CASE("record stream recovers an empty schema table with a default crypto position", "[record_stream]")
 {
     record_stream_writer w;
     in_memory_byte_sink  sink;

@@ -54,12 +54,8 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, std::uint64_t fingerprint)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0,
-                                .local_fingerprint        = host_fingerprint{fingerprint}};
+    return handshake_fsm_config{
+            .self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0, .local_fingerprint = host_fingerprint{fingerprint}};
 }
 
 // A two-node inproc link whose two ends advertise the given fingerprints. The
@@ -72,9 +68,9 @@ struct link
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink}, resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink}, resp_messages{sink};
+    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx, resp_ctx;
     std::optional<session>                  requester, responder;
@@ -86,8 +82,7 @@ struct link
                 {
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
-                    responder.emplace(resp_ctx, ex, make_cfg(0x01, resp_fp), k_long_timeout,
-                                      resp_messages, resp_procedures, true, sink);
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01, resp_fp), k_long_timeout, resp_messages, resp_procedures, true, sink);
                     responder->start();
                 });
         transport.on_dialed(
@@ -95,15 +90,17 @@ struct link
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
-                    requester.emplace(req_ctx, ex, make_cfg(0x02, req_fp), k_long_timeout,
-                                      req_messages, req_procedures, false, sink);
+                    requester.emplace(req_ctx, ex, make_cfg(0x02, req_fp), k_long_timeout, req_messages, req_procedures, false, sink);
                     requester->start();
                 });
         transport.listen({"inproc", "svc"});
         transport.dial({"inproc", "svc"});
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 constexpr std::uint64_t k_host_a = 0xA11CE0FFEEull;
@@ -111,8 +108,7 @@ constexpr std::uint64_t k_host_b = 0xB0B0B0B0B0ull;
 
 }
 
-TEST_CASE("inproc peer_session: equal non-null fingerprints record same-host on both ends, looped",
-          "[integration][peer_session][same_host][inproc]")
+TEST_CASE("inproc peer_session: equal non-null fingerprints record same-host on both ends, looped", "[integration][peer_session][same_host][inproc]")
 {
     for(int iter = 0; iter < 50; ++iter)
     {
@@ -125,8 +121,7 @@ TEST_CASE("inproc peer_session: equal non-null fingerprints record same-host on 
     }
 }
 
-TEST_CASE("inproc peer_session: distinct fingerprints record NOT same-host (cross-host), looped",
-          "[integration][peer_session][same_host][inproc]")
+TEST_CASE("inproc peer_session: distinct fingerprints record NOT same-host (cross-host), looped", "[integration][peer_session][same_host][inproc]")
 {
     for(int iter = 0; iter < 50; ++iter)
     {
@@ -173,13 +168,10 @@ TEST_CASE("the same-host verdict gates shared-memory eligibility: a non-same-hos
     // eligibility gate denies the ring acquire. The verdict the session recorded is the
     // co-location fact the selection consumes (here mirrored through the pure decision).
     const host_fingerprint local{k_host_a}, peer{k_host_b};
-    CHECK(select_same_host_medium(peer, local, dispatch_hint::frequent) ==
-          same_host_medium::stream);
+    CHECK(select_same_host_medium(peer, local, dispatch_hint::frequent) == same_host_medium::stream);
 
     // The same-host pair WITH a hint is the only combination that resolves to shm.
-    CHECK(select_same_host_medium(host_fingerprint{k_host_a}, host_fingerprint{k_host_a},
-                                  dispatch_hint::frequent) == same_host_medium::shm);
+    CHECK(select_same_host_medium(host_fingerprint{k_host_a}, host_fingerprint{k_host_a}, dispatch_hint::frequent) == same_host_medium::shm);
     // Same-host but NO hint stays on the stream (the hint gates the attempt).
-    CHECK(select_same_host_medium(host_fingerprint{k_host_a}, host_fingerprint{k_host_a},
-                                  dispatch_hint::none) == same_host_medium::stream);
+    CHECK(select_same_host_medium(host_fingerprint{k_host_a}, host_fingerprint{k_host_a}, dispatch_hint::none) == same_host_medium::stream);
 }

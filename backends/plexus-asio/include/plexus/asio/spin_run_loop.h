@@ -38,8 +38,7 @@ public:
     // with the knob for a latency-maximalist consumer to opt up.
     static constexpr std::uint32_t default_spin_budget = 256;
 
-    explicit spin_run_loop(::asio::io_context &io,
-                           std::uint32_t       spin_budget = default_spin_budget) noexcept
+    explicit spin_run_loop(::asio::io_context &io, std::uint32_t spin_budget = default_spin_budget) noexcept
             : m_io(io)
             , m_spin_budget(spin_budget)
     {
@@ -81,7 +80,10 @@ public:
         }
     }
 
-    std::uint32_t spin_budget() const noexcept { return m_spin_budget; }
+    std::uint32_t spin_budget() const noexcept
+    {
+        return m_spin_budget;
+    }
 
 private:
     ::asio::io_context &m_io;

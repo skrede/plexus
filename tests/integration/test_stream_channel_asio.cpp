@@ -48,12 +48,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
         opts.so_sndbuf = static_cast<std::size_t>(default_snd) / 2;
         opts.so_rcvbuf = static_cast<std::size_t>(default_rcv) / 2;
         opts.keepalive = true;
-        pasio::asio_channel ch{io,
-                               std::move(client),
-                               stream::stream_inbound_config{},
-                               pio::congestion::block,
-                               pio::egress_capacity::bounded_default(),
-                               opts};
+        pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::bounded_default(), opts};
 
         ::asio::socket_base::send_buffer_size    snd;
         ::asio::socket_base::receive_buffer_size rcv;
@@ -70,8 +65,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
     // A default channel: the buffers stay at the kernel default and keepalive stays off.
     {
         auto [peer, client] = connected_pair();
-        pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{},
-                               pio::congestion::block};
+        pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{}, pio::congestion::block};
 
         ::asio::socket_base::send_buffer_size    snd;
         ::asio::socket_base::receive_buffer_size rcv;
@@ -86,8 +80,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
     }
 }
 
-TEST_CASE("asio stream channel: a bad-magic byte run fires on_protocol_close(invalid_magic)",
-          "[integration][asio][hardening]")
+TEST_CASE("asio stream channel: a bad-magic byte run fires on_protocol_close(invalid_magic)", "[integration][asio][hardening]")
 {
     constexpr int k_iterations = 20;
     int           proven       = 0;

@@ -29,8 +29,7 @@ struct stub_broker
 {
     using region_handle = stub_region_handle;
 
-    region_status create(std::string_view /*name*/, std::size_t /*bytes*/,
-                         const create_options & /*opts*/, region_handle &out)
+    region_status create(std::string_view /*name*/, std::size_t /*bytes*/, const create_options & /*opts*/, region_handle &out)
     {
         out.mapped = true;
         return region_status::ok;
@@ -54,11 +53,20 @@ struct stub_broker
 // disarm clears it.
 struct stub_notifier
 {
-    void signal() { ++signals; }
+    void signal()
+    {
+        ++signals;
+    }
 
-    void arm(plexus::detail::move_only_function<void()> drain) { m_drain = std::move(drain); }
+    void arm(plexus::detail::move_only_function<void()> drain)
+    {
+        m_drain = std::move(drain);
+    }
 
-    void disarm() { m_drain = nullptr; }
+    void disarm()
+    {
+        m_drain = nullptr;
+    }
 
     int                                        signals = 0;
     plexus::detail::move_only_function<void()> m_drain;
@@ -69,8 +77,7 @@ static_assert(notifier<stub_notifier>, "stub_notifier must satisfy notifier");
 
 }
 
-TEST_CASE("seams: a stub broker satisfies region_broker and round-trips create/attach",
-          "[shm][seams]")
+TEST_CASE("seams: a stub broker satisfies region_broker and round-trips create/attach", "[shm][seams]")
 {
     stub_broker        broker;
     stub_region_handle h{};

@@ -7,8 +7,7 @@
 
 namespace pio = plexus::shm;
 
-TEST_CASE("shm.same_host_roundtrip the machine fingerprint is deterministic and non-null",
-          "[shm][same_host_roundtrip]")
+TEST_CASE("shm.same_host_roundtrip the machine fingerprint is deterministic and non-null", "[shm][same_host_roundtrip]")
 {
     const plexus::io::host_fingerprint a = plexus::native::read_machine_fingerprint();
     const plexus::io::host_fingerprint b = plexus::native::read_machine_fingerprint();

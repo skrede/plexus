@@ -51,9 +51,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0x1A7E10u;
     opts.dial_eagerly = eager;
     return opts;
@@ -117,8 +115,7 @@ TEST_CASE("late join: a publisher that joins after the subscriber's standing dem
         inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
 
         std::vector<std::string> got;
-        inproc_subscriber s{a, "topic",
-                            [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber        s{a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         a.listen({"inproc", "host-a:5000"});
         ex.drain();
 
@@ -176,8 +173,7 @@ TEST_CASE("late join: a subscriber that joins after the publisher is already pre
         // demand, and B reacts to the in-band subscribe — no user action on join timing.
         inproc_node              a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
         std::vector<std::string> got;
-        inproc_subscriber s{a, "topic",
-                            [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber        s{a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         a.listen({"inproc", "host-a:5000"});
         REQUIRE(pump_until(ex, [&] { return a.router().is_connected(id_b); }));
         // Let A's standing subscribe demand round-trip to B and register the fanout before

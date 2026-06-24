@@ -2,8 +2,7 @@
 
 using namespace attach_policy_fixture;
 
-TEST_CASE("io.attach_policy admits a matching key-id with a valid recomputed proof",
-          "[io][attach_policy]")
+TEST_CASE("io.attach_policy admits a matching key-id with a valid recomputed proof", "[io][attach_policy]")
 {
     const auto          material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
@@ -40,13 +39,11 @@ TEST_CASE("io.attach_policy refuses an unknown / removed key-id", "[io][attach_p
     REQUIRE_FALSE(policy.decide(facts));
 }
 
-TEST_CASE("io.attach_policy dual single-key keystores each admit their own peer (rotation)",
-          "[io][attach_policy]")
+TEST_CASE("io.attach_policy dual single-key keystores each admit their own peer (rotation)", "[io][attach_policy]")
 {
     const auto          old_key = material_of(0xA0);
     const auto          new_key = material_of(0xB0);
-    psk_keystore_policy policy{{{key_id_of(0x01), old_key}, {key_id_of(0x02), new_key}},
-                               fake_hmac()};
+    psk_keystore_policy policy{{{key_id_of(0x01), old_key}, {key_id_of(0x02), new_key}}, fake_hmac()};
 
     auto old_facts  = facts_for(0x01, attach_role::initiator);
     auto old_proof  = proof_for(old_key, old_facts);
@@ -65,8 +62,7 @@ TEST_CASE("io.attach_policy dual single-key keystores each admit their own peer 
     REQUIRE_FALSE(policy.decide(crossed));
 }
 
-TEST_CASE("io.attach_policy refuses a proof presented under the other role (reflection)",
-          "[io][attach_policy]")
+TEST_CASE("io.attach_policy refuses a proof presented under the other role (reflection)", "[io][attach_policy]")
 {
     const auto          material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
@@ -81,15 +77,8 @@ TEST_CASE("io.attach_policy refuses a proof presented under the other role (refl
     REQUIRE_FALSE(policy.decide(as_responder));
 }
 
-TEST_CASE("io.attach_policy keystore ctor throws on material below the minimum length",
-          "[io][attach_policy]")
+TEST_CASE("io.attach_policy keystore ctor throws on material below the minimum length", "[io][attach_policy]")
 {
-    REQUIRE_THROWS(
-            [&]
-            {
-                psk_keystore_policy bad{{{key_id_of(0x01), material_of(0xA0, 15)}}, fake_hmac()};
-            }());
-    REQUIRE_NOTHROW(
-            [&]
-            { psk_keystore_policy ok{{{key_id_of(0x01), material_of(0xA0, 16)}}, fake_hmac()}; }());
+    REQUIRE_THROWS([&] { psk_keystore_policy bad{{{key_id_of(0x01), material_of(0xA0, 15)}}, fake_hmac()}; }());
+    REQUIRE_NOTHROW([&] { psk_keystore_policy ok{{{key_id_of(0x01), material_of(0xA0, 16)}}, fake_hmac()}; }());
 }

@@ -35,8 +35,7 @@ decode_result round_trip(std::uint64_t v)
 TEST_CASE("varint round-trips the full u64 value space", "[wire][varint]")
 {
     for(std::uint64_t v :
-        {std::uint64_t{0}, std::uint64_t{1}, std::uint64_t{0x7F}, std::uint64_t{0x80},
-         std::uint64_t{300}, std::uint64_t{0xDEADBEEF}, std::numeric_limits<std::uint64_t>::max()})
+        {std::uint64_t{0}, std::uint64_t{1}, std::uint64_t{0x7F}, std::uint64_t{0x80}, std::uint64_t{300}, std::uint64_t{0xDEADBEEF}, std::numeric_limits<std::uint64_t>::max()})
     {
         const auto r = round_trip(v);
         REQUIRE(r.value.has_value());

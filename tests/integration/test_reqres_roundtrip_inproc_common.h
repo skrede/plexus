@@ -72,23 +72,27 @@ struct rpc_link
     procedure_forwarder::peer caller_peer{caller_tx, "provider-node"};
     procedure_forwarder::peer provider_peer{provider_tx, "caller-node"};
 
-    rpc_link() { wire(); }
+    rpc_link()
+    {
+        wire();
+    }
 
     void wire()
     {
         caller_tx.connect_to(provider_rx.local_endpoint());
         provider_tx.connect_to(caller_rx.local_endpoint());
 
-        provider_router.on_rpc_request([this](std::span<const std::byte> inner)
-                                       { provider.deliver_request(provider_peer, inner); });
-        caller_router.on_rpc_response([this](std::span<const std::byte> inner)
-                                      { caller.deliver_response(caller_peer, inner); });
+        provider_router.on_rpc_request([this](std::span<const std::byte> inner) { provider.deliver_request(provider_peer, inner); });
+        caller_router.on_rpc_response([this](std::span<const std::byte> inner) { caller.deliver_response(caller_peer, inner); });
 
         provider_rx.on_data([this](std::span<const std::byte> f) { provider_router.route(f); });
         caller_rx.on_data([this](std::span<const std::byte> f) { caller_router.route(f); });
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 }

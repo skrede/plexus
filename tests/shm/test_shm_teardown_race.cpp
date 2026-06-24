@@ -70,8 +70,7 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
-                     0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -93,8 +92,7 @@ bool flood(const std::string &fqn, coord *c)
 {
     posix_shm_region_broker broker;
     region_handle           ctrl, slab;
-    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
-       broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
+    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
 
     pio::broadcast_ring ring;
@@ -102,8 +100,7 @@ bool flood(const std::string &fqn, coord *c)
         return false;
 
     pio::broadcast_ring::claim_result claim;
-    if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::best_effort,
-                              plexus::io::congestion::drop_newest, claim) == pio::loan_status::ok)
+    if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim) == pio::loan_status::ok)
     {
         std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
         ring.commit(claim.position, sizeof(k_payload));
@@ -126,8 +123,7 @@ bool flood(const std::string &fqn, coord *c)
 
 }
 
-TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state",
-          "[shm][teardown_race]")
+TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state", "[shm][teardown_race]")
 {
     const std::string        fqn  = "topic.teardown." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
@@ -150,15 +146,11 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state",
 
         posix_shm_region_broker broker;
         region_handle           ctrl, slab;
-        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
-                              pio::create_options{}, ctrl) == pio::region_status::ok);
-        REQUIRE(broker.create(slab_name(fqn),
-                              pio::slab_region_bytes(geom.cell_count, geom.slot_capacity),
-                              pio::create_options{}, slab) == pio::region_status::ok);
+        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
+        REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count,
-                                            geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
 
         ::asio::io_context io;
         // The channel + bridge live in a nested scope so their destruction order
@@ -166,16 +158,13 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state",
         // teardown the proof exercises; the explicit disarm() before scope exit is
         // the stop-first edge.
         {
-            plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
-            pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(
-                    ring, bridge, plexus::io::reliability::best_effort,
-                    plexus::io::congestion::drop_newest);
+            plexus::asio::shm::ring_notifier<test_policy>                   bridge(io, ring.notify_generation());
+            pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
             bridge.arm(
                     [&]
                     {
-                        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn
-                                deliver = [](plexus::wire_bytes<pio::shm_slot_owner>) {};
+                        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [](plexus::wire_bytes<pio::shm_slot_owner>) {};
                         channel.drain(deliver); // touches the subscriber -- must be alive here
                     });
 

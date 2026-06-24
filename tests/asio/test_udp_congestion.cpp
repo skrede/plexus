@@ -60,11 +60,7 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 // production uses) — not a mutable setter.
 inline plexus::datagram::detail::udp_arq_config small_window_arq(std::size_t window)
 {
-    return plexus::datagram::detail::udp_arq_config{.window         = window,
-                                                    .initial_rto    = ms{20},
-                                                    .min_rto        = ms{10},
-                                                    .max_rto        = ms{120},
-                                                    .max_retransmit = 12};
+    return plexus::datagram::detail::udp_arq_config{.window = window, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{120}, .max_retransmit = 12};
 }
 
 std::vector<std::byte> bytes_of(const std::string &s)
@@ -116,13 +112,15 @@ struct relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const { return front.local_endpoint().port(); }
+    [[nodiscard]] std::uint16_t port() const
+    {
+        return front.local_endpoint().port();
+    }
 
     [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
-        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq &&
-                wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
+        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
     }
 
     void to_server(std::span<const std::byte> dg)
@@ -166,8 +164,7 @@ struct relay
                                     if(ec)
                                         return;
                                     if(client_ep.port() != 0)
-                                        front.send_to(::asio::buffer(back_buf.data(), n),
-                                                      client_ep);
+                                        front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
                                     recv_back();
                                 });
     }
@@ -199,34 +196,28 @@ struct fixture
     std::vector<std::string>            delivered;
 
     fixture(pio::congestion cong, std::size_t window)
-            : server(io, pasio::udp_channel::default_max_payload,
-                     pasio::udp_transport::arq_type::default_ladder, small_window_arq(window), cong)
-            , client(io, pasio::udp_channel::default_max_payload, fast_hs, small_window_arq(window),
-                     cong)
+            : server(io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, small_window_arq(window), cong)
+            , client(io, pasio::udp_channel::default_max_payload, fast_hs, small_window_arq(window), cong)
     {
         server.on_accepted(
                 [this](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([this](std::span<const std::byte> b)
-                                      { delivered.push_back(str_of(b)); });
+                    accepted->on_data([this](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [this] { return server.port() != 0; });
 
         link = std::make_unique<relay>(io, server.port());
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
-        client.dial(
-                {"udpr", "127.0.0.1:" + std::to_string(link->port())}); // reliable-datagram mode
+        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
+        client.dial({"udpr", "127.0.0.1:" + std::to_string(link->port())}); // reliable-datagram mode
         pump_until(io, [this] { return dialed && accepted; });
     }
 };
 
 }
 
-TEST_CASE("udp congestion block: a full window back-pressures and every frame arrives in order",
-          "[udp][congestion]")
+TEST_CASE("udp congestion block: a full window back-pressures and every frame arrives in order", "[udp][congestion]")
 {
     constexpr int k_iterations = 100;
     int           proven       = 0;
@@ -265,8 +256,7 @@ TEST_CASE("udp congestion block: a full window back-pressures and every frame ar
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow keeps flowing",
-          "[udp][congestion]")
+TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow keeps flowing", "[udp][congestion]")
 {
     constexpr int k_iterations = 30;
     int           proven       = 0;
@@ -280,8 +270,8 @@ TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow
         REQUIRE(f.dialed != nullptr);
 
         // The concurrent best_effort pair (own transports on f.io).
-        pasio::udp_transport be_server{f.io};
-        pasio::udp_transport be_client{f.io, pasio::udp_channel::default_max_payload, fast_hs};
+        pasio::udp_transport                be_server{f.io};
+        pasio::udp_transport                be_client{f.io, pasio::udp_channel::default_max_payload, fast_hs};
         std::unique_ptr<pasio::udp_channel> be_acc, be_dialed;
         std::optional<std::string>          be_got;
         be_server.on_accepted(
@@ -292,8 +282,7 @@ TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow
                 });
         be_server.listen({"udp", "127.0.0.1:0"});
         pump_until(f.io, [&] { return be_server.port() != 0; });
-        be_client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                            { be_dialed = std::move(ch); });
+        be_client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { be_dialed = std::move(ch); });
         be_client.dial({"udp", "127.0.0.1:" + std::to_string(be_server.port())});
         pump_until(f.io, [&] { return be_dialed && be_acc; });
         REQUIRE(be_dialed != nullptr);
@@ -339,8 +328,7 @@ TEST_CASE("udp congestion drop: a window-full frame is shed at the publisher", "
 
         // drop never enqueues — the backpressure queue stays empty; the overrun is shed.
         REQUIRE(f.dialed->backpressured() == 0);
-        REQUIRE(f.dialed->dropped_count() ==
-                static_cast<std::size_t>(n - 2)); // 3 shed past the window of 2
+        REQUIRE(f.dialed->dropped_count() == static_cast<std::size_t>(n - 2)); // 3 shed past the window of 2
 
         // The admitted (windowed) frames still deliver; the shed ones never arrive. Give
         // the path time to settle, then assert fewer than n were delivered (the guarantee
@@ -354,8 +342,7 @@ TEST_CASE("udp congestion drop: a window-full frame is shed at the publisher", "
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_block stall signal",
-          "[udp][congestion]")
+TEST_CASE("udp congestion block: the bounded queue at its cap surfaces a would_block stall signal", "[udp][congestion]")
 {
     // A standalone channel (no real peer, so NO acks slide the window) with a small window
     // AND a small backpressure BYTE budget: the window fills, then the queue fills to its
@@ -447,18 +434,17 @@ TEST_CASE("udp_server send: a transient per-datagram send error is counted, neve
         server.start(::asio::ip::udp::endpoint{::asio::ip::udp::v4(), 0});
 
         const ::asio::ip::udp::endpoint dest{::asio::ip::make_address_v4("127.0.0.1"), 9};
-        std::vector<std::byte> oversized(70000, std::byte{0x5A}); // past the 65507 IPv4 UDP max
-        constexpr int          n = 4;
+        std::vector<std::byte>          oversized(70000, std::byte{0x5A}); // past the 65507 IPv4 UDP max
+        constexpr int                   n = 4;
         for(int i = 0; i < n; ++i)
             server.send_to(oversized, dest);
 
         pump_until(io, [&] { return server.send_error_count() == static_cast<std::size_t>(n); });
 
-        REQUIRE(server.send_error_count() ==
-                static_cast<std::size_t>(n));     // every oversized send counted
-        REQUIRE_FALSE(err.has_value());           // on_error NEVER fired per datagram
-        REQUIRE(server.queued_send_bytes() == 0); // the drain chained past every failure
-        REQUIRE(server.is_open());                // a transient error never closes the socket
+        REQUIRE(server.send_error_count() == static_cast<std::size_t>(n)); // every oversized send counted
+        REQUIRE_FALSE(err.has_value());                                    // on_error NEVER fired per datagram
+        REQUIRE(server.queued_send_bytes() == 0);                          // the drain chained past every failure
+        REQUIRE(server.is_open());                                         // a transient error never closes the socket
     }
 }
 
@@ -495,7 +481,7 @@ TEST_CASE("udp congestion block: a sustained reliable load completes within a bo
     REQUIRE(f.delivered.size() == static_cast<std::size_t>(n)); // every frame arrived
     REQUIRE(f.delivered == sent);                               // in publish order
     REQUIRE(f.dialed->backpressured() == 0);                    // queue fully drained
-    REQUIRE(elapsed < std::chrono::seconds(8)); // within the bounded budget (no freeze)
+    REQUIRE(elapsed < std::chrono::seconds(8));                 // within the bounded budget (no freeze)
 }
 
 TEST_CASE("udp congestion block: a windowed reliable burst stays byte-bounded and DRAINS on ack "
@@ -537,7 +523,7 @@ TEST_CASE("udp congestion block: a windowed reliable burst stays byte-bounded an
                    return f.delivered.size() == static_cast<std::size_t>(n);
                });
 
-    REQUIRE_FALSE(err.has_value()); // the bounded byte budget never overflowed
+    REQUIRE_FALSE(err.has_value());                             // the bounded byte budget never overflowed
     REQUIRE(f.delivered.size() == static_cast<std::size_t>(n)); // FULL delivery, never partial
     REQUIRE(f.delivered == sent);                               // in publish order
     REQUIRE(f.dialed->backpressured() == 0);                    // the queue fully DRAINED on ack

@@ -30,12 +30,10 @@ TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fra
         // and a worst-case overhead ceiling, not a hardcoded number, so it tracks the
         // mtu_budget default rather than restating a stale 1400-era constant.
         constexpr std::size_t k_record_mtu          = ptls::dtls_channel::default_record_mtu;
-        constexpr std::size_t k_max_record_overhead = 37u +
-                plexus::wire::udp_envelope_overhead; // DTLS 1.2 AEAD-GCM record + udp envelope
-        const std::size_t cap = l.probe_one_record_ceiling(100, k_record_mtu);
-        REQUIRE(cap >= k_record_mtu -
-                        k_max_record_overhead); // within the overhead band below the record MTU
-        REQUIRE(cap < k_record_mtu);            // strictly below (overhead subtracted)
+        constexpr std::size_t k_max_record_overhead = 37u + plexus::wire::udp_envelope_overhead; // DTLS 1.2 AEAD-GCM record + udp envelope
+        const std::size_t     cap                   = l.probe_one_record_ceiling(100, k_record_mtu);
+        REQUIRE(cap >= k_record_mtu - k_max_record_overhead); // within the overhead band below the record MTU
+        REQUIRE(cap < k_record_mtu);                          // strictly below (overhead subtracted)
         observed_cap = cap;
 
         // The boundary frame is delivered intact AS ONE record (no fragmentation): the
@@ -54,9 +52,7 @@ TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fra
     REQUIRE(observed_cap > 0);
 }
 
-TEST_CASE(
-        "dtls.mtu: a low configured cap binds the single-record ceiling below the data-MTU, looped",
-        "[dtls][mtu]")
+TEST_CASE("dtls.mtu: a low configured cap binds the single-record ceiling below the data-MTU, looped", "[dtls][mtu]")
 {
     pdt::identity_fixture srv("cap_srv");
     pdt::identity_fixture cli("cap_cli");

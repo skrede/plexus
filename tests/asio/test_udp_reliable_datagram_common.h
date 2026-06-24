@@ -44,11 +44,7 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 
 inline plexus::datagram::detail::udp_arq_config fast_arq()
 {
-    return plexus::datagram::detail::udp_arq_config{.window         = 64,
-                                                    .initial_rto    = ms{20},
-                                                    .min_rto        = ms{10},
-                                                    .max_rto        = ms{80},
-                                                    .max_retransmit = 12};
+    return plexus::datagram::detail::udp_arq_config{.window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{80}, .max_retransmit = 12};
 }
 
 inline std::vector<std::byte> bytes_of(const std::string &s)

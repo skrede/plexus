@@ -67,7 +67,10 @@ struct lossy_relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const { return front.local_endpoint().port(); }
+    [[nodiscard]] std::uint16_t port() const
+    {
+        return front.local_endpoint().port();
+    }
 
     void recv_front()
     {
@@ -78,8 +81,7 @@ struct lossy_relay
                                          return;
                                      client_ep = from;
                                      if(!maybe_drop())
-                                         back.send_to(::asio::buffer(front_buf.data(), n),
-                                                      server_ep);
+                                         back.send_to(::asio::buffer(front_buf.data(), n), server_ep);
                                      recv_front();
                                  });
     }
@@ -92,8 +94,7 @@ struct lossy_relay
                                     if(ec)
                                         return;
                                     if(!maybe_drop() && client_ep.port() != 0)
-                                        front.send_to(::asio::buffer(back_buf.data(), n),
-                                                      client_ep);
+                                        front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
                                     recv_back();
                                 });
     }

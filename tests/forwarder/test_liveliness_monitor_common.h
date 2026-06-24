@@ -43,10 +43,8 @@ using monitor = plexus::io::liveliness_monitor<mock_policy, test_clock>;
 // cross a tick boundary and the test would stick — never fire.)
 constexpr auto k_period = k_tick_granularity * 3; // 300ms
 constexpr auto k_lease  = k_tick_granularity * 5; // 500ms
-static_assert(k_period >= k_tick_granularity,
-              "a deadline period below the tick granularity never crosses a tick");
-static_assert(k_lease >= k_tick_granularity,
-              "a lease below the tick granularity never crosses a tick");
+static_assert(k_period >= k_tick_granularity, "a deadline period below the tick granularity never crosses a tick");
+static_assert(k_lease >= k_tick_granularity, "a lease below the tick granularity never crosses a tick");
 
 constexpr int k_loops = 50;
 

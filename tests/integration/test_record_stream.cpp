@@ -13,8 +13,7 @@ TEST_CASE("record stream reserves the wire-record variant", "[record_stream]")
     REQUIRE(record_category::wire_frame != record_category::dropout);
 }
 
-TEST_CASE("record stream populates the wire variant with no ordinal reorder",
-          "[record_stream][wire]")
+TEST_CASE("record stream populates the wire variant with no ordinal reorder", "[record_stream][wire]")
 {
     // The wire tier reuses ordinal 11 — populating the slot adds only the byte source, never
     // an ordinal reorder. The format version reflects the self-describing preamble layout, not
@@ -23,8 +22,7 @@ TEST_CASE("record stream populates the wire variant with no ordinal reorder",
     STATIC_REQUIRE(plexus::io::recording::k_format_version == 2u);
 }
 
-TEST_CASE("record stream round-trips a wire frame byte-identically offline",
-          "[record_stream][wire]")
+TEST_CASE("record stream round-trips a wire frame byte-identically offline", "[record_stream][wire]")
 {
     record_stream_writer w;
     byte_ring            ring{64u * 1024u};
@@ -39,10 +37,8 @@ TEST_CASE("record stream round-trips a wire frame byte-identically offline",
         frame.push_back(static_cast<std::byte>(i & 0xffu));
 
     const node_id peer = make_node(9);
-    ring.try_push(
-            w.wire_frame(77u, wire_direction::out, 42u, peer, std::span<const std::byte>{frame}));
-    ring.try_push(
-            w.wire_frame(78u, wire_direction::in, 43u, peer, std::span<const std::byte>{frame}));
+    ring.try_push(w.wire_frame(77u, wire_direction::out, 42u, peer, std::span<const std::byte>{frame}));
+    ring.try_push(w.wire_frame(78u, wire_direction::in, 43u, peer, std::span<const std::byte>{frame}));
 
     while(ring.drain(sink, 4096))
         ;
@@ -69,8 +65,7 @@ TEST_CASE("record stream round-trips a wire frame byte-identically offline",
     REQUIRE(std::vector<std::byte>(out[1].payload.begin(), out[1].payload.end()) == frame);
 }
 
-TEST_CASE("record stream interleaves a wire frame with the other categories",
-          "[record_stream][wire]")
+TEST_CASE("record stream interleaves a wire frame with the other categories", "[record_stream][wire]")
 {
     record_stream_writer w;
     byte_ring            ring{64u * 1024u};
@@ -81,13 +76,10 @@ TEST_CASE("record stream interleaves a wire frame with the other categories",
 
     message_info info{};
     info.publication_sequence = 3;
-    ring.try_push(w.sample(11u, plexus::wire::fqn_topic_hash("topic/a"), info, 0u, false,
-                           capture_fidelity::payload, bytes_of(std::string{"payload"})));
+    ring.try_push(w.sample(11u, plexus::wire::fqn_topic_hash("topic/a"), info, 0u, false, capture_fidelity::payload, bytes_of(std::string{"payload"})));
 
-    std::vector<std::byte> frame{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE},
-                                 std::byte{0xEF}};
-    ring.try_push(w.wire_frame(2u, wire_direction::out, 1u, make_node(9),
-                               std::span<const std::byte>{frame}));
+    std::vector<std::byte> frame{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}};
+    ring.try_push(w.wire_frame(2u, wire_direction::out, 1u, make_node(9), std::span<const std::byte>{frame}));
 
     drop_event de{};
     de.cause = drop_cause::drop_newest;

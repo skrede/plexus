@@ -51,8 +51,7 @@ TEST_CASE("udp envelope: best_effort overhead is exactly 3 bytes", "[udp][envelo
     REQUIRE(wire.size() == udp_envelope_overhead + frame.size());
 }
 
-TEST_CASE("udp envelope: wrap/unwrap round-trips kind, seq, and the inner frame byte-identically",
-          "[udp][envelope]")
+TEST_CASE("udp envelope: wrap/unwrap round-trips kind, seq, and the inner frame byte-identically", "[udp][envelope]")
 {
     const auto frame = bytes({0x01, 0x02, 0x03, 0x04, 0x05});
     const auto wire  = wrap_udp(udp_envelope_kind::best_effort, 1234, frame);
@@ -76,12 +75,10 @@ TEST_CASE("udp envelope: an empty inner frame round-trips (header only)", "[udp]
     REQUIRE(dec->seq == 7u);
 }
 
-TEST_CASE("udp envelope: seq round-trips across the full uint16 range, big-endian on the wire",
-          "[udp][envelope]")
+TEST_CASE("udp envelope: seq round-trips across the full uint16 range, big-endian on the wire", "[udp][envelope]")
 {
     const auto frame = bytes({0x99});
-    for(std::uint16_t seq : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{255},
-                             std::uint16_t{256}, std::uint16_t{32768}, std::uint16_t{65535}})
+    for(std::uint16_t seq : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{255}, std::uint16_t{256}, std::uint16_t{32768}, std::uint16_t{65535}})
     {
         const auto wire = wrap_udp(udp_envelope_kind::best_effort, seq, frame);
         // Big-endian: seq high byte at offset 1, low byte at offset 2.
@@ -94,8 +91,7 @@ TEST_CASE("udp envelope: seq round-trips across the full uint16 range, big-endia
     }
 }
 
-TEST_CASE("udp envelope: the kind discriminator distinguishes best_effort from reliable-ARQ",
-          "[udp][envelope]")
+TEST_CASE("udp envelope: the kind discriminator distinguishes best_effort from reliable-ARQ", "[udp][envelope]")
 {
     const auto frame = bytes({0x11, 0x22});
 
@@ -123,8 +119,7 @@ TEST_CASE("udp envelope: the FRAGMENTED bit is never set on encode this phase", 
     REQUIRE((static_cast<unsigned>(rel_wire[0]) & 0x3Fu) == 0u);
 }
 
-TEST_CASE("udp envelope: a datagram with the FRAGMENTED bit set decodes (reserved, not rejected)",
-          "[udp][envelope]")
+TEST_CASE("udp envelope: a datagram with the FRAGMENTED bit set decodes (reserved, not rejected)", "[udp][envelope]")
 {
     // Hand-craft a datagram with kind=0 and the FRAGMENTED bit set, plus a 2-byte frame.
     const auto wire = bytes({0x01, 0x00, 0x2A, 0xDE, 0xAD});
@@ -136,8 +131,7 @@ TEST_CASE("udp envelope: a datagram with the FRAGMENTED bit set decodes (reserve
     REQUIRE(dec->frame.size() == 2u);
 }
 
-TEST_CASE("udp envelope: a buffer shorter than the overhead unwraps to nullopt (fail-closed)",
-          "[udp][envelope]")
+TEST_CASE("udp envelope: a buffer shorter than the overhead unwraps to nullopt (fail-closed)", "[udp][envelope]")
 {
     REQUIRE_FALSE(unwrap_udp(bytes({})).has_value());
     REQUIRE_FALSE(unwrap_udp(bytes({0x00})).has_value());
@@ -146,8 +140,7 @@ TEST_CASE("udp envelope: a buffer shorter than the overhead unwraps to nullopt (
     REQUIRE(unwrap_udp(bytes({0x00, 0x00, 0x00})).has_value());
 }
 
-TEST_CASE("udp envelope: wrap_udp_into reuses the buffer and matches the allocating overload",
-          "[udp][envelope]")
+TEST_CASE("udp envelope: wrap_udp_into reuses the buffer and matches the allocating overload", "[udp][envelope]")
 {
     const auto             frame = bytes({0xCA, 0xFE, 0xBA, 0xBE});
     std::vector<std::byte> scratch;

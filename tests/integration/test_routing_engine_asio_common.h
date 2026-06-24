@@ -49,8 +49,7 @@ namespace pio   = plexus::io;
 using pio::endpoint;
 using pio::handshake_fsm_config;
 using pio::reconnect_config;
-using engine =
-        pio::routing_engine<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
+using engine = pio::routing_engine<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
 
 namespace routing_asio_fixture {
 
@@ -71,11 +70,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 inline plexus::node_id make_id(std::uint8_t seed)
@@ -87,8 +82,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 
 inline reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
 }
 
 // One asio engine on a shared io_context, listening on an ephemeral port. Member
@@ -106,15 +100,20 @@ struct asio_node
     asio_node(::asio::io_context &shared, std::uint8_t id_seed, bool eager, bool listen_now = true)
             : io(shared)
             , transport(shared)
-            , eng(transport, shared, make_cfg(id_seed), k_long_timeout, forever_cfg(), k_seed,
-                  sink, eager)
+            , eng(transport, shared, make_cfg(id_seed), k_long_timeout, forever_cfg(), k_seed, sink, eager)
     {
         if(listen_now)
             eng.listen({"tcp", "127.0.0.1:0"});
     }
 
-    void listen_on(std::uint16_t port) { eng.listen({"tcp", "127.0.0.1:" + std::to_string(port)}); }
-    endpoint listen_ep() const { return {"tcp", "127.0.0.1:" + std::to_string(transport.port())}; }
+    void listen_on(std::uint16_t port)
+    {
+        eng.listen({"tcp", "127.0.0.1:" + std::to_string(port)});
+    }
+    endpoint listen_ep() const
+    {
+        return {"tcp", "127.0.0.1:" + std::to_string(transport.port())};
+    }
 };
 
 // Reserve a free loopback port, then close it so a dial there is refused until a
@@ -141,8 +140,7 @@ inline void pump_until(::asio::io_context &io, Pred pred)
         io.poll();
 }
 
-inline void settle(::asio::io_context       &io,
-                   std::chrono::milliseconds window = std::chrono::milliseconds(30))
+inline void settle(::asio::io_context &io, std::chrono::milliseconds window = std::chrono::milliseconds(30))
 {
     auto bound = std::chrono::steady_clock::now() + window;
     while(std::chrono::steady_clock::now() < bound)

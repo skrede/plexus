@@ -53,8 +53,7 @@ public:
     // Inbound handshake_request. inbound_is_bootstrap marks a fresh inbound with no
     // counter-direction dial in flight (the common path under demand-driven lazy
     // dial): it completes inbound-only rather than stranding the session.
-    fsm_step_result on_request(const wire::handshake_request &req, bool inbound_is_bootstrap,
-                               const security::attach_facts &facts = {}) noexcept
+    fsm_step_result on_request(const wire::handshake_request &req, bool inbound_is_bootstrap, const security::attach_facts &facts = {}) noexcept
     {
         m_last_seen_their_protocol_version = req.protocol_version;
         if(auto gate = validate(req.protocol_version, req.id, req.fingerprint, facts))
@@ -64,8 +63,7 @@ public:
         return resolve_inbound(inbound_is_bootstrap);
     }
 
-    fsm_step_result on_response(const wire::handshake_response &resp,
-                                const security::attach_facts   &facts = {}) noexcept
+    fsm_step_result on_response(const wire::handshake_response &resp, const security::attach_facts &facts = {}) noexcept
     {
         m_last_seen_their_protocol_version = resp.protocol_version;
         if(auto gate = validate(resp.protocol_version, resp.id, resp.fingerprint, facts))
@@ -111,8 +109,11 @@ public:
         return {};
     }
 
-    peer_fsm_state state() const noexcept { return m_state; }
-    std::uint8_t   last_seen_their_protocol_version() const noexcept
+    peer_fsm_state state() const noexcept
+    {
+        return m_state;
+    }
+    std::uint8_t last_seen_their_protocol_version() const noexcept
     {
         return m_last_seen_their_protocol_version;
     }
@@ -120,19 +121,27 @@ public:
     // The peer's advertised same-host fingerprint, learned at the last validated
     // request/response. Null (zero) until a frame is validated, and the conservative
     // not-same-host value the session's is_same_host compare null-guards on.
-    host_fingerprint last_seen_peer_fingerprint() const noexcept { return m_peer_fingerprint; }
-    host_fingerprint local_fingerprint() const noexcept { return m_cfg.local_fingerprint; }
+    host_fingerprint last_seen_peer_fingerprint() const noexcept
+    {
+        return m_peer_fingerprint;
+    }
+    host_fingerprint local_fingerprint() const noexcept
+    {
+        return m_cfg.local_fingerprint;
+    }
 
     // The node-level admission gate (null = accept-any). The bridge reads it to decide
     // whether an attach is security-engaged.
-    const security::attach_policy *attach_policy() const noexcept { return m_cfg.attach_policy; }
+    const security::attach_policy *attach_policy() const noexcept
+    {
+        return m_cfg.attach_policy;
+    }
 
 private:
     // The exact-match protocol gate runs ahead of every compat / status check, and the
     // identity-collision gate catches an equal node_id at validation so dedup never sees
     // the equal case. Captures the learned peer id for the dedup arbitration.
-    std::optional<fsm_step_result> validate(std::uint8_t   peer_protocol_version,
-                                            const node_id &peer_id, std::uint64_t peer_fingerprint,
+    std::optional<fsm_step_result> validate(std::uint8_t peer_protocol_version, const node_id &peer_id, std::uint64_t peer_fingerprint,
                                             const security::attach_facts &facts = {}) noexcept
     {
         m_peer_id          = peer_id;
@@ -153,8 +162,7 @@ private:
     {
         m_inbound_pending = true;
         if(racing_outbound())
-            return m_complete_emitted ? accept_inbound_no_complete()
-                                      : complete_inbound(arbitrate_dedup());
+            return m_complete_emitted ? accept_inbound_no_complete() : complete_inbound(arbitrate_dedup());
         if(inbound_is_bootstrap)
             return complete_inbound(dedup_decision::none);
         m_state = peer_fsm_state::handshake_resolved;
@@ -173,23 +181,18 @@ private:
         auto dedup         = m_inbound_pending ? arbitrate_dedup() : dedup_decision::none;
         m_state            = peer_fsm_state::handshake_resolved;
         m_complete_emitted = true;
-        return {.action  = fsm_action::complete,
-                .outcome = handshake_outcome::accept_outbound,
-                .dedup   = dedup};
+        return {.action = fsm_action::complete, .outcome = handshake_outcome::accept_outbound, .dedup = dedup};
     }
 
     bool racing_outbound() const noexcept
     {
-        return m_state == peer_fsm_state::handshaking ||
-                m_state == peer_fsm_state::handshake_resolved;
+        return m_state == peer_fsm_state::handshaking || m_state == peer_fsm_state::handshake_resolved;
     }
     fsm_step_result complete_inbound(dedup_decision dedup) noexcept
     {
         m_state            = peer_fsm_state::handshake_resolved;
         m_complete_emitted = true;
-        return {.action  = fsm_action::complete,
-                .outcome = handshake_outcome::accept_inbound,
-                .dedup   = dedup};
+        return {.action = fsm_action::complete, .outcome = handshake_outcome::accept_inbound, .dedup = dedup};
     }
 
     static fsm_step_result accept_inbound_no_complete() noexcept
@@ -202,15 +205,12 @@ private:
     // validation, so the comparison is strict).
     dedup_decision arbitrate_dedup() const noexcept
     {
-        return m_cfg.self_id > m_peer_id ? dedup_decision::keep_outbound
-                                         : dedup_decision::keep_inbound;
+        return m_cfg.self_id > m_peer_id ? dedup_decision::keep_outbound : dedup_decision::keep_inbound;
     }
 
     bool is_version_compatible(std::uint8_t peer_major, std::uint8_t peer_minor) const noexcept
     {
-        return (peer_major > m_cfg.compatible_version_major) ||
-                (peer_major == m_cfg.compatible_version_major &&
-                 peer_minor >= m_cfg.compatible_version_minor);
+        return (peer_major > m_cfg.compatible_version_major) || (peer_major == m_cfg.compatible_version_major && peer_minor >= m_cfg.compatible_version_minor);
     }
 
     fsm_step_result abort_result(handshake_outcome reason) noexcept
@@ -231,12 +231,12 @@ private:
         return abort_result(handshake_outcome::reject_unauthorized);
     }
 
-    handshake_fsm_config  m_cfg;
-    node_id               m_peer_id{};
-    host_fingerprint m_peer_fingerprint{};
-    peer_fsm_state        m_state{peer_fsm_state::not_connected};
-    std::uint8_t          m_last_seen_their_protocol_version{0};
-    bool                  m_inbound_pending{false};
+    handshake_fsm_config m_cfg;
+    node_id              m_peer_id{};
+    host_fingerprint     m_peer_fingerprint{};
+    peer_fsm_state       m_state{peer_fsm_state::not_connected};
+    std::uint8_t         m_last_seen_their_protocol_version{0};
+    bool                 m_inbound_pending{false};
     // Latches true once a step has emitted complete. The matching second arrival of a
     // simultaneous connect skips re-emitting complete so the bridge installs forwarders
     // exactly once; on_torn_down clears it for a fresh cycle.

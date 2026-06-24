@@ -72,9 +72,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -104,11 +113,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -120,8 +125,7 @@ plexus::node_id make_id(std::uint8_t seed)
 
 reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 struct counted_payload
@@ -137,8 +141,7 @@ object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
     p.slot.refs    = 1;
     p.slot.release = [](loan_slot *s)
     {
-        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) -
-                                                          offsetof(counted_payload, slot));
+        auto *owner = reinterpret_cast<counted_payload *>(reinterpret_cast<std::byte *>(s) - offsetof(counted_payload, slot));
         ++owner->release_calls;
     };
     return object_carrier{0, tag, &p.value, 0, 0, &p.slot};
@@ -148,7 +151,10 @@ object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
 // observer-presence count untouched, so an unselected topic stays inert for it.
 struct lifecycle_only_observer final : plexus::io::observer
 {
-    bool observes_data_path() const override { return false; }
+    bool observes_data_path() const override
+    {
+        return false;
+    }
 };
 
 // Node A subscribes to node B (the publisher); B's loan path runs the capture gate. The
@@ -187,14 +193,15 @@ struct capture_net
         ex.drain();
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
     plexus::io::peer_session<manual_policy> *b_live_inbound()
     {
         plexus::io::peer_session<manual_policy> *found = nullptr;
-        b.registry().for_each_connected(
-                [&](const plexus::node_id &, plexus::io::peer_session<manual_policy> &s)
-                { found = &s; });
+        b.registry().for_each_connected([&](const plexus::node_id &, plexus::io::peer_session<manual_policy> &s) { found = &s; });
         return found;
     }
 
@@ -209,15 +216,17 @@ struct capture_net
                 [&]
                 {
                     ++encode_calls;
-                    return std::span<const std::byte>{
-                            reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
+                    return std::span<const std::byte>{reinterpret_cast<const std::byte *>(p.value.data()), p.value.size()};
                 },
                 b_inbound->session_id());
         drive();
     }
 };
 
-std::uint64_t topic_hash() { return plexus::wire::fqn_topic_hash(k_topic); }
+std::uint64_t topic_hash()
+{
+    return plexus::wire::fqn_topic_hash(k_topic);
+}
 
 // Run K publishes through B's gate and return the encode-count. Each payload uses a distinct
 // owned buffer so a stale view cannot mask a missing encode.
@@ -234,32 +243,27 @@ int publish_k(capture_net &net, int k)
 
 }
 
-TEST_CASE("capture gate: a metadata-only declaration forces no loan-path encode",
-          "[integration][capture]")
+TEST_CASE("capture gate: a metadata-only declaration forces no loan-path encode", "[integration][capture]")
 {
     constexpr int k = 5;
     manual_clock::reset();
     capture_net net;
-    net.b.capture().set_topic(topic_hash(),
-                              topic_capture_rule{.fidelity = capture_fidelity::metadata});
+    net.b.capture().set_topic(topic_hash(), topic_capture_rule{.fidelity = capture_fidelity::metadata});
 
     REQUIRE(publish_k(net, k) == 0);
 }
 
-TEST_CASE("capture gate: a payload-fidelity topic forces exactly one encode per publish",
-          "[integration][capture]")
+TEST_CASE("capture gate: a payload-fidelity topic forces exactly one encode per publish", "[integration][capture]")
 {
     constexpr int k = 5;
     manual_clock::reset();
     capture_net net;
-    net.b.capture().set_topic(topic_hash(),
-                              topic_capture_rule{.fidelity = capture_fidelity::payload});
+    net.b.capture().set_topic(topic_hash(), topic_capture_rule{.fidelity = capture_fidelity::payload});
 
     REQUIRE(publish_k(net, k) == k);
 }
 
-TEST_CASE("capture gate: an unselected topic with no observer forces no encode",
-          "[integration][capture]")
+TEST_CASE("capture gate: an unselected topic with no observer forces no encode", "[integration][capture]")
 {
     constexpr int k = 5;
     manual_clock::reset();
@@ -268,8 +272,7 @@ TEST_CASE("capture gate: an unselected topic with no observer forces no encode",
     REQUIRE(publish_k(net, k) == 0);
 }
 
-TEST_CASE("capture gate: wire on an inproc topic degrades to payload (one encode per publish)",
-          "[integration][capture]")
+TEST_CASE("capture gate: wire on an inproc topic degrades to payload (one encode per publish)", "[integration][capture]")
 {
     constexpr int k = 4;
     manual_clock::reset();
@@ -281,23 +284,18 @@ TEST_CASE("capture gate: wire on an inproc topic degrades to payload (one encode
     REQUIRE(publish_k(net, k) == k);
 }
 
-TEST_CASE("capture gate: count_n decimation keeps one encode per N publishes",
-          "[integration][capture]")
+TEST_CASE("capture gate: count_n decimation keeps one encode per N publishes", "[integration][capture]")
 {
     constexpr int           k = 9;
     constexpr std::uint32_t n = 3;
     manual_clock::reset();
     capture_net net;
-    net.b.capture().set_topic(topic_hash(),
-                              topic_capture_rule{.fidelity   = capture_fidelity::payload,
-                                                 .mode       = decimation_mode::count_n,
-                                                 .decimation = n});
+    net.b.capture().set_topic(topic_hash(), topic_capture_rule{.fidelity = capture_fidelity::payload, .mode = decimation_mode::count_n, .decimation = n});
 
     REQUIRE(publish_k(net, k) == k / static_cast<int>(n));
 }
 
-TEST_CASE("capture gate: the default time_window mechanism admits one record per elapsed window",
-          "[integration][capture]")
+TEST_CASE("capture gate: the default time_window mechanism admits one record per elapsed window", "[integration][capture]")
 {
     // The integration loan path reads the wall clock for the time-window test (the publish
     // path's own now_ns), which is not deterministically drivable from a test. The mechanism
@@ -309,10 +307,7 @@ TEST_CASE("capture gate: the default time_window mechanism admits one record per
     for(int run = 0; run < 3; ++run)
     {
         plexus::io::capture_policy policy;
-        policy.set_topic(hash,
-                         topic_capture_rule{.fidelity  = capture_fidelity::payload,
-                                            .mode      = decimation_mode::time_window,
-                                            .window_ns = window_ns});
+        policy.set_topic(hash, topic_capture_rule{.fidelity = capture_fidelity::payload, .mode = decimation_mode::time_window, .window_ns = window_ns});
 
         // Three windows, three records inside each at a fixed instant. The first record of each
         // window is admitted; the two in-window records that follow are not.
@@ -352,8 +347,7 @@ TEST_CASE("capture gate: the folded should_emit matches the dual gate across the
     {
         manual_clock::reset();
         capture_net net;
-        net.b.capture().set_topic(topic_hash(),
-                                  topic_capture_rule{.fidelity = capture_fidelity::payload});
+        net.b.capture().set_topic(topic_hash(), topic_capture_rule{.fidelity = capture_fidelity::payload});
 
         counted_payload p;
         p.value = "select-no-obs";
@@ -377,9 +371,7 @@ TEST_CASE("capture gate: the folded should_emit matches the dual gate across the
     }
 }
 
-TEST_CASE(
-        "capture gate: a lifecycle-only observer never admits payload posts on an unselected topic",
-        "[integration][capture]")
+TEST_CASE("capture gate: a lifecycle-only observer never admits payload posts on an unselected topic", "[integration][capture]")
 {
     constexpr int k = 4;
     manual_clock::reset();

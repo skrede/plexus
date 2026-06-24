@@ -14,8 +14,7 @@
 
 using plexus::io::epoch_source;
 
-TEST_CASE("epoch_source: mints strictly-distinct, non-zero epochs past the u8 boundary",
-          "[io][epoch_source]")
+TEST_CASE("epoch_source: mints strictly-distinct, non-zero epochs past the u8 boundary", "[io][epoch_source]")
 {
     epoch_source            well;
     std::set<std::uint64_t> seen;

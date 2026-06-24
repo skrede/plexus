@@ -49,8 +49,14 @@ public:
 class accept_any_peer_cred final : public peer_cred_policy
 {
 public:
-    [[nodiscard]] bool decide(const peer_cred &) const noexcept override { return true; }
-    [[nodiscard]] bool accepts_without_credentials() const noexcept override { return true; }
+    [[nodiscard]] bool decide(const peer_cred &) const noexcept override
+    {
+        return true;
+    }
+    [[nodiscard]] bool accepts_without_credentials() const noexcept override
+    {
+        return true;
+    }
 };
 
 // The shared default accept_any policy a listener binds when the caller injects none. A

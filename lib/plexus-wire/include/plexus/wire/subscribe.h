@@ -54,10 +54,10 @@ enum class subscribe_notification : uint8_t
 // io::subscriber_qos at the decode site, packing/unpacking requested_flags.
 struct subscribe_qos_region
 {
-    uint8_t  durability;      // {0=none, 1=latest, 2=all}
-    uint8_t  delivery_mode;   // {0=push, 1=pull}
-    uint32_t replay_depth;    // 0 => use the ring depth
-    uint8_t  requested_flags; // bit0=requires_source_identity, bit1=requested_reliability_reliable
+    uint8_t  durability;                  // {0=none, 1=latest, 2=all}
+    uint8_t  delivery_mode;               // {0=push, 1=pull}
+    uint32_t replay_depth;                // 0 => use the ring depth
+    uint8_t  requested_flags;             // bit0=requires_source_identity, bit1=requested_reliability_reliable
     uint64_t requested_deadline_ns;       // 0 = unset
     uint64_t requested_lease_ns;          // 0 = unset
     uint8_t  requested_priority;          // carry-only; default band 0
@@ -160,8 +160,7 @@ constexpr std::size_t k_qos_reserved_off     = 28;
 constexpr std::size_t k_qos_reserved_size    = 2;
 
 constexpr std::size_t k_qos_region_size = k_qos_reserved_off + k_qos_reserved_size;
-static_assert(k_qos_region_size == 1 + 1 + 4 + 1 + 8 + 8 + 1 + 4 + 2,
-              "the subscriber-QoS region must equal the sum of its fixed fields");
+static_assert(k_qos_region_size == 1 + 1 + 4 + 1 + 8 + 8 + 1 + 4 + 2, "the subscriber-QoS region must equal the sum of its fixed fields");
 static_assert(k_qos_region_size == 30);
 
 // The per-callsite policy lid on the attacker-controlled region length, mirroring

@@ -2,14 +2,12 @@
 
 using namespace datagram_replay_fixture;
 
-TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary",
-          "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary", "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
 
     wire_lower                                 recv_wire;
-    datagram_authenticated_channel<wire_lower> receiver(
-            recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+    datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     std::vector<std::byte> delivered;
     receiver.on_data([&](std::span<const std::byte> f) { delivered.assign(f.begin(), f.end()); });
@@ -24,12 +22,10 @@ TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary",
     {
         wire_lower                                 send_wire;
         derived_keys                               ek{.k_send = send_key, .k_recv = keys.k_recv};
-        datagram_authenticated_channel<wire_lower> sender(send_wire,
-                                                          aead_cipher_id::chacha20_poly1305, ek, e);
+        datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, ek, e);
 
         std::vector<std::byte> on_wire;
-        send_wire.m_sink = [&](std::span<const std::byte> b)
-        { on_wire.assign(b.begin(), b.end()); };
+        send_wire.m_sink = [&](std::span<const std::byte> b) { on_wire.assign(b.begin(), b.end()); };
         const auto frame = make_frame(7, "datagram-epoch-" + std::to_string(e));
         sender.send(frame);
 
@@ -43,16 +39,14 @@ TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary",
     REQUIRE(receiver.replay_count() == 0);
 }
 
-TEST_CASE("crypto.datagram_replay drops a datagram below the window floor as too-old",
-          "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay drops a datagram below the window floor as too-old", "[crypto][datagram_replay]")
 {
     const auto        keys        = fixed_keys();
     const std::size_t past_window = plexus::crypto::k_anti_replay_window_bits + 8;
     const auto        wire        = seal_datagrams(keys, past_window + 1);
 
     wire_lower                                 recv_wire;
-    datagram_authenticated_channel<wire_lower> receiver(
-            recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+    datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     int delivered = 0;
     receiver.on_data([&](std::span<const std::byte>) { ++delivered; });

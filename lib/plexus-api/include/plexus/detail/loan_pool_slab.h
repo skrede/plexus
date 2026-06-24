@@ -49,7 +49,10 @@ public:
         }
     }
 
-    ~loan_slab() { delete[] m_slots; }
+    ~loan_slab()
+    {
+        delete[] m_slots;
+    }
 
     loan_slab(const loan_slab &)            = delete;
     loan_slab &operator=(const loan_slab &) = delete;
@@ -90,7 +93,10 @@ public:
         m_free       = n;
     }
 
-    [[nodiscard]] std::size_t capacity() const noexcept { return m_capacity; }
+    [[nodiscard]] std::size_t capacity() const noexcept
+    {
+        return m_capacity;
+    }
 
 private:
     // Destroy the object in place and return its slot to the freelist. The node is recovered from
@@ -98,8 +104,7 @@ private:
     // producer's concrete type is known statically here, never a cast across an erased boundary.
     static void release_slot(io::loan_slot *control) noexcept
     {
-        node *n = reinterpret_cast<node *>(reinterpret_cast<std::byte *>(control) -
-                                           offsetof(node, control));
+        node *n = reinterpret_cast<node *>(reinterpret_cast<std::byte *>(control) - offsetof(node, control));
         std::launder(reinterpret_cast<T *>(&n->storage))->~T();
         control->object = nullptr;
         n->owner->push_free(n);

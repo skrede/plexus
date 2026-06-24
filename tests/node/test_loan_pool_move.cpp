@@ -2,8 +2,7 @@
 
 using namespace loan_pool_fixture;
 
-TEST_CASE("loan pool: a pool with an outstanding loan can be moved and the loan stays valid",
-          "[node][loan_pool]")
+TEST_CASE("loan pool: a pool with an outstanding loan can be moved and the loan stays valid", "[node][loan_pool]")
 {
     reset_counts();
 
@@ -36,12 +35,10 @@ TEST_CASE("loan pool: a pool with an outstanding loan can be moved and the loan 
     REQUIRE(reborrow->value == 22u);
     auto second = again.try_borrow(33u);
     REQUIRE(second);
-    REQUIRE_FALSE(
-            again.try_borrow(44u)); // capacity-2 pool exhausted, freelist intact across the moves
+    REQUIRE_FALSE(again.try_borrow(44u)); // capacity-2 pool exhausted, freelist intact across the moves
 }
 
-TEST_CASE("loan pool: move assignment re-homes outstanding loans onto the destination pool",
-          "[node][loan_pool]")
+TEST_CASE("loan pool: move assignment re-homes outstanding loans onto the destination pool", "[node][loan_pool]")
 {
     reset_counts();
     loan_pool<counted> dst{1};

@@ -7,8 +7,7 @@
 
 namespace plexus::native {
 
-region_handle::region_handle(int fd, void *base, std::size_t length, std::string name,
-                             bool owns_name) noexcept
+region_handle::region_handle(int fd, void *base, std::size_t length, std::string name, bool owns_name) noexcept
         : m_fd(fd)
         , m_base(base)
         , m_length(length)
@@ -50,7 +49,10 @@ region_handle &region_handle::operator=(region_handle &&other) noexcept
     return *this;
 }
 
-region_handle::~region_handle() { reclaim(); }
+region_handle::~region_handle()
+{
+    reclaim();
+}
 
 void region_handle::reclaim() noexcept
 {
@@ -72,6 +74,9 @@ std::span<std::byte> region_handle::bytes() const
     return {static_cast<std::byte *>(m_base), m_length};
 }
 
-std::size_t region_handle::size() const noexcept { return m_length; }
+std::size_t region_handle::size() const noexcept
+{
+    return m_length;
+}
 
 }

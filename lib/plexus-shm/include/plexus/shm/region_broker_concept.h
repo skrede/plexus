@@ -60,15 +60,13 @@ struct create_options
 // the predicate install is a bare call. Core holds ONLY this concept; the mechanism
 // is the backend's.
 template<typename T>
-concept region_broker =
-        requires(T &broker, std::string_view name, std::size_t bytes, const create_options &opts,
-                 typename T::region_handle                                 &out,
-                 plexus::detail::move_only_function<bool(std::string_view)> policy) {
-            typename T::region_handle;
-            { broker.create(name, bytes, opts, out) } -> std::same_as<region_status>;
-            { broker.attach(name, out) } -> std::same_as<region_status>;
-            broker.set_attach_policy(std::move(policy));
-        };
+concept region_broker = requires(T &broker, std::string_view name, std::size_t bytes, const create_options &opts, typename T::region_handle &out,
+                                 plexus::detail::move_only_function<bool(std::string_view)> policy) {
+    typename T::region_handle;
+    { broker.create(name, bytes, opts, out) } -> std::same_as<region_status>;
+    { broker.attach(name, out) } -> std::same_as<region_status>;
+    broker.set_attach_policy(std::move(policy));
+};
 
 }
 

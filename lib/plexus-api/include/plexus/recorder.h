@@ -61,14 +61,10 @@ public:
 
     // Constructed only by node.make_recorder. The engine/executor/byte_sink are borrowed and MUST
     // outlive the recorder. The crypto position records which wire-capture tap the stream used.
-    recorder(Engine &engine, typename Engine::executor_type executor, const node_id &id,
-             io::recording::byte_sink &sink, recorder_options opts, wire_crypto_position crypto)
+    recorder(Engine &engine, typename Engine::executor_type executor, const node_id &id, io::recording::byte_sink &sink, recorder_options opts, wire_crypto_position crypto)
             : m_engine(&engine)
             , m_executor(executor)
-            , m_block(std::make_shared<block>(sink, opts,
-                                              io::recording::flat_recorder::clock_fn{
-                                                      [] { return wire::now_timestamp_ns(); }},
-                                              preamble_scratch_bytes(opts.schemas)))
+            , m_block(std::make_shared<block>(sink, opts, io::recording::flat_recorder::clock_fn{[] { return wire::now_timestamp_ns(); }}, preamble_scratch_bytes(opts.schemas)))
             , m_sink(make_sink())
     {
         if(opts.mode == recording_mode::pre_buffer && opts.on_anomaly)
@@ -78,8 +74,7 @@ public:
             const auto rows = schema_rows(opts.schemas);
             // The on-disk ordinals of capture_crypto_position are pinned to the public
             // wire_crypto_position (cleartext=0, ciphertext=1), so the cast is a forward.
-            flat().open(id, m_engine->capture().default_rule(), rows,
-                        static_cast<io::recording::capture_crypto_position>(crypto));
+            flat().open(id, m_engine->capture().default_rule(), rows, static_cast<io::recording::capture_crypto_position>(crypto));
         }
         m_block->draining = true;
         m_block->rearm    = [blk = std::weak_ptr<block>(m_block), exec = &m_executor]
@@ -144,7 +139,10 @@ public:
 
     // Drive one bounded cooperative drain batch manually; returns true while work remains (the
     // self-re-posting task calls this on the consumer's turns).
-    bool pump() { return m_block->pump(); }
+    bool pump()
+    {
+        return m_block->pump();
+    }
 
     void flush()
     {
@@ -182,26 +180,18 @@ private:
     std::unique_ptr<io::observer> make_sink()
     {
         return std::make_unique<detail::recorder_variant_sink>(
-                *m_block, [engine = m_engine](std::uint64_t hash)
-                { return engine->capture().rule_for(hash).fidelity; },
-                [engine = m_engine](std::uint64_t hash)
-                { return engine->messages().producer_type_id(hash); });
+                *m_block, [engine = m_engine](std::uint64_t hash) { return engine->capture().rule_for(hash).fidelity; },
+                [engine = m_engine](std::uint64_t hash) { return engine->messages().producer_type_id(hash); });
     }
 
     // Translate the public schemas into the core preamble rows (field-for-field; open() copies the
     // bytes into the stream synchronously, so the views may alias opts.schemas).
-    static std::vector<io::recording::type_schema_entry>
-    schema_rows(const std::vector<type_schema> &schemas)
+    static std::vector<io::recording::type_schema_entry> schema_rows(const std::vector<type_schema> &schemas)
     {
         std::vector<io::recording::type_schema_entry> rows;
         rows.reserve(schemas.size());
         for(const type_schema &s : schemas)
-            rows.push_back({s.type_id,
-                            {},
-                            s.message_encoding,
-                            s.schema_name,
-                            s.schema_encoding,
-                            s.schema_data});
+            rows.push_back({s.type_id, {}, s.message_encoding, s.schema_name, s.schema_encoding, s.schema_data});
         return rows;
     }
 
@@ -212,12 +202,10 @@ private:
     {
         constexpr std::size_t k_default_scratch = 64u * 1024u;
         constexpr std::size_t k_header_margin   = 256u;
-        auto                  blob = [](std::size_t n) { return wire::varint_size(n) + n; };
-        std::size_t           need = k_header_margin + wire::varint_size(schemas.size());
+        auto                  blob              = [](std::size_t n) { return wire::varint_size(n) + n; };
+        std::size_t           need              = k_header_margin + wire::varint_size(schemas.size());
         for(const type_schema &s : schemas)
-            need += wire::varint_size(s.type_id) + blob(0) + blob(s.message_encoding.size()) +
-                    blob(s.schema_name.size()) + blob(s.schema_encoding.size()) +
-                    blob(s.schema_data.size());
+            need += wire::varint_size(s.type_id) + blob(0) + blob(s.message_encoding.size()) + blob(s.schema_name.size()) + blob(s.schema_encoding.size()) + blob(s.schema_data.size());
         return std::max(k_default_scratch, need);
     }
 

@@ -88,9 +88,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -119,11 +128,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -135,14 +140,12 @@ plexus::node_id make_id(std::uint8_t seed)
 
 reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 reconnect_config bounded_cfg(std::uint32_t max_attempts)
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            max_attempts, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), max_attempts, std::nullopt};
 }
 
 // A tiny logger that counts warn() calls — the close funnel emits exactly ONE warn
@@ -151,7 +154,10 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
 struct counting_logger final : plexus::log::logger
 {
     int  warns{0};
-    void warn(std::string_view) override { ++warns; }
+    void warn(std::string_view) override
+    {
+        ++warns;
+    }
 };
 
 // Frame a handshake response with a chosen status exactly as the wire codec does,
@@ -169,11 +175,7 @@ std::vector<std::byte> make_handshake_response(plexus::wire::handshake_status st
     resp.protocol_version              = plexus::wire::k_protocol_version;
     resp.status                        = status;
     auto                       payload = plexus::wire::encode_handshake_response(resp);
-    plexus::wire::frame_header hdr{.type         = plexus::wire::msg_type::handshake_resp,
-                                   .flags        = 0,
-                                   .session_id   = 0,
-                                   .timestamp_ns = 0,
-                                   .payload_len  = payload.size()};
+    plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::handshake_resp, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = payload.size()};
     return plexus::wire::encode_frame(hdr, payload);
 }
 
@@ -191,11 +193,7 @@ std::vector<std::byte> make_undecodable_frame()
 std::vector<std::byte> make_unknown_topic_frame(std::uint64_t session_id)
 {
     std::array<std::byte, 4>   body{};
-    plexus::wire::frame_header hdr{.type         = plexus::wire::msg_type::unidirectional,
-                                   .flags        = 0,
-                                   .session_id   = session_id,
-                                   .timestamp_ns = 0,
-                                   .payload_len  = body.size()};
+    plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = session_id, .timestamp_ns = 0, .payload_len = body.size()};
     return plexus::wire::encode_frame(hdr, body);
 }
 
@@ -251,7 +249,10 @@ struct two_node
         b.listen(ep_b);
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
     void advance(std::chrono::nanoseconds d)
     {
         manual_clock::advance(d);
@@ -264,17 +265,29 @@ struct two_node
 struct recording_drop_observer final : plexus::io::observer
 {
     std::vector<plexus::io::detail::drop_cause> seen;
-    void on_drop(const plexus::io::detail::drop_event &ev) override { seen.push_back(ev.cause); }
-    [[nodiscard]] bool any() const { return !seen.empty(); }
+    void                                        on_drop(const plexus::io::detail::drop_event &ev) override
+    {
+        seen.push_back(ev.cause);
+    }
+    [[nodiscard]] bool any() const
+    {
+        return !seen.empty();
+    }
 };
 
 // The no-op notifier the shm congestion fixture needs (it exercises the loan gate, not
 // the cross-process wake).
 struct null_notifier
 {
-    void signal() noexcept {}
-    void arm(plexus::detail::move_only_function<void()>) {}
-    void disarm() noexcept {}
+    void signal() noexcept
+    {
+    }
+    void arm(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void disarm() noexcept
+    {
+    }
 };
 
 static_assert(plexus::shm::notifier<null_notifier>);
@@ -287,12 +300,14 @@ struct backing_region
             : m_storage(bytes + plexus::shm::k_cache_line)
     {
         auto base    = reinterpret_cast<std::uintptr_t>(m_storage.data());
-        auto aligned = (base + plexus::shm::k_cache_line - 1) &
-                ~static_cast<std::uintptr_t>(plexus::shm::k_cache_line - 1);
-        m_data = reinterpret_cast<std::byte *>(aligned);
-        m_size = bytes;
+        auto aligned = (base + plexus::shm::k_cache_line - 1) & ~static_cast<std::uintptr_t>(plexus::shm::k_cache_line - 1);
+        m_data       = reinterpret_cast<std::byte *>(aligned);
+        m_size       = bytes;
     }
-    std::span<std::byte> span() const noexcept { return {m_data, m_size}; }
+    std::span<std::byte> span() const noexcept
+    {
+        return {m_data, m_size};
+    }
 
 private:
     std::vector<std::byte> m_storage;
@@ -307,7 +322,10 @@ class stub_region_handle
 {
 public:
     stub_region_handle() = default;
-    std::span<std::byte> bytes() const { return {}; }
+    std::span<std::byte> bytes() const
+    {
+        return {};
+    }
 };
 
 // The minimal region_broker the shm drop-edge oracle needs: shm_byte_channel borrows a
@@ -318,8 +336,7 @@ class stub_broker
 {
 public:
     using region_handle = stub_region_handle;
-    plexus::shm::region_status create(std::string_view, std::size_t,
-                                          const plexus::shm::create_options &, region_handle &)
+    plexus::shm::region_status create(std::string_view, std::size_t, const plexus::shm::create_options &, region_handle &)
     {
         return plexus::shm::region_status::failed;
     }
@@ -327,7 +344,9 @@ public:
     {
         return plexus::shm::region_status::not_found;
     }
-    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>) {}
+    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>)
+    {
+    }
 };
 
 static_assert(plexus::shm::region_broker<stub_broker>);
@@ -370,8 +389,7 @@ TEST_CASE("inproc drop seam: a REAL partner-end close drives an automatic re-dia
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("inproc drop seam: a clean tear_down on the dialer's OWN session drives no re-dial",
-          "[integration][drop_seam][inproc]")
+TEST_CASE("inproc drop seam: a clean tear_down on the dialer's OWN session drives no re-dial", "[integration][drop_seam][inproc]")
 {
     constexpr int k_iterations = 100;
     int           proven       = 0;
@@ -418,10 +436,9 @@ TEST_CASE("inproc drop seam: crossing a surrender bound marks is_dead and re-dia
         // A's B slot is bounded (max_attempts) so enough real drops surrender it; C
         // is forever, so it is the live co-resident peer the surrender must not touch.
         plexus::log::null_logger sink;
-        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts),
-                 k_seed, sink, false);
-        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine                   a(transport_a, ex, make_cfg(0xA1), k_long_timeout, bounded_cfg(k_max_attempts), k_seed, sink, false);
+        engine                   b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine                   c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
 
         plexus::node_id id_b = make_id(0xB2);
         plexus::node_id id_c = make_id(0xC3);
@@ -634,12 +651,11 @@ TEST_CASE("inproc drop seam: an engine-installed observer sees an unroutable inp
         transport_t                   transport_b{ex, bus};
 
         plexus::log::null_logger sink;
-        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine                   a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
         // B's engine is destroyed mid-test to make A's heartbeat target vanish, so it
         // lives in an optional A's slot outlives (no clock advance => no re-dial yet).
         std::optional<engine> b;
-        b.emplace(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink,
-                  false);
+        b.emplace(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
 
         plexus::node_id id_b = make_id(0xB2);
         endpoint        ep_b{"inproc", "node-b"};
@@ -694,8 +710,7 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         backing_region control{control_region_bytes(cells)};
         backing_region slab{slab_region_bytes(cells, slot)};
         broadcast_ring ring;
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) ==
-                loan_status::ok);
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) == loan_status::ok);
         null_notifier           notify;
         recording_drop_observer observer;
 
@@ -704,13 +719,10 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         // the shm congestion drop edge posts into the observer). The byte_channel wraps the
         // channel and owns the on_drop edge; the registry is borrowed only for its dtor
         // release, which is a no-op for this hand-built (never-acquired) ring.
-        shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort,
-                                           plexus::io::congestion::drop_newest);
-        stub_broker                broker;
-        shm_topic_registry<stub_broker, null_notifier> registry(
-                broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
-        shm_byte_channel<stub_broker, null_notifier> bytechan(
-                registry, channel, "shm-topic", plexus::io::endpoint{"shm", "shm-topic"});
+        shm_channel<null_notifier>                     channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+        stub_broker                                    broker;
+        shm_topic_registry<stub_broker, null_notifier> registry(broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+        shm_byte_channel<stub_broker, null_notifier>   bytechan(registry, channel, "shm-topic", plexus::io::endpoint{"shm", "shm-topic"});
         bytechan.on_drop([&](const plexus::io::detail::drop_event &ev) { observer.on_drop(ev); });
 
         std::uint32_t idx = 0;
@@ -719,9 +731,7 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         for(std::uint64_t i = 0; i < cells; ++i)
         {
             broadcast_ring::claim_result claim;
-            REQUIRE(ring.claim_with_policy(
-                            sizeof(std::uint32_t), plexus::io::reliability::best_effort,
-                            plexus::io::congestion::drop_newest, claim) == loan_status::ok);
+            REQUIRE(ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim) == loan_status::ok);
             const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
             std::memcpy(claim.slab.data(), &v, sizeof(v));
             REQUIRE(ring.commit(claim.position, sizeof(v)) == loan_status::ok);
@@ -773,33 +783,26 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         inproc_executor<manual_clock> ex{bus};
         transport_t                   transport{ex, bus};
         plexus::log::null_logger      sink;
-        engine eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        recording_drop_observer observer;
+        engine                        eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        recording_drop_observer       observer;
         eng.add_observer(observer);
 
         backing_region control{control_region_bytes(cells)};
         backing_region slab{slab_region_bytes(cells, slot)};
         broadcast_ring ring;
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) ==
-                loan_status::ok);
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) == loan_status::ok);
         null_notifier notify;
 
-        shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort,
-                                           plexus::io::congestion::drop_newest);
-        stub_broker                broker;
-        shm_topic_registry<stub_broker, null_notifier> registry(
-                broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+        shm_channel<null_notifier>                     channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+        stub_broker                                    broker;
+        shm_topic_registry<stub_broker, null_notifier> registry(broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
         // Erase the concrete shm channel behind the production polymorphic_byte_channel and
         // install the engine's posted drop_sink through the ERASED on_drop verb — exactly
         // the call wire_channel_drop makes for a muxed shm node. NO concrete on_drop is bound
         // by the test; remove either the erasure forward or the engine binding and this fails.
-        auto concrete = std::make_unique<shm_byte_channel<stub_broker, null_notifier>>(
-                registry, channel, "shm-topic", plexus::io::endpoint{"shm", "shm-topic"});
-        plexus::io::polymorphic_byte_channel erased(
-                std::make_unique<
-                        plexus::io::channel_adapter<shm_byte_channel<stub_broker, null_notifier>>>(
-                        std::move(concrete)));
+        auto concrete = std::make_unique<shm_byte_channel<stub_broker, null_notifier>>(registry, channel, "shm-topic", plexus::io::endpoint{"shm", "shm-topic"});
+        plexus::io::polymorphic_byte_channel erased(std::make_unique<plexus::io::channel_adapter<shm_byte_channel<stub_broker, null_notifier>>>(std::move(concrete)));
         erased.on_drop(eng.drop_sink());
 
         std::uint32_t idx = 0;
@@ -808,9 +811,7 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         for(std::uint64_t i = 0; i < cells; ++i)
         {
             broadcast_ring::claim_result claim;
-            REQUIRE(ring.claim_with_policy(
-                            sizeof(std::uint32_t), plexus::io::reliability::best_effort,
-                            plexus::io::congestion::drop_newest, claim) == loan_status::ok);
+            REQUIRE(ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim) == loan_status::ok);
             const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
             std::memcpy(claim.slab.data(), &v, sizeof(v));
             REQUIRE(ring.commit(claim.position, sizeof(v)) == loan_status::ok);

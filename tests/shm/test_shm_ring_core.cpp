@@ -2,8 +2,7 @@
 
 using namespace shm_ring_core_fixture;
 
-TEST_CASE("ring_sizing: ring_geometry_for trades depth for width under a ceiling",
-          "[shm][ring_sizing]")
+TEST_CASE("ring_sizing: ring_geometry_for trades depth for width under a ceiling", "[shm][ring_sizing]")
 {
     // Default deep-but-narrow ring for an unset / small declaration -- byte-identical
     // to the shipped default (reliable_preserving, capacity 16).
@@ -36,8 +35,7 @@ TEST_CASE("ring_sizing: the deep band depth is capacity-derived per mode", "[shm
     // (16 -> 32, 2 -> 4, 1 -> 2), never depth-17.
     for(auto [cap, depth] : {std::pair<std::uint32_t, std::uint64_t>{16u, 32u}, {2u, 4u}, {1u, 2u}})
     {
-        const ring_geometry g =
-                ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving, cap);
+        const ring_geometry g = ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving, cap);
         REQUIRE(g.cell_count == depth);
         REQUIRE(g.cell_count > cap);
         REQUIRE(g.slot_capacity == round_up_8(k_deep));
@@ -45,40 +43,31 @@ TEST_CASE("ring_sizing: the deep band depth is capacity-derived per mode", "[shm
 
     // wire_fallback reuses the reliable derivation at this layer (the bounded ring is
     // a reliable ring; the reroute is not a geometry concern).
-    REQUIRE(ring_geometry_for(k_deep, ring_geometry_mode::wire_fallback, 16u).cell_count ==
-            ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving, 16u).cell_count);
+    REQUIRE(ring_geometry_for(k_deep, ring_geometry_mode::wire_fallback, 16u).cell_count == ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving, 16u).cell_count);
 
     // best_effort_large admits depth == capacity (the low-memory deep band).
     for(auto [cap, depth] : {std::pair<std::uint32_t, std::uint64_t>{16u, 16u}, {2u, 2u}, {4u, 4u}})
     {
-        const ring_geometry g =
-                ring_geometry_for(k_deep, ring_geometry_mode::best_effort_large, cap);
+        const ring_geometry g = ring_geometry_for(k_deep, ring_geometry_mode::best_effort_large, cap);
         REQUIRE(g.cell_count == depth);
     }
 
     // A capacity of 0 resolves to the shipped capacity floor (k_max_consumers).
     REQUIRE(ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving, 0u).cell_count ==
-            ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving,
-                              static_cast<std::uint32_t>(k_max_consumers))
-                    .cell_count);
+            ring_geometry_for(k_deep, ring_geometry_mode::reliable_preserving, static_cast<std::uint32_t>(k_max_consumers)).cell_count);
 }
 
-TEST_CASE("ring_sizing: ring_memory_for is the pure byte cost of the derived ring",
-          "[shm][ring_sizing]")
+TEST_CASE("ring_sizing: ring_memory_for is the pure byte cost of the derived ring", "[shm][ring_sizing]")
 {
     for(std::uint32_t payload : {64u, 40000u, 131072u})
-        for(auto mode : {ring_geometry_mode::reliable_preserving,
-                         ring_geometry_mode::best_effort_large, ring_geometry_mode::wire_fallback})
+        for(auto mode : {ring_geometry_mode::reliable_preserving, ring_geometry_mode::best_effort_large, ring_geometry_mode::wire_fallback})
         {
             const ring_geometry g = ring_geometry_for(payload, mode, 8u);
-            REQUIRE(ring_memory_for(payload, mode, 8u) ==
-                    control_region_bytes(g.cell_count) +
-                            slab_region_bytes(g.cell_count, g.slot_capacity));
+            REQUIRE(ring_memory_for(payload, mode, 8u) == control_region_bytes(g.cell_count) + slab_region_bytes(g.cell_count, g.slot_capacity));
         }
 }
 
-TEST_CASE("ring_layout: the cross-process structs are lock-free standard-layout",
-          "[shm][ring_sizing]")
+TEST_CASE("ring_layout: the cross-process structs are lock-free standard-layout", "[shm][ring_sizing]")
 {
     STATIC_REQUIRE(std::atomic<std::uint64_t>::is_always_lock_free);
     STATIC_REQUIRE(std::atomic<std::uint32_t>::is_always_lock_free);
@@ -88,8 +77,7 @@ TEST_CASE("ring_layout: the cross-process structs are lock-free standard-layout"
     REQUIRE(k_cache_line == 64);
 }
 
-TEST_CASE("ring_core: claim/commit/consume round-trips a payload single-process",
-          "[shm][ring_core]")
+TEST_CASE("ring_core: claim/commit/consume round-trips a payload single-process", "[shm][ring_core]")
 {
     constexpr std::uint64_t k_cells      = 64;
     constexpr std::uint64_t k_slot       = 256;
@@ -99,8 +87,7 @@ TEST_CASE("ring_core: claim/commit/consume round-trips a payload single-process"
     backing_region slab(slab_region_bytes(k_cells, k_slot));
 
     broadcast_ring ring;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) ==
-            loan_status::ok);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) == loan_status::ok);
 
     std::uint32_t cursor_index = 0;
     REQUIRE(ring.register_cursor(cursor_index) == loan_status::ok);
@@ -116,8 +103,7 @@ TEST_CASE("ring_core: claim/commit/consume round-trips a payload single-process"
         const std::uint32_t value = 0xC0DE0000u | static_cast<std::uint32_t>(i);
 
         broadcast_ring::claim_result claim;
-        REQUIRE(ring.claim_with_policy(sizeof(value), plexus::io::reliability::reliable,
-                                       plexus::io::congestion::block, claim) == loan_status::ok);
+        REQUIRE(ring.claim_with_policy(sizeof(value), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) == loan_status::ok);
         std::memcpy(claim.slab.data(), &value, sizeof(value));
         REQUIRE(ring.commit(claim.position, sizeof(value)) == loan_status::ok);
 

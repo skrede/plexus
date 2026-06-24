@@ -24,8 +24,7 @@ namespace plexus::io::detail {
 template<typename C>
 std::unique_ptr<polymorphic_byte_channel> mux_wrap(std::unique_ptr<C> ch)
 {
-    return std::make_unique<polymorphic_byte_channel>(
-            std::make_unique<channel_adapter<C>>(std::move(ch)));
+    return std::make_unique<polymorphic_byte_channel>(std::make_unique<channel_adapter<C>>(std::move(ch)));
 }
 
 // Install one member's four completion sinks, each forwarding the wrapped channel / edge up to the
@@ -64,8 +63,7 @@ void wire_member(Mux &mux, M &m)
 // Append member I to the candidate array iff it serves ep.scheme within tier (the per-scheme,
 // per-tier eligibility filter). The local_fast_eligible flag is the member type's compile-time property.
 template<typename Mux, std::size_t I, typename Candidates>
-void mux_consider(const Mux &, const endpoint &ep, transport_kind tier, Candidates &out,
-                  std::size_t &count)
+void mux_consider(const Mux &, const endpoint &ep, transport_kind tier, Candidates &out, std::size_t &count)
 {
     using M = typename Mux::template member_type<I>;
     if(M::mux_tier != tier)
@@ -79,8 +77,7 @@ void mux_consider(const Mux &, const endpoint &ep, transport_kind tier, Candidat
 }
 
 template<typename Mux, typename Candidates, std::size_t... I>
-void mux_collect_candidates(const Mux &mux, const endpoint &ep, transport_kind tier,
-                            Candidates &out, std::size_t &count, std::index_sequence<I...>)
+void mux_collect_candidates(const Mux &mux, const endpoint &ep, transport_kind tier, Candidates &out, std::size_t &count, std::index_sequence<I...>)
 {
     (mux_consider<Mux, I>(mux, ep, tier, out, count), ...);
 }

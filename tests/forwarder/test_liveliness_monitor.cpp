@@ -19,9 +19,7 @@ TEST_CASE("liveliness monitor: a data gap beyond the deadline period fires exact
 
         const node_id       id         = make_id(0x11);
         const std::uint64_t topic_hash = 0xABCDull;
-        m.register_endpoint(id, topic_hash,
-                            static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),
-                            0);
+        m.register_endpoint(id, topic_hash, static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()), 0);
 
         m.stamp_data(id, topic_hash);
 
@@ -68,8 +66,7 @@ TEST_CASE("liveliness monitor: a presence gap beyond the lease fires exactly one
         m.start();
 
         const node_id id = make_id(0x22);
-        m.register_endpoint(id, 0xABCDull, 0,
-                            static_cast<std::uint64_t>(std::chrono::nanoseconds(k_lease).count()));
+        m.register_endpoint(id, 0xABCDull, 0, static_cast<std::uint64_t>(std::chrono::nanoseconds(k_lease).count()));
 
         m.stamp_seen(id);
 
@@ -121,8 +118,7 @@ TEST_CASE("liveliness monitor: the two stamps are distinct — a heartbeat refre
         const node_id       id         = make_id(0x33);
         const std::uint64_t topic_hash = 0xBEEFull;
         // L > P so the deadline lapses first; both periods >= the granularity.
-        m.register_endpoint(id, topic_hash,
-                            static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),
+        m.register_endpoint(id, topic_hash, static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),
                             static_cast<std::uint64_t>(std::chrono::nanoseconds(k_lease).count()));
 
         m.stamp_data(id, topic_hash);

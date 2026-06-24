@@ -91,8 +91,7 @@ TEST_CASE("udp segment: the marker wraps and strips a payload round-trip", "[udp
     REQUIRE(empty_inner->empty());
 }
 
-TEST_CASE("udp arq demux: peek classifies segment vs ack and rejects unknown/handshake markers",
-          "[udp][ack]")
+TEST_CASE("udp arq demux: peek classifies segment vs ack and rejects unknown/handshake markers", "[udp][ack]")
 {
     std::vector<std::byte> seg;
     wire::encode_udp_segment_into(seg, bytes_of({0xAA}));

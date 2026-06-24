@@ -11,22 +11,18 @@ struct recorded_fragment
     std::vector<std::byte> bytes;
 };
 
-std::vector<recorded_fragment> collect(std::span<const std::byte> payload, std::size_t budget,
-                                       bool aead_decorated = false)
+std::vector<recorded_fragment> collect(std::span<const std::byte> payload, std::size_t budget, bool aead_decorated = false)
 {
     std::vector<recorded_fragment> seen;
-    io::fragment_sink              sink =
-            [&seen](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> b)
-    { seen.push_back({idx, cnt, std::vector<std::byte>(b.begin(), b.end())}); };
-    const auto returned = io::split(payload, budget, /*msg_id*/ 1, sink, aead_decorated);
+    io::fragment_sink sink     = [&seen](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> b) { seen.push_back({idx, cnt, std::vector<std::byte>(b.begin(), b.end())}); };
+    const auto        returned = io::split(payload, budget, /*msg_id*/ 1, sink, aead_decorated);
     REQUIRE(returned == seen.size());
     return seen;
 }
 
 }
 
-TEST_CASE("the splitter fragments against the default budget and honors an upward override",
-          "[fragment][split][mtu]")
+TEST_CASE("the splitter fragments against the default budget and honors an upward override", "[fragment][split][mtu]")
 {
     // The splitter consults the mtu_budget the channel passes: at the conservative 1200-byte
     // default a payload above it fragments, and an explicit higher budget (the tunable knob)
@@ -34,9 +30,8 @@ TEST_CASE("the splitter fragments against the default budget and honors an upwar
     // silently clamped to the default.
     const std::vector<std::byte> payload(datagram::mtu_budget{}.max_payload * 4);
 
-    const auto at_default = collect(payload, datagram::mtu_budget{}.max_payload);
-    const auto at_override =
-            collect(payload, datagram::mtu_budget{.max_payload = 8192}.max_payload);
+    const auto at_default  = collect(payload, datagram::mtu_budget{}.max_payload);
+    const auto at_override = collect(payload, datagram::mtu_budget{.max_payload = 8192}.max_payload);
 
     REQUIRE(at_default.size() > 1);                // genuinely fragmented at 1200
     CHECK(at_override.size() < at_default.size()); // the larger budget fragments less
@@ -53,8 +48,7 @@ TEST_CASE("split against a budget yields one fragment when the payload fits", "[
     CHECK(frags[0].bytes.size() == 100);
 }
 
-TEST_CASE("split a payload just over the effective budget yields two fragments",
-          "[fragment][split]")
+TEST_CASE("split a payload just over the effective budget yields two fragments", "[fragment][split]")
 {
     const std::size_t            budget = 100;
     const std::size_t            eff    = io::effective_fragment_budget(budget);
@@ -68,8 +62,7 @@ TEST_CASE("split a payload just over the effective budget yields two fragments",
     CHECK(frags[1].bytes.size() == 1);
 }
 
-TEST_CASE("split a large payload yields N fragments, N-1 full-sized in index order",
-          "[fragment][split]")
+TEST_CASE("split a large payload yields N fragments, N-1 full-sized in index order", "[fragment][split]")
 {
     const std::size_t            budget = 200;
     const std::size_t            eff    = io::effective_fragment_budget(budget);
@@ -108,9 +101,7 @@ TEST_CASE("an AEAD-decorated split leaves room for the per-fragment seal overhea
 
     // The AEAD budget is strictly tighter than the plaintext budget, so a sealed fragment
     // sized to the plaintext budget would have overrun the MTU by exactly the seal overhead.
-    CHECK(io::effective_fragment_budget(budget, /*aead_decorated=*/true) +
-                  io::k_aead_fragment_overhead ==
-          io::effective_fragment_budget(budget, /*aead_decorated=*/false));
+    CHECK(io::effective_fragment_budget(budget, /*aead_decorated=*/true) + io::k_aead_fragment_overhead == io::effective_fragment_budget(budget, /*aead_decorated=*/false));
 }
 
 TEST_CASE("a non-AEAD split is byte-identical to the default path", "[fragment][split][aead]")

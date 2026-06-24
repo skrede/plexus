@@ -65,7 +65,10 @@ inline std::string to_string(std::span<const std::byte> b)
 // A counting logger: warn() bumps a counter, proving the warn-and-drop seam fires.
 struct counting_logger final : plexus::log::logger
 {
-    void        warn(std::string_view) override { ++count; }
+    void warn(std::string_view) override
+    {
+        ++count;
+    }
     std::size_t count{0};
 };
 
@@ -101,7 +104,10 @@ struct rpc_link
         wire();
     }
 
-    rpc_link() { wire(); }
+    rpc_link()
+    {
+        wire();
+    }
 
     void wire()
     {
@@ -110,16 +116,17 @@ struct rpc_link
         caller_tx.connect_to(provider_rx.local_endpoint());
         provider_tx.connect_to(caller_rx.local_endpoint());
 
-        provider_router.on_rpc_request([this](std::span<const std::byte> inner)
-                                       { provider.deliver_request(provider_peer, inner); });
-        caller_router.on_rpc_response([this](std::span<const std::byte> inner)
-                                      { caller.deliver_response(caller_peer, inner); });
+        provider_router.on_rpc_request([this](std::span<const std::byte> inner) { provider.deliver_request(provider_peer, inner); });
+        caller_router.on_rpc_response([this](std::span<const std::byte> inner) { caller.deliver_response(caller_peer, inner); });
 
         provider_rx.on_data([this](std::span<const std::byte> f) { provider_router.route(f); });
         caller_rx.on_data([this](std::span<const std::byte> f) { caller_router.route(f); });
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 // A capture sink recording every frame the forwarder sends.
@@ -128,8 +135,7 @@ struct capture
     explicit capture(inproc_executor<> &ex)
             : sink(ex)
     {
-        sink.on_data([this](std::span<const std::byte> d)
-                     { frames.emplace_back(d.begin(), d.end()); });
+        sink.on_data([this](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
     }
 
     inproc_channel<>                    sink;
@@ -151,8 +157,7 @@ inline std::size_t count_subscribes(const capture &cap)
     return n;
 }
 
-inline procedure_forwarder::peer make_peer(inproc_channel<> &tx, capture &cap,
-                                           std::string node_name)
+inline procedure_forwarder::peer make_peer(inproc_channel<> &tx, capture &cap, std::string node_name)
 {
     tx.connect_to(cap.sink.local_endpoint());
     return procedure_forwarder::peer{tx, std::move(node_name)};
@@ -160,16 +165,11 @@ inline procedure_forwarder::peer make_peer(inproc_channel<> &tx, capture &cap,
 
 // Synthesize a header-off rpc_response inner payload for an arbitrary corr_id (the
 // orphan probe feeds this straight to deliver_response, bypassing the link).
-inline std::vector<std::byte> make_response_inner(std::uint64_t corr_id, rpc_status status,
-                                                  std::span<const std::byte> ret)
+inline std::vector<std::byte> make_response_inner(std::uint64_t corr_id, rpc_status status, std::span<const std::byte> ret)
 {
-    plexus::wire::bidirectional_header hdr{.source = plexus::wire::endpoint_source_type::procedure,
-                                           .sequence       = 0,
-                                           .topic_hash     = 0,
-                                           .type_hash_1    = 0,
-                                           .type_hash_2    = 0,
-                                           .correlation_id = corr_id};
-    std::vector<std::byte>             out;
+    plexus::wire::bidirectional_header hdr{
+            .source = plexus::wire::endpoint_source_type::procedure, .sequence = 0, .topic_hash = 0, .type_hash_1 = 0, .type_hash_2 = 0, .correlation_id = corr_id};
+    std::vector<std::byte> out;
     plexus::wire::encode_rpc_response_into(out, hdr, status, ret);
     return out;
 }

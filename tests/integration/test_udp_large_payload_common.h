@@ -55,11 +55,7 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 // through the bounded congestion=block queue without exhausting retransmits over loopback.
 inline plexus::datagram::detail::udp_arq_config large_arq()
 {
-    return plexus::datagram::detail::udp_arq_config{.window         = 1024,
-                                                    .initial_rto    = ms{20},
-                                                    .min_rto        = ms{10},
-                                                    .max_rto        = ms{160},
-                                                    .max_retransmit = 40};
+    return plexus::datagram::detail::udp_arq_config{.window = 1024, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{160}, .max_retransmit = 40};
 }
 
 // A DELIBERATELY tiny send window so a many-fragment message has far more fragments than
@@ -68,11 +64,7 @@ inline plexus::datagram::detail::udp_arq_config large_arq()
 // envelope bit (a window-sized message never parks a fragment and would not exercise it).
 inline plexus::datagram::detail::udp_arq_config tiny_window_arq()
 {
-    return plexus::datagram::detail::udp_arq_config{.window         = 8,
-                                                    .initial_rto    = ms{20},
-                                                    .min_rto        = ms{10},
-                                                    .max_rto        = ms{160},
-                                                    .max_retransmit = 40};
+    return plexus::datagram::detail::udp_arq_config{.window = 8, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{160}, .max_retransmit = 40};
 }
 
 // A deterministic, position-dependent payload byte-checked against a regenerated oracle.

@@ -47,8 +47,7 @@ enum class ring_direction : std::uint8_t
 // applications that pick distinct namespaces compute DISTINCT region names for the
 // same topic. An EMPTY namespace is the no-fold default — byte-identical to the
 // namespace-less name.
-[[nodiscard]] inline std::string region_name_for(std::string_view fqn, ring_direction direction,
-                                                 std::string_view region_ns = "")
+[[nodiscard]] inline std::string region_name_for(std::string_view fqn, ring_direction direction, std::string_view region_ns = "")
 {
     if(region_ns.empty() && direction == ring_direction::request)
         return bare_hex(plexus::wire::fqn_topic_hash(fqn));

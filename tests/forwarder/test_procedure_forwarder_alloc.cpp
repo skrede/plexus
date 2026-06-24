@@ -15,20 +15,37 @@ struct sink_executor
 
 struct sink_channel
 {
-    explicit sink_channel(sink_executor &) {}
-    sink_channel(sink_executor &, std::error_code &) {}
+    explicit sink_channel(sink_executor &)
+    {
+    }
+    sink_channel(sink_executor &, std::error_code &)
+    {
+    }
 
     void send(std::span<const std::byte> d)
     {
         total_bytes += d.size();
         ++sends;
     }
-    void                 close() {}
-    plexus::io::endpoint remote_endpoint() const { return {}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
-    void on_closed(plexus::detail::move_only_function<void()>) {}
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
+    void close()
+    {
+    }
+    plexus::io::endpoint remote_endpoint() const
+    {
+        return {};
+    }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
+    {
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
 
     std::size_t total_bytes{0};
     std::size_t sends{0};
@@ -36,11 +53,21 @@ struct sink_channel
 
 struct sink_timer
 {
-    explicit sink_timer(sink_executor &) {}
-    sink_timer(sink_executor &, std::error_code &) {}
-    void expires_after(std::chrono::milliseconds) {}
-    void async_wait(plexus::detail::move_only_function<void(std::error_code)>) {}
-    void cancel() {}
+    explicit sink_timer(sink_executor &)
+    {
+    }
+    sink_timer(sink_executor &, std::error_code &)
+    {
+    }
+    void expires_after(std::chrono::milliseconds)
+    {
+    }
+    void async_wait(plexus::detail::move_only_function<void(std::error_code)>)
+    {
+    }
+    void cancel()
+    {
+    }
 };
 
 struct sink_policy
@@ -50,7 +77,10 @@ struct sink_policy
     using timer_type        = sink_timer;
     using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
+    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
+    {
+        fn();
+    }
 };
 
 static_assert(plexus::Policy<sink_policy>);
@@ -76,18 +106,17 @@ TEST_CASE("steady-state provider dispatch + reply framing allocates nothing", "[
     // A handler that replies with a fixed return span captured by reference: the
     // reply itself moves no heap (the body lives in the test frame).
     const std::string ret_body = "return-bytes";
-    provider.serve("svc", [&](std::span<const std::byte>, sink_forwarder::reply_fn &reply)
-                   { reply(rpc_status::success, as_bytes(ret_body)); });
+    provider.serve("svc", [&](std::span<const std::byte>, sink_forwarder::reply_fn &reply) { reply(rpc_status::success, as_bytes(ret_body)); });
 
     // The inbound request inner (header-off), built ONCE outside the gate and reused
     // every iteration, so the gate measures only the forwarder's decode + dispatch +
     // reply-framing path.
     const std::string                  param = "steady-param";
-    plexus::wire::bidirectional_header req_hdr{.source = plexus::wire::endpoint_source_type::caller,
-                                               .sequence    = 0,
-                                               .topic_hash  = plexus::wire::fqn_topic_hash("svc"),
-                                               .type_hash_1 = 0,
-                                               .type_hash_2 = 0,
+    plexus::wire::bidirectional_header req_hdr{.source         = plexus::wire::endpoint_source_type::caller,
+                                               .sequence       = 0,
+                                               .topic_hash     = plexus::wire::fqn_topic_hash("svc"),
+                                               .type_hash_1    = 0,
+                                               .type_hash_2    = 0,
                                                .correlation_id = 1};
     std::vector<std::byte>             req_inner;
     plexus::wire::encode_rpc_request_into(req_inner, req_hdr, as_bytes(param));

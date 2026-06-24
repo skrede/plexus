@@ -29,9 +29,9 @@ namespace plexus::test {
 // buffered to force the overrun probe.
 struct host_uart_state
 {
-    std::vector<std::byte> rx;        // bytes the next uart_read_bytes hands over
-    std::size_t            rx_pos{0}; // read cursor into rx
-    std::vector<std::byte> tx;        // bytes uart_write_bytes captured
+    std::vector<std::byte> rx;          // bytes the next uart_read_bytes hands over
+    std::size_t            rx_pos{0};   // read cursor into rx
+    std::vector<std::byte> tx;          // bytes uart_write_bytes captured
     std::size_t            buffered{0}; // value uart_get_buffered_data_len reports
 };
 
@@ -41,7 +41,10 @@ inline host_uart_state &uart_fixture()
     return state;
 }
 
-inline void reset_uart_fixture() { uart_fixture() = host_uart_state{}; }
+inline void reset_uart_fixture()
+{
+    uart_fixture() = host_uart_state{};
+}
 
 }
 

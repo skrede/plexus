@@ -28,7 +28,10 @@ struct xproc_outcome
     bool child_succeeded  = false;
     bool parent_succeeded = false;
 
-    bool ok() const noexcept { return child_succeeded && parent_succeeded; }
+    bool ok() const noexcept
+    {
+        return child_succeeded && parent_succeeded;
+    }
 };
 
 // Fork; run `child` in the child (its bool result is the child exit status);
@@ -71,13 +74,22 @@ public:
         ::shm_unlink(m_name.c_str());
     }
 
-    ~scoped_shm_name() { ::shm_unlink(m_name.c_str()); }
+    ~scoped_shm_name()
+    {
+        ::shm_unlink(m_name.c_str());
+    }
 
     scoped_shm_name(const scoped_shm_name &)            = delete;
     scoped_shm_name &operator=(const scoped_shm_name &) = delete;
 
-    const char        *c_str() const noexcept { return m_name.c_str(); }
-    const std::string &str() const noexcept { return m_name; }
+    const char *c_str() const noexcept
+    {
+        return m_name.c_str();
+    }
+    const std::string &str() const noexcept
+    {
+        return m_name;
+    }
 
 private:
     std::string m_name;

@@ -2,8 +2,7 @@
 
 using namespace history_ring_fixture;
 
-TEST_CASE("durability=all with replay_depth caps to the most-recent replay_depth frames",
-          "[history_ring][forwarder]")
+TEST_CASE("durability=all with replay_depth caps to the most-recent replay_depth frames", "[history_ring][forwarder]")
 {
     for(int iter = 0; iter < 50; ++iter)
     {
@@ -14,7 +13,7 @@ TEST_CASE("durability=all with replay_depth caps to the most-recent replay_depth
         auto              peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder fwd{sink};
+        forwarder                fwd{sink};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
         for(int i = 0; i < 5; ++i)
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));
@@ -32,8 +31,7 @@ TEST_CASE("durability=all with replay_depth caps to the most-recent replay_depth
     }
 }
 
-TEST_CASE("a depth-1 ring stays byte-identical to last-writer-wins (all/latest/none)",
-          "[history_ring][forwarder]")
+TEST_CASE("a depth-1 ring stays byte-identical to last-writer-wins (all/latest/none)", "[history_ring][forwarder]")
 {
     auto replay = [](durability mode)
     {
@@ -44,7 +42,7 @@ TEST_CASE("a depth-1 ring stays byte-identical to last-writer-wins (all/latest/n
         auto              peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder fwd{sink};
+        forwarder                fwd{sink};
         fwd.latch("topic"); // depth-1 convenience
         fwd.publish("topic", as_bytes(std::string{"v1"}));
         fwd.publish("topic", as_bytes(std::string{"v2"}));
@@ -69,5 +67,8 @@ TEST_CASE("a depth-1 ring stays byte-identical to last-writer-wins (all/latest/n
         REQUIRE(bodies.size() == 1);
         REQUIRE(bodies[0] == "v2");
     }
-    SECTION("none -> zero") { REQUIRE(replay(durability::none).empty()); }
+    SECTION("none -> zero")
+    {
+        REQUIRE(replay(durability::none).empty());
+    }
 }

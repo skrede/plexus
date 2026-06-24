@@ -63,11 +63,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // Synthesize a unidirectional data frame for "topic" carrying a chosen session_id,
@@ -88,7 +84,7 @@ inline std::vector<std::byte> make_data_frame(const std::string &payload, std::u
     plexus::log::null_logger sink;
     inproc_msg               framer{sink};
     inproc_channel<>         capture(ex);
-    inproc_channel<>  tx(ex);
+    inproc_channel<>         tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
     capture.on_data([&](std::span<const std::byte> f) { captured.assign(f.begin(), f.end()); });
@@ -115,10 +111,10 @@ struct tcp_link
     pasio::asio_transport transport{io};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{io, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink};
+    msg_forwarder            resp_messages{sink};
+    rpc_forwarder            req_procedures{io, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{io, k_long_timeout, sink};
 
     plexus::io::peer_context<pasio::asio_policy> req_ctx;   // the dialer slot's per-peer record
     plexus::io::peer_context<pasio::asio_policy> resp_ctx;  // the accepted slot's per-peer record
@@ -135,10 +131,8 @@ struct tcp_link
                 {
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
-                    responder.emplace(resp_ctx, io, make_cfg(0x01), timeout, resp_messages,
-                                      resp_procedures, true, sink);
-                    responder->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { resp_received.emplace_back(to_string(d)); });
+                    responder.emplace(resp_ctx, io, make_cfg(0x01), timeout, resp_messages, resp_procedures, true, sink);
+                    responder->on_message([this](std::string_view, std::span<const std::byte> d) { resp_received.emplace_back(to_string(d)); });
                     responder->start();
                 });
         transport.on_dialed(
@@ -146,10 +140,8 @@ struct tcp_link
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
-                    requester.emplace(req_ctx, io, make_cfg(0x02), timeout, req_messages,
-                                      req_procedures, false, sink);
-                    requester->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { req_received.emplace_back(to_string(d)); });
+                    requester.emplace(req_ctx, io, make_cfg(0x02), timeout, req_messages, req_procedures, false, sink);
+                    requester->on_message([this](std::string_view, std::span<const std::byte> d) { req_received.emplace_back(to_string(d)); });
                     requester->start();
                 });
 

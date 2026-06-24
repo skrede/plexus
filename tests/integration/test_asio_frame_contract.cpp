@@ -40,8 +40,7 @@ std::optional<wire::subscribe_request> one_control_roundtrip(std::string_view fq
 
     pasio::asio_listener                 listener(io);
     std::unique_ptr<pasio::asio_channel> server_channel;
-    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch)
-                         { server_channel = std::move(ch); });
+    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch) { server_channel = std::move(ch); });
     listener.start({"tcp", "127.0.0.1:0"});
     auto port = listener.port();
 
@@ -82,9 +81,7 @@ std::optional<wire::subscribe_request> one_control_roundtrip(std::string_view fq
 
 }
 
-TEST_CASE(
-        "a framed control frame demuxes through the real asio reassembler + frame_router over TCP",
-        "[integration][asio][router]")
+TEST_CASE("a framed control frame demuxes through the real asio reassembler + frame_router over TCP", "[integration][asio][router]")
 {
     const std::string fqn           = "demo._plexus._tcp.local.";
     const auto        expected_hash = wire::fqn_topic_hash(fqn);

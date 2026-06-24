@@ -4,8 +4,7 @@
 
 using namespace stream_channel_unix_fixture;
 
-TEST_CASE("unix stream channel: a bad-magic byte run fires on_protocol_close(invalid_magic)",
-          "[integration][unix][hardening]")
+TEST_CASE("unix stream channel: a bad-magic byte run fires on_protocol_close(invalid_magic)", "[integration][unix][hardening]")
 {
     constexpr int k_iterations = 20;
     int           proven       = 0;
@@ -59,8 +58,7 @@ TEST_CASE("unix stream channel: a header with a withheld payload fires "
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to asio_channel",
-          "[integration][unix][bound]")
+TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to asio_channel", "[integration][unix][bound]")
 {
     // unix_channel composes the shared bounded stream_send_queue, so its congestion verdicts
     // are byte-identical to asio_channel's — proven over a real (connected) local socket
@@ -75,15 +73,13 @@ TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to 
         constexpr std::size_t                    cap = 4096;
         temp_sock                                sock;
         ::asio::io_context                       io;
-        ::asio::local::stream_protocol::acceptor acc{
-                io, ::asio::local::stream_protocol::endpoint(sock.path)};
-        ::asio::local::stream_protocol::socket peer{io};
-        ::asio::local::stream_protocol::socket client{io};
+        ::asio::local::stream_protocol::acceptor acc{io, ::asio::local::stream_protocol::endpoint(sock.path)};
+        ::asio::local::stream_protocol::socket   peer{io};
+        ::asio::local::stream_protocol::socket   client{io};
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         acc.accept(peer); // peer adopts but NEVER reads
 
-        pasio::unix_channel ch{io, std::move(client), stream::stream_inbound_config{}, mode,
-                               pio::egress_capacity::of_bytes(cap)};
+        pasio::unix_channel ch{io, std::move(client), stream::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
         REQUIRE(ch.congestion_mode() == mode);
 
         std::optional<pio::io_error> err;

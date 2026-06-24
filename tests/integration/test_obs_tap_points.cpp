@@ -27,13 +27,11 @@ TEST_CASE("obs tap: one publish to N subscribers fires published once and delive
     net.drive(); // pump the posted tap turns
 
     const auto &t = rec.for_topic(fan_net::k_topic);
-    REQUIRE(t.published == 1); // on_message_published once per publish
-    REQUIRE(t.delivered ==
-            static_cast<int>(k_subscribers)); // on_message_delivered once per destination
+    REQUIRE(t.published == 1);                               // on_message_published once per publish
+    REQUIRE(t.delivered == static_cast<int>(k_subscribers)); // on_message_delivered once per destination
 }
 
-TEST_CASE("obs tap: the delivered view borrows the surfaced owner (a shared addref, not a copy)",
-          "[integration][observer][tap]")
+TEST_CASE("obs tap: the delivered view borrows the surfaced owner (a shared addref, not a copy)", "[integration][observer][tap]")
 {
     const std::string payload = "tap-zero-copy";
 

@@ -72,15 +72,17 @@ class recording_handle
 public:
     recording_handle() = default;
 
-    recording_handle(recording_store *store, std::string name,
-                     std::shared_ptr<recording_store::region> region) noexcept
+    recording_handle(recording_store *store, std::string name, std::shared_ptr<recording_store::region> region) noexcept
             : m_store(store)
             , m_name(std::move(name))
             , m_region(std::move(region))
     {
     }
 
-    ~recording_handle() { reclaim(); }
+    ~recording_handle()
+    {
+        reclaim();
+    }
 
     recording_handle(const recording_handle &)            = delete;
     recording_handle &operator=(const recording_handle &) = delete;
@@ -106,7 +108,10 @@ public:
         return *this;
     }
 
-    std::span<std::byte> bytes() const { return {m_region->base, m_region->size}; }
+    std::span<std::byte> bytes() const
+    {
+        return {m_region->base, m_region->size};
+    }
 
 private:
     void reclaim() noexcept
@@ -136,8 +141,7 @@ public:
     {
     }
 
-    region_status create(std::string_view name, std::size_t bytes, const create_options &,
-                         region_handle &out)
+    region_status create(std::string_view name, std::size_t bytes, const create_options &, region_handle &out)
     {
         const std::string key{name};
         if(key.size() >= 2 && key.compare(key.size() - 2, 2, ".s") == 0)
@@ -158,20 +162,27 @@ public:
         return region_status::ok;
     }
 
-    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>) {}
+    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>)
+    {
+    }
 
 private:
     recording_store &m_store;
 };
 
-static_assert(region_broker<recording_broker>,
-              "recording_broker must satisfy the region_broker seam");
+static_assert(region_broker<recording_broker>, "recording_broker must satisfy the region_broker seam");
 
 struct silent_notifier
 {
-    void signal() noexcept {}
-    void arm(plexus::detail::move_only_function<void()>) {}
-    void disarm() noexcept {}
+    void signal() noexcept
+    {
+    }
+    void arm(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void disarm() noexcept
+    {
+    }
 };
 
 static_assert(notifier<silent_notifier>, "silent_notifier must satisfy the notifier seam");
@@ -180,33 +191,25 @@ using test_registry = shm_topic_registry<recording_broker, silent_notifier>;
 
 }
 
-TEST_CASE("shm.ring_memory_query ring_memory_for equals the layout helpers for a (P,C) table",
-          "[shm][ring_memory_query]")
+TEST_CASE("shm.ring_memory_query ring_memory_for equals the layout helpers for a (P,C) table", "[shm][ring_memory_query]")
 {
-    for(std::uint32_t payload :
-        {static_cast<std::uint32_t>(512 * k_kib), static_cast<std::uint32_t>(k_mib)})
+    for(std::uint32_t payload : {static_cast<std::uint32_t>(512 * k_kib), static_cast<std::uint32_t>(k_mib)})
         for(std::uint32_t capacity : {1u, 2u, 16u})
         {
-            const ring_geometry g =
-                    ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
-            const std::size_t expected = control_region_bytes(g.cell_count) +
-                    slab_region_bytes(g.cell_count, g.slot_capacity);
-            REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, capacity) ==
-                    expected);
+            const ring_geometry g        = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
+            const std::size_t   expected = control_region_bytes(g.cell_count) + slab_region_bytes(g.cell_count, g.slot_capacity);
+            REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, capacity) == expected);
         }
 }
 
-TEST_CASE(
-        "shm.ring_memory_query the 16 MiB reliable_preserving cost at C=16 is the depth-32 figure",
-        "[shm][ring_memory_query]")
+TEST_CASE("shm.ring_memory_query the 16 MiB reliable_preserving cost at C=16 is the depth-32 figure", "[shm][ring_memory_query]")
 {
     // The expensive corner: a 16 MiB payload at the full 16-consumer capacity is a
     // depth-32 ring (next power of two STRICTLY above 16, never depth-17). slab = 32 *
     // round_up_8(16 MiB) = 512 MiB; control = 1344 + 32*64 = 3392 bytes. This pins the
     // corrected math so a future depth-17 (or deep-tier) regression is caught.
     const std::uint32_t payload = static_cast<std::uint32_t>(16 * k_mib);
-    const ring_geometry g =
-            ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 16u);
+    const ring_geometry g       = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 16u);
     REQUIRE(g.cell_count == 32u);
     REQUIRE(g.slot_capacity == 16 * k_mib);
 
@@ -217,31 +220,25 @@ TEST_CASE(
     REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, 16u) == expected);
 }
 
-TEST_CASE("shm.ring_memory_query ring_memory_for matches the bytes the registry actually requests",
-          "[shm][ring_memory_query]")
+TEST_CASE("shm.ring_memory_query ring_memory_for matches the bytes the registry actually requests", "[shm][ring_memory_query]")
 {
     // The query and the registry's mint must agree: the slab the registry asks the
     // broker to create equals ring_memory_for's slab term for the same (P, mode, C).
     recording_store  store;
     recording_broker broker{store};
-    test_registry    registry(broker, plexus::io::reliability::reliable,
-                              plexus::io::congestion::block);
+    test_registry    registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
-    const std::uint32_t payload  = static_cast<std::uint32_t>(512 * k_kib);
-    const std::uint32_t capacity = 2u;
-    const ring_geometry g =
-            ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
-    const std::size_t expected_slab = slab_region_bytes(g.cell_count, g.slot_capacity);
+    const std::uint32_t payload       = static_cast<std::uint32_t>(512 * k_kib);
+    const std::uint32_t capacity      = 2u;
+    const ring_geometry g             = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
+    const std::size_t   expected_slab = slab_region_bytes(g.cell_count, g.slot_capacity);
 
-    REQUIRE(registry.acquire("topic.query", ring_direction::request, payload,
-                             ring_geometry_mode::reliable_preserving,
-                             capacity) == acquire_result::created);
+    REQUIRE(registry.acquire("topic.query", ring_direction::request, payload, ring_geometry_mode::reliable_preserving, capacity) == acquire_result::created);
 
     REQUIRE(store.slab_requests.size() == 1);
     REQUIRE(store.slab_requests.front() == expected_slab);
     // And the query a consumer would have run beforehand matches that slab term.
-    REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, capacity) ==
-            control_region_bytes(g.cell_count) + expected_slab);
+    REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, capacity) == control_region_bytes(g.cell_count) + expected_slab);
 
     registry.release("topic.query", ring_direction::request);
 }

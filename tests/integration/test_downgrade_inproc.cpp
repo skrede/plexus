@@ -63,13 +63,8 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, const attach_policy *policy)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0,
-                                .local_fingerprint        = {},
-                                .attach_policy            = policy};
+    return handshake_fsm_config{
+            .self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0, .local_fingerprint = {}, .attach_policy = policy};
 }
 
 // The transcript-bound proof stand-in: it refuses any facts whose transcript_digest is
@@ -90,7 +85,10 @@ struct transcript_policy final : public attach_policy
 // An always-admit policy (the honest path under no tamper).
 struct admit_policy final : public attach_policy
 {
-    [[nodiscard]] bool decide(const attach_facts &) const noexcept override { return true; }
+    [[nodiscard]] bool decide(const attach_facts &) const noexcept override
+    {
+        return true;
+    }
 };
 
 // A seam whose transcript fold returns a NON-ZERO digest — the "tampered transcript"
@@ -161,8 +159,7 @@ struct link
     std::vector<lifecycle_event>            req_lifecycle;
     std::vector<lifecycle_event>            resp_lifecycle;
 
-    link(const attach_policy *req_policy, const attach_policy *resp_policy, security_seam rseam,
-         security_seam pseam)
+    link(const attach_policy *req_policy, const attach_policy *resp_policy, security_seam rseam, security_seam pseam)
             : req_seam(std::move(rseam))
             , resp_seam(std::move(pseam))
     {
@@ -172,30 +169,23 @@ struct link
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
                     resp_ctx.peer_id   = make_cfg(0x02, nullptr).self_id;
-                    responder.emplace(resp_ctx, ex, make_cfg(0x01, resp_policy), k_long_timeout,
-                                      resp_messages, resp_procedures, true, sink);
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01, resp_policy), k_long_timeout, resp_messages, resp_procedures, true, sink);
                     responder->set_security_seam(&resp_seam);
-                    responder->on_security([this](const security_event &ev)
-                                           { resp_security.push_back(ev); });
-                    responder->on_lifecycle([this](const lifecycle_event &ev)
-                                            { resp_lifecycle.push_back(ev); });
+                    responder->on_security([this](const security_event &ev) { resp_security.push_back(ev); });
+                    responder->on_lifecycle([this](const lifecycle_event &ev) { resp_lifecycle.push_back(ev); });
                     responder->on_install_security([](const security_negotiation &) {});
                     responder->start();
                 });
         transport.on_dialed(
-                [this, req_policy](std::unique_ptr<inproc_channel<>> ch,
-                                   const plexus::io::endpoint &)
+                [this, req_policy](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &)
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
                     req_ctx.peer_id   = make_cfg(0x01, nullptr).self_id;
-                    requester.emplace(req_ctx, ex, make_cfg(0x02, req_policy), k_long_timeout,
-                                      req_messages, req_procedures, false, sink);
+                    requester.emplace(req_ctx, ex, make_cfg(0x02, req_policy), k_long_timeout, req_messages, req_procedures, false, sink);
                     requester->set_security_seam(&req_seam);
-                    requester->on_security([this](const security_event &ev)
-                                           { req_security.push_back(ev); });
-                    requester->on_lifecycle([this](const lifecycle_event &ev)
-                                            { req_lifecycle.push_back(ev); });
+                    requester->on_security([this](const security_event &ev) { req_security.push_back(ev); });
+                    requester->on_lifecycle([this](const lifecycle_event &ev) { req_lifecycle.push_back(ev); });
                     requester->on_install_security([](const security_negotiation &) {});
                     requester->start();
                 });
@@ -203,7 +193,10 @@ struct link
         transport.dial({"inproc", "svc"});
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 }
@@ -236,8 +229,7 @@ TEST_CASE("downgrade: a forced cipher/version downgrade is refused with downgrad
     REQUIRE_FALSE(l.responder->is_complete());
 }
 
-TEST_CASE("downgrade: an honest secured-vs-secured pair completes with NO posture event",
-          "[integration][downgrade]")
+TEST_CASE("downgrade: an honest secured-vs-secured pair completes with NO posture event", "[integration][downgrade]")
 {
     admit_policy req_pol;
     admit_policy resp_pol;
@@ -250,9 +242,7 @@ TEST_CASE("downgrade: an honest secured-vs-secured pair completes with NO postur
     REQUIRE(count_kind(l.resp_security, security_kind::posture_mismatch) == 0);
 }
 
-TEST_CASE(
-        "downgrade: a secured-vs-plain posture mismatch is refused with posture_mismatch BOTH ways",
-        "[integration][downgrade]")
+TEST_CASE("downgrade: a secured-vs-plain posture mismatch is refused with posture_mismatch BOTH ways", "[integration][downgrade]")
 {
     admit_policy req_pol;
     admit_policy resp_pol;

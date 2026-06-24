@@ -42,16 +42,14 @@ std::vector<std::byte> bytes_of(std::string_view s)
 // data the reassembler delivered), or nullopt if nothing arrived. Each call
 // stands up a fresh listener + client on its own io_context so the iterations
 // are independent.
-std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> payload,
-                                                    std::string_view           fqn)
+std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> payload, std::string_view fqn)
 {
     ::asio::io_context io;
 
     // Server side: a listener accepts a channel the publisher fans out over.
     pasio::asio_listener                 listener(io);
     std::unique_ptr<pasio::asio_channel> server_channel;
-    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch)
-                         { server_channel = std::move(ch); });
+    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch) { server_channel = std::move(ch); });
     listener.start({"tcp", "127.0.0.1:0"});
     auto port = listener.port();
 

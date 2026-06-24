@@ -72,14 +72,8 @@ struct live_link
                 {
                     sub_ctx.channel   = std::move(ch);
                     sub_ctx.node_name = "publisher-node";
-                    subscriber.emplace(sub_ctx, io, make_cfg(0x01), std::chrono::hours(1),
-                                       sub_messages, sub_procedures, true, sink);
-                    subscriber->on_message(
-                            [this](std::string_view, std::span<const std::byte> d)
-                            {
-                                received.emplace_back(reinterpret_cast<const char *>(d.data()),
-                                                      d.size());
-                            });
+                    subscriber.emplace(sub_ctx, io, make_cfg(0x01), std::chrono::hours(1), sub_messages, sub_procedures, true, sink);
+                    subscriber->on_message([this](std::string_view, std::span<const std::byte> d) { received.emplace_back(reinterpret_cast<const char *>(d.data()), d.size()); });
                     subscriber->start();
                 });
         transport.on_dialed(
@@ -87,8 +81,7 @@ struct live_link
                 {
                     pub_ctx.channel   = std::move(ch);
                     pub_ctx.node_name = "subscriber-node";
-                    publisher.emplace(pub_ctx, io, make_cfg(0x02), std::chrono::hours(1),
-                                      pub_messages, pub_procedures, false, sink);
+                    publisher.emplace(pub_ctx, io, make_cfg(0x02), std::chrono::hours(1), pub_messages, pub_procedures, false, sink);
                     publisher->start();
                 });
     }
@@ -114,15 +107,9 @@ struct live_link
 // delivers. `tier_mask` is the reach that should include this link (local for AF_UNIX,
 // remote for TCP); `excluded_mask` is one that should not.
 template<typename Link>
-inline void prove_link_confinement(Link &l, const std::string &fqn, locality including_mask,
-                                   locality excluding_mask)
+inline void prove_link_confinement(Link &l, const std::string &fqn, locality including_mask, locality excluding_mask)
 {
-    l.pump_until(
-            [&]
-            {
-                return l.publisher && l.subscriber && l.publisher->is_complete() &&
-                        l.subscriber->is_complete();
-            });
+    l.pump_until([&] { return l.publisher && l.subscriber && l.publisher->is_complete() && l.subscriber->is_complete(); });
     REQUIRE(l.publisher->is_complete());
     REQUIRE(l.subscriber->is_complete());
 

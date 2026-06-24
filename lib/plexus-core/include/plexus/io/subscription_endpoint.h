@@ -40,10 +40,19 @@ public:
         std::string   node_name;
     };
 
-    subscriber_registry<channel_type>       &registry() noexcept { return m_registry; }
-    const subscriber_registry<channel_type> &registry() const noexcept { return m_registry; }
+    subscriber_registry<channel_type> &registry() noexcept
+    {
+        return m_registry;
+    }
+    const subscriber_registry<channel_type> &registry() const noexcept
+    {
+        return m_registry;
+    }
 
-    std::uint64_t next_sequence() noexcept { return m_next_sequence++; }
+    std::uint64_t next_sequence() noexcept
+    {
+        return m_next_sequence++;
+    }
 
     // The 0->1 attach gate: true exactly on the transition that puts a wire subscribe
     // on the channel; a later attach for the same pair bumps and returns false.
@@ -59,7 +68,10 @@ public:
         return m_registry.drop_refcount(node_name, fqn) == 0u;
     }
 
-    void remove_peer(const peer &p) { m_registry.remove_peer(p.node_name, p.channel); }
+    void remove_peer(const peer &p)
+    {
+        m_registry.remove_peer(p.node_name, p.channel);
+    }
 
     void send_subscribe(channel_type &channel, const wire::subscribe_request &req)
     {
@@ -72,11 +84,7 @@ public:
     // frame. Reuses a member scratch to stay allocation-light.
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
-        wire::frame_header fhdr{.type         = type,
-                                .flags        = 0,
-                                .session_id   = 0,
-                                .timestamp_ns = wire::now_timestamp_ns(),
-                                .payload_len  = inner.size()};
+        wire::frame_header fhdr{.type = type, .flags = 0, .session_id = 0, .timestamp_ns = wire::now_timestamp_ns(), .payload_len = inner.size()};
         wire::encode_frame_into(m_control_scratch, fhdr, inner);
         channel.send(m_control_scratch);
     }

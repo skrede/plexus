@@ -4,8 +4,7 @@
 
 using namespace reassembler_dos_fixture;
 
-TEST_CASE("integration.reassembler_dos a total-memory-cap flood is rejected and stays bounded",
-          "[reassembler][dos][cap]")
+TEST_CASE("integration.reassembler_dos a total-memory-cap flood is rejected and stays bounded", "[reassembler][dos][cap]")
 {
     constexpr std::size_t   frag     = 256;
     constexpr std::uint16_t frag_cnt = 2;
@@ -53,10 +52,10 @@ TEST_CASE("integration.reassembler_dos a metadata-amplification flood (tiny data
     // bounded handful of such entries and refuses the rest — the cap is a true memory bound,
     // not a payload-only bound. Without the fix this loop would mint thousands of entries and
     // exhaust gigabytes while held_bytes reported only a few kilobytes.
-    constexpr std::uint16_t huge_cnt = plexus::io::max_fragment_count; // 32768
-    const std::size_t structural = huge_cnt * sizeof(std::vector<std::byte>) + (huge_cnt + 7u) / 8u;
-    constexpr std::size_t cap    = 16u * 1024u * 1024u;
-    const std::size_t expected_admit = cap / (structural + 1u); // +1 for the single payload byte
+    constexpr std::uint16_t huge_cnt       = plexus::io::max_fragment_count; // 32768
+    const std::size_t       structural     = huge_cnt * sizeof(std::vector<std::byte>) + (huge_cnt + 7u) / 8u;
+    constexpr std::size_t   cap            = 16u * 1024u * 1024u;
+    const std::size_t       expected_admit = cap / (structural + 1u); // +1 for the single payload byte
 
     for(int loop = 0; loop < 4; ++loop)
     {
@@ -80,15 +79,14 @@ TEST_CASE("integration.reassembler_dos a metadata-amplification flood (tiny data
     }
 }
 
-TEST_CASE("integration.reassembler_dos a per-message-ceiling overrun is dropped",
-          "[reassembler][dos][ceiling]")
+TEST_CASE("integration.reassembler_dos a per-message-ceiling overrun is dropped", "[reassembler][dos][ceiling]")
 {
     constexpr std::size_t ceiling = 1024;
 
     for(int loop = 0; loop < 8; ++loop)
     {
         plexus::testing::harness h;
-        test_reassembler r{h.ex, {.max_message_size = ceiling, .total_memory_cap = 64u * 1024u}};
+        test_reassembler         r{h.ex, {.max_message_size = ceiling, .total_memory_cap = 64u * 1024u}};
 
         // Two fragments that fit, then a third whose bytes would push the entry past the
         // per-message ceiling: the third is dropped_malformed, the entry stays bounded.

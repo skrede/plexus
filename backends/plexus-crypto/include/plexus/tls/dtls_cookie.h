@@ -45,8 +45,7 @@ extern "C" int dtls_cookie_verify_cb(ssl_st *ssl, const unsigned char *cookie, u
 // client offered it, else returns SSL_TLSEXT_ERR_ALERT_FATAL to FAIL the handshake
 // on no overlap — the fail-closed in-handshake version gate (R-2). The client
 // offers "plexus/1" via SSL_CTX_set_alpn_protos in the credential builder.
-extern "C" int plexus_alpn_select(ssl_st *ssl, const unsigned char **out, unsigned char *outlen,
-                                  const unsigned char *in, unsigned int inlen, void *arg);
+extern "C" int plexus_alpn_select(ssl_st *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *arg);
 
 }
 

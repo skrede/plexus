@@ -79,16 +79,13 @@ void drop_accept(T &t, dtls_channel *raw)
 template<typename T>
 void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<const std::byte> bytes)
 {
-    auto  ch  = std::make_unique<dtls_channel>(t.m_io, t.m_server, from, t.m_cred, t.m_cookie,
-                                               dtls_channel::role::server, t.m_max_payload,
-                                               dtls_channel::default_record_mtu,
+    auto  ch  = std::make_unique<dtls_channel>(t.m_io, t.m_server, from, t.m_cred, t.m_cookie, dtls_channel::role::server, t.m_max_payload, dtls_channel::default_record_mtu,
                                                t.m_max_message_bytes, t.m_reassembly_budget);
     auto *raw = ch.get();
     if(!t.m_demux.insert(from, raw))
     {
         if(t.m_on_drop)
-            t.m_on_drop(io::detail::drop_event{.cause     = io::detail::drop_cause::demux_refused,
-                                               .transport = io::locality::remote});
+            t.m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::demux_refused, .transport = io::locality::remote});
         return; // peer cap reached: drop the flood
     }
     wire_teardown(t, *raw, from);

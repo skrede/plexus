@@ -45,8 +45,7 @@ TEST_CASE("resurrection re-emits one subscribe per peer-rooted remembered topic"
     }
 }
 
-TEST_CASE("resurrection carries the remembered type_id onto the re-subscribe",
-          "[forwarder][type_id]")
+TEST_CASE("resurrection carries the remembered type_id onto the re-subscribe", "[forwarder][type_id]")
 {
     // The reconnect type-gate drop: a demand remembered WITH a type_id must re-emit a
     // subscribe carrying that SAME type_id when the counted path resurrects it. Looped
@@ -76,8 +75,7 @@ TEST_CASE("resurrection carries the remembered type_id onto the re-subscribe",
     REQUIRE(proven == k_cycles);
 }
 
-TEST_CASE("resurrection keeps an undeclared demand untyped on the re-subscribe",
-          "[forwarder][type_id]")
+TEST_CASE("resurrection keeps an undeclared demand untyped on the re-subscribe", "[forwarder][type_id]")
 {
     // The absence-is-distinct mirror: a demand remembered WITHOUT a type_id re-emits the
     // undeclared sentinel (0), never a fabricated type.

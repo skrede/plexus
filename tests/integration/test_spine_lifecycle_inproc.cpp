@@ -4,8 +4,7 @@
 
 using namespace spine_fixture;
 
-TEST_CASE("integration.spine a custom observer reconstructs the ordered node/endpoint timeline",
-          "[integration][inproc][spine]")
+TEST_CASE("integration.spine a custom observer reconstructs the ordered node/endpoint timeline", "[integration][inproc][spine]")
 {
     fixture               fx;
     recording_observer    rec;
@@ -19,9 +18,7 @@ TEST_CASE("integration.spine a custom observer reconstructs the ordered node/end
         // ctor returned, so this run witnesses create via the same pump as the rest.
         {
             plexus::publisher<>  pub{n, "topic"};
-            plexus::subscriber<> sub{
-                    n, "topic",
-                    [](std::span<const std::byte>, const plexus::io::message_info &) {}};
+            plexus::subscriber<> sub{n, "topic", [](std::span<const std::byte>, const plexus::io::message_info &) {}};
             fx.drive();
 
             // The declare + register edges surface after the pump (the handles still live).
@@ -43,8 +40,7 @@ TEST_CASE("integration.spine a custom observer reconstructs the ordered node/end
     REQUIRE(rec.for_participant(id).destroyed == 1);
 }
 
-TEST_CASE("integration.spine a moved-from publisher handle fires no drop edge",
-          "[integration][inproc][spine]")
+TEST_CASE("integration.spine a moved-from publisher handle fires no drop edge", "[integration][inproc][spine]")
 {
     fixture               fx;
     recording_observer    rec;

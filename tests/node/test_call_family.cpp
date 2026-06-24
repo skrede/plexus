@@ -9,8 +9,7 @@ TEST_CASE("call family: round-trip is byte-identical, looped", "[node][call]")
     n.connect();
 
     // The provider echoes "reply:<param>".
-    inproc_procedure proc{n.b, "rpc",
-                          [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply)
+    inproc_procedure proc{n.b, "rpc", [](std::span<const std::byte> param, inproc_procedure::reply_fn &reply)
                           {
                               const std::string out = "reply:" + to_string(param);
                               reply(plexus::wire::rpc_status::success, as_bytes(out));
@@ -45,25 +44,20 @@ TEST_CASE("call family: round-trip is byte-identical, looped", "[node][call]")
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("call family: a second local serve on one fqn throws and leaves the first serving",
-          "[node][call]")
+TEST_CASE("call family: a second local serve on one fqn throws and leaves the first serving", "[node][call]")
 {
     net n;
     n.connect();
 
     int              first_calls = 0;
-    inproc_procedure proc{
-            n.b, "rpc", [&](std::span<const std::byte>, inproc_procedure::reply_fn &reply)
-            {
-                ++first_calls;
-                reply(plexus::wire::rpc_status::success, as_bytes(std::string{"first"}));
-            }};
+    inproc_procedure proc{n.b, "rpc", [&](std::span<const std::byte>, inproc_procedure::reply_fn &reply)
+                          {
+                              ++first_calls;
+                              reply(plexus::wire::rpc_status::success, as_bytes(std::string{"first"}));
+                          }};
 
-    REQUIRE_THROWS_AS(
-            (inproc_procedure{n.b, "rpc",
-                              [](std::span<const std::byte>, inproc_procedure::reply_fn &reply)
-                              { reply(plexus::wire::rpc_status::success, {}); }}),
-            std::runtime_error);
+    REQUIRE_THROWS_AS((inproc_procedure{n.b, "rpc", [](std::span<const std::byte>, inproc_procedure::reply_fn &reply) { reply(plexus::wire::rpc_status::success, {}); }}),
+                      std::runtime_error);
 
     // The refused ctor left no side effect: the FIRST handler still answers.
     inproc_caller call{n.a, "rpc"};
@@ -86,9 +80,8 @@ TEST_CASE("call family: dropping the procedure retires it to no_handler", "[node
     n.connect();
 
     {
-        inproc_procedure proc{
-                n.b, "rpc", [](std::span<const std::byte>, inproc_procedure::reply_fn &reply)
-                { reply(plexus::wire::rpc_status::success, as_bytes(std::string{"served"})); }};
+        inproc_procedure proc{n.b, "rpc",
+                              [](std::span<const std::byte>, inproc_procedure::reply_fn &reply) { reply(plexus::wire::rpc_status::success, as_bytes(std::string{"served"})); }};
         n.drive();
 
         inproc_caller              call{n.a, "rpc"};

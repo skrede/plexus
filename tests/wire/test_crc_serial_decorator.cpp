@@ -13,8 +13,7 @@
 
 using namespace crc_serial_test;
 
-TEST_CASE("crc_serial: a valid frame emits clean header+payload bytes, no drop",
-          "[wire][crc_serial]")
+TEST_CASE("crc_serial: a valid frame emits clean header+payload bytes, no drop", "[wire][crc_serial]")
 {
     sink s;
     auto dec   = s.make();
@@ -26,8 +25,7 @@ TEST_CASE("crc_serial: a valid frame emits clean header+payload bytes, no drop",
     REQUIRE(s.emitted[0] == header_on("hello-serial"));
 }
 
-TEST_CASE("crc_serial: garbage before the first magic anchor is skipped and the frame decodes",
-          "[wire][crc_serial]")
+TEST_CASE("crc_serial: garbage before the first magic anchor is skipped and the frame decodes", "[wire][crc_serial]")
 {
     sink s;
     auto dec = s.make();
@@ -44,8 +42,7 @@ TEST_CASE("crc_serial: garbage before the first magic anchor is skipped and the 
     REQUIRE(s.emitted[0] == header_on("aligned"));
 }
 
-TEST_CASE("crc_serial: a frame split across two feeds is reassembled and emitted once",
-          "[wire][crc_serial]")
+TEST_CASE("crc_serial: a frame split across two feeds is reassembled and emitted once", "[wire][crc_serial]")
 {
     sink s;
     auto dec   = s.make();
@@ -61,8 +58,7 @@ TEST_CASE("crc_serial: a frame split across two feeds is reassembled and emitted
     REQUIRE(s.emitted[0] == header_on("split-across-feeds"));
 }
 
-TEST_CASE("crc_serial: an empty-payload frame round-trips (trailer over the bare header)",
-          "[wire][crc_serial]")
+TEST_CASE("crc_serial: an empty-payload frame round-trips (trailer over the bare header)", "[wire][crc_serial]")
 {
     sink s;
     auto dec   = s.make();

@@ -15,12 +15,9 @@ TEST_CASE("integration.reassembler_dos malformed fragments are rejected without 
 
         // idx >= cnt, cnt == 0, and cnt past the max_fragment_count ceiling are each rejected
         // before any indexing — looped so a state-carrying regression is caught.
-        REQUIRE(r.feed(1, 5, 3, filler(64)) ==
-                test_reassembler::outcome::dropped_malformed); // idx >= cnt
-        REQUIRE(r.feed(1, 0, 0, filler(64)) ==
-                test_reassembler::outcome::dropped_malformed); // cnt == 0
-        REQUIRE(r.feed(1, 0, 0xFFFF, filler(64)) ==
-                test_reassembler::outcome::dropped_malformed); // cnt over max
+        REQUIRE(r.feed(1, 5, 3, filler(64)) == test_reassembler::outcome::dropped_malformed);      // idx >= cnt
+        REQUIRE(r.feed(1, 0, 0, filler(64)) == test_reassembler::outcome::dropped_malformed);      // cnt == 0
+        REQUIRE(r.feed(1, 0, 0xFFFF, filler(64)) == test_reassembler::outcome::dropped_malformed); // cnt over max
         REQUIRE(r.in_flight() == 0);
         REQUIRE(r.held_bytes() == 0);
 
@@ -30,10 +27,8 @@ TEST_CASE("integration.reassembler_dos malformed fragments are rejected without 
         // field cannot be turned into a metadata-amplification allocation. structural_cost itself
         // casts to size_t before the multiply, so even the rejected count cannot overflow the
         // cost computation on the path that does evaluate it.
-        REQUIRE(r.feed(1, 0, 0xFFFFFFFFu, filler(64)) ==
-                test_reassembler::outcome::dropped_malformed);
-        REQUIRE(r.feed(1, 0, 0xFFFFFFF0u, filler(64)) ==
-                test_reassembler::outcome::dropped_malformed);
+        REQUIRE(r.feed(1, 0, 0xFFFFFFFFu, filler(64)) == test_reassembler::outcome::dropped_malformed);
+        REQUIRE(r.feed(1, 0, 0xFFFFFFF0u, filler(64)) == test_reassembler::outcome::dropped_malformed);
         REQUIRE(r.in_flight() == 0);
         REQUIRE(r.held_bytes() == 0);
 
@@ -45,8 +40,7 @@ TEST_CASE("integration.reassembler_dos malformed fragments are rejected without 
     }
 }
 
-TEST_CASE("integration.reassembler_dos a stalled partial is evicted on the per-message timeout",
-          "[reassembler][dos][timeout]")
+TEST_CASE("integration.reassembler_dos a stalled partial is evicted on the per-message timeout", "[reassembler][dos][timeout]")
 {
     constexpr auto timeout = 1000ms;
 
@@ -81,14 +75,12 @@ TEST_CASE("integration.reassembler_dos a stalled partial is evicted on the per-m
     }
 }
 
-TEST_CASE("integration.reassembler_dos the demux cap bounds the spoofed-source channel count",
-          "[reassembler][dos][demux]")
+TEST_CASE("integration.reassembler_dos the demux cap bounds the spoofed-source channel count", "[reassembler][dos][demux]")
 {
     // Each datagram channel is per-peer and owns one reassembler, so the demux peer cap
     // bounds how many reassemblers a spoofed-source flood can mint — the aggregate
     // reassembly-memory bound is (demux cap × per-reassembler cap), not unbounded.
-    using demux = plexus::datagram::detail::basic_inbound_demux<int, std::uint32_t,
-                                                                std::hash<std::uint32_t>>;
+    using demux = plexus::datagram::detail::basic_inbound_demux<int, std::uint32_t, std::hash<std::uint32_t>>;
 
     constexpr std::size_t cap = 8;
     demux                 d{cap};

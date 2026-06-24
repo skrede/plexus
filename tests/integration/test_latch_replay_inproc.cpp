@@ -46,8 +46,7 @@ TEST_CASE("inproc latch replay delivers the late joiner the retained value throu
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("inproc non-latched topic does not replay on a late subscribe, looped",
-          "[integration][latch][inproc]")
+TEST_CASE("inproc non-latched topic does not replay on a late subscribe, looped", "[integration][latch][inproc]")
 {
     // The non-latched NEGATIVE (guards against an accidental always-replay): the
     // same late-join setup with NO latch records NOTHING through the router until a
@@ -94,20 +93,37 @@ struct sink_executor
 
 struct sink_channel
 {
-    explicit sink_channel(sink_executor &) {}
-    sink_channel(sink_executor &, std::error_code &) {}
+    explicit sink_channel(sink_executor &)
+    {
+    }
+    sink_channel(sink_executor &, std::error_code &)
+    {
+    }
 
     void send(std::span<const std::byte> d)
     {
         total_bytes += d.size();
         ++sends;
     }
-    void                 close() {}
-    plexus::io::endpoint remote_endpoint() const { return {}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
-    void on_closed(plexus::detail::move_only_function<void()>) {}
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
+    void close()
+    {
+    }
+    plexus::io::endpoint remote_endpoint() const
+    {
+        return {};
+    }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
+    {
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
 
     std::size_t total_bytes{0};
     std::size_t sends{0};
@@ -115,11 +131,21 @@ struct sink_channel
 
 struct sink_timer
 {
-    explicit sink_timer(sink_executor &) {}
-    sink_timer(sink_executor &, std::error_code &) {}
-    void expires_after(std::chrono::milliseconds) {}
-    void async_wait(plexus::detail::move_only_function<void(std::error_code)>) {}
-    void cancel() {}
+    explicit sink_timer(sink_executor &)
+    {
+    }
+    sink_timer(sink_executor &, std::error_code &)
+    {
+    }
+    void expires_after(std::chrono::milliseconds)
+    {
+    }
+    void async_wait(plexus::detail::move_only_function<void(std::error_code)>)
+    {
+    }
+    void cancel()
+    {
+    }
 };
 
 struct sink_policy
@@ -129,7 +155,10 @@ struct sink_policy
     using timer_type        = sink_timer;
     using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
+    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
+    {
+        fn();
+    }
 };
 
 static_assert(plexus::Policy<sink_policy>);

@@ -74,8 +74,7 @@ std::uint64_t monotonic_clock()
 
 }
 
-TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after attach",
-          "[integration]")
+TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after attach", "[integration]")
 {
     constexpr int     warm = 256;
     constexpr int     K    = 8192;
@@ -111,8 +110,7 @@ TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after
     }
 }
 
-TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after attach",
-          "[integration]")
+TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after attach", "[integration]")
 {
     // The wire tier rides the SAME grown-once ring + reused encoder scratch as every other
     // record, so a warmed saturating record_wire -> ring -> drain loop touches no heap. The
@@ -148,8 +146,7 @@ TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after att
             push(0xF0000000ull + static_cast<std::uint64_t>(i));
         const auto after = plexus::testing::alloc_count();
 
-        REQUIRE(after - before ==
-                0); // grown-once: the saturating wire producer + drain touched no heap
+        REQUIRE(after - before == 0); // grown-once: the saturating wire producer + drain touched no heap
     }
 }
 

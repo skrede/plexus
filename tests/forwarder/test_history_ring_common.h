@@ -44,8 +44,7 @@ struct capture
     explicit capture(inproc_executor<> &ex)
             : sink(ex)
     {
-        sink.on_data([this](std::span<const std::byte> d)
-                     { frames.emplace_back(d.begin(), d.end()); });
+        sink.on_data([this](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
     }
 
     inproc_channel<>                    sink;
@@ -70,8 +69,7 @@ inline std::vector<std::string> data_bodies(const capture &cap)
         auto decoded = plexus::wire::decode_unidirectional(inner);
         if(!decoded)
             continue;
-        bodies.emplace_back(reinterpret_cast<const char *>(decoded->data.data()),
-                            decoded->data.size());
+        bodies.emplace_back(reinterpret_cast<const char *>(decoded->data.data()), decoded->data.size());
     }
     return bodies;
 }

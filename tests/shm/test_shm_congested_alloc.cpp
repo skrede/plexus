@@ -10,15 +10,13 @@ TEST_CASE("shm.backpressure the reliable blocking spin allocates nothing", "[shm
     constexpr int             k_total = 2000;
     ring_fixture<k_cells, 64> f;
 
-    shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable,
-                                       plexus::io::congestion::block);
+    shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
     // The deliver callback counts drained messages into an atomic (NO heap in its
     // body). It is constructed BEFORE the snapshot, so the one-time
     // move_only_function construction never falls inside the measured window.
     std::atomic<int>                       drained{0};
-    shm_channel<null_notifier>::deliver_fn deliver = [&](plexus::wire_bytes<shm_slot_owner>)
-    { drained.fetch_add(1, std::memory_order_release); };
+    shm_channel<null_notifier>::deliver_fn deliver = [&](plexus::wire_bytes<shm_slot_owner>) { drained.fetch_add(1, std::memory_order_release); };
 
     // Bring the consumer thread fully up (its stack + any one-time allocation lands)
     // and barrier on a flag BEFORE snapshotting the allocation counter, so only the
@@ -56,8 +54,7 @@ TEST_CASE("shm.backpressure the reliable blocking spin allocates nothing", "[shm
     REQUIRE(after - before == 0);
 }
 
-TEST_CASE("shm.congested a reliable claim on a pinned cell returns congested past the spin budget",
-          "[shm][congested][spin_budget]")
+TEST_CASE("shm.congested a reliable claim on a pinned cell returns congested past the spin budget", "[shm][congested][spin_budget]")
 {
     // A reliable claim whose target cell is still held by a live take() pin used to
     // spin the producer core indefinitely. It now relaxes the core a bounded number
@@ -77,8 +74,7 @@ TEST_CASE("shm.congested a reliable claim on a pinned cell returns congested pas
     for(std::uint64_t i = 0; i < k_cells; ++i)
     {
         broadcast_ring::claim_result claim;
-        REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable,
-                                         plexus::io::congestion::block, claim) == loan_status::ok);
+        REQUIRE(f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) == loan_status::ok);
         const std::uint32_t v = static_cast<std::uint32_t>(i);
         std::memcpy(claim.slab.data(), &v, sizeof(v));
         REQUIRE(f.ring.commit(claim.position, sizeof(v)) == loan_status::ok);
@@ -92,11 +88,9 @@ TEST_CASE("shm.congested a reliable claim on a pinned cell returns congested pas
     const auto                   before = plexus::testing::alloc_count();
     const auto                   start  = std::chrono::steady_clock::now();
     broadcast_ring::claim_result claim;
-    const loan_status            st =
-            f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable,
-                                     plexus::io::congestion::block, claim);
-    const auto elapsed = std::chrono::steady_clock::now() - start;
-    const auto after   = plexus::testing::alloc_count();
+    const loan_status            st      = f.ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::reliable, plexus::io::congestion::block, claim);
+    const auto                   elapsed = std::chrono::steady_clock::now() - start;
+    const auto                   after   = plexus::testing::alloc_count();
 
     REQUIRE(st == loan_status::congested);
     REQUIRE(elapsed < std::chrono::seconds(1)); // bounded: it does NOT hang on the pin

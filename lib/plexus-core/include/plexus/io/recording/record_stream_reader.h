@@ -130,8 +130,7 @@ public:
                 res.trailing_partial_dropped = true;
                 break;
             }
-            const std::span<const std::byte> payload =
-                    m_stream.subspan(len_off, static_cast<std::size_t>(*len));
+            const std::span<const std::byte> payload = m_stream.subspan(len_off, static_cast<std::size_t>(*len));
             if(detail::is_sync(payload))
             {
                 at = payload_end;

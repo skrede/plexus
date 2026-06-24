@@ -47,13 +47,28 @@ public:
     loan(const loan &)            = delete;
     loan &operator=(const loan &) = delete;
 
-    ~loan() { release_if_held(); }
+    ~loan()
+    {
+        release_if_held();
+    }
 
-    [[nodiscard]] bool valid() const noexcept { return m_slot != nullptr; }
-    explicit           operator bool() const noexcept { return valid(); }
+    [[nodiscard]] bool valid() const noexcept
+    {
+        return m_slot != nullptr;
+    }
+    explicit operator bool() const noexcept
+    {
+        return valid();
+    }
 
-    T &operator*() const noexcept { return *object_ptr(); }
-    T *operator->() const noexcept { return object_ptr(); }
+    T &operator*() const noexcept
+    {
+        return *object_ptr();
+    }
+    T *operator->() const noexcept
+    {
+        return object_ptr();
+    }
 
 private:
     friend class loan_pool<T>;
@@ -70,7 +85,10 @@ private:
 
     // The publish hand-off: surrender the slot to the carrier (whose refcount now owns
     // the release) and leave the handle null so its destructor is a no-op.
-    io::loan_slot *take() noexcept { return std::exchange(m_slot, nullptr); }
+    io::loan_slot *take() noexcept
+    {
+        return std::exchange(m_slot, nullptr);
+    }
 
     void release_if_held() noexcept
     {
@@ -126,7 +144,10 @@ public:
         return carrier;
     }
 
-    [[nodiscard]] std::size_t capacity() const noexcept { return m_slab.capacity(); }
+    [[nodiscard]] std::size_t capacity() const noexcept
+    {
+        return m_slab.capacity();
+    }
 
 private:
     loan_slab<T> m_slab;

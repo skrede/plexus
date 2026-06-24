@@ -38,18 +38,15 @@ namespace pasio = plexus::asio;
 namespace ptls  = plexus::tls;
 namespace pio   = plexus::io;
 
-static_assert(
-        plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
+static_assert(plexus::io::transport_backend<pasio::all_backends_mux, plexus::muxify<pasio::asio_policy>>);
 
 namespace dtls_mux_fixture {
 
 // Mint a TLS (TLS-over-TCP) credential for `self` pinning exactly `peer_pin` — the
 // secure stream member needs a TLS_method SSL_CTX (NOT the DTLS one pin_one mints).
-inline ptls::tls_credential pin_one_tls(const pdt::identity_fixture &self,
-                                        const pdt::spki_digest      &peer_pin)
+inline ptls::tls_credential pin_one_tls(const pdt::identity_fixture &self, const pdt::spki_digest &peer_pin)
 {
-    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-            std::vector<pdt::spki_digest>{peer_pin});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(std::vector<pdt::spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -96,13 +93,10 @@ struct mux_pair
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     mux_pair(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
-            : listen_face(io, pin_one_tls(server_id, client_id.digest),
-                          pdt::pin_one(server_id, client_id.digest))
-            , dial_face(io, pin_one_tls(client_id, server_id.digest),
-                        pdt::pin_one(client_id, server_id.digest))
+            : listen_face(io, pin_one_tls(server_id, client_id.digest), pdt::pin_one(server_id, client_id.digest))
+            , dial_face(io, pin_one_tls(client_id, server_id.digest), pdt::pin_one(client_id, server_id.digest))
     {
-        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch)
-                                    { accepted = std::move(ch); });
+        listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) { accepted = std::move(ch); });
         dial_face.mux.on_dialed(
                 [this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep)
                 {

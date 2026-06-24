@@ -15,9 +15,7 @@ TEST_CASE("deadline liveliness: a heartbeat refreshes the lease but not the dead
 
         // Subscribe with BOTH a deadline P and a lease L (L > P): the keepalive
         // heartbeats keep presence alive while data lapses past the deadline.
-        n.a.subscribe(n.id_b, "topic",
-                      subscriber_qos{.requested_deadline_ns = ns_of(k_period),
-                                     .requested_lease_ns    = ns_of(k_lease)});
+        n.a.subscribe(n.id_b, "topic", subscriber_qos{.requested_deadline_ns = ns_of(k_period), .requested_lease_ns = ns_of(k_lease)});
         n.drive();
         REQUIRE(n.a.is_connected(n.id_b));
 

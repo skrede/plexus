@@ -54,8 +54,7 @@ using pio::reconnect_config;
 using session       = pio::peer_session<pasio::unix_policy>;
 using msg_forwarder = pio::message_forwarder<pasio::unix_policy>;
 using rpc_forwarder = pio::procedure_forwarder<pasio::unix_policy>;
-using driver_t =
-        pio::reconnect<pasio::unix_policy, pasio::unix_transport, std::chrono::steady_clock>;
+using driver_t      = pio::reconnect<pasio::unix_policy, pasio::unix_transport, std::chrono::steady_clock>;
 
 namespace reconnect_unix_fixture {
 
@@ -66,11 +65,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // A per-instance owner-only temp directory + a SHORT socket path within it.
@@ -110,10 +105,10 @@ struct unix_reconnect
     pasio::unix_transport transport{io};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{io, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink};
+    msg_forwarder            resp_messages{sink};
+    rpc_forwarder            req_procedures{io, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{io, k_long_timeout, sink};
 
     plexus::io::peer_context<pasio::unix_policy> req_ctx;
     plexus::io::peer_context<pasio::unix_policy> resp_ctx;
@@ -133,8 +128,7 @@ struct unix_reconnect
                 {
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
-                    responder.emplace(resp_ctx, io, make_cfg(0x01), k_long_timeout, resp_messages,
-                                      resp_procedures, true, sink);
+                    responder.emplace(resp_ctx, io, make_cfg(0x01), k_long_timeout, resp_messages, resp_procedures, true, sink);
                     responder->start();
                 });
         transport.on_dialed(
@@ -142,8 +136,7 @@ struct unix_reconnect
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
-                    requester.emplace(req_ctx, io, make_cfg(0x02), k_long_timeout, req_messages,
-                                      req_procedures, false, sink);
+                    requester.emplace(req_ctx, io, make_cfg(0x02), k_long_timeout, req_messages, req_procedures, false, sink);
                     requester->start();
                     // Route a transport DROP — not a clean close — to the driver through the
                     // session's production drop seam, set AFTER start() (start() owns the
@@ -163,8 +156,7 @@ struct unix_reconnect
         // The driver no longer self-wires the transport's dial-failure callback (a
         // shared transport's single callback cannot belong to one of many drivers);
         // the owner routes a failure to its sole driver.
-        transport.on_dial_failed([this](const pio::endpoint &, pio::io_error)
-                                 { driver->notify_dial_failed(); });
+        transport.on_dial_failed([this](const pio::endpoint &, pio::io_error) { driver->notify_dial_failed(); });
         driver->on_redial(
                 [this]
                 {
@@ -189,8 +181,7 @@ struct unix_reconnect
 
 inline reconnect_config fast_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(50),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(50), std::nullopt, std::nullopt};
 }
 
 }

@@ -75,9 +75,7 @@ public:
 
     // The accepting-endpoint registry (distinct from the synthetic per-channel addresses): a
     // listen() names an endpoint + the on_accepted callback a dial() to it fires.
-    void register_listener(
-            const io::endpoint                                                      &ep,
-            detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted)
+    void register_listener(const io::endpoint &ep, detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted)
     {
         m_listeners.push_back(listener_entry{ep, std::move(on_accepted)});
     }
@@ -140,7 +138,10 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool has_pending_packets() const noexcept { return m_size != 0; }
+    [[nodiscard]] bool has_pending_packets() const noexcept
+    {
+        return m_size != 0;
+    }
 
 private:
     // The per-packet match + dispatch tail is relocated to detail/inproc_dispatch.h (a friend, so
@@ -213,7 +214,7 @@ private:
     std::vector<queued_packet>  m_ring;
     std::size_t                 m_head{0};
     std::size_t                 m_size{0};
-    std::uint64_t m_next_addr{1}; // key 0 stays "unconnected": it matches no registration
+    std::uint64_t               m_next_addr{1}; // key 0 stays "unconnected": it matches no registration
 };
 
 }

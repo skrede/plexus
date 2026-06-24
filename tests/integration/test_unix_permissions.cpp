@@ -82,13 +82,15 @@ struct deny_all_peer_cred final : public pio::security::peer_cred_policy
     {
         return false;
     }
-    [[nodiscard]] bool accepts_without_credentials() const noexcept override { return false; }
+    [[nodiscard]] bool accepts_without_credentials() const noexcept override
+    {
+        return false;
+    }
 };
 
 }
 
-TEST_CASE("unix_permissions: the socket file is created owner-only 0700 by default",
-          "[integration][unix][permissions]")
+TEST_CASE("unix_permissions: the socket file is created owner-only 0700 by default", "[integration][unix][permissions]")
 {
     temp_dir             t;
     ::asio::io_context   io;
@@ -113,15 +115,14 @@ TEST_CASE("unix_permissions: a widened socket mode is honored", "[integration][u
     REQUIRE((mode_of(t.path) & 0777) == widened);
 }
 
-TEST_CASE("unix_permissions: the unlink-before-bind window is closed under a restrictive umask",
-          "[integration][unix][permissions]")
+TEST_CASE("unix_permissions: the unlink-before-bind window is closed under a restrictive umask", "[integration][unix][permissions]")
 {
     // Even under a permissive process umask (which would otherwise let bind create a
     // world-accessible socket inode before the chmod), the listener binds under a
     // restrictive umask so the inode is never momentarily world-accessible: the final
     // 0700 mode holds and no broader bits ever appear.
-    temp_dir       t;
-    const ::mode_t prev = ::umask(0); // maximally permissive: bind would create 0777 if unguarded
+    temp_dir             t;
+    const ::mode_t       prev = ::umask(0); // maximally permissive: bind would create 0777 if unguarded
     ::asio::io_context   io;
     pasio::unix_listener listener{io};
     listener.start(pio::endpoint{"unix", t.path});

@@ -41,7 +41,10 @@ struct backing_region
         m_size       = bytes;
     }
 
-    std::span<std::byte> span() const noexcept { return {m_data, m_size}; }
+    std::span<std::byte> span() const noexcept
+    {
+        return {m_data, m_size};
+    }
 
 private:
     std::vector<std::byte> m_storage;

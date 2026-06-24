@@ -63,12 +63,14 @@ public:
     }
 
     // Arm the single ticker. From here it re-arms itself once per tick.
-    void start() { arm_tick(); }
+    void start()
+    {
+        arm_tick();
+    }
 
     // Grow this endpoint's per-topic deadline state and ensure its per-endpoint lease
     // state. A 0 period leaves the axis inert (it never fires). Cold path.
-    void register_endpoint(const node_id &id, std::uint64_t topic_hash,
-                           std::uint64_t deadline_period_ns, std::uint64_t lease_ns)
+    void register_endpoint(const node_id &id, std::uint64_t topic_hash, std::uint64_t deadline_period_ns, std::uint64_t lease_ns)
     {
         const std::uint64_t now = now_ns();
         auto               &d   = m_deadlines[deadline_key{id, topic_hash}];
@@ -136,9 +138,7 @@ private:
     // tick expiry is the same elapsed gap the scan reads.
     std::uint64_t now_ns() const
     {
-        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                                  Clock::now().time_since_epoch())
-                                                  .count());
+        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count());
     }
 
     void arm_tick()
@@ -157,8 +157,7 @@ private:
     // runs on this same tick before the one re-arm.
     void on_tick()
     {
-        detail::scan_liveness(m_deadlines, m_leases, now_ns(),
-                              [this](const liveness_event &ev) { fire(ev); });
+        detail::scan_liveness(m_deadlines, m_leases, now_ns(), [this](const liveness_event &ev) { fire(ev); });
         if(m_on_tick_action)
             m_on_tick_action();
         arm_tick();

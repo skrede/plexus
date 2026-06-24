@@ -37,8 +37,7 @@ TEST_CASE("multipeer asio: concurrent real socket closes re-dial each dropped sl
                 [&]
                 {
                     for(std::size_t i = 0; i < k_dropped; ++i)
-                        if(!(net.a.is_connected(net.peer(i).id) &&
-                             net.a.session_for(net.peer(i).id)->session_id() != epoch[i]))
+                        if(!(net.a.is_connected(net.peer(i).id) && net.a.session_for(net.peer(i).id)->session_id() != epoch[i]))
                             return false;
                     return true;
                 });

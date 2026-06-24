@@ -4,8 +4,7 @@
 
 using namespace self_describing_fixture;
 
-TEST_CASE("a declared schema + crypto position + producer type_id round-trip through the preamble",
-          "[self_describing_capture]")
+TEST_CASE("a declared schema + crypto position + producer type_id round-trip through the preamble", "[self_describing_capture]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};
@@ -24,15 +23,11 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
     producer.listen({"inproc", "host-b:6000"});
     ex.drain();
 
-    const std::string schema_blob =
-            R"({"type":"object","properties":{"value":{"type":"integer"}}})";
+    const std::string schema_blob = R"({"type":"object","properties":{"value":{"type":"integer"}}})";
 
     plexus::recorder_options ropts;
-    ropts.schemas.push_back(plexus::type_schema{.type_id          = k_reading_type_id,
-                                                .message_encoding = "json",
-                                                .schema_name      = "reading",
-                                                .schema_encoding  = "jsonschema",
-                                                .schema_data      = as_bytes(schema_blob)});
+    ropts.schemas.push_back(plexus::type_schema{
+            .type_id = k_reading_type_id, .message_encoding = "json", .schema_name = "reading", .schema_encoding = "jsonschema", .schema_data = as_bytes(schema_blob)});
 
     in_memory_byte_sink sink;
     auto                recorder = producer.make_recorder(sink, std::move(ropts));
@@ -57,8 +52,7 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
     REQUIRE(e.message_encoding == "json");
     REQUIRE(e.schema_name == "reading");
     REQUIRE(e.schema_encoding == "jsonschema");
-    const std::vector<std::byte> expected_blob{as_bytes(schema_blob).begin(),
-                                               as_bytes(schema_blob).end()};
+    const std::vector<std::byte> expected_blob{as_bytes(schema_blob).begin(), as_bytes(schema_blob).end()};
     REQUIRE(e.schema_data == expected_blob);
 
     std::vector<plexus::io::recording::decoded_record> records;
@@ -82,8 +76,7 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
     REQUIRE(saw_typed_sample);
 }
 
-TEST_CASE("a recorder that declares nothing still writes a valid opaque stream",
-          "[self_describing_capture]")
+TEST_CASE("a recorder that declares nothing still writes a valid opaque stream", "[self_describing_capture]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};

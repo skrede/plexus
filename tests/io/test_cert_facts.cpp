@@ -28,8 +28,7 @@ std::array<std::byte, 32> digest_of(int seed)
 
 }
 
-TEST_CASE("io.cert_facts carries the full field list and round-trips the identity subset",
-          "[io][cert_facts]")
+TEST_CASE("io.cert_facts carries the full field list and round-trips the identity subset", "[io][cert_facts]")
 {
     cert_facts facts;
     facts.spki_sha256  = digest_of(1);

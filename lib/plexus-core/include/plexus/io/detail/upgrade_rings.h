@@ -14,8 +14,7 @@
 // These live in plexus::io::detail. The upgrade coordinator reaches them by namespace
 // fall-through. Inside this namespace plexus::detail must be fully qualified — io::detail
 // shadows it.
-namespace plexus::io::detail
-{
+namespace plexus::io::detail {
 
 // One held companion lane for a (peer, fqn). Exactly one lane is engaged per pair — the up-edge
 // role decides — and both lanes are keyed identically, so the lookups treat them uniformly. The
@@ -25,21 +24,18 @@ namespace plexus::io::detail
 template<typename Channel, typename Receive>
 struct coordinator_ring
 {
-    std::string                                              fqn;
-    std::unique_ptr<Channel>                                 channel; // publisher lane
-    plexus::detail::move_only_function<bool(std::size_t)>    fits;    // per-message route predicate
-    Receive                                                  receive; // subscriber lane
+    std::string                                           fqn;
+    std::unique_ptr<Channel>                              channel; // publisher lane
+    plexus::detail::move_only_function<bool(std::size_t)> fits;    // per-message route predicate
+    Receive                                               receive; // subscriber lane
 };
 
 // The per-peer held lanes, keyed by node_name.
 template<typename Channel, typename Receive>
-using coordinator_held =
-        std::unordered_map<std::string, std::vector<coordinator_ring<Channel, Receive>>>;
+using coordinator_held = std::unordered_map<std::string, std::vector<coordinator_ring<Channel, Receive>>>;
 
 template<typename Channel, typename Receive>
-const coordinator_ring<Channel, Receive> *find_ring(const coordinator_held<Channel, Receive> &held,
-                                                    std::string_view node_name,
-                                                    std::string_view fqn)
+const coordinator_ring<Channel, Receive> *find_ring(const coordinator_held<Channel, Receive> &held, std::string_view node_name, std::string_view fqn)
 {
     auto it = held.find(std::string{node_name});
     if(it == held.end())
@@ -63,8 +59,7 @@ bool any_holder(const coordinator_held<Channel, Receive> &held, std::string_view
 // Drop the (peer, fqn) lane; returns true if the peer's whole list emptied (so the caller erases
 // the peer key).
 template<typename Channel, typename Receive>
-bool erase_ring(coordinator_held<Channel, Receive> &held, std::string_view node_name,
-                std::string_view fqn)
+bool erase_ring(coordinator_held<Channel, Receive> &held, std::string_view node_name, std::string_view fqn)
 {
     auto it = held.find(std::string{node_name});
     if(it == held.end())
@@ -84,8 +79,7 @@ bool erase_ring(coordinator_held<Channel, Receive> &held, std::string_view node_
 // to nullptr. The held map is taken mutably: the route invokes the medium's fits predicate (a
 // move_only_function with a non-const call operator).
 template<typename Channel, typename Receive>
-Channel *route_companion(coordinator_held<Channel, Receive> &held, std::string_view node_name,
-                         std::string_view fqn, std::size_t bytes)
+Channel *route_companion(coordinator_held<Channel, Receive> &held, std::string_view node_name, std::string_view fqn, std::size_t bytes)
 {
     auto it = held.find(std::string{node_name});
     if(it == held.end())

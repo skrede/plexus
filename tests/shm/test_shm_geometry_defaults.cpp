@@ -75,15 +75,17 @@ class stub_handle
 public:
     stub_handle() = default;
 
-    stub_handle(region_store *store, std::string name,
-                std::shared_ptr<region_store::region> region) noexcept
+    stub_handle(region_store *store, std::string name, std::shared_ptr<region_store::region> region) noexcept
             : m_store(store)
             , m_name(std::move(name))
             , m_region(std::move(region))
     {
     }
 
-    ~stub_handle() { reclaim(); }
+    ~stub_handle()
+    {
+        reclaim();
+    }
 
     stub_handle(const stub_handle &)            = delete;
     stub_handle &operator=(const stub_handle &) = delete;
@@ -109,7 +111,10 @@ public:
         return *this;
     }
 
-    std::span<std::byte> bytes() const { return {m_region->base, m_region->size}; }
+    std::span<std::byte> bytes() const
+    {
+        return {m_region->base, m_region->size};
+    }
 
 private:
     void reclaim() noexcept
@@ -139,8 +144,7 @@ public:
     {
     }
 
-    region_status create(std::string_view name, std::size_t bytes, const create_options &,
-                         region_handle &out)
+    region_status create(std::string_view name, std::size_t bytes, const create_options &, region_handle &out)
     {
         const std::string key{name};
         const bool        is_slab = key.size() >= 2 && key.compare(key.size() - 2, 2, ".s") == 0;
@@ -162,7 +166,9 @@ public:
         return region_status::ok;
     }
 
-    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>) {}
+    void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)>)
+    {
+    }
 
 private:
     region_store &m_store;
@@ -172,9 +178,15 @@ static_assert(region_broker<stub_broker>, "stub_broker must satisfy the region_b
 
 struct silent_notifier
 {
-    void signal() noexcept {}
-    void arm(plexus::detail::move_only_function<void()>) {}
-    void disarm() noexcept {}
+    void signal() noexcept
+    {
+    }
+    void arm(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void disarm() noexcept
+    {
+    }
 };
 
 static_assert(notifier<silent_notifier>, "silent_notifier must satisfy the notifier seam");
@@ -184,8 +196,7 @@ using test_member   = shm_mux_member<stub_broker, silent_notifier>;
 
 }
 
-TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-identical",
-          "[shm][geometry_defaults]")
+TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-identical", "[shm][geometry_defaults]")
 {
     // The historical default ring: an unset declaration keeps cell_count 256, slot 4096.
     const ring_geometry unset = ring_geometry_for(std::nullopt);
@@ -193,15 +204,12 @@ TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-iden
     REQUIRE(unset.slot_capacity == 4096u);
 
     // And the explicit reliable_preserving / shipped-floor form agrees byte-for-byte.
-    const ring_geometry explicit_default = ring_geometry_for(
-            std::nullopt, ring_geometry_mode::reliable_preserving, k_max_consumers);
+    const ring_geometry explicit_default = ring_geometry_for(std::nullopt, ring_geometry_mode::reliable_preserving, k_max_consumers);
     REQUIRE(explicit_default.cell_count == 256u);
     REQUIRE(explicit_default.slot_capacity == 4096u);
 
     // A small (<=4096) declared payload still lands in the default deep-but-narrow ring.
-    const ring_geometry small =
-            ring_geometry_for(std::optional<std::uint32_t>{4096u},
-                              ring_geometry_mode::reliable_preserving, k_max_consumers);
+    const ring_geometry small = ring_geometry_for(std::optional<std::uint32_t>{4096u}, ring_geometry_mode::reliable_preserving, k_max_consumers);
     REQUIRE(small.cell_count == 256u);
     REQUIRE(small.slot_capacity == 4096u);
 
@@ -222,16 +230,11 @@ TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-iden
     // The default policy reproduces attempt_shm_upgrade across the full (same_host x hint) matrix:
     // it engages only when same-host AND a qualifying hint is set, and can only decline otherwise.
     for(const bool same_host : {false, true})
-        for(const dispatch_hint hint :
-            {dispatch_hint::none, dispatch_hint::frequent, dispatch_hint::large,
-             dispatch_hint::priority, dispatch_hint::frequent | dispatch_hint::large})
-            REQUIRE(member.upgrade_policy()(same_host, hint) ==
-                    attempt_shm_upgrade(same_host, hint));
+        for(const dispatch_hint hint : {dispatch_hint::none, dispatch_hint::frequent, dispatch_hint::large, dispatch_hint::priority, dispatch_hint::frequent | dispatch_hint::large})
+            REQUIRE(member.upgrade_policy()(same_host, hint) == attempt_shm_upgrade(same_host, hint));
 }
 
-TEST_CASE(
-        "shm.geometry_defaults an over-ceiling registration fails closed naming the ceiling bound",
-        "[shm][geometry_defaults]")
+TEST_CASE("shm.geometry_defaults an over-ceiling registration fails closed naming the ceiling bound", "[shm][geometry_defaults]")
 {
     region_store store;
     stub_broker  broker{store};
@@ -240,13 +243,10 @@ TEST_CASE(
     // exceeds it, so the registration must fail closed against the CEILING bound rather
     // than mint a downgraded or shrunk ring.
     constexpr std::uint64_t tiny_ceiling = 64 * 1024; // 64 KiB
-    test_registry registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block,
-                           test_registry::default_notifier_binder(), tiny_ceiling);
+    test_registry           registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block, test_registry::default_notifier_binder(), tiny_ceiling);
 
     const std::uint32_t payload = static_cast<std::uint32_t>(k_mib); // 1 MiB ring slab >> 64 KiB
-    REQUIRE(registry.acquire("topic.over_ceiling", ring_direction::request, payload,
-                             ring_geometry_mode::reliable_preserving,
-                             1u) == acquire_result::failed);
+    REQUIRE(registry.acquire("topic.over_ceiling", ring_direction::request, payload, ring_geometry_mode::reliable_preserving, 1u) == acquire_result::failed);
 
     // The diagnostic names the CEILING bound with the exact ask vs the ceiling, and the
     // ring was never minted (no live entry, no silent downgrade).
@@ -267,16 +267,13 @@ TEST_CASE("shm.geometry_defaults an OS-allocation-failed registration fails clos
 
     // A generous (default) ceiling: the ceiling leg passes, so the failure can ONLY be the
     // OS-allocator leg — the second fail-closed path.
-    test_registry registry(broker, plexus::io::reliability::reliable,
-                           plexus::io::congestion::block);
+    test_registry registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
-    const std::uint32_t payload = static_cast<std::uint32_t>(512 * 1024);
-    const ring_geometry g = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 1u);
+    const std::uint32_t payload      = static_cast<std::uint32_t>(512 * 1024);
+    const ring_geometry g            = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 1u);
     const std::size_t   expected_ask = slab_region_bytes(g.cell_count, g.slot_capacity);
 
-    REQUIRE(registry.acquire("topic.os_fail", ring_direction::request, payload,
-                             ring_geometry_mode::reliable_preserving,
-                             1u) == acquire_result::failed);
+    REQUIRE(registry.acquire("topic.os_fail", ring_direction::request, payload, ring_geometry_mode::reliable_preserving, 1u) == acquire_result::failed);
 
     // The diagnostic names the OS-ALLOCATOR bound, carries the exact slab ask and the
     // broker's verdict, and the ring was not minted (no silent best-effort path).

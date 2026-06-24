@@ -70,9 +70,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -128,11 +137,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -144,14 +149,12 @@ plexus::node_id make_id(std::uint8_t seed)
 
 reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 reconnect_config bounded_cfg(std::uint32_t max_attempts)
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            max_attempts, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), max_attempts, std::nullopt};
 }
 
 // A peer engine keys each accepted session on a synthetic inbound identity minted in
@@ -224,14 +227,20 @@ struct multipeer_net
         ex.drain();
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
     void advance(std::chrono::nanoseconds d)
     {
         manual_clock::advance(d);
         drive();
     }
 
-    peer_node &peer(std::size_t i) { return *peers[i]; }
+    peer_node &peer(std::size_t i)
+    {
+        return *peers[i];
+    }
 
     // The injection-free real drop verb: close the i-th peer engine's FIRST accepted
     // inbound session, so A's dialer observes the partner close from its own receive
@@ -375,12 +384,7 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
         const auto dead_local = a_to_p->session_id();
 
         std::vector<std::string> a_received;
-        a_to_p->on_message(
-                [&](std::string_view, std::span<const std::byte> d)
-                {
-                    a_received.emplace_back(
-                            std::string{reinterpret_cast<const char *>(d.data()), d.size()});
-                });
+        a_to_p->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(std::string{reinterpret_cast<const char *>(d.data()), d.size()}); });
 
         net.drop_peer(0);
         net.drive(); // process the real drop: slot 0's driver arms its backoff
@@ -392,12 +396,7 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
         // Re-wire the sink on the reconnected slot-0 session and latch the live PEER
         // epoch with a real publish from the peer's reconnected inbound session. The
         // gate compares an incoming frame's session_id against THIS latched peer epoch.
-        a_to_p->on_message(
-                [&](std::string_view, std::span<const std::byte> d)
-                {
-                    a_received.emplace_back(
-                            std::string{reinterpret_cast<const char *>(d.data()), d.size()});
-                });
+        a_to_p->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(std::string{reinterpret_cast<const char *>(d.data()), d.size()}); });
         auto *p_inbound = p.eng.session_for(inbound_slot(2)); // the re-accept is slot 2
         REQUIRE(p_inbound != nullptr);
         const auto live_epoch = p_inbound->session_id();
@@ -414,9 +413,8 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
         // from the latched live one — is dropped by the per-peer staleness gate. It is
         // fed verbatim through A's slot-0 production receive path (on_receive runs the
         // gate before the router), with no second delivery.
-        const std::uint8_t stale_epoch =
-                (live_epoch == 1) ? std::uint8_t{2} : std::uint8_t(live_epoch - 1);
-        auto straggler = make_data_frame("dead-incarnation", stale_epoch);
+        const std::uint8_t stale_epoch = (live_epoch == 1) ? std::uint8_t{2} : std::uint8_t(live_epoch - 1);
+        auto               straggler   = make_data_frame("dead-incarnation", stale_epoch);
         a_to_p->on_receive(straggler);
         net.drive();
         REQUIRE(a_received.size() == 1); // the previous-epoch frame is DROPPED

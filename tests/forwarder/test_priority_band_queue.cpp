@@ -2,8 +2,7 @@
 
 using namespace priority_band_fixture;
 
-TEST_CASE("priority_band queue: band_of maps realtime->0 high->1 normal->2 background->3",
-          "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: band_of maps realtime->0 high->1 normal->2 background->3", "[priority_band][forwarder]")
 {
     REQUIRE(band_of(priority::realtime) == 0);
     REQUIRE(band_of(priority::high) == 1);
@@ -12,8 +11,7 @@ TEST_CASE("priority_band queue: band_of maps realtime->0 high->1 normal->2 backg
     REQUIRE(band_of(priority::background) == k_egress_bands - 1);
 }
 
-TEST_CASE("priority_band queue: a fresh queue has no work and front_highest is null",
-          "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: a fresh queue has no work and front_highest is null", "[priority_band][forwarder]")
 {
     priority_band_queue q;
     REQUIRE_FALSE(q.has_work());
@@ -22,8 +20,7 @@ TEST_CASE("priority_band queue: a fresh queue has no work and front_highest is n
     REQUIRE_FALSE(q.has_work());
 }
 
-TEST_CASE("priority_band queue: FIFO order is preserved within a band",
-          "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: FIFO order is preserved within a band", "[priority_band][forwarder]")
 {
     priority_band_queue q;
     const std::size_t   b = band_of(priority::normal);
@@ -40,8 +37,7 @@ TEST_CASE("priority_band queue: FIFO order is preserved within a band",
     REQUIRE_FALSE(q.has_work());
 }
 
-TEST_CASE("priority_band queue: strict cross-band priority, a lower band index drains fully first",
-          "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: strict cross-band priority, a lower band index drains fully first", "[priority_band][forwarder]")
 {
     priority_band_queue q;
     // background (band 3) gets two frames, then realtime (band 0) gets two — the
@@ -60,8 +56,7 @@ TEST_CASE("priority_band queue: strict cross-band priority, a lower band index d
     REQUIRE(order == std::vector<std::string>{"rt0", "rt1", "bg0", "bg1"});
 }
 
-TEST_CASE("priority_band queue: block at a full band refuses the new frame and bumps blocked_count",
-          "[priority_band][forwarder]")
+TEST_CASE("priority_band queue: block at a full band refuses the new frame and bumps blocked_count", "[priority_band][forwarder]")
 {
     priority_band_queue q;
     const std::size_t   b = band_of(priority::high);

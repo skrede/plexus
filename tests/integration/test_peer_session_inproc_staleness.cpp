@@ -16,7 +16,7 @@ std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t
     plexus::log::null_logger sink;
     msg_forwarder            framer{sink};
     inproc_channel<>         capture(ex);
-    inproc_channel<>  tx(ex);
+    inproc_channel<>         tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
     capture.on_data([&](std::span<const std::byte> f) { captured.assign(f.begin(), f.end()); });
@@ -124,9 +124,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -157,8 +166,8 @@ struct timeout_harness
     inproc_channel<manual_clock>  peer_ch{ex}; // a silent peer that never responds
 
     plexus::log::null_logger sink;
-    manual_msg messages{sink};
-    manual_rpc procedures{ex, std::chrono::hours(1), sink};
+    manual_msg               messages{sink};
+    manual_rpc               procedures{ex, std::chrono::hours(1), sink};
 
     plexus::io::peer_context<manual_policy> ctx; // the record owns the dialer channel
     manual_session                          requester;
@@ -167,12 +176,14 @@ struct timeout_harness
             : ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}
             , requester(ctx, ex, make_cfg(0x02), timeout, messages, procedures, false, sink)
     {
-        ctx.channel->connect_to(
-                peer_ch.local_endpoint()); // sends land on a peer that never replies
+        ctx.channel->connect_to(peer_ch.local_endpoint()); // sends land on a peer that never replies
         requester.start();
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 }

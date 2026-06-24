@@ -58,25 +58,18 @@ struct frag_link
     std::vector<std::vector<std::byte>> server_to_client;
     int                                 client_to_server_count{0};
 
-    frag_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id,
-              std::size_t max_payload)
+    frag_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id, std::size_t max_payload)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
             , client_cred(pdt::pin_one(client_id, server_id.digest))
     {
         server_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
 
-        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"),
-                                            server_sock.port());
-        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"),
-                                            client_sock.port());
+        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), server_sock.port());
+        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"), client_sock.port());
 
-        server_ch = std::make_unique<ptls::dtls_channel>(
-                io, server_sock, client_ep, server_cred, server_cookie,
-                ptls::dtls_channel::role::server, max_payload);
-        client_ch = std::make_unique<ptls::dtls_channel>(
-                io, client_sock, server_ep, client_cred, client_cookie,
-                ptls::dtls_channel::role::client, max_payload);
+        server_ch = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred, server_cookie, ptls::dtls_channel::role::server, max_payload);
+        client_ch = std::make_unique<ptls::dtls_channel>(io, client_sock, server_ep, client_cred, client_cookie, ptls::dtls_channel::role::client, max_payload);
 
         server_sock.on_datagram(
                 [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
@@ -84,14 +77,11 @@ struct frag_link
                     client_to_server.emplace_back(b.begin(), b.end());
                     ++client_to_server_count;
                 });
-        client_sock.on_datagram(
-                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
-                { server_to_client.emplace_back(b.begin(), b.end()); });
+        client_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) { server_to_client.emplace_back(b.begin(), b.end()); });
 
         server_ch->on_external_complete([this] { server_complete = true; });
         client_ch->on_external_complete([this] { client_complete = true; });
-        server_ch->on_data([this](std::span<const std::byte> d)
-                           { server_received.emplace_back(d.begin(), d.end()); });
+        server_ch->on_data([this](std::span<const std::byte> d) { server_received.emplace_back(d.begin(), d.end()); });
     }
 
     void pump_relays()
@@ -122,9 +112,7 @@ struct frag_link
 
     // Send a `size`-byte frame (a deterministic byte ramp) and pump until the server has
     // reassembled exactly one message. Returns the reassembled bytes (empty on timeout).
-    std::vector<std::byte> round_trip(std::size_t               size,
-                                      std::chrono::milliseconds timeout = std::chrono::milliseconds{
-                                              2000})
+    std::vector<std::byte> round_trip(std::size_t size, std::chrono::milliseconds timeout = std::chrono::milliseconds{2000})
     {
         server_received.clear();
         client_to_server_count = 0;

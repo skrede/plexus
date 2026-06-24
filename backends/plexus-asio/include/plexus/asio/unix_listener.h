@@ -64,13 +64,9 @@ public:
     // channel this listener accepts. mode is the socket-file permission (required-WITH-
     // default 0700). policy is the borrowed accept-time peer-credential allowlist
     // (defense-in-depth; the named accept_any default admits every local peer).
-    explicit unix_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {},
-                           ::mode_t                              mode = default_socket_mode,
-                           const io::security::peer_cred_policy &policy =
-                                   io::security::shared_accept_any_peer_cred(),
-                           io::congestion        congestion = io::congestion::block,
-                           io::egress_capacity   egress = io::egress_capacity::bounded_default(),
-                           stream_socket_options socket_options = {})
+    explicit unix_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {}, ::mode_t mode = default_socket_mode,
+                           const io::security::peer_cred_policy &policy = io::security::shared_accept_any_peer_cred(), io::congestion congestion = io::congestion::block,
+                           io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {})
             : m_io(io)
             , m_acceptor(io)
             , m_cfg(cfg)
@@ -94,7 +90,10 @@ public:
         m_on_error = std::move(cb);
     }
 
-    ~unix_listener() { stop(); }
+    ~unix_listener()
+    {
+        stop();
+    }
 
     // NOLINTNEXTLINE(readability-function-size)
     void start(const io::endpoint &bind_ep)
@@ -123,9 +122,8 @@ public:
         (void)::umask(prev_umask);
         if(ec)
             return detail::abort_start(*this, ec); // close the opened acceptor
-        m_bound_path = path; // bind created the inode — own it so any later failure unlinks it
-        if(::chmod(path.c_str(), m_mode) !=
-           0) // apply the configured mode (0700 default, or a widened knob)
+        m_bound_path = path;                       // bind created the inode — own it so any later failure unlinks it
+        if(::chmod(path.c_str(), m_mode) != 0)     // apply the configured mode (0700 default, or a widened knob)
             return detail::abort_start(*this, std::error_code(errno, std::generic_category()));
         m_acceptor.listen(::asio::socket_base::max_listen_connections, ec);
         if(ec)
@@ -161,15 +159,15 @@ private:
     template<typename L>
     friend void detail::do_accept(L &);
 
-    ::asio::io_context                      &m_io;
-    ::asio::local::stream_protocol::acceptor m_acceptor;
-    stream::stream_inbound_config              m_cfg;
-    ::mode_t                                 m_mode;
-    const io::security::peer_cred_policy    *m_peer_policy; // borrowed; never owned
-    io::congestion                           m_congestion;
-    io::egress_capacity                      m_egress_capacity;
-    stream_socket_options                    m_socket_options;
-    std::string                              m_bound_path;
+    ::asio::io_context                                                     &m_io;
+    ::asio::local::stream_protocol::acceptor                                m_acceptor;
+    stream::stream_inbound_config                                           m_cfg;
+    ::mode_t                                                                m_mode;
+    const io::security::peer_cred_policy                                   *m_peer_policy; // borrowed; never owned
+    io::congestion                                                          m_congestion;
+    io::egress_capacity                                                     m_egress_capacity;
+    stream_socket_options                                                   m_socket_options;
+    std::string                                                             m_bound_path;
     plexus::detail::move_only_function<void(std::unique_ptr<unix_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(io::io_error)>                  m_on_error;
     bool                                                                    m_running{false};

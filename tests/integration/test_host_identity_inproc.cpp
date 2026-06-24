@@ -4,8 +4,7 @@
 
 using namespace host_identity_fixture;
 
-TEST_CASE("host_identity: the PSK-path accessor returns the attach-bound id, by role",
-          "[integration][host_identity]")
+TEST_CASE("host_identity: the PSK-path accessor returns the attach-bound id, by role", "[integration][host_identity]")
 {
     attach_facts f;
     f.initiator_id = make_id(0xAA);
@@ -18,8 +17,7 @@ TEST_CASE("host_identity: the PSK-path accessor returns the attach-bound id, by 
     REQUIRE(authenticated_peer_id(f) == make_id(0xAA));
 }
 
-TEST_CASE("host_identity: the TLS-path accessor returns the SPKI-derived id",
-          "[integration][host_identity]")
+TEST_CASE("host_identity: the TLS-path accessor returns the SPKI-derived id", "[integration][host_identity]")
 {
     cert_facts c;
     for(std::size_t i = 0; i < c.spki_sha256.size(); ++i)
@@ -39,12 +37,12 @@ TEST_CASE("host_identity: a spoofed external claim is ignored — the accessor b
     security_seam req_seam  = honest_seam();
     security_seam resp_seam = honest_seam();
 
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
-    inproc_transport<>       transport{ex, bus};
-    plexus::log::null_logger sink;
-    msg_forwarder            req_messages{sink}, resp_messages{sink};
-    rpc_forwarder            req_procedures{ex, k_long_timeout, sink}, resp_procedures{ex, k_long_timeout, sink};
+    inproc_bus<>                            bus;
+    inproc_executor<>                       ex{bus};
+    inproc_transport<>                      transport{ex, bus};
+    plexus::log::null_logger                sink;
+    msg_forwarder                           req_messages{sink}, resp_messages{sink};
+    rpc_forwarder                           req_procedures{ex, k_long_timeout, sink}, resp_procedures{ex, k_long_timeout, sink};
     plexus::io::peer_context<inproc_policy> req_ctx, resp_ctx;
     std::optional<session>                  requester, responder;
 
@@ -57,8 +55,7 @@ TEST_CASE("host_identity: a spoofed external claim is ignored — the accessor b
                 resp_ctx.channel   = std::move(ch);
                 resp_ctx.node_name = "requester-node";
                 resp_ctx.peer_id   = id_req;
-                responder.emplace(resp_ctx, ex, make_cfg(0x01, &admit), k_long_timeout,
-                                  resp_messages, resp_procedures, true, sink);
+                responder.emplace(resp_ctx, ex, make_cfg(0x01, &admit), k_long_timeout, resp_messages, resp_procedures, true, sink);
                 responder->set_security_seam(&resp_seam);
                 responder->on_install_security([](const security_negotiation &) {});
                 responder->start();
@@ -69,8 +66,7 @@ TEST_CASE("host_identity: a spoofed external claim is ignored — the accessor b
                 req_ctx.channel   = std::move(ch);
                 req_ctx.node_name = "responder-node";
                 req_ctx.peer_id   = id_resp;
-                requester.emplace(req_ctx, ex, make_cfg(0x02, &admit), k_long_timeout, req_messages,
-                                  req_procedures, false, sink);
+                requester.emplace(req_ctx, ex, make_cfg(0x02, &admit), k_long_timeout, req_messages, req_procedures, false, sink);
                 requester->set_security_seam(&req_seam);
                 requester->on_install_security([](const security_negotiation &) {});
                 // Before the attach resolves the accessor is absent — no identity to spoof yet.

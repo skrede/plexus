@@ -42,21 +42,21 @@ public:
     {
     }
 
-    bool observes_data_path() const override { return true; }
+    bool observes_data_path() const override
+    {
+        return true;
+    }
 
     // Wire the per-topic resolved fidelity (capture_policy.rule_for(hash).fidelity) so a
     // recorded sample is stamped with its true tier; unset falls back to payload.
-    void set_fidelity_resolver(
-            plexus::detail::move_only_function<capture_fidelity(std::uint64_t)> resolver)
+    void set_fidelity_resolver(plexus::detail::move_only_function<capture_fidelity(std::uint64_t)> resolver)
     {
         m_fidelity_resolver = std::move(resolver);
     }
 
     // Wire the per-topic producer type_id (registry.producer_type_id(hash)) so a recorded
     // sample keys to the declared schema; unset records no type_id (a valid opaque sample).
-    void set_type_id_resolver(
-            plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)>
-                    resolver)
+    void set_type_id_resolver(plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)> resolver)
     {
         m_type_id_resolver = std::move(resolver);
     }
@@ -66,20 +66,31 @@ public:
         record_message(fqn, m_empty_info, v);
     }
 
-    void on_message_delivered(std::string_view fqn, const message_info &info,
-                              const message_view &v) override
+    void on_message_delivered(std::string_view fqn, const message_info &info, const message_view &v) override
     {
         record_message(fqn, info, v);
     }
 
-    void on_drop(const io::detail::drop_event &e) override { m_recorder.record_drop(e); }
-    void on_qos_change(const qos_change_event &e) override { m_recorder.record_qos_change(e); }
-    void on_participant(const participant_event &e) override { m_recorder.record_participant(e); }
+    void on_drop(const io::detail::drop_event &e) override
+    {
+        m_recorder.record_drop(e);
+    }
+    void on_qos_change(const qos_change_event &e) override
+    {
+        m_recorder.record_qos_change(e);
+    }
+    void on_participant(const participant_event &e) override
+    {
+        m_recorder.record_participant(e);
+    }
     void on_endpoint(std::string_view fqn, const endpoint_event &e) override
     {
         m_recorder.record_endpoint(fqn, e);
     }
-    void on_security(const security_event &e) override { m_recorder.record_security(e); }
+    void on_security(const security_event &e) override
+    {
+        m_recorder.record_security(e);
+    }
 
     void on_wire(const wire_record &rec) override
     {
@@ -89,20 +100,17 @@ public:
 private:
     void record_message(std::string_view fqn, const message_info &info, const message_view &v)
     {
-        const std::uint64_t              hash  = wire::fqn_topic_hash(fqn);
-        const std::span<const std::byte> bytes = v;
-        const capture_fidelity           fidelity =
-                m_fidelity_resolver ? m_fidelity_resolver(hash) : capture_fidelity::payload;
-        const std::optional<std::uint64_t> id =
-                m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
+        const std::uint64_t                hash     = wire::fqn_topic_hash(fqn);
+        const std::span<const std::byte>   bytes    = v;
+        const capture_fidelity             fidelity = m_fidelity_resolver ? m_fidelity_resolver(hash) : capture_fidelity::payload;
+        const std::optional<std::uint64_t> id       = m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
         m_recorder.record_sample(hash, info, id.value_or(0), id.has_value(), fidelity, bytes);
     }
 
-    Recorder                                                           &m_recorder;
-    const message_info                                                  m_empty_info{};
-    plexus::detail::move_only_function<capture_fidelity(std::uint64_t)> m_fidelity_resolver;
-    plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)>
-            m_type_id_resolver;
+    Recorder                                                                       &m_recorder;
+    const message_info                                                              m_empty_info{};
+    plexus::detail::move_only_function<capture_fidelity(std::uint64_t)>             m_fidelity_resolver;
+    plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)> m_type_id_resolver;
 };
 
 template<typename Recorder>

@@ -2,8 +2,7 @@
 
 using namespace udp_handshake_arq_fixture;
 
-TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired frame cancels it",
-          "[udp][handshake]")
+TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired frame cancels it", "[udp][handshake]")
 {
     using arq_t = plexus::datagram::detail::udp_handshake_arq<pasio::udp_policy>;
 

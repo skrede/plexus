@@ -21,10 +21,9 @@ TEST_CASE("typed interop cell 1: a typed publisher reaches a bytes subscriber wi
     REQUIRE(sub_node.router().is_connected(pub_node.id()));
 
     std::vector<std::vector<std::byte>> got;
-    bytes_subscriber s{sub_node, "topic",
-                       [&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); }};
-    counting_codec   codec;
-    typed_publisher  p{pub_node, "topic", plexus::typed_publisher_options{}, codec};
+    bytes_subscriber                    s{sub_node, "topic", [&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); }};
+    counting_codec                      codec;
+    typed_publisher                     p{pub_node, "topic", plexus::typed_publisher_options{}, codec};
     ex.drain();
 
     // The subscriber is bytes (undeclared type), so the typed publisher has no eligible
@@ -37,8 +36,7 @@ TEST_CASE("typed interop cell 1: a typed publisher reaches a bytes subscriber wi
     REQUIRE(codec.encodes->load() == 1);
 }
 
-TEST_CASE("typed interop cell 2: a bytes producer's valid encoding decodes to an equal T",
-          "[node][typed][interop]")
+TEST_CASE("typed interop cell 2: a bytes producer's valid encoding decodes to an equal T", "[node][typed][interop]")
 {
     net n;
     n.connect();
@@ -120,8 +118,7 @@ TEST_CASE("typed interop cell 4: a typed pair over a NON-process tier round-trip
     std::vector<sample>              got;
     plexus::typed_subscriber_options sopts;
     sopts.qos.requested_reliability_reliable = false;
-    typed_subscriber s{n.a, "topic", sopts, [&](const sample &v) { got.push_back(v); },
-                       counting_codec{}};
+    typed_subscriber s{n.a, "topic", sopts, [&](const sample &v) { got.push_back(v); }, counting_codec{}};
     counting_codec   codec;
     auto             encodes = codec.encodes;
     // Force the byte path: publish(const T&) on an exhausted pool serializes directly. A

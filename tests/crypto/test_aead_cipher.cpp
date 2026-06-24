@@ -115,8 +115,7 @@ TEST_CASE("crypto.aead_cipher round-trips under AES-256-GCM", "[crypto][aead]")
     round_trips(aead_cipher_id::aes_256_gcm);
 }
 
-TEST_CASE("crypto.aead_cipher open rejects every tamper class (ChaCha20-Poly1305)",
-          "[crypto][aead]")
+TEST_CASE("crypto.aead_cipher open rejects every tamper class (ChaCha20-Poly1305)", "[crypto][aead]")
 {
     rejects_tampering(aead_cipher_id::chacha20_poly1305);
 }
@@ -134,8 +133,7 @@ TEST_CASE("crypto.aead_cipher seals an empty plaintext to exactly the tag", "[cr
     const std::vector<std::byte> empty;
 
     std::vector<std::byte> sealed;
-    REQUIRE(plexus::crypto::seal(aead_cipher_id::chacha20_poly1305, key, nonce, aad, empty,
-                                 sealed));
+    REQUIRE(plexus::crypto::seal(aead_cipher_id::chacha20_poly1305, key, nonce, aad, empty, sealed));
     REQUIRE(sealed.size() == k_aead_tag_len);
 
     std::vector<std::byte> out;

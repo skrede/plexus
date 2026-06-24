@@ -41,8 +41,7 @@ TEST_CASE("dispatch_hint: the operators compose like locality's bitflags", "[shm
     REQUIRE(any_set(both & dispatch_hint::frequent));
 }
 
-TEST_CASE("topic_qos default-constructs with dispatch == none and max_message_bytes == 0",
-          "[shm][dispatch_hint]")
+TEST_CASE("topic_qos default-constructs with dispatch == none and max_message_bytes == 0", "[shm][dispatch_hint]")
 {
     plexus::topic_qos qos{};
 

@@ -87,7 +87,7 @@ struct fixed_codec
 
     plexus::wire_bytes<> encode(const sample &) const
     {
-        auto owner = std::make_shared<std::vector<std::byte>>(payload_bytes, std::byte{0xC3});
+        auto                       owner = std::make_shared<std::vector<std::byte>>(payload_bytes, std::byte{0xC3});
         std::span<const std::byte> view{owner->data(), owner->size()};
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
@@ -97,7 +97,10 @@ struct fixed_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {0xABCD1234u, "sample"}; }
+    plexus::type_identity type_info() const
+    {
+        return {0xABCD1234u, "sample"};
+    }
 };
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -110,9 +113,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(plexus::recording_qos capture)
 {
     plexus::node_options opts;
-    opts.reconnect   = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                    std::chrono::milliseconds(2000), std::nullopt,
-                                                    std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed = 0x9163u;
     opts.capture     = capture;
     return opts;
@@ -127,7 +128,10 @@ struct net
     inproc_transport<> ta{ex, bus};
     static_discovery   disc{{}};
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 plexus::recording_qos keep_all_payload(plexus::io::decimation_mode mode)
@@ -152,8 +156,7 @@ std::uint64_t recovered_samples(std::size_t ring_bytes, std::size_t payload_byte
 
     in_memory_byte_sink sink;
     {
-        inproc_node n_node{n.ex, n.disc, id, n.ta,
-                           make_opts(keep_all_payload(plexus::io::decimation_mode::count_n))};
+        inproc_node n_node{n.ex, n.disc, id, n.ta, make_opts(keep_all_payload(plexus::io::decimation_mode::count_n))};
 
         plexus::recorder_options ro;
         ro.ring_bytes = ring_bytes;
@@ -163,8 +166,7 @@ std::uint64_t recovered_samples(std::size_t ring_bytes, std::size_t payload_byte
             plexus::topic_qos qos;
             qos.latch = true;
             plexus::publisher<>  pub{n_node, "defaults.topic", qos};
-            plexus::subscriber<> sub{n_node, "defaults.topic",
-                                     [](std::span<const std::byte>, const message_info &) {}};
+            plexus::subscriber<> sub{n_node, "defaults.topic", [](std::span<const std::byte>, const message_info &) {}};
             n.drive();
 
             const std::vector<std::byte> body(payload_bytes, std::byte{0x5A});
@@ -223,8 +225,7 @@ decim_counts count_n_run(std::uint32_t n_keep, std::size_t payload_bytes, int bu
             plexus::typed_publisher_options popts;
             popts.qos.latch  = true;
             popts.pool_depth = 8;
-            plexus::publisher<fixed_codec>  pub{n_node, "defaults.topic", popts,
-                                                fixed_codec{payload_bytes}};
+            plexus::publisher<fixed_codec>  pub{n_node, "defaults.topic", popts, fixed_codec{payload_bytes}};
             plexus::subscriber<fixed_codec> sub{n_node, "defaults.topic", [](const sample &) {}};
             n.drive();
 
@@ -295,33 +296,28 @@ TEST_CASE("recorder defaults the shipped ring_bytes gives full recall for a mode
 
     for(int run = 0; run < 3; ++run)
     {
-        const std::uint64_t delivered =
-                recovered_samples(shipped_ring, k_modest_payload, k_modest_burst);
+        const std::uint64_t delivered = recovered_samples(shipped_ring, k_modest_payload, k_modest_burst);
         // Full recall: every produced sample of the modest small-payload backlog is
         // recovered at the conservative default — the design point.
         REQUIRE(delivered == static_cast<std::uint64_t>(k_modest_burst));
     }
 }
 
-TEST_CASE("recorder defaults raising ring_bytes recovers a saturating burst the default sheds",
-          "[recorder_defaults][sweep]")
+TEST_CASE("recorder defaults raising ring_bytes recovers a saturating burst the default sheds", "[recorder_defaults][sweep]")
 {
     // The default is conservative on purpose: a saturating large-payload burst (~8 MiB of
     // raw payload) overflows the 1 MiB ring and sheds — observable while recording, the
     // intended posture. This proves the default is a live floor, not a roomy ceiling.
-    const std::uint64_t at_default = recovered_samples(plexus::recorder_options{}.ring_bytes,
-                                                       k_firehose_payload, k_firehose_burst);
+    const std::uint64_t at_default = recovered_samples(plexus::recorder_options{}.ring_bytes, k_firehose_payload, k_firehose_burst);
     REQUIRE(at_default < static_cast<std::uint64_t>(k_firehose_burst));
 
     // Raising ring_bytes to a firehose value recovers the same burst in full — the explicit
     // override path for a large-payload capture.
-    const std::uint64_t at_firehose =
-            recovered_samples(k_firehose_ring, k_firehose_payload, k_firehose_burst);
+    const std::uint64_t at_firehose = recovered_samples(k_firehose_ring, k_firehose_payload, k_firehose_burst);
     REQUIRE(at_firehose == static_cast<std::uint64_t>(k_firehose_burst));
 }
 
-TEST_CASE("recorder defaults the keep-all decimation default keeps every payload",
-          "[recorder_defaults][sweep]")
+TEST_CASE("recorder defaults the keep-all decimation default keeps every payload", "[recorder_defaults][sweep]")
 {
     // The shipped decimation default (count_n N = 1) drops nothing: every sample on the
     // typed object lane carries its payload. The consumer-sovereign keep-all posture.
@@ -333,8 +329,7 @@ TEST_CASE("recorder defaults the keep-all decimation default keeps every payload
     REQUIRE(c.payload == c.total); // keep-all: every record is payload-bearing
 }
 
-TEST_CASE("recorder defaults count_n decimation keeps exactly one of every N on the object lane",
-          "[recorder_defaults][sweep]")
+TEST_CASE("recorder defaults count_n decimation keeps exactly one of every N on the object lane", "[recorder_defaults][sweep]")
 {
     // The decimation gate is a typed-object-lane mechanism (wants_payload is consulted on
     // the zero-serialization object path); the assertion drives that lane. count_n is exact

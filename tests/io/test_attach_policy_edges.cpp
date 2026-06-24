@@ -18,8 +18,7 @@ TEST_CASE("io.attach_policy accept_any admits every facts value", "[io][attach_p
     REQUIRE(policy.decide(attach_facts{}));
 }
 
-TEST_CASE("io.attach_policy ct_equal rejects a length mismatch and is order-independent",
-          "[io][attach_policy]")
+TEST_CASE("io.attach_policy ct_equal rejects a length mismatch and is order-independent", "[io][attach_policy]")
 {
     const std::array<std::byte, 4> a{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
     const std::array<std::byte, 4> a_copy = a;

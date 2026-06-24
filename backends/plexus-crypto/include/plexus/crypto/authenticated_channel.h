@@ -52,9 +52,7 @@ template<typename Lower>
 class authenticated_channel
 {
 public:
-    authenticated_channel(Lower &lower, aead_cipher_id cipher, const derived_keys &keys,
-                          std::uint32_t initial_epoch   = 0,
-                          std::uint64_t rekey_threshold = k_rekey_message_threshold)
+    authenticated_channel(Lower &lower, aead_cipher_id cipher, const derived_keys &keys, std::uint32_t initial_epoch = 0, std::uint64_t rekey_threshold = k_rekey_message_threshold)
             : m_lower(lower)
             , m_cipher(cipher)
             , m_send_key(keys.k_send)
@@ -71,11 +69,20 @@ public:
     authenticated_channel(authenticated_channel &&)                 = delete;
     authenticated_channel &operator=(authenticated_channel &&)      = delete;
 
-    void send(std::span<const std::byte> data) { detail::stream_aead_send(*this, data); }
+    void send(std::span<const std::byte> data)
+    {
+        detail::stream_aead_send(*this, data);
+    }
 
-    void close() { m_lower.close(); }
+    void close()
+    {
+        m_lower.close();
+    }
 
-    [[nodiscard]] io::endpoint remote_endpoint() const { return m_lower.remote_endpoint(); }
+    [[nodiscard]] io::endpoint remote_endpoint() const
+    {
+        return m_lower.remote_endpoint();
+    }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
@@ -94,9 +101,18 @@ public:
         m_on_protocol_close = std::move(cb);
     }
 
-    [[nodiscard]] std::uint32_t send_epoch() const noexcept { return m_send_epoch; }
-    [[nodiscard]] std::uint64_t send_sequence() const noexcept { return m_send_seq; }
-    [[nodiscard]] std::size_t   backpressured() const { return m_lower.backpressured(); }
+    [[nodiscard]] std::uint32_t send_epoch() const noexcept
+    {
+        return m_send_epoch;
+    }
+    [[nodiscard]] std::uint64_t send_sequence() const noexcept
+    {
+        return m_send_seq;
+    }
+    [[nodiscard]] std::size_t backpressured() const
+    {
+        return m_lower.backpressured();
+    }
 
 private:
     template<typename C>
@@ -112,8 +128,7 @@ private:
 
     void wire_lower()
     {
-        m_lower.on_data([this](std::span<const std::byte> bytes)
-                        { detail::stream_aead_on_lower_data(*this, bytes); });
+        m_lower.on_data([this](std::span<const std::byte> bytes) { detail::stream_aead_on_lower_data(*this, bytes); });
     }
 
     Lower                                                               &m_lower;
@@ -138,8 +153,7 @@ private:
 // The decorator over the erased multi-transport channel is itself a byte_channel:
 // the seven-verb conformance is pinned at compile time so the decorated channel
 // composes anywhere a plaintext one does.
-static_assert(plexus::io::byte_channel<
-                      plexus::crypto::authenticated_channel<plexus::io::polymorphic_byte_channel>>,
+static_assert(plexus::io::byte_channel<plexus::crypto::authenticated_channel<plexus::io::polymorphic_byte_channel>>,
               "authenticated_channel must satisfy byte_channel — check the seven verbs");
 
 #endif

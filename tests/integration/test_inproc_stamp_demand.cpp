@@ -4,16 +4,14 @@
 
 using namespace stamp_demand_fixture;
 
-TEST_CASE("inproc stamp demand: a 3-arg subscriber with default qos sees populated stamps",
-          "[integration][inproc][stamp]")
+TEST_CASE("inproc stamp demand: a 3-arg subscriber with default qos sees populated stamps", "[integration][inproc][stamp]")
 {
     net n;
     n.connect();
 
     std::vector<message_info> infos;
-    typed_subscriber s{n.a, "topic",
-                       [&](const sample &, const message_info &info) { infos.push_back(info); }};
-    typed_publisher  p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
+    typed_subscriber          s{n.a, "topic", [&](const sample &, const message_info &info) { infos.push_back(info); }};
+    typed_publisher           p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
     n.drive();
 
     auto loan = p.borrow();
@@ -28,8 +26,7 @@ TEST_CASE("inproc stamp demand: a 3-arg subscriber with default qos sees populat
     REQUIRE(infos.front().from_intra_process);
 }
 
-TEST_CASE("inproc stamp demand: a 3-arg subscriber that opts out sees a documented 0 stamp",
-          "[integration][inproc][stamp]")
+TEST_CASE("inproc stamp demand: a 3-arg subscriber that opts out sees a documented 0 stamp", "[integration][inproc][stamp]")
 {
     net n;
     n.connect();
@@ -38,9 +35,8 @@ TEST_CASE("inproc stamp demand: a 3-arg subscriber that opts out sees a document
     opts.qos.wants_message_info = false; // an informed 3-arg opt-out: deliver no timestamps
 
     std::vector<message_info> infos;
-    typed_subscriber s{n.a, "topic", opts,
-                       [&](const sample &, const message_info &info) { infos.push_back(info); }};
-    typed_publisher  p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
+    typed_subscriber          s{n.a, "topic", opts, [&](const sample &, const message_info &info) { infos.push_back(info); }};
+    typed_publisher           p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
     n.drive();
 
     auto loan = p.borrow();

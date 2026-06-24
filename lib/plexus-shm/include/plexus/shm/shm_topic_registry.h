@@ -51,31 +51,26 @@ class shm_topic_registry
 {
 public:
     using broker_type = Broker;
-    using deliver_fn =
-            plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
+    using deliver_fn  = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
     // Constructs each entry's notifier in place over the ring's in-region generation word once
     // the ring is bound. A notifier that wakes on a cross-process futex (the asio reactor
     // bridge) is NOT default-constructible — it binds to the word + the user's executor — so the
     // binder injects that construction without coupling the registry to a concrete notifier ctor.
-    using notifier_binder = plexus::detail::move_only_function<void(
-            std::optional<Notifier> &, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &)>;
+    using notifier_binder = plexus::detail::move_only_function<void(std::optional<Notifier> &, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &)>;
 
     // The default binder: emplace a default-constructed notifier (the stub/recording seam, which
     // wakes nothing so it needs no word); a real reactor bridge injects a binder over the word.
     [[nodiscard]] static notifier_binder default_notifier_binder() noexcept
     {
-        return [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &,
-                  std::atomic<std::uint32_t> &) { slot.emplace(); };
+        return [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &) { slot.emplace(); };
     }
 
     // max_ring_slab_bytes is the node-level per-ring slab ceiling enforced at registration —
     // required-with-default the shipped k_max_ring_slab_bytes so a caller that threads no node
     // knob keeps the shipped bound. The acquire fails closed above it.
-    shm_topic_registry(Broker &broker, io::reliability rel, io::congestion cong,
-                       notifier_binder bind_notifier       = default_notifier_binder(),
-                       std::uint64_t   max_ring_slab_bytes = k_max_ring_slab_bytes,
-                       std::string     region_ns           = {}) noexcept
+    shm_topic_registry(Broker &broker, io::reliability rel, io::congestion cong, notifier_binder bind_notifier = default_notifier_binder(),
+                       std::uint64_t max_ring_slab_bytes = k_max_ring_slab_bytes, std::string region_ns = {}) noexcept
             : m_broker(broker)
             , m_reliability(rel)
             , m_congestion(cong)
@@ -90,18 +85,18 @@ public:
     shm_topic_registry(shm_topic_registry &&)                 = delete;
     shm_topic_registry &operator=(shm_topic_registry &&)      = delete;
 
-    ~shm_topic_registry() { teardown_all(); }
+    ~shm_topic_registry()
+    {
+        teardown_all();
+    }
 
     // Demand-drives the ring for (fqn, direction). A repeat acquire of a live key
     // bumps the refcount and returns the same created/attached verdict it minted
     // with. A first acquire mints (or attaches to a peer's) ring of the geometry
     // max_payload sizes (0 -> default).
     // NOLINTNEXTLINE(readability-function-size)
-    acquire_result acquire(const std::string &fqn, ring_direction direction,
-                           std::uint32_t      max_payload,
-                           ring_geometry_mode mode = ring_geometry_mode::reliable_preserving,
-                           std::uint32_t      consumer_capacity = 0,
-                           acquire_mode       amode             = acquire_mode::reclaim_stale)
+    acquire_result acquire(const std::string &fqn, ring_direction direction, std::uint32_t max_payload, ring_geometry_mode mode = ring_geometry_mode::reliable_preserving,
+                           std::uint32_t consumer_capacity = 0, acquire_mode amode = acquire_mode::reclaim_stale)
     {
         const key k{fqn, direction};
         if(auto it = m_entries.find(k); it != m_entries.end())
@@ -112,8 +107,7 @@ public:
 
         auto e                       = std::make_unique<entry>();
         m_last_failure               = acquire_failure{};
-        const acquire_result verdict = detail::topic_open_ring(
-                *this, *e, fqn, direction, max_payload, mode, consumer_capacity, amode);
+        const acquire_result verdict = detail::topic_open_ring(*this, *e, fqn, direction, max_payload, mode, consumer_capacity, amode);
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
 
@@ -197,7 +191,10 @@ public:
         drain_channels(discard);
     }
 
-    std::size_t live_count() const noexcept { return m_entries.size(); }
+    std::size_t live_count() const noexcept
+    {
+        return m_entries.size();
+    }
 
     // The diagnostic of the most recent fail-closed acquire: which bound was hit plus the exact
     // ask vs available. The mux member surfaces it on a failed dial so a publisher learns WHY
@@ -209,7 +206,10 @@ public:
 
     // Apply the node-level per-ring slab ceiling; it bounds the slab of every ring minted AFTER
     // it is set.
-    void set_max_ring_slab_bytes(std::uint64_t bytes) noexcept { m_max_ring_slab_bytes = bytes; }
+    void set_max_ring_slab_bytes(std::uint64_t bytes) noexcept
+    {
+        m_max_ring_slab_bytes = bytes;
+    }
 
 private:
     struct key
@@ -227,8 +227,7 @@ private:
     {
         std::size_t operator()(const key &k) const noexcept
         {
-            return std::hash<std::string>{}(k.fqn) ^
-                    static_cast<std::size_t>(k.direction) * 0x9e3779b9u;
+            return std::hash<std::string>{}(k.fqn) ^ static_cast<std::size_t>(k.direction) * 0x9e3779b9u;
         }
     };
 
@@ -271,17 +270,12 @@ private:
     };
 
     template<typename R, typename E>
-    friend ::plexus::shm::acquire_result
-    detail::topic_open_ring(R &, E &, const std::string &, ::plexus::shm::ring_direction,
-                            std::uint32_t, ::plexus::shm::ring_geometry_mode, std::uint32_t,
-                            ::plexus::shm::acquire_mode);
+    friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const std::string &, ::plexus::shm::ring_direction, std::uint32_t, ::plexus::shm::ring_geometry_mode,
+                                                                 std::uint32_t, ::plexus::shm::acquire_mode);
     template<typename R, typename E>
-    friend ::plexus::shm::acquire_result
-    detail::topic_mint(R &, E &, const std::string &, const ::plexus::shm::ring_geometry &,
-                       std::uint64_t);
+    friend ::plexus::shm::acquire_result detail::topic_mint(R &, E &, const std::string &, const ::plexus::shm::ring_geometry &, std::uint64_t);
     template<typename R, typename E>
-    friend ::plexus::shm::acquire_result detail::topic_join(R &, E &, const std::string &,
-                                                                const std::string &);
+    friend ::plexus::shm::acquire_result detail::topic_join(R &, E &, const std::string &, const std::string &);
     template<typename R>
     friend bool detail::topic_region_exists(R &, const std::string &);
 
@@ -306,8 +300,8 @@ private:
     }
 
     Broker         &m_broker;
-    io::reliability     m_reliability;
-    io::congestion      m_congestion;
+    io::reliability m_reliability;
+    io::congestion  m_congestion;
     notifier_binder m_bind_notifier;
     std::uint64_t   m_max_ring_slab_bytes;
     std::string     m_region_ns;

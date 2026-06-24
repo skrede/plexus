@@ -41,9 +41,7 @@ public:
     // record category; a caller raises it when the Definitions preamble (the declared schema
     // blobs) would exceed it, since wire::writer is bounds-check-free (a raw memcpy). It is a
     // one-time sizing at open time, never on the hot path.
-    flat_recorder(byte_sink &sink, std::size_t ring_bytes, clock_fn clock,
-                  std::size_t drain_batch_bytes = 64u * 1024u,
-                  std::size_t scratch_bytes     = 64u * 1024u)
+    flat_recorder(byte_sink &sink, std::size_t ring_bytes, clock_fn clock, std::size_t drain_batch_bytes = 64u * 1024u, std::size_t scratch_bytes = 64u * 1024u)
             : m_sink(sink)
             , m_writer(scratch_bytes)
             , m_ring(ring_bytes)
@@ -54,25 +52,25 @@ public:
 
     // Emit the stream header + Definitions preamble straight to the sink (the head is
     // never subject to ring overflow). Call once before any record_* call.
-    void open(const node_id &node, topic_capture_rule rule,
-              std::span<const type_schema_entry> schema = {},
-              capture_crypto_position            crypto = capture_crypto_position::cleartext)
+    void open(const node_id &node, topic_capture_rule rule, std::span<const type_schema_entry> schema = {}, capture_crypto_position crypto = capture_crypto_position::cleartext)
     {
         const auto head = m_writer.begin_stream(m_clock(), node, rule, schema, crypto);
         m_sink.write(head);
     }
 
-    void record_sample(std::uint64_t topic_hash, const message_info &info, std::uint64_t type_id,
-                       bool type_id_present, capture_fidelity fidelity,
-                       std::span<const std::byte> payload)
+    void record_sample(std::uint64_t topic_hash, const message_info &info, std::uint64_t type_id, bool type_id_present, capture_fidelity fidelity, std::span<const std::byte> payload)
     {
-        admit(m_writer.sample(m_clock(), topic_hash, info, type_id, type_id_present, fidelity,
-                              payload),
-              payload.size(), fidelity);
+        admit(m_writer.sample(m_clock(), topic_hash, info, type_id, type_id_present, fidelity, payload), payload.size(), fidelity);
     }
 
-    void record_drop(const io::detail::drop_event &e) { admit(m_writer.drop(m_clock(), e)); }
-    void record_qos_change(const qos_change_event &e) { admit(m_writer.qos_change(m_clock(), e)); }
+    void record_drop(const io::detail::drop_event &e)
+    {
+        admit(m_writer.drop(m_clock(), e));
+    }
+    void record_qos_change(const qos_change_event &e)
+    {
+        admit(m_writer.qos_change(m_clock(), e));
+    }
     void record_participant(const participant_event &e)
     {
         admit(m_writer.participant(m_clock(), e));
@@ -81,27 +79,33 @@ public:
     {
         admit(m_writer.endpoint(m_clock(), fqn, e));
     }
-    void record_security(const security_event &e) { admit(m_writer.security(m_clock(), e)); }
+    void record_security(const security_event &e)
+    {
+        admit(m_writer.security(m_clock(), e));
+    }
 
     // The wire tier shares the SAME bounded ring + dropout accounting as every other
     // record; passing capture_fidelity::wire means an overflow sheds at the wire tier and
     // the surfaced dropout_record bounds the gap at wire. The bytes are sized by the frame.
-    void record_wire(wire_direction dir, std::uint64_t seq, const node_id &peer,
-                     std::span<const std::byte> bytes)
+    void record_wire(wire_direction dir, std::uint64_t seq, const node_id &peer, std::span<const std::byte> bytes)
     {
-        admit(m_writer.wire_frame(m_clock(), dir, seq, peer, bytes), bytes.size(),
-              capture_fidelity::wire);
+        admit(m_writer.wire_frame(m_clock(), dir, seq, peer, bytes), bytes.size(), capture_fidelity::wire);
     }
 
     // Pop a bounded batch of framed records from the ring into the sink; returns true
     // while the ring still holds unread records (the cooperative yield). No thread.
-    bool pump() { return m_ring.drain(m_sink, m_drain_batch); }
+    bool pump()
+    {
+        return m_ring.drain(m_sink, m_drain_batch);
+    }
 
-    void flush() { m_sink.flush(); }
+    void flush()
+    {
+        m_sink.flush();
+    }
 
 private:
-    void admit(std::span<const std::byte> record, std::uint64_t would_be_bytes,
-               capture_fidelity fidelity)
+    void admit(std::span<const std::byte> record, std::uint64_t would_be_bytes, capture_fidelity fidelity)
     {
         maybe_sync();
         surface_dropout();

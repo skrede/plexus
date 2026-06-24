@@ -77,12 +77,10 @@ struct reading_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
-                                                   reading                   &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, reading &out) const
     {
         if(bytes.size() != 4)
-            return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+            return plexus::expected<void, std::error_code>{plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -90,7 +88,10 @@ struct reading_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {k_reading_type_id, "reading"}; }
+    plexus::type_identity type_info() const
+    {
+        return {k_reading_type_id, "reading"};
+    }
 };
 
 static_assert(plexus::typed_codec<reading_codec>);
@@ -108,9 +109,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 inline plexus::node_options base_opts()
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = true;
     return opts;
@@ -123,8 +122,7 @@ inline std::span<const std::byte> as_bytes(std::string_view s)
 
 // Publish one reading through a payload-fidelity typed publisher and drain the recorder out.
 template<typename Recorder>
-inline void capture_one(bare_node &producer, bare_node &consumer, inproc_executor<> &ex,
-                        Recorder &recorder, std::uint32_t value)
+inline void capture_one(bare_node &producer, bare_node &consumer, inproc_executor<> &ex, Recorder &recorder, std::uint32_t value)
 {
     typed_subscriber sub{consumer, "telemetry", [](const reading &) {}};
 

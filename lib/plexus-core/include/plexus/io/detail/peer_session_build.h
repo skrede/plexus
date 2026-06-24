@@ -62,8 +62,7 @@ void wire_observer(Registry &reg, Slot &slot)
                 if(reg.m_build.on_stamp_seen)
                     reg.m_build.on_stamp_seen(id);
             });
-    slot.session->on_security([&reg](const security_event &ev)
-                              { reg.m_build.session_observer.on_security(ev); });
+    slot.session->on_security([&reg](const security_event &ev) { reg.m_build.session_observer.on_security(ev); });
 }
 
 // Thread the node-shared receive route into this slot's session, re-threaded on every
@@ -106,8 +105,7 @@ void wire_security(Registry &reg, Slot &slot)
     if(reg.m_build.install_security_factory)
     {
         channel_type &lower = *slot.record.channel;
-        slot.session->on_install_security([&reg, &lower](const security_negotiation &neg)
-                                          { reg.m_build.install_security_factory(lower, neg); });
+        slot.session->on_install_security([&reg, &lower](const security_negotiation &neg) { reg.m_build.install_security_factory(lower, neg); });
     }
 }
 
@@ -134,8 +132,7 @@ void fire_dead(Registry &reg, Slot &slot, const node_id &id)
 {
     if(!reg.m_build.on_lifecycle)
         return;
-    reg.m_build.on_lifecycle(lifecycle_event{lifecycle_edge::dead, id, slot.record.node_name,
-                                             peer_kind::dialed, handshake_outcome::none});
+    reg.m_build.on_lifecycle(lifecycle_event{lifecycle_edge::dead, id, slot.record.node_name, peer_kind::dialed, handshake_outcome::none});
 }
 
 // Latch a per-slot dead flag when the driver crosses a surrender bound. on_dead fires from

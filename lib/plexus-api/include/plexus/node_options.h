@@ -25,11 +25,11 @@ namespace plexus {
 // shared-memory backend is correctly never co-located), not a sentinel for absence.
 struct handshake_options
 {
-    std::uint8_t              version_major{1};
-    std::uint8_t              version_minor{0};
-    std::uint8_t              compatible_version_major{1};
-    std::uint8_t              compatible_version_minor{0};
-    io::host_fingerprint      local_fingerprint{};
+    std::uint8_t         version_major{1};
+    std::uint8_t         version_minor{0};
+    std::uint8_t         compatible_version_major{1};
+    std::uint8_t         compatible_version_minor{0};
+    io::host_fingerprint local_fingerprint{};
 };
 
 // Every node tunable in one plain, non-templated, designated-initializer-friendly

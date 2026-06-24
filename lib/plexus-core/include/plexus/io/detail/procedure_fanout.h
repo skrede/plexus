@@ -17,8 +17,7 @@ namespace plexus::io::detail {
 
 // Forward-declared because reply_status() calls it before its definition below.
 template<typename Forwarder, typename Channel>
-void send_data(Forwarder &f, Channel &channel, wire::msg_type type,
-               std::span<const std::byte> inner, std::uint64_t session_id);
+void send_data(Forwarder &f, Channel &channel, wire::msg_type type, std::span<const std::byte> inner, std::uint64_t session_id);
 
 // The rpc observation fan: hand the call/serve/reply edge to the engine sink (which posts a
 // snapshot to the observer fan-out); absent = one branch. The surfaced view is envelope-only (the
@@ -41,8 +40,7 @@ void emit_rpc_serve(Forwarder &f, std::string_view fqn, std::uint64_t corr_id)
 }
 
 template<typename Forwarder>
-void emit_rpc_reply(Forwarder &f, std::string_view fqn, std::uint64_t corr_id,
-                    wire::rpc_status status)
+void emit_rpc_reply(Forwarder &f, std::string_view fqn, std::uint64_t corr_id, wire::rpc_status status)
 {
     if(f.m_on_rpc_reply)
         f.m_on_rpc_reply(fqn, rpc_reply_view{.correlation_id = corr_id, .status = status});
@@ -54,9 +52,7 @@ void emit_rpc_reply(Forwarder &f, std::string_view fqn, std::uint64_t corr_id,
 // authority (matching is subscribe-time discovery), so the response writes them 0 rather than
 // echoing.
 template<typename Forwarder, typename Channel>
-void reply_status(Forwarder &f, Channel &channel, const wire::bidirectional_header &req_hdr,
-                  wire::rpc_status status, std::span<const std::byte> return_data,
-                  std::uint64_t session_id)
+void reply_status(Forwarder &f, Channel &channel, const wire::bidirectional_header &req_hdr, wire::rpc_status status, std::span<const std::byte> return_data, std::uint64_t session_id)
 {
     wire::bidirectional_header resp_hdr{.source         = wire::endpoint_source_type::procedure,
                                         .sequence       = f.m_endpoint.next_sequence(),
@@ -73,14 +69,9 @@ void reply_status(Forwarder &f, Channel &channel, const wire::bidirectional_head
 // epoch is per-peer, passed per send (a node-shared forwarder fans to many peers), never a
 // forwarder-wide member.
 template<typename Forwarder, typename Channel>
-void send_data(Forwarder &f, Channel &channel, wire::msg_type type,
-               std::span<const std::byte> inner, std::uint64_t session_id)
+void send_data(Forwarder &f, Channel &channel, wire::msg_type type, std::span<const std::byte> inner, std::uint64_t session_id)
 {
-    wire::frame_header fhdr{.type         = type,
-                            .flags        = 0,
-                            .session_id   = session_id,
-                            .timestamp_ns = wire::now_timestamp_ns(),
-                            .payload_len  = inner.size()};
+    wire::frame_header fhdr{.type = type, .flags = 0, .session_id = session_id, .timestamp_ns = wire::now_timestamp_ns(), .payload_len = inner.size()};
     wire::encode_frame_into(f.m_frame_scratch, fhdr, inner);
     channel.send(f.m_frame_scratch);
 }
@@ -89,11 +80,7 @@ void send_data(Forwarder &f, Channel &channel, wire::msg_type type,
 template<typename Forwarder, typename Channel>
 void send_subscribe(Forwarder &f, Channel &channel, std::string_view fqn, std::uint64_t hash)
 {
-    wire::subscribe_request req{.fqn        = std::string{fqn},
-                                .type_name  = {},
-                                .topic_hash = hash,
-                                .type_hash  = 0,
-                                .source     = wire::endpoint_source_type::caller};
+    wire::subscribe_request req{.fqn = std::string{fqn}, .type_name = {}, .topic_hash = hash, .type_hash = 0, .source = wire::endpoint_source_type::caller};
     f.m_endpoint.send_subscribe(channel, req);
 }
 

@@ -33,8 +33,7 @@ namespace attach_policy_fixture {
 // OpenSSL. Mirrors the cookie_secret oracle's fake_hmac.
 inline hmac_fn fake_hmac()
 {
-    return [](std::span<const std::byte> key, std::span<const std::byte> msg,
-              std::span<std::byte> out)
+    return [](std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out)
     {
         if(out.size() != 32)
             return false;
@@ -42,11 +41,9 @@ inline hmac_fn fake_hmac()
         {
             unsigned acc = 0x811c9dc5u + static_cast<unsigned>(i);
             for(std::size_t k = 0; k < key.size(); ++k)
-                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u +
-                        static_cast<unsigned>(k);
+                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u + static_cast<unsigned>(k);
             for(std::size_t m = 0; m < msg.size(); ++m)
-                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u +
-                        static_cast<unsigned>(m + i);
+                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u + static_cast<unsigned>(m + i);
             out[i] = static_cast<std::byte>(acc & 0xffu);
         }
         return true;
@@ -84,14 +81,11 @@ inline attach_facts facts_for(std::uint8_t key_seed, attach_role role)
 // Recompute the canonical proof for `facts` under `material` via the same fake HMAC
 // the policy uses, so a facts value can be presented with a VALID proof. The proof
 // input ordering is the policy's contract; this mirror keeps it in one place.
-inline std::array<std::byte, 32> proof_for(std::span<const std::byte> material,
-                                           const attach_facts        &f)
+inline std::array<std::byte, 32> proof_for(std::span<const std::byte> material, const attach_facts &f)
 {
-    static constexpr std::array<std::byte, 13> label{
-            std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'u'},
-            std::byte{'s'}, std::byte{'-'}, std::byte{'a'}, std::byte{'t'}, std::byte{'t'},
-            std::byte{'a'}, std::byte{'c'}, std::byte{'h'}};
-    std::vector<std::byte> msg;
+    static constexpr std::array<std::byte, 13> label{std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'u'}, std::byte{'s'}, std::byte{'-'},
+                                                     std::byte{'a'}, std::byte{'t'}, std::byte{'t'}, std::byte{'a'}, std::byte{'c'}, std::byte{'h'}};
+    std::vector<std::byte>                     msg;
     msg.insert(msg.end(), label.begin(), label.end());
     msg.push_back(static_cast<std::byte>(f.role));
     msg.insert(msg.end(), f.initiator_id.begin(), f.initiator_id.end());

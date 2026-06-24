@@ -7,9 +7,7 @@ TEST_CASE("typed reqres: round-trip decodes the handler's response value", "[nod
     net n;
     n.connect();
 
-    typed_procedure proc{n.b, "rpc",
-                         [](const request_t &req) -> plexus::expected<response_t, std::error_code>
-                         { return response_t{req.value * 2}; }};
+    typed_procedure proc{n.b, "rpc", [](const request_t &req) -> plexus::expected<response_t, std::error_code> { return response_t{req.value * 2}; }};
     typed_caller    call{n.a, "rpc"};
     n.drive();
 
@@ -25,20 +23,14 @@ TEST_CASE("typed reqres: round-trip decodes the handler's response value", "[nod
     REQUIRE(*got == 42);
 }
 
-TEST_CASE("typed reqres: a provider handler error preserves its value under provider_category",
-          "[node][typed][call]")
+TEST_CASE("typed reqres: a provider handler error preserves its value under provider_category", "[node][typed][call]")
 {
     net n;
     n.connect();
 
     constexpr int   k_provider_value = 77;
-    typed_procedure proc{n.b, "rpc",
-                         [](const request_t &) -> plexus::expected<response_t, std::error_code>
-                         {
-                             return plexus::expected<response_t, std::error_code>{
-                                     plexus::unexpect,
-                                     std::error_code{k_provider_value, plexus::call_category()}};
-                         }};
+    typed_procedure proc{n.b, "rpc", [](const request_t &) -> plexus::expected<response_t, std::error_code>
+                         { return plexus::expected<response_t, std::error_code>{plexus::unexpect, std::error_code{k_provider_value, plexus::call_category()}}; }};
     typed_caller    call{n.a, "rpc"};
     n.drive();
 
@@ -55,15 +47,13 @@ TEST_CASE("typed reqres: a provider handler error preserves its value under prov
     REQUIRE(&err->category() == &plexus::provider_category());
 }
 
-TEST_CASE("typed reqres: a provider request-decode failure surfaces as deserialize_failed",
-          "[node][typed][call]")
+TEST_CASE("typed reqres: a provider request-decode failure surfaces as deserialize_failed", "[node][typed][call]")
 {
     net n;
     n.connect();
 
     bool            handler_ran = false;
-    typed_procedure proc{n.b, "rpc",
-                         [&](const request_t &) -> plexus::expected<response_t, std::error_code>
+    typed_procedure proc{n.b, "rpc", [&](const request_t &) -> plexus::expected<response_t, std::error_code>
                          {
                              handler_ran = true;
                              return response_t{0};

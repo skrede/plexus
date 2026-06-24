@@ -56,8 +56,7 @@ public:
     // per-message spin burn on every consumer.
     static constexpr std::uint32_t default_spin_budget = 256;
 
-    explicit slot_subscriber(broadcast_ring &ring,
-                             std::uint32_t   spin_budget = default_spin_budget) noexcept
+    explicit slot_subscriber(broadcast_ring &ring, std::uint32_t spin_budget = default_spin_budget) noexcept
             : m_ring(ring)
             , m_spin_budget(spin_budget)
     {
@@ -104,8 +103,14 @@ public:
         }
     }
 
-    bool          registered() const noexcept { return m_registered; }
-    std::uint64_t cursor() const noexcept { return m_cursor; }
+    bool registered() const noexcept
+    {
+        return m_registered;
+    }
+    std::uint64_t cursor() const noexcept
+    {
+        return m_cursor;
+    }
 
 private:
     // Adaptive spin-then-park: a back-to-back message may land within the budget, so spin
@@ -123,8 +128,7 @@ private:
     // O(1) step; congested (small-contention dif>0 or a skip tombstone) steps forward; ok pins the
     // slot Dekker-safe before advancing, retrying on a lost overwrite race rather than aliasing a
     // torn read. Returns true (settled = ok) only on a delivered slot; false means retry the loop.
-    bool resolve(loan_status st, const broadcast_ring::consume_result &consumed, taken_message &out,
-                 loan_status &settled) noexcept
+    bool resolve(loan_status st, const broadcast_ring::consume_result &consumed, taken_message &out, loan_status &settled) noexcept
     {
         if(st == loan_status::lagged)
         {
@@ -137,8 +141,7 @@ private:
             advance();
             return false;
         }
-        out = taken_message(taken_message::adopt_pin, consumed.slab.data(), consumed.slab.size(),
-                            &m_ring.refcount_at(m_cursor));
+        out = taken_message(taken_message::adopt_pin, consumed.slab.data(), consumed.slab.size(), &m_ring.refcount_at(m_cursor));
         advance();
         settled = loan_status::ok;
         return true;

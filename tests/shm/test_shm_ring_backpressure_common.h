@@ -33,7 +33,10 @@ struct backing_region
         m_data       = reinterpret_cast<std::byte *>(aligned);
         m_size       = bytes;
     }
-    std::span<std::byte> span() const noexcept { return {m_data, m_size}; }
+    std::span<std::byte> span() const noexcept
+    {
+        return {m_data, m_size};
+    }
 
 private:
     std::vector<std::byte> m_storage;
@@ -52,15 +55,13 @@ struct fixture
 
     fixture()
     {
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) ==
-                loan_status::ok);
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) == loan_status::ok);
     }
 
     void put(plexus::io::reliability rel, std::uint32_t value)
     {
         broadcast_ring::claim_result claim;
-        REQUIRE(ring.claim_with_policy(sizeof(value), rel, plexus::io::congestion::drop_newest,
-                                       claim) == loan_status::ok);
+        REQUIRE(ring.claim_with_policy(sizeof(value), rel, plexus::io::congestion::drop_newest, claim) == loan_status::ok);
         std::memcpy(claim.slab.data(), &value, sizeof(value));
         REQUIRE(ring.commit(claim.position, sizeof(value)) == loan_status::ok);
     }

@@ -95,11 +95,9 @@ public:
 
 private:
     template<typename Completion>
-    void dispatch(std::span<const std::byte> param, Completion &&completion,
-                  std::optional<std::chrono::nanoseconds> deadline)
+    void dispatch(std::span<const std::byte> param, Completion &&completion, std::optional<std::chrono::nanoseconds> deadline)
     {
-        detail::dispatch_bytes_call(m_seam, m_fqn, param, std::forward<Completion>(completion),
-                                    deadline);
+        detail::dispatch_bytes_call(m_seam, m_fqn, param, std::forward<Completion>(completion), deadline);
     }
 
     io::endpoint_seam m_seam{};
@@ -124,8 +122,7 @@ public:
     using response_codec = CRes<Res>;
 
     template<typename Policy, typename... NodeTs>
-    caller(node<Policy, NodeTs...> &n, std::string_view fqn, request_codec req_codec = {},
-           response_codec res_codec = {})
+    caller(node<Policy, NodeTs...> &n, std::string_view fqn, request_codec req_codec = {}, response_codec res_codec = {})
             : m_seam(n.endpoint_seam_for())
             , m_req_codec(std::move(req_codec))
             , m_res_codec(std::move(res_codec))
@@ -155,13 +152,10 @@ public:
 
 private:
     template<typename Completion>
-    void dispatch(const Req &request, Completion &&completion,
-                  std::optional<std::chrono::nanoseconds> deadline)
+    void dispatch(const Req &request, Completion &&completion, std::optional<std::chrono::nanoseconds> deadline)
     {
         const wire_bytes<> encoded = m_req_codec.encode(request);
-        detail::dispatch_typed_call<Res>(
-                m_seam, m_fqn, static_cast<std::span<const std::byte>>(encoded), m_res_codec,
-                std::forward<Completion>(completion), deadline);
+        detail::dispatch_typed_call<Res>(m_seam, m_fqn, static_cast<std::span<const std::byte>>(encoded), m_res_codec, std::forward<Completion>(completion), deadline);
     }
 
     io::endpoint_seam m_seam{};

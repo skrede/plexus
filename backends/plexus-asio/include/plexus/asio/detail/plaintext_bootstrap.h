@@ -53,7 +53,9 @@ public:
         c.start_read_loop();
     }
 
-    void reset() noexcept {}
+    void reset() noexcept
+    {
+    }
 };
 
 }

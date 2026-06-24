@@ -32,7 +32,10 @@ struct cookie_relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const { return front.local_endpoint().port(); }
+    [[nodiscard]] std::uint16_t port() const
+    {
+        return front.local_endpoint().port();
+    }
 
     void recv_front()
     {
@@ -42,34 +45,29 @@ struct cookie_relay
                                      if(ec)
                                          return;
                                      client_ep = from;
-                                     auto copy = std::make_shared<std::vector<std::byte>>(
-                                             front_buf.data(), front_buf.data() + n);
-                                     back.async_send_to(::asio::buffer(*copy), server_ep,
-                                                        [copy](std::error_code, std::size_t) {});
+                                     auto copy = std::make_shared<std::vector<std::byte>>(front_buf.data(), front_buf.data() + n);
+                                     back.async_send_to(::asio::buffer(*copy), server_ep, [copy](std::error_code, std::size_t) {});
                                      recv_front();
                                  });
     }
 
     void recv_back()
     {
-        back.async_receive_from(
-                ::asio::buffer(back_buf), from,
-                [this](std::error_code ec, std::size_t n)
-                {
-                    if(ec)
-                        return;
-                    if(server_datagrams == 0)
-                        first_server_response = n;
-                    ++server_datagrams;
-                    if(client_ep.port() != 0)
-                    {
-                        auto copy = std::make_shared<std::vector<std::byte>>(back_buf.data(),
-                                                                             back_buf.data() + n);
-                        front.async_send_to(::asio::buffer(*copy), client_ep,
-                                            [copy](std::error_code, std::size_t) {});
-                    }
-                    recv_back();
-                });
+        back.async_receive_from(::asio::buffer(back_buf), from,
+                                [this](std::error_code ec, std::size_t n)
+                                {
+                                    if(ec)
+                                        return;
+                                    if(server_datagrams == 0)
+                                        first_server_response = n;
+                                    ++server_datagrams;
+                                    if(client_ep.port() != 0)
+                                    {
+                                        auto copy = std::make_shared<std::vector<std::byte>>(back_buf.data(), back_buf.data() + n);
+                                        front.async_send_to(::asio::buffer(*copy), client_ep, [copy](std::error_code, std::size_t) {});
+                                    }
+                                    recv_back();
+                                });
     }
 };
 
@@ -94,12 +92,9 @@ TEST_CASE("dtls.cookie: a no-cookie ClientHello gets a small HelloVerifyRequest,
 
         std::unique_ptr<ptls::dtls_channel> accepted, dialed;
         bool                                dial_failed = false;
-        server.on_accepted([&](std::unique_ptr<ptls::dtls_channel> ch)
-                           { accepted = std::move(ch); });
-        client.on_dialed([&](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &)
-                         { dialed = std::move(ch); });
-        client.on_dial_failed([&](const pdt::pio::endpoint &, pdt::pio::io_error)
-                              { dial_failed = true; });
+        server.on_accepted([&](std::unique_ptr<ptls::dtls_channel> ch) { accepted = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &) { dialed = std::move(ch); });
+        client.on_dial_failed([&](const pdt::pio::endpoint &, pdt::pio::io_error) { dial_failed = true; });
 
         server.listen({"dtls", "127.0.0.1:0"});
         cookie_relay link(io, server.port());

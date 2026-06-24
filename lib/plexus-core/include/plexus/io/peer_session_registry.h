@@ -64,8 +64,7 @@ public:
         if(m_slots.find(id) != m_slots.end())
             return;
         if(endpoint_claimed(id, ep))
-            return m_build.logger.warn(
-                    "plexus: dial endpoint already claimed by another peer — slot not created");
+            return m_build.logger.warn("plexus: dial endpoint already claimed by another peer — slot not created");
         auto slot = std::make_unique<slot_block>(m_transport, m_build, id, ep, node_name);
         detail::wire_redial(*this, *slot, id);
         detail::wire_dead(*this, *slot, id);
@@ -96,9 +95,8 @@ public:
     node_id accept_session(std::unique_ptr<channel_type> channel, PreBuild &&pre_build = nullptr)
     {
         const node_id inbound_id = next_inbound_id();
-        auto slot = std::make_unique<slot_block>(m_transport, m_build, inbound_id, endpoint{},
-                                                 node_name_of(inbound_id));
-        auto [it, inserted] = m_slots.emplace(inbound_id, std::move(slot));
+        auto          slot       = std::make_unique<slot_block>(m_transport, m_build, inbound_id, endpoint{}, node_name_of(inbound_id));
+        auto [it, inserted]      = m_slots.emplace(inbound_id, std::move(slot));
         if(!inserted)
         {
             m_build.logger.warn("plexus: inbound id collision — accept dropped");
@@ -129,8 +127,7 @@ public:
     bool is_connected(const node_id &id) const
     {
         auto it = m_slots.find(id);
-        return it != m_slots.end() && it->second->session.has_value() &&
-                it->second->session->is_complete();
+        return it != m_slots.end() && it->second->session.has_value() && it->second->session->is_complete();
     }
 
     session_type *session_for(const node_id &id)
@@ -172,7 +169,10 @@ public:
                 fn(id, *slot->session);
     }
 
-    driver_type  &driver_for(const node_id &id) { return m_slots.at(id)->driver; }
+    driver_type &driver_for(const node_id &id)
+    {
+        return m_slots.at(id)->driver;
+    }
     std::uint32_t attempt_count(const node_id &id) const
     {
         return m_slots.at(id)->driver.attempt_count();
@@ -201,8 +201,7 @@ private:
     // sibling, then the session built from both).
     struct slot_block
     {
-        slot_block(Transport &transport, session_build_context<Policy> &build, const node_id &id,
-                   const endpoint &ep, const std::string &node_name)
+        slot_block(Transport &transport, session_build_context<Policy> &build, const node_id &id, const endpoint &ep, const std::string &node_name)
                 : driver(transport, build.executor, build.redial, ep, build.redial_seed)
         {
             record.peer_id       = id;
@@ -220,9 +219,7 @@ private:
     {
         slot.record.channel = std::move(channel);
         slot.session.reset();
-        slot.session.emplace(slot.record, m_build.executor, m_build.fsm_cfg,
-                             m_build.handshake_timeout, m_build.messages, m_build.procedures,
-                             inbound, m_build.logger);
+        slot.session.emplace(slot.record, m_build.executor, m_build.fsm_cfg, m_build.handshake_timeout, m_build.messages, m_build.procedures, inbound, m_build.logger);
         if(inbound)
             detail::wire_inbound_drop(*this, slot, slot.record.peer_id);
         else

@@ -77,9 +77,8 @@ constexpr std::size_t k_kib = 1024;
 // LARGE payload (> cap) reroutes over the wire — the per-message medium split.
 constexpr std::uint32_t k_cap_bytes = 2 * k_kib;
 
-using same_host_node = decltype(std::declval<pasio::same_host_transports &>().make_node(
-        std::declval<plexus::discovery::discovery &>(), std::declval<const plexus::node_id &>(),
-        std::declval<plexus::node_options>()));
+using same_host_node = decltype(std::declval<pasio::same_host_transports &>().make_node(std::declval<plexus::discovery::discovery &>(), std::declval<const plexus::node_id &>(),
+                                                                                        std::declval<plexus::node_options>()));
 
 plexus::node_id make_id(std::uint8_t seed)
 {
@@ -91,9 +90,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options dial_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(20),
-                                                     std::chrono::milliseconds(500), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(20), std::chrono::milliseconds(500), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xC0FFEEu;
     opts.dial_eagerly = eager;
     return opts;
@@ -111,11 +108,9 @@ plexus::node_options distinct_fingerprint_opts(bool eager, std::uint64_t fp)
 // The peer's contact card pre-seeded into one side's static_discovery table: each forked
 // process owns its OWN discovery, so the OTHER node's reachable tcp endpoint is supplied
 // verbatim (no live mDNS) — browse-to-awareness then dials it deterministically.
-plexus::discovery::service_info peer_card(const std::string &name, const plexus::node_id &id,
-                                          std::uint16_t tcp_port)
+plexus::discovery::service_info peer_card(const std::string &name, const plexus::node_id &id, std::uint16_t tcp_port)
 {
-    return {name, plexus::io::endpoint{"", "127.0.0.1"},
-            plexus::discovery::assemble_contact_card(id, {{"tcp", tcp_port}})};
+    return {name, plexus::io::endpoint{"", "127.0.0.1"}, plexus::discovery::assemble_contact_card(id, {{"tcp", tcp_port}})};
 }
 
 std::span<const std::byte> as_bytes(const std::string &s)
@@ -161,14 +156,13 @@ bool contains(std::span<const std::byte> hay, std::span<const std::byte> needle)
 struct coord
 {
     std::atomic<std::uint32_t> ring_ready{0}; // the publisher minted the companion ring
-    std::atomic<std::uint32_t> shm_seen{0}; // the raw consumer saw the fitting payload on the ring
+    std::atomic<std::uint32_t> shm_seen{0};   // the raw consumer saw the fitting payload on the ring
     std::atomic<std::uint32_t> consumer_done{0};
 };
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
-                     0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -177,14 +171,12 @@ coord *map_coord()
 // fitting payload appears on the ring — proving the publisher's facade routed it over SHM,
 // byte-observable across the process boundary. Bounded by a deadline so a non-engaged ring
 // (a regression) fails rather than hangs.
-bool ring_carries(const std::string &fqn, std::span<const std::byte> needle,
-                  std::chrono::seconds bound)
+bool ring_carries(const std::string &fqn, std::span<const std::byte> needle, std::chrono::seconds bound)
 {
     posix_shm_region_broker broker;
     region_handle           ctrl, slab;
     const auto              deadline = std::chrono::steady_clock::now() + bound;
-    while(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
-          broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
+    while(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
     {
         if(std::chrono::steady_clock::now() >= deadline)
             return false;
@@ -265,8 +257,7 @@ struct medium_result
 // The small payload is distinct per run (so a stale ring cannot pass); the large payload is a
 // distinct marker the subscriber's wire callback reports separately. `same_host` selects the
 // co-host vs forced-distinct variant.
-medium_result one_run(const std::string &fqn, const std::string &small, const std::string &large,
-                      bool same_host)
+medium_result one_run(const std::string &fqn, const std::string &small, const std::string &large, bool same_host)
 {
     const std::uint16_t   sub_port = static_cast<std::uint16_t>(41000 + 2 * (::getpid() % 9000));
     const std::uint16_t   pub_port = sub_port + 1;
@@ -303,9 +294,7 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
             ::asio::io_context                  io;
             plexus::discovery::static_discovery disc{{peer_card(pub_name, pub_id, pub_port)}};
             pasio::same_host_transports         ts{io};
-            auto node = ts.make_node(disc, sub_id,
-                                     same_host ? dial_opts(true)
-                                               : distinct_fingerprint_opts(true, 0xA1A1A1A1u));
+            auto                                node = ts.make_node(disc, sub_id, same_host ? dial_opts(true) : distinct_fingerprint_opts(true, 0xA1A1A1A1u));
 
             // The subscriber declares its OWN qualifying same-host hint: the upgrade is
             // bilateral-LOCAL (each side decides from its own hint with no wire exchange), so
@@ -318,27 +307,22 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
             // over-cap payload off the TCP wire. Tag which arrived so the parent proves the
             // subscriber received the fitting one (it can ONLY have crossed SHM — the publisher
             // never routed it to this node's socket) and the over-cap one (over the wire).
-            plexus::subscriber<> sub{
-                    node, fqn, sub_qos, [&](std::span<const std::byte> b)
-                    {
-                        const std::string got(reinterpret_cast<const char *>(b.data()), b.size());
-                        const char        tag = got == small ? 'S' : (got == large ? 'L' : '?');
-                        const ssize_t     w   = ::write(pipe_fd[1], &tag, 1);
-                        (void)w;
-                    }};
+            plexus::subscriber<> sub{node, fqn, sub_qos, [&](std::span<const std::byte> b)
+                                     {
+                                         const std::string got(reinterpret_cast<const char *>(b.data()), b.size());
+                                         const char        tag = got == small ? 'S' : (got == large ? 'L' : '?');
+                                         const ssize_t     w   = ::write(pipe_fd[1], &tag, 1);
+                                         (void)w;
+                                     }};
             node.listen({"tcp", "127.0.0.1:" + std::to_string(sub_port)});
-            pump_until(
-                    io, [&] { return node.router().is_connected(pub_id); },
-                    std::chrono::seconds(10));
+            pump_until(io, [&] { return node.router().is_connected(pub_id); }, std::chrono::seconds(10));
 
             // Once the publisher has minted the companion ring (same-host only), run the raw
             // SHM consumer to observe the fitting payload on the ring while pumping the node
             // so the wire-side over-cap message still flows.
             if(same_host)
             {
-                pump_until(
-                        io, [&] { return c->ring_ready.load(std::memory_order_acquire) != 0; },
-                        std::chrono::seconds(10));
+                pump_until(io, [&] { return c->ring_ready.load(std::memory_order_acquire) != 0; }, std::chrono::seconds(10));
                 const bool seen = ring_carries(fqn, as_bytes(small), std::chrono::seconds(10));
                 c->shm_seen.store(seen ? 1u : 0u, std::memory_order_release);
             }
@@ -360,9 +344,7 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
         ::asio::io_context                  io;
         plexus::discovery::static_discovery disc{{peer_card(sub_name, sub_id, sub_port)}};
         pasio::same_host_transports         ts{io};
-        auto node = ts.make_node(disc, pub_id,
-                                 same_host ? dial_opts(false)
-                                           : distinct_fingerprint_opts(false, 0xB2B2B2B2u));
+        auto                                node = ts.make_node(disc, pub_id, same_host ? dial_opts(false) : distinct_fingerprint_opts(false, 0xB2B2B2B2u));
 
         if(same_host)
             REQUIRE_FALSE(node.router().local_fingerprint().is_null());
@@ -399,11 +381,9 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
             while(::read(pipe_fd[0], &tag, 1) == 1)
             {
                 if(tag == 'S')
-                    result.small_at_callback =
-                            true; // the fitting payload reached the callback (via SHM)
+                    result.small_at_callback = true; // the fitting payload reached the callback (via SHM)
                 else if(tag == 'L')
-                    result.large_at_callback =
-                            true; // the over-cap payload reached the callback (via wire)
+                    result.large_at_callback = true; // the over-cap payload reached the callback (via wire)
             }
             consumer_done = c->consumer_done.load(std::memory_order_acquire) != 0;
         }
@@ -442,26 +422,23 @@ TEST_CASE("node_xproc_shm the subscriber callback receives the fitting message o
     // transited the ring.
     for(int run = 0; run < 2; ++run)
     {
-        const std::string fqn =
-                "topic.xproc." + std::to_string(::getpid()) + "." + std::to_string(run);
-        const std::string small =
-                "xproc-shm-fit-" + std::to_string(run) + "-" + std::to_string(::getpid());
+        const std::string fqn   = "topic.xproc." + std::to_string(::getpid()) + "." + std::to_string(run);
+        const std::string small = "xproc-shm-fit-" + std::to_string(run) + "-" + std::to_string(::getpid());
         const std::string large = std::string(64 * k_kib, 'L') + std::to_string(run);
 
         const medium_result r = one_run(fqn, small, large, /*same_host=*/true);
 
-        REQUIRE(r.region_observed);   // the /dev/shm companion ring mapped while live
-        REQUIRE(r.small_at_callback); // the subscriber callback received the fitting payload (over
-                                      // SHM)
-        REQUIRE(r.small_over_shm);    // corroborated: the fitting payload was on the SHM ring
-        REQUIRE(r.large_at_callback); // the subscriber callback received the over-cap payload (over
-                                      // wire)
+        REQUIRE(r.region_observed);      // the /dev/shm companion ring mapped while live
+        REQUIRE(r.small_at_callback);    // the subscriber callback received the fitting payload (over
+                                         // SHM)
+        REQUIRE(r.small_over_shm);       // corroborated: the fitting payload was on the SHM ring
+        REQUIRE(r.large_at_callback);    // the subscriber callback received the over-cap payload (over
+                                         // wire)
         REQUIRE_FALSE(region_maps(fqn)); // the ring is gone once both nodes tore down (no leak)
     }
 }
 
-TEST_CASE("node_xproc_shm a forced-distinct-fingerprint pair delivers over the wire with no region",
-          "[integration][shm][node_xproc_shm]")
+TEST_CASE("node_xproc_shm a forced-distinct-fingerprint pair delivers over the wire with no region", "[integration][shm][node_xproc_shm]")
 {
     // The cross-host fail-closed fallback: distinct fingerprints -> is_same_host false -> no
     // upgrade -> NO /dev/shm region, and EVERY message (fitting and over-cap) crosses the TCP

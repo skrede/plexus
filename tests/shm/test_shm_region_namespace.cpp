@@ -53,8 +53,7 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
-                     0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -71,8 +70,7 @@ void run_consumer(coord *c, const std::string &fqn, std::string_view ns)
 
     posix_shm_region_broker broker;
     region_handle           ctrl, slab;
-    const bool attached = broker.attach(control_name(fqn, ns), ctrl) == pio::region_status::ok &&
-            broker.attach(slab_name(fqn, ns), slab) == pio::region_status::ok;
+    const bool              attached = broker.attach(control_name(fqn, ns), ctrl) == pio::region_status::ok && broker.attach(slab_name(fqn, ns), slab) == pio::region_status::ok;
     c->attach_ok.store(attached ? 1u : 0u, std::memory_order_release);
 
     bool ok = false;
@@ -111,8 +109,7 @@ void run_consumer(coord *c, const std::string &fqn, std::string_view ns)
 
 }
 
-TEST_CASE("shm.region_namespace same namespace converges and a different one is isolated",
-          "[shm][same_host][namespace][roundtrip]")
+TEST_CASE("shm.region_namespace same namespace converges and a different one is isolated", "[shm][same_host][namespace][roundtrip]")
 {
     const std::string        fqn         = "topic.region_namespace." + std::to_string(::getpid());
     const std::string        producer_ns = "alpha";
@@ -136,18 +133,13 @@ TEST_CASE("shm.region_namespace same namespace converges and a different one is 
 
         posix_shm_region_broker broker;
         region_handle           ctrl, slab;
-        REQUIRE(broker.create(control_name(fqn, producer_ns),
-                              pio::control_region_bytes(geom.cell_count),
-                              pio::create_options{.unlink_stale_on_create = true},
-                              ctrl) == pio::region_status::ok);
-        REQUIRE(broker.create(slab_name(fqn, producer_ns),
-                              pio::slab_region_bytes(geom.cell_count, geom.slot_capacity),
-                              pio::create_options{.unlink_stale_on_create = true},
-                              slab) == pio::region_status::ok);
+        REQUIRE(broker.create(control_name(fqn, producer_ns), pio::control_region_bytes(geom.cell_count), pio::create_options{.unlink_stale_on_create = true}, ctrl) ==
+                pio::region_status::ok);
+        REQUIRE(broker.create(slab_name(fqn, producer_ns), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{.unlink_stale_on_create = true}, slab) ==
+                pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count,
-                                            geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
         c->regions_ready.store(1, std::memory_order_release);
 
         while(c->consumer_armed.load(std::memory_order_acquire) == 0)
@@ -156,9 +148,7 @@ TEST_CASE("shm.region_namespace same namespace converges and a different one is 
         if(expect_share)
         {
             pio::broadcast_ring::claim_result claim;
-            REQUIRE(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable,
-                                           plexus::io::congestion::block,
-                                           claim) == pio::loan_status::ok);
+            REQUIRE(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) == pio::loan_status::ok);
             std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
             REQUIRE(ring.commit(claim.position, sizeof(k_payload)) == pio::loan_status::ok);
         }
@@ -187,6 +177,12 @@ TEST_CASE("shm.region_namespace same namespace converges and a different one is 
         ::munmap(c, sizeof(coord));
     };
 
-    SECTION("convergence: same namespace shares the ring") { round(producer_ns, true); }
-    SECTION("isolation: a different namespace does not share the ring") { round("beta", false); }
+    SECTION("convergence: same namespace shares the ring")
+    {
+        round(producer_ns, true);
+    }
+    SECTION("isolation: a different namespace does not share the ring")
+    {
+        round("beta", false);
+    }
 }

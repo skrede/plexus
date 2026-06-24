@@ -63,7 +63,10 @@ public:
 
     // The firable predicate try_fire gates on, exposed so the executor can skip
     // the clock read entirely when nothing could fire.
-    [[nodiscard]] bool armed() const noexcept { return m_active && m_handler; }
+    [[nodiscard]] bool armed() const noexcept
+    {
+        return m_active && m_handler;
+    }
 
     bool try_fire(typename Clock::time_point now)
     {

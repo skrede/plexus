@@ -2,8 +2,7 @@
 
 using namespace pending_dial_registry_fixture;
 
-TEST_CASE("pending_dial_registry insert_accepted+adopt_accepted transfers ownership out",
-          "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry insert_accepted+adopt_accepted transfers ownership out", "[io][pending_dial_registry]")
 {
     int           destroyed = 0;
     deferred_sink sink;

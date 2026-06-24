@@ -80,9 +80,7 @@ inline std::span<const std::byte> bytes_of(const std::string &s)
 
 // Encode a complete in-memory stream of mixed-category records through a real byte_ring
 // drain into an in-memory sink. Returns the framed byte stream the reader consumes.
-inline std::vector<std::byte> encode_mixed_stream(record_stream_writer &w, byte_ring &ring,
-                                                  in_memory_byte_sink &sink,
-                                                  const std::string   &payload)
+inline std::vector<std::byte> encode_mixed_stream(record_stream_writer &w, byte_ring &ring, in_memory_byte_sink &sink, const std::string &payload)
 {
     sink.write(w.begin_stream(7u, make_node(1), topic_capture_rule{}, {}));
 
@@ -92,13 +90,11 @@ inline std::vector<std::byte> encode_mixed_stream(record_stream_writer &w, byte_
     info.publication_sequence = 42;
     info.source_timestamp     = 100;
     info.reception_timestamp  = 101;
-    ring.try_push(w.sample(11u, plexus::wire::fqn_topic_hash("topic/a"), info, 0xC0DEu, true,
-                           capture_fidelity::payload, bytes_of(payload)));
+    ring.try_push(w.sample(11u, plexus::wire::fqn_topic_hash("topic/a"), info, 0xC0DEu, true, capture_fidelity::payload, bytes_of(payload)));
 
     message_info meta{};
     meta.publication_sequence = 7;
-    ring.try_push(w.sample(12u, plexus::wire::fqn_topic_hash("topic/b"), meta, 0u, false,
-                           capture_fidelity::metadata, {}));
+    ring.try_push(w.sample(12u, plexus::wire::fqn_topic_hash("topic/b"), meta, 0u, false, capture_fidelity::metadata, {}));
 
     drop_event de{};
     de.cause      = drop_cause::drop_newest;

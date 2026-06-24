@@ -54,7 +54,10 @@ public:
         return inner_it != outer_it->second.end() && inner_it->second > 0;
     }
 
-    void forget(std::string_view k1) { m_counts.erase(std::string{k1}); }
+    void forget(std::string_view k1)
+    {
+        m_counts.erase(std::string{k1});
+    }
 
 private:
     std::unordered_map<std::string, std::unordered_map<std::string, std::uint32_t>> m_counts;

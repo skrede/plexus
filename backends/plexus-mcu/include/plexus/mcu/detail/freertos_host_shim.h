@@ -24,7 +24,10 @@ inline constexpr BaseType_t pdFALSE = 0;
 // The host clock assumes a 1000 Hz tick so a millisecond maps to one tick — the
 // ESP-IDF default rate. The wrap-safe comparison at ~49.7 days is an on-bench
 // concern, not exercised by the host compile-proof.
-constexpr TickType_t pdMS_TO_TICKS(std::uint32_t ms) noexcept { return ms; }
+constexpr TickType_t pdMS_TO_TICKS(std::uint32_t ms) noexcept
+{
+    return ms;
+}
 
 namespace plexus::mcu::detail {
 
@@ -42,8 +45,7 @@ inline TickType_t xTaskGetTickCount() noexcept
     using clock                           = std::chrono::steady_clock;
     static const auto               start = clock::now();
     const auto                      since = clock::now() - start;
-    const std::chrono::milliseconds ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(since);
+    const std::chrono::milliseconds ms    = std::chrono::duration_cast<std::chrono::milliseconds>(since);
     return static_cast<TickType_t>(ms.count());
 }
 
@@ -79,7 +81,9 @@ inline BaseType_t xQueueSendFromISR(QueueHandle_t q, const void *item, BaseType_
     return xQueueSend(q, item, 0);
 }
 
-inline void vTaskDelay(TickType_t /*ticks*/) noexcept {}
+inline void vTaskDelay(TickType_t /*ticks*/) noexcept
+{
+}
 
 inline std::uint32_t ulTaskNotifyTake(BaseType_t /*clear*/, TickType_t /*wait*/) noexcept
 {

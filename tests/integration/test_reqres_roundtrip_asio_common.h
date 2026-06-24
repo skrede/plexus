@@ -62,26 +62,22 @@ struct live_rpc
     pio::frame_router server_router{sink}; // server: demux inbound rpc_request
     pio::frame_router client_router{sink}; // client: demux inbound rpc_response
 
-    std::optional<forwarder> provider; // server side (constructed once accepted)
-    forwarder                caller{
-            io, std::chrono::seconds(30),
-            sink}; // client side; generous so the roundtrip never trips
+    std::optional<forwarder> provider;                                   // server side (constructed once accepted)
+    forwarder                caller{io, std::chrono::seconds(30), sink}; // client side; generous so the roundtrip never trips
 
     std::optional<forwarder::peer> caller_peer;
     std::optional<forwarder::peer> provider_peer;
 
     live_rpc()
     {
-        listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch)
-                             { server_channel = std::move(ch); });
+        listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) { server_channel = std::move(ch); });
         listener.start({"tcp", "127.0.0.1:0"});
 
         ::asio::ip::tcp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), listener.port());
         client.socket().connect(server_ep);
 
         // Client receive: header-on frame -> router -> rpc_response -> caller.
-        client_router.on_rpc_response([this](std::span<const std::byte> inner)
-                                      { caller.deliver_response(*caller_peer, inner); });
+        client_router.on_rpc_response([this](std::span<const std::byte> inner) { caller.deliver_response(*caller_peer, inner); });
         client.on_data([this](std::span<const std::byte> frame) { client_router.route(frame); });
         client.start_read();
 
@@ -94,10 +90,8 @@ struct live_rpc
         provider_peer.emplace(forwarder::peer{*server_channel, "client-node"});
 
         // Server receive: header-on frame -> router -> rpc_request -> provider.
-        server_router.on_rpc_request([this](std::span<const std::byte> inner)
-                                     { provider->deliver_request(*provider_peer, inner); });
-        server_channel->on_data([this](std::span<const std::byte> frame)
-                                { server_router.route(frame); });
+        server_router.on_rpc_request([this](std::span<const std::byte> inner) { provider->deliver_request(*provider_peer, inner); });
+        server_channel->on_data([this](std::span<const std::byte> frame) { server_router.route(frame); });
         server_channel->start_read();
     }
 

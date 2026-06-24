@@ -46,13 +46,22 @@ public:
         if(m_sink)
             m_sink(std::span<const std::byte>{m_last});
     }
-    void                               close() { m_closed = true; }
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {"wire", ""}; }
+    void close()
+    {
+        m_closed = true;
+    }
+    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    {
+        return {"wire", ""};
+    }
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_closed = std::move(cb);
+    }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -61,7 +70,10 @@ public:
     {
         m_on_protocol_close = std::move(cb);
     }
-    [[nodiscard]] std::size_t backpressured() const { return 0; }
+    [[nodiscard]] std::size_t backpressured() const
+    {
+        return 0;
+    }
 
     void feed(std::span<const std::byte> bytes)
     {
@@ -78,8 +90,7 @@ public:
     plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
 
-static_assert(plexus::io::byte_channel<wire_lower>,
-              "wire_lower must satisfy byte_channel for the decorator test");
+static_assert(plexus::io::byte_channel<wire_lower>, "wire_lower must satisfy byte_channel for the decorator test");
 
 inline derived_keys fixed_keys()
 {
@@ -122,15 +133,12 @@ inline std::vector<std::byte> make_frame(std::uint64_t session_id, std::string_v
 
 // Seal a sequence of datagrams the sender emits, capturing each on the wire so the
 // test can reorder/replay them into the receiver at will.
-inline std::vector<std::vector<std::byte>> seal_datagrams(const derived_keys &keys,
-                                                          std::size_t         count)
+inline std::vector<std::vector<std::byte>> seal_datagrams(const derived_keys &keys, std::size_t count)
 {
     wire_lower                                 send_wire;
-    datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305,
-                                                      keys);
+    datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys);
     std::vector<std::vector<std::byte>>        on_wire;
-    send_wire.m_sink = [&](std::span<const std::byte> b)
-    { on_wire.emplace_back(b.begin(), b.end()); };
+    send_wire.m_sink = [&](std::span<const std::byte> b) { on_wire.emplace_back(b.begin(), b.end()); };
     for(std::size_t i = 0; i < count; ++i)
         sender.send(make_frame(7, "datagram-payload-" + std::to_string(i)));
     return on_wire;

@@ -15,8 +15,7 @@ TEST_CASE("udp reliable_datagram: a 'udpr' dial mints reliable-mode channels on 
     server.listen({"udp", "127.0.0.1:0"});
     pump_until(io, [&] { return server.port() != 0; });
 
-    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                     { dialed = std::move(ch); });
+    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
     client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
     pump_until(io, [&] { return dialed && accepted; });
 
@@ -30,8 +29,7 @@ TEST_CASE("udp reliable_datagram: a 'udpr' dial mints reliable-mode channels on 
     REQUIRE(accepted->remote_endpoint().scheme == "udpr");
 }
 
-TEST_CASE("udp reliable_datagram: a 'udp' dial stays best_effort (the opt-in is scheme-gated)",
-          "[udp][reliable_datagram][mode]")
+TEST_CASE("udp reliable_datagram: a 'udp' dial stays best_effort (the opt-in is scheme-gated)", "[udp][reliable_datagram][mode]")
 {
     ::asio::io_context   io;
     pasio::udp_transport server{io};
@@ -42,8 +40,7 @@ TEST_CASE("udp reliable_datagram: a 'udp' dial stays best_effort (the opt-in is 
     server.listen({"udp", "127.0.0.1:0"});
     pump_until(io, [&] { return server.port() != 0; });
 
-    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                     { dialed = std::move(ch); });
+    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
     client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
     pump_until(io, [&] { return dialed && accepted; });
 

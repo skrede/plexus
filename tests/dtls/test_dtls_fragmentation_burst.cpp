@@ -14,8 +14,7 @@ struct large_run
     std::vector<std::byte> got;
 };
 
-large_run dtls_large_run(const pdt::identity_fixture &srv, const pdt::identity_fixture &cli,
-                         std::size_t size, std::chrono::milliseconds timeout)
+large_run dtls_large_run(const pdt::identity_fixture &srv, const pdt::identity_fixture &cli, std::size_t size, std::chrono::milliseconds timeout)
 {
     frag_link l(srv, cli, /*max_payload=*/8u * 1024u * 1024u);
     l.handshake();

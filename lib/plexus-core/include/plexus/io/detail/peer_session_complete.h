@@ -30,13 +30,11 @@ peer_kind session_kind(const Session &s) noexcept
 
 // Route one lifecycle edge up the seam (if wired) as an owned-value carrier.
 template<typename Session>
-void fire_lifecycle(Session &s, lifecycle_edge edge,
-                    handshake_outcome reason = handshake_outcome::none)
+void fire_lifecycle(Session &s, lifecycle_edge edge, handshake_outcome reason = handshake_outcome::none)
 {
     if(!s.m_on_lifecycle)
         return;
-    s.m_on_lifecycle(
-            lifecycle_event{edge, s.m_ctx.peer_id, s.m_ctx.node_name, session_kind(s), reason});
+    s.m_on_lifecycle(lifecycle_event{edge, s.m_ctx.peer_id, s.m_ctx.node_name, session_kind(s), reason});
 }
 
 // Route one security event up the dedicated seam (if wired) carrying THIS peer's pinned id.
@@ -114,8 +112,7 @@ void execute(Session &s, const fsm_step_result &step)
 template<typename Session>
 void record_same_host(Session &s) noexcept
 {
-    s.m_ctx.same_host =
-            is_same_host(s.m_fsm.last_seen_peer_fingerprint(), s.m_fsm.local_fingerprint());
+    s.m_ctx.same_host = is_same_host(s.m_fsm.last_seen_peer_fingerprint(), s.m_fsm.local_fingerprint());
 }
 
 // Re-emit every remembered subscribe for this peer through the counted subscribe(), so each
@@ -155,9 +152,7 @@ void on_complete(Session &s)
 
 static bool is_refusal(wire::subscribe_status status)
 {
-    return status == wire::subscribe_status::type_mismatch ||
-            status == wire::subscribe_status::incompatible_qos ||
-            status == wire::subscribe_status::source_identity_incompatible;
+    return status == wire::subscribe_status::type_mismatch || status == wire::subscribe_status::incompatible_qos || status == wire::subscribe_status::source_identity_incompatible;
 }
 
 // Fire the subscribe-outcome observables for a matched response (kept separate so the

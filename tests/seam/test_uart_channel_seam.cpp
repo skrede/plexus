@@ -22,8 +22,7 @@
 #include <initializer_list>
 
 // The explicit witness at the test site (mirrors the gate in the header).
-static_assert(plexus::io::byte_channel<plexus::mcu::uart_channel>,
-              "uart_channel must satisfy byte_channel at the seam-test site");
+static_assert(plexus::io::byte_channel<plexus::mcu::uart_channel>, "uart_channel must satisfy byte_channel at the seam-test site");
 
 namespace {
 
@@ -34,13 +33,8 @@ constexpr std::size_t k_ring        = 2048;
 // peer would put on the link — exactly what the decorator expects to verify and emit.
 std::vector<std::byte> on_wire(std::span<const std::byte> payload)
 {
-    auto frame = plexus::wire::encode_frame(
-            plexus::wire::frame_header{.type         = plexus::wire::msg_type::unidirectional,
-                                       .flags        = 0,
-                                       .session_id   = 0,
-                                       .timestamp_ns = 0,
-                                       .payload_len  = 0},
-            payload);
+    auto frame = plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
+                                            payload);
     const auto header  = std::span<const std::byte>{frame}.first(plexus::wire::header_size);
     const auto body    = std::span<const std::byte>{frame}.subspan(plexus::wire::header_size);
     const auto trailer = plexus::stream::crc_trailer(header, body);
@@ -62,15 +56,14 @@ TEST_CASE("uart_channel delivers a verified frame synchronously, no owning per-f
 {
     plexus::test::reset_uart_fixture();
 
-    const auto payload = bytes_of({0xDE, 0xAD, 0xBE, 0xEF});
+    const auto payload              = bytes_of({0xDE, 0xAD, 0xBE, 0xEF});
     plexus::test::uart_fixture().rx = on_wire(payload);
 
     plexus::mcu::uart_channel ch{0, k_max_payload, k_ring};
 
     std::vector<std::byte> received;
     bool                   protocol_closed = false;
-    ch.on_data([&](std::span<const std::byte> frame)
-               { received.assign(frame.begin(), frame.end()); });
+    ch.on_data([&](std::span<const std::byte> frame) { received.assign(frame.begin(), frame.end()); });
     ch.on_protocol_close([&](plexus::wire::close_cause) { protocol_closed = true; });
 
     ch.poll();
@@ -91,8 +84,8 @@ TEST_CASE("uart_channel drops+resyncs a garbled stream and never wedges", "[seam
     auto       garbage = bytes_of({0x00, 0xFF, 0x13, 0x37});
     const auto payload = bytes_of({0x01, 0x02, 0x03});
     auto       bad     = on_wire(payload);
-    bad.back() = std::byte(bad.back() == std::byte{0} ? 0x01 : 0x00); // flip the CRC
-    auto good = on_wire(payload);
+    bad.back()         = std::byte(bad.back() == std::byte{0} ? 0x01 : 0x00); // flip the CRC
+    auto good          = on_wire(payload);
 
     auto &rx = plexus::test::uart_fixture().rx;
     rx.insert(rx.end(), garbage.begin(), garbage.end());
@@ -121,12 +114,7 @@ TEST_CASE("uart_channel egress appends the reused CRC trailer", "[seam]")
 
     const auto payload = bytes_of({0x11, 0x22});
     const auto frame   = plexus::wire::encode_frame(
-            plexus::wire::frame_header{.type         = plexus::wire::msg_type::unidirectional,
-                                       .flags        = 0,
-                                       .session_id   = 0,
-                                       .timestamp_ns = 0,
-                                       .payload_len  = 0},
-            payload);
+            plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, payload);
     ch.send(frame);
 
     // The header+payload then the 4-byte CRC32C trailer landed on the wire.

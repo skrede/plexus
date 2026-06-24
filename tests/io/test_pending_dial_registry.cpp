@@ -2,9 +2,7 @@
 
 using namespace pending_dial_registry_fixture;
 
-TEST_CASE(
-        "pending_dial_registry insert+resolve returns the same owned channel and erases the entry",
-        "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry insert+resolve returns the same owned channel and erases the entry", "[io][pending_dial_registry]")
 {
     int           destroyed = 0;
     deferred_sink sink;
@@ -29,8 +27,7 @@ TEST_CASE("pending_dial_registry resolve honors copy-before-erase (a copied-out 
 {
     int                                                          destroyed = 0;
     deferred_sink                                                sink;
-    plexus::io::pending_dial_registry<fake_channel, std::string> reg{
-            [](std::unique_ptr<fake_channel>) {}};
+    plexus::io::pending_dial_registry<fake_channel, std::string> reg{[](std::unique_ptr<fake_channel>) {}};
 
     auto  ch  = std::make_unique<fake_channel>(&destroyed, 7);
     auto *raw = ch.get();
@@ -46,9 +43,7 @@ TEST_CASE("pending_dial_registry resolve honors copy-before-erase (a copied-out 
     REQUIRE(reg.payload_of(raw) == nullptr); // the entry (and its payload) are gone
 }
 
-TEST_CASE(
-        "pending_dial_registry fail routes the freed channel through the deferred-destroy callback",
-        "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry fail routes the freed channel through the deferred-destroy callback", "[io][pending_dial_registry]")
 {
     int           destroyed = 0;
     deferred_sink sink;
@@ -71,8 +66,7 @@ TEST_CASE(
     REQUIRE(destroyed == 1);
 }
 
-TEST_CASE("pending_dial_registry threads a non-monostate Payload through payload_of",
-          "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry threads a non-monostate Payload through payload_of", "[io][pending_dial_registry]")
 {
     int                                                  destroyed = 0;
     plexus::io::pending_dial_registry<fake_channel, int> reg{[](std::unique_ptr<fake_channel>) {}};

@@ -83,26 +83,28 @@ public:
     reassembler(const reassembler &)            = delete;
     reassembler &operator=(const reassembler &) = delete;
 
-    using drop_sink =
-            plexus::detail::move_only_function<void(const plexus::io::detail::drop_event &)>;
+    using drop_sink = plexus::detail::move_only_function<void(const plexus::io::detail::drop_event &)>;
 
-    void on_deliver(deliver_sink cb) { m_on_deliver = std::move(cb); }
+    void on_deliver(deliver_sink cb)
+    {
+        m_on_deliver = std::move(cb);
+    }
 
     // The drop-observability seam (null by default — zero cost when unobserved). A malformed/
     // over-cap fragment and a timed-out partial each hand a coalesced event here; the installed
     // sink POSTS, so the receive site never fires the observer synchronously.
-    void on_drop(drop_sink cb) { m_on_drop = std::move(cb); }
+    void on_drop(drop_sink cb)
+    {
+        m_on_drop = std::move(cb);
+    }
 
     // Feed an untrusted fragment. Range-checks precede every index; once all frag_cnt fragments
     // for one msg_id have arrived (in any order) the message assembles and fires on_deliver
     // exactly once. Returns the per-fragment outcome.
-    outcome feed(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt,
-                 std::span<const std::byte> bytes)
+    outcome feed(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt, std::span<const std::byte> bytes)
     {
         const outcome o =
-                (frag_cnt == 0 || frag_idx >= frag_cnt || frag_cnt > plexus::io::max_fragment_count)
-                ? outcome::dropped_malformed
-                : admit_fragment(msg_id, frag_idx, frag_cnt, bytes);
+                (frag_cnt == 0 || frag_idx >= frag_cnt || frag_cnt > plexus::io::max_fragment_count) ? outcome::dropped_malformed : admit_fragment(msg_id, frag_idx, frag_cnt, bytes);
         if(o == outcome::dropped_malformed)
             emit_drop(plexus::io::detail::drop_cause::malformed);
         else if(o == outcome::dropped_cap)
@@ -118,15 +120,20 @@ public:
             kv.second.timer->cancel();
     }
 
-    [[nodiscard]] std::size_t in_flight() const noexcept { return m_table.size(); }
-    [[nodiscard]] std::size_t held_bytes() const noexcept { return m_held; }
+    [[nodiscard]] std::size_t in_flight() const noexcept
+    {
+        return m_table.size();
+    }
+    [[nodiscard]] std::size_t held_bytes() const noexcept
+    {
+        return m_held;
+    }
 
     // The per-entry structural cost a claimed frag_cnt forces (the slots vector plus the present
     // bitmap), charged against the same cap as payload — see the BOUNDS note at the class head.
     [[nodiscard]] static constexpr std::size_t structural_cost(std::uint32_t frag_cnt) noexcept
     {
-        return static_cast<std::size_t>(frag_cnt) * sizeof(std::vector<std::byte>) +
-                (static_cast<std::size_t>(frag_cnt) + 7u) / 8u;
+        return static_cast<std::size_t>(frag_cnt) * sizeof(std::vector<std::byte>) + (static_cast<std::size_t>(frag_cnt) + 7u) / 8u;
     }
 
 private:
@@ -135,13 +142,12 @@ private:
         std::vector<std::vector<std::byte>> slots; // per-index fragment bytes
         std::vector<bool>                   present;
         std::size_t                         received{0};
-        std::size_t                         size{0}; // payload bytes held by this entry
-        std::size_t            overhead{0}; // structural slot/present cost charged to the cap
-        std::unique_ptr<Timer> timer;
+        std::size_t                         size{0};     // payload bytes held by this entry
+        std::size_t                         overhead{0}; // structural slot/present cost charged to the cap
+        std::unique_ptr<Timer>              timer;
     };
 
-    outcome admit_fragment(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt,
-                           std::span<const std::byte> bytes)
+    outcome admit_fragment(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt, std::span<const std::byte> bytes)
     {
         auto it = m_table.find(msg_id);
         if(it == m_table.end())
@@ -153,8 +159,7 @@ private:
         return store(it->second, msg_id, frag_idx, bytes);
     }
 
-    typename reassembler_flat_map<entry>::iterator
-    open_entry(std::uint16_t msg_id, std::uint32_t frag_cnt, std::size_t payload)
+    typename reassembler_flat_map<entry>::iterator open_entry(std::uint16_t msg_id, std::uint32_t frag_cnt, std::size_t payload)
     {
         if(m_held + structural_cost(frag_cnt) + payload > m_cfg.total_memory_cap)
             return m_table.end(); // structural + payload cost cannot fit the cap
@@ -163,8 +168,7 @@ private:
         e.present.assign(frag_cnt, false);
         e.overhead = structural_cost(frag_cnt);
         e.timer    = std::make_unique<Timer>(m_executor);
-        auto it =
-                m_table.emplace(msg_id, std::move(e)); // refuses past the cap-implied count ceiling
+        auto it    = m_table.emplace(msg_id, std::move(e)); // refuses past the cap-implied count ceiling
         if(it == m_table.end())
             return it;
         m_held += it->second.overhead; // charge the structural cost up front
@@ -172,15 +176,13 @@ private:
         return it;
     }
 
-    outcome store(entry &e, std::uint16_t msg_id, std::uint32_t frag_idx,
-                  std::span<const std::byte> bytes)
+    outcome store(entry &e, std::uint16_t msg_id, std::uint32_t frag_idx, std::span<const std::byte> bytes)
     {
         if(frag_idx >= e.slots.size())
             return outcome::dropped_malformed; // frag_cnt disagreed with the open entry
         if(e.present[frag_idx])
             return outcome::admitted; // duplicate / overlap — ignore, keep the first
-        if(e.size + bytes.size() > m_cfg.max_message_size ||
-           m_held + bytes.size() > m_cfg.total_memory_cap)
+        if(e.size + bytes.size() > m_cfg.max_message_size || m_held + bytes.size() > m_cfg.total_memory_cap)
             return outcome::dropped_malformed; // per-message ceiling / total cap overrun
 
         e.slots[frag_idx].assign(bytes.begin(), bytes.end());
@@ -222,8 +224,7 @@ private:
     void emit_drop(plexus::io::detail::drop_cause cause)
     {
         if(m_on_drop)
-            m_on_drop(plexus::io::detail::drop_event{.cause     = cause,
-                                                     .transport = plexus::io::locality::remote});
+            m_on_drop(plexus::io::detail::drop_event{.cause = cause, .transport = plexus::io::locality::remote});
     }
 
     void evict(std::uint16_t msg_id)

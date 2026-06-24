@@ -4,8 +4,7 @@
 
 using namespace stamp_demand_fixture;
 
-TEST_CASE("inproc stamp demand: the per-topic latch OR-reduces over local subscriber demand",
-          "[integration][inproc][stamp]")
+TEST_CASE("inproc stamp demand: the per-topic latch OR-reduces over local subscriber demand", "[integration][inproc][stamp]")
 {
     using registry = plexus::io::subscriber_registry<stub_channel>;
     registry   reg;

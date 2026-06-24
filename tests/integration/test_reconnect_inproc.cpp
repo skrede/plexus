@@ -66,9 +66,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -100,30 +109,57 @@ struct sink_executor
 
 struct sink_channel
 {
-    explicit sink_channel(sink_executor &) {}
-    sink_channel(sink_executor &, std::error_code &) {}
+    explicit sink_channel(sink_executor &)
+    {
+    }
+    sink_channel(sink_executor &, std::error_code &)
+    {
+    }
     void send(std::span<const std::byte> d)
     {
         total_bytes += d.size();
         ++sends;
     }
-    void                               close() {}
-    [[nodiscard]] plexus::io::endpoint remote_endpoint() const { return {}; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
-    void on_closed(plexus::detail::move_only_function<void()>) {}
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
+    void close()
+    {
+    }
+    [[nodiscard]] plexus::io::endpoint remote_endpoint() const
+    {
+        return {};
+    }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
+    {
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
     std::size_t total_bytes{0};
     std::size_t sends{0};
 };
 
 struct sink_timer
 {
-    explicit sink_timer(sink_executor &) {}
-    sink_timer(sink_executor &, std::error_code &) {}
-    void expires_after(std::chrono::milliseconds) {}
-    void async_wait(plexus::detail::move_only_function<void(std::error_code)>) {}
-    void cancel() {}
+    explicit sink_timer(sink_executor &)
+    {
+    }
+    sink_timer(sink_executor &, std::error_code &)
+    {
+    }
+    void expires_after(std::chrono::milliseconds)
+    {
+    }
+    void async_wait(plexus::detail::move_only_function<void(std::error_code)>)
+    {
+    }
+    void cancel()
+    {
+    }
 };
 
 struct sink_policy
@@ -132,7 +168,10 @@ struct sink_policy
     using byte_channel_type = sink_channel;
     using timer_type        = sink_timer;
     using byte_owner        = std::shared_ptr<const void>;
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn) { fn(); }
+    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
+    {
+        fn();
+    }
 };
 
 static_assert(plexus::Policy<sink_policy>);
@@ -161,11 +200,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // Synthesize a unidirectional "topic" data frame carrying a chosen session_id via
@@ -204,10 +239,10 @@ struct harness
     transport_t                   transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink};
+    msg_forwarder            resp_messages{sink};
+    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
 
     // The per-peer records own the channel + the epoch well and OUTLIVE every
     // incarnation, so each rebuilt session draws a strictly-later epoch with no
@@ -234,29 +269,23 @@ struct harness
                 {
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
-                    responder.emplace(resp_ctx, ex, make_cfg(0x01), k_long_timeout, resp_messages,
-                                      resp_procedures, true, sink);
-                    responder->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { resp_received.emplace_back(to_string(d)); });
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01), k_long_timeout, resp_messages, resp_procedures, true, sink);
+                    responder->on_message([this](std::string_view, std::span<const std::byte> d) { resp_received.emplace_back(to_string(d)); });
                     responder->start();
                 });
         transport.on_dialed(
-                [this](std::unique_ptr<inproc_channel<manual_clock>> ch,
-                       const plexus::io::endpoint &)
+                [this](std::unique_ptr<inproc_channel<manual_clock>> ch, const plexus::io::endpoint &)
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
-                    requester.emplace(req_ctx, ex, make_cfg(0x02), k_long_timeout, req_messages,
-                                      req_procedures, false, sink);
-                    requester->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { req_received.emplace_back(to_string(d)); });
+                    requester.emplace(req_ctx, ex, make_cfg(0x02), k_long_timeout, req_messages, req_procedures, false, sink);
+                    requester->on_message([this](std::string_view, std::span<const std::byte> d) { req_received.emplace_back(to_string(d)); });
                     requester->start();
                 });
         // The driver no longer self-wires the transport's dial-failure callback (a
         // shared transport's single callback cannot belong to one of many drivers);
         // the owner routes a failure to its sole driver.
-        transport.on_dial_failed([this](const plexus::io::endpoint &, plexus::io::io_error)
-                                 { driver.notify_dial_failed(); });
+        transport.on_dial_failed([this](const plexus::io::endpoint &, plexus::io::io_error) { driver.notify_dial_failed(); });
         // Tear the dead requester down before the fresh channel arrives, and count
         // surrender as a reported death the oracle asserts.
         driver.on_redial(
@@ -278,7 +307,10 @@ struct harness
         transport.close();
         listening = false;
     }
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
     void advance(std::chrono::nanoseconds d)
     {
         manual_clock::advance(d);
@@ -297,8 +329,7 @@ TEST_CASE("inproc reconnect: an initial refused dial backs off and re-dials, com
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                             std::nullopt, std::nullopt};
+        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
         harness          h(cfg);
 
         // No listener yet: the initial dial is refused, the driver schedules a re-dial.
@@ -330,8 +361,7 @@ TEST_CASE("inproc reconnect: an established session whose channel drops re-dials
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                             std::nullopt, std::nullopt};
+        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
         harness          h(cfg);
         h.listen();
         h.driver.start();
@@ -369,8 +399,7 @@ TEST_CASE("inproc reconnect: surrender on max_attempts and on max_elapsed report
     SECTION("max_attempts surrender")
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                             std::uint32_t{3}, std::nullopt};
+        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::uint32_t{3}, std::nullopt};
         harness          h(cfg); // never listening → every dial is refused
         h.driver.start();
         // Drain repeatedly across ceilings: each refused dial schedules the next until
@@ -389,8 +418,7 @@ TEST_CASE("inproc reconnect: surrender on max_attempts and on max_elapsed report
     SECTION("max_elapsed surrender")
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                             std::nullopt, std::chrono::milliseconds(25000)};
+        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::chrono::milliseconds(25000)};
         harness          h(cfg);
         h.driver.start();
         for(int i = 0; i < 20 && !h.driver.is_surrendered(); ++i)
@@ -402,8 +430,7 @@ TEST_CASE("inproc reconnect: surrender on max_attempts and on max_elapsed report
     SECTION("neither bound set retries forever at the ceiling cadence")
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                             std::nullopt, std::nullopt};
+        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
         harness          h(cfg);
         h.driver.start();
         for(int i = 0; i < 50; ++i)
@@ -418,8 +445,7 @@ TEST_CASE("inproc reconnect: backoff grows full-jitter to the ceiling then holds
           "with a fixed seed",
           "[integration][reconnect][inproc]")
 {
-    reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                         std::nullopt, std::nullopt};
+    reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
     // Two independent RNGs with the SAME seed produce the identical sequence
     // (reproducibility), and every sample stays within the growing full-jitter
     // ceiling [0, min(max_delay, min_delay*2^attempt)] (growth then hold).
@@ -451,8 +477,7 @@ TEST_CASE("inproc reconnect: each reconnect mints a fresh epoch and the stalenes
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                             std::nullopt, std::nullopt};
+        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
         harness          h(cfg);
         h.listen();
         h.driver.start();
@@ -492,8 +517,7 @@ TEST_CASE("inproc reconnect: the POST-RECONNECT publish loop stays frame-once (p
           "[integration][reconnect][inproc]")
 {
     manual_clock::reset();
-    reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                         std::nullopt, std::nullopt};
+    reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
     harness          h(cfg);
     h.listen();
     h.driver.start();

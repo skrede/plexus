@@ -50,10 +50,8 @@ TEST_CASE("routing over asio: one node dialing TWO peers near-simultaneously res
 
         // Per-slot sinks: B's bytes must reach the B-sink and C's the C-sink.
         std::vector<std::string> a_from_b, a_from_c;
-        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d)
-                           { a_from_b.emplace_back(to_string(d)); });
-        a_to_c->on_message([&](std::string_view, std::span<const std::byte> d)
-                           { a_from_c.emplace_back(to_string(d)); });
+        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_from_b.emplace_back(to_string(d)); });
+        a_to_c->on_message([&](std::string_view, std::span<const std::byte> d) { a_from_c.emplace_back(to_string(d)); });
 
         const auto inbound1 = []
         {
@@ -148,10 +146,8 @@ TEST_CASE("routing over asio: a dial that completes OUT OF ORDER is correlated t
         REQUIRE(a_to_c != nullptr);
 
         std::vector<std::string> a_from_b, a_from_c;
-        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d)
-                           { a_from_b.emplace_back(to_string(d)); });
-        a_to_c->on_message([&](std::string_view, std::span<const std::byte> d)
-                           { a_from_c.emplace_back(to_string(d)); });
+        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_from_b.emplace_back(to_string(d)); });
+        a_to_c->on_message([&](std::string_view, std::span<const std::byte> d) { a_from_c.emplace_back(to_string(d)); });
 
         const auto inbound = []
         {

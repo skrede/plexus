@@ -2,8 +2,7 @@
 
 using namespace udp_fragmentation_fixture;
 
-TEST_CASE("udp fragment best_effort: an oversize payload reassembles byte-equal as one message",
-          "[udp][fragment]")
+TEST_CASE("udp fragment best_effort: an oversize payload reassembles byte-equal as one message", "[udp][fragment]")
 {
     // A small per-datagram budget so a modest payload fragments into many datagrams; the
     // total stays well inside the loopback socket buffer so a lossless best_effort burst
@@ -23,14 +22,12 @@ TEST_CASE("udp fragment best_effort: an oversize payload reassembles byte-equal 
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> b)
-                                      { got.emplace_back(b.begin(), b.end()); });
+                    accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
@@ -71,8 +68,7 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
     server.listen({"udp", "127.0.0.1:0"});
     pump_until(io, [&] { return server.port() != 0; });
 
-    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                     { dialed = std::move(ch); });
+    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
     client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
     pump_until(io, [&] { return dialed && accepted; });
     REQUIRE(accepted != nullptr);
@@ -81,12 +77,10 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
     auto                                payload = make_payload(1000, 0x5A);
     const std::uint16_t                 msg_id  = 7;
     std::vector<std::vector<std::byte>> datagrams;
-    pio::fragment_sink                  sink =
-            [&](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
+    pio::fragment_sink                  sink = [&](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
     {
         std::vector<std::byte> dg;
-        wire::wrap_udp_fragment_into(dg, wire::udp_envelope_kind::best_effort,
-                                     static_cast<std::uint16_t>(idx), msg_id, idx, cnt, slice);
+        wire::wrap_udp_fragment_into(dg, wire::udp_envelope_kind::best_effort, static_cast<std::uint16_t>(idx), msg_id, idx, cnt, slice);
         datagrams.push_back(std::move(dg));
     };
     const std::uint32_t cnt = pio::split(payload, /*budget=*/256, msg_id, sink);

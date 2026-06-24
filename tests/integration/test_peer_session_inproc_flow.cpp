@@ -21,8 +21,7 @@ TEST_CASE("inproc peer_session: the opt-in 3-arg callback delivers a message_inf
         plexus::io::message_info got{};
         bool                     got_one = false;
         l.responder->on_message_with_info(
-                [&](std::string_view, std::span<const std::byte> d,
-                    const plexus::io::message_info &mi)
+                [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi)
                 {
                     got     = mi;
                     got_one = true;
@@ -71,8 +70,7 @@ TEST_CASE("inproc peer_session: a source-identity publish populates message_info
         plexus::io::message_info got{};
         bool                     got_one = false;
         l.requester->on_message_with_info(
-                [&](std::string_view, std::span<const std::byte> d,
-                    const plexus::io::message_info &mi)
+                [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi)
                 {
                     got     = mi;
                     got_one = true;
@@ -102,9 +100,7 @@ TEST_CASE("inproc peer_session: a source-identity publish populates message_info
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE(
-        "inproc peer_session: a real RPC round-trips post-handshake matched by correlation, looped",
-        "[integration][peer_session][inproc]")
+TEST_CASE("inproc peer_session: a real RPC round-trips post-handshake matched by correlation, looped", "[integration][peer_session][inproc]")
 {
     constexpr int     k_iterations = 100;
     const std::string param        = "rpc-param";

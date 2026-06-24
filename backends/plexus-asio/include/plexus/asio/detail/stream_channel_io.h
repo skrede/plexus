@@ -85,8 +85,7 @@ template<typename Ch>
 void stream_wire_inbound(Ch &c)
 {
     c.m_inbound.on_frame([&c](const wire::complete_frame &f) { stream_post_frame(c, f); });
-    c.m_inbound.on_protocol_close([&c](wire::close_cause cc)
-                                  { stream_handle_protocol_close(c, cc); });
+    c.m_inbound.on_protocol_close([&c](wire::close_cause cc) { stream_handle_protocol_close(c, cc); });
 }
 
 template<typename Ch>
@@ -97,8 +96,7 @@ void stream_do_read(Ch &c)
                                {
                                    if(ec)
                                        return stream_fail(c, ec);
-                                   c.m_inbound.feed(
-                                           std::span<const std::byte>{c.m_read_buf.data(), n});
+                                   c.m_inbound.feed(std::span<const std::byte>{c.m_read_buf.data(), n});
                                    if(c.m_open) // a protocol-close may have torn the socket down
                                        stream_do_read(c);
                                });
@@ -111,8 +109,7 @@ void stream_do_read(Ch &c)
 template<typename Ch>
 stream::detail::send_queue::send_sink stream_make_send_sink(Ch &c)
 {
-    return [&c](stream::detail::send_queue::buffer_sequence views,
-                stream::detail::send_queue::completion      done)
+    return [&c](stream::detail::send_queue::buffer_sequence views, stream::detail::send_queue::completion done)
     {
         c.m_gather.clear();
         c.m_gather.reserve(views.size());

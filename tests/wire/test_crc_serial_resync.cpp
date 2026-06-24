@@ -17,9 +17,7 @@
 
 using namespace crc_serial_test;
 
-TEST_CASE(
-        "crc_serial: a flipped trailer byte drops the frame and resyncs onto the next valid frame",
-        "[wire][crc_serial]")
+TEST_CASE("crc_serial: a flipped trailer byte drops the frame and resyncs onto the next valid frame", "[wire][crc_serial]")
 {
     sink s;
     auto dec = s.make();
@@ -39,8 +37,7 @@ TEST_CASE(
     REQUIRE(s.emitted[0] == header_on("recovered")); // resync recovered the boundary
 }
 
-TEST_CASE("crc_serial: a flipped HEADER byte is caught by the CRC and resyncs onto the next frame",
-          "[wire][crc_serial]")
+TEST_CASE("crc_serial: a flipped HEADER byte is caught by the CRC and resyncs onto the next frame", "[wire][crc_serial]")
 {
     sink s;
     auto dec = s.make();
@@ -63,16 +60,14 @@ TEST_CASE("crc_serial: a flipped HEADER byte is caught by the CRC and resyncs on
     REQUIRE(s.emitted.back() == header_on("after"));
 }
 
-TEST_CASE("crc_serial: a lying oversized payload_len stays bounded — no over-read, no over-alloc",
-          "[wire][crc_serial]")
+TEST_CASE("crc_serial: a lying oversized payload_len stays bounded — no over-read, no over-alloc", "[wire][crc_serial]")
 {
     // A tiny payload cap so a crafted header that claims more than the cap exercises the
     // lying-length branch deterministically (independent of the 16 MiB default).
     crc_serial_inbound dec{/*max_payload=*/16};
     int                drops = 0;
     std::string        out;
-    dec.on_match([&](std::span<const std::byte> f)
-                 { out.assign(reinterpret_cast<const char *>(f.data()), f.size()); });
+    dec.on_match([&](std::span<const std::byte> f) { out.assign(reinterpret_cast<const char *>(f.data()), f.size()); });
     dec.on_drop(
             [&](close_cause c)
             {

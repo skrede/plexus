@@ -31,8 +31,7 @@ TEST_CASE("expected carries a value", "[vocabulary][expected]")
 
 TEST_CASE("expected carries an error via unexpected", "[vocabulary][expected]")
 {
-    expected<int, std::error_code> e{
-            unexpected<std::error_code>(make_error_code(call_errc::timeout))};
+    expected<int, std::error_code> e{unexpected<std::error_code>(make_error_code(call_errc::timeout))};
 
     REQUIRE_FALSE(static_cast<bool>(e));
     REQUIRE_FALSE(e.has_value());
@@ -67,8 +66,7 @@ TEST_CASE("expected<void> default-constructs to a success state", "[vocabulary][
 
 TEST_CASE("expected<void> carries an error via unexpected", "[vocabulary][expected]")
 {
-    expected<void, std::error_code> e{
-            unexpected<std::error_code>(make_error_code(call_errc::deserialize_failed))};
+    expected<void, std::error_code> e{unexpected<std::error_code>(make_error_code(call_errc::deserialize_failed))};
 
     REQUIRE_FALSE(static_cast<bool>(e));
     REQUIRE_FALSE(e.has_value());

@@ -8,15 +8,13 @@ namespace {
 
 // Stand up a loopback udp_transport pair (no interposed relay) and round-trip one payload
 // over the given scheme, looping in-body. Returns the count of byte-equal deliveries.
-int roundtrip_clean(const char *scheme, std::size_t budget, std::size_t payload_size,
-                    plexus::datagram::detail::udp_arq_config arq, int iterations)
+int roundtrip_clean(const char *scheme, std::size_t budget, std::size_t payload_size, plexus::datagram::detail::udp_arq_config arq, int iterations)
 {
     int proven = 0;
     for(int iter = 0; iter < iterations; ++iter)
     {
         ::asio::io_context   io;
-        pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder,
-                                    arq};
+        pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder, arq};
         pasio::udp_transport client{io, budget, fast_hs, arq};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
@@ -25,14 +23,12 @@ int roundtrip_clean(const char *scheme, std::size_t budget, std::size_t payload_
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> b)
-                                      { got.emplace_back(b.begin(), b.end()); });
+                    accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({scheme, "127.0.0.1:" + std::to_string(server.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
@@ -66,9 +62,7 @@ TEST_CASE("udp_large_payload: an oversize message round-trips byte-identically o
     REQUIRE(roundtrip_clean("udp", budget, 16u * 1024, large_arq(), /*iterations=*/8) == 8);
 }
 
-TEST_CASE(
-        "udp_large_payload: a 1 MB message round-trips byte-identically over udpr reliable, looped",
-        "[udp_large_payload]")
+TEST_CASE("udp_large_payload: a 1 MB message round-trips byte-identically over udpr reliable, looped", "[udp_large_payload]")
 {
     constexpr std::size_t budget = 8192;
     REQUIRE(roundtrip_clean("udpr", budget, 1u * 1024 * 1024, large_arq(), /*iterations=*/8) == 8);
@@ -115,14 +109,12 @@ TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured â
     // budget, each subject to the deterministic 8% drop.
     constexpr std::size_t            budget       = 1200;
     constexpr std::size_t            payload_size = 64u * 1024;
-    const ptest::loss_reorder_config loss{
-            .loss_num = 8, .loss_den = 100, .reorder_depth = 0, .seed = 0x5151ull};
+    const ptest::loss_reorder_config loss{.loss_num = 8, .loss_den = 100, .reorder_depth = 0, .seed = 0x5151ull};
 
     auto run_leg = [&](const char *scheme)
     {
         ::asio::io_context   io;
-        pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder,
-                                    large_arq()};
+        pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder, large_arq()};
         pasio::udp_transport client{io, budget, fast_hs, large_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
@@ -143,8 +135,7 @@ TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured â
         pump_until(io, [&] { return server.port() != 0; });
 
         ptest::loss_reorder_relay link{io, server.port(), loss};
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({scheme, "127.0.0.1:" + std::to_string(link.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
@@ -164,9 +155,7 @@ TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured â
         auto [deliveries, last, payload, dropped] = run_leg("udp");
         REQUIRE(dropped > 0);     // the shim genuinely lost fragments
         REQUIRE(deliveries == 0); // drop-whole-message â€” no partial delivery
-        WARN("measured loss policy [udp best-effort]: "
-             << dropped << " datagram(s) dropped by the shim -> whole-message drop, deliveries="
-             << deliveries);
+        WARN("measured loss policy [udp best-effort]: " << dropped << " datagram(s) dropped by the shim -> whole-message drop, deliveries=" << deliveries);
     }
 
     // RECORDED MEASUREMENT (reliable): the same loss is retransmitted and the message arrives.
@@ -175,8 +164,6 @@ TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured â
         REQUIRE(dropped > 0);                // the same injected loss engaged
         REQUIRE(deliveries == 1);            // reliably reassembled via retransmit
         REQUIRE(equal_bytes(last, payload)); // byte-equal despite the loss
-        WARN("measured loss policy [udpr reliable]: "
-             << dropped << " datagram(s) dropped by the shim -> retransmit-reassembled, deliveries="
-             << deliveries);
+        WARN("measured loss policy [udpr reliable]: " << dropped << " datagram(s) dropped by the shim -> retransmit-reassembled, deliveries=" << deliveries);
     }
 }

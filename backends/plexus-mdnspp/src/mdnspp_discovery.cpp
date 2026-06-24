@@ -31,7 +31,7 @@ struct mdnspp_discovery::impl
     ::asio::io_context                                                      &context;
     std::unique_ptr<::mdnspp::basic_service_server<::mdnspp::AsioPolicy>>    server;
     std::unique_ptr<::mdnspp::basic_service_discovery<::mdnspp::AsioPolicy>> browser;
-    std::string advertised_name; // the live server's service name, for the in-place-update decision
+    std::string                                                              advertised_name; // the live server's service name, for the in-place-update decision
 };
 
 namespace {
@@ -49,8 +49,7 @@ std::string tcp_address(const ::mdnspp::resolved_service &svc)
 // The contact card maps onto the RFC 6763 TXT record key/value entries: a faithful
 // pass-through of whatever the card assembler produced (the assembler is the sole
 // authority on what a card may contain, so the backend never injects or filters keys).
-std::vector<::mdnspp::service_txt>
-to_txt_records(const std::vector<std::pair<std::string, std::string>> &metadata)
+std::vector<::mdnspp::service_txt> to_txt_records(const std::vector<std::pair<std::string, std::string>> &metadata)
 {
     std::vector<::mdnspp::service_txt> records;
     records.reserve(metadata.size());
@@ -59,8 +58,7 @@ to_txt_records(const std::vector<std::pair<std::string, std::string>> &metadata)
     return records;
 }
 
-std::vector<std::pair<std::string, std::string>>
-from_txt_entries(const std::vector<::mdnspp::service_txt> &entries)
+std::vector<std::pair<std::string, std::string>> from_txt_entries(const std::vector<::mdnspp::service_txt> &entries)
 {
     std::vector<std::pair<std::string, std::string>> metadata;
     metadata.reserve(entries.size());
@@ -129,28 +127,25 @@ void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
     }
 
     m_impl->advertised_name = service.name;
-    m_impl->server = std::make_unique<::mdnspp::basic_service_server<::mdnspp::AsioPolicy>>(
-            m_io, std::move(info));
+    m_impl->server          = std::make_unique<::mdnspp::basic_service_server<::mdnspp::AsioPolicy>>(m_io, std::move(info));
     m_impl->server->async_start();
 }
 
 void mdnspp_discovery::browse(const resolved_callback &on_resolved)
 {
-    m_impl->browser =
-            std::make_unique<::mdnspp::basic_service_discovery<::mdnspp::AsioPolicy>>(m_io);
-    m_impl->browser->async_browse(
-            m_service_type,
-            [on_resolved](std::error_code, std::vector<::mdnspp::resolved_service> services)
-            {
-                for(const auto &svc : services)
-                {
-                    plexus::discovery::service_info out;
-                    out.name     = std::string{std::string_view{svc.instance_name}};
-                    out.endpoint = {"tcp", tcp_address(svc)};
-                    out.metadata = from_txt_entries(svc.txt_entries);
-                    on_resolved(out);
-                }
-            });
+    m_impl->browser = std::make_unique<::mdnspp::basic_service_discovery<::mdnspp::AsioPolicy>>(m_io);
+    m_impl->browser->async_browse(m_service_type,
+                                  [on_resolved](std::error_code, std::vector<::mdnspp::resolved_service> services)
+                                  {
+                                      for(const auto &svc : services)
+                                      {
+                                          plexus::discovery::service_info out;
+                                          out.name     = std::string{std::string_view{svc.instance_name}};
+                                          out.endpoint = {"tcp", tcp_address(svc)};
+                                          out.metadata = from_txt_entries(svc.txt_entries);
+                                          on_resolved(out);
+                                      }
+                                  });
 }
 
 void mdnspp_discovery::stop()

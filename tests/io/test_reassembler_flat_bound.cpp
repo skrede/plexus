@@ -21,16 +21,16 @@ using namespace plexus;
 
 namespace {
 
-using test_reassembler =
-        datagram::detail::reassembler<plexus::inproc::inproc_executor<testing::test_clock> &,
-                                      plexus::inproc::inproc_timer<testing::test_clock>>;
+using test_reassembler = datagram::detail::reassembler<plexus::inproc::inproc_executor<testing::test_clock> &, plexus::inproc::inproc_timer<testing::test_clock>>;
 
-std::vector<std::byte> one_byte() { return std::vector<std::byte>(1, std::byte{0xAB}); }
+std::vector<std::byte> one_byte()
+{
+    return std::vector<std::byte>(1, std::byte{0xAB});
+}
 
 }
 
-TEST_CASE("reassembler refuses a tiny datagram claiming a huge frag_cnt at the structural cost",
-          "[reassemble][bound][dos]")
+TEST_CASE("reassembler refuses a tiny datagram claiming a huge frag_cnt at the structural cost", "[reassemble][bound][dos]")
 {
     testing::harness h;
     // A cap far below the slot-table cost a frag_cnt=32768 open would charge: structural_cost
@@ -49,8 +49,7 @@ TEST_CASE("reassembler refuses a tiny datagram claiming a huge frag_cnt at the s
     CHECK(r.held_bytes() <= cap);
 }
 
-TEST_CASE("reassembler keeps held_bytes within the cap as crafted opens are refused",
-          "[reassemble][bound][dos]")
+TEST_CASE("reassembler keeps held_bytes within the cap as crafted opens are refused", "[reassemble][bound][dos]")
 {
     testing::harness      h;
     constexpr std::size_t cap = 256u * 1024u;
@@ -63,8 +62,7 @@ TEST_CASE("reassembler keeps held_bytes within the cap as crafted opens are refu
     for(std::uint16_t id = 1; id <= 5000; ++id)
     {
         const auto o = r.feed(id, 0, frag_cnt, one_byte());
-        CHECK((o == test_reassembler::outcome::admitted ||
-               o == test_reassembler::outcome::dropped_cap));
+        CHECK((o == test_reassembler::outcome::admitted || o == test_reassembler::outcome::dropped_cap));
         CHECK(r.held_bytes() <= cap);
     }
 

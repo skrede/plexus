@@ -43,10 +43,8 @@ namespace plexus::asio {
 class serial_transport
 {
 public:
-    explicit serial_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {},
-                              io::congestion        congestion = io::congestion::block,
-                              io::egress_capacity   egress = io::egress_capacity::bounded_default(),
-                              std::size_t global_default    = io::global_default_max_message_bytes,
+    explicit serial_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+                              io::egress_capacity egress = io::egress_capacity::bounded_default(), std::size_t global_default = io::global_default_max_message_bytes,
                               std::size_t reassembly_budget = io::reassembly_memory_budget)
             : m_io(io)
             , m_cfg(stream::with_message_limits(cfg, global_default, reassembly_budget))
@@ -62,14 +60,11 @@ public:
     {
         m_on_accepted = std::move(cb);
     }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>,
-                                                           const io::endpoint &)>
-                           cb)
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)> cb)
     {
         m_on_dialed = std::move(cb);
     }
-    void
-    on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
+    void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
         m_on_dial_failed = std::move(cb);
     }
@@ -104,7 +99,9 @@ public:
 
     // No acceptor to stop and no pending async dial to cancel — the delivered channel owns the
     // open port and closes it on teardown.
-    void close() {}
+    void close()
+    {
+    }
 
     // The scheme this member serves + its locality tier: a directly-attached point-to-point UART
     // is the most-local link, serving the "serial" scheme.
@@ -128,14 +125,12 @@ private:
         apply_line_discipline(port, parsed.baud, ec);
         if(ec)
             return nullptr;
-        auto ch = std::make_unique<serial_channel>(m_io, std::move(port), m_cfg, m_congestion,
-                                                   m_egress);
+        auto ch = std::make_unique<serial_channel>(m_io, std::move(port), m_cfg, m_congestion, m_egress);
         ch->start_read();
         return ch;
     }
 
-    static void apply_line_discipline(::asio::serial_port &port, std::uint32_t baud,
-                                      std::error_code &ec)
+    static void apply_line_discipline(::asio::serial_port &port, std::uint32_t baud, std::error_code &ec)
     {
         using base = ::asio::serial_port_base;
         port.set_option(base::baud_rate(baud), ec);
@@ -164,21 +159,19 @@ private:
             m_on_error(e);
     }
 
-    ::asio::io_context         &m_io;
-    stream::stream_inbound_config m_cfg;
-    io::congestion              m_congestion;
-    io::egress_capacity         m_egress;
-    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)>
-                                                                                m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)>                       m_on_error;
+    ::asio::io_context                                                                             &m_io;
+    stream::stream_inbound_config                                                                   m_cfg;
+    io::congestion                                                                                  m_congestion;
+    io::egress_capacity                                                                             m_egress;
+    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)>                       m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)>                    m_on_dial_failed;
+    plexus::detail::move_only_function<void(io::io_error)>                                          m_on_error;
 };
 
 }
 
-static_assert(
-        plexus::io::transport_backend<plexus::asio::serial_transport, plexus::asio::serial_policy>,
-        "serial_transport must satisfy transport_backend — check the listen/dial/on_* surface");
+static_assert(plexus::io::transport_backend<plexus::asio::serial_transport, plexus::asio::serial_policy>,
+              "serial_transport must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif

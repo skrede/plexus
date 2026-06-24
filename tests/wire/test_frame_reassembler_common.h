@@ -13,14 +13,9 @@
 
 using namespace plexus::wire;
 
-inline std::vector<std::byte> make_frame(msg_type type, uint8_t flags, uint64_t ts,
-                                         std::span<const std::byte> payload)
+inline std::vector<std::byte> make_frame(msg_type type, uint8_t flags, uint64_t ts, std::span<const std::byte> payload)
 {
-    frame_header hdr{.type         = type,
-                     .flags        = flags,
-                     .session_id   = 0,
-                     .timestamp_ns = ts,
-                     .payload_len  = payload.size()};
+    frame_header hdr{.type = type, .flags = flags, .session_id = 0, .timestamp_ns = ts, .payload_len = payload.size()};
     return encode_frame(hdr, payload);
 }
 

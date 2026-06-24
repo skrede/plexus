@@ -72,12 +72,10 @@ struct counting_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
-                                                   sample                    &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, sample &out) const
     {
         if(bytes.size() != 4)
-            return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+            return plexus::expected<void, std::error_code>{plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -85,7 +83,10 @@ struct counting_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {0xABCD1234u, "sample"}; }
+    plexus::type_identity type_info() const
+    {
+        return {0xABCD1234u, "sample"};
+    }
 };
 
 static_assert(plexus::typed_codec<counting_codec>);
@@ -104,9 +105,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 inline plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0x7A9EDu;
     opts.dial_eagerly = eager;
     return opts;
@@ -141,7 +140,10 @@ struct net
     inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
     inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
     void connect()
     {

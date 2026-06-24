@@ -78,17 +78,14 @@ public:
     // rpc_response carrying the request's correlation_id. Passed to a handler by
     // reference to a forwarder-owned, reused callable — so a steady-state dispatch
     // constructs no new type-erased object (the no-hot-path-allocation invariant).
-    using reply_fn =
-            plexus::detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
+    using reply_fn = plexus::detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
 
     // A provider handler over opaque param bytes; it replies via the reply&.
-    using handler_fn =
-            plexus::detail::move_only_function<void(std::span<const std::byte> param, reply_fn &)>;
+    using handler_fn = plexus::detail::move_only_function<void(std::span<const std::byte> param, reply_fn &)>;
 
     // The caller's response callback: fired once with the matched response's status
     // and opaque return bytes (or peer_disconnected/no_handler on a failure leg).
-    using on_response_fn =
-            plexus::detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
+    using on_response_fn = plexus::detail::move_only_function<void(wire::rpc_status, std::span<const std::byte>)>;
 
     // Default bounded outstanding capacity per peer. A plexus determinism posture
     // (no hot-path growth), not a wire change — an over-capacity call fails fast.
@@ -100,9 +97,7 @@ public:
     // The deadline and logger are passed in, not defaulted to a magic constant or a
     // shared sink, per plexus's required-over-default posture: the right value depends
     // on the deployment. max_outstanding keeps its capacity default.
-    procedure_forwarder(executor_type executor, std::chrono::nanoseconds default_deadline,
-                        log::logger &logger,
-                        std::size_t  max_outstanding = k_default_max_outstanding)
+    procedure_forwarder(executor_type executor, std::chrono::nanoseconds default_deadline, log::logger &logger, std::size_t max_outstanding = k_default_max_outstanding)
             : m_logger(logger)
             , m_executor(executor)
             , m_default_deadline(default_deadline)
@@ -118,20 +113,17 @@ public:
     // reused scratch), so the surfaced view is envelope-only — recording the bytes is a
     // sovereign opt-in, never a silent per-call copy into the posted turn. Absent = one
     // predictable branch.
-    void
-    on_rpc_call(plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> hook)
+    void on_rpc_call(plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> hook)
     {
         m_on_rpc_call = std::move(hook);
     }
 
-    void
-    on_rpc_serve(plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> hook)
+    void on_rpc_serve(plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> hook)
     {
         m_on_rpc_serve = std::move(hook);
     }
 
-    void on_rpc_reply(
-            plexus::detail::move_only_function<void(std::string_view, const rpc_reply_view &)> hook)
+    void on_rpc_reply(plexus::detail::move_only_function<void(std::string_view, const rpc_reply_view &)> hook)
     {
         m_on_rpc_reply = std::move(hook);
     }
@@ -160,10 +152,8 @@ public:
     // registers post-admission so a rejected send leaves no dangling entry). The type
     // tag words are reserved zeroes: correlation is carried by correlation_id, and type
     // matching is settled at subscribe-time discovery, so they are written 0.
-    void call(const peer &p, std::string_view fqn, std::span<const std::byte> param,
-              on_response_fn                          on_response,
-              std::optional<std::chrono::nanoseconds> deadline   = std::nullopt,
-              std::uint64_t                           session_id = 0)
+    void call(const peer &p, std::string_view fqn, std::span<const std::byte> param, on_response_fn on_response, std::optional<std::chrono::nanoseconds> deadline = std::nullopt,
+              std::uint64_t session_id = 0)
     {
         auto &per_peer = m_outstanding[p.node_name];
         if(per_peer.size() >= m_max_outstanding)
@@ -180,11 +170,8 @@ public:
         detail::send_data(*this, p.channel, wire::msg_type::rpc_request, m_req_scratch, session_id);
         detail::emit_rpc_call(*this, fqn, corr_id);
 
-        auto [it, _] = per_peer.emplace(corr_id,
-                                        pending_rpc{std::string{fqn}, std::move(on_response),
-                                                    std::make_unique<timer_type>(m_executor)});
-        arm_deadline(p.node_name, corr_id, *it->second.timer,
-                     deadline.value_or(m_default_deadline));
+        auto [it, _] = per_peer.emplace(corr_id, pending_rpc{std::string{fqn}, std::move(on_response), std::make_unique<timer_type>(m_executor)});
+        arm_deadline(p.node_name, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
     }
 
     // attach: per-(peer, fqn) refcount gate. On 0->1 it emits a procedure subscribe
@@ -209,8 +196,7 @@ public:
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
         m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name);
-        auto resp = wire::encode_subscribe_response(
-                {.topic_hash = hash, .status = wire::subscribe_status::subscribed});
+        auto resp = wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::subscribed});
         send_control(p.channel, wire::msg_type::subscribe_response, resp);
         return true;
     }
@@ -254,8 +240,7 @@ public:
     // a prior attach but no provider is served — that "topic known, provider gone"
     // state replies topic_not_found. The handler replies via a reply_fn that frames
     // a same-corr_id rpc_response (source = procedure, swapped type hashes).
-    void deliver_request(const peer &p, std::span<const std::byte> inner,
-                         std::uint64_t session_id = 0)
+    void deliver_request(const peer &p, std::span<const std::byte> inner, std::uint64_t session_id = 0)
     {
         auto decoded = wire::decode_rpc_request(inner);
         if(!decoded)
@@ -265,9 +250,7 @@ public:
         auto       hash_it = m_hash_to_fqn.find(req_hdr.topic_hash);
         if(hash_it == m_hash_to_fqn.end())
         {
-            auto status = m_endpoint.registry().fqn_for(req_hdr.topic_hash).empty()
-                    ? wire::rpc_status::no_handler
-                    : wire::rpc_status::topic_not_found;
+            auto status = m_endpoint.registry().fqn_for(req_hdr.topic_hash).empty() ? wire::rpc_status::no_handler : wire::rpc_status::topic_not_found;
             return detail::reply_status(*this, p.channel, req_hdr, status, {}, session_id);
         }
 
@@ -315,11 +298,9 @@ private:
     template<typename F>
     friend void detail::emit_rpc_reply(F &, std::string_view, std::uint64_t, wire::rpc_status);
     template<typename F, typename C>
-    friend void detail::reply_status(F &, C &, const wire::bidirectional_header &, wire::rpc_status,
-                                     std::span<const std::byte>, std::uint64_t);
+    friend void detail::reply_status(F &, C &, const wire::bidirectional_header &, wire::rpc_status, std::span<const std::byte>, std::uint64_t);
     template<typename F, typename C>
-    friend void detail::send_data(F &, C &, wire::msg_type, std::span<const std::byte>,
-                                  std::uint64_t);
+    friend void detail::send_data(F &, C &, wire::msg_type, std::span<const std::byte>, std::uint64_t);
     template<typename F, typename C>
     friend void detail::send_subscribe(F &, C &, std::string_view, std::uint64_t);
 
@@ -337,8 +318,7 @@ private:
     // arrived) fire rpc_status::timeout and erase the entry; a cancellation (match
     // or detach_all) lands as operation_canceled and is a no-op. The handler looks
     // the entry up by (node_name, corr_id) — never captures the entry, which moves.
-    void arm_deadline(const std::string &node_name, std::uint64_t corr_id, timer_type &timer,
-                      std::chrono::nanoseconds deadline)
+    void arm_deadline(const std::string &node_name, std::uint64_t corr_id, timer_type &timer, std::chrono::nanoseconds deadline)
     {
         timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(deadline));
         timer.async_wait(
@@ -374,10 +354,7 @@ private:
         if(m_reply)
             return;
         m_reply = [this](wire::rpc_status status, std::span<const std::byte> return_data)
-        {
-            detail::reply_status(*this, *m_active_channel, m_active_req_hdr, status, return_data,
-                                 m_active_session_id);
-        };
+        { detail::reply_status(*this, *m_active_channel, m_active_req_hdr, status, return_data, m_active_session_id); };
     }
 
     // send_control: wrap an inner CONTROL payload (subscribe / unsubscribe /
@@ -388,28 +365,30 @@ private:
         m_endpoint.send_control(channel, type, inner);
     }
 
-    void drop(std::string_view message) { m_logger.warn(message); }
+    void drop(std::string_view message)
+    {
+        m_logger.warn(message);
+    }
 
-    log::logger                                   &m_logger;
-    endpoint_type                                  m_endpoint;
-    executor_type                                  m_executor;
-    std::chrono::nanoseconds                       m_default_deadline;
-    std::unordered_map<std::string, handler_fn>    m_providers;
-    std::unordered_map<std::uint64_t, std::string> m_hash_to_fqn;
-    std::unordered_map<std::string, std::unordered_map<std::uint64_t, pending_rpc>> m_outstanding;
-    std::vector<std::byte>                                                          m_req_scratch;
-    std::vector<std::byte>                                                          m_resp_scratch;
-    std::vector<std::byte>                                                          m_frame_scratch;
-    reply_fn                                                                        m_reply;
-    channel_type              *m_active_channel{nullptr};
-    wire::bidirectional_header m_active_req_hdr{};
-    std::uint64_t              m_active_session_id{0};
-    std::uint64_t              m_next_correlation_id{1};
-    std::size_t                m_max_outstanding;
-    plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> m_on_rpc_call;
-    plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> m_on_rpc_serve;
-    plexus::detail::move_only_function<void(std::string_view, const rpc_reply_view &)>
-            m_on_rpc_reply;
+    log::logger                                                                       &m_logger;
+    endpoint_type                                                                      m_endpoint;
+    executor_type                                                                      m_executor;
+    std::chrono::nanoseconds                                                           m_default_deadline;
+    std::unordered_map<std::string, handler_fn>                                        m_providers;
+    std::unordered_map<std::uint64_t, std::string>                                     m_hash_to_fqn;
+    std::unordered_map<std::string, std::unordered_map<std::uint64_t, pending_rpc>>    m_outstanding;
+    std::vector<std::byte>                                                             m_req_scratch;
+    std::vector<std::byte>                                                             m_resp_scratch;
+    std::vector<std::byte>                                                             m_frame_scratch;
+    reply_fn                                                                           m_reply;
+    channel_type                                                                      *m_active_channel{nullptr};
+    wire::bidirectional_header                                                         m_active_req_hdr{};
+    std::uint64_t                                                                      m_active_session_id{0};
+    std::uint64_t                                                                      m_next_correlation_id{1};
+    std::size_t                                                                        m_max_outstanding;
+    plexus::detail::move_only_function<void(std::string_view, const rpc_view &)>       m_on_rpc_call;
+    plexus::detail::move_only_function<void(std::string_view, const rpc_view &)>       m_on_rpc_serve;
+    plexus::detail::move_only_function<void(std::string_view, const rpc_reply_view &)> m_on_rpc_reply;
 };
 
 }

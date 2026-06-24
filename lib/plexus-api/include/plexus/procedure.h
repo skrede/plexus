@@ -115,14 +115,11 @@ public:
     using response_codec = CRes<Res>;
 
     template<typename Policy, typename... NodeTs, typename Handler>
-    procedure(node<Policy, NodeTs...> &n, std::string_view fqn, Handler handler,
-              request_codec req_codec = {}, response_codec res_codec = {})
+    procedure(node<Policy, NodeTs...> &n, std::string_view fqn, Handler handler, request_codec req_codec = {}, response_codec res_codec = {})
             : m_fqn(fqn)
     {
         io::endpoint_seam seam = n.endpoint_seam_for();
-        seam.serve_procedure(
-                seam.ctx, fqn,
-                handler_fn{adapt(std::move(handler), std::move(req_codec), std::move(res_codec))});
+        seam.serve_procedure(seam.ctx, fqn, handler_fn{adapt(std::move(handler), std::move(req_codec), std::move(res_codec))});
         m_retire = [seam, fqn = m_fqn] { seam.retire_procedure(seam.ctx, fqn); };
     }
 
@@ -142,9 +139,8 @@ private:
     template<typename Handler>
     static handler_fn adapt(Handler handler, request_codec req_codec, response_codec res_codec)
     {
-        return [handler = std::move(handler), req_codec = std::move(req_codec),
-                res_codec = std::move(res_codec), scratch = std::vector<std::byte>{}](
-                       std::span<const std::byte> param, reply_fn &reply) mutable
+        return [handler = std::move(handler), req_codec = std::move(req_codec), res_codec = std::move(res_codec), scratch = std::vector<std::byte>{}](std::span<const std::byte> param,
+                                                                                                                                                      reply_fn &reply) mutable
         {
             Req request{};
             if(!req_codec.decode(param, request))

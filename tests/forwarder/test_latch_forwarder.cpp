@@ -4,17 +4,16 @@ using namespace latch_forwarder_fixture;
 
 TEST_CASE("latch records the per-topic qos independent of any subscriber", "[latch][forwarder]")
 {
-    inproc_bus<>      bus;
-    inproc_executor<> ex(bus);
+    inproc_bus<>             bus;
+    inproc_executor<>        ex(bus);
     plexus::log::null_logger sink;
-    forwarder fwd{sink};
+    forwarder                fwd{sink};
     fwd.latch("topic"); // zero subscribers, no attach
     // The registry seam the headline scenario depends on: declare/latch records
     // the qos before any add_subscriber. Reach it via a fresh registry mirroring
     // the forwarder-under-test path (the forwarder forwards declare straight to it).
     plexus::io::subscriber_registry<inproc_channel<>> reg;
-    reg.declare(plexus::wire::fqn_topic_hash("topic"), "topic",
-                plexus::topic_qos{.latch = true, .depth = 1});
+    reg.declare(plexus::wire::fqn_topic_hash("topic"), "topic", plexus::topic_qos{.latch = true, .depth = 1});
     REQUIRE(reg.qos_for(plexus::wire::fqn_topic_hash("topic")).latch);
 }
 
@@ -31,7 +30,7 @@ TEST_CASE("late subscriber to a latched topic gets the retained value published 
         auto              peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder fwd{sink};
+        forwarder                fwd{sink};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(std::string{"retained-v1"})); // NO subscriber yet
         ex.drain();
@@ -59,7 +58,7 @@ TEST_CASE("a non-latched topic does not replay on a late subscribe", "[latch][fo
     auto              peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder fwd{sink};
+    forwarder                fwd{sink};
     fwd.publish("topic", as_bytes(std::string{"live-only"})); // not latched, no subscriber
     ex.drain();
 
@@ -68,8 +67,7 @@ TEST_CASE("a non-latched topic does not replay on a late subscribe", "[latch][fo
     REQUIRE(data_bodies(cap).empty()); // no replay; only the subscribe_response control frame
 }
 
-TEST_CASE("a latched-but-never-published topic replays nothing (empty retention)",
-          "[latch][forwarder]")
+TEST_CASE("a latched-but-never-published topic replays nothing (empty retention)", "[latch][forwarder]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex(bus);
@@ -78,7 +76,7 @@ TEST_CASE("a latched-but-never-published topic replays nothing (empty retention)
     auto              peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder fwd{sink};
+    forwarder                fwd{sink};
     fwd.latch("topic");
     REQUIRE(fwd.attach_for_fanout(peer, "topic")); // subscribe BEFORE any publish
     ex.drain();
@@ -102,7 +100,7 @@ TEST_CASE("depth=1 replays only the last latched value", "[latch][forwarder]")
         auto              peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder fwd{sink};
+        forwarder                fwd{sink};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(std::string{"v1"}));
         fwd.publish("topic", as_bytes(std::string{"v2"}));

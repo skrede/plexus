@@ -35,8 +35,7 @@ struct recorder
 
     send_queue::send_sink sink()
     {
-        return [this](std::span<const std::byte> bytes, const int &dest,
-                      send_queue::completion done)
+        return [this](std::span<const std::byte> bytes, const int &dest, send_queue::completion done)
         {
             calls.push_back(sent{std::vector<std::byte>(bytes.begin(), bytes.end()), dest});
             pending.push_back(std::move(done));

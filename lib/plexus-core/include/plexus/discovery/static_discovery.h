@@ -29,8 +29,7 @@ public:
 
     void advertise(const service_info &service) override
     {
-        const auto it = std::find_if(m_table.begin(), m_table.end(),
-                                     [&](const service_info &e) { return e.name == service.name; });
+        const auto it = std::find_if(m_table.begin(), m_table.end(), [&](const service_info &e) { return e.name == service.name; });
         if(it != m_table.end())
             *it = service;
         else
@@ -46,7 +45,10 @@ public:
         m_browsers.push_back(on_resolved);
     }
 
-    void stop() override { m_browsers.clear(); }
+    void stop() override
+    {
+        m_browsers.clear();
+    }
 
 private:
     std::vector<service_info>      m_table;

@@ -30,8 +30,7 @@ struct asio_endpoint_hash
         std::size_t h    = std::hash<std::uint16_t>{}(ep.port());
         if(addr.is_v4())
         {
-            h ^= std::hash<std::uint32_t>{}(addr.to_v4().to_uint()) + 0x9e3779b97f4a7c15ull +
-                    (h << 6) + (h >> 2);
+            h ^= std::hash<std::uint32_t>{}(addr.to_v4().to_uint()) + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
             return h;
         }
         const auto bytes = addr.to_v6().to_bytes();
@@ -45,9 +44,7 @@ struct asio_endpoint_hash
 // site spells either this one-argument alias or udp_inbound_demux, so the consumer source
 // is unchanged — only the defining file moved + split.
 template<typename Channel>
-using basic_inbound_demux =
-        plexus::datagram::detail::basic_inbound_demux<Channel, ::asio::ip::udp::endpoint,
-                                                      asio_endpoint_hash>;
+using basic_inbound_demux = plexus::datagram::detail::basic_inbound_demux<Channel, ::asio::ip::udp::endpoint, asio_endpoint_hash>;
 
 // The plain-UDP binding: udp_transport's existing call sites stay untouched.
 using udp_inbound_demux = basic_inbound_demux<udp_channel>;

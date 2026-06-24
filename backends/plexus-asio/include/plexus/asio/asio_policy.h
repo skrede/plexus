@@ -36,7 +36,6 @@ struct asio_policy
 
 }
 
-static_assert(plexus::Policy<plexus::asio::asio_policy>,
-              "asio_policy must satisfy Policy — check the channel/timer constructors and post()");
+static_assert(plexus::Policy<plexus::asio::asio_policy>, "asio_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

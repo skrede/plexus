@@ -14,11 +14,7 @@ namespace {
 // generous retransmit budget covers the residual loopback loss/reorder at this volume.
 inline plexus::datagram::detail::udp_arq_config paced_arq()
 {
-    return plexus::datagram::detail::udp_arq_config{.window         = 64,
-                                                    .initial_rto    = ms{20},
-                                                    .min_rto        = ms{10},
-                                                    .max_rto        = ms{200},
-                                                    .max_retransmit = 80};
+    return plexus::datagram::detail::udp_arq_config{.window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{200}, .max_retransmit = 80};
 }
 
 // The 4 MiB kernel-buffer ceiling this host's rmem_max/wmem_max permits — raised on both
@@ -37,9 +33,8 @@ struct large_result
     std::chrono::milliseconds last_wall;
 };
 
-large_result roundtrip_large(std::size_t budget, std::size_t payload_size,
-                             std::size_t global_default, std::size_t reassembly_budget,
-                             plexus::datagram::detail::udp_arq_config arq, int iterations)
+large_result roundtrip_large(std::size_t budget, std::size_t payload_size, std::size_t global_default, std::size_t reassembly_budget, plexus::datagram::detail::udp_arq_config arq,
+                             int iterations)
 {
     // A multi-megabyte reassembly over the paced ARQ takes well past the 5 s default
     // per-message reclaim window, which would evict the partial mid-flight; extend it so an
@@ -88,14 +83,12 @@ large_result roundtrip_large(std::size_t budget, std::size_t payload_size,
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> b)
-                                      { got.emplace_back(b.begin(), b.end()); });
+                    accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
@@ -116,9 +109,7 @@ large_result roundtrip_large(std::size_t budget, std::size_t payload_size,
 
 }
 
-TEST_CASE(
-        "udp_large_payload: a 16 MB single message round-trips byte-identically over udpr, looped",
-        "[udp_large_payload][envelope16]")
+TEST_CASE("udp_large_payload: a 16 MB single message round-trips byte-identically over udpr, looped", "[udp_large_payload][envelope16]")
 {
     // The lifted envelope on the datagram path: one 16 MiB message over the reliable ARQ,
     // proven byte-equal across repeated in-body iterations (the ctest invocation is itself
@@ -133,14 +124,10 @@ TEST_CASE(
     constexpr std::size_t ceiling    = 20u * 1024u * 1024u;
     constexpr std::size_t reassembly = 48u * 1024u * 1024u;
 
-    const auto r =
-            roundtrip_large(budget, payload, ceiling, reassembly, paced_arq(), /*iterations=*/2);
+    const auto r = roundtrip_large(budget, payload, ceiling, reassembly, paced_arq(), /*iterations=*/2);
     REQUIRE(r.proven == 2);
-    const double mbps = r.last_wall.count() > 0
-            ? (static_cast<double>(payload) / (1024.0 * 1024.0)) / (r.last_wall.count() / 1000.0)
-            : 0.0;
-    WARN("udpr 16 MB round-trip: wall=" << r.last_wall.count() << " ms, throughput~=" << mbps
-                                        << " MiB/s");
+    const double mbps = r.last_wall.count() > 0 ? (static_cast<double>(payload) / (1024.0 * 1024.0)) / (r.last_wall.count() / 1000.0) : 0.0;
+    WARN("udpr 16 MB round-trip: wall=" << r.last_wall.count() << " ms, throughput~=" << mbps << " MiB/s");
 }
 
 TEST_CASE("udp_large_payload: a probe sweep records the highest single message that round-trips "
@@ -161,13 +148,11 @@ TEST_CASE("udp_large_payload: a probe sweep records the highest single message t
     {
         const std::size_t ceiling    = size + 4u * 1024u * 1024u;
         const std::size_t reassembly = ceiling + 4u * 1024u * 1024u;
-        const auto        r =
-                roundtrip_large(budget, size, ceiling, reassembly, paced_arq(), /*iterations=*/1);
+        const auto        r          = roundtrip_large(budget, size, ceiling, reassembly, paced_arq(), /*iterations=*/1);
         if(r.proven != 1)
             break; // first size that does not fully arrive caps the sweep
         highest = size;
     }
     REQUIRE(highest >= 16u * 1024u * 1024u); // the 16 MB envelope floor holds
-    WARN("udpr probe: highest round-tripping single message = " << (highest / (1024 * 1024))
-                                                                << " MB");
+    WARN("udpr probe: highest round-tripping single message = " << (highest / (1024 * 1024)) << " MB");
 }

@@ -64,24 +64,21 @@ void exercise_four_verbs(Table &table)
 
 } // namespace
 
-TEST_CASE("known_peers_storage default storage reproduces the std::map 4-verb behavior",
-          "[io][known_peers]")
+TEST_CASE("known_peers_storage default storage reproduces the std::map 4-verb behavior", "[io][known_peers]")
 {
     known_peers table; // == basic_known_peers<> == the std::map PC default
     exercise_four_verbs(table);
 }
 
-TEST_CASE("known_peers_storage fixed variant satisfies the same 4-verb contract",
-          "[io][known_peers]")
+TEST_CASE("known_peers_storage fixed variant satisfies the same 4-verb contract", "[io][known_peers]")
 {
     basic_known_peers<fixed_peer_storage<8>> table;
     exercise_four_verbs(table);
 }
 
-TEST_CASE("known_peers_storage fixed variant fills to capacity and overwrites in place",
-          "[io][known_peers]")
+TEST_CASE("known_peers_storage fixed variant fills to capacity and overwrites in place", "[io][known_peers]")
 {
-    constexpr std::size_t cap = 4;
+    constexpr std::size_t                      cap = 4;
     basic_known_peers<fixed_peer_storage<cap>> table;
 
     for(std::size_t i = 0; i < cap; ++i)
@@ -103,7 +100,7 @@ TEST_CASE("known_peers_storage fixed variant fills to capacity and overwrites in
 
 TEST_CASE("known_peers_storage fixed variant fails closed on over-capacity", "[io][known_peers]")
 {
-    constexpr std::size_t cap = 2;
+    constexpr std::size_t                      cap = 2;
     basic_known_peers<fixed_peer_storage<cap>> table;
 
     table.note_peer(id_of(std::byte{0x01}), ep_of("a"));

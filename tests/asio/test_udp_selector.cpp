@@ -1,15 +1,13 @@
 #include "test_udp_selector_common.h"
 
-TEST_CASE("udp selector: the tier classifies same-host local and everything else remote",
-          "[udp][selector][tier]")
+TEST_CASE("udp selector: the tier classifies same-host local and everything else remote", "[udp][selector][tier]")
 {
     pio::transport_selector sel;
     const auto              any = pio::reliability_hint::unspecified;
 
     // Locality wins: a same-host scheme is local regardless of the reliability hint.
     REQUIRE(sel.select({"unix", "/tmp/s"}, any) == pio::transport_kind::local);
-    REQUIRE(sel.select({"unix", "/tmp/s"}, pio::reliability_hint::reliable) ==
-            pio::transport_kind::local);
+    REQUIRE(sel.select({"unix", "/tmp/s"}, pio::reliability_hint::reliable) == pio::transport_kind::local);
     REQUIRE(sel.select({"inproc", "node-a"}, any) == pio::transport_kind::local);
 
     // Every off-host scheme — including the two UDP spellings — is the remote tier.
@@ -19,8 +17,7 @@ TEST_CASE("udp selector: the tier classifies same-host local and everything else
     REQUIRE(sel.select({"tls", "127.0.0.1:5000"}, any) == pio::transport_kind::remote);
 }
 
-TEST_CASE("udp selector: the scheme classifies its reliability class from the endpoint alone",
-          "[udp][selector][reliability]")
+TEST_CASE("udp selector: the scheme classifies its reliability class from the endpoint alone", "[udp][selector][reliability]")
 {
     pio::transport_selector sel;
 
@@ -41,8 +38,7 @@ TEST_CASE("udp selector: the scheme classifies its reliability class from the en
     REQUIRE(sel.reliability_of_scheme("ws") == pio::reliability_hint::unspecified);
 }
 
-TEST_CASE("udp selector: the selector is a pure value object — no state across calls or instances",
-          "[udp][selector][value-object]")
+TEST_CASE("udp selector: the selector is a pure value object — no state across calls or instances", "[udp][selector][value-object]")
 {
     pio::transport_selector a;
     pio::transport_selector b;
@@ -56,30 +52,24 @@ TEST_CASE("udp selector: the selector is a pure value object — no state across
     REQUIRE(a.reliability_of_scheme(udp.scheme) == b.reliability_of_scheme(udp.scheme));
     REQUIRE(a.reliability_of_scheme("udpr") == pio::reliability_hint::reliable_datagram);
     REQUIRE(a.reliability_of_scheme("udpr") == a.reliability_of_scheme("udpr"));
-    REQUIRE(a.select(udp, pio::reliability_hint::unspecified) ==
-            b.select(udp, pio::reliability_hint::unspecified));
+    REQUIRE(a.select(udp, pio::reliability_hint::unspecified) == b.select(udp, pio::reliability_hint::unspecified));
 }
 
-TEST_CASE("udp selector: select consumes the hint without changing the tier",
-          "[udp][selector][reliability]")
+TEST_CASE("udp selector: select consumes the hint without changing the tier", "[udp][selector][reliability]")
 {
     pio::transport_selector sel;
 
     // The hint is tier-neutral: the locality tier is identical under every hint, so the
     // additive reliability consumption never regresses the classification.
     const pio::endpoint udp{"udp", "127.0.0.1:5000"};
-    REQUIRE(sel.select(udp, pio::reliability_hint::reliable) ==
-            sel.select(udp, pio::reliability_hint::best_effort));
-    REQUIRE(sel.select(udp, pio::reliability_hint::best_effort) ==
-            sel.select(udp, pio::reliability_hint::unspecified));
+    REQUIRE(sel.select(udp, pio::reliability_hint::reliable) == sel.select(udp, pio::reliability_hint::best_effort));
+    REQUIRE(sel.select(udp, pio::reliability_hint::best_effort) == sel.select(udp, pio::reliability_hint::unspecified));
 
     const pio::endpoint unix_ep{"unix", "/tmp/s"};
-    REQUIRE(sel.select(unix_ep, pio::reliability_hint::reliable) ==
-            sel.select(unix_ep, pio::reliability_hint::unspecified));
+    REQUIRE(sel.select(unix_ep, pio::reliability_hint::reliable) == sel.select(unix_ep, pio::reliability_hint::unspecified));
 }
 
-TEST_CASE("udp selector: reliability_class enforces the no-silent-downgrade rule",
-          "[udp][selector][reliability]")
+TEST_CASE("udp selector: reliability_class enforces the no-silent-downgrade rule", "[udp][selector][reliability]")
 {
     pio::transport_selector sel;
     const auto              reliable    = pio::reliability_hint::reliable;

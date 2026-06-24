@@ -48,8 +48,7 @@ public:
     // The send-sink: given the block-owned bytes view + the destination, perform the
     // irreducible async op and invoke the completion with ok once it finishes.
     using completion = plexus::detail::move_only_function<void(bool)>;
-    using send_sink  = plexus::detail::move_only_function<void(std::span<const std::byte>,
-                                                               const Endpoint &, completion)>;
+    using send_sink  = plexus::detail::move_only_function<void(std::span<const std::byte>, const Endpoint &, completion)>;
 
     explicit send_queue(send_sink sink, std::size_t byte_cap = unbounded)
             : m_sink(std::move(sink))
@@ -76,14 +75,26 @@ public:
 
     // True when the queued byte total has reached the cap and no further frame is
     // admitted until a drain frees room; always false under the unbounded default.
-    [[nodiscard]] bool full() const noexcept { return m_bytes >= m_byte_cap; }
+    [[nodiscard]] bool full() const noexcept
+    {
+        return m_bytes >= m_byte_cap;
+    }
 
-    [[nodiscard]] std::size_t size() const noexcept { return m_queue.size(); }
+    [[nodiscard]] std::size_t size() const noexcept
+    {
+        return m_queue.size();
+    }
 
     // The summed payload bytes of the queued (not-yet-drained) nodes.
-    [[nodiscard]] std::size_t queued_bytes() const noexcept { return m_bytes; }
+    [[nodiscard]] std::size_t queued_bytes() const noexcept
+    {
+        return m_bytes;
+    }
 
-    [[nodiscard]] bool sending() const noexcept { return m_sending; }
+    [[nodiscard]] bool sending() const noexcept
+    {
+        return m_sending;
+    }
 
     // Drop the queue; a completion firing after close is a guarded no-op. close() is terminal
     // (m_open never re-arms), so the recycled-buffer pool is released here too — it is spare

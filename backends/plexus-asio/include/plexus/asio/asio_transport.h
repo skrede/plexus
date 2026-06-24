@@ -59,16 +59,11 @@ public:
     // aggregate reassembly-memory cap — the two operator-facing message-size node options
     // (required-WITH-default, bound to the shipped named constants). Stamped onto every
     // minted channel's inbound config; a per-topic override resolves through io::effective_max.
-    explicit asio_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {},
-                            bool no_delay = true, io::congestion congestion = io::congestion::block,
-                            io::egress_capacity   egress = io::egress_capacity::bounded_default(),
-                            stream_socket_options socket_options = {},
-                            std::size_t global_default    = io::global_default_max_message_bytes,
-                            std::size_t reassembly_budget = io::reassembly_memory_budget)
-            : base(io, stream::with_message_limits(cfg, global_default, reassembly_budget), no_delay,
-                   congestion, egress, socket_options, io,
-                   stream::with_message_limits(cfg, global_default, reassembly_budget), no_delay,
-                   congestion, egress, socket_options)
+    explicit asio_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
+                            io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {},
+                            std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget)
+            : base(io, stream::with_message_limits(cfg, global_default, reassembly_budget), no_delay, congestion, egress, socket_options, io,
+                   stream::with_message_limits(cfg, global_default, reassembly_budget), no_delay, congestion, egress, socket_options)
     {
     }
 
@@ -78,13 +73,15 @@ public:
     static constexpr std::array<std::string_view, 1> mux_schemes{"tcp"};
     static constexpr io::transport_kind              mux_tier = io::transport_kind::remote;
 
-    [[nodiscard]] uint16_t port() const { return listener().port(); }
+    [[nodiscard]] uint16_t port() const
+    {
+        return listener().port();
+    }
 };
 
 }
 
-static_assert(
-        plexus::io::transport_backend<plexus::asio::asio_transport, plexus::asio::asio_policy>,
-        "asio_transport must satisfy transport_backend — check the listen/dial/on_* surface");
+static_assert(plexus::io::transport_backend<plexus::asio::asio_transport, plexus::asio::asio_policy>,
+              "asio_transport must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif

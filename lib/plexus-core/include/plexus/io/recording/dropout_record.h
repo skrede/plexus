@@ -36,7 +36,10 @@ public:
             m_max_fidelity = fidelity;
     }
 
-    [[nodiscard]] bool pending() const noexcept { return m_count != 0; }
+    [[nodiscard]] bool pending() const noexcept
+    {
+        return m_count != 0;
+    }
 
     dropout_record harvest(std::uint64_t resumed_ts) noexcept
     {

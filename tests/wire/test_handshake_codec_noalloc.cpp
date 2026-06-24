@@ -57,8 +57,7 @@ handshake_response sample_response()
 
 }
 
-TEST_CASE("Handshake encode-into: zero allocation across a steady-state loop",
-          "[wire][handshake][noalloc]")
+TEST_CASE("Handshake encode-into: zero allocation across a steady-state loop", "[wire][handshake][noalloc]")
 {
     constexpr int K    = 1024;
     const auto    req  = sample_request();

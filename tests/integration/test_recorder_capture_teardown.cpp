@@ -30,12 +30,10 @@ TEST_CASE("a recorder destroyed mid-session deregisters before teardown and surv
                 plexus::topic_qos qos;
                 qos.latch = true;
                 plexus::publisher<>  pub{n, "teardown.topic", qos};
-                plexus::subscriber<> sub{n, "teardown.topic",
-                                         [](std::span<const std::byte>, const message_info &) {}};
+                plexus::subscriber<> sub{n, "teardown.topic", [](std::span<const std::byte>, const message_info &) {}};
                 for(int i = 0; i < 8; ++i)
                 {
-                    const std::array<std::byte, 3> mk{std::byte{0x01}, std::byte(i),
-                                                      std::byte{0x02}};
+                    const std::array<std::byte, 3> mk{std::byte{0x01}, std::byte(i), std::byte{0x02}};
                     pub.publish(mk);
                     fx.drive();
                 }

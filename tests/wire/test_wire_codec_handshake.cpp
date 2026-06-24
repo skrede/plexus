@@ -16,12 +16,9 @@ TEST_CASE("Handshake request: round-trip across the id field space", "[wire][han
     }
 }
 
-TEST_CASE("Handshake response: round-trip across id field space and all four statuses",
-          "[wire][handshake]")
+TEST_CASE("Handshake response: round-trip across id field space and all four statuses", "[wire][handshake]")
 {
-    const handshake_status statuses[] = {
-            handshake_status::accepted, handshake_status::version_incompatible,
-            handshake_status::identity_conflict, handshake_status::rejected_unknown};
+    const handshake_status statuses[] = {handshake_status::accepted, handshake_status::version_incompatible, handshake_status::identity_conflict, handshake_status::rejected_unknown};
 
     for(const auto &id : {id_distinct(), id_filled(0x00), id_filled(0xFF), id_mixed_high_bit()})
         for(auto status : statuses)
@@ -45,12 +42,10 @@ TEST_CASE("Handshake codec: encoded wire-size pins", "[wire][handshake]")
     // id(16) + 5 single-byte fields + fingerprint(8) + the attach region
     // key_id(8)+own_nonce(16)+cipher_offer(1)+chosen(1)+proof(32) = 87; +status(1) = 88.
     CHECK(encode_handshake_request(make_request(id_distinct())).size() == 87);
-    CHECK(encode_handshake_response(make_response(id_distinct(), handshake_status::accepted))
-                  .size() == 88);
+    CHECK(encode_handshake_response(make_response(id_distinct(), handshake_status::accepted)).size() == 88);
 }
 
-TEST_CASE("Handshake request: every length below the fixed size returns nullopt",
-          "[wire][handshake]")
+TEST_CASE("Handshake request: every length below the fixed size returns nullopt", "[wire][handshake]")
 {
     for(std::size_t len = 0; len < handshake_request_size; ++len)
     {
@@ -61,11 +56,9 @@ TEST_CASE("Handshake request: every length below the fixed size returns nullopt"
     CHECK(decode_handshake_request(exact).has_value());
 }
 
-TEST_CASE("Handshake response: every length below the fixed size returns nullopt",
-          "[wire][handshake]")
+TEST_CASE("Handshake response: every length below the fixed size returns nullopt", "[wire][handshake]")
 {
-    auto valid =
-            encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
+    auto valid = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
     for(std::size_t len = 0; len < handshake_response_size; ++len)
     {
         std::vector<std::byte> payload(valid.begin(), valid.begin() + len);
@@ -74,11 +67,9 @@ TEST_CASE("Handshake response: every length below the fixed size returns nullopt
     CHECK(decode_handshake_response(valid).has_value());
 }
 
-TEST_CASE("Handshake response: status cutoff rejects 0x00 and every byte 0x06..0xFF",
-          "[wire][handshake]")
+TEST_CASE("Handshake response: status cutoff rejects 0x00 and every byte 0x06..0xFF", "[wire][handshake]")
 {
-    auto encoded =
-            encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
+    auto encoded = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
 
     // The status byte is the LAST byte, after the appended attach region, at offset
     // handshake_request_size (the response is the request plus the trailing status).
@@ -92,17 +83,14 @@ TEST_CASE("Handshake response: status cutoff rejects 0x00 and every byte 0x06..0
     }
 }
 
-TEST_CASE("Handshake response: each defined status byte 0x01..0x05 decodes to its enumerator",
-          "[wire][handshake]")
+TEST_CASE("Handshake response: each defined status byte 0x01..0x05 decodes to its enumerator", "[wire][handshake]")
 {
-    auto encoded =
-            encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
-    const std::pair<std::uint8_t, handshake_status> defined[] = {
-            {0x01, handshake_status::accepted},
-            {0x02, handshake_status::version_incompatible},
-            {0x03, handshake_status::identity_conflict},
-            {0x04, handshake_status::rejected_unknown},
-            {0x05, handshake_status::unauthorized}};
+    auto                                            encoded   = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
+    const std::pair<std::uint8_t, handshake_status> defined[] = {{0x01, handshake_status::accepted},
+                                                                 {0x02, handshake_status::version_incompatible},
+                                                                 {0x03, handshake_status::identity_conflict},
+                                                                 {0x04, handshake_status::rejected_unknown},
+                                                                 {0x05, handshake_status::unauthorized}};
 
     for(auto [byte, status] : defined)
     {
@@ -121,8 +109,8 @@ TEST_CASE("Handshake encode-into: byte-identical to the allocating encoder", "[w
     encode_handshake_request_into(req_reused, req);
     CHECK(req_reused == req_allocating);
 
-    auto resp            = make_response(id_mixed_high_bit(), handshake_status::identity_conflict);
-    auto resp_allocating = encode_handshake_response(resp);
+    auto                   resp            = make_response(id_mixed_high_bit(), handshake_status::identity_conflict);
+    auto                   resp_allocating = encode_handshake_response(resp);
     std::vector<std::byte> resp_reused;
     encode_handshake_response_into(resp_reused, resp);
     CHECK(resp_reused == resp_allocating);

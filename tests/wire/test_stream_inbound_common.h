@@ -60,9 +60,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 using executor_t = inproc_executor<manual_clock>;
@@ -78,25 +87,18 @@ constexpr std::size_t k_throughput = 1024; // bytes/sec -> 1 ns per byte * 1e6
 
 inline stream_inbound_config test_config()
 {
-    return stream_inbound_config{
-            .no_progress_floor = std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor),
-            .min_throughput_bytes_per_sec = k_throughput};
+    return stream_inbound_config{.no_progress_floor = std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor), .min_throughput_bytes_per_sec = k_throughput};
 }
 
 // payload_deadline(N) = N / throughput, in nanoseconds (mirrors the component).
 inline std::chrono::nanoseconds payload_deadline(std::size_t n)
 {
-    return std::chrono::nanoseconds{static_cast<std::int64_t>(n) * 1'000'000'000 /
-                                    static_cast<std::int64_t>(k_throughput)};
+    return std::chrono::nanoseconds{static_cast<std::int64_t>(n) * 1'000'000'000 / static_cast<std::int64_t>(k_throughput)};
 }
 
 inline frame_header make_header(std::uint64_t payload_len)
 {
-    return frame_header{.type         = msg_type::unidirectional,
-                        .flags        = 0,
-                        .session_id   = 1,
-                        .timestamp_ns = 0,
-                        .payload_len  = payload_len};
+    return frame_header{.type = msg_type::unidirectional, .flags = 0, .session_id = 1, .timestamp_ns = 0, .payload_len = payload_len};
 }
 
 // A complete frame minted by the production codec path.
@@ -133,7 +135,10 @@ struct fixture
                 });
     }
 
-    void feed(std::span<const std::byte> bytes) { stream.feed(bytes); }
+    void feed(std::span<const std::byte> bytes)
+    {
+        stream.feed(bytes);
+    }
     void advance(std::chrono::nanoseconds d)
     {
         manual_clock::advance(d);

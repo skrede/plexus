@@ -42,9 +42,18 @@ public:
         m_count = std::min(m_count + 1, m_slots.size());
     }
 
-    bool        empty() const { return m_count == 0; }
-    std::size_t count() const { return m_count; }
-    std::size_t capacity() const { return m_slots.size(); }
+    bool empty() const
+    {
+        return m_count == 0;
+    }
+    std::size_t count() const
+    {
+        return m_count;
+    }
+    std::size_t capacity() const
+    {
+        return m_slots.size();
+    }
 
     // The most-recently-pushed frame (durability=latest). Precondition: count > 0.
     const std::vector<std::byte> &newest() const

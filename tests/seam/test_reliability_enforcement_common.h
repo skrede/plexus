@@ -53,7 +53,10 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
 };
 
 struct manual_policy
@@ -81,11 +84,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 inline plexus::node_id make_id(std::uint8_t seed)
@@ -97,8 +96,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 
 inline reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 // A two-node inproc rendezvous: a dialer engine (A) and a responder engine (B) on one
@@ -115,10 +113,8 @@ struct rendezvous
     transport_t                   responder_tp{ex, bus};
     plexus::log::null_logger      sink;
 
-    engine dialer{dialer_tp, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink,
-                  false};
-    engine responder{responder_tp,  ex,     make_cfg(0xB2), k_long_timeout,
-                     forever_cfg(), k_seed, sink, false};
+    engine dialer{dialer_tp, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false};
+    engine responder{responder_tp, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false};
 
     plexus::node_id peer{make_id(0xB2)};
     endpoint        peer_ep;
@@ -132,7 +128,10 @@ struct rendezvous
         dialer.note_peer(peer, peer_ep);
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
     bool connected()
     {
         drive();

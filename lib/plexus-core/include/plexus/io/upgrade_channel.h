@@ -16,7 +16,7 @@ namespace plexus::io {
 template<typename Channel>
 struct upgrade_mint
 {
-    std::unique_ptr<Channel>                             channel;
+    std::unique_ptr<Channel>                              channel;
     plexus::detail::move_only_function<bool(std::size_t)> fits;
 };
 
@@ -28,7 +28,10 @@ struct upgrade_receive
 {
     plexus::detail::move_only_function<void()> owner;
 
-    [[nodiscard]] bool engaged() const noexcept { return static_cast<bool>(owner); }
+    [[nodiscard]] bool engaged() const noexcept
+    {
+        return static_cast<bool>(owner);
+    }
 };
 
 }

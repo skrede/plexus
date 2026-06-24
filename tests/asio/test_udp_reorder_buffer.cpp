@@ -112,17 +112,14 @@ TEST_CASE("udp reorder: a duplicate below expected is dropped, not re-delivered"
     REQUIRE(r.released_seq == std::vector<std::uint16_t>{0, 1});
 }
 
-TEST_CASE("udp reorder: a seq at or beyond expected+W is out of window and dropped",
-          "[udp][reorder]")
+TEST_CASE("udp reorder: a seq at or beyond expected+W is out of window and dropped", "[udp][reorder]")
 {
     recorder r{/*window=*/4};
     REQUIRE(r.buf.feed(0, false, bytes_of("a")) == reorder::outcome::delivered); // expected -> 1
 
     // Window is 4: holes at offsets [0,4) from expected=1 are admissible (seq 1..4).
-    REQUIRE(r.buf.feed(4, false, bytes_of("ok")) ==
-            reorder::outcome::buffered); // offset 3, in window
-    REQUIRE(r.buf.feed(5, false, bytes_of("no")) ==
-            reorder::outcome::out_of_window); // offset 4, past bound
+    REQUIRE(r.buf.feed(4, false, bytes_of("ok")) == reorder::outcome::buffered);      // offset 3, in window
+    REQUIRE(r.buf.feed(5, false, bytes_of("no")) == reorder::outcome::out_of_window); // offset 4, past bound
     REQUIRE(r.released_seq == std::vector<std::uint16_t>{0});
 }
 
@@ -132,8 +129,7 @@ TEST_CASE("udp reorder: in-order delivery survives the uint16 65535 -> 0 wrap", 
 
     REQUIRE(r.buf.feed(65534, false, bytes_of("x")) == reorder::outcome::delivered);
     REQUIRE(r.buf.feed(65535, false, bytes_of("y")) == reorder::outcome::delivered);
-    REQUIRE(r.buf.feed(0, false, bytes_of("z")) ==
-            reorder::outcome::delivered); // the wrap is a forward step
+    REQUIRE(r.buf.feed(0, false, bytes_of("z")) == reorder::outcome::delivered); // the wrap is a forward step
     REQUIRE(r.buf.feed(1, false, bytes_of("w")) == reorder::outcome::delivered);
 
     REQUIRE(r.released_seq == std::vector<std::uint16_t>{65534, 65535, 0, 1});
@@ -147,8 +143,7 @@ TEST_CASE("udp reorder: in-order delivery survives the uint16 65535 -> 0 wrap", 
     REQUIRE(r.released_seq == std::vector<std::uint16_t>{65534, 65535, 0, 1, 2, 3});
 }
 
-TEST_CASE("udp reorder: the per-segment fragmented bit rides the slot through a HOL hold",
-          "[udp][reorder]")
+TEST_CASE("udp reorder: the per-segment fragmented bit rides the slot through a HOL hold", "[udp][reorder]")
 {
     recorder r;
 

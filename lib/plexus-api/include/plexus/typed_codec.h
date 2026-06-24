@@ -37,8 +37,7 @@ struct type_identity
 // passed span rather than copying) is valid for the delivery callback's duration ONLY;
 // deferred consumption must copy the value out before the callback returns.
 template<typename C>
-concept typed_codec = requires(C &c, const typename C::value_type &v,
-                               std::span<const std::byte> bytes, typename C::value_type &slot) {
+concept typed_codec = requires(C &c, const typename C::value_type &v, std::span<const std::byte> bytes, typename C::value_type &slot) {
     typename C::value_type;
     { c.encode(v) } -> std::convertible_to<wire_bytes<>>;
     { c.decode(bytes, slot) } -> std::same_as<expected<void, std::error_code>>;
@@ -82,8 +81,7 @@ constexpr type_identity resolve_identity(const Codec &codec)
 // non-identity-bearing codec instantiates only the explicit path, so the empty-optional
 // case never compiles its (ill-formed) type_info read.
 template<typename Codec>
-constexpr type_identity resolve_identity(const Codec                 &codec,
-                                         std::optional<type_identity> explicit_identity)
+constexpr type_identity resolve_identity(const Codec &codec, std::optional<type_identity> explicit_identity)
 {
     if constexpr(identity_bearing<Codec>)
         return explicit_identity ? *explicit_identity : codec.type_info();

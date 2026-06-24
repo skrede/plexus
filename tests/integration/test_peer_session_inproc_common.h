@@ -61,11 +61,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // A two-node inproc link stood up through the transport's listen/dial rendezvous
@@ -86,10 +82,10 @@ struct link
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink};
+    msg_forwarder            resp_messages{sink};
+    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx;  // the dialer slot's per-peer record
     plexus::io::peer_context<inproc_policy> resp_ctx; // the accepted slot's per-peer record
@@ -110,10 +106,8 @@ struct link
                     // real accepter it is the post-inbound-reconciliation value). Pinned here so
                     // the source-identity gid reconstructs against the true peer node_id.
                     resp_ctx.peer_id = make_cfg(0x02).self_id; // the requester's node_id
-                    responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages,
-                                      resp_procedures, true, sink);
-                    responder->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { resp_received.emplace_back(to_string(d)); });
+                    responder.emplace(resp_ctx, ex, make_cfg(0x01), timeout, resp_messages, resp_procedures, true, sink);
+                    responder->on_message([this](std::string_view, std::span<const std::byte> d) { resp_received.emplace_back(to_string(d)); });
                     responder->start();
                 });
         transport.on_dialed(
@@ -121,12 +115,9 @@ struct link
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
-                    req_ctx.peer_id =
-                            make_cfg(0x01).self_id; // the responder's node_id (the dialed peer)
-                    requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages,
-                                      req_procedures, false, sink);
-                    requester->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { req_received.emplace_back(to_string(d)); });
+                    req_ctx.peer_id   = make_cfg(0x01).self_id; // the responder's node_id (the dialed peer)
+                    requester.emplace(req_ctx, ex, make_cfg(0x02), timeout, req_messages, req_procedures, false, sink);
+                    requester->on_message([this](std::string_view, std::span<const std::byte> d) { req_received.emplace_back(to_string(d)); });
                     requester->start();
                 });
 
@@ -134,7 +125,10 @@ struct link
         transport.dial({"inproc", "svc"});
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 }

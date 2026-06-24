@@ -25,18 +25,32 @@ class freertos_stub_channel
 public:
     freertos_stub_channel() = default;
 
-    void                 send(std::span<const std::byte>) {}
-    void                 close() {}
-    plexus::io::endpoint remote_endpoint() const { return {}; }
+    void send(std::span<const std::byte>)
+    {
+    }
+    void close()
+    {
+    }
+    plexus::io::endpoint remote_endpoint() const
+    {
+        return {};
+    }
 
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
-    void on_closed(plexus::detail::move_only_function<void()>) {}
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
+    {
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
 };
 
-static_assert(plexus::io::byte_channel<freertos_stub_channel>,
-              "freertos_stub_channel must satisfy byte_channel — check every on_* member and send/close");
+static_assert(plexus::io::byte_channel<freertos_stub_channel>, "freertos_stub_channel must satisfy byte_channel — check every on_* member and send/close");
 
 }
 

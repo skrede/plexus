@@ -42,8 +42,7 @@ class move_only_function<R(Args...)>
     // not over-aligned, and moves without throwing — otherwise it spills to the heap
     // and the buffer holds a single owning F*.
     template<typename F>
-    static constexpr bool fits_inline = sizeof(F) <= k_move_only_fn_sbo &&
-            alignof(F) <= alignof(std::max_align_t) && std::is_nothrow_move_constructible_v<F>;
+    static constexpr bool fits_inline = sizeof(F) <= k_move_only_fn_sbo && alignof(F) <= alignof(std::max_align_t) && std::is_nothrow_move_constructible_v<F>;
 
     // The type-erased operation table: invoke the target, relocate it from a source
     // buffer into a destination buffer (move-construct + destroy the inline object, or
@@ -70,8 +69,7 @@ class move_only_function<R(Args...)>
     template<typename F>
     static const ops_t *ops_for() noexcept
     {
-        static constexpr ops_t ops{[](std::byte *buf, Args... a) -> R
-                                   { return (*as<F>(buf))(std::forward<Args>(a)...); },
+        static constexpr ops_t ops{[](std::byte *buf, Args... a) -> R { return (*as<F>(buf))(std::forward<Args>(a)...); },
                                    [](std::byte *dst, std::byte *src) noexcept
                                    {
                                        if constexpr(fits_inline<F>)
@@ -80,8 +78,7 @@ class move_only_function<R(Args...)>
                                            as<F>(src)->~F();
                                        }
                                        else
-                                           *reinterpret_cast<F **>(dst) =
-                                                   *reinterpret_cast<F **>(src);
+                                           *reinterpret_cast<F **>(dst) = *reinterpret_cast<F **>(src);
                                    },
                                    [](std::byte *buf) noexcept
                                    {
@@ -124,19 +121,21 @@ class move_only_function<R(Args...)>
 public:
     move_only_function() = default;
 
-    move_only_function(std::nullptr_t) noexcept {}
+    move_only_function(std::nullptr_t) noexcept
+    {
+    }
 
-    template<typename F,
-             std::enable_if_t<!std::is_same_v<std::remove_cvref_t<F>, move_only_function> &&
-                                      std::is_invocable_r_v<R, F &, Args...>,
-                              int> = 0>
+    template<typename F, std::enable_if_t<!std::is_same_v<std::remove_cvref_t<F>, move_only_function> && std::is_invocable_r_v<R, F &, Args...>, int> = 0>
     // NOLINTNEXTLINE(google-explicit-constructor)
     move_only_function(F f)
     {
         emplace<std::decay_t<F>>(std::move(f));
     }
 
-    move_only_function(move_only_function &&o) noexcept { steal(o); }
+    move_only_function(move_only_function &&o) noexcept
+    {
+        steal(o);
+    }
 
     move_only_function &operator=(move_only_function &&o) noexcept
     {
@@ -151,16 +150,37 @@ public:
     move_only_function(const move_only_function &)            = delete;
     move_only_function &operator=(const move_only_function &) = delete;
 
-    ~move_only_function() { reset(); }
+    ~move_only_function()
+    {
+        reset();
+    }
 
-    explicit operator bool() const noexcept { return m_ops != nullptr; }
+    explicit operator bool() const noexcept
+    {
+        return m_ops != nullptr;
+    }
 
-    friend bool operator==(const move_only_function &f, std::nullptr_t) noexcept { return !f; }
-    friend bool operator==(std::nullptr_t, const move_only_function &f) noexcept { return !f; }
-    friend bool operator!=(const move_only_function &f, std::nullptr_t) noexcept { return !!f; }
-    friend bool operator!=(std::nullptr_t, const move_only_function &f) noexcept { return !!f; }
+    friend bool operator==(const move_only_function &f, std::nullptr_t) noexcept
+    {
+        return !f;
+    }
+    friend bool operator==(std::nullptr_t, const move_only_function &f) noexcept
+    {
+        return !f;
+    }
+    friend bool operator!=(const move_only_function &f, std::nullptr_t) noexcept
+    {
+        return !!f;
+    }
+    friend bool operator!=(std::nullptr_t, const move_only_function &f) noexcept
+    {
+        return !!f;
+    }
 
-    R operator()(Args... args) { return m_ops->invoke(m_buf, std::forward<Args>(args)...); }
+    R operator()(Args... args)
+    {
+        return m_ops->invoke(m_buf, std::forward<Args>(args)...);
+    }
 };
 
 #endif

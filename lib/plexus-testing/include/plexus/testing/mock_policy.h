@@ -47,17 +47,29 @@ public:
     mock_channel(mock_channel &&)                 = delete;
     mock_channel &operator=(mock_channel &&)      = delete;
 
-    void send(std::span<const std::byte> data) { m_sent.emplace_back(data.begin(), data.end()); }
+    void send(std::span<const std::byte> data)
+    {
+        m_sent.emplace_back(data.begin(), data.end());
+    }
 
-    void close() { m_closed = true; }
+    void close()
+    {
+        m_closed = true;
+    }
 
-    [[nodiscard]] io::endpoint remote_endpoint() const { return m_remote; }
+    [[nodiscard]] io::endpoint remote_endpoint() const
+    {
+        return m_remote;
+    }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_closed = std::move(cb);
+    }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -103,14 +115,23 @@ public:
                 });
     }
 
-    void set_remote_endpoint(io::endpoint ep) { m_remote = std::move(ep); }
+    void set_remote_endpoint(io::endpoint ep)
+    {
+        m_remote = std::move(ep);
+    }
 
     [[nodiscard]] const std::vector<std::vector<std::byte>> &sent() const noexcept
     {
         return m_sent;
     }
-    [[nodiscard]] std::size_t sent_packets() const noexcept { return m_sent.size(); }
-    [[nodiscard]] bool        closed() const noexcept { return m_closed; }
+    [[nodiscard]] std::size_t sent_packets() const noexcept
+    {
+        return m_sent.size();
+    }
+    [[nodiscard]] bool closed() const noexcept
+    {
+        return m_closed;
+    }
 
 private:
     plexus::inproc::inproc_executor<Clock>                              *m_exec;
@@ -142,8 +163,6 @@ struct mock_policy
 
 }
 
-static_assert(
-        plexus::Policy<plexus::testing::mock_policy>,
-        "mock_policy must satisfy Policy — check the mock_channel/timer constructors and post()");
+static_assert(plexus::Policy<plexus::testing::mock_policy>, "mock_policy must satisfy Policy — check the mock_channel/timer constructors and post()");
 
 #endif

@@ -36,9 +36,15 @@ using namespace plexus::shm;
 // not the wakeup; the channel still requires a notifier reference).
 struct null_notifier
 {
-    void signal() noexcept {}
-    void arm(plexus::detail::move_only_function<void()>) {}
-    void disarm() noexcept {}
+    void signal() noexcept
+    {
+    }
+    void arm(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void disarm() noexcept
+    {
+    }
 };
 
 static_assert(notifier<null_notifier>, "null_notifier must satisfy the notifier seam");
@@ -53,7 +59,10 @@ struct backing_region
         m_data       = reinterpret_cast<std::byte *>(aligned);
         m_size       = bytes;
     }
-    std::span<std::byte> span() const noexcept { return {m_data, m_size}; }
+    std::span<std::byte> span() const noexcept
+    {
+        return {m_data, m_size};
+    }
 
 private:
     std::vector<std::byte> m_storage;
@@ -71,8 +80,7 @@ struct ring_fixture
 
     ring_fixture()
     {
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), Cells, Slot, ring) ==
-                loan_status::ok);
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), Cells, Slot, ring) == loan_status::ok);
     }
 };
 

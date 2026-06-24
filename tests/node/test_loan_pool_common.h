@@ -36,7 +36,10 @@ struct counted
         ++live;
         ++constructed;
     }
-    ~counted() { --live; }
+    ~counted()
+    {
+        --live;
+    }
 };
 
 inline void reset_counts()

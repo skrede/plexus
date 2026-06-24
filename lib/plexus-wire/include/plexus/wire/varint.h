@@ -41,8 +41,7 @@ namespace detail {
 // Accumulate one LEB128 byte at index i into value. Returns true when the terminator (no
 // continuation bit) was seen. On the 10th (last permitted) byte only bit 63 may be set — any
 // higher payload bit would overflow u64 — so the overflow guard runs BEFORE the accumulate.
-[[nodiscard]] inline bool varint_step(std::uint8_t byte, std::size_t i, std::uint64_t &value,
-                                      bool &overflow) noexcept
+[[nodiscard]] inline bool varint_step(std::uint8_t byte, std::size_t i, std::uint64_t &value, bool &overflow) noexcept
 {
     const std::uint64_t payload = byte & 0x7Fu;
     if(i == k_max_varint_bytes - 1 && payload > 0x01u)
@@ -56,8 +55,7 @@ namespace detail {
 
 }
 
-[[nodiscard]] inline std::optional<std::uint64_t> read_varint(std::span<const std::byte> data,
-                                                              std::size_t &consumed) noexcept
+[[nodiscard]] inline std::optional<std::uint64_t> read_varint(std::span<const std::byte> data, std::size_t &consumed) noexcept
 {
     if(consumed > data.size())
         return std::nullopt;

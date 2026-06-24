@@ -79,11 +79,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // Frame a unidirectional "topic" message carrying a chosen session_id through the PRODUCTION
@@ -152,14 +148,19 @@ struct pty_pair
     pty_pair(const pty_pair &)            = delete;
     pty_pair &operator=(const pty_pair &) = delete;
 
-    int take_master() { return std::exchange(master, -1); }
-    int take_slave() { return std::exchange(slave, -1); }
+    int take_master()
+    {
+        return std::exchange(master, -1);
+    }
+    int take_slave()
+    {
+        return std::exchange(slave, -1);
+    }
 };
 
 // Adopt a pty fd into a fresh serial_channel: wrap the fd as a serial_port (the native-handle
 // ctor — the port now owns the fd) and move it into the adopt-connected channel ctor.
-inline std::unique_ptr<pasio::serial_channel> adopt_channel(::asio::io_context &io, int fd,
-                                                            stream::stream_inbound_config cfg = {})
+inline std::unique_ptr<pasio::serial_channel> adopt_channel(::asio::io_context &io, int fd, stream::stream_inbound_config cfg = {})
 {
     return std::make_unique<pasio::serial_channel>(io, ::asio::serial_port{io, fd}, cfg);
 }
@@ -172,8 +173,7 @@ inline void pump_until(::asio::io_context &io, Pred pred)
         io.poll();
 }
 
-inline void settle(::asio::io_context       &io,
-                   std::chrono::milliseconds window = std::chrono::milliseconds(20))
+inline void settle(::asio::io_context &io, std::chrono::milliseconds window = std::chrono::milliseconds(20))
 {
     auto bound = std::chrono::steady_clock::now() + window;
     while(std::chrono::steady_clock::now() < bound)

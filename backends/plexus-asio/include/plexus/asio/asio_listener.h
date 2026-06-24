@@ -38,10 +38,8 @@ public:
     // no_delay disables Nagle on every accepted peer (required-WITH-default true — the
     // latency-MW default; a Nagle use-case overrides it): set BEFORE the channel adopts
     // the socket, since the accept ctor starts reading immediately.
-    explicit asio_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {},
-                           bool no_delay = true, io::congestion congestion = io::congestion::block,
-                           io::egress_capacity   egress = io::egress_capacity::bounded_default(),
-                           stream_socket_options socket_options = {})
+    explicit asio_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
+                           io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {})
             : m_io(io)
             , m_acceptor(io)
             , m_cfg(cfg)
@@ -117,9 +115,7 @@ private:
                         (void)peer.set_option(::asio::ip::tcp::no_delay(true),
                                               nec); // disable Nagle pre-adopt
                     }
-                    auto channel = std::make_unique<asio_channel>(m_io, std::move(peer), m_cfg,
-                                                                  m_congestion, m_egress_capacity,
-                                                                  m_socket_options);
+                    auto channel = std::make_unique<asio_channel>(m_io, std::move(peer), m_cfg, m_congestion, m_egress_capacity, m_socket_options);
                     if(m_on_accepted)
                         m_on_accepted(std::move(channel));
                     if(m_running)
@@ -135,7 +131,7 @@ private:
 
     ::asio::io_context                                                     &m_io;
     ::asio::ip::tcp::acceptor                                               m_acceptor;
-    stream::stream_inbound_config                                             m_cfg;
+    stream::stream_inbound_config                                           m_cfg;
     bool                                                                    m_no_delay;
     io::congestion                                                          m_congestion;
     io::egress_capacity                                                     m_egress_capacity;

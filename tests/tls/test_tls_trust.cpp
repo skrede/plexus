@@ -56,9 +56,7 @@ struct identity_fixture
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path() /
-                ("plexus_tls_trust_" + tag + "_" + std::to_string(::getpid()) + "_" +
-                 std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() / ("plexus_tls_trust_" + tag + "_" + std::to_string(::getpid()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
         key_path  = dir / "key.pem";
@@ -76,8 +74,7 @@ struct identity_fixture
 
     void generate()
     {
-        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"),
-                                                                 &EVP_PKEY_free);
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"), &EVP_PKEY_free);
         REQUIRE(pkey);
 
         std::unique_ptr<X509, decltype(&X509_free)> cert(X509_new(), &X509_free);
@@ -88,16 +85,12 @@ struct identity_fixture
         X509_set_pubkey(cert.get(), pkey.get());
 
         X509_NAME *name = X509_get_subject_name(cert.get());
-        X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-                                   reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1,
-                                   0);
+        X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1, 0);
         X509_set_issuer_name(cert.get(), name);
         REQUIRE(X509_sign(cert.get(), pkey.get(), EVP_sha256()) != 0);
 
         write_pem(cert.get(), pkey.get());
-        std::filesystem::permissions(
-                key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-                std::filesystem::perm_options::replace);
+        std::filesystem::permissions(key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, std::filesystem::perm_options::replace);
 
         auto d = ptls::spki_fingerprint(*cert.get());
         REQUIRE(d.has_value());
@@ -121,8 +114,7 @@ struct identity_fixture
 // Mint a credential for `self` whose verify policy pins exactly `peer_pin`.
 ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &peer_pin)
 {
-    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-            std::vector<spki_digest>{peer_pin});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(std::vector<spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -130,8 +122,7 @@ ptls::tls_credential pin_one(const identity_fixture &self, const spki_digest &pe
 // allowlist) — fail-closed: it rejects every peer.
 ptls::tls_credential pin_none(const identity_fixture &self)
 {
-    auto policy =
-            std::make_shared<const pio::security::spki_pin_policy>(std::vector<spki_digest>{});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(std::vector<spki_digest>{});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -165,8 +156,7 @@ struct trust_link
                 [this](std::unique_ptr<ptls::tls_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([this](std::span<const std::byte> d)
-                                      { accepter_received.emplace_back(d.begin(), d.end()); });
+                    accepted->on_data([this](std::span<const std::byte> d) { accepter_received.emplace_back(d.begin(), d.end()); });
                 });
         dialer.on_dialed(
                 [this](std::unique_ptr<ptls::tls_channel> ch, const pio::endpoint &)
@@ -211,11 +201,7 @@ struct trust_link
 
 std::vector<std::byte> make_frame(const std::string &payload)
 {
-    plexus::wire::frame_header hdr{.type         = plexus::wire::msg_type::unidirectional,
-                                   .flags        = 0,
-                                   .session_id   = 1,
-                                   .timestamp_ns = 0,
-                                   .payload_len  = 0};
+    plexus::wire::frame_header hdr{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 1, .timestamp_ns = 0, .payload_len = 0};
     auto                       bytes = reinterpret_cast<const std::byte *>(payload.data());
     return plexus::wire::encode_frame(hdr, std::span<const std::byte>{bytes, payload.size()});
 }
@@ -224,9 +210,7 @@ constexpr int k_iterations = 100;
 
 }
 
-TEST_CASE(
-        "tls trust: mutual cross-pinning lands both ends live and delivers byte-identical, looped",
-        "[tls][trust][failclosed]")
+TEST_CASE("tls trust: mutual cross-pinning lands both ends live and delivers byte-identical, looped", "[tls][trust][failclosed]")
 {
     identity_fixture acc("acc");
     identity_fixture dia("dia");
@@ -312,8 +296,7 @@ TEST_CASE("tls trust: the dialer not pinning the accepter fails closed — on_di
     REQUIRE(rejected == k_iterations);
 }
 
-TEST_CASE("tls trust: a mismatched (wrong-digest) pin rejects — no channel, looped",
-          "[tls][trust][failclosed]")
+TEST_CASE("tls trust: a mismatched (wrong-digest) pin rejects — no channel, looped", "[tls][trust][failclosed]")
 {
     identity_fixture acc("acc");
     identity_fixture dia("dia");
@@ -338,8 +321,7 @@ TEST_CASE("tls trust: a mismatched (wrong-digest) pin rejects — no channel, lo
     REQUIRE(rejected == k_iterations);
 }
 
-TEST_CASE("tls trust: a credential with an empty (no-pin) policy rejects every peer, looped",
-          "[tls][trust][failclosed]")
+TEST_CASE("tls trust: a credential with an empty (no-pin) policy rejects every peer, looped", "[tls][trust][failclosed]")
 {
     identity_fixture acc("acc");
     identity_fixture dia("dia");

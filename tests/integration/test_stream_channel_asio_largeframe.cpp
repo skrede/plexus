@@ -16,8 +16,8 @@ TEST_CASE("asio stream channel: a 16 MB single frame round-trips byte-identicall
     // Looped in-body and re-run across process runs (a transport claim is never made from one
     // run); the frame body encodes a position ramp so a reorder or corruption is caught, not
     // just a size mismatch.
-    constexpr std::size_t       k_payload = 16u * 1024u * 1024u;
-    constexpr std::size_t       k_ceiling = 20u * 1024u * 1024u;
+    constexpr std::size_t         k_payload = 16u * 1024u * 1024u;
+    constexpr std::size_t         k_ceiling = 20u * 1024u * 1024u;
     stream::stream_inbound_config cfg{};
     cfg.max_payload_size          = k_ceiling;
     cfg.buffered_bytes_cap        = k_ceiling + wire::header_size;
@@ -34,10 +34,8 @@ TEST_CASE("asio stream channel: a 16 MB single frame round-trips byte-identicall
         raw_client.connect(acc.local_endpoint());
         acc.accept(raw_server);
 
-        pasio::asio_channel server{io, std::move(raw_server), cfg, pio::congestion::block,
-                                   pio::egress_capacity::of_bytes(k_queue)};
-        pasio::asio_channel client{io, std::move(raw_client), cfg, pio::congestion::block,
-                                   pio::egress_capacity::of_bytes(k_queue)};
+        pasio::asio_channel server{io, std::move(raw_server), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
+        pasio::asio_channel client{io, std::move(raw_client), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
 
         std::vector<std::byte>           got;
         std::optional<wire::close_cause> closed;
@@ -79,11 +77,7 @@ pio::handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return pio::handshake_fsm_config{.self_id                  = id,
-                                     .version_major            = 1,
-                                     .version_minor            = 0,
-                                     .compatible_version_major = 1,
-                                     .compatible_version_minor = 0};
+    return pio::handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // A peer_session over a real accepted TCP channel, built dialer-style so its
@@ -118,8 +112,7 @@ struct session_under_peer
                 {
                     ctx.channel   = std::move(ch);
                     ctx.node_name = "raw-peer";
-                    peer.emplace(ctx, io, make_cfg(0x02), k_long_timeout, messages, procedures,
-                                 false, sink);
+                    peer.emplace(ctx, io, make_cfg(0x02), k_long_timeout, messages, procedures, false, sink);
                     peer->start();
                     peer->on_transport_drop([this] { ++drops; });
                 });

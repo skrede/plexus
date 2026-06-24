@@ -70,8 +70,14 @@ struct fake_channel
     {
         ++*live;
     }
-    ~fake_channel() { --*live; }
-    void send(std::span<const std::byte> b) { sent.push_back(b.size()); }
+    ~fake_channel()
+    {
+        --*live;
+    }
+    void send(std::span<const std::byte> b)
+    {
+        sent.push_back(b.size());
+    }
 };
 
 using coordinator = plexus::io::upgrade_coordinator<stub_registry, fake_channel>;
@@ -93,12 +99,14 @@ struct gate_recorder
         if(!accept)
             return {};
         minted.emplace_back(fqn);
-        auto fits = [m = mode, cap = slot_capacity](std::size_t bytes)
-        { return route_message_medium(m, bytes, cap) == same_host_medium::shm; };
+        auto fits = [m = mode, cap = slot_capacity](std::size_t bytes) { return route_message_medium(m, bytes, cap) == same_host_medium::shm; };
         return {std::make_unique<fake_channel>(&live), std::move(fits)};
     }
 
-    [[nodiscard]] std::size_t mints() const { return minted.size(); }
+    [[nodiscard]] std::size_t mints() const
+    {
+        return minted.size();
+    }
 };
 
 void install_gate(coordinator &c, gate_recorder &gate)
@@ -150,13 +158,15 @@ struct receive_recorder
         return {[h = handle{&live}]() mutable { (void)h; }};
     }
 
-    [[nodiscard]] std::size_t attaches() const { return attached.size(); }
+    [[nodiscard]] std::size_t attaches() const
+    {
+        return attached.size();
+    }
 };
 
 void install_receive_gate(coordinator &c, receive_recorder &gate)
 {
-    c.on_receive_gate([&gate](std::string_view node_name, std::string_view fqn)
-                      { return gate.mint(node_name, fqn); });
+    c.on_receive_gate([&gate](std::string_view node_name, std::string_view fqn) { return gate.mint(node_name, fqn); });
 }
 
 }
@@ -206,8 +216,7 @@ TEST_CASE("shm.coordinator a hint-less co-host 0->1 mints NOTHING", "[shm][coord
     REQUIRE(gate.mints() == 0);
 }
 
-TEST_CASE("shm.coordinator a gate decline (broker failure) falls back to the wire with no bypass",
-          "[shm][coordinator]")
+TEST_CASE("shm.coordinator a gate decline (broker failure) falls back to the wire with no bypass", "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
@@ -266,8 +275,7 @@ TEST_CASE("shm.coordinator a reliable_preserving companion carries every fitting
     REQUIRE(c.companion_for("node-a", "alpha", 1u << 20) != nullptr);
 }
 
-TEST_CASE("shm.coordinator the 1->0 edge drops the companion; intermediate edges no-op",
-          "[shm][coordinator]")
+TEST_CASE("shm.coordinator the 1->0 edge drops the companion; intermediate edges no-op", "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
@@ -288,8 +296,7 @@ TEST_CASE("shm.coordinator the 1->0 edge drops the companion; intermediate edges
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
 
-TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that peer",
-          "[shm][coordinator]")
+TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that peer", "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
@@ -308,9 +315,7 @@ TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
 
-TEST_CASE(
-        "shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive companion, not a send mint",
-        "[shm][coordinator]")
+TEST_CASE("shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive companion, not a send mint", "[shm][coordinator]")
 {
     // The receive lane (gap-closure): a subscriber-role edge routes THROUGH the receive gate
     // (attach the co-host ring as a consumer) and NOT the send mint gate — a subscriber node
@@ -335,8 +340,7 @@ TEST_CASE(
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr); // no send channel for a receive ring
 }
 
-TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and on peer-dead",
-          "[shm][coordinator]")
+TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and on peer-dead", "[shm][coordinator]")
 {
     // The receive lane mirrors the send lane's refcounted teardown: the 1->0 demand edge AND
     // a peer-dead both drop the receive owner, running the handle dtor (clear sink, release
@@ -364,8 +368,7 @@ TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and
     REQUIRE(rgate.live == 0);
 }
 
-TEST_CASE("shm.coordinator a subscriber edge with no receive gate keeps only the wire (no crash)",
-          "[shm][coordinator]")
+TEST_CASE("shm.coordinator a subscriber edge with no receive gate keeps only the wire (no crash)", "[shm][coordinator]")
 {
     // A composition with no shm member installs no receive gate: a co-host subscriber edge is
     // a no-op (the wire receive path stays), exactly as a no-mint-gate publisher edge is.
@@ -379,8 +382,7 @@ TEST_CASE("shm.coordinator a subscriber edge with no receive gate keeps only the
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
 
-TEST_CASE("shm.coordinator the default policy auto-engages; an override can disable the upgrade",
-          "[shm][coordinator]")
+TEST_CASE("shm.coordinator the default policy auto-engages; an override can disable the upgrade", "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
@@ -406,8 +408,7 @@ TEST_CASE("shm.coordinator the default policy auto-engages; an override can disa
     }
 }
 
-TEST_CASE("shm.coordinator the bilateral OR: a subscriber-side hint upgrades a hint-less publisher",
-          "[shm][coordinator]")
+TEST_CASE("shm.coordinator the bilateral OR: a subscriber-side hint upgrades a hint-less publisher", "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
@@ -421,8 +422,7 @@ TEST_CASE("shm.coordinator the bilateral OR: a subscriber-side hint upgrades a h
     REQUIRE(gate.mints() == 1); // the OR upgrades the pair
 }
 
-TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the topic's hint",
-          "[shm][coordinator]")
+TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the topic's hint", "[shm][coordinator]")
 {
     // WR-05: dynamic topic churn must not grow the hint map without bound. The hint is
     // pruned when the last demand for an fqn drops, mirroring the held-channel teardown; a
@@ -483,9 +483,7 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
     {
         plexus::log::null_logger log_sink;
         forwarder                fwd{log_sink};
-        fwd.on_demand_transition(
-                [&edges](std::string_view, std::string_view fqn, demand_transition d, demand_role r)
-                { edges.push_back({std::string{fqn}, d, r}); });
+        fwd.on_demand_transition([&edges](std::string_view, std::string_view fqn, demand_transition d, demand_role r) { edges.push_back({std::string{fqn}, d, r}); });
 
         REQUIRE(fwd.attach(peer, "alpha"));       // 0->1: up
         REQUIRE_FALSE(fwd.attach(peer, "alpha")); // 1->2: no emit

@@ -4,19 +4,15 @@
 
 using namespace udp_repro_fixture;
 
-TEST_CASE(
-        "integration udp reproducibility: reliable-ARQ delivers in order over loss every iteration",
-        "[integration][udp][reproducibility]")
+TEST_CASE("integration udp reproducibility: reliable-ARQ delivers in order over loss every iteration", "[integration][udp][reproducibility]")
 {
     constexpr int k_iterations = 100;
     int           proven       = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context   io;
-        pasio::udp_transport server{io, pasio::udp_channel::default_max_payload,
-                                    pasio::udp_transport::arq_type::default_ladder, fast_arq()};
-        pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs,
-                                    fast_arq()};
+        pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
+        pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
         std::vector<std::string>            delivered;
@@ -24,15 +20,13 @@ TEST_CASE(
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> b)
-                                      { delivered.push_back(str_of(b)); });
+                    accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
         relay link{io, server.port()};
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);

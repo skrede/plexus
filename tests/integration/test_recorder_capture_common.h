@@ -158,7 +158,10 @@ struct session_fixture
     inproc_transport<> ta{ex, bus};
     static_discovery   disc{{}};
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 // The separately-supplied offline decoder, proving no codec lives in the tap: a captured

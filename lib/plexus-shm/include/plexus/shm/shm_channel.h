@@ -53,14 +53,12 @@ template<typename Notifier>
 class shm_channel
 {
 public:
-    using deliver_fn =
-            plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
+    using deliver_fn = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
     // spin_budget is the consumer-sovereign adaptive spin-then-park knob threaded to the
     // slot_subscriber (required-WITH-default — the swept knee): the subscriber spins up to
     // the budget on an empty take before this drain returns and the notifier parks.
-    shm_channel(broadcast_ring &ring, Notifier &notify, io::reliability rel, io::congestion cong,
-                std::uint32_t spin_budget = slot_subscriber::default_spin_budget) noexcept
+    shm_channel(broadcast_ring &ring, Notifier &notify, io::reliability rel, io::congestion cong, std::uint32_t spin_budget = slot_subscriber::default_spin_budget) noexcept
             : m_publisher(ring, rel, cong)
             , m_subscriber(ring, spin_budget)
             , m_notifier(notify)
@@ -124,13 +122,11 @@ private:
     loan_status loan_blocking(std::size_t size, loaned_buffer &out) noexcept
     {
         loan_status st = m_publisher.loan(size, out);
-        if(m_publisher.delivery() != io::reliability::reliable ||
-           m_publisher.overflow() != io::congestion::block)
+        if(m_publisher.delivery() != io::reliability::reliable || m_publisher.overflow() != io::congestion::block)
             return st; // best_effort / non-block: surface the status as-is (no blocking)
 
         std::uint64_t last_seen = m_publisher.slowest_consumer_position();
-        for(int stalled = 0; st == loan_status::congested && stalled < k_no_progress_budget;
-            ++stalled)
+        for(int stalled = 0; st == loan_status::congested && stalled < k_no_progress_budget; ++stalled)
         {
             std::this_thread::yield(); // allocation-free back-pressure spin
             st = m_publisher.loan(size, out);

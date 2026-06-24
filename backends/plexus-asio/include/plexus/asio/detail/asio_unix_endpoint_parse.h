@@ -17,8 +17,7 @@ namespace plexus::asio::detail {
 // {} — the dial/listen path then fails closed rather than binding the wrong file.
 // Shared by the listener (bind) and the transport (dial) so the validation lives
 // in one place.
-inline ::asio::local::stream_protocol::endpoint parse_unix(const std::string &path,
-                                                           std::error_code   &ec)
+inline ::asio::local::stream_protocol::endpoint parse_unix(const std::string &path, std::error_code &ec)
 {
     if(path.empty() || path.size() >= sizeof(::sockaddr_un{}.sun_path))
     {

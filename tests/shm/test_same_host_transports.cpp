@@ -53,8 +53,7 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
-                     0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -71,8 +70,7 @@ constexpr std::uint32_t k_payload = 0x5A4E0FEEu;
 
 }
 
-TEST_CASE("shm.same_host_transports the portable composition stands up a live node",
-          "[shm][mux][node][same_host_transports]")
+TEST_CASE("shm.same_host_transports the portable composition stands up a live node", "[shm][mux][node][same_host_transports]")
 {
     ::asio::io_context                  io;
     plexus::discovery::static_discovery disc{{}};
@@ -90,8 +88,7 @@ TEST_CASE("shm.same_host_transports the portable composition stands up a live no
     SUCCEED("same_host_transports minted a live node and stood up a same-host listener");
 }
 
-TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by name",
-          "[shm][same_host_transports][roundtrip]")
+TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by name", "[shm][same_host_transports][roundtrip]")
 {
     const std::string        fqn  = "topic.same_host_transports." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
@@ -112,12 +109,10 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
 
             posix_shm_region_broker broker;
             region_handle           ctrl, slab;
-            if(broker.attach(control_name(fqn), ctrl) == pio::region_status::ok &&
-               broker.attach(slab_name(fqn), slab) == pio::region_status::ok)
+            if(broker.attach(control_name(fqn), ctrl) == pio::region_status::ok && broker.attach(slab_name(fqn), slab) == pio::region_status::ok)
             {
                 pio::broadcast_ring ring;
-                if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) ==
-                   pio::loan_status::ok)
+                if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) == pio::loan_status::ok)
                 {
                     std::uint32_t idx = 0;
                     if(ring.register_cursor(idx) == pio::loan_status::ok)
@@ -153,24 +148,18 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
 
         posix_shm_region_broker broker;
         region_handle           ctrl, slab;
-        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
-                              pio::create_options{}, ctrl) == pio::region_status::ok);
-        REQUIRE(broker.create(slab_name(fqn),
-                              pio::slab_region_bytes(geom.cell_count, geom.slot_capacity),
-                              pio::create_options{}, slab) == pio::region_status::ok);
+        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
+        REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count,
-                                            geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
         c->regions_ready.store(1, std::memory_order_release);
 
         while(c->consumer_armed.load(std::memory_order_acquire) == 0)
             ;
 
         pio::broadcast_ring::claim_result claim;
-        REQUIRE(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable,
-                                       plexus::io::congestion::block,
-                                       claim) == pio::loan_status::ok);
+        REQUIRE(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) == pio::loan_status::ok);
         std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
         REQUIRE(ring.commit(claim.position, sizeof(k_payload)) == pio::loan_status::ok);
 

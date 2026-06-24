@@ -4,8 +4,7 @@
 
 using namespace self_describing_fixture;
 
-TEST_CASE("a declared schema larger than the writer's default scratch round-trips",
-          "[self_describing_capture]")
+TEST_CASE("a declared schema larger than the writer's default scratch round-trips", "[self_describing_capture]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};
@@ -26,11 +25,8 @@ TEST_CASE("a declared schema larger than the writer's default scratch round-trip
     const std::string big_blob(96u * 1024u, 'x');
 
     plexus::recorder_options ropts;
-    ropts.schemas.push_back(plexus::type_schema{.type_id          = k_reading_type_id,
-                                                .message_encoding = "json",
-                                                .schema_name      = "reading",
-                                                .schema_encoding  = "jsonschema",
-                                                .schema_data      = as_bytes(big_blob)});
+    ropts.schemas.push_back(
+            plexus::type_schema{.type_id = k_reading_type_id, .message_encoding = "json", .schema_name = "reading", .schema_encoding = "jsonschema", .schema_data = as_bytes(big_blob)});
 
     in_memory_byte_sink sink;
     auto                recorder = producer.make_recorder(sink, std::move(ropts));
@@ -45,7 +41,6 @@ TEST_CASE("a declared schema larger than the writer's default scratch round-trip
     REQUIRE(reader.read_definitions(defs));
     REQUIRE(defs.schema.size() == 1);
     REQUIRE(defs.schema.front().schema_data.size() == big_blob.size());
-    const std::vector<std::byte> expected_blob{as_bytes(big_blob).begin(),
-                                               as_bytes(big_blob).end()};
+    const std::vector<std::byte> expected_blob{as_bytes(big_blob).begin(), as_bytes(big_blob).end()};
     REQUIRE(defs.schema.front().schema_data == expected_blob);
 }

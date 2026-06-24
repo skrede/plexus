@@ -70,9 +70,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
     const auto msg_id   = read_u16_lenient(bytes, 0);
     const auto frag_idx = read_u32_lenient(bytes, 2);
     const auto frag_cnt = read_u32_lenient(bytes, 6);
-    const auto payload  = bytes.size() > wire::udp_fragment_subheader
-            ? bytes.subspan(wire::udp_fragment_subheader)
-            : std::span<const std::byte>{};
+    const auto payload  = bytes.size() > wire::udp_fragment_subheader ? bytes.subspan(wire::udp_fragment_subheader) : std::span<const std::byte>{};
     (void)r.feed(msg_id, frag_idx, frag_cnt, payload);
 
     return 0;

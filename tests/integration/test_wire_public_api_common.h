@@ -71,11 +71,8 @@ using wire_node = plexus::node<wire_policy, wire_transport>;
 // Structural-absence witness (compile-time): a default node's channel type is a bare inproc
 // channel, NOT a recording_channel; only the wire-capturing node's channel type is the
 // decorator. The decorated-vs-bare TYPE is fixed at the node's construction.
-static_assert(!plexus::io::is_recording_channel_v<inproc_policy::byte_channel_type>,
-              "a default node's channel must NOT be a recording_channel — structurally absent");
-static_assert(
-        plexus::io::is_recording_channel_v<wire_policy::byte_channel_type>,
-        "the wire-capturing node's channel must be a recording_channel — structurally present");
+static_assert(!plexus::io::is_recording_channel_v<inproc_policy::byte_channel_type>, "a default node's channel must NOT be a recording_channel — structurally absent");
+static_assert(plexus::io::is_recording_channel_v<wire_policy::byte_channel_type>, "the wire-capturing node's channel must be a recording_channel — structurally present");
 
 struct reading
 {
@@ -95,12 +92,10 @@ struct reading_codec
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes,
-                                                   reading                   &out) const
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte> bytes, reading &out) const
     {
         if(bytes.size() != 4)
-            return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+            return plexus::expected<void, std::error_code>{plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(bytes[i])) << (8 * i);
@@ -108,7 +103,10 @@ struct reading_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {0x9A9A0001u, "reading"}; }
+    plexus::type_identity type_info() const
+    {
+        return {0x9A9A0001u, "reading"};
+    }
 };
 
 static_assert(plexus::typed_codec<reading_codec>);
@@ -126,9 +124,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 inline plexus::node_options base_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = eager;
     return opts;

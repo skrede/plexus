@@ -50,8 +50,7 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
                             [&](std::string_view fqn, std::span<const std::byte> data)
                             {
                                 got_fqn.assign(fqn);
-                                got_body.assign(reinterpret_cast<const char *>(data.data()),
-                                                data.size());
+                                got_body.assign(reinterpret_cast<const char *>(data.data()), data.size());
                             });
             });
     router.route(frame);
@@ -72,8 +71,7 @@ TEST_CASE("no-subscriber publish sends nothing (demand-driven)", "[forwarder]")
     REQUIRE_FALSE(bus.has_pending_packets()); // nothing was ever enqueued
 }
 
-TEST_CASE("receive tail warn-and-drops a malformed frame through the injected logger",
-          "[forwarder]")
+TEST_CASE("receive tail warn-and-drops a malformed frame through the injected logger", "[forwarder]")
 {
     counting_logger   log;
     inproc_bus<>      bus;
@@ -89,8 +87,7 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
     std::vector<std::byte> garbage(8, std::byte{0xAB});
 
     bool fired = false;
-    fwd.deliver(peer, garbage, plexus::node_id{}, /*has_source_identity=*/false,
-                [&](std::string_view, std::span<const std::byte>) { fired = true; });
+    fwd.deliver(peer, garbage, plexus::node_id{}, /*has_source_identity=*/false, [&](std::string_view, std::span<const std::byte>) { fired = true; });
 
     REQUIRE_FALSE(fired);    // dropped: no subscriber callback
     REQUIRE(log.count == 1); // the warn seam fired exactly once
@@ -103,14 +100,12 @@ TEST_CASE("default forwarder drops a malformed frame silently via null_logger", 
     plexus::log::null_logger sink; // an inert sink: warn-and-drop stays silent
     forwarder                fwd{sink};
     inproc_channel<>         ch(ex);
-    capture           cap(ex);
-    auto              peer = make_peer(ch, cap, "node-a");
+    capture                  cap(ex);
+    auto                     peer = make_peer(ch, cap, "node-a");
 
     std::vector<std::byte> garbage(8, std::byte{0xAB});
 
     bool fired = false;
-    REQUIRE_NOTHROW(fwd.deliver(peer, garbage, plexus::node_id{}, /*has_source_identity=*/false,
-                                [&](std::string_view, std::span<const std::byte>)
-                                { fired = true; }));
+    REQUIRE_NOTHROW(fwd.deliver(peer, garbage, plexus::node_id{}, /*has_source_identity=*/false, [&](std::string_view, std::span<const std::byte>) { fired = true; }));
     REQUIRE_FALSE(fired); // dropped silently, no crash
 }

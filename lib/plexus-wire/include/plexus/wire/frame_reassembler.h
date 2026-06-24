@@ -39,17 +39,38 @@ public:
     {
     }
 
-    const std::byte *data() const noexcept { return m_owner ? m_owner->data() : nullptr; }
-    std::size_t      size() const noexcept { return m_owner ? m_owner->size() : 0u; }
-    bool             empty() const noexcept { return size() == 0u; }
+    const std::byte *data() const noexcept
+    {
+        return m_owner ? m_owner->data() : nullptr;
+    }
+    std::size_t size() const noexcept
+    {
+        return m_owner ? m_owner->size() : 0u;
+    }
+    bool empty() const noexcept
+    {
+        return size() == 0u;
+    }
 
-    const std::byte *begin() const noexcept { return data(); }
-    const std::byte *end() const noexcept { return data() + size(); }
+    const std::byte *begin() const noexcept
+    {
+        return data();
+    }
+    const std::byte *end() const noexcept
+    {
+        return data() + size();
+    }
 
-    operator std::span<const std::byte>() const noexcept { return {data(), size()}; }
+    operator std::span<const std::byte>() const noexcept
+    {
+        return {data(), size()};
+    }
 
     // Type-erased owner handle the receive seam binds a wire_bytes view to.
-    std::shared_ptr<const void> owner() const noexcept { return m_owner; }
+    std::shared_ptr<const void> owner() const noexcept
+    {
+        return m_owner;
+    }
 
     friend bool operator==(const shared_bytes &a, std::span<const std::byte> b) noexcept
     {
@@ -94,9 +115,7 @@ class frame_reassembler
     };
 
 public:
-    explicit frame_reassembler(std::size_t max_payload_size   = k_max_reassembler_payload_bytes,
-                               std::size_t buffered_bytes_cap = k_max_reassembler_payload_bytes +
-                                       header_size)
+    explicit frame_reassembler(std::size_t max_payload_size = k_max_reassembler_payload_bytes, std::size_t buffered_bytes_cap = k_max_reassembler_payload_bytes + header_size)
             : m_max_payload_size{max_payload_size}
             , m_buffered_bytes_cap{buffered_bytes_cap}
     {
@@ -159,11 +178,9 @@ public:
                 auto                   header_bytes = encode_header(m_pending_header);
                 writer{std::span<std::byte>{framed}}.bytes(header_bytes);
                 if(!payload_span.empty())
-                    std::memcpy(framed.data() + header_size, payload_span.data(),
-                                payload_span.size());
+                    std::memcpy(framed.data() + header_size, payload_span.data(), payload_span.size());
 
-                result.frames.push_back(complete_frame{.header  = m_pending_header,
-                                                       .payload = shared_bytes{std::move(framed)}});
+                result.frames.push_back(complete_frame{.header = m_pending_header, .payload = shared_bytes{std::move(framed)}});
 
                 m_consumed += m_pending_header.payload_len;
                 m_state = state::reading_header;
@@ -181,7 +198,10 @@ public:
         m_pending_header = {};
     }
 
-    [[nodiscard]] std::size_t buffered_bytes() const { return live_bytes(); }
+    [[nodiscard]] std::size_t buffered_bytes() const
+    {
+        return live_bytes();
+    }
 
     // A frame is mid-assembly when its header is decoded (reading_payload) or any
     // unconsumed bytes sit buffered (a partial header). False only when idle between frames.
@@ -204,7 +224,10 @@ public:
 private:
     // The cap bounds the LIVE (unconsumed) tail, not the physical buffer: the cursor
     // changes WHEN consumed bytes are reclaimed, never how many live bytes may be held.
-    [[nodiscard]] std::size_t live_bytes() const { return m_buffer.size() - m_consumed; }
+    [[nodiscard]] std::size_t live_bytes() const
+    {
+        return m_buffer.size() - m_consumed;
+    }
 
     // Reclaim the consumed prefix once it dominates the buffer, amortizing the front
     // erase across feeds instead of paying an O(n) tail memmove on every frame boundary.
@@ -212,8 +235,7 @@ private:
     {
         if(m_consumed != 0 && m_consumed >= m_buffer.size() - m_consumed)
         {
-            m_buffer.erase(m_buffer.begin(),
-                           m_buffer.begin() + static_cast<std::ptrdiff_t>(m_consumed));
+            m_buffer.erase(m_buffer.begin(), m_buffer.begin() + static_cast<std::ptrdiff_t>(m_consumed));
             m_consumed = 0;
         }
     }

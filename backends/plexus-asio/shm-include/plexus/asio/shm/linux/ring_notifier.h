@@ -63,8 +63,7 @@ class ring_notifier
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
-    ring_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word,
-                  std::atomic<std::uint32_t> &park) noexcept
+    ring_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park) noexcept
             : m_executor(executor)
             , m_word(word)
             , m_park(park)
@@ -74,15 +73,17 @@ public:
     // Back-compat construction for a single-process harness whose producer drives the
     // always-wake one-arg signal: the gated producer never reads this consumer's park
     // word, so it binds to an owned fallback atom rather than an in-region word.
-    ring_notifier(typename Policy::executor_type executor,
-                  std::atomic<std::uint32_t>    &word) noexcept
+    ring_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word) noexcept
             : m_executor(executor)
             , m_word(word)
             , m_park(m_park_fallback)
     {
     }
 
-    ~ring_notifier() { disarm(); }
+    ~ring_notifier()
+    {
+        disarm();
+    }
 
     ring_notifier(const ring_notifier &)            = delete;
     ring_notifier &operator=(const ring_notifier &) = delete;
@@ -92,7 +93,10 @@ public:
     // The producer wake: bump the shared generation word (release) and wake a parked
     // consumer — the gated primitive skips the FUTEX_WAKE syscall when no waiter is
     // parked (a spinning consumer costs the producer zero wakes).
-    void signal() noexcept { ::plexus::native::notifier_signal(m_word, m_park); }
+    void signal() noexcept
+    {
+        ::plexus::native::notifier_signal(m_word, m_park);
+    }
 
     // Register the consumer drain and begin watching the word. Brings up the
     // private io_uring, registers the CQE-doorbell eventfd onto the user's
@@ -179,8 +183,7 @@ private:
         // reactor turn re-drains and re-submits -- no lost wake, no blocked-on-stale.
         m_park.store(::plexus::shm::k_park_parked, std::memory_order_release);
         const std::uint32_t cur = m_word.load(std::memory_order_acquire);
-        ::io_uring_prep_futex_wait(sqe, reinterpret_cast<std::uint32_t *>(&m_word), cur,
-                                   FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
+        ::io_uring_prep_futex_wait(sqe, reinterpret_cast<std::uint32_t *>(&m_word), cur, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0);
         ::io_uring_submit(&m_ring);
     }
 
@@ -192,8 +195,7 @@ private:
     // operation_aborted and the chain ends.
     void watch_doorbell() noexcept
     {
-        m_doorbell->async_wait(::asio::posix::stream_descriptor::wait_read,
-                               [this](const std::error_code &ec) { on_doorbell(ec); });
+        m_doorbell->async_wait(::asio::posix::stream_descriptor::wait_read, [this](const std::error_code &ec) { on_doorbell(ec); });
     }
 
     void on_doorbell(const std::error_code &ec) noexcept
@@ -266,9 +268,7 @@ class ring_notifier_threaded
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
-    ring_notifier_threaded(typename Policy::executor_type executor,
-                           std::atomic<std::uint32_t>    &word,
-                           std::atomic<std::uint32_t>    &park) noexcept
+    ring_notifier_threaded(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park) noexcept
             : m_executor(executor)
             , m_word(word)
             , m_park(park)
@@ -277,22 +277,27 @@ public:
 
     // Back-compat construction for a single-process harness whose producer drives the
     // always-wake one-arg signal: it binds to an owned fallback atom (see ring_notifier).
-    ring_notifier_threaded(typename Policy::executor_type executor,
-                           std::atomic<std::uint32_t>    &word) noexcept
+    ring_notifier_threaded(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word) noexcept
             : m_executor(executor)
             , m_word(word)
             , m_park(m_park_fallback)
     {
     }
 
-    ~ring_notifier_threaded() { disarm(); }
+    ~ring_notifier_threaded()
+    {
+        disarm();
+    }
 
     ring_notifier_threaded(const ring_notifier_threaded &)            = delete;
     ring_notifier_threaded &operator=(const ring_notifier_threaded &) = delete;
     ring_notifier_threaded(ring_notifier_threaded &&)                 = delete;
     ring_notifier_threaded &operator=(ring_notifier_threaded &&)      = delete;
 
-    void signal() noexcept { ::plexus::native::notifier_signal(m_word, m_park); }
+    void signal() noexcept
+    {
+        ::plexus::native::notifier_signal(m_word, m_park);
+    }
 
     void arm(drain_fn drain)
     {
@@ -373,8 +378,7 @@ private:
 
     void watch_doorbell() noexcept
     {
-        m_doorbell->async_wait(::asio::posix::stream_descriptor::wait_read,
-                               [this](const std::error_code &ec) { on_doorbell(ec); });
+        m_doorbell->async_wait(::asio::posix::stream_descriptor::wait_read, [this](const std::error_code &ec) { on_doorbell(ec); });
     }
 
     void on_doorbell(const std::error_code &ec) noexcept

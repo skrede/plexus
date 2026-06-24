@@ -61,10 +61,8 @@ public:
     // already thread, brought to the encrypted best-effort lane so DTLS is tunable in lockstep
     // (a large best-effort DTLS message fragments per record under the always-on aggregate bound).
     // max_payload is the per-record logical budget, distinct from the message ceiling.
-    explicit dtls_transport(::asio::io_context &io, const tls_credential &cred,
-                            std::size_t max_payload       = dtls_channel::default_max_payload,
-                            std::size_t global_default    = io::global_default_max_message_bytes,
-                            std::size_t reassembly_budget = io::reassembly_memory_budget)
+    explicit dtls_transport(::asio::io_context &io, const tls_credential &cred, std::size_t max_payload = dtls_channel::default_max_payload,
+                            std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget)
             : m_io(io)
             , m_server(io)
             , m_cred(cred)
@@ -74,8 +72,7 @@ public:
             , m_reassembly_budget(reassembly_budget)
             , m_registry(make_defer_destroy())
     {
-        m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes)
-                             { detail::on_datagram(*this, from, bytes); });
+        m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { detail::on_datagram(*this, from, bytes); });
         m_server.on_error(
                 [this](io::io_error e)
                 {
@@ -87,7 +84,10 @@ public:
     dtls_transport(const dtls_transport &)            = delete;
     dtls_transport &operator=(const dtls_transport &) = delete;
 
-    ~dtls_transport() { close(); }
+    ~dtls_transport()
+    {
+        close();
+    }
 
     // The concrete channel this member's completions deliver + its routing identity: the
     // schemes it serves and the locality tier. DTLS-over-UDP is a remote (encrypted
@@ -102,14 +102,11 @@ public:
     {
         m_on_accepted = std::move(cb);
     }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>,
-                                                           const io::endpoint &)>
-                           cb)
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> cb)
     {
         m_on_dialed = std::move(cb);
     }
-    void
-    on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
+    void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
         m_on_dial_failed = std::move(cb);
     }
@@ -147,9 +144,8 @@ public:
 
         detail::ensure_bound(*this, dest.protocol());
 
-        auto ch = std::make_unique<dtls_channel>(
-                m_io, m_server, dest, m_cred, m_cookie, dtls_channel::role::client, m_max_payload,
-                dtls_channel::default_record_mtu, m_max_message_bytes, m_reassembly_budget);
+        auto  ch  = std::make_unique<dtls_channel>(m_io, m_server, dest, m_cred, m_cookie, dtls_channel::role::client, m_max_payload, dtls_channel::default_record_mtu,
+                                                   m_max_message_bytes, m_reassembly_budget);
         auto *raw = ch.get();
         if(!m_demux.insert(dest, raw))
             return detail::report_dial_fail(*this, ep, io::io_error::address_in_use);
@@ -171,7 +167,10 @@ public:
         m_server.close();
     }
 
-    [[nodiscard]] std::uint16_t port() const { return m_server.port(); }
+    [[nodiscard]] std::uint16_t port() const
+    {
+        return m_server.port();
+    }
 
 private:
     using dial_registry = io::pending_dial_registry<dtls_channel, std::monostate>;
@@ -184,8 +183,7 @@ private:
     // the current stack.
     dial_registry::defer_destroy make_defer_destroy()
     {
-        return [this](std::unique_ptr<dtls_channel> ch)
-        { ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); }); };
+        return [this](std::unique_ptr<dtls_channel> ch) { ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); }); };
     }
 
     // The listener/accept/cookie-exchange + dial-resolution glue is relocated to
@@ -204,31 +202,28 @@ private:
     template<typename U>
     friend void detail::drop_accept(U &, dtls_channel *);
     template<typename U>
-    friend void detail::accept_new_peer(U &, const typename U::endpoint_type &,
-                                        std::span<const std::byte>);
+    friend void detail::accept_new_peer(U &, const typename U::endpoint_type &, std::span<const std::byte>);
     template<typename U>
-    friend void detail::on_datagram(U &, const typename U::endpoint_type &,
-                                    std::span<const std::byte>);
+    friend void detail::on_datagram(U &, const typename U::endpoint_type &, std::span<const std::byte>);
     template<typename U>
     friend void detail::resolve_dial(U &, const io::endpoint &, dtls_channel *);
     template<typename U>
     friend void detail::fail_dial(U &, const io::endpoint &, dtls_channel *, io::io_error);
 
-    ::asio::io_context         &m_io;
-    plexus::asio::udp_server    m_server;
-    const tls_credential       &m_cred;
-    io::security::cookie_secret m_cookie; // the node's single cookie secret
-    std::size_t                 m_max_payload;
-    std::size_t                 m_max_message_bytes; // per-message ceiling threaded to each channel
-    std::size_t m_reassembly_budget; // always-on aggregate reassembly-memory DoS cap
-    plexus::asio::detail::basic_inbound_demux<dtls_channel> m_demux;
-    dial_registry m_registry; // the half-open dial table + the accepted table
-    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)>
-                                                                                 m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)>                       m_on_error;
-    plexus::detail::move_only_function<void(const io::detail::drop_event &)>     m_on_drop;
+    ::asio::io_context                                                                           &m_io;
+    plexus::asio::udp_server                                                                      m_server;
+    const tls_credential                                                                         &m_cred;
+    io::security::cookie_secret                                                                   m_cookie; // the node's single cookie secret
+    std::size_t                                                                                   m_max_payload;
+    std::size_t                                                                                   m_max_message_bytes; // per-message ceiling threaded to each channel
+    std::size_t                                                                                   m_reassembly_budget; // always-on aggregate reassembly-memory DoS cap
+    plexus::asio::detail::basic_inbound_demux<dtls_channel>                                       m_demux;
+    dial_registry                                                                                 m_registry; // the half-open dial table + the accepted table
+    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)>                       m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>, const io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)>                  m_on_dial_failed;
+    plexus::detail::move_only_function<void(io::io_error)>                                        m_on_error;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)>                      m_on_drop;
 };
 
 }

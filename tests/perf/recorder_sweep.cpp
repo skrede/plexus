@@ -93,7 +93,7 @@ struct fixed_codec
 
     plexus::wire_bytes<> encode(const sample &) const
     {
-        auto owner = std::make_shared<std::vector<std::byte>>(payload_bytes, std::byte{0xC3});
+        auto                       owner = std::make_shared<std::vector<std::byte>>(payload_bytes, std::byte{0xC3});
         std::span<const std::byte> view{owner->data(), owner->size()};
         return plexus::wire_bytes<>{view, std::move(owner)};
     }
@@ -103,7 +103,10 @@ struct fixed_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {0xABCD1234u, "sample"}; }
+    plexus::type_identity type_info() const
+    {
+        return {0xABCD1234u, "sample"};
+    }
 };
 
 // The non-disk drain target: it appends every drained record into one growing buffer the
@@ -116,7 +119,10 @@ public:
     {
         m_bytes.insert(m_bytes.end(), bytes.begin(), bytes.end());
     }
-    [[nodiscard]] std::span<const std::byte> bytes() const noexcept { return m_bytes; }
+    [[nodiscard]] std::span<const std::byte> bytes() const noexcept
+    {
+        return m_bytes;
+    }
 
 private:
     std::vector<std::byte> m_bytes;
@@ -132,9 +138,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(plexus::recording_qos capture)
 {
     plexus::node_options opts;
-    opts.reconnect   = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                    std::chrono::milliseconds(2000), std::nullopt,
-                                                    std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed = 0x9163u;
     opts.capture     = capture;
     return opts;
@@ -149,7 +153,10 @@ struct net
     inproc_transport<> ta{ex, bus};
     static_discovery   disc{{}};
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 };
 
 struct recall_point
@@ -168,8 +175,7 @@ struct recall_point
 // ground truth (one published-tap sample record per publish, verified), so recall is read
 // against it directly rather than against the shed accounting (a saturated ring can shed even
 // its own dropout_record, so the recovered shed count is a floor on loss, not the metric).
-recall_point run_ring_cell(std::size_t ring_bytes, std::size_t payload_bytes, int burst,
-                           plexus::recording_qos capture)
+recall_point run_ring_cell(std::size_t ring_bytes, std::size_t payload_bytes, int burst, plexus::recording_qos capture)
 {
     net        n;
     const auto id = make_id(0x4C);
@@ -188,9 +194,7 @@ recall_point run_ring_cell(std::size_t ring_bytes, std::size_t payload_bytes, in
             plexus::topic_qos qos;
             qos.latch = true;
             plexus::publisher<>  pub{n_node, "sweep.topic", qos};
-            plexus::subscriber<> sub{
-                    n_node, "sweep.topic",
-                    [](std::span<const std::byte>, const plexus::io::message_info &) {}};
+            plexus::subscriber<> sub{n_node, "sweep.topic", [](std::span<const std::byte>, const plexus::io::message_info &) {}};
             n.drive();
 
             const std::vector<std::byte> body(payload_bytes, std::byte{0x5A});
@@ -217,8 +221,7 @@ recall_point run_ring_cell(std::size_t ring_bytes, std::size_t payload_bytes, in
             ++delivered;
 
     const std::uint64_t produced = static_cast<std::uint64_t>(burst);
-    const double        recall =
-            produced == 0 ? 0.0 : static_cast<double>(delivered) / static_cast<double>(produced);
+    const double        recall   = produced == 0 ? 0.0 : static_cast<double>(delivered) / static_cast<double>(produced);
     return {produced, delivered, recall};
 }
 
@@ -251,8 +254,7 @@ decim_point run_decim_cell(plexus::recording_qos capture, std::size_t payload_by
             plexus::typed_publisher_options popts;
             popts.qos.latch  = true;
             popts.pool_depth = 8;
-            plexus::publisher<fixed_codec>  pub{n_node, "sweep.topic", popts,
-                                                fixed_codec{payload_bytes}};
+            plexus::publisher<fixed_codec>  pub{n_node, "sweep.topic", popts, fixed_codec{payload_bytes}};
             plexus::subscriber<fixed_codec> sub{n_node, "sweep.topic", [](const sample &) {}};
             n.drive();
 
@@ -293,13 +295,11 @@ decim_point run_decim_cell(plexus::recording_qos capture, std::size_t payload_by
         if(!r.payload.empty())
             ++payload;
     }
-    const double keep =
-            total == 0 ? 0.0 : static_cast<double>(payload) / static_cast<double>(total);
+    const double keep = total == 0 ? 0.0 : static_cast<double>(payload) / static_cast<double>(total);
     return {total, payload, keep};
 }
 
-double median_recall(std::size_t ring_bytes, std::size_t payload_bytes, int burst,
-                     plexus::recording_qos capture, int runs)
+double median_recall(std::size_t ring_bytes, std::size_t payload_bytes, int burst, plexus::recording_qos capture, int runs)
 {
     std::vector<double> v;
     v.reserve(static_cast<std::size_t>(runs));
@@ -347,8 +347,7 @@ int main(int argc, char **argv)
     cap_full.mode       = plexus::io::decimation_mode::count_n;
     cap_full.decimation = 1; // keep every record (no decimation) for the recall sweep
 
-    const std::size_t rings[]    = {64u * 1024u, 128u * 1024u, 256u * 1024u, 512u * 1024u,
-                                    1u << 20,    2u << 20,     4u << 20,     16u << 20};
+    const std::size_t rings[]    = {64u * 1024u, 128u * 1024u, 256u * 1024u, 512u * 1024u, 1u << 20, 2u << 20, 4u << 20, 16u << 20};
     const std::size_t payloads[] = {64, 256, 1024, 4096};
 
     std::printf("  Sweep 1 — recall (median of %d) vs ring_bytes:\n", runs);
@@ -370,8 +369,7 @@ int main(int argc, char **argv)
     std::printf("\n");
 
     // ---- Sweep 2a: count_n decimation keep-ratio ---------------------------------------
-    std::printf("  Sweep 2a — count_n keep-ratio (median of %d), payload=256B, burst=%d:\n", runs,
-                burst);
+    std::printf("  Sweep 2a — count_n keep-ratio (median of %d), payload=256B, burst=%d:\n", runs, burst);
     std::printf("    %8s  %14s  %16s\n", "N", "keep(measured)", "expected(1/N)");
     const std::uint32_t ns[] = {1, 2, 4, 8, 16, 32, 64};
     for(std::uint32_t nn : ns)
@@ -388,8 +386,7 @@ int main(int argc, char **argv)
     // ---- Sweep 2b: time_window decimation keep-ratio -----------------------------------
     // The source clock is wire::now_timestamp_ns (wall ns); each publish is driven to
     // quiescence so the window gate sees real elapsed time between records.
-    std::printf("  Sweep 2b — time_window keep-ratio (median of %d), payload=256B, burst=%d:\n",
-                runs, burst);
+    std::printf("  Sweep 2b — time_window keep-ratio (median of %d), payload=256B, burst=%d:\n", runs, burst);
     std::printf("    %12s  %16s\n", "window", "keep(measured)");
     const std::uint64_t windows_ns[] = {0, 1000, 10000, 100000, 1000000, 10000000};
     for(std::uint64_t w : windows_ns)

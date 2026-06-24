@@ -64,9 +64,7 @@ struct identity_fixture
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path() /
-                ("plexus_tlsbp_" + tag + "_" + std::to_string(::getpid()) + "_" +
-                 std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() / ("plexus_tlsbp_" + tag + "_" + std::to_string(::getpid()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
         key_path  = dir / "key.pem";
@@ -84,8 +82,7 @@ struct identity_fixture
 
     void generate()
     {
-        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"),
-                                                                 &EVP_PKEY_free);
+        std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(EVP_EC_gen("P-256"), &EVP_PKEY_free);
         REQUIRE(pkey);
         std::unique_ptr<X509, decltype(&X509_free)> cert(X509_new(), &X509_free);
         REQUIRE(cert);
@@ -94,15 +91,11 @@ struct identity_fixture
         X509_gmtime_adj(X509_getm_notAfter(cert.get()), 3600);
         X509_set_pubkey(cert.get(), pkey.get());
         X509_NAME *name = X509_get_subject_name(cert.get());
-        X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-                                   reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1,
-                                   0);
+        X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char *>("plexus-test"), -1, -1, 0);
         X509_set_issuer_name(cert.get(), name);
         REQUIRE(X509_sign(cert.get(), pkey.get(), EVP_sha256()) != 0);
         write_pem(cert.get(), pkey.get());
-        std::filesystem::permissions(
-                key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-                std::filesystem::perm_options::replace);
+        std::filesystem::permissions(key_path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, std::filesystem::perm_options::replace);
         auto d = ptls::spki_fingerprint(*cert.get());
         REQUIRE(d.has_value());
         digest = *d;
@@ -123,8 +116,7 @@ struct identity_fixture
 
 ptls::tls_credential make_cred(const identity_fixture &self, const spki_digest &peer_pin)
 {
-    auto policy = std::make_shared<const pio::security::spki_pin_policy>(
-            std::vector<spki_digest>{peer_pin});
+    auto policy = std::make_shared<const pio::security::spki_pin_policy>(std::vector<spki_digest>{peer_pin});
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
@@ -155,8 +147,7 @@ TEST_CASE("tls channel: the bounded outbox sheds under congestion=drop and stall
         ::asio::io_context client_io;
         ::asio::io_context server_io;
 
-        ::asio::ip::tcp::acceptor acc{server_io,
-                                      ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+        ::asio::ip::tcp::acceptor acc{server_io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
         ::asio::ip::tcp::socket   raw_server{server_io};
         ::asio::ip::tcp::socket   raw_client{client_io};
         raw_client.connect(acc.local_endpoint());
@@ -166,11 +157,8 @@ TEST_CASE("tls channel: the bounded outbox sheds under congestion=drop and stall
         auto client_cred = make_cred(client_id, server_id.digest);
 
         constexpr std::size_t cap = 4096;
-        ptls::tls_channel     server{
-                server_io, std::move(raw_server), server_cred, {}, pio::congestion::block};
-        ptls::tls_channel client{client_io,   std::move(raw_client),
-                                 client_cred, stream::stream_inbound_config{},
-                                 mode,        pio::egress_capacity::of_bytes(cap)};
+        ptls::tls_channel     server{server_io, std::move(raw_server), server_cred, {}, pio::congestion::block};
+        ptls::tls_channel     client{client_io, std::move(raw_client), client_cred, stream::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
 
         bool server_ready = false;
         bool client_ready = false;

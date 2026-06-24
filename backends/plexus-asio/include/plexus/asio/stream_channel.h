@@ -107,11 +107,8 @@ public:
     // default that back-pressures; drop_newest = the opt-out shed), threaded as required-
     // WITH-default ctor args exactly as udp_channel threads io::congestion.
     template<typename... BootstrapArgs>
-    explicit stream_channel(::asio::io_context &io, stream::stream_inbound_config cfg,
-                            io::congestion congestion, io::egress_capacity egress,
-                            stream_socket_options socket_options,
-                            std::size_t read_buffer_bytes = k_stream_read_buffer_bytes,
-                            BootstrapArgs &&...bargs)
+    explicit stream_channel(::asio::io_context &io, stream::stream_inbound_config cfg, io::congestion congestion, io::egress_capacity egress, stream_socket_options socket_options,
+                            std::size_t read_buffer_bytes = k_stream_read_buffer_bytes, BootstrapArgs &&...bargs)
             : m_io(io)
             , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
             , m_stream(m_bootstrap.make_stream(io))
@@ -130,11 +127,8 @@ public:
     // socket the Bootstrap wraps into the stream (a tcp::socket for both TCP and TLS, a
     // local-stream socket for AF_UNIX).
     template<typename Connected, typename... BootstrapArgs>
-    stream_channel(::asio::io_context &io, Connected connected, stream::stream_inbound_config cfg,
-                   io::congestion congestion, io::egress_capacity egress,
-                   stream_socket_options socket_options,
-                   std::size_t read_buffer_bytes = k_stream_read_buffer_bytes,
-                   BootstrapArgs &&...bargs)
+    stream_channel(::asio::io_context &io, Connected connected, stream::stream_inbound_config cfg, io::congestion congestion, io::egress_capacity egress,
+                   stream_socket_options socket_options, std::size_t read_buffer_bytes = k_stream_read_buffer_bytes, BootstrapArgs &&...bargs)
             : m_io(io)
             , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
             , m_stream(m_bootstrap.make_stream(io, std::move(connected)))
@@ -207,13 +201,19 @@ public:
                      }); // posted, never synchronous
     }
 
-    [[nodiscard]] io::endpoint remote_endpoint() const { return Traits::format_endpoint(m_stream); }
+    [[nodiscard]] io::endpoint remote_endpoint() const
+    {
+        return Traits::format_endpoint(m_stream);
+    }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
         m_on_data = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()> cb) { m_on_closed = std::move(cb); }
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_closed = std::move(cb);
+    }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -223,9 +223,15 @@ public:
         m_on_protocol_close = std::move(cb);
     }
 
-    [[nodiscard]] decltype(auto) socket() noexcept { return Traits::lowest_layer(m_stream); }
-    [[nodiscard]] decltype(auto) socket() const noexcept { return Traits::lowest_layer(m_stream); }
-    void                         start_read()
+    [[nodiscard]] decltype(auto) socket() noexcept
+    {
+        return Traits::lowest_layer(m_stream);
+    }
+    [[nodiscard]] decltype(auto) socket() const noexcept
+    {
+        return Traits::lowest_layer(m_stream);
+    }
+    void start_read()
     {
         m_open = true;
         apply_socket_options();
@@ -235,17 +241,32 @@ public:
     // The stable per-construction id the egress scheduler keys its band map on (read via a
     // capability probe): unique per object, so a reconnect at a reused heap address cannot
     // bleed a stale band entry across.
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return m_scheduler_key; }
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    {
+        return m_scheduler_key;
+    }
 
-    [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
+    [[nodiscard]] io::congestion congestion_mode() const noexcept
+    {
+        return m_congestion;
+    }
     // The count of frames shed under congestion=drop_newest (the drop-observer's edge).
-    [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
+    [[nodiscard]] std::size_t dropped_count() const noexcept
+    {
+        return m_dropped;
+    }
     // The current queued (un-drained) write-queue byte occupancy; 0 when the socket drains.
-    [[nodiscard]] std::size_t backpressured() const noexcept { return m_egress.queued_bytes(); }
+    [[nodiscard]] std::size_t backpressured() const noexcept
+    {
+        return m_egress.queued_bytes();
+    }
     // The write-queue byte cap, read by the egress scheduler so its low-water gate tracks THIS
     // channel's actual bound (lockstep): a deepened cap is fed deeper, a shallow one never
     // over-fed.
-    [[nodiscard]] std::size_t write_queue_capacity() const noexcept { return m_egress.capacity(); }
+    [[nodiscard]] std::size_t write_queue_capacity() const noexcept
+    {
+        return m_egress.capacity();
+    }
 
     // Bootstrap-facing seam (the Bootstrap drives the open path through these): the gate's
     // drain target, the read loop, the open flag, and the stream the handshake runs on.
@@ -262,13 +283,28 @@ public:
         if(!m_egress.enqueue(std::move(bytes)))
             detail::stream_on_write_queue_full(*this);
     }
-    void                  start_read_loop() { detail::stream_do_read(*this); }
-    void                  mark_open() noexcept { m_open = true; }
-    [[nodiscard]] Stream &stream() noexcept { return m_stream; }
-    void                  fail(const std::error_code &ec) { detail::stream_fail(*this, ec); }
+    void start_read_loop()
+    {
+        detail::stream_do_read(*this);
+    }
+    void mark_open() noexcept
+    {
+        m_open = true;
+    }
+    [[nodiscard]] Stream &stream() noexcept
+    {
+        return m_stream;
+    }
+    void fail(const std::error_code &ec)
+    {
+        detail::stream_fail(*this, ec);
+    }
 
 protected:
-    [[nodiscard]] Bootstrap &bootstrap() noexcept { return m_bootstrap; }
+    [[nodiscard]] Bootstrap &bootstrap() noexcept
+    {
+        return m_bootstrap;
+    }
 
 private:
     // The send-queue drive + read-loop glue is relocated to detail/stream_channel_io.h
@@ -317,18 +353,17 @@ private:
         m_open = false;
     }
 
-    ::asio::io_context                                    &m_io;
-    Bootstrap                                              m_bootstrap;
-    Stream                                                 m_stream;
-    stream::stream_inbound<asio_timer, ::asio::io_context &> m_inbound;
-    std::vector<::asio::const_buffer> m_gather; // reused gather-write iovec (grows once)
-    std::vector<std::byte> m_read_buf; // sized once from the read-buffer ctor param
-    io::congestion         m_congestion;
-    stream_socket_options  m_socket_options;
-    std::uint64_t          m_scheduler_key{
-            io::detail::next_scheduler_key()};  // stable per-construction egress key
-    std::size_t                   m_dropped{0}; // congestion=drop shed count
-    stream::detail::send_queue m_egress;     // bounded byte-budgeted serial write block
+    ::asio::io_context                                                  &m_io;
+    Bootstrap                                                            m_bootstrap;
+    Stream                                                               m_stream;
+    stream::stream_inbound<asio_timer, ::asio::io_context &>             m_inbound;
+    std::vector<::asio::const_buffer>                                    m_gather;   // reused gather-write iovec (grows once)
+    std::vector<std::byte>                                               m_read_buf; // sized once from the read-buffer ctor param
+    io::congestion                                                       m_congestion;
+    stream_socket_options                                                m_socket_options;
+    std::uint64_t                                                        m_scheduler_key{io::detail::next_scheduler_key()}; // stable per-construction egress key
+    std::size_t                                                          m_dropped{0};                                      // congestion=drop shed count
+    stream::detail::send_queue                                           m_egress;                                          // bounded byte-budgeted serial write block
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()>                           m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)>               m_on_error;

@@ -2,8 +2,7 @@
 
 using namespace udp_handshake_arq_fixture;
 
-TEST_CASE("udp handshake_arq: the session establishes under injected loss via retransmit",
-          "[udp][handshake]")
+TEST_CASE("udp handshake_arq: the session establishes under injected loss via retransmit", "[udp][handshake]")
 {
     constexpr int k_iterations = 30;
     int           proven       = 0;
@@ -23,8 +22,7 @@ TEST_CASE("udp handshake_arq: the session establishes under injected loss via re
         // first hs_response) is lost, so the ARQ must retransmit to establish.
         lossy_relay relay{io, server.port(), /*drops=*/1};
 
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel>, const plexus::io::endpoint &)
-                         { dialed = true; });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel>, const plexus::io::endpoint &) { dialed = true; });
         client.dial({"udp", "127.0.0.1:" + std::to_string(relay.port())});
 
         pump_until(io, [&] { return dialed && accepted; });
@@ -36,8 +34,7 @@ TEST_CASE("udp handshake_arq: the session establishes under injected loss via re
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp handshake_arq: dropping every datagram surfaces a handshake-timeout abort",
-          "[udp][handshake]")
+TEST_CASE("udp handshake_arq: dropping every datagram surfaces a handshake-timeout abort", "[udp][handshake]")
 {
     constexpr int k_iterations = 10;
     int           proven       = 0;
@@ -54,10 +51,8 @@ TEST_CASE("udp handshake_arq: dropping every datagram surfaces a handshake-timeo
 
         std::optional<plexus::io::io_error> dial_fail;
         bool                                dialed = false;
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel>, const plexus::io::endpoint &)
-                         { dialed = true; });
-        client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e)
-                              { dial_fail = e; });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel>, const plexus::io::endpoint &) { dialed = true; });
+        client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e) { dial_fail = e; });
         client.dial({"udp", "127.0.0.1:" + std::to_string(relay.port())});
 
         pump_until(io, [&] { return dial_fail.has_value(); });

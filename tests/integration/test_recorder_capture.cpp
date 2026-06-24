@@ -6,8 +6,7 @@
 
 using namespace recorder_capture_fixture;
 
-TEST_CASE("pre_buffer mode runs drop-oldest and stays byte-bounded under a saturating producer",
-          "[recorder_capture][fdr]")
+TEST_CASE("pre_buffer mode runs drop-oldest and stays byte-bounded under a saturating producer", "[recorder_capture][fdr]")
 {
     for(int run = 0; run < 3; ++run)
     {
@@ -35,8 +34,7 @@ TEST_CASE("pre_buffer mode runs drop-oldest and stays byte-bounded under a satur
     }
 }
 
-TEST_CASE("the freeze captures two indices with no allocation and no buffer copy",
-          "[recorder_capture][fdr]")
+TEST_CASE("the freeze captures two indices with no allocation and no buffer copy", "[recorder_capture][fdr]")
 {
     for(int run = 0; run < 3; ++run)
     {
@@ -58,8 +56,7 @@ TEST_CASE("the freeze captures two indices with no allocation and no buffer copy
     }
 }
 
-TEST_CASE("a manual trigger freezes and drains the held window to the byte_sink with no thread",
-          "[recorder_capture][fdr]")
+TEST_CASE("a manual trigger freezes and drains the held window to the byte_sink with no thread", "[recorder_capture][fdr]")
 {
     in_memory_byte_sink   sink;
     manual_clock          clk;

@@ -27,9 +27,8 @@ namespace plexus::detail {
 // bytes-only subscription with no object entry.
 struct object_entry
 {
-    const void *native_key{};
-    plexus::detail::move_only_function<void(const io::object_carrier &, const io::message_info &)>
-            dispatch;
+    const void                                                                                    *native_key{};
+    plexus::detail::move_only_function<void(const io::object_carrier &, const io::message_info &)> dispatch;
 };
 
 struct subscription
@@ -38,10 +37,9 @@ struct subscription
     io::subscriber_qos qos;
     // The subscriber-declared type identity (std::nullopt = undeclared), stored so a
     // late-discovered peer gets the typed demand fanned with the gate intact.
-    std::optional<std::uint64_t> type_id;
-    plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)>
-                 cb;
-    object_entry obj{};
+    std::optional<std::uint64_t>                                                                   type_id;
+    plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb;
+    object_entry                                                                                   obj{};
 };
 
 // The private observer the node registers on its own engine: a peer-ready edge

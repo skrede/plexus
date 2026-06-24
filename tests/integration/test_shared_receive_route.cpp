@@ -61,9 +61,18 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept { return current; }
-    static void              reset() noexcept { current = time_point{}; }
-    static void              advance(duration d) noexcept { current += d; }
+    static time_point        now() noexcept
+    {
+        return current;
+    }
+    static void reset() noexcept
+    {
+        current = time_point{};
+    }
+    static void advance(duration d) noexcept
+    {
+        current += d;
+    }
 };
 
 struct manual_policy
@@ -101,11 +110,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -117,8 +122,7 @@ plexus::node_id make_id(std::uint8_t seed)
 
 reconnect_config forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 // Node A (the DIALER, hence the slot that REBUILDS on reconnect) subscribing to
@@ -150,7 +154,10 @@ struct route_net
         b.listen(ep_b);
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
     // B's CURRENTLY-connected inbound session (A's dial lands on a fresh inbound slot
     // on every reconnect, so the index is not stable — resolve it live). There is
@@ -158,9 +165,7 @@ struct route_net
     plexus::io::peer_session<manual_policy> *b_live_inbound()
     {
         plexus::io::peer_session<manual_policy> *found = nullptr;
-        b.registry().for_each_connected(
-                [&](const plexus::node_id &, plexus::io::peer_session<manual_policy> &s)
-                { found = &s; });
+        b.registry().for_each_connected([&](const plexus::node_id &, plexus::io::peer_session<manual_policy> &s) { found = &s; });
         return found;
     }
 
@@ -247,8 +252,7 @@ TEST_CASE("shared receive route: the route survives a forced reconnect rebuild w
 
     // Install the shared route ONCE, before any session exists.
     std::vector<std::string> received;
-    net.a.on_message_route([&](std::string_view, std::span<const std::byte> d, const message_info &)
-                           { received.emplace_back(to_string(d)); });
+    net.a.on_message_route([&](std::string_view, std::span<const std::byte> d, const message_info &) { received.emplace_back(to_string(d)); });
 
     net.connect_and_wire(topic);
     net.publish(topic, "before-reconnect");
@@ -280,8 +284,7 @@ TEST_CASE("shared receive route: the route survives a forced reconnect rebuild w
     }
 }
 
-TEST_CASE("shared receive route: a per-session on_message takes precedence over the shared route",
-          "[integration][routing][inproc]")
+TEST_CASE("shared receive route: a per-session on_message takes precedence over the shared route", "[integration][routing][inproc]")
 {
     constexpr int     k_iterations = 100;
     const std::string topic        = "topic";
@@ -293,15 +296,13 @@ TEST_CASE("shared receive route: a per-session on_message takes precedence over 
         route_net net;
 
         std::vector<std::string> via_route;
-        net.a.on_message_route([&](std::string_view, std::span<const std::byte> d,
-                                   const message_info &) { via_route.emplace_back(to_string(d)); });
+        net.a.on_message_route([&](std::string_view, std::span<const std::byte> d, const message_info &) { via_route.emplace_back(to_string(d)); });
 
         net.connect_and_wire(topic);
 
         // Install a per-session seam on the live A->B session: it must win.
         std::vector<std::string> via_session;
-        net.a.session_for(net.id_b)->on_message([&](std::string_view, std::span<const std::byte> d)
-                                                { via_session.emplace_back(to_string(d)); });
+        net.a.session_for(net.id_b)->on_message([&](std::string_view, std::span<const std::byte> d) { via_session.emplace_back(to_string(d)); });
 
         net.publish(topic, payload);
 

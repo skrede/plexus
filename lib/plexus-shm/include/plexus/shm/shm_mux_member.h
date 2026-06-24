@@ -78,18 +78,16 @@ public:
     using notifier_binder = typename registry_type::notifier_binder;
 
     static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
-    static constexpr io::transport_kind              mux_tier        = io::transport_kind::local;
+    static constexpr io::transport_kind              mux_tier               = io::transport_kind::local;
     static constexpr bool                            mux_prefers_local_fast = true;
 
     // bind_notifier constructs each ring's notifier over the in-region generation word
     // (required-with-default: a default-constructible notifier needs none). region_ns is the
     // static shm-region namespace (EMPTY shares rings by topic; a distinct namespace isolates
     // this application's same-host shm from unrelated apps).
-    shm_mux_member(Broker &broker, io::reliability rel, io::congestion cong,
-                   notifier_binder bind_notifier = registry_type::default_notifier_binder(),
-                   std::string     region_ns     = {}) noexcept
-            : m_registry(broker, rel, cong, std::move(bind_notifier), k_max_ring_slab_bytes,
-                         std::move(region_ns))
+    shm_mux_member(Broker &broker, io::reliability rel, io::congestion cong, notifier_binder bind_notifier = registry_type::default_notifier_binder(),
+                   std::string region_ns = {}) noexcept
+            : m_registry(broker, rel, cong, std::move(bind_notifier), k_max_ring_slab_bytes, std::move(region_ns))
     {
     }
 
@@ -100,9 +98,7 @@ public:
     {
         m_on_accepted = std::move(cb);
     }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>,
-                                                           const io::endpoint &)>
-                           cb)
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const io::endpoint &)> cb)
     {
         m_on_dialed = std::move(cb);
     }
@@ -135,7 +131,9 @@ public:
             m_on_dialed(std::move(ch), ep);
     }
 
-    void close() {}
+    void close()
+    {
+    }
 
     // Whether the preference hook should prefer this member for ep: the ring acquire for
     // ep.address must succeed. A successful probe LEAVES the ring acquired so the following
@@ -148,13 +146,15 @@ public:
         const auto g = detail::mux_resolve(*this, ep.address, ring_direction::request);
         if(g.mode == ring_geometry_mode::wire_fallback)
             return false;
-        return m_registry.acquire(ep.address, ring_direction::request, g.max_payload, g.mode,
-                                  g.consumer_capacity) != acquire_result::failed;
+        return m_registry.acquire(ep.address, ring_direction::request, g.max_payload, g.mode, g.consumer_capacity) != acquire_result::failed;
     }
 
     // Drop a held probe bump the dial did not consume (the hook probed shm but chose the
     // stream fallback for a co-tier reason). Keeps the refcount honest.
-    void abandon(const io::endpoint &ep) { m_registry.release(ep.address, ring_direction::request); }
+    void abandon(const io::endpoint &ep)
+    {
+        m_registry.release(ep.address, ring_direction::request);
+    }
 
     // Mint a per-topic COMPANION ring channel for the same-host upgrade coordinator: the
     // additive fast path a co-host (peer, topic) pair runs ALONGSIDE its wire session. Unlike
@@ -176,24 +176,22 @@ public:
     // unmaps). nullptr on a broker failure (the coordinator then keeps the wire receive path).
     // The framed bytes are header-on, so the caller feeds them into the SAME receive entry the
     // wire session feeds.
-    [[nodiscard]] std::unique_ptr<shm_companion_consumer<Broker, Notifier>> mint_receive_companion(
-            const std::string                                                   &fqn,
-            plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame)
+    [[nodiscard]] std::unique_ptr<shm_companion_consumer<Broker, Notifier>> mint_receive_companion(const std::string                                                   &fqn,
+                                                                                                   plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame)
     {
         const auto g = detail::mux_resolve(*this, fqn, ring_direction::request);
-        if(m_registry.acquire(fqn, ring_direction::request, g.max_payload, g.mode,
-                              g.consumer_capacity,
-                              acquire_mode::join_live) == acquire_result::failed)
+        if(m_registry.acquire(fqn, ring_direction::request, g.max_payload, g.mode, g.consumer_capacity, acquire_mode::join_live) == acquire_result::failed)
             return nullptr;
         auto handle = std::make_unique<shm_companion_consumer<Broker, Notifier>>(m_registry, fqn);
-        m_registry.set_consumer_sink(
-                fqn, ring_direction::request,
-                [cb = std::move(on_frame)](::plexus::wire_bytes<shm_slot_owner> wb) mutable
-                { cb(std::span<const std::byte>{wb.data(), wb.size()}); });
+        m_registry.set_consumer_sink(fqn, ring_direction::request,
+                                     [cb = std::move(on_frame)](::plexus::wire_bytes<shm_slot_owner> wb) mutable { cb(std::span<const std::byte>{wb.data(), wb.size()}); });
         return handle;
     }
 
-    registry_type &registry() noexcept { return m_registry; }
+    registry_type &registry() noexcept
+    {
+        return m_registry;
+    }
 
     // The producer-side same-host provisioning channel: the declaring publisher records the
     // effective per-message size + resolved geometry for its topic here, BEFORE the dial/listen
@@ -201,10 +199,7 @@ public:
     // geometry). An fqn with no entry resolves to the default ring.
     void set_topic_geometry(const std::string &fqn, std::size_t effective_bytes, shm_geometry geom)
     {
-        m_geometry.insert_or_assign(
-                fqn,
-                detail::shm_provisioned{static_cast<std::uint32_t>(effective_bytes), geom.mode,
-                                        geom.max_consumers});
+        m_geometry.insert_or_assign(fqn, detail::shm_provisioned{static_cast<std::uint32_t>(effective_bytes), geom.mode, geom.max_consumers});
     }
 
     // The resolved mode + the capped ring's per-message slot capacity for an fqn, read by the
@@ -239,21 +234,28 @@ public:
     // against (the {0, reliable_preserving} shipped default: max_consumers 0 resolves to the
     // capacity floor, the safe reliable mode). Sourced by the node's declare/subscribe path so the
     // default lives on the transport that owns the rings, not on node_options.
-    [[nodiscard]] shm_geometry default_geometry() const noexcept { return m_default_geometry; }
+    [[nodiscard]] shm_geometry default_geometry() const noexcept
+    {
+        return m_default_geometry;
+    }
 
     // The consumer-sovereign same-host upgrade policy the medium coordinator consults on a co-host
     // demand edge. The default engages the upgrade out of the box; a deployment supplies a stricter
     // predicate (e.g. one always returning false) to disable it. Owned here, never on node_options.
-    void set_upgrade_policy(upgrade_policy_fn policy) noexcept { m_upgrade_policy = policy; }
-    [[nodiscard]] upgrade_policy_fn upgrade_policy() const noexcept { return m_upgrade_policy; }
+    void set_upgrade_policy(upgrade_policy_fn policy) noexcept
+    {
+        m_upgrade_policy = policy;
+    }
+    [[nodiscard]] upgrade_policy_fn upgrade_policy() const noexcept
+    {
+        return m_upgrade_policy;
+    }
 
 private:
     template<typename M>
-    friend auto detail::mux_open(M &, const io::endpoint &, shm::acquire_mode)
-            -> std::unique_ptr<typename M::channel_type>;
+    friend auto detail::mux_open(M &, const io::endpoint &, shm::acquire_mode) -> std::unique_ptr<typename M::channel_type>;
     template<typename M>
-    friend detail::shm_resolved_geometry detail::mux_resolve(const M &, const std::string &,
-                                                             shm::ring_direction);
+    friend detail::shm_resolved_geometry detail::mux_resolve(const M &, const std::string &, shm::ring_direction);
 
     void report_dial_fail(const io::endpoint &ep, io::io_error e)
     {
@@ -261,15 +263,14 @@ private:
             m_on_dial_failed(ep, e);
     }
 
-    registry_type                                                           m_registry;
-    std::unordered_map<std::string, detail::shm_provisioned>                m_geometry;
-    shm_geometry      m_default_geometry{};
-    upgrade_policy_fn m_upgrade_policy{&default_upgrade_policy};
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const io::endpoint &)>
-                                                                         m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)>                   m_on_error;
+    registry_type                                                                                 m_registry;
+    std::unordered_map<std::string, detail::shm_provisioned>                                      m_geometry;
+    shm_geometry                                                                                  m_default_geometry{};
+    upgrade_policy_fn                                                                             m_upgrade_policy{&default_upgrade_policy};
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)>                       m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)>                  m_on_dial_failed;
+    plexus::detail::move_only_function<void(io::io_error)>                                        m_on_error;
 };
 
 }

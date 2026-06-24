@@ -91,7 +91,10 @@ public:
         m_seen_any = false;
     }
 
-    [[nodiscard]] std::uint64_t highest() const noexcept { return m_highest; }
+    [[nodiscard]] std::uint64_t highest() const noexcept
+    {
+        return m_highest;
+    }
 
 private:
     static constexpr std::size_t k_word_bits = 64;

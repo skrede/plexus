@@ -44,9 +44,7 @@ struct session_build_context
     // observer fan-out, so it is threaded from here on every build. One 3-arg shape carrying
     // the message_info serves both arities (a bytes-only consumer drops the info). Absent
     // until the engine wires it — a session guards on it.
-    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>,
-                                            const message_info &)>
-            on_message;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> on_message;
     // The process-tier object-lane route, shaped like on_message. Absent until wired.
     plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> on_object;
     // A typed lifecycle sink, NOT an observer per-edge method: the engine arms its liveliness
@@ -61,7 +59,7 @@ struct session_build_context
     // installs a posting adapter here so a security transition reaches observers POSTED, never
     // inline. Supplied positionally on every construction path (the engine fills it with its
     // own security fan-out); never defaulted to a shared sink.
-    observer                    &session_observer;
+    observer &session_observer;
     // The OpenSSL-free security seam (transcript digest + AEAD decorator install): the
     // type-erased boundary that keeps the EVP/decorator instantiation behind the gated target
     // while the bridge stays plaintext. An empty seam is the no-AEAD posture.
@@ -69,9 +67,7 @@ struct session_build_context
     // Derives the keys and routes a just-built channel through the EVP decorator. Type-erased
     // so the core bridge links no libcrypto. Absent until the gated path is wired — a
     // security-engaged accept with no factory is then refused fail-closed (never fail-open).
-    plexus::detail::move_only_function<void(typename Policy::byte_channel_type &,
-                                            const security_negotiation &)>
-            install_security_factory;
+    plexus::detail::move_only_function<void(typename Policy::byte_channel_type &, const security_negotiation &)> install_security_factory;
 };
 
 }

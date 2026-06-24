@@ -27,7 +27,10 @@ namespace {
 struct small_adder
 {
     int base;
-    int operator()(int x) const { return base + x; }
+    int operator()(int x) const
+    {
+        return base + x;
+    }
 };
 
 // A large callable whose captured state exceeds the SBO inline buffer, forcing the
@@ -37,7 +40,10 @@ struct large_callable
 {
     std::array<std::byte, 256> payload{};
     int                        base = 7;
-    int                        operator()(int x) const { return base + x; }
+    int                        operator()(int x) const
+    {
+        return base + x;
+    }
 };
 
 }
@@ -56,8 +62,7 @@ TEST_CASE("move_only_function invokes a small callable with zero heap", "[io][mo
     REQUIRE(fn(5) == 15);
 }
 
-TEST_CASE("move_only_function spills a large callable to the heap and invokes it",
-          "[io][move_only_function]")
+TEST_CASE("move_only_function spills a large callable to the heap and invokes it", "[io][move_only_function]")
 {
     move_only_function<int(int)> fn{large_callable{}};
 
@@ -86,8 +91,7 @@ TEST_CASE("move_only_function default and null construct empty", "[io][move_only
     REQUIRE_FALSE(def != nullptr);
 }
 
-TEST_CASE("move_only_function move-construct transfers the target and empties the source",
-          "[io][move_only_function]")
+TEST_CASE("move_only_function move-construct transfers the target and empties the source", "[io][move_only_function]")
 {
     move_only_function<int(int)> src{small_adder{.base = 100}};
     move_only_function<int(int)> dst{std::move(src)};
@@ -97,8 +101,7 @@ TEST_CASE("move_only_function move-construct transfers the target and empties th
     REQUIRE(dst(1) == 101);
 }
 
-TEST_CASE("move_only_function move-assign transfers the target and empties the source",
-          "[io][move_only_function]")
+TEST_CASE("move_only_function move-assign transfers the target and empties the source", "[io][move_only_function]")
 {
     move_only_function<int(int)> src{small_adder{.base = 200}};
     move_only_function<int(int)> dst{small_adder{.base = 1}};

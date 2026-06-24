@@ -1,11 +1,9 @@
 #include "test_udp_selector_common.h"
 
-TEST_CASE("udp selector: reliability_hint_of bridges the publisher's declared class",
-          "[udp][selector][reliability]")
+TEST_CASE("udp selector: reliability_hint_of bridges the publisher's declared class", "[udp][selector][reliability]")
 {
     pio::transport_selector sel;
-    REQUIRE(sel.reliability_hint_of(pio::reliability::best_effort) ==
-            pio::reliability_hint::best_effort);
+    REQUIRE(sel.reliability_hint_of(pio::reliability::best_effort) == pio::reliability_hint::best_effort);
     REQUIRE(sel.reliability_hint_of(pio::reliability::reliable) == pio::reliability_hint::reliable);
 }
 
@@ -33,8 +31,7 @@ TEST_CASE("udp selector: dispatch_class observably changes with the hint and lea
     REQUIRE_FALSE(sel.local_fast_eligible_for(tcp_ep, dispatch_hint::frequent));
 }
 
-TEST_CASE("udp selector: the new verdicts preserve the pure value-object invariant",
-          "[udp][selector][value-object]")
+TEST_CASE("udp selector: the new verdicts preserve the pure value-object invariant", "[udp][selector][value-object]")
 {
     pio::transport_selector a;
     pio::transport_selector b;
@@ -44,17 +41,12 @@ TEST_CASE("udp selector: the new verdicts preserve the pure value-object invaria
     // forced ONLY by a different (scheme, hint), never by mutating the selector.
     const pio::endpoint udp{"udp", "127.0.0.1:5000"};
     const pio::endpoint tcp{"tcp", "127.0.0.1:5000"};
-    REQUIRE(a.reliability_class(udp, pio::reliability_hint::reliable) ==
-            b.reliability_class(udp, pio::reliability_hint::reliable));
-    REQUIRE(a.reliability_class(tcp, pio::reliability_hint::reliable) ==
-            b.reliability_class(tcp, pio::reliability_hint::reliable));
-    REQUIRE(a.dispatch_class({"unix", "/tmp/s"}, dispatch_hint::frequent) ==
-            b.dispatch_class({"unix", "/tmp/s"}, dispatch_hint::frequent));
-    REQUIRE(a.reliability_hint_of(pio::reliability::reliable) ==
-            b.reliability_hint_of(pio::reliability::reliable));
+    REQUIRE(a.reliability_class(udp, pio::reliability_hint::reliable) == b.reliability_class(udp, pio::reliability_hint::reliable));
+    REQUIRE(a.reliability_class(tcp, pio::reliability_hint::reliable) == b.reliability_class(tcp, pio::reliability_hint::reliable));
+    REQUIRE(a.dispatch_class({"unix", "/tmp/s"}, dispatch_hint::frequent) == b.dispatch_class({"unix", "/tmp/s"}, dispatch_hint::frequent));
+    REQUIRE(a.reliability_hint_of(pio::reliability::reliable) == b.reliability_hint_of(pio::reliability::reliable));
 
     // A different scheme forces a different reliability verdict — the discriminator is the
     // input, not selector state.
-    REQUIRE(a.reliability_class(udp, pio::reliability_hint::reliable) !=
-            a.reliability_class(tcp, pio::reliability_hint::reliable));
+    REQUIRE(a.reliability_class(udp, pio::reliability_hint::reliable) != a.reliability_class(tcp, pio::reliability_hint::reliable));
 }

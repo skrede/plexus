@@ -26,8 +26,7 @@ struct recorder
 
     handshake_gate::drain_fn drain()
     {
-        return [this](std::span<const std::byte> bytes)
-        { drained.emplace_back(bytes.begin(), bytes.end()); };
+        return [this](std::span<const std::byte> bytes) { drained.emplace_back(bytes.begin(), bytes.end()); };
     }
 };
 
@@ -41,8 +40,7 @@ std::vector<std::byte> bytes_of(std::initializer_list<int> vals)
 
 }
 
-TEST_CASE("handshake_gate buffers submissions before ready (the drain sees nothing)",
-          "[io][handshake_gate]")
+TEST_CASE("handshake_gate buffers submissions before ready (the drain sees nothing)", "[io][handshake_gate]")
 {
     recorder       rec;
     handshake_gate gate{rec.drain()};
@@ -55,8 +53,7 @@ TEST_CASE("handshake_gate buffers submissions before ready (the drain sees nothi
     REQUIRE(rec.drained.empty()); // nothing drained until the ready edge
 }
 
-TEST_CASE("handshake_gate mark_ready drains the buffer in FIFO order then flips ready",
-          "[io][handshake_gate]")
+TEST_CASE("handshake_gate mark_ready drains the buffer in FIFO order then flips ready", "[io][handshake_gate]")
 {
     recorder       rec;
     handshake_gate gate{rec.drain()};

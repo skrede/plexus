@@ -59,8 +59,7 @@ void stream_aead_send(Ch &c, std::span<const std::byte> data)
     c.m_send_frame.resize(1 + wire::header_size + c.m_seal_scratch.size());
     c.m_send_frame[0] = static_cast<std::byte>(c.m_send_epoch & 0xffu);
     std::copy(header.begin(), header.end(), c.m_send_frame.begin() + 1);
-    std::copy(c.m_seal_scratch.begin(), c.m_seal_scratch.end(),
-              c.m_send_frame.begin() + 1 + wire::header_size);
+    std::copy(c.m_seal_scratch.begin(), c.m_seal_scratch.end(), c.m_send_frame.begin() + 1 + wire::header_size);
     c.m_lower.send(c.m_send_frame);
 }
 
@@ -108,8 +107,7 @@ void stream_aead_on_lower_data(Ch &c, std::span<const std::byte> bytes)
 
     c.m_recv_frame.resize(wire::header_size + c.m_open_scratch.size());
     std::copy(header.begin(), header.end(), c.m_recv_frame.begin());
-    std::copy(c.m_open_scratch.begin(), c.m_open_scratch.end(),
-              c.m_recv_frame.begin() + wire::header_size);
+    std::copy(c.m_open_scratch.begin(), c.m_open_scratch.end(), c.m_recv_frame.begin() + wire::header_size);
     if(c.m_on_data)
         c.m_on_data(std::span<const std::byte>{c.m_recv_frame});
 }

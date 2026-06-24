@@ -81,11 +81,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // A two-node inproc link: the dialer (the SUBSCRIBER) and the accepted end (the
@@ -101,10 +97,10 @@ struct link
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder sub_messages{sink};  // the subscriber's forwarder
-    msg_forwarder prod_messages{sink}; // the producer's forwarder
-    rpc_forwarder sub_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder prod_procedures{ex, k_long_timeout, sink};
+    msg_forwarder            sub_messages{sink};  // the subscriber's forwarder
+    msg_forwarder            prod_messages{sink}; // the producer's forwarder
+    rpc_forwarder            sub_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder            prod_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> sub_ctx;
     plexus::io::peer_context<inproc_policy> prod_ctx;
@@ -123,8 +119,7 @@ struct link
                     prod_ctx.channel   = std::move(ch);
                     prod_ctx.node_name = "subscriber-node";
                     prod_ctx.peer_id   = make_cfg(0x02).self_id; // the subscriber's node_id
-                    producer.emplace(prod_ctx, ex, make_cfg(0x01), k_long_timeout, prod_messages,
-                                     prod_procedures, true, sink);
+                    producer.emplace(prod_ctx, ex, make_cfg(0x01), k_long_timeout, prod_messages, prod_procedures, true, sink);
                     producer->start();
                 });
         transport.on_dialed(
@@ -133,14 +128,10 @@ struct link
                     sub_ctx.channel   = std::move(ch);
                     sub_ctx.node_name = "producer-node";
                     sub_ctx.peer_id   = make_cfg(0x01).self_id; // the producer's node_id
-                    subscriber.emplace(sub_ctx, ex, make_cfg(0x02), k_long_timeout, sub_messages,
-                                       sub_procedures, false, sink);
-                    subscriber->on_message([this](std::string_view, std::span<const std::byte> d)
-                                           { received.emplace_back(to_string(d)); });
-                    subscriber->on_subscribe_refused([this](std::uint64_t, subscribe_status s)
-                                                     { refusals.push_back(s); });
-                    subscriber->on_subscribe_degraded([this](std::uint64_t, std::uint8_t bits)
-                                                      { degraded.push_back(bits); });
+                    subscriber.emplace(sub_ctx, ex, make_cfg(0x02), k_long_timeout, sub_messages, sub_procedures, false, sink);
+                    subscriber->on_message([this](std::string_view, std::span<const std::byte> d) { received.emplace_back(to_string(d)); });
+                    subscriber->on_subscribe_refused([this](std::uint64_t, subscribe_status s) { refusals.push_back(s); });
+                    subscriber->on_subscribe_degraded([this](std::uint64_t, std::uint8_t bits) { degraded.push_back(bits); });
                     subscriber->start();
                 });
 
@@ -148,9 +139,15 @@ struct link
         transport.dial({"inproc", "svc"});
     }
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
-    bool complete() const { return subscriber->is_complete() && producer->is_complete(); }
+    bool complete() const
+    {
+        return subscriber->is_complete() && producer->is_complete();
+    }
 };
 
 }

@@ -53,9 +53,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 inline plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xC0FFEEu;
     opts.dial_eagerly = eager;
     return opts;
@@ -85,7 +83,10 @@ struct net
     inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
     inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
     // Both nodes listen and discover each other; A's eager dial converges the single
     // connection (B is lazy — it accepts A's dial as an inbound session, which is not

@@ -22,12 +22,7 @@ TEST_CASE("observer over asio: an accepted (inbound) peer fires connected/discon
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.reach(id_b);
         const auto inbound = inbound_slot(1);
-        pump_until(io,
-                   [&]
-                   {
-                       return rec.for_peer(inbound).connected == 1 &&
-                               rec.for_peer(inbound).ready == 1;
-                   });
+        pump_until(io, [&] { return rec.for_peer(inbound).connected == 1 && rec.for_peer(inbound).ready == 1; });
         {
             const auto &c = rec.for_peer(inbound);
             REQUIRE(c.connected == 1);
@@ -59,7 +54,7 @@ TEST_CASE("observer over asio: calling engine.subscribe from inside an observer 
         engine         *eng{nullptr};
         plexus::node_id target{};
         int             connected{0};
-        void on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
+        void            on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
         {
             ++connected;
             if(eng)

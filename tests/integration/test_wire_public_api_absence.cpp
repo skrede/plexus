@@ -4,8 +4,7 @@
 
 using namespace wire_public_api_fixture;
 
-TEST_CASE("public API: a default node records no wire frames (structural absence)",
-          "[wire_public_api][wire]")
+TEST_CASE("public API: a default node records no wire frames (structural absence)", "[wire_public_api][wire]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};

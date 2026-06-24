@@ -4,8 +4,7 @@
 
 using namespace recording_qos_fixture;
 
-TEST_CASE("integration.recording_qos a node declaring no recording QoS ships zero capture",
-          "[integration][inproc][recording]")
+TEST_CASE("integration.recording_qos a node declaring no recording QoS ships zero capture", "[integration][inproc][recording]")
 {
     net n{base_opts(/*eager=*/false)}; // producer leaves node_options.capture at the off default
     n.connect();
@@ -20,11 +19,10 @@ TEST_CASE("integration.recording_qos a node declaring no recording QoS ships zer
     REQUIRE(encodes->load() == 0); // the off default selects nothing: the gate stays inert
 }
 
-TEST_CASE("integration.recording_qos a node-level payload default fires the encode per publish",
-          "[integration][inproc][recording]")
+TEST_CASE("integration.recording_qos a node-level payload default fires the encode per publish", "[integration][inproc][recording]")
 {
     plexus::node_options producer = base_opts(/*eager=*/false);
-    producer.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
+    producer.capture              = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
     net n{producer};
     n.connect();
 

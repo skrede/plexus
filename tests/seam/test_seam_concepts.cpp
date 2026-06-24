@@ -27,26 +27,55 @@ namespace {
 struct fake_channel
 {
     fake_channel() = default;
-    explicit fake_channel(int) {}
-    fake_channel(int, std::error_code &) {}
+    explicit fake_channel(int)
+    {
+    }
+    fake_channel(int, std::error_code &)
+    {
+    }
 
-    void                 send(std::span<const std::byte>) {}
-    void                 close() {}
-    plexus::io::endpoint remote_endpoint() const { return {}; }
-    void                 on_data(move_only_function<void(std::span<const std::byte>)>) {}
-    void                 on_closed(move_only_function<void()>) {}
-    void                 on_error(move_only_function<void(plexus::io::io_error)>) {}
-    void                 on_protocol_close(move_only_function<void(plexus::wire::close_cause)>) {}
+    void send(std::span<const std::byte>)
+    {
+    }
+    void close()
+    {
+    }
+    plexus::io::endpoint remote_endpoint() const
+    {
+        return {};
+    }
+    void on_data(move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(move_only_function<void()>)
+    {
+    }
+    void on_error(move_only_function<void(plexus::io::io_error)>)
+    {
+    }
+    void on_protocol_close(move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
 };
 
 struct fake_timer
 {
-    explicit fake_timer(int) {}
-    fake_timer(int, std::error_code &) {}
+    explicit fake_timer(int)
+    {
+    }
+    fake_timer(int, std::error_code &)
+    {
+    }
 
-    void expires_after(std::chrono::milliseconds) {}
-    void async_wait(move_only_function<void(std::error_code)>) {}
-    void cancel() {}
+    void expires_after(std::chrono::milliseconds)
+    {
+    }
+    void async_wait(move_only_function<void(std::error_code)>)
+    {
+    }
+    void cancel()
+    {
+    }
 };
 
 // A minimal Policy over the fakes: executor is a plain int handle the channel
@@ -58,7 +87,9 @@ struct fake_policy
     using timer_type        = fake_timer;
     using byte_owner        = std::shared_ptr<const void>;
 
-    static void post(executor_type, move_only_function<void()>) {}
+    static void post(executor_type, move_only_function<void()>)
+    {
+    }
 };
 
 static_assert(plexus::io::byte_channel<fake_channel>, "fake_channel must satisfy byte_channel");
@@ -89,8 +120,7 @@ TEST_CASE("wire_bytes owner keeps the bytes alive past the source scope", "[seam
     plexus::wire_bytes<> wb;
 
     {
-        plexus::wire::shared_bytes source{std::vector<std::byte>{std::byte{0xDE}, std::byte{0xAD},
-                                                                 std::byte{0xBE}, std::byte{0xEF}}};
+        plexus::wire::shared_bytes source{std::vector<std::byte>{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}}};
         aliased = source.data();
         wb      = plexus::wire_bytes<>{source};
 

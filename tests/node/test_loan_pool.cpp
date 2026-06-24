@@ -57,8 +57,7 @@ TEST_CASE("loan pool: a never-published loan returns its slot on destruction", "
     REQUIRE(c->value == 3u);
 }
 
-TEST_CASE("loan pool: exhaustion returns an empty loan and recovers after a release",
-          "[node][loan_pool]")
+TEST_CASE("loan pool: exhaustion returns an empty loan and recovers after a release", "[node][loan_pool]")
 {
     reset_counts();
     constexpr std::size_t k_capacity = 3;

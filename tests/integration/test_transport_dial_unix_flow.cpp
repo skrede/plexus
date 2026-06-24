@@ -14,12 +14,7 @@ TEST_CASE("unix transport: a real published message carrying the minted epoch fl
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         dial_unix_link l;
-        l.pump_until(
-                [&]
-                {
-                    return l.requester && l.responder && l.requester->is_complete() &&
-                            l.responder->is_complete();
-                });
+        l.pump_until([&] { return l.requester && l.responder && l.requester->is_complete() && l.responder->is_complete(); });
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
 

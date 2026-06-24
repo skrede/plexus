@@ -31,7 +31,10 @@ public:
             m_rc->fetch_add(1, std::memory_order_acq_rel); // pin
     }
 
-    ~shm_slot_owner() { release(); }
+    ~shm_slot_owner()
+    {
+        release();
+    }
 
     shm_slot_owner(const shm_slot_owner &)            = delete;
     shm_slot_owner &operator=(const shm_slot_owner &) = delete;

@@ -39,8 +39,7 @@ struct shared_state
 
 shared_state *map_shared_state()
 {
-    void *p = ::mmap(nullptr, sizeof(shared_state), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(shared_state), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if(p == MAP_FAILED)
         return nullptr;
     return ::new(p) shared_state{};
@@ -61,8 +60,7 @@ bool consumer_park_and_wait(shared_state *s)
 
 }
 
-TEST_CASE("shm.wake_gating the wake decision is gated off the prior park-state",
-          "[shm][wake_gating]")
+TEST_CASE("shm.wake_gating the wake decision is gated off the prior park-state", "[shm][wake_gating]")
 {
     // The zero-wake-when-spinning claim, asserted off the syscall: a producer wakes
     // ONLY when the consumer was PARKED. EMPTY (spinning) and NOTIFIED (a wake is
@@ -72,8 +70,7 @@ TEST_CASE("shm.wake_gating the wake decision is gated off the prior park-state",
     REQUIRE(plexus::native::should_wake(k_park_notified) == false);
 }
 
-TEST_CASE("shm.wake_gating a spinning consumer leaves the gated signal NOTIFIED and parks nobody",
-          "[shm][wake_gating]")
+TEST_CASE("shm.wake_gating a spinning consumer leaves the gated signal NOTIFIED and parks nobody", "[shm][wake_gating]")
 {
     // Single-process: with the consumer SPINNING (park_state == EMPTY) the gated
     // signal bumps the generation and swaps the park word to NOTIFIED without ever
@@ -99,8 +96,7 @@ TEST_CASE("shm.wake_gating a spinning consumer leaves the gated signal NOTIFIED 
     ::munmap(s, sizeof(shared_state));
 }
 
-TEST_CASE("shm.wake_gating a parked consumer is woken by the gated signal across address spaces",
-          "[shm][wake_gating]")
+TEST_CASE("shm.wake_gating a parked consumer is woken by the gated signal across address spaces", "[shm][wake_gating]")
 {
     // WOKEN-WHEN-PARKED (the lost-wakeup guard on the GATED path): a forked child
     // stores PARKED then FUTEX_WAITs; the parent's two-arg gated signal observes the

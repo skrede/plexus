@@ -74,8 +74,7 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
-                     0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -97,8 +96,7 @@ bool produce(const std::string &fqn)
 {
     posix_shm_region_broker broker;
     region_handle           ctrl, slab;
-    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
-       broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
+    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
 
     pio::broadcast_ring ring;
@@ -106,8 +104,7 @@ bool produce(const std::string &fqn)
         return false;
 
     pio::broadcast_ring::claim_result claim;
-    if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable,
-                              plexus::io::congestion::block, claim) != pio::loan_status::ok)
+    if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) != pio::loan_status::ok)
         return false;
     std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
@@ -125,8 +122,7 @@ bool produce_gated(const std::string &fqn)
 {
     posix_shm_region_broker broker;
     region_handle           ctrl, slab;
-    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
-       broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
+    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
 
     pio::broadcast_ring ring;
@@ -134,8 +130,7 @@ bool produce_gated(const std::string &fqn)
         return false;
 
     pio::broadcast_ring::claim_result claim;
-    if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable,
-                              plexus::io::congestion::block, claim) != pio::loan_status::ok)
+    if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) != pio::loan_status::ok)
         return false;
     std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
@@ -147,8 +142,7 @@ bool produce_gated(const std::string &fqn)
 
 }
 
-TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor and drains",
-          "[shm][notifier_bridge]")
+TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor and drains", "[shm][notifier_bridge]")
 {
     const std::string        fqn  = "topic.bridge." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
@@ -175,15 +169,11 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         // io_context bound to the ring's notify word, then drive ONLY that reactor.
         posix_shm_region_broker broker;
         region_handle           ctrl, slab;
-        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
-                              pio::create_options{}, ctrl) == pio::region_status::ok);
-        REQUIRE(broker.create(slab_name(fqn),
-                              pio::slab_region_bytes(geom.cell_count, geom.slot_capacity),
-                              pio::create_options{}, slab) == pio::region_status::ok);
+        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
+        REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count,
-                                            geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
 
         ::asio::io_context                            io;
         plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
@@ -191,8 +181,7 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         // The channel's subscriber registers its cursor at the producer's tail at
         // construction; build it BEFORE announcing ready so the cursor is fixed
         // before the producer publishes (no publish-before-arm race).
-        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(
-                ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
+        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t got = 0;
         // The arm()'d drain runs on a posted reactor turn: drain the channel and
@@ -201,8 +190,7 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         bridge.arm(
                 [&]
                 {
-                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn
-                            deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
+                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
                     {
                         std::memcpy(&got, wb.data(), sizeof(got));
                         c->value_seen.store(1u, std::memory_order_release);
@@ -215,8 +203,7 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         // Drive the user's reactor until the wake lands the drain (or a bounded
         // timeout so a missed wake surfaces as a failure, never a hang).
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-        while(c->value_seen.load(std::memory_order_acquire) == 0 &&
-              std::chrono::steady_clock::now() < deadline)
+        while(c->value_seen.load(std::memory_order_acquire) == 0 && std::chrono::steady_clock::now() < deadline)
             io.run_for(std::chrono::milliseconds(20));
 
         bridge.disarm(); // stop the watch before the ring/regions unwind
@@ -266,32 +253,25 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
 
         posix_shm_region_broker broker;
         region_handle           ctrl, slab;
-        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
-                              pio::create_options{}, ctrl) == pio::region_status::ok);
-        REQUIRE(broker.create(slab_name(fqn),
-                              pio::slab_region_bytes(geom.cell_count, geom.slot_capacity),
-                              pio::create_options{}, slab) == pio::region_status::ok);
+        REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
+        REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count,
-                                            geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
 
         ::asio::io_context io;
         // The GATED bridge: bound to BOTH the generation word AND the in-region park
         // word, so submit_futex_wait stores PARKED before its io_uring submit and the
         // producer's gated signal reads it.
-        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation(),
-                                                             ring.park_state());
+        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation(), ring.park_state());
 
-        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(
-                ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
+        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t got = 0;
         bridge.arm(
                 [&]
                 {
-                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn
-                            deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
+                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
                     {
                         std::memcpy(&got, wb.data(), sizeof(got));
                         c->value_seen.store(1u, std::memory_order_release);
@@ -305,8 +285,7 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
         c->regions_ready.store(1, std::memory_order_release);
 
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-        while(c->value_seen.load(std::memory_order_acquire) == 0 &&
-              std::chrono::steady_clock::now() < deadline)
+        while(c->value_seen.load(std::memory_order_acquire) == 0 && std::chrono::steady_clock::now() < deadline)
             io.run_for(std::chrono::milliseconds(20));
 
         bridge.disarm();

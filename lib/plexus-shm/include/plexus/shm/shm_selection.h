@@ -34,9 +34,7 @@ enum class same_host_medium : std::uint8_t
 // independently converge on region_name_for(fqn) with NO wire exchange. The hint
 // only gates whether each side ATTEMPTS the acquire; the upgrade_coordinator mints
 // the companion ring through the shm member (the broker-failure fallback keeps the wire).
-[[nodiscard]] inline same_host_medium select_same_host_medium(io::host_fingerprint peer,
-                                                              io::host_fingerprint local,
-                                                              io::dispatch_hint combined_hint) noexcept
+[[nodiscard]] inline same_host_medium select_same_host_medium(io::host_fingerprint peer, io::host_fingerprint local, io::dispatch_hint combined_hint) noexcept
 {
     if(io::is_same_host(peer, local) && io::any_set(combined_hint))
         return same_host_medium::shm;
@@ -56,9 +54,7 @@ enum class same_host_medium : std::uint8_t
 // wire_fallback AND message_bytes > the capped slot capacity routes to the wire
 // (stream); a wire_fallback message that fits the cap rides the ring. Pure: it reads
 // the LOCAL message size against the LOCALLY-resolved cap, never anything wire-supplied.
-[[nodiscard]] inline same_host_medium
-route_message_medium(ring_geometry_mode mode, std::size_t message_bytes,
-                     std::uint64_t capped_slot_capacity) noexcept
+[[nodiscard]] inline same_host_medium route_message_medium(ring_geometry_mode mode, std::size_t message_bytes, std::uint64_t capped_slot_capacity) noexcept
 {
     if(mode != ring_geometry_mode::wire_fallback)
         return same_host_medium::shm;
@@ -89,8 +85,7 @@ route_message_medium(ring_geometry_mode mode, std::size_t message_bytes,
 // a declared max_payload sizes the ring to that width; a subscriber-only upgrade (no
 // max_payload, i.e. 0) falls back to the default ring geometry. Returns the value to
 // pass to shm_topic_registry::acquire, where 0 already means "default geometry".
-[[nodiscard]] inline std::uint32_t
-upgrade_ring_max_payload(ring_direction direction, std::uint32_t publisher_max_payload) noexcept
+[[nodiscard]] inline std::uint32_t upgrade_ring_max_payload(ring_direction direction, std::uint32_t publisher_max_payload) noexcept
 {
     return direction == ring_direction::request ? publisher_max_payload : 0u;
 }

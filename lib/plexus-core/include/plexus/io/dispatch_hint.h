@@ -39,7 +39,10 @@ constexpr dispatch_hint operator&(dispatch_hint a, dispatch_hint b) noexcept
 }
 
 // Any-bit-set: the generic predicate the default upgrade policy reads. none -> false.
-constexpr bool any_set(dispatch_hint h) noexcept { return static_cast<std::uint8_t>(h) != 0u; }
+constexpr bool any_set(dispatch_hint h) noexcept
+{
+    return static_cast<std::uint8_t>(h) != 0u;
+}
 
 }
 

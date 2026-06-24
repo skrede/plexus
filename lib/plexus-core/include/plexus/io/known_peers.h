@@ -18,7 +18,10 @@ namespace plexus::io {
 class std_map_peer_storage
 {
 public:
-    void                    put(const node_id &id, const endpoint &ep) { m_table[id] = ep; }
+    void put(const node_id &id, const endpoint &ep)
+    {
+        m_table[id] = ep;
+    }
     std::optional<endpoint> get(const node_id &id) const
     {
         auto it = m_table.find(id);
@@ -26,8 +29,14 @@ public:
             return std::nullopt;
         return it->second;
     }
-    bool has(const node_id &id) const { return m_table.find(id) != m_table.end(); }
-    void remove(const node_id &id) { m_table.erase(id); }
+    bool has(const node_id &id) const
+    {
+        return m_table.find(id) != m_table.end();
+    }
+    void remove(const node_id &id)
+    {
+        m_table.erase(id);
+    }
 
 private:
     std::map<node_id, endpoint> m_table;
@@ -52,15 +61,27 @@ class basic_known_peers
 {
 public:
     // Insert or overwrite the awareness entry. NEVER dials — awareness only.
-    void note_peer(const node_id &id, const endpoint &ep) { m_storage.put(id, ep); }
+    void note_peer(const node_id &id, const endpoint &ep)
+    {
+        m_storage.put(id, ep);
+    }
 
     // The endpoint this identity is reachable at, or absence if unknown.
-    std::optional<endpoint> lookup(const node_id &id) const { return m_storage.get(id); }
+    std::optional<endpoint> lookup(const node_id &id) const
+    {
+        return m_storage.get(id);
+    }
 
-    bool contains(const node_id &id) const { return m_storage.has(id); }
+    bool contains(const node_id &id) const
+    {
+        return m_storage.has(id);
+    }
 
     // Drop an awareness entry (e.g. a peer that left). No wire, no dial side effect.
-    void forget(const node_id &id) { m_storage.remove(id); }
+    void forget(const node_id &id)
+    {
+        m_storage.remove(id);
+    }
 
 private:
     Storage m_storage;

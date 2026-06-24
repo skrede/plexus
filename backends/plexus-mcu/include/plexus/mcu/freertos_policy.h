@@ -39,8 +39,6 @@ struct freertos_policy
 
 }
 
-static_assert(
-        plexus::Policy<plexus::mcu::freertos_policy>,
-        "freertos_policy must satisfy Policy — check the channel/timer constructors and post()");
+static_assert(plexus::Policy<plexus::mcu::freertos_policy>, "freertos_policy must satisfy Policy — check the channel/timer constructors and post()");
 
 #endif

@@ -49,8 +49,7 @@ void tls_fail_dial(T &t, const io::endpoint &ep, tls_channel *raw, io::io_error 
 // the registry across the handshake (no self-owning readiness closure); a handshake/verify failure
 // routes through the channel's on_error to tls_fail_dial (deferred-destroy + on_dial_failed).
 template<typename T>
-void tls_run_handshake(T &t, std::unique_ptr<tls_channel> ch, tls_channel *raw,
-                       const io::endpoint &ep)
+void tls_run_handshake(T &t, std::unique_ptr<tls_channel> ch, tls_channel *raw, const io::endpoint &ep)
 {
     t.m_pending.insert(raw, std::move(ch));
     raw->on_error([&t, ep, raw](io::io_error e) { tls_fail_dial(t, ep, raw, e); });

@@ -72,9 +72,7 @@ template<typename UIntT>
 }
 
 template<typename UIntT>
-[[nodiscard]] std::optional<std::span<const std::byte>>
-read_length_prefixed(std::span<const std::byte> data, std::size_t &consumed,
-                     std::size_t element_size = 1) noexcept
+[[nodiscard]] std::optional<std::span<const std::byte>> read_length_prefixed(std::span<const std::byte> data, std::size_t &consumed, std::size_t element_size = 1) noexcept
 {
     static_assert(std::is_unsigned_v<UIntT>, "read_length_prefixed: UIntT must be unsigned");
 

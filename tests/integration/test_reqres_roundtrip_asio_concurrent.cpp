@@ -4,8 +4,7 @@
 
 using namespace reqres_asio_fixture;
 
-TEST_CASE("concurrent outstanding req/res over real TCP each resolve to their own response, looped",
-          "[integration][reqres][asio]")
+TEST_CASE("concurrent outstanding req/res over real TCP each resolve to their own response, looped", "[integration][reqres][asio]")
 {
     // The key staged-context stress over REAL asio TCP: issue M>=8 overlapping
     // calls (distinct correlation_ids) BEFORE pumping, so multiple requests are
@@ -19,8 +18,7 @@ TEST_CASE("concurrent outstanding req/res over real TCP each resolve to their ow
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         live_rpc h;
-        h.provider->serve("echo", [](std::span<const std::byte> param, forwarder::reply_fn &reply)
-                          { reply(rpc_status::success, param); });
+        h.provider->serve("echo", [](std::span<const std::byte> param, forwarder::reply_fn &reply) { reply(rpc_status::success, param); });
 
         std::array<std::string, m_outstanding> got{};
         std::array<rpc_status, m_outstanding>  status{};

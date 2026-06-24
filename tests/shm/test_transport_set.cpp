@@ -24,15 +24,13 @@
 
 namespace pasio = plexus::asio;
 
-TEST_CASE("shm.transport_set an shm-bearing set mints a node from {io, broker}",
-          "[shm][mux][node][transport_set]")
+TEST_CASE("shm.transport_set an shm-bearing set mints a node from {io, broker}", "[shm][mux][node][transport_set]")
 {
-    ::asio::io_context                   io;
+    ::asio::io_context                      io;
     plexus::native::posix_shm_region_broker broker;
-    plexus::discovery::static_discovery  disc{{}};
+    plexus::discovery::static_discovery     disc{{}};
 
-    pasio::transport_set<pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport> ts{
-            io, broker};
+    pasio::transport_set<pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport> ts{io, broker};
 
     plexus::node_id id{};
     id[0]     = std::byte{0x2A};

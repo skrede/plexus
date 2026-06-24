@@ -58,7 +58,10 @@ public:
         return true;
     }
 
-    void erase(const endpoint_type &sender) { m_peers.erase(sender); }
+    void erase(const endpoint_type &sender)
+    {
+        m_peers.erase(sender);
+    }
 
     // Erase the entry ONLY if it still maps to `channel`. A channel's teardown erases
     // its own demux ref, but a re-dial to the same sender may have already OVERWRITTEN
@@ -72,7 +75,10 @@ public:
             m_peers.erase(it);
     }
 
-    [[nodiscard]] std::size_t size() const noexcept { return m_peers.size(); }
+    [[nodiscard]] std::size_t size() const noexcept
+    {
+        return m_peers.size();
+    }
 
 private:
     std::size_t                                        m_max_peers;

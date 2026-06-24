@@ -4,8 +4,7 @@
 
 using namespace peer_session_inproc_fixture;
 
-TEST_CASE("inproc peer_session pair completes the handshake, mints epochs, installs once, looped",
-          "[integration][peer_session][inproc]")
+TEST_CASE("inproc peer_session pair completes the handshake, mints epochs, installs once, looped", "[integration][peer_session][inproc]")
 {
     constexpr int k_iterations = 100;
     int           completed    = 0;

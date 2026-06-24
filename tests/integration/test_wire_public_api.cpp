@@ -4,8 +4,7 @@
 
 using namespace wire_public_api_fixture;
 
-TEST_CASE("public API: a node that opts a transport into wire capture records wire frames",
-          "[wire_public_api][wire]")
+TEST_CASE("public API: a node that opts a transport into wire capture records wire frames", "[wire_public_api][wire]")
 {
     inproc_bus<>      bus;
     inproc_executor<> ex{bus};
@@ -21,8 +20,7 @@ TEST_CASE("public API: a node that opts a transport into wire capture records wi
 
     plexus::node_options consumer_opts = base_opts(/*eager=*/true);
     plexus::node_options producer_opts = base_opts(/*eager=*/true);
-    producer_opts.wire                 = plexus::wire_capture_qos{
-            .enabled = true, .position = plexus::wire_crypto_position::cleartext};
+    producer_opts.wire                 = plexus::wire_capture_qos{.enabled = true, .position = plexus::wire_crypto_position::cleartext};
 
     bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, consumer_opts};
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};

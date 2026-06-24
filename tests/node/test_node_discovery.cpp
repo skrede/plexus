@@ -40,10 +40,7 @@ TEST_CASE("node discovery: listen() appends a port key and re-advertises live", 
     REQUIRE(card != nullptr);
     REQUIRE(has_port_key(*card));
     // Exactly one plexus/<scheme>/port key, carrying the bound explicit port.
-    const auto count =
-            std::count_if(card->metadata.begin(), card->metadata.end(),
-                          [](const auto &kv) { return kv.first == "plexus/inproc/port"; });
+    const auto count = std::count_if(card->metadata.begin(), card->metadata.end(), [](const auto &kv) { return kv.first == "plexus/inproc/port"; });
     REQUIRE(count == 1);
-    REQUIRE(plexus::discovery::read_transport_port(card->metadata, "inproc") ==
-            std::uint16_t{7000});
+    REQUIRE(plexus::discovery::read_transport_port(card->metadata, "inproc") == std::uint16_t{7000});
 }

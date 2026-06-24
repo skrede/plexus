@@ -63,11 +63,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // A per-instance owner-only temp directory + a SHORT socket path within it (well
@@ -80,10 +76,10 @@ struct temp_sock
 
     temp_sock()
     {
-        char tmpl[] = "/tmp/pxu-XXXXXX"; // short prefix keeps the full path well under sun_path
-        const char *made = ::mkdtemp(tmpl);
-        dir              = made ? made : "";
-        path             = dir + "/s";
+        char        tmpl[] = "/tmp/pxu-XXXXXX"; // short prefix keeps the full path well under sun_path
+        const char *made   = ::mkdtemp(tmpl);
+        dir                = made ? made : "";
+        path               = dir + "/s";
     }
 
     ~temp_sock()
@@ -110,10 +106,10 @@ struct dial_unix_link
     pasio::unix_transport transport{io};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{io, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink};
+    msg_forwarder            resp_messages{sink};
+    rpc_forwarder            req_procedures{io, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{io, k_long_timeout, sink};
 
     plexus::io::peer_context<pasio::unix_policy> req_ctx;   // the dialer slot's per-peer record
     plexus::io::peer_context<pasio::unix_policy> resp_ctx;  // the accepted slot's per-peer record
@@ -130,10 +126,8 @@ struct dial_unix_link
                 {
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
-                    responder.emplace(resp_ctx, io, make_cfg(0x01), timeout, resp_messages,
-                                      resp_procedures, true, sink);
-                    responder->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { resp_received.emplace_back(to_string(d)); });
+                    responder.emplace(resp_ctx, io, make_cfg(0x01), timeout, resp_messages, resp_procedures, true, sink);
+                    responder->on_message([this](std::string_view, std::span<const std::byte> d) { resp_received.emplace_back(to_string(d)); });
                     responder->start();
                 });
         transport.on_dialed(
@@ -141,10 +135,8 @@ struct dial_unix_link
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
-                    requester.emplace(req_ctx, io, make_cfg(0x02), timeout, req_messages,
-                                      req_procedures, false, sink);
-                    requester->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { req_received.emplace_back(to_string(d)); });
+                    requester.emplace(req_ctx, io, make_cfg(0x02), timeout, req_messages, req_procedures, false, sink);
+                    requester->on_message([this](std::string_view, std::span<const std::byte> d) { req_received.emplace_back(to_string(d)); });
                     requester->start();
                 });
 

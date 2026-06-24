@@ -71,9 +71,7 @@ public:
                 });
     }
 
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>,
-                                                           const endpoint &)>
-                           cb)
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)> cb)
     {
         m_on_dialed = std::move(cb);
         m_inner.on_dialed(
@@ -94,15 +92,23 @@ public:
         m_inner.on_error(std::move(cb));
     }
 
-    void listen(const endpoint &ep) { m_inner.listen(ep); }
-    void dial(const endpoint &ep) { m_inner.dial(ep); }
-    void close() { m_inner.close(); }
+    void listen(const endpoint &ep)
+    {
+        m_inner.listen(ep);
+    }
+    void dial(const endpoint &ep)
+    {
+        m_inner.dial(ep);
+    }
+    void close()
+    {
+        m_inner.close();
+    }
 
 private:
-    InnerTransport                                                         &m_inner;
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)>
-            m_on_dialed;
+    InnerTransport                                                                           &m_inner;
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)>                   m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)> m_on_dialed;
 };
 
 }

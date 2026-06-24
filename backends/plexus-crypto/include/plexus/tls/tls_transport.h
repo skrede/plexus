@@ -53,18 +53,12 @@ public:
     // true). global_default is the per-MESSAGE receive ceiling and reassembly_budget the aggregate
     // reassembly-memory cap (the two operator-facing message-size node options, stamped onto every
     // minted channel's inbound config). All required-WITH-default.
-    tls_transport(::asio::io_context &io, const tls_credential &cred,
-                  stream::stream_inbound_config cfg = {}, bool no_delay = true,
-                  io::congestion      congestion = io::congestion::block,
-                  io::egress_capacity egress     = io::egress_capacity::bounded_default(),
-                  plexus::asio::stream_socket_options socket_options = {},
-                  std::size_t global_default    = io::global_default_max_message_bytes,
-                  std::size_t reassembly_budget = io::reassembly_memory_budget)
+    tls_transport(::asio::io_context &io, const tls_credential &cred, stream::stream_inbound_config cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
+                  io::egress_capacity egress = io::egress_capacity::bounded_default(), plexus::asio::stream_socket_options socket_options = {},
+                  std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget)
             : m_io(io)
             , m_cred(cred)
-            , m_listener(io, cred,
-                         stream::with_message_limits(cfg, global_default, reassembly_budget),
-                         no_delay, congestion, egress, socket_options)
+            , m_listener(io, cred, stream::with_message_limits(cfg, global_default, reassembly_budget), no_delay, congestion, egress, socket_options)
             , m_cfg(stream::with_message_limits(cfg, global_default, reassembly_budget))
             , m_no_delay(no_delay)
             , m_congestion(congestion)
@@ -72,9 +66,7 @@ public:
             , m_socket_options(socket_options)
             // Destroy a freed channel OFF the current stack: a posted continuation owns it until
             // it runs, so teardown follows the channel's own async-completion unwind.
-            , m_pending(
-                      [this](std::unique_ptr<tls_channel> ch)
-                      { ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); }); })
+            , m_pending([this](std::unique_ptr<tls_channel> ch) { ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); }); })
     {
         m_listener.on_accepted(
                 [this](std::unique_ptr<tls_channel> ch)
@@ -103,14 +95,11 @@ public:
     {
         m_on_accepted = std::move(cb);
     }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>,
-                                                           const io::endpoint &)>
-                           cb)
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> cb)
     {
         m_on_dialed = std::move(cb);
     }
-    void
-    on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
+    void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
         m_on_dial_failed = std::move(cb);
     }
@@ -119,9 +108,15 @@ public:
         m_on_error = std::move(cb);
     }
 
-    void listen(const io::endpoint &ep) { m_listener.start(ep); }
+    void listen(const io::endpoint &ep)
+    {
+        m_listener.start(ep);
+    }
 
-    [[nodiscard]] uint16_t port() const { return m_listener.port(); }
+    [[nodiscard]] uint16_t port() const
+    {
+        return m_listener.port();
+    }
 
     void dial(const io::endpoint &ep)
     {
@@ -129,24 +124,21 @@ public:
         auto            target = plexus::asio::detail::parse(ep.address, pec);
         if(pec)
             return detail::tls_report_dial_fail(*this, ep, plexus::asio::detail::map_error(pec));
-        auto  ch  = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion,
-                                                  m_egress_capacity, m_socket_options);
+        auto  ch  = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
-        raw->socket().async_connect(
-                target,
-                [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable
-                {
-                    if(ec)
-                        return detail::tls_report_dial_fail(*this, ep,
-                                                            plexus::asio::detail::map_error(ec));
-                    if(m_no_delay)
-                    {
-                        std::error_code nec;
-                        (void)raw->socket().set_option(::asio::ip::tcp::no_delay(true),
-                                                       nec); // disable Nagle pre-handshake
-                    }
-                    detail::tls_run_handshake(*this, std::move(ch), raw, ep);
-                });
+        raw->socket().async_connect(target,
+                                    [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable
+                                    {
+                                        if(ec)
+                                            return detail::tls_report_dial_fail(*this, ep, plexus::asio::detail::map_error(ec));
+                                        if(m_no_delay)
+                                        {
+                                            std::error_code nec;
+                                            (void)raw->socket().set_option(::asio::ip::tcp::no_delay(true),
+                                                                           nec); // disable Nagle pre-handshake
+                                        }
+                                        detail::tls_run_handshake(*this, std::move(ch), raw, ep);
+                                    });
     }
 
     void close()
@@ -166,29 +158,25 @@ private:
     template<typename U>
     friend void detail::tls_fail_dial(U &, const io::endpoint &, tls_channel *, io::io_error);
     template<typename U>
-    friend void detail::tls_run_handshake(U &, std::unique_ptr<tls_channel>, tls_channel *,
-                                          const io::endpoint &);
+    friend void detail::tls_run_handshake(U &, std::unique_ptr<tls_channel>, tls_channel *, const io::endpoint &);
 
-    ::asio::io_context                 &m_io;
-    const tls_credential               &m_cred;
-    tls_listener                        m_listener;
-    stream::stream_inbound_config         m_cfg;
-    bool                                m_no_delay;
-    io::congestion                      m_congestion;
-    io::egress_capacity                 m_egress_capacity;
-    plexus::asio::stream_socket_options m_socket_options;
-    io::pending_dial_registry<tls_channel, std::monostate>
-            m_pending; // transport-owned half-open dials
-    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)>
-                                                                                 m_on_dialed;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io::io_error)>                       m_on_error;
+    ::asio::io_context                                                                          &m_io;
+    const tls_credential                                                                        &m_cred;
+    tls_listener                                                                                 m_listener;
+    stream::stream_inbound_config                                                                m_cfg;
+    bool                                                                                         m_no_delay;
+    io::congestion                                                                               m_congestion;
+    io::egress_capacity                                                                          m_egress_capacity;
+    plexus::asio::stream_socket_options                                                          m_socket_options;
+    io::pending_dial_registry<tls_channel, std::monostate>                                       m_pending; // transport-owned half-open dials
+    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)>                       m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)>                 m_on_dial_failed;
+    plexus::detail::move_only_function<void(io::io_error)>                                       m_on_error;
 };
 
 }
 
-static_assert(plexus::io::transport_backend<plexus::tls::tls_transport, plexus::tls::tls_policy>,
-              "tls_transport must satisfy transport_backend — check the listen/dial/on_* surface");
+static_assert(plexus::io::transport_backend<plexus::tls::tls_transport, plexus::tls::tls_policy>, "tls_transport must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif

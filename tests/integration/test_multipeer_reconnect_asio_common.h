@@ -48,8 +48,7 @@ namespace pio   = plexus::io;
 using pio::endpoint;
 using pio::handshake_fsm_config;
 using pio::reconnect_config;
-using engine =
-        pio::routing_engine<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
+using engine        = pio::routing_engine<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
 using session       = pio::peer_session<pasio::asio_policy>;
 using msg_forwarder = pio::message_forwarder<pasio::asio_policy>;
 using rpc_forwarder = pio::procedure_forwarder<pasio::asio_policy>;
@@ -63,11 +62,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 inline plexus::node_id make_id(std::uint8_t seed)
@@ -79,14 +74,12 @@ inline plexus::node_id make_id(std::uint8_t seed)
 
 inline reconnect_config fast_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(50),
-                            std::nullopt, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(50), std::nullopt, std::nullopt};
 }
 
 inline reconnect_config bounded_cfg(std::uint32_t max_attempts)
 {
-    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(50),
-                            max_attempts, std::nullopt};
+    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(50), max_attempts, std::nullopt};
 }
 
 // One peer node on the shared io_context: its OWN asio_transport listening on an
@@ -119,8 +112,7 @@ struct peer_node
                     accepted      = ch.get();
                     ctx.channel   = std::move(ch);
                     ctx.node_name = "dialer-node";
-                    responder.emplace(ctx, io, make_cfg(seed), k_long_timeout, messages, procedures,
-                                      true, sink);
+                    responder.emplace(ctx, io, make_cfg(seed), k_long_timeout, messages, procedures, true, sink);
                     responder->start();
                 });
         transport.listen({"tcp", "127.0.0.1:0"});
@@ -161,7 +153,10 @@ struct multipeer_net
         }
     }
 
-    peer_node &peer(std::size_t i) { return *peers[i]; }
+    peer_node &peer(std::size_t i)
+    {
+        return *peers[i];
+    }
 
     template<typename Pred>
     void pump_until(Pred pred)

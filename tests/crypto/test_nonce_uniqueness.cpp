@@ -2,8 +2,7 @@
 
 using namespace nonce_uniqueness_fixture;
 
-TEST_CASE("crypto.nonce_uniqueness holds across flow, reconnect, and restart (looped)",
-          "[crypto][nonce]")
+TEST_CASE("crypto.nonce_uniqueness holds across flow, reconnect, and restart (looped)", "[crypto][nonce]")
 {
     std::set<nonce_tuple> seen;
     const std::uint64_t   rekey_threshold = 64; // exercise several rekeys per session
@@ -24,8 +23,7 @@ TEST_CASE("crypto.nonce_uniqueness holds across flow, reconnect, and restart (lo
     REQUIRE(seen.size() == static_cast<std::size_t>(loops) * 3u * per_session);
 }
 
-TEST_CASE("crypto.nonce_uniqueness holds across a > 256-rekey session (epoch byte wrap)",
-          "[crypto][nonce]")
+TEST_CASE("crypto.nonce_uniqueness holds across a > 256-rekey session (epoch byte wrap)", "[crypto][nonce]")
 {
     // Force > 256 rekeys in one session (a rekey every frame) so the 8-bit wire epoch
     // byte wraps 0xff -> 0x00. Each epoch installs a FRESH key (a distinct fingerprint),

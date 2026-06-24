@@ -28,15 +28,36 @@ struct dummy_channel
 {
     pio::endpoint ep;
 
-    void                        send(std::span<const std::byte>) {}
-    void                        close() {}
-    [[nodiscard]] pio::endpoint remote_endpoint() const { return ep; }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>) {}
-    void on_closed(plexus::detail::move_only_function<void()>) {}
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>) {}
-    [[nodiscard]] std::size_t   backpressured() const noexcept { return 0; }
-    [[nodiscard]] std::uint64_t scheduler_key() const noexcept { return 1; }
+    void send(std::span<const std::byte>)
+    {
+    }
+    void close()
+    {
+    }
+    [[nodiscard]] pio::endpoint remote_endpoint() const
+    {
+        return ep;
+    }
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(plexus::detail::move_only_function<void()>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
+    {
+    }
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
+    {
+    }
+    [[nodiscard]] std::size_t backpressured() const noexcept
+    {
+        return 0;
+    }
+    [[nodiscard]] std::uint64_t scheduler_key() const noexcept
+    {
+        return 1;
+    }
 };
 
 static_assert(pio::byte_channel<dummy_channel>);
@@ -55,28 +76,37 @@ struct dummy_member
     bool dialed   = false;
     bool listened = false;
 
-    void listen(const pio::endpoint &) { listened = true; }
-    void dial(const pio::endpoint &) { dialed = true; }
-    void close() {}
+    void listen(const pio::endpoint &)
+    {
+        listened = true;
+    }
+    void dial(const pio::endpoint &)
+    {
+        dialed = true;
+    }
+    void close()
+    {
+    }
 
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dummy_channel>)>) {}
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dummy_channel>,
-                                                           const pio::endpoint &)>)
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dummy_channel>)>)
     {
     }
-    void on_dial_failed(
-            plexus::detail::move_only_function<void(const pio::endpoint &, plexus::io::io_error)>)
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dummy_channel>, const pio::endpoint &)>)
     {
     }
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>) {}
+    void on_dial_failed(plexus::detail::move_only_function<void(const pio::endpoint &, plexus::io::io_error)>)
+    {
+    }
+    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
+    {
+    }
 };
 
 using mux_t = pio::multiplexing_transport<dummy_member<0>, dummy_member<1>>;
 
 }
 
-TEST_CASE("mux_select_hook: the DEFAULT hook routes the dial to the FIRST candidate, looped",
-          "[integration][mux][select][hook]")
+TEST_CASE("mux_select_hook: the DEFAULT hook routes the dial to the FIRST candidate, looped", "[integration][mux][select][hook]")
 {
     // The resolution is deterministic (no timing/transport), so the loop is a redundancy
     // check, not a flake hunt; the real reproducibility proof is re-running the process.
@@ -100,8 +130,7 @@ TEST_CASE("mux_select_hook: the DEFAULT hook routes the dial to the FIRST candid
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("mux_select_hook: an INJECTED hook routes the dial to the SECOND candidate, looped",
-          "[integration][mux][select][hook]")
+TEST_CASE("mux_select_hook: an INJECTED hook routes the dial to the SECOND candidate, looped", "[integration][mux][select][hook]")
 {
     constexpr int k_iterations = 100;
     int           completed    = 0;
@@ -113,11 +142,8 @@ TEST_CASE("mux_select_hook: an INJECTED hook routes the dial to the SECOND candi
         // index overrides the default — the mux must honor the erased callable, not a
         // hardcoded first-candidate choice. This is the behavioral substitutability the
         // multi-candidate selection seam requires.
-        pio::selection_hook pick_last =
-                [](const pio::endpoint &,
-                   std::span<const pio::mux_candidate> candidates) -> std::size_t
-        { return candidates.back().index; };
-        mux_t mux{first, second, {}, std::move(pick_last)};
+        pio::selection_hook pick_last = [](const pio::endpoint &, std::span<const pio::mux_candidate> candidates) -> std::size_t { return candidates.back().index; };
+        mux_t               mux{first, second, {}, std::move(pick_last)};
 
         mux.dial({"tcp", "host:1"});
 
@@ -130,15 +156,12 @@ TEST_CASE("mux_select_hook: an INJECTED hook routes the dial to the SECOND candi
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("mux_select_hook: the injected hook also governs listen",
-          "[integration][mux][select][hook]")
+TEST_CASE("mux_select_hook: the injected hook also governs listen", "[integration][mux][select][hook]")
 {
     dummy_member<0>     first;
     dummy_member<1>     second;
-    pio::selection_hook pick_last =
-            [](const pio::endpoint &, std::span<const pio::mux_candidate> candidates) -> std::size_t
-    { return candidates.back().index; };
-    mux_t mux{first, second, {}, std::move(pick_last)};
+    pio::selection_hook pick_last = [](const pio::endpoint &, std::span<const pio::mux_candidate> candidates) -> std::size_t { return candidates.back().index; };
+    mux_t               mux{first, second, {}, std::move(pick_last)};
 
     mux.listen({"tcp", "host:1"});
 

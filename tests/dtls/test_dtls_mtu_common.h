@@ -57,28 +57,20 @@ struct mtu_link
 
     std::vector<std::vector<std::byte>> client_to_server;
     std::vector<std::vector<std::byte>> server_to_client;
-    int client_records{0}; // client->server DTLS records since the last send
+    int                                 client_records{0}; // client->server DTLS records since the last send
 
-    mtu_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id,
-             std::size_t max_payload,
-             std::size_t record_mtu = ptls::dtls_channel::default_record_mtu)
+    mtu_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id, std::size_t max_payload, std::size_t record_mtu = ptls::dtls_channel::default_record_mtu)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
             , client_cred(pdt::pin_one(client_id, server_id.digest))
     {
         server_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
 
-        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"),
-                                            server_sock.port());
-        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"),
-                                            client_sock.port());
+        ::asio::ip::udp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), server_sock.port());
+        ::asio::ip::udp::endpoint client_ep(::asio::ip::make_address("127.0.0.1"), client_sock.port());
 
-        server_ch = std::make_unique<ptls::dtls_channel>(
-                io, server_sock, client_ep, server_cred, server_cookie,
-                ptls::dtls_channel::role::server, max_payload, record_mtu);
-        client_ch = std::make_unique<ptls::dtls_channel>(
-                io, client_sock, server_ep, client_cred, client_cookie,
-                ptls::dtls_channel::role::client, max_payload, record_mtu);
+        server_ch = std::make_unique<ptls::dtls_channel>(io, server_sock, client_ep, server_cred, server_cookie, ptls::dtls_channel::role::server, max_payload, record_mtu);
+        client_ch = std::make_unique<ptls::dtls_channel>(io, client_sock, server_ep, client_cred, client_cookie, ptls::dtls_channel::role::client, max_payload, record_mtu);
 
         server_sock.on_datagram(
                 [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
@@ -86,14 +78,11 @@ struct mtu_link
                     client_to_server.emplace_back(b.begin(), b.end());
                     ++client_records;
                 });
-        client_sock.on_datagram(
-                [this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
-                { server_to_client.emplace_back(b.begin(), b.end()); });
+        client_sock.on_datagram([this](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b) { server_to_client.emplace_back(b.begin(), b.end()); });
 
         server_ch->on_external_complete([this] { server_complete = true; });
         client_ch->on_external_complete([this] { client_complete = true; });
-        server_ch->on_data([this](std::span<const std::byte> d)
-                           { server_received.emplace_back(d.begin(), d.end()); });
+        server_ch->on_data([this](std::span<const std::byte> d) { server_received.emplace_back(d.begin(), d.end()); });
         client_ch->on_error(
                 [this](pio::io_error e)
                 {
@@ -130,8 +119,7 @@ struct mtu_link
 
     // Send a frame of `size` bytes and pump until the server receives it OR an oversize
     // error fired. Returns true if the server received exactly one datagram of `size`.
-    bool send_and_deliver(std::size_t               size,
-                          std::chrono::milliseconds timeout = std::chrono::milliseconds{2000})
+    bool send_and_deliver(std::size_t size, std::chrono::milliseconds timeout = std::chrono::milliseconds{2000})
     {
         server_received.clear();
         client_too_large = false;
@@ -139,8 +127,7 @@ struct mtu_link
         std::vector<std::byte> frame(size, std::byte{0xab});
         client_ch->send(std::span<const std::byte>{frame});
         auto bound = std::chrono::steady_clock::now() + timeout;
-        while(server_received.empty() && !client_too_large &&
-              std::chrono::steady_clock::now() < bound)
+        while(server_received.empty() && !client_too_large && std::chrono::steady_clock::now() < bound)
         {
             io.poll();
             if(io.stopped())

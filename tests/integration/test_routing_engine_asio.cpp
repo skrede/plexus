@@ -60,8 +60,7 @@ TEST_CASE("routing over asio: a demand subscribe carries a real published messag
         auto *a_to_b = a.eng.session_for(id_b);
         REQUIRE(a_to_b != nullptr);
         std::vector<std::string> a_received;
-        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d)
-                           { a_received.emplace_back(to_string(d)); });
+        a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(to_string(d)); });
 
         const auto inbound = []
         {

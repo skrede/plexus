@@ -50,9 +50,7 @@ struct response_t
 };
 
 // The positive case: a concrete, non-generic handler with a single deducible signature.
-using concrete_handler =
-        decltype([](const request_t &) -> plexus::expected<response_t, std::error_code>
-                 { return response_t{0}; });
+using concrete_handler = decltype([](const request_t &) -> plexus::expected<response_t, std::error_code> { return response_t{0}; });
 
 // Negative case 1: a generic lambda — operator() is a template, nothing to deduce.
 using generic_handler = decltype([](auto) {});
@@ -60,20 +58,20 @@ using generic_handler = decltype([](auto) {});
 // Negative case 2: an overloaded operator() — two signatures, deduction is ambiguous.
 struct overloaded_handler
 {
-    void operator()(const request_t &) const {}
-    void operator()(const response_t &) const {}
+    void operator()(const request_t &) const
+    {
+    }
+    void operator()(const response_t &) const
+    {
+    }
 };
 
-static_assert(deducible_handler<concrete_handler>,
-              "a concrete non-generic handler must be deducible");
-static_assert(!deducible_handler<generic_handler>,
-              "a generic lambda must NOT be deducible (spell Sig explicitly)");
-static_assert(!deducible_handler<overloaded_handler>,
-              "an overloaded operator() must NOT be deducible (spell Sig explicitly)");
+static_assert(deducible_handler<concrete_handler>, "a concrete non-generic handler must be deducible");
+static_assert(!deducible_handler<generic_handler>, "a generic lambda must NOT be deducible (spell Sig explicitly)");
+static_assert(!deducible_handler<overloaded_handler>, "an overloaded operator() must NOT be deducible (spell Sig explicitly)");
 
 // The deduced signature recovers Res(Req) from the (const Req&) -> expected<Res, ...> shape.
-static_assert(std::is_same_v<plexus::detail::handler_signature_t<concrete_handler>,
-                             response_t(request_t)>);
+static_assert(std::is_same_v<plexus::detail::handler_signature_t<concrete_handler>, response_t(request_t)>);
 
 // node.serve<Family>(name, handler) and node.subscribe<Family>(topic, cb) gate on the SAME
 // deducible_handler concept asserted above: the "spell Sig explicitly" static_assert in each
@@ -93,15 +91,13 @@ struct echo_codec
         auto owner = std::make_shared<std::vector<std::byte>>(4);
         for(int i = 0; i < 4; ++i)
             (*owner)[i] = static_cast<std::byte>((v.value >> (8 * i)) & 0xff);
-        return plexus::wire_bytes<>{std::span<const std::byte>{owner->data(), owner->size()},
-                                    std::move(owner)};
+        return plexus::wire_bytes<>{std::span<const std::byte>{owner->data(), owner->size()}, std::move(owner)};
     }
 
     plexus::expected<void, std::error_code> decode(std::span<const std::byte> b, T &out) const
     {
         if(b.size() != 4)
-            return plexus::expected<void, std::error_code>{
-                    plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
+            return plexus::expected<void, std::error_code>{plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
         std::uint32_t v = 0;
         for(int i = 0; i < 4; ++i)
             v |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(b[i])) << (8 * i);
@@ -124,9 +120,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0x5E14Eu;
     opts.dial_eagerly = eager;
     return opts;
@@ -146,7 +140,10 @@ struct net
     inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
     inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
 
-    void drive() { ex.drain(); }
+    void drive()
+    {
+        ex.drain();
+    }
 
     void connect()
     {
@@ -159,8 +156,7 @@ struct net
 
 }
 
-TEST_CASE("serve deduction: concrete handlers deduce, generic and overloaded do not",
-          "[node][typed]")
+TEST_CASE("serve deduction: concrete handlers deduce, generic and overloaded do not", "[node][typed]")
 {
     STATIC_REQUIRE(deducible_handler<concrete_handler>);
     STATIC_REQUIRE_FALSE(deducible_handler<generic_handler>);
@@ -172,9 +168,7 @@ TEST_CASE("serve deduction: the deduced serve/caller pair round-trips", "[node][
     net n;
     n.connect();
 
-    auto proc = n.b.serve<echo_codec>(
-            "rpc", [](const request_t &req) -> plexus::expected<response_t, std::error_code>
-            { return response_t{req.value + 1}; });
+    auto proc = n.b.serve<echo_codec>("rpc", [](const request_t &req) -> plexus::expected<response_t, std::error_code> { return response_t{req.value + 1}; });
     auto call = n.a.caller<response_t(request_t), echo_codec>("rpc");
     n.drive();
 

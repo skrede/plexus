@@ -9,9 +9,7 @@ TEST_CASE("mdnspp re-advertise on a live server updates the record in place", "[
     ::asio::io_context io;
 
     pmdns::mdnspp_discovery         advertiser(io, "_plexus._tcp.local.");
-    plexus::discovery::service_info local{"inplace._plexus._tcp.local.",
-                                          {"tcp", "127.0.0.1:5566"},
-                                          {{"node_id", "0022"}, {"plexus/tcp/port", "5566"}}};
+    plexus::discovery::service_info local{"inplace._plexus._tcp.local.", {"tcp", "127.0.0.1:5566"}, {{"node_id", "0022"}, {"plexus/tcp/port", "5566"}}};
     advertiser.advertise(local);
 
     // Let the first announce settle so the server is live (started + probed) before the
@@ -37,8 +35,7 @@ TEST_CASE("mdnspp re-advertise on a live server updates the record in place", "[
 
     // Poll past the browse silence timeout (mdnspp default 3s) so aggregation completes.
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
-    while(std::chrono::steady_clock::now() < deadline &&
-          (resolved_count == 0 || read_card_value(resolved_metadata, "plexus/schema").empty()))
+    while(std::chrono::steady_clock::now() < deadline && (resolved_count == 0 || read_card_value(resolved_metadata, "plexus/schema").empty()))
         io.poll();
 
     discovery.stop();

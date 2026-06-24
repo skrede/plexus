@@ -15,8 +15,7 @@ using namespace serial_fixture;
 // delivers it; a frame_router strips the header and the inner payload decodes to the exact bytes.
 // Looped N>=50 in-body; the ctest invocation is re-run >=3 process runs (a serial round-trip claim
 // is never made from one run).
-TEST_CASE("serial channel: a framed message round-trips over an openpty pair, looped",
-          "[integration][serial][roundtrip]")
+TEST_CASE("serial channel: a framed message round-trips over an openpty pair, looped", "[integration][serial][roundtrip]")
 {
     constexpr int     k_iterations = 50;
     const std::string payload      = "plexus-serial-pty-payload";
@@ -30,8 +29,8 @@ TEST_CASE("serial channel: a framed message round-trips over an openpty pair, lo
         auto rx = adopt_channel(io, pty.take_slave());
 
         std::optional<std::string> received;
-        plexus::log::null_logger    router_sink;
-        pio::frame_router           router{router_sink};
+        plexus::log::null_logger   router_sink;
+        pio::frame_router          router{router_sink};
         router.on_unidirectional(
                 [&](const wire::frame_header &, std::span<const std::byte> inner)
                 {
@@ -72,10 +71,10 @@ TEST_CASE("serial channel: a peer_session pair completes the point-at-port hands
         ::asio::io_context io;
 
         plexus::log::null_logger sink;
-        serial_msg_fwd req_messages{sink};
-        serial_msg_fwd resp_messages{sink};
-        serial_rpc_fwd req_procedures{io, k_long_timeout, sink};
-        serial_rpc_fwd resp_procedures{io, k_long_timeout, sink};
+        serial_msg_fwd           req_messages{sink};
+        serial_msg_fwd           resp_messages{sink};
+        serial_rpc_fwd           req_procedures{io, k_long_timeout, sink};
+        serial_rpc_fwd           resp_procedures{io, k_long_timeout, sink};
 
         pio::peer_context<pasio::serial_policy> req_ctx;  // the dialer (requester) slot
         pio::peer_context<pasio::serial_policy> resp_ctx; // the listener (responder) bootstrap slot
@@ -85,11 +84,8 @@ TEST_CASE("serial channel: a peer_session pair completes the point-at-port hands
         resp_ctx.channel   = adopt_channel(io, pty.take_slave());
         resp_ctx.node_name = "requester-node";
 
-        serial_session requester{req_ctx,  io, make_cfg(0x02), k_long_timeout,
-                                 req_messages, req_procedures, /*is_inbound_bootstrap=*/false, sink};
-        serial_session responder{resp_ctx, io, make_cfg(0x01), k_long_timeout,
-                                  resp_messages, resp_procedures, /*is_inbound_bootstrap=*/true,
-                                  sink};
+        serial_session requester{req_ctx, io, make_cfg(0x02), k_long_timeout, req_messages, req_procedures, /*is_inbound_bootstrap=*/false, sink};
+        serial_session responder{resp_ctx, io, make_cfg(0x01), k_long_timeout, resp_messages, resp_procedures, /*is_inbound_bootstrap=*/true, sink};
         requester.start();
         responder.start();
 

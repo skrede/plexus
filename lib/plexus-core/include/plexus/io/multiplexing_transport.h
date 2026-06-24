@@ -32,14 +32,9 @@ namespace plexus::io {
 // listen/dial/close, and advertises the schemes it serves and its locality tier so
 // the multiplexer routes over the pack generically at compile time.
 template<typename M>
-concept mux_member = requires(
-        M &m, const endpoint &ep,
-        plexus::detail::move_only_function<void(std::unique_ptr<typename M::channel_type>)> on_acc,
-        plexus::detail::move_only_function<void(std::unique_ptr<typename M::channel_type>,
-                                                const endpoint &)>
-                                                                             on_ch,
-        plexus::detail::move_only_function<void(const endpoint &, io_error)> on_dfail,
-        plexus::detail::move_only_function<void(io_error)>                   on_err) {
+concept mux_member = requires(M &m, const endpoint &ep, plexus::detail::move_only_function<void(std::unique_ptr<typename M::channel_type>)> on_acc,
+                              plexus::detail::move_only_function<void(std::unique_ptr<typename M::channel_type>, const endpoint &)> on_ch,
+                              plexus::detail::move_only_function<void(const endpoint &, io_error)> on_dfail, plexus::detail::move_only_function<void(io_error)> on_err) {
     { m.listen(ep) } -> std::same_as<void>;
     m.on_accepted(std::move(on_acc));
     { m.dial(ep) } -> std::same_as<void>;
@@ -57,7 +52,7 @@ concept mux_member = requires(
 // candidate is the fast path, then decides at acquire time.
 struct mux_candidate
 {
-    std::size_t index        = 0;
+    std::size_t index               = 0;
     bool        local_fast_eligible = false;
 };
 
@@ -70,8 +65,7 @@ struct member_prefers_local_fast : std::false_type
 };
 
 template<typename M>
-struct member_prefers_local_fast<M, std::void_t<decltype(M::mux_prefers_local_fast)>>
-        : std::bool_constant<M::mux_prefers_local_fast>
+struct member_prefers_local_fast<M, std::void_t<decltype(M::mux_prefers_local_fast)>> : std::bool_constant<M::mux_prefers_local_fast>
 {
 };
 
@@ -79,15 +73,13 @@ struct member_prefers_local_fast<M, std::void_t<decltype(M::mux_prefers_local_fa
 // one by index (a cold-path dial/listen call, never the hot loop; the default is empty so it stays
 // in SBO). It receives the endpoint + a span of per-candidate descriptors (index + the same-host
 // fast-path flag) — NOT the members tuple, so it stays decoupled from the concrete member types.
-using selection_hook = plexus::detail::move_only_function<std::size_t(
-        const endpoint &, std::span<const mux_candidate>)>;
+using selection_hook = plexus::detail::move_only_function<std::size_t(const endpoint &, std::span<const mux_candidate>)>;
 
 // The default hook: return the first candidate, so today's single-candidate tiers behave
 // identically. It is a small empty callable injected at construction (never a setter).
 struct first_candidate
 {
-    [[nodiscard]] std::size_t operator()(const endpoint &,
-                                         std::span<const mux_candidate> candidates) const noexcept
+    [[nodiscard]] std::size_t operator()(const endpoint &, std::span<const mux_candidate> candidates) const noexcept
     {
         return candidates.front().index;
     }
@@ -120,8 +112,7 @@ public:
     template<typename M>
     static constexpr bool member_prefers_local_fast_v = member_prefers_local_fast<M>::value;
 
-    explicit multiplexing_transport(Members &...members, transport_selector selector = {},
-                                    selection_hook hook = first_candidate{})
+    explicit multiplexing_transport(Members &...members, transport_selector selector = {}, selection_hook hook = first_candidate{})
             : m_members(members...)
             , m_selector(selector)
             , m_hook(std::move(hook))
@@ -132,14 +123,11 @@ public:
     multiplexing_transport(const multiplexing_transport &)            = delete;
     multiplexing_transport &operator=(const multiplexing_transport &) = delete;
 
-    void on_accepted(
-            plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>)> cb)
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>)> cb)
     {
         m_on_accepted = std::move(cb);
     }
-    void on_dialed(plexus::detail::move_only_function<
-                   void(std::unique_ptr<polymorphic_byte_channel>, const endpoint &)>
-                           cb)
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>, const endpoint &)> cb)
     {
         m_on_dialed = std::move(cb);
     }
@@ -180,8 +168,7 @@ private:
     template<typename Mux, typename M>
     friend void detail::wire_member(Mux &, M &);
     template<typename Mux, std::size_t I, typename Candidates>
-    friend void detail::mux_consider(const Mux &, const endpoint &, transport_kind, Candidates &,
-                                     std::size_t &);
+    friend void detail::mux_consider(const Mux &, const endpoint &, transport_kind, Candidates &, std::size_t &);
 
     // The resolved member tier for an endpoint: locality wins first (same-host -> the
     // local member), so a remote member — including the encrypted ones — never serves a
@@ -203,8 +190,7 @@ private:
         const transport_kind                          tier = tier_of(ep);
         std::array<mux_candidate, sizeof...(Members)> candidates{};
         std::size_t                                   count = 0;
-        detail::mux_collect_candidates(*this, ep, tier, candidates, count,
-                                       std::index_sequence_for<Members...>{});
+        detail::mux_collect_candidates(*this, ep, tier, candidates, count, std::index_sequence_for<Members...>{});
         if(count == 0)
             return sizeof...(Members);
         return m_hook(ep, {candidates.data(), count});
@@ -222,16 +208,13 @@ private:
         ((index == I ? (void)fn(std::get<I>(m_members)) : (void)0), ...);
     }
 
-    std::tuple<Members &...> m_members;
-    transport_selector       m_selector;
-    selection_hook           m_hook;
-    plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>)>
-            m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>,
-                                            const endpoint &)>
-                                                                         m_on_dialed;
-    plexus::detail::move_only_function<void(const endpoint &, io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(io_error)>                   m_on_error;
+    std::tuple<Members &...>                                                                              m_members;
+    transport_selector                                                                                    m_selector;
+    selection_hook                                                                                        m_hook;
+    plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>)>                   m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>, const endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const endpoint &, io_error)>                                  m_on_dial_failed;
+    plexus::detail::move_only_function<void(io_error)>                                                    m_on_error;
 };
 
 }

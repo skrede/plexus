@@ -58,10 +58,8 @@ public:
 
     template<typename Policy, typename... NodeTs>
     // NOLINTNEXTLINE(readability-function-size)
-    value_logger(node<Policy, NodeTs...> &n, std::string_view fqn, const value_logger_options &opts,
-                 Codec codec = {}, Projection projection = {})
-            : m_state(std::make_unique<state>(std::move(codec), std::move(projection), opts.format,
-                                              opts.out))
+    value_logger(node<Policy, NodeTs...> &n, std::string_view fqn, const value_logger_options &opts, Codec codec = {}, Projection projection = {})
+            : m_state(std::make_unique<state>(std::move(codec), std::move(projection), opts.format, opts.out))
     {
         static_assert(typed_codec<Codec>,
                       "plexus: a value_logger needs a codec satisfying typed_codec "
@@ -78,22 +76,20 @@ public:
         qos.wants_message_info      = true;
 
         state *st            = m_state.get();
-        auto   bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info)
-        { st->on_bytes(bytes, info); };
+        auto   bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info) { st->on_bytes(bytes, info); };
 
-        io::object_dispatch dispatch =
-                [st](const io::object_carrier &carrier, const io::message_info &info)
-        { st->on_object(carrier, info); };
+        io::object_dispatch dispatch = [st](const io::object_carrier &carrier, const io::message_info &info) { st->on_object(carrier, info); };
 
         io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto        rid  = seam.register_subscriber(
-                seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id,
-                &io::detail::type_key<value_type>, std::move(dispatch), std::nullopt);
-        m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
+        const auto rid = seam.register_subscriber(seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id, &io::detail::type_key<value_type>, std::move(dispatch), std::nullopt);
+        m_retire       = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
     // The count of inbound frames whose decode failed — dropped, never a partial line.
-    [[nodiscard]] std::size_t decode_failed() const noexcept { return m_state->decode_failed; }
+    [[nodiscard]] std::size_t decode_failed() const noexcept
+    {
+        return m_state->decode_failed;
+    }
 
     value_logger(value_logger &&) noexcept            = default;
     value_logger &operator=(value_logger &&) noexcept = default;

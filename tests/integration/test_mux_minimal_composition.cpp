@@ -31,8 +31,7 @@ using minimal_mux = pio::multiplexing_transport<pasio::unix_transport, pasio::as
 // weaken the contract. These two static_asserts preserve the gate the deleted asio mux
 // policy header carried, now at a living site.
 static_assert(plexus::Policy<mux_pol>, "muxify<asio_policy> must satisfy Policy");
-static_assert(pio::transport_backend<minimal_mux, mux_pol>,
-              "the minimal unix+tcp multiplexer must satisfy transport_backend");
+static_assert(pio::transport_backend<minimal_mux, mux_pol>, "the minimal unix+tcp multiplexer must satisfy transport_backend");
 
 TEST_CASE("mux_minimal: a unix+tcp multiplexer composes, constructs, and routes by scheme without "
           "the secure member",

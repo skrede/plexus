@@ -31,7 +31,10 @@ void report(L &l, const std::error_code &ec)
 
 // Best-effort remove of a socket file: ENOENT is success; any real conflict surfaces at the
 // subsequent bind rather than here.
-inline void unlink_path(const std::string &path) { (void)::unlink(path.c_str()); }
+inline void unlink_path(const std::string &path)
+{
+    (void)::unlink(path.c_str());
+}
 
 // Unwind a partially-started listener: close the opened acceptor and unlink the socket file
 // bind() created, so a failed start leaks neither the open acceptor nor the on-disk inode.
@@ -60,16 +63,13 @@ bool admit_peer(const L &l, ::asio::local::stream_protocol::socket &peer)
     ::socklen_t len = sizeof(cred);
     if(::getsockopt(peer.native_handle(), SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0)
         return false;
-    return l.m_peer_policy->decide(io::security::peer_cred{static_cast<std::uint32_t>(cred.uid),
-                                                           static_cast<std::uint32_t>(cred.gid),
-                                                           static_cast<std::uint32_t>(cred.pid)});
+    return l.m_peer_policy->decide(io::security::peer_cred{static_cast<std::uint32_t>(cred.uid), static_cast<std::uint32_t>(cred.gid), static_cast<std::uint32_t>(cred.pid)});
 #elif defined(__APPLE__) || defined(__FreeBSD__)
     ::uid_t uid = 0;
     ::gid_t gid = 0;
     if(::getpeereid(peer.native_handle(), &uid, &gid) != 0) // no pid on Darwin/BSD => pid=0
         return false;
-    return l.m_peer_policy->decide(io::security::peer_cred{static_cast<std::uint32_t>(uid),
-                                                           static_cast<std::uint32_t>(gid), 0});
+    return l.m_peer_policy->decide(io::security::peer_cred{static_cast<std::uint32_t>(uid), static_cast<std::uint32_t>(gid), 0});
 #else
     (void)peer;
     return l.m_peer_policy->accepts_without_credentials();
@@ -87,8 +87,7 @@ void adopt_peer(L &l, ::asio::local::stream_protocol::socket peer)
         (void)peer.close(ic);
         return;
     }
-    auto channel = std::make_unique<unix_channel>(l.m_io, std::move(peer), l.m_cfg, l.m_congestion,
-                                                  l.m_egress_capacity, l.m_socket_options);
+    auto channel = std::make_unique<unix_channel>(l.m_io, std::move(peer), l.m_cfg, l.m_congestion, l.m_egress_capacity, l.m_socket_options);
     if(l.m_on_accepted)
         l.m_on_accepted(std::move(channel));
 }

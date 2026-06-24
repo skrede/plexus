@@ -43,22 +43,20 @@ TEST_CASE("attach succeeds on 0->1 for an arbitrary fqn (no remote registry)", "
     }
 }
 
-TEST_CASE("roundtrip recovers exact opaque param and return bytes matched by corr_id",
-          "[procedure]")
+TEST_CASE("roundtrip recovers exact opaque param and return bytes matched by corr_id", "[procedure]")
 {
     for(int iter = 0; iter < 100; ++iter)
     {
         rpc_link link;
 
         std::string seen_param;
-        link.provider.serve(
-                "svc",
-                [&](std::span<const std::byte> param, procedure_forwarder::reply_fn &reply)
-                {
-                    seen_param            = to_string(param);
-                    const std::string ret = "return-" + seen_param;
-                    reply(rpc_status::success, as_bytes(ret));
-                });
+        link.provider.serve("svc",
+                            [&](std::span<const std::byte> param, procedure_forwarder::reply_fn &reply)
+                            {
+                                seen_param            = to_string(param);
+                                const std::string ret = "return-" + seen_param;
+                                reply(rpc_status::success, as_bytes(ret));
+                            });
 
         rpc_status        got_status = rpc_status::error;
         std::string       got_return;
@@ -109,8 +107,7 @@ TEST_CASE("an orphan rpc_response warn-drops and fires no callback", "[procedure
         // exists; then feed deliver_response a synthetic response for an unknown
         // corr_id. The real call's callback must NOT fire from the orphan.
         bool real_fired = false;
-        link.caller.call(link.caller_peer, "svc", {},
-                         [&](rpc_status, std::span<const std::byte>) { real_fired = true; });
+        link.caller.call(link.caller_peer, "svc", {}, [&](rpc_status, std::span<const std::byte>) { real_fired = true; });
 
         auto orphan = make_response_inner(987654321u, rpc_status::success, {});
         link.caller.deliver_response(link.caller_peer, orphan);
@@ -134,8 +131,7 @@ TEST_CASE("detach_all fails every outstanding call with peer_disconnected", "[pr
         std::array<rpc_status, outstanding> got{};
         got.fill(rpc_status::success);
         for(int i = 0; i < outstanding; ++i)
-            link.caller.call(link.caller_peer, "svc", {},
-                             [&got, i](rpc_status s, std::span<const std::byte>) { got[i] = s; });
+            link.caller.call(link.caller_peer, "svc", {}, [&got, i](rpc_status s, std::span<const std::byte>) { got[i] = s; });
 
         link.caller.detach_all(link.caller_peer);
 
@@ -156,9 +152,7 @@ TEST_CASE("concurrent outstanding calls each resolve to their own response", "[p
 
         // The provider echoes the param back, so each response is keyed to its
         // request's payload — cross-talk would surface as a mismatched echo.
-        link.provider.serve(
-                "echo", [](std::span<const std::byte> param, procedure_forwarder::reply_fn &reply)
-                { reply(rpc_status::success, param); });
+        link.provider.serve("echo", [](std::span<const std::byte> param, procedure_forwarder::reply_fn &reply) { reply(rpc_status::success, param); });
 
         constexpr int              n = 8;
         std::array<std::string, n> got{};

@@ -28,17 +28,14 @@ using local_shm_mux = io::multiplexing_transport<shm_member, unix_transport, asi
 // injecting the same-host preference hook (prefer shm, fall back to AF_UNIX on a failed
 // ring acquire). The members are BORROWED and MUST outlive the returned object. Returns a
 // prvalue (guaranteed elision) so the member callbacks capture the final address.
-[[nodiscard]] inline local_shm_mux make_local_shm_mux(shm_member &shm, unix_transport &local,
-                                                      asio_transport        &remote,
-                                                      io::transport_selector selector = {})
+[[nodiscard]] inline local_shm_mux make_local_shm_mux(shm_member &shm, unix_transport &local, asio_transport &remote, io::transport_selector selector = {})
 {
     return local_shm_mux{shm, local, remote, selector, ::plexus::shm::prefer_upgradeable_hook(shm)};
 }
 
 }
 
-static_assert(plexus::io::transport_backend<plexus::asio::shm::local_shm_mux,
-                                            plexus::muxify<plexus::asio::asio_policy>>,
+static_assert(plexus::io::transport_backend<plexus::asio::shm::local_shm_mux, plexus::muxify<plexus::asio::asio_policy>>,
               "local_shm_mux must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif

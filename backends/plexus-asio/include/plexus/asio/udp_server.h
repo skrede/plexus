@@ -45,8 +45,7 @@ public:
     // a saturating publisher's overrun is refused at the bound. FLOORED at one per-message
     // ceiling so a single oversize message's fragment burst is admitted whole (a one-datagram cap
     // would refuse fragment 1 and lose the message). O(one message), DoS-safe, never unbounded.
-    static constexpr std::size_t default_send_queue_bytes =
-            std::max<std::size_t>(65536, io::global_default_max_message_bytes);
+    static constexpr std::size_t default_send_queue_bytes = std::max<std::size_t>(65536, io::global_default_max_message_bytes);
 
     // The kernel SO_SNDBUF/SO_RCVBUF overrides; 0 = leave the kernel default (the
     // empirically-substantiated default — a loopback sweep moved p50 under the 2% noise bar). A
@@ -58,10 +57,8 @@ public:
     // The congestion mode is the per-node QoS choice (block surfaces would_block at the cap;
     // drop_newest sheds), threaded with the byte budget + socket-buffer sizes as
     // required-with-default ctor args.
-    explicit udp_server(::asio::io_context &io, io::congestion congestion = io::congestion::block,
-                        std::size_t send_queue_bytes = default_send_queue_bytes,
-                        std::size_t so_sndbuf        = default_so_sndbuf,
-                        std::size_t so_rcvbuf        = default_so_rcvbuf)
+    explicit udp_server(::asio::io_context &io, io::congestion congestion = io::congestion::block, std::size_t send_queue_bytes = default_send_queue_bytes,
+                        std::size_t so_sndbuf = default_so_sndbuf, std::size_t so_rcvbuf = default_so_rcvbuf)
             : m_socket(io)
             , m_congestion(congestion)
             , m_so_sndbuf(so_sndbuf)
@@ -73,7 +70,10 @@ public:
     udp_server(const udp_server &)            = delete;
     udp_server &operator=(const udp_server &) = delete;
 
-    ~udp_server() { close(); }
+    ~udp_server()
+    {
+        close();
+    }
 
     // Bind the one socket to bind_ep and arm the single receive loop. Fail-closed:
     // a bind error is reported through on_error and the loop is never armed.
@@ -131,9 +131,7 @@ public:
     }
 
     // Installed by the transport: (sender, datagram bytes) per inbound completion.
-    void on_datagram(plexus::detail::move_only_function<void(const endpoint_type &,
-                                                             std::span<const std::byte>)>
-                             cb)
+    void on_datagram(plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> cb)
     {
         m_on_datagram = std::move(cb);
     }
@@ -149,7 +147,10 @@ public:
         return m_socket.local_endpoint(ec).port();
     }
 
-    [[nodiscard]] bool is_open() const noexcept { return m_open; }
+    [[nodiscard]] bool is_open() const noexcept
+    {
+        return m_open;
+    }
 
     // The current queued (un-drained) outbound byte occupancy; 0 when the socket drains.
     [[nodiscard]] std::size_t queued_send_bytes() const noexcept
@@ -157,20 +158,38 @@ public:
         return m_send_queue.queued_bytes();
     }
 
-    [[nodiscard]] io::congestion congestion_mode() const noexcept { return m_congestion; }
+    [[nodiscard]] io::congestion congestion_mode() const noexcept
+    {
+        return m_congestion;
+    }
     // The configured SO_SNDBUF/SO_RCVBUF override (0 = kernel default left untouched).
-    [[nodiscard]] std::size_t so_sndbuf() const noexcept { return m_so_sndbuf; }
-    [[nodiscard]] std::size_t so_rcvbuf() const noexcept { return m_so_rcvbuf; }
+    [[nodiscard]] std::size_t so_sndbuf() const noexcept
+    {
+        return m_so_sndbuf;
+    }
+    [[nodiscard]] std::size_t so_rcvbuf() const noexcept
+    {
+        return m_so_rcvbuf;
+    }
     // The count of datagrams shed under congestion=drop_newest at the byte cap.
-    [[nodiscard]] std::size_t dropped_count() const noexcept { return m_dropped; }
+    [[nodiscard]] std::size_t dropped_count() const noexcept
+    {
+        return m_dropped;
+    }
     // The count of datagrams discarded on a transient per-datagram send error (an
     // unreachable destination, a momentary buffer-full) — best-effort UDP loss that is NOT
     // surfaced through on_error per datagram, so an unreachable port cannot storm the owner.
-    [[nodiscard]] std::size_t send_error_count() const noexcept { return m_send_errors; }
+    [[nodiscard]] std::size_t send_error_count() const noexcept
+    {
+        return m_send_errors;
+    }
     // The count of spurious connection_reset signals swallowed on the recv path (a Windows
     // ICMP port-unreachable surfacing as a reset on the next recv) — re-armed silently, NOT
     // surfaced through on_error, so an unreachable peer cannot storm the owner.
-    [[nodiscard]] std::size_t recv_reset_count() const noexcept { return m_recv_resets; }
+    [[nodiscard]] std::size_t recv_reset_count() const noexcept
+    {
+        return m_recv_resets;
+    }
 
     void close()
     {
@@ -192,8 +211,7 @@ private:
     template<typename S>
     friend void detail::on_sync_send_error(S &, const std::error_code &);
     template<typename S>
-    friend auto detail::make_send_sink(S &) ->
-            typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink;
+    friend auto detail::make_send_sink(S &) -> typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink;
     template<typename S>
     friend void detail::apply_socket_buffers(S &);
     template<typename S>
@@ -201,21 +219,19 @@ private:
     template<typename S>
     friend void detail::do_receive(S &);
 
-    ::asio::ip::udp::socket      m_socket;
-    endpoint_type                m_sender{};
-    std::array<std::byte, 65536> m_recv_buf{};
-    io::congestion               m_congestion{io::congestion::block};
-    std::size_t                  m_so_sndbuf{0};   // SO_SNDBUF override; 0 = kernel default
-    std::size_t                  m_so_rcvbuf{0};   // SO_RCVBUF override; 0 = kernel default
-    std::size_t                  m_dropped{0};     // congestion=drop shed count
-    std::size_t                  m_send_errors{0}; // transient per-datagram send-failure discards
-    std::size_t m_recv_resets{0}; // spurious recv connection_reset signals swallowed
-    datagram::detail::send_queue<endpoint_type>
-            m_send_queue; // byte-capped owned outbound discipline
-    plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)>
-                                                           m_on_datagram;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
-    bool                                                   m_open{false};
+    ::asio::ip::udp::socket                                                                     m_socket;
+    endpoint_type                                                                               m_sender{};
+    std::array<std::byte, 65536>                                                                m_recv_buf{};
+    io::congestion                                                                              m_congestion{io::congestion::block};
+    std::size_t                                                                                 m_so_sndbuf{0};   // SO_SNDBUF override; 0 = kernel default
+    std::size_t                                                                                 m_so_rcvbuf{0};   // SO_RCVBUF override; 0 = kernel default
+    std::size_t                                                                                 m_dropped{0};     // congestion=drop shed count
+    std::size_t                                                                                 m_send_errors{0}; // transient per-datagram send-failure discards
+    std::size_t                                                                                 m_recv_resets{0}; // spurious recv connection_reset signals swallowed
+    datagram::detail::send_queue<endpoint_type>                                                 m_send_queue;     // byte-capped owned outbound discipline
+    plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram;
+    plexus::detail::move_only_function<void(io::io_error)>                                      m_on_error;
+    bool                                                                                        m_open{false};
 };
 
 }

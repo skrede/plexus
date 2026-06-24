@@ -56,8 +56,7 @@ struct coord
 
 coord *map_coord()
 {
-    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1,
-                     0);
+    void *p = ::mmap(nullptr, sizeof(coord), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? nullptr : ::new(p) coord{};
 }
 
@@ -83,8 +82,7 @@ bool subscribe_shm(const std::string &fqn, coord *c, std::uint32_t want_payload)
     // Wait for the publisher to mint the ring, then attach the SAME names.
     while(c->publisher_ready.load(std::memory_order_acquire) == 0)
         ;
-    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok ||
-       broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
+    if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
     if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
@@ -120,8 +118,7 @@ bool subscribe_shm(const std::string &fqn, coord *c, std::uint32_t want_payload)
 // (max_payload, 0 -> default), the subscriber (child) converges + consumes. Returns
 // whether the value crossed over shared memory. region_name_for is the only thing
 // either end shares; the hint never rides the wire.
-bool run_shm_roundtrip(const std::string &fqn, std::uint32_t publisher_max_payload,
-                       std::uint32_t payload)
+bool run_shm_roundtrip(const std::string &fqn, std::uint32_t publisher_max_payload, std::uint32_t payload)
 {
     coord *c = map_coord();
     REQUIRE(c != nullptr);
@@ -143,25 +140,18 @@ bool run_shm_roundtrip(const std::string &fqn, std::uint32_t publisher_max_paylo
     // topic). Both ends derive the names from the fqn alone — the convergence.
     posix_shm_region_broker            broker;
     region_handle                      ctrl, slab;
-    const std::optional<std::uint32_t> want = publisher_max_payload == 0
-            ? std::nullopt
-            : std::optional<std::uint32_t>{publisher_max_payload};
+    const std::optional<std::uint32_t> want = publisher_max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{publisher_max_payload};
     const pio::ring_geometry           geom = pio::ring_geometry_for(want);
-    REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count),
-                          pio::create_options{}, ctrl) == pio::region_status::ok);
-    REQUIRE(broker.create(slab_name(fqn),
-                          pio::slab_region_bytes(geom.cell_count, geom.slot_capacity),
-                          pio::create_options{}, slab) == pio::region_status::ok);
+    REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
+    REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
     pio::broadcast_ring ring;
-    REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count,
-                                        geom.slot_capacity, ring) == pio::loan_status::ok);
+    REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
     c->publisher_ready.store(1, std::memory_order_release);
 
     while(c->subscriber_armed.load(std::memory_order_acquire) == 0)
         ;
     pio::broadcast_ring::claim_result claim;
-    REQUIRE(ring.claim_with_policy(sizeof(payload), plexus::io::reliability::reliable,
-                                   plexus::io::congestion::block, claim) == pio::loan_status::ok);
+    REQUIRE(ring.claim_with_policy(sizeof(payload), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) == pio::loan_status::ok);
     std::memcpy(claim.slab.data(), &payload, sizeof(payload));
     REQUIRE(ring.commit(claim.position, sizeof(payload)) == pio::loan_status::ok);
 
@@ -212,16 +202,14 @@ TEST_CASE("shm.bilateral demand-driven convergence: the hint gates each side's a
     }
 }
 
-TEST_CASE("shm.bilateral a publisher-sized ring lets a wide value cross over shared memory (xproc)",
-          "[shm][bilateral]")
+TEST_CASE("shm.bilateral a publisher-sized ring lets a wide value cross over shared memory (xproc)", "[shm][bilateral]")
 {
     // The publisher declares max_payload; the ring is sized to it; a value at that
     // width fits and crosses to the converged subscriber. Looped + reproduced.
     const std::string       fqn       = "topic.bilateral.sized." + std::to_string(::getpid());
     constexpr std::uint32_t k_payload = 0xBADC0FFEu;
     for(int iter = 0; iter < 3; ++iter)
-        REQUIRE(run_shm_roundtrip(fqn + "." + std::to_string(iter), /*max_payload=*/8192u,
-                                  k_payload));
+        REQUIRE(run_shm_roundtrip(fqn + "." + std::to_string(iter), /*max_payload=*/8192u, k_payload));
 }
 
 TEST_CASE("shm.bilateral a subscriber-only upgrade with no max_payload uses the default geometry "

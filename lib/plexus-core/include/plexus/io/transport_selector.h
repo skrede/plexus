@@ -85,9 +85,7 @@ public:
     // consumed SEPARATELY by reliability_class (the verdict that composes the hint
     // with the path's own class); the hint reaches select() only so the signature
     // stays stable for callers that thread the axis through dial(ep).
-    [[nodiscard]] transport_kind
-    select(const endpoint &ep,
-           reliability_hint /*tier-neutral; composed by reliability_class*/) const noexcept
+    [[nodiscard]] transport_kind select(const endpoint &ep, reliability_hint /*tier-neutral; composed by reliability_class*/) const noexcept
     {
         if(ep.scheme == "unix" || ep.scheme == "inproc" || ep.scheme == "shm")
             return transport_kind::local;
@@ -132,8 +130,7 @@ public:
     // scheme_is_reliable DIRECTLY (not off reliability_of_scheme) keeps this verdict
     // lock-step with the engine-side reliability gate for EVERY scheme, unknown
     // included — the documented mirror invariant the two enforcement points share.
-    [[nodiscard]] reliability_admissibility reliability_class(const endpoint  &ep,
-                                                              reliability_hint hint) const noexcept
+    [[nodiscard]] reliability_admissibility reliability_class(const endpoint &ep, reliability_hint hint) const noexcept
     {
         if(hint == reliability_hint::reliable && !scheme_is_reliable(ep.scheme))
             return reliability_admissibility::downgrade_refused;
@@ -145,15 +142,13 @@ public:
     // as a real input rather than a hardcoded constant.
     [[nodiscard]] reliability_hint reliability_hint_of(reliability r) const noexcept
     {
-        return r == reliability::reliable ? reliability_hint::reliable
-                                          : reliability_hint::best_effort;
+        return r == reliability::reliable ? reliability_hint::reliable : reliability_hint::best_effort;
     }
 
     // Does a topic's dispatch hint prefer the fast path? A transport-class preference: true iff
     // any hint bit is set. Tier-independent in value; the locality tier governs what it MEANS —
     // actionable for a local peer, advisory for a remote one (no remote fast member exists today).
-    [[nodiscard]] bool dispatch_class(const endpoint & /*tier governs meaning, not value*/,
-                                      dispatch_hint h) const noexcept
+    [[nodiscard]] bool dispatch_class(const endpoint & /*tier governs meaning, not value*/, dispatch_hint h) const noexcept
     {
         return any_set(h);
     }

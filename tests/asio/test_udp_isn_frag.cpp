@@ -2,8 +2,7 @@
 
 using namespace udp_isn_fixture;
 
-TEST_CASE("udp isn: forged fragmented-flagged segments the reorder buffer rejects leave no residue",
-          "[udp][isn][spoof][frag]")
+TEST_CASE("udp isn: forged fragmented-flagged segments the reorder buffer rejects leave no residue", "[udp][isn][spoof][frag]")
 {
     // A forged reliable-data segment carrying the FRAGMENTED envelope bit that the reorder
     // buffer PROVABLY rejects must not deposit any per-seq receive-side state: the fragmented
@@ -25,10 +24,8 @@ TEST_CASE("udp isn: forged fragmented-flagged segments the reorder buffer reject
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context   io;
-        pasio::udp_transport server{io, pasio::udp_channel::default_max_payload,
-                                    pasio::udp_transport::arq_type::default_ladder, fast_arq()};
-        pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs,
-                                    fast_arq()};
+        pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
+        pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
         std::vector<std::string>            delivered;
@@ -36,14 +33,12 @@ TEST_CASE("udp isn: forged fragmented-flagged segments the reorder buffer reject
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([&](std::span<const std::byte> b)
-                                      { delivered.push_back(str_of(b)); });
+                    accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });
 
-        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
-                         { dialed = std::move(ch); });
+        client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
         pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);

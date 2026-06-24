@@ -32,8 +32,7 @@ TEST_CASE("wire stream_inbound: a complete header with its payload withheld clos
     }
 }
 
-TEST_CASE("wire stream_inbound: a slow byte-dribble does not reset the deadline and closes once",
-          "[wire][stream_inbound]")
+TEST_CASE("wire stream_inbound: a slow byte-dribble does not reset the deadline and closes once", "[wire][stream_inbound]")
 {
     constexpr int k_iterations = 100;
     for(int iter = 0; iter < k_iterations; ++iter)
@@ -66,8 +65,7 @@ TEST_CASE("wire stream_inbound: a slow byte-dribble does not reset the deadline 
     }
 }
 
-TEST_CASE("wire stream_inbound: a sub-throughput large frame closes on the throughput floor",
-          "[wire][stream_inbound]")
+TEST_CASE("wire stream_inbound: a sub-throughput large frame closes on the throughput floor", "[wire][stream_inbound]")
 {
     constexpr int k_iterations = 50;
     for(int iter = 0; iter < k_iterations; ++iter)

@@ -31,19 +31,12 @@ int main()
 
     plexus::node_id self{};
     self[0] = std::byte{0x01};
-    const plexus::io::handshake_fsm_config fsm_cfg{.self_id                  = self,
-                                                   .version_major            = 1,
-                                                   .version_minor            = 0,
-                                                   .compatible_version_major = 1,
-                                                   .compatible_version_minor = 0};
-    const plexus::io::reconnect_config     redial{.min_delay    = std::chrono::milliseconds{10},
-                                                  .max_delay    = std::chrono::milliseconds{100},
-                                                  .max_attempts = std::nullopt,
-                                                  .max_elapsed  = std::nullopt};
+    const plexus::io::handshake_fsm_config fsm_cfg{.self_id = self, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
+    const plexus::io::reconnect_config     redial{
+            .min_delay = std::chrono::milliseconds{10}, .max_delay = std::chrono::milliseconds{100}, .max_attempts = std::nullopt, .max_elapsed = std::nullopt};
 
     plexus::log::null_logger                      sink;
-    plexus::io::routing_engine<policy, transport> engine{
-            tr, executor, fsm_cfg, std::chrono::seconds{1}, redial, 0x1u, sink};
+    plexus::io::routing_engine<policy, transport> engine{tr, executor, fsm_cfg, std::chrono::seconds{1}, redial, 0x1u, sink};
 
     (void)engine.messages();
     return 0;

@@ -49,11 +49,7 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 
 inline plexus::datagram::detail::udp_arq_config fast_arq()
 {
-    return plexus::datagram::detail::udp_arq_config{.window         = 64,
-                                                    .initial_rto    = ms{20},
-                                                    .min_rto        = ms{10},
-                                                    .max_rto        = ms{80},
-                                                    .max_retransmit = 12};
+    return plexus::datagram::detail::udp_arq_config{.window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{80}, .max_retransmit = 12};
 }
 
 inline std::vector<std::byte> bytes_of(const std::string &s)
@@ -101,13 +97,15 @@ struct relay
         recv_back();
     }
 
-    [[nodiscard]] std::uint16_t port() const { return front.local_endpoint().port(); }
+    [[nodiscard]] std::uint16_t port() const
+    {
+        return front.local_endpoint().port();
+    }
 
     [[nodiscard]] static bool is_data(std::span<const std::byte> dg)
     {
         auto dec = wire::unwrap_udp(dg);
-        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq &&
-                wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
+        return dec && dec->kind == wire::udp_envelope_kind::reliable_arq && wire::peek_udp_arq_kind(dec->frame) == wire::udp_arq_kind::segment;
     }
 
     void to_server(std::span<const std::byte> dg)
@@ -150,8 +148,7 @@ struct relay
                                     if(ec)
                                         return;
                                     if(client_ep.port() != 0)
-                                        front.send_to(::asio::buffer(back_buf.data(), n),
-                                                      client_ep);
+                                        front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
                                     recv_back();
                                 });
     }

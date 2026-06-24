@@ -20,12 +20,14 @@ using queue = plexus::datagram::detail::udp_backpressure_queue;
 
 namespace {
 
-std::vector<std::byte> frame(std::size_t n) { return std::vector<std::byte>(n, std::byte{0xAB}); }
+std::vector<std::byte> frame(std::size_t n)
+{
+    return std::vector<std::byte>(n, std::byte{0xAB});
+}
 
 }
 
-TEST_CASE("udp_backpressure_queue admits, accounts summed bytes, and pops FIFO",
-          "[io][backpressure]")
+TEST_CASE("udp_backpressure_queue admits, accounts summed bytes, and pops FIFO", "[io][backpressure]")
 {
     queue q{16}; // a 16-byte budget
 
@@ -66,8 +68,7 @@ TEST_CASE("udp_backpressure_queue caps on summed BYTES, not entry count", "[io][
     REQUIRE(q.queued_bytes() == 10);
 }
 
-TEST_CASE("udp_backpressure_queue near-cap boundary: byte accounting does not wrap (W1)",
-          "[io][backpressure]")
+TEST_CASE("udp_backpressure_queue near-cap boundary: byte accounting does not wrap (W1)", "[io][backpressure]")
 {
     // W1 / T-23-D2 overflow boundary: a frame at cap-1 bytes followed by a small frame
     // whose sum exceeds the cap is refused (compare-before-add), and the running total
@@ -97,8 +98,7 @@ TEST_CASE("udp_backpressure_queue near-cap boundary: byte accounting does not wr
     REQUIRE(q.queued_bytes() == 31);
 }
 
-TEST_CASE("send_queue: a finite byte cap refuses past the bound (the udp_server outbound bound)",
-          "[io][backpressure][bound]")
+TEST_CASE("send_queue: a finite byte cap refuses past the bound (the udp_server outbound bound)", "[io][backpressure][bound]")
 {
     // The cap mechanism at the block the shared udp_server outbound queue is built from: a
     // finite byte_cap refuses enqueue past the cap (the at-capacity signal the server reacts

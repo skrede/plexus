@@ -27,10 +27,8 @@ struct loopback
                 [this](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     accepted = std::move(ch);
-                    accepted->on_data([this](std::span<const std::byte> b)
-                                      { received.push_back(str_of(b)); });
-                    accepted->on_protocol_close([this](wire::close_cause)
-                                                { ++accepted_protocol_closes; });
+                    accepted->on_data([this](std::span<const std::byte> b) { received.push_back(str_of(b)); });
+                    accepted->on_protocol_close([this](wire::close_cause) { ++accepted_protocol_closes; });
                 });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until([this] { return server.port() != 0; });
@@ -60,8 +58,7 @@ struct loopback
 
 }
 
-TEST_CASE("udp best_effort: a dialed channel sends a frame the accepting channel posts identically",
-          "[udp][transport]")
+TEST_CASE("udp best_effort: a dialed channel sends a frame the accepting channel posts identically", "[udp][transport]")
 {
     constexpr int k_iterations = 100;
     int           proven       = 0;
@@ -119,8 +116,7 @@ TEST_CASE("udp oversize: a message beyond the max-message size is rejected at pu
     // max-MESSAGE size, the genuinely-too-big case the reassembler cannot hold. The live
     // ceiling is the channel's effective-max (the node default), not the fragment-count
     // assert constant.
-    std::vector<std::byte> too_big(plexus::io::global_default_max_message_bytes + 1,
-                                   std::byte{0x5A});
+    std::vector<std::byte> too_big(plexus::io::global_default_max_message_bytes + 1, std::byte{0x5A});
     h.dialed->send(too_big);
     h.pump_until([&] { return h.client_error.has_value(); });
 
@@ -131,23 +127,20 @@ TEST_CASE("udp oversize: a message beyond the max-message size is rejected at pu
     // A frame that just fits one datagram still sends unfragmented (boundary: size +
     // overhead == max_payload) — the small path is byte-identical to before.
     h.client_error.reset();
-    std::vector<std::byte> fits(
-            pasio::udp_channel::default_max_payload - wire::udp_envelope_overhead, std::byte{0x01});
+    std::vector<std::byte> fits(pasio::udp_channel::default_max_payload - wire::udp_envelope_overhead, std::byte{0x01});
     h.dialed->send(fits);
     h.pump_until([&] { return !h.received.empty(); });
     REQUIRE_FALSE(h.client_error.has_value());
     REQUIRE(h.received.size() == 1);
 }
 
-TEST_CASE("udp dial: a malformed port fails closed via on_dial_failed, never throwing",
-          "[udp][transport][parse]")
+TEST_CASE("udp dial: a malformed port fails closed via on_dial_failed, never throwing", "[udp][transport][parse]")
 {
     ::asio::io_context   io;
     pasio::udp_transport client{io};
 
     std::optional<plexus::io::io_error> dial_error;
-    client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e)
-                          { dial_error = e; });
+    client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e) { dial_error = e; });
 
     // A non-numeric / empty / overflowing port must NOT throw out of dial(): the parser
     // is fail-closed (from_chars, not stoul), so each routes to on_dial_failed.
@@ -167,8 +160,7 @@ TEST_CASE("udp dial: a malformed port fails closed via on_dial_failed, never thr
     REQUIRE(dial_error.has_value());
 }
 
-TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ engine",
-          "[udp][transport][mode]")
+TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ engine", "[udp][transport][mode]")
 {
     loopback h;
     REQUIRE(h.accepted != nullptr);
@@ -183,8 +175,7 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
     inner[0] = static_cast<std::byte>(wire::udp_arq_kind::segment);
     for(std::size_t i = 0; i < payload.size(); ++i)
         inner[i + 1] = payload[i];
-    auto datagram = wire::wrap_udp(wire::udp_envelope_kind::reliable_arq, 0,
-                                   std::span<const std::byte>{inner});
+    auto datagram = wire::wrap_udp(wire::udp_envelope_kind::reliable_arq, 0, std::span<const std::byte>{inner});
 
     h.accepted->deliver_inbound(datagram);
     for(int i = 0; i < 64; ++i) // drain any (erroneous) posted delivery / ack without a long wait

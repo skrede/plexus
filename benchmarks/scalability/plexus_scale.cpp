@@ -50,7 +50,7 @@ using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 
 using clock_type = std::chrono::steady_clock;
-using node_type = plexus::node<inproc_policy, inproc_transport<>>;
+using node_type  = plexus::node<inproc_policy, inproc_transport<>>;
 
 struct footprint
 {
@@ -62,7 +62,7 @@ struct footprint
 std::uint64_t read_vmrss_kib()
 {
     std::ifstream status{"/proc/self/status"};
-    std::string key;
+    std::string   key;
     while(status >> key)
     {
         if(key == "VmRSS:")
@@ -78,7 +78,7 @@ std::uint64_t read_vmrss_kib()
 
 std::uint64_t count_dir_entries(const char *path)
 {
-    std::error_code ec;
+    std::error_code                     ec;
     std::filesystem::directory_iterator it{path, ec};
     if(ec)
         return 0;
@@ -92,8 +92,8 @@ footprint sample_footprint()
 
 struct latency
 {
-    double p50_us{};
-    double p99_us{};
+    double        p50_us{};
+    double        p99_us{};
     std::uint64_t delivered{};
 };
 
@@ -108,14 +108,13 @@ double percentile(std::vector<double> &sorted, double q)
 latency reduce(std::vector<double> &samples_us)
 {
     std::sort(samples_us.begin(), samples_us.end());
-    return {percentile(samples_us, 0.50), percentile(samples_us, 0.99),
-            static_cast<std::uint64_t>(samples_us.size())};
+    return {percentile(samples_us, 0.50), percentile(samples_us, 0.99), static_cast<std::uint64_t>(samples_us.size())};
 }
 
 plexus::node_options publisher_opts(std::uint64_t seed)
 {
     plexus::node_options o;
-    o.redial_seed = seed;
+    o.redial_seed  = seed;
     o.dial_eagerly = false;
     return o;
 }
@@ -123,7 +122,7 @@ plexus::node_options publisher_opts(std::uint64_t seed)
 plexus::node_options subscriber_opts()
 {
     plexus::node_options o;
-    o.redial_seed = 0x5;
+    o.redial_seed  = 0x5;
     o.dial_eagerly = true;
     return o;
 }
@@ -134,19 +133,19 @@ plexus::node_options subscriber_opts()
 // whose element addresses never shift as the graph grows.
 struct mesh
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    static_discovery disc{{}};
+    inproc_bus<>                   bus;
+    inproc_executor<>              ex{bus};
+    static_discovery               disc{{}};
     std::deque<inproc_transport<>> transports;
-    std::deque<node_type> nodes;
+    std::deque<node_type>          nodes;
 
     explicit mesh(std::size_t node_count)
     {
         for(std::size_t i = 0; i < node_count; ++i)
         {
-            auto &t = transports.emplace_back(ex, bus);
+            auto      &t             = transports.emplace_back(ex, bus);
             const bool is_subscriber = i == 0;
-            auto opts = is_subscriber ? subscriber_opts() : publisher_opts(0x100 + i);
+            auto       opts          = is_subscriber ? subscriber_opts() : publisher_opts(0x100 + i);
             nodes.emplace_back(ex, disc, "scale-node-" + std::to_string(i), t, opts);
         }
         for(std::size_t i = 0; i < node_count; ++i)
@@ -177,29 +176,30 @@ std::uint64_t read_stamp(std::span<const std::byte> bytes)
 
 struct cell_result
 {
-    double setup_ms{};
-    latency lat;
+    double    setup_ms{};
+    latency   lat;
     footprint feet;
 };
 
 // Build the cell, settle it, drive a fixed message count per (publisher, topic) pair,
 // and reduce the captured one-way deltas. Each subscriber callback reads the receive
 // clock and records (now - sent) in microseconds against the carried stamp.
-cell_result run_cell(std::size_t node_count, std::size_t topic_count,
-                     std::size_t payload_bytes, std::uint64_t messages_per_pair)
+cell_result run_cell(std::size_t node_count, std::size_t topic_count, std::size_t payload_bytes, std::uint64_t messages_per_pair)
 {
     std::vector<double> samples_us;
 
     const auto t_setup0 = clock_type::now();
-    mesh m{node_count};
+    mesh       m{node_count};
 
     std::deque<plexus::subscriber<>> subs;
     for(std::size_t t = 0; t < topic_count; ++t)
-        subs.emplace_back(m.nodes[0], topic_name(t), [&samples_us](std::span<const std::byte> bytes) {
-            const auto recv = static_cast<std::uint64_t>(clock_type::now().time_since_epoch().count());
-            const double delta_ns = static_cast<double>(recv - read_stamp(bytes));
-            samples_us.push_back(delta_ns / 1000.0);
-        });
+        subs.emplace_back(m.nodes[0], topic_name(t),
+                          [&samples_us](std::span<const std::byte> bytes)
+                          {
+                              const auto   recv     = static_cast<std::uint64_t>(clock_type::now().time_since_epoch().count());
+                              const double delta_ns = static_cast<double>(recv - read_stamp(bytes));
+                              samples_us.push_back(delta_ns / 1000.0);
+                          });
 
     std::deque<plexus::publisher<>> pubs;
     for(std::size_t n = 1; n < node_count; ++n)
@@ -220,13 +220,12 @@ cell_result run_cell(std::size_t node_count, std::size_t topic_count,
     return {setup_ms, reduce(samples_us), sample_footprint()};
 }
 
-const std::array<std::size_t, 4> g_nodes = {1, 4, 16, 64};
-const std::array<std::size_t, 4> g_topics = {1, 4, 16, 64};
-const std::array<std::size_t, 2> g_payloads = {8, 4096};
-constexpr std::uint64_t g_messages_per_pair = 200;
+const std::array<std::size_t, 4> g_nodes             = {1, 4, 16, 64};
+const std::array<std::size_t, 4> g_topics            = {1, 4, 16, 64};
+const std::array<std::size_t, 2> g_payloads          = {8, 4096};
+constexpr std::uint64_t          g_messages_per_pair = 200;
 
-void print_matrix(std::ostream &out, std::size_t payload,
-                  const std::vector<std::vector<cell_result>> &grid)
+void print_matrix(std::ostream &out, std::size_t payload, const std::vector<std::vector<cell_result>> &grid)
 {
     out << "\n### p50 one-way latency (us) -- payload " << payload << " B\n\n";
     out << "| nodes \\ topics |";
@@ -255,9 +254,7 @@ void print_matrix(std::ostream &out, std::size_t payload,
     }
 }
 
-void print_footprint_table(std::ostream &out, const char *title, const char *unit,
-                           const std::vector<std::vector<cell_result>> &grid,
-                           std::uint64_t (*pick)(const footprint &))
+void print_footprint_table(std::ostream &out, const char *title, const char *unit, const std::vector<std::vector<cell_result>> &grid, std::uint64_t (*pick)(const footprint &))
 {
     out << "\n### " << title << " (" << unit << ") -- rows nodes, cols topics\n\n";
     out << "| nodes \\ topics |";
@@ -299,13 +296,10 @@ void print_setup_table(std::ostream &out, const std::vector<std::vector<cell_res
     }
 }
 
-void emit_report(std::ostream &out,
-                 const std::vector<std::vector<std::vector<cell_result>>> &by_payload,
-                 std::uint64_t peak_rss_kib)
+void emit_report(std::ostream &out, const std::vector<std::vector<std::vector<cell_result>>> &by_payload, std::uint64_t peak_rss_kib)
 {
     out << "# plexus scalability first-cut (inproc, single process)\n\n";
-    out << "Axes: nodes " << "{1,4,16,64}, topics {1,4,16,64}, payload {8,4096} B; "
-        << g_messages_per_pair << " messages per (publisher, topic) pair.\n";
+    out << "Axes: nodes " << "{1,4,16,64}, topics {1,4,16,64}, payload {8,4096} B; " << g_messages_per_pair << " messages per (publisher, topic) pair.\n";
     out << "Latency is one-way (steady_clock stamp in payload) over the in-process bus, "
         << "single executor. Footprint is the whole-process VmRSS/fd/thread sampled after "
         << "the cell's steady loop.\n";
@@ -327,14 +321,14 @@ void emit_report(std::ostream &out,
 int main(int argc, char **argv)
 {
     std::vector<std::vector<std::vector<cell_result>>> by_payload(g_payloads.size());
-    std::uint64_t peak_rss_kib = 0;
+    std::uint64_t                                      peak_rss_kib = 0;
     for(std::size_t pi = 0; pi < g_payloads.size(); ++pi)
         for(auto nodes : g_nodes)
         {
             by_payload[pi].emplace_back();
             for(auto topics : g_topics)
             {
-                auto r = run_cell(nodes, topics, g_payloads[pi], g_messages_per_pair);
+                auto r       = run_cell(nodes, topics, g_payloads[pi], g_messages_per_pair);
                 peak_rss_kib = std::max(peak_rss_kib, r.feet.rss_kib);
                 by_payload[pi].back().push_back(r);
             }
@@ -343,7 +337,7 @@ int main(int argc, char **argv)
     emit_report(std::cout, by_payload, peak_rss_kib);
 
     const std::string path = argc > 1 ? argv[1] : "plexus_scale_report.md";
-    std::ofstream file{path};
+    std::ofstream     file{path};
     if(file)
     {
         emit_report(file, by_payload, peak_rss_kib);

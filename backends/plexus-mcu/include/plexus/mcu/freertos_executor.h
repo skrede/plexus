@@ -37,7 +37,10 @@ public:
     freertos_executor(freertos_executor &&)                 = delete;
     freertos_executor &operator=(freertos_executor &&)      = delete;
 
-    void post(plexus::detail::move_only_function<void()> fn) { m_posted.push_back(std::move(fn)); }
+    void post(plexus::detail::move_only_function<void()> fn)
+    {
+        m_posted.push_back(std::move(fn));
+    }
 
     // Reserved ISR seam: an interrupt hands work to the cooperative loop via the
     // FreeRTOS queue, the one cross-context edge in the design. The minimal demo
@@ -78,14 +81,20 @@ public:
             m_timers.push_back(t);
     }
 
-    void deregister_timer(freertos_timer *t) noexcept { std::erase(m_timers, t); }
+    void deregister_timer(freertos_timer *t) noexcept
+    {
+        std::erase(m_timers, t);
+    }
 
 private:
     // The tick is read only here, and only when some timer could actually fire —
     // never for an armed-but-handlerless or cancelled timer. The scan over the
     // (complete) timer type is out-of-line in the timer header.
-    static TickType_t now_ticks() noexcept { return xTaskGetTickCount(); }
-    bool              fire_due_timer();
+    static TickType_t now_ticks() noexcept
+    {
+        return xTaskGetTickCount();
+    }
+    bool fire_due_timer();
 
     static constexpr std::uint32_t k_queue_depth = 16;
 

@@ -35,8 +35,7 @@ struct shared_word
 
 shared_word *map_shared_word()
 {
-    void *p = ::mmap(nullptr, sizeof(shared_word), PROT_READ | PROT_WRITE,
-                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    void *p = ::mmap(nullptr, sizeof(shared_word), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if(p == MAP_FAILED)
         return nullptr;
     return ::new(p) shared_word{};
@@ -92,8 +91,7 @@ TEST_CASE("shm.notifier_lostwakeup the wake crosses address spaces", "[shm][noti
     }
 }
 
-TEST_CASE("shm.notifier_lostwakeup a publish between drain and wait is delivered",
-          "[shm][notifier_lostwakeup]")
+TEST_CASE("shm.notifier_lostwakeup a publish between drain and wait is delivered", "[shm][notifier_lostwakeup]")
 {
     // The drain-before-wait protocol, exercised against the real syscall. The
     // consumer snapshots last_seen, drains, THEN a publish lands (the producer

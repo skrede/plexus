@@ -4,8 +4,7 @@
 
 using namespace record_stream_fixture;
 
-TEST_CASE("record_wire over a saturated ring sheds at the wire tier",
-          "[record_stream][wire][recorder]")
+TEST_CASE("record_wire over a saturated ring sheds at the wire tier", "[record_stream][wire][recorder]")
 {
     in_memory_byte_sink sink;
     std::uint64_t       tick = 0;
@@ -19,8 +18,7 @@ TEST_CASE("record_wire over a saturated ring sheds at the wire tier",
     // Fill then overflow: the ~240-byte framed records exceed the 256-byte ring one at a
     // time, so every admit past the first shed into the dropout run (drop-newest).
     for(int i = 0; i < 8; ++i)
-        recorder.record_wire(wire_direction::out, static_cast<std::uint64_t>(i), peer,
-                             std::span<const std::byte>{big});
+        recorder.record_wire(wire_direction::out, static_cast<std::uint64_t>(i), peer, std::span<const std::byte>{big});
 
     // Drain to free the ring, then a small admit surfaces the accumulated dropout_record
     // BEFORE it (the gap is quantified on the first successful admit after a shed run).
@@ -81,8 +79,7 @@ TEST_CASE("record stream round-trips mixed categories offline", "[record_stream]
 
     // No codec in the stream: the raw payload bytes are byte-identical; a codec is applied
     // only here in the test to interpret them.
-    const std::string decoded{reinterpret_cast<const char *>(out[0].payload.data()),
-                              out[0].payload.size()};
+    const std::string decoded{reinterpret_cast<const char *>(out[0].payload.data()), out[0].payload.size()};
     REQUIRE(decoded == payload);
 
     REQUIRE(out[1].category == record_category::sample);
@@ -98,8 +95,7 @@ TEST_CASE("record stream round-trips mixed categories offline", "[record_stream]
     REQUIRE(out[3].type_id.has_value());
 }
 
-TEST_CASE("record stream recovers every complete record after mid-write truncation",
-          "[record_stream]")
+TEST_CASE("record stream recovers every complete record after mid-write truncation", "[record_stream]")
 {
     record_stream_writer w;
     byte_ring            ring{64u * 1024u};

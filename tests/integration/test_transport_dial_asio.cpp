@@ -57,11 +57,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{id_seed};
-    return handshake_fsm_config{.self_id                  = id,
-                                .version_major            = 1,
-                                .version_minor            = 0,
-                                .compatible_version_major = 1,
-                                .compatible_version_minor = 0};
+    return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 // A DIALED TCP loopback link turned into a peer_session pair — NO hand-dial. The
@@ -78,10 +74,10 @@ struct dial_tcp_link
     pasio::asio_transport transport{io};
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{io, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
+    msg_forwarder            req_messages{sink};
+    msg_forwarder            resp_messages{sink};
+    rpc_forwarder            req_procedures{io, k_long_timeout, sink};
+    rpc_forwarder            resp_procedures{io, k_long_timeout, sink};
 
     plexus::io::peer_context<pasio::asio_policy> req_ctx;   // the dialer slot's per-peer record
     plexus::io::peer_context<pasio::asio_policy> resp_ctx;  // the accepted slot's per-peer record
@@ -98,10 +94,8 @@ struct dial_tcp_link
                 {
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
-                    responder.emplace(resp_ctx, io, make_cfg(0x01), timeout, resp_messages,
-                                      resp_procedures, true, sink);
-                    responder->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { resp_received.emplace_back(to_string(d)); });
+                    responder.emplace(resp_ctx, io, make_cfg(0x01), timeout, resp_messages, resp_procedures, true, sink);
+                    responder->on_message([this](std::string_view, std::span<const std::byte> d) { resp_received.emplace_back(to_string(d)); });
                     responder->start();
                 });
         transport.on_dialed(
@@ -109,10 +103,8 @@ struct dial_tcp_link
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
-                    requester.emplace(req_ctx, io, make_cfg(0x02), timeout, req_messages,
-                                      req_procedures, false, sink);
-                    requester->on_message([this](std::string_view, std::span<const std::byte> d)
-                                          { req_received.emplace_back(to_string(d)); });
+                    requester.emplace(req_ctx, io, make_cfg(0x02), timeout, req_messages, req_procedures, false, sink);
+                    requester->on_message([this](std::string_view, std::span<const std::byte> d) { req_received.emplace_back(to_string(d)); });
                     requester->start();
                 });
 
@@ -147,12 +139,7 @@ TEST_CASE("asio transport: a DIALED peer_session pair completes the handshake ov
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         dial_tcp_link l;
-        l.pump_until(
-                [&]
-                {
-                    return l.requester && l.responder && l.requester->is_complete() &&
-                            l.responder->is_complete();
-                });
+        l.pump_until([&] { return l.requester && l.responder && l.requester->is_complete() && l.responder->is_complete(); });
 
         REQUIRE(l.requester.has_value());
         REQUIRE(l.responder.has_value());
@@ -175,12 +162,7 @@ TEST_CASE("asio transport: a real published message carrying the minted epoch fl
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         dial_tcp_link l;
-        l.pump_until(
-                [&]
-                {
-                    return l.requester && l.responder && l.requester->is_complete() &&
-                            l.responder->is_complete();
-                });
+        l.pump_until([&] { return l.requester && l.responder && l.requester->is_complete() && l.responder->is_complete(); });
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
 

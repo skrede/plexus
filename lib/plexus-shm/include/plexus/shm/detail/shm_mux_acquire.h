@@ -37,13 +37,11 @@ struct shm_resolved_geometry
 };
 
 template<typename Member>
-shm_resolved_geometry mux_resolve(const Member &m, const std::string &fqn,
-                                  shm::ring_direction direction)
+shm_resolved_geometry mux_resolve(const Member &m, const std::string &fqn, shm::ring_direction direction)
 {
     auto it = m.m_geometry.find(fqn);
     if(it == m.m_geometry.end())
-        return {shm::upgrade_ring_max_payload(direction, 0),
-                shm::ring_geometry_mode::reliable_preserving, 0};
+        return {shm::upgrade_ring_max_payload(direction, 0), shm::ring_geometry_mode::reliable_preserving, 0};
     const auto &p = it->second;
     return {shm::upgrade_ring_max_payload(direction, p.max_payload), p.mode, p.consumer_capacity};
 }
@@ -54,16 +52,13 @@ shm_resolved_geometry mux_resolve(const Member &m, const std::string &fqn,
 // ep.address is the fqn the deterministic region name derives from. RELOCATION of the member
 // body — it is a friend, so it reaches the registry/geometry map through the member reference.
 template<typename Member>
-auto mux_open(Member &m, const io::endpoint &ep,
-              shm::acquire_mode amode = shm::acquire_mode::reclaim_stale)
-        -> std::unique_ptr<typename Member::channel_type>
+auto mux_open(Member &m, const io::endpoint &ep, shm::acquire_mode amode = shm::acquire_mode::reclaim_stale) -> std::unique_ptr<typename Member::channel_type>
 {
     auto *ch = m.m_registry.channel_for(ep.address, shm::ring_direction::request);
     if(ch == nullptr) // no probe held it: acquire fresh
     {
         const shm_resolved_geometry g = mux_resolve(m, ep.address, shm::ring_direction::request);
-        if(m.m_registry.acquire(ep.address, shm::ring_direction::request, g.max_payload, g.mode,
-                                g.consumer_capacity, amode) == shm::acquire_result::failed)
+        if(m.m_registry.acquire(ep.address, shm::ring_direction::request, g.max_payload, g.mode, g.consumer_capacity, amode) == shm::acquire_result::failed)
             return nullptr;
         ch = m.m_registry.channel_for(ep.address, shm::ring_direction::request);
     }

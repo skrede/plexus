@@ -52,9 +52,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                     std::chrono::milliseconds(2000), std::nullopt,
-                                                     std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xE12Cu;
     opts.dial_eagerly = eager;
     return opts;
@@ -86,8 +84,7 @@ bool pump_until(inproc_executor<> &ex, Pred done, std::chrono::milliseconds budg
 
 }
 
-TEST_CASE("caller errc: no-provider completes POSTED with no_provider and never hangs, looped",
-          "[node][call][errc]")
+TEST_CASE("caller errc: no-provider completes POSTED with no_provider and never hangs, looped", "[node][call][errc]")
 {
     constexpr int k_iterations = 5;
     int           proven       = 0;
@@ -125,8 +122,7 @@ TEST_CASE("caller errc: no-provider completes POSTED with no_provider and never 
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("caller errc: a provider that never replies resolves timeout through the deadline path",
-          "[node][call][errc]")
+TEST_CASE("caller errc: a provider that never replies resolves timeout through the deadline path", "[node][call][errc]")
 {
     inproc_bus<>       bus;
     inproc_executor<>  ex{bus};
@@ -145,9 +141,7 @@ TEST_CASE("caller errc: a provider that never replies resolves timeout through t
 
     // A provider that DROPS every request: it never invokes reply, so only the per-call
     // deadline resolves the call (rpc_status::timeout -> call_errc::timeout).
-    inproc_procedure proc{
-            b, "rpc",
-            [](std::span<const std::byte>, inproc_procedure::reply_fn &) { /* never replies */ }};
+    inproc_procedure proc{b, "rpc", [](std::span<const std::byte>, inproc_procedure::reply_fn &) { /* never replies */ }};
 
     inproc_caller                  call{a, "rpc"};
     std::optional<std::error_code> err;

@@ -2,8 +2,7 @@
 
 using namespace datagram_replay_fixture;
 
-TEST_CASE("crypto.anti_replay_window would_accept predicts check_and_set without mutating",
-          "[crypto][anti_replay]")
+TEST_CASE("crypto.anti_replay_window would_accept predicts check_and_set without mutating", "[crypto][anti_replay]")
 {
     // would_accept must return the SAME verdict check_and_set would, while leaving the
     // window untouched (so a pre-auth probe cannot itself slide the window).
@@ -24,8 +23,7 @@ TEST_CASE("crypto.anti_replay_window would_accept predicts check_and_set without
     REQUIRE(window.highest() == 200);
 }
 
-TEST_CASE("crypto.datagram_replay a forged huge-sequence datagram does not wedge the window",
-          "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay a forged huge-sequence datagram does not wedge the window", "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
 
@@ -35,15 +33,13 @@ TEST_CASE("crypto.datagram_replay a forged huge-sequence datagram does not wedge
         auto wire = seal_datagrams(keys, 2);
 
         wire_lower                                 recv_wire;
-        datagram_authenticated_channel<wire_lower> receiver(
-                recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+        datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
         bool protocol_closed = false;
         receiver.on_protocol_close([&](plexus::wire::close_cause) { protocol_closed = true; });
 
         std::vector<std::vector<std::byte>> delivered;
-        receiver.on_data([&](std::span<const std::byte> f)
-                         { delivered.emplace_back(f.begin(), f.end()); });
+        receiver.on_data([&](std::span<const std::byte> f) { delivered.emplace_back(f.begin(), f.end()); });
 
         // Forge a datagram in the current epoch with seq = 2^64-1 and a corrupted tag.
         // Pre-fix, would_accept's slide ran before the tag check, advancing the window
@@ -66,8 +62,7 @@ TEST_CASE("crypto.datagram_replay a forged huge-sequence datagram does not wedge
     }
 }
 
-TEST_CASE("crypto.datagram_replay a forged next-epoch datagram does not desync the key",
-          "[crypto][datagram_replay]")
+TEST_CASE("crypto.datagram_replay a forged next-epoch datagram does not desync the key", "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
 
@@ -76,12 +71,10 @@ TEST_CASE("crypto.datagram_replay a forged next-epoch datagram does not desync t
         auto wire = seal_datagrams(keys, 3);
 
         wire_lower                                 recv_wire;
-        datagram_authenticated_channel<wire_lower> receiver(
-                recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+        datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
         std::vector<std::vector<std::byte>> delivered;
-        receiver.on_data([&](std::span<const std::byte> f)
-                         { delivered.emplace_back(f.begin(), f.end()); });
+        receiver.on_data([&](std::span<const std::byte> f) { delivered.emplace_back(f.begin(), f.end()); });
 
         // Forge a datagram carrying the NEXT epoch byte (current is 0) with a corrupted
         // tag. Pre-fix, select_recv_epoch derived/advanced the recv key and reset the

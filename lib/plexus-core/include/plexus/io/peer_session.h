@@ -84,10 +84,8 @@ public:
     // the live channel (the session borrows it), the peer node_name, and the epoch well. The
     // record OUTLIVES this incarnation. handshake_timeout is required with NO default — a
     // session cannot arm a bound it was not told, and the value depends on the deployment.
-    peer_session(peer_context<Policy> &ctx, executor_type executor,
-                 const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout,
-                 message_forwarder<Policy> &messages, procedure_forwarder<Policy> &procedures,
-                 bool is_inbound_bootstrap, log::logger &logger)
+    peer_session(peer_context<Policy> &ctx, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, message_forwarder<Policy> &messages,
+                 procedure_forwarder<Policy> &procedures, bool is_inbound_bootstrap, log::logger &logger)
             : m_ctx(ctx)
             , m_channel(*ctx.channel)
             , m_fsm_cfg(fsm_cfg)
@@ -127,13 +125,11 @@ public:
                     if(m_on_drop && !m_torn_down && !m_closed_for_protocol_error)
                         m_on_drop();
                 });
-        m_channel.on_protocol_close([this](wire::close_cause cause)
-                                    { on_channel_protocol_close(cause); });
+        m_channel.on_protocol_close([this](wire::close_cause cause) { on_channel_protocol_close(cause); });
         // The process-tier object lane, compiled only when the concrete channel exposes it
         // (the inproc lane). A remote channel structurally lacks on_object.
         if constexpr(requires(channel_type &c) { c.on_object([](const object_carrier &) {}); })
-            m_channel.on_object([this](const object_carrier &c)
-                                { detail::deliver_session_object(*this, c); });
+            m_channel.on_object([this](const object_carrier &c) { detail::deliver_session_object(*this, c); });
         detail::register_session_consumers(*this);
         arm_handshake_timer();
         if(!m_is_inbound_bootstrap)
@@ -159,17 +155,14 @@ public:
 
     // The node-shared receive route, threaded in by the registry so a reconnect slot REBUILD
     // carries it. The per-session seams take precedence; otherwise data flows through this.
-    void on_message_route(plexus::detail::move_only_function<
-                          void(std::string_view, std::span<const std::byte>, const message_info &)>
-                                  cb)
+    void on_message_route(plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> cb)
     {
         m_on_message_route = std::move(cb);
     }
 
     // The node-shared object-lane route. READ-ONLY delivery — the carrier is valid for the
     // callback duration only; the deliver tail owns the single release on every path.
-    void on_object_route(
-            plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> cb)
+    void on_object_route(plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> cb)
     {
         m_on_object_route = std::move(cb);
     }
@@ -198,8 +191,7 @@ public:
         m_on_security = std::move(cb);
     }
 
-    void
-    on_install_security(plexus::detail::move_only_function<void(const security_negotiation &)> cb)
+    void on_install_security(plexus::detail::move_only_function<void(const security_negotiation &)> cb)
     {
         m_negotiator.on_install_security(std::move(cb));
     }
@@ -228,13 +220,11 @@ public:
         return m_negotiator.authenticated_host_identity();
     }
 
-    void on_subscribe_refused(
-            plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> cb)
+    void on_subscribe_refused(plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> cb)
     {
         m_on_subscribe_refused = std::move(cb);
     }
-    void
-    on_subscribe_degraded(plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> cb)
+    void on_subscribe_degraded(plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> cb)
     {
         m_on_subscribe_degraded = std::move(cb);
     }
@@ -261,7 +251,10 @@ public:
     // co-host shared-memory ring enters the SAME receive path a wire frame does. The drain is
     // posted on the node executor, so this is never called inline from a wake. A torn-down
     // session ignores it (on_receive's guard).
-    void inject_receive(std::span<const std::byte> frame) { on_receive(frame); }
+    void inject_receive(std::span<const std::byte> frame)
+    {
+        on_receive(frame);
+    }
 
     // Cancel the timer, detach the forwarders for this peer, reset the epoch latch and the
     // FSM for a fresh cycle, and close the channel. A teardown of a session that never
@@ -292,8 +285,7 @@ public:
         if(m_torn_down)
             return;
         if(m_negotiator.engaged() && m_forwarders_installed)
-            detail::fire_security(*this, security_kind::stream_tamper_teardown,
-                                  security_cause::tag_verify_failed);
+            detail::fire_security(*this, security_kind::stream_tamper_teardown, security_cause::tag_verify_failed);
         close_for_protocol_error(cause);
     }
 
@@ -313,8 +305,7 @@ public:
     // The counted subscribe emit: the session routes its OWN demand-subscribe so it observes
     // the wire emit and owns the readiness count. attach() returns true only on the 0->1
     // refcount transition — the single transition that puts a wire::subscribe on the channel.
-    void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{},
-                   std::optional<std::uint64_t> type_id = std::nullopt)
+    void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt)
     {
         if(m_messages.attach(m_msg_peer, fqn, qos, type_id))
             ++m_outstanding_subscribes;
@@ -322,7 +313,10 @@ public:
 
     // The counted retire of one topic demand: detach through the forwarder's per-(peer, fqn)
     // gate, which emits the wire unsubscribe on its 1->0 transition.
-    void unsubscribe(std::string_view fqn) { m_messages.detach(m_msg_peer, fqn); }
+    void unsubscribe(std::string_view fqn)
+    {
+        m_messages.detach(m_msg_peer, fqn);
+    }
 
     // Emit a session-level keepalive heartbeat. Driven by the engine on the router tick
     // cadence — NOT a per-session timer. Reuses the session's send scratch.
@@ -344,11 +338,26 @@ public:
         }
     }
 
-    bool               is_complete() const noexcept { return m_forwarders_installed; }
-    [[nodiscard]] bool same_host() const noexcept { return m_ctx.same_host; }
-    std::uint64_t      session_id() const noexcept { return m_session_id; }
-    std::uint64_t      peer_session_id() const noexcept { return m_peer_session_id; }
-    const typename message_forwarder<Policy>::peer &msg_peer() const noexcept { return m_msg_peer; }
+    bool is_complete() const noexcept
+    {
+        return m_forwarders_installed;
+    }
+    [[nodiscard]] bool same_host() const noexcept
+    {
+        return m_ctx.same_host;
+    }
+    std::uint64_t session_id() const noexcept
+    {
+        return m_session_id;
+    }
+    std::uint64_t peer_session_id() const noexcept
+    {
+        return m_peer_session_id;
+    }
+    const typename message_forwarder<Policy>::peer &msg_peer() const noexcept
+    {
+        return m_msg_peer;
+    }
     const typename procedure_forwarder<Policy>::peer &rpc_peer() const noexcept
     {
         return m_rpc_peer;
@@ -358,8 +367,7 @@ private:
     template<typename S>
     friend void detail::register_session_consumers(S &);
     template<typename S>
-    friend void detail::deliver_session_data(S &, const wire::frame_header &,
-                                             std::span<const std::byte>);
+    friend void detail::deliver_session_data(S &, const wire::frame_header &, std::span<const std::byte>);
     template<typename S>
     friend void detail::deliver_session_object(S &, const object_carrier &);
     template<typename S>
@@ -401,8 +409,7 @@ private:
 
     void arm_handshake_timer()
     {
-        m_handshake_timer.expires_after(
-                std::chrono::duration_cast<std::chrono::milliseconds>(m_handshake_timeout));
+        m_handshake_timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(m_handshake_timeout));
         m_handshake_timer.async_wait(
                 [this](std::error_code ec)
                 {
@@ -435,33 +442,26 @@ private:
     // The readiness counter + fire-once latch, OWNED by the per-incarnation session (cleared
     // in tear_down so reconnect re-arms). The counter is the number of outstanding subscribe
     // acks; the latch records whether ready already fired this cycle.
-    std::uint16_t                              m_outstanding_subscribes{0};
-    bool                                       m_ready_latched_this_cycle{false};
-    log::logger                               &m_logger;
-    typename message_forwarder<Policy>::peer   m_msg_peer;
-    typename procedure_forwarder<Policy>::peer m_rpc_peer;
-    std::vector<std::byte>                     m_payload_scratch, m_frame_scratch;
-    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>)>
-            m_on_message;
-    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>,
-                                            const message_info &)>
-            m_on_message_with_info;
-    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>,
-                                            const message_info &)>
-            m_on_message_route;
-    plexus::detail::move_only_function<void(std::string_view, const object_carrier &)>
-                                                                      m_on_object_route;
-    plexus::detail::move_only_function<void()>                        m_on_drop;
-    plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle;
-    plexus::detail::move_only_function<void(const node_id &)>         m_on_stamp_seen;
-    plexus::detail::move_only_function<void(const security_event &)>  m_on_security;
+    std::uint16_t                                                                                                m_outstanding_subscribes{0};
+    bool                                                                                                         m_ready_latched_this_cycle{false};
+    log::logger                                                                                                 &m_logger;
+    typename message_forwarder<Policy>::peer                                                                     m_msg_peer;
+    typename procedure_forwarder<Policy>::peer                                                                   m_rpc_peer;
+    std::vector<std::byte>                                                                                       m_payload_scratch, m_frame_scratch;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>)>                       m_on_message;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_with_info;
+    plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> m_on_message_route;
+    plexus::detail::move_only_function<void(std::string_view, const object_carrier &)>                           m_on_object_route;
+    plexus::detail::move_only_function<void()>                                                                   m_on_drop;
+    plexus::detail::move_only_function<void(const lifecycle_event &)>                                            m_on_lifecycle;
+    plexus::detail::move_only_function<void(const node_id &)>                                                    m_on_stamp_seen;
+    plexus::detail::move_only_function<void(const security_event &)>                                             m_on_security;
     // The held-by-value security/transcript/proof orchestrator: owns the attach credentials +
     // pending attach, borrows the node-level seam, runs the PSK proof / transcript / posture
     // gate / AEAD install. The bridge forwards its security setters here.
-    attach_negotiator<Policy> m_negotiator;
-    plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)>
-                                                                          m_on_subscribe_refused;
-    plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> m_on_subscribe_degraded;
+    attach_negotiator<Policy>                                                       m_negotiator;
+    plexus::detail::move_only_function<void(std::uint64_t, wire::subscribe_status)> m_on_subscribe_refused;
+    plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)>           m_on_subscribe_degraded;
 };
 
 }

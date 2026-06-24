@@ -17,8 +17,7 @@ using deadline_key = std::pair<node_id, std::uint64_t>;
 
 // Edge-latched deadline check: fire once when the data gap first exceeds the period; clear the
 // latch when the gap falls back under it. A 0 period leaves the axis inert.
-inline std::optional<liveness_event> check_deadline(const deadline_key &key, endpoint_liveness &s,
-                                                    std::uint64_t now)
+inline std::optional<liveness_event> check_deadline(const deadline_key &key, endpoint_liveness &s, std::uint64_t now)
 {
     if(s.deadline_period_ns == 0)
         return std::nullopt;
@@ -26,8 +25,7 @@ inline std::optional<liveness_event> check_deadline(const deadline_key &key, end
     if(lapsed && !s.deadline_violated)
     {
         s.deadline_violated = true;
-        return liveness_event{liveness_kind::missed_deadline, key.first, key.second,
-                              s.deadline_period_ns};
+        return liveness_event{liveness_kind::missed_deadline, key.first, key.second, s.deadline_period_ns};
     }
     if(!lapsed)
         s.deadline_violated = false;
@@ -36,8 +34,7 @@ inline std::optional<liveness_event> check_deadline(const deadline_key &key, end
 
 // Edge-latched lease check: fire once when the presence gap first exceeds the lease; clear the
 // latch when presence resumes. A 0 lease leaves the axis inert.
-inline std::optional<liveness_event> check_lease(const node_id &id, endpoint_liveness &s,
-                                                 std::uint64_t now)
+inline std::optional<liveness_event> check_lease(const node_id &id, endpoint_liveness &s, std::uint64_t now)
 {
     if(s.lease_ns == 0)
         return std::nullopt;
@@ -55,8 +52,7 @@ inline std::optional<liveness_event> check_lease(const node_id &id, endpoint_liv
 // The per-tick scan over both axes: each axis fires exactly once per lapse via fire(event), keyed
 // per-(endpoint, topic) for deadlines and per-endpoint for leases.
 template<typename Fire>
-void scan_liveness(std::map<deadline_key, endpoint_liveness> &deadlines,
-                   std::map<node_id, endpoint_liveness> &leases, std::uint64_t now, Fire &&fire)
+void scan_liveness(std::map<deadline_key, endpoint_liveness> &deadlines, std::map<node_id, endpoint_liveness> &leases, std::uint64_t now, Fire &&fire)
 {
     for(auto &[key, state] : deadlines)
         if(auto ev = check_deadline(key, state, now))

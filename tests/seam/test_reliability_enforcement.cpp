@@ -2,8 +2,7 @@
 
 using namespace reliability_enforcement_fixture;
 
-TEST_CASE("reliability enforcement: the permissive default admits a best_effort 'udp' peer",
-          "[udp][enforcement][permissive]")
+TEST_CASE("reliability enforcement: the permissive default admits a best_effort 'udp' peer", "[udp][enforcement][permissive]")
 {
     rendezvous r{"udp"};
     r.dialer.subscribe(r.peer, "topic/x"); // no requirement -> permissive default
@@ -28,16 +27,14 @@ TEST_CASE("reliability enforcement: a strict-reliable demand toward a 'udpr' rel
     REQUIRE(r.connected()); // admitted: udpr satisfies reliable
 }
 
-TEST_CASE("reliability enforcement: a strict-reliable demand toward a 'tcp' peer is admitted",
-          "[udp][enforcement][strict]")
+TEST_CASE("reliability enforcement: a strict-reliable demand toward a 'tcp' peer is admitted", "[udp][enforcement][strict]")
 {
     rendezvous r{"tcp"};
     r.dialer.subscribe(r.peer, "topic/x", locality::any, reliability_requirement::reliable);
     REQUIRE(r.connected()); // admitted: tcp is a reliable stream
 }
 
-TEST_CASE("reliability enforcement: a strict-reliable demand toward an UNKNOWN peer fails closed",
-          "[udp][enforcement][strict]")
+TEST_CASE("reliability enforcement: a strict-reliable demand toward an UNKNOWN peer fails closed", "[udp][enforcement][strict]")
 {
     rendezvous r{"tcp"}; // responder listens, but the dialer forgets it
     r.dialer.subscribe(make_id(0xCC), "topic/x", locality::any, reliability_requirement::reliable);

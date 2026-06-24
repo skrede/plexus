@@ -62,18 +62,19 @@ public:
     // Templated over <Policy, NodeTs...> so it binds across the node's transport pack; the
     // captured seam carries no Policy.
     template<typename Policy, typename... NodeTs>
-    publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {},
-              bool                                 emit_source_identity = false,
-              std::optional<shm::shm_geometry> shm_geometry         = std::nullopt)
+    publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {}, bool emit_source_identity = false,
+              std::optional<shm::shm_geometry> shm_geometry = std::nullopt)
             : m_seam(n.endpoint_seam_for())
             , m_fqn(fqn)
     {
-        m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt,
-                                 shm_geometry ? &*shm_geometry : nullptr, std::nullopt);
+        m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt, shm_geometry ? &*shm_geometry : nullptr, std::nullopt);
     }
 
     // A moved-from publisher has a null seam ctx and must not be published through.
-    void publish(std::span<const std::byte> bytes) { m_seam.publish(m_seam.ctx, m_fqn, bytes); }
+    void publish(std::span<const std::byte> bytes)
+    {
+        m_seam.publish(m_seam.ctx, m_fqn, bytes);
+    }
 
     publisher(publisher &&other) noexcept
             : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
@@ -94,7 +95,10 @@ public:
     publisher(const publisher &)            = delete;
     publisher &operator=(const publisher &) = delete;
 
-    ~publisher() noexcept { detail::retire_publisher_quiet(m_seam, m_fqn); }
+    ~publisher() noexcept
+    {
+        detail::retire_publisher_quiet(m_seam, m_fqn);
+    }
 
 private:
     io::endpoint_seam m_seam{};
@@ -112,8 +116,7 @@ public:
     using value_type = typename Codec::value_type;
 
     template<typename Policy, typename... NodeTs>
-    publisher(node<Policy, NodeTs...> &n, std::string_view fqn,
-              const typed_publisher_options &opts = {}, Codec codec = {})
+    publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const typed_publisher_options &opts = {}, Codec codec = {})
             : m_seam(n.endpoint_seam_for())
             , m_fqn(fqn)
             , m_codec(std::move(codec))
@@ -124,11 +127,8 @@ public:
                       "plexus: a typed publisher needs a codec satisfying typed_codec "
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
-        m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity,
-                                 m_identity.type_id,
-                                 opts.shm_geometry ? &*opts.shm_geometry : nullptr,
-                                 opts.capture ? std::optional{opts.capture->to_rule()}
-                                              : std::nullopt);
+        m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity, m_identity.type_id, opts.shm_geometry ? &*opts.shm_geometry : nullptr,
+                                 opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
     }
 
     // Borrow a slot to construct a value in place (zero-copy publish); an empty loan signals
@@ -139,11 +139,20 @@ public:
         return m_pool.try_borrow(std::forward<Args>(args)...);
     }
 
-    void publish(detail::loan<value_type> &&held) { detail::publish_loan(*this, std::move(held)); }
-    void publish(const value_type &value) { detail::publish_value(*this, value); }
+    void publish(detail::loan<value_type> &&held)
+    {
+        detail::publish_loan(*this, std::move(held));
+    }
+    void publish(const value_type &value)
+    {
+        detail::publish_value(*this, value);
+    }
 
     // The readable exhaustion signal: publishes that degraded to the serialize path.
-    [[nodiscard]] std::size_t loan_exhausted() const noexcept { return m_loan_exhausted; }
+    [[nodiscard]] std::size_t loan_exhausted() const noexcept
+    {
+        return m_loan_exhausted;
+    }
 
     publisher(publisher &&other) noexcept
             : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
@@ -159,7 +168,10 @@ public:
     publisher &operator=(const publisher &) = delete;
     publisher &operator=(publisher &&)      = delete;
 
-    ~publisher() noexcept { detail::retire_publisher_quiet(m_seam, m_fqn); }
+    ~publisher() noexcept
+    {
+        detail::retire_publisher_quiet(m_seam, m_fqn);
+    }
 
 private:
     template<typename P, typename V>
