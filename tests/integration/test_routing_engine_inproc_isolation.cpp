@@ -45,7 +45,7 @@ TEST_CASE("inproc routing: a publish to a known-but-unconnected peer's topic ope
           "[integration][routing][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -68,7 +68,7 @@ TEST_CASE("inproc routing: a single slot's channel drop re-dials only that slot;
           "[integration][routing][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -76,21 +76,21 @@ TEST_CASE("inproc routing: a single slot's channel drop re-dials only that slot;
         // A three-node-aware net: node A reaches both B and a second peer C (C is
         // node B's transport too — a second endpoint B listens on is unnecessary; we
         // assert single-slot isolation, so two independent slots on A suffice).
-        inproc_bus<manual_clock>      bus;
+        inproc_bus<manual_clock> bus;
         inproc_executor<manual_clock> ex{bus};
-        transport_t                   transport_a{ex, bus};
-        transport_t                   transport_b{ex, bus};
-        transport_t                   transport_c{ex, bus};
+        transport_t transport_a{ex, bus};
+        transport_t transport_b{ex, bus};
+        transport_t transport_c{ex, bus};
 
         plexus::log::null_logger sink;
-        engine                   a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        engine                   b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
-        engine                   c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false);
+        engine c(transport_c, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false);
 
         plexus::node_id id_b = make_id(0xB2);
         plexus::node_id id_c = make_id(0xC3);
-        endpoint        ep_b{"inproc", "node-b"};
-        endpoint        ep_c{"inproc", "node-c"};
+        endpoint ep_b{"inproc", "node-b"};
+        endpoint ep_c{"inproc", "node-c"};
         a.listen({"inproc", "node-a"});
         b.listen(ep_b);
         c.listen(ep_c);

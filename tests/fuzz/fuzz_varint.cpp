@@ -19,8 +19,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
 
     // Derive a starting offset from the first byte so the consumed-offset bounds path
     // (consumed may legitimately equal Size) is exercised alongside the body decode.
-    std::size_t       consumed = Size == 0 ? 0 : (static_cast<std::size_t>(Data[0]) % (Size + 1));
-    const std::size_t before   = consumed;
+    std::size_t consumed     = Size == 0 ? 0 : (static_cast<std::size_t>(Data[0]) % (Size + 1));
+    const std::size_t before = consumed;
 
     auto value = read_varint(bytes, consumed);
     (void)value;

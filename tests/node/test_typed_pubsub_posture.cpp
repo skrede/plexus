@@ -10,8 +10,8 @@ TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, es
         n.connect();
 
         std::vector<sample> got;
-        typed_subscriber    s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
-        bytes_publisher     p{n.b, "topic"};
+        typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
+        bytes_publisher p{n.b, "topic"};
         n.drive();
 
         const std::vector<std::byte> garbage(7, std::byte{0xFF}); // not 4 bytes -> decode fails
@@ -28,9 +28,9 @@ TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, es
         net n;
         n.connect();
 
-        std::vector<sample>              got;
-        std::vector<std::size_t>         escaped_sizes;
-        std::vector<std::error_code>     escaped_errcs;
+        std::vector<sample> got;
+        std::vector<std::size_t> escaped_sizes;
+        std::vector<std::error_code> escaped_errcs;
         plexus::typed_subscriber_options opts;
         opts.on_decode_failure = [&](std::span<const std::byte> raw, std::error_code ec)
         {
@@ -38,7 +38,7 @@ TEST_CASE("typed pub/sub: a decode failure is dropped and counted by default, es
             escaped_errcs.push_back(ec);
         };
         typed_subscriber s{n.a, "topic", opts, [&](const sample &v) { got.push_back(v); }};
-        bytes_publisher  p{n.b, "topic"};
+        bytes_publisher p{n.b, "topic"};
         n.drive();
 
         const std::vector<std::byte> garbage(7, std::byte{0xFF});
@@ -60,7 +60,7 @@ TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, l
         net n;
         n.connect();
 
-        std::vector<sample>              got;
+        std::vector<sample> got;
         plexus::typed_subscriber_options opts;
         opts.posture = plexus::io::attach_posture::strict;
         typed_subscriber s{n.a, "topic", opts, [&](const sample &v) { got.push_back(v); }};
@@ -81,8 +81,8 @@ TEST_CASE("typed pub/sub: strict posture refuses an undeclared bytes producer, l
         n.connect();
 
         std::vector<sample> got;
-        typed_subscriber    s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
-        bytes_publisher     p{n.b, "topic"};
+        typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
+        bytes_publisher p{n.b, "topic"};
         n.drive();
 
         const auto frame = encode_u32(0x22u);
@@ -99,9 +99,9 @@ TEST_CASE("typed pub/sub: a dropped typed subscriber delivers nothing on a later
     net n;
     n.connect();
 
-    int             delivered = 0;
-    auto            s         = std::make_unique<typed_subscriber>(n.a, "topic", [&](const sample &) { ++delivered; });
-    counting_codec  codec;
+    int delivered = 0;
+    auto s        = std::make_unique<typed_subscriber>(n.a, "topic", [&](const sample &) { ++delivered; });
+    counting_codec codec;
     typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 

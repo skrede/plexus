@@ -20,15 +20,15 @@ TEST_CASE("udp isn: forged fragmented-flagged segments the reorder buffer reject
     // window) is the AEAD path's job; the cleartext udpr path is cleartext-equivalent by
     // design (udp_envelope.h) and its sole off-path defense is the random ISN.
     constexpr int k_iterations = 20;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
         pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
-        std::vector<std::string>            delivered;
+        std::vector<std::string> delivered;
         server.on_accepted(
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
@@ -53,7 +53,7 @@ TEST_CASE("udp isn: forged fragmented-flagged segments the reorder buffer reject
         const std::uint16_t isn = accepted->initial_seq();
         for(std::uint16_t k = 1; k <= 200; ++k)
         {
-            const auto             s = static_cast<std::uint16_t>(isn - k);
+            const auto s = static_cast<std::uint16_t>(isn - k);
             std::vector<std::byte> inner;
             wire::encode_udp_segment_into(inner, bytes_of("FORGED-FRAG"));
             std::vector<std::byte> spoof;

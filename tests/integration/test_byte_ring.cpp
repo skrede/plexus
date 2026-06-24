@@ -46,7 +46,7 @@ std::size_t decode_record_count(std::span<const std::byte> stream)
 
 TEST_CASE("byte_ring allocates its backing store once and never reallocates", "[byte_ring]")
 {
-    byte_ring  ring{4096};
+    byte_ring ring{4096};
     const auto rec = record_of(24, std::byte{0xAB});
 
     plexus::testing::reset_alloc_count();
@@ -60,11 +60,11 @@ TEST_CASE("byte_ring allocates its backing store once and never reallocates", "[
 
 TEST_CASE("byte_ring never blocks and drops-newest on a full ring", "[byte_ring]")
 {
-    byte_ring  ring{256};
+    byte_ring ring{256};
     const auto rec = record_of(40, std::byte{0x7E});
 
-    bool        saw_reject = false;
-    std::size_t admitted   = 0;
+    bool saw_reject      = false;
+    std::size_t admitted = 0;
     for(int i = 0; i < 1000; ++i)
     {
         if(ring.try_push(rec))
@@ -87,13 +87,13 @@ TEST_CASE("byte_ring accounts every shed record exactly (recall 1.0)", "[byte_ri
 {
     for(int iteration = 0; iteration < 5; ++iteration)
     {
-        byte_ring           ring{512};
-        dropout_run         run;
+        byte_ring ring{512};
+        dropout_run run;
         in_memory_byte_sink sink;
 
         const std::size_t produced = 5000;
-        std::size_t       drained  = 0;
-        const auto        rec      = record_of(48, std::byte{0x11});
+        std::size_t drained        = 0;
+        const auto rec             = record_of(48, std::byte{0x11});
 
         for(std::size_t i = 0; i < produced; ++i)
         {
@@ -120,8 +120,8 @@ TEST_CASE("byte_ring accounts every shed record exactly (recall 1.0)", "[byte_ri
 TEST_CASE("byte_ring never exceeds its byte budget under saturation", "[byte_ring]")
 {
     const std::size_t budget = 1024;
-    byte_ring         ring{budget};
-    const auto        rec = record_of(60, std::byte{0x55});
+    byte_ring ring{budget};
+    const auto rec = record_of(60, std::byte{0x55});
 
     for(int i = 0; i < 100000; ++i)
     {
@@ -132,7 +132,7 @@ TEST_CASE("byte_ring never exceeds its byte budget under saturation", "[byte_rin
 
 TEST_CASE("byte_ring drains fully with no thread into a byte_sink", "[byte_ring]")
 {
-    byte_ring           ring{4096};
+    byte_ring ring{4096};
     in_memory_byte_sink sink;
 
     const std::size_t produced = 30;
@@ -148,7 +148,7 @@ TEST_CASE("byte_ring drains fully with no thread into a byte_sink", "[byte_ring]
 
 TEST_CASE("byte_ring drop-oldest overwrites the oldest unread record", "[byte_ring]")
 {
-    byte_ring  ring{200, ring_policy::drop_oldest};
+    byte_ring ring{200, ring_policy::drop_oldest};
     const auto rec = record_of(40, std::byte{0x33});
 
     for(int i = 0; i < 1000; ++i)

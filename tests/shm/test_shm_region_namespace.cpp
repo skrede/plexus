@@ -69,8 +69,8 @@ void run_consumer(coord *c, const std::string &fqn, std::string_view ns)
         ;
 
     posix_shm_region_broker broker;
-    region_handle           ctrl, slab;
-    const bool              attached = broker.attach(control_name(fqn, ns), ctrl) == pio::region_status::ok && broker.attach(slab_name(fqn, ns), slab) == pio::region_status::ok;
+    region_handle ctrl, slab;
+    const bool attached = broker.attach(control_name(fqn, ns), ctrl) == pio::region_status::ok && broker.attach(slab_name(fqn, ns), slab) == pio::region_status::ok;
     c->attach_ok.store(attached ? 1u : 0u, std::memory_order_release);
 
     bool ok = false;
@@ -87,7 +87,7 @@ void run_consumer(coord *c, const std::string &fqn, std::string_view ns)
                 for(;;)
                 {
                     pio::broadcast_ring::consume_result out;
-                    const auto                          st = ring.consume(cursor, out);
+                    const auto st = ring.consume(cursor, out);
                     if(st == pio::loan_status::ok)
                     {
                         std::uint32_t got = 0;
@@ -111,9 +111,9 @@ void run_consumer(coord *c, const std::string &fqn, std::string_view ns)
 
 TEST_CASE("shm.region_namespace same namespace converges and a different one is isolated", "[shm][same_host][namespace][roundtrip]")
 {
-    const std::string        fqn         = "topic.region_namespace." + std::to_string(::getpid());
-    const std::string        producer_ns = "alpha";
-    const pio::ring_geometry geom        = pio::ring_geometry_for(std::nullopt);
+    const std::string fqn         = "topic.region_namespace." + std::to_string(::getpid());
+    const std::string producer_ns = "alpha";
+    const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     // consumer_ns_matches drives the same producer/consumer dance twice: with the SAME namespace
     // (convergence -> the value arrives) and a DIFFERENT one (isolation -> the region cannot even
@@ -132,7 +132,7 @@ TEST_CASE("shm.region_namespace same namespace converges and a different one is 
         }
 
         posix_shm_region_broker broker;
-        region_handle           ctrl, slab;
+        region_handle ctrl, slab;
         REQUIRE(broker.create(control_name(fqn, producer_ns), pio::control_region_bytes(geom.cell_count), pio::create_options{.unlink_stale_on_create = true}, ctrl) ==
                 pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn, producer_ns), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{.unlink_stale_on_create = true}, slab) ==

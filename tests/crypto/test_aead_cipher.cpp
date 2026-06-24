@@ -127,9 +127,9 @@ TEST_CASE("crypto.aead_cipher open rejects every tamper class (AES-256-GCM)", "[
 
 TEST_CASE("crypto.aead_cipher seals an empty plaintext to exactly the tag", "[crypto][aead]")
 {
-    const auto                   key   = fixed_key(3);
-    const auto                   nonce = fixed_nonce(1);
-    const auto                   aad   = bytes_of("h");
+    const auto key   = fixed_key(3);
+    const auto nonce = fixed_nonce(1);
+    const auto aad   = bytes_of("h");
     const std::vector<std::byte> empty;
 
     std::vector<std::byte> sealed;
@@ -143,7 +143,7 @@ TEST_CASE("crypto.aead_cipher seals an empty plaintext to exactly the tag", "[cr
 
 TEST_CASE("crypto.key_schedule derives distinct send and recv keys", "[crypto][key_schedule]")
 {
-    const auto                psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
+    const auto psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
     std::array<std::byte, 16> in_nonce{};
     std::array<std::byte, 16> rs_nonce{};
     std::array<std::byte, 32> transcript{};
@@ -162,7 +162,7 @@ TEST_CASE("crypto.key_schedule derives distinct send and recv keys", "[crypto][k
 
 TEST_CASE("crypto.key_schedule binds the transcript digest into the keys", "[crypto][key_schedule]")
 {
-    const auto                psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
+    const auto psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
     std::array<std::byte, 16> in_nonce{};
     std::array<std::byte, 16> rs_nonce{};
     std::array<std::byte, 32> transcript_a{};

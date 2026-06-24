@@ -10,7 +10,7 @@ TEST_CASE("inproc req/res roundtrip recovers the exact return bytes, looped", "[
     // looping N>=100 with a fresh bus/executor/forwarders each iteration surfaces
     // any flake as a mismatch on some iteration rather than a one-off pass.
     constexpr int k_iterations = 128;
-    int           resolved     = 0;
+    int resolved               = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         rpc_link link;
@@ -24,8 +24,8 @@ TEST_CASE("inproc req/res roundtrip recovers the exact return bytes, looped", "[
                                 reply(rpc_status::success, as_bytes(ret));
                             });
 
-        rpc_status        got_status = rpc_status::error;
-        std::string       got_return;
+        rpc_status got_status = rpc_status::error;
+        std::string got_return;
         const std::string param = "param-" + std::to_string(iter);
         link.caller.call(link.caller_peer, "svc", as_bytes(param),
                          [&](rpc_status s, std::span<const std::byte> ret)
@@ -58,7 +58,7 @@ TEST_CASE("inproc concurrent outstanding requests each resolve to their own resp
         link.provider.serve("echo", [](std::span<const std::byte> param, procedure_forwarder::reply_fn &reply) { reply(rpc_status::success, param); });
 
         std::array<std::string, m_outstanding> got{};
-        std::array<rpc_status, m_outstanding>  status{};
+        std::array<rpc_status, m_outstanding> status{};
         status.fill(rpc_status::error);
         for(int i = 0; i < m_outstanding; ++i)
         {
@@ -129,7 +129,7 @@ struct sink_channel
     }
 
     std::vector<std::byte> last;
-    int                    pending{0};
+    int pending{0};
 };
 
 struct sink_timer

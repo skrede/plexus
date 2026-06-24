@@ -53,8 +53,8 @@ using engine = pio::routing_engine<pasio::asio_policy, pasio::asio_transport, st
 
 namespace routing_asio_fixture {
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 inline std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -90,10 +90,10 @@ inline reconnect_config forever_cfg()
 // channels/sessions before the io_context they borrow.
 struct asio_node
 {
-    ::asio::io_context      &io;
-    pasio::asio_transport    transport;
+    ::asio::io_context &io;
+    pasio::asio_transport transport;
     plexus::log::null_logger sink;
-    engine                   eng;
+    engine eng;
 
     // listen_now=false defers the listen so the caller can bring the acceptor up
     // LATE (the refused-then-up path that forces an out-of-order dial completion).
@@ -120,7 +120,7 @@ struct asio_node
 // listener rebinds it (reuse_address is set on the acceptor).
 inline std::uint16_t reserve_closed_port()
 {
-    ::asio::io_context    probe_io;
+    ::asio::io_context probe_io;
     pasio::asio_transport probe{probe_io};
     probe.listen({"tcp", "127.0.0.1:0"});
     const auto port = probe.port();

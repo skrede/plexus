@@ -16,7 +16,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
     auto bytes = std::span<const std::byte>{reinterpret_cast<const std::byte *>(Data), Size};
 
     frame_reassembler r;
-    auto              result = r.feed(bytes);
+    auto result = r.feed(bytes);
     (void)result;
     return 0;
 }

@@ -4,14 +4,14 @@ using namespace message_forwarder_fixture;
 
 TEST_CASE("detach on 1->0 emits exactly one unsubscribe_request", "[forwarder]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch(ex);
-    capture           cap(ex);
-    auto              peer = make_peer(ch, cap, "node-a");
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.attach(peer, "alpha");
     fwd.attach(peer, "alpha"); // refcount 2
     ex.drain();
@@ -25,23 +25,23 @@ TEST_CASE("detach on 1->0 emits exactly one unsubscribe_request", "[forwarder]")
 
 TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up", "[forwarder]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch(ex);
-    capture           cap(ex);
-    auto              peer = make_peer(ch, cap, "node-a");
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.attach(peer, "alpha"); // registers the topic_hash -> fqn resolution
 
-    const std::string body  = "the-opaque-payload";
-    auto              frame = make_data_frame("alpha", body);
+    const std::string body = "the-opaque-payload";
+    auto frame             = make_data_frame("alpha", body);
 
     // The frame_router owns the header strip + type switch; its unidirectional
     // consumer hands the inner payload (header-off) to the realigned deliver().
-    std::string              got_fqn;
-    std::string              got_body;
+    std::string got_fqn;
+    std::string got_body;
     plexus::io::frame_router router{sink};
     router.on_unidirectional(
             [&](const plexus::wire::frame_header &, std::span<const std::byte> inner)
@@ -61,11 +61,11 @@ TEST_CASE("receive tail resolves the fqn by topic_hash and hands exact bytes up"
 
 TEST_CASE("no-subscriber publish sends nothing (demand-driven)", "[forwarder]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.publish("alpha", as_bytes(std::string{"nobody-home"}));
     ex.drain();
     REQUIRE_FALSE(bus.has_pending_packets()); // nothing was ever enqueued
@@ -73,13 +73,13 @@ TEST_CASE("no-subscriber publish sends nothing (demand-driven)", "[forwarder]")
 
 TEST_CASE("receive tail warn-and-drops a malformed frame through the injected logger", "[forwarder]")
 {
-    counting_logger   log;
-    inproc_bus<>      bus;
+    counting_logger log;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    forwarder         fwd{log, plexus::io::global_default_max_message_bytes};
-    inproc_channel<>  ch(ex);
-    capture           cap(ex);
-    auto              peer = make_peer(ch, cap, "node-a");
+    forwarder fwd{log, plexus::io::global_default_max_message_bytes};
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
 
     // An inner payload too short to be a unidirectional header (< 25 bytes), so
     // the realigned deliver() — which now receives the header-off inner payload
@@ -95,13 +95,13 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
 
 TEST_CASE("default forwarder drops a malformed frame silently via null_logger", "[forwarder]")
 {
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink; // an inert sink: warn-and-drop stays silent
-    forwarder                fwd{sink};
-    inproc_channel<>         ch(ex);
-    capture                  cap(ex);
-    auto                     peer = make_peer(ch, cap, "node-a");
+    forwarder fwd{sink};
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
 
     std::vector<std::byte> garbage(8, std::byte{0xAB});
 

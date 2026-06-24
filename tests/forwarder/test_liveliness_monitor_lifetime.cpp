@@ -10,10 +10,10 @@ TEST_CASE("liveliness monitor: a 0 period is inert (never fires)")
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock>      bus;
+        inproc_bus<test_clock> bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor    m{ex};
+        monitor m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
@@ -38,15 +38,15 @@ TEST_CASE("liveliness monitor: a deregistered endpoint never fires (no resurrect
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock>      bus;
+        inproc_bus<test_clock> bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor    m{ex};
+        monitor m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
 
-        const node_id       id         = make_id(0x55);
+        const node_id id               = make_id(0x55);
         const std::uint64_t topic_hash = 0xCAFEull;
         m.register_endpoint(id, topic_hash, static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),
                             static_cast<std::uint64_t>(std::chrono::nanoseconds(k_lease).count()));
@@ -68,13 +68,13 @@ TEST_CASE("liveliness monitor: a deregistered endpoint never fires (no resurrect
 TEST_CASE("liveliness monitor: a stamp allocates nothing in steady state")
 {
     test_clock::reset();
-    inproc_bus<test_clock>      bus;
+    inproc_bus<test_clock> bus;
     inproc_executor<test_clock> ex{bus};
 
     monitor m{ex};
     m.start();
 
-    const node_id       id         = make_id(0x66);
+    const node_id id               = make_id(0x66);
     const std::uint64_t topic_hash = 0xD00Dull;
     // Warm the maps once (register grows the entries).
     m.register_endpoint(id, topic_hash, static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()), static_cast<std::uint64_t>(std::chrono::nanoseconds(k_lease).count()));

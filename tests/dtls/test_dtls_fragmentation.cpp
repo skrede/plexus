@@ -14,9 +14,9 @@ TEST_CASE("dtls.fragment: a large payload fragments across records and reassembl
     // a 24 KiB message splits into ~18 records and reassembles into ONE on_data byte-equal.
     constexpr std::size_t k_payload = 24u * 1024u;
 
-    constexpr int k_iterations  = 50;
-    int           proven        = 0;
-    int           max_fragments = 0;
+    constexpr int k_iterations = 50;
+    int proven                 = 0;
+    int max_fragments          = 0;
 
     for(int i = 0; i < k_iterations; ++i)
     {
@@ -46,7 +46,7 @@ TEST_CASE("dtls.fragment: a frame at the record budget rides ONE record (parity,
     pdt::identity_fixture cli("par_cli");
 
     constexpr int k_iterations = 50;
-    int           proven       = 0;
+    int proven                 = 0;
 
     for(int i = 0; i < k_iterations; ++i)
     {
@@ -64,7 +64,7 @@ TEST_CASE("dtls.fragment: a frame at the record budget rides ONE record (parity,
         // crosses as exactly one record. The size is DERIVED from the record MTU, not a stale
         // 1400-era constant, so it tracks the mtu_budget default.
         constexpr std::size_t k_under_budget = ptls::dtls_channel::default_record_mtu - 128u;
-        const auto            got            = l.round_trip(k_under_budget);
+        const auto got                       = l.round_trip(k_under_budget);
         REQUIRE(got.size() == k_under_budget);
         REQUIRE(got == ramp(k_under_budget));
         REQUIRE(l.client_to_server_count == 1); // ONE record: no fragmentation

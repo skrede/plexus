@@ -29,10 +29,10 @@ namespace plexus::test {
 // buffered to force the overrun probe.
 struct host_uart_state
 {
-    std::vector<std::byte> rx;          // bytes the next uart_read_bytes hands over
-    std::size_t            rx_pos{0};   // read cursor into rx
-    std::vector<std::byte> tx;          // bytes uart_write_bytes captured
-    std::size_t            buffered{0}; // value uart_get_buffered_data_len reports
+    std::vector<std::byte> rx; // bytes the next uart_read_bytes hands over
+    std::size_t rx_pos{0};     // read cursor into rx
+    std::vector<std::byte> tx; // bytes uart_write_bytes captured
+    std::size_t buffered{0};   // value uart_get_buffered_data_len reports
 };
 
 inline host_uart_state &uart_fixture()
@@ -52,7 +52,7 @@ inline void reset_uart_fixture()
 // drained) — the non-blocking ticks=0 contract: returns whatever the ring holds.
 inline int uart_read_bytes(uart_port_t, void *buf, std::uint32_t len, std::uint32_t /*ticks*/)
 {
-    auto      &fx        = plexus::test::uart_fixture();
+    auto &fx             = plexus::test::uart_fixture();
     const auto available = fx.rx.size() - fx.rx_pos;
     const auto n         = std::min<std::size_t>(available, len);
     std::copy_n(fx.rx.data() + fx.rx_pos, n, static_cast<std::byte *>(buf));
@@ -62,8 +62,8 @@ inline int uart_read_bytes(uart_port_t, void *buf, std::uint32_t len, std::uint3
 
 inline int uart_write_bytes(uart_port_t, const void *src, std::size_t size)
 {
-    auto       &fx = plexus::test::uart_fixture();
-    const auto *p  = static_cast<const std::byte *>(src);
+    auto &fx      = plexus::test::uart_fixture();
+    const auto *p = static_cast<const std::byte *>(src);
     fx.tx.insert(fx.tx.end(), p, p + size);
     return static_cast<int>(size);
 }

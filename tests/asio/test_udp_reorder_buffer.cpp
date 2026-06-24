@@ -38,10 +38,10 @@ std::string str_of(std::span<const std::byte> b)
 // A reorder buffer wired to record the in-order release sequence + payloads.
 struct recorder
 {
-    reorder                    buf;
+    reorder buf;
     std::vector<std::uint16_t> released_seq;
-    std::vector<std::string>   released_payload;
-    std::vector<bool>          released_fragmented;
+    std::vector<std::string> released_payload;
+    std::vector<bool> released_fragmented;
 
     explicit recorder(std::size_t window = reorder::default_window, std::uint16_t initial_seq = 0)
             : buf(window, initial_seq)

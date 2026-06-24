@@ -87,8 +87,8 @@ TEST_CASE("transport steering: the selector verdict mirrors the engine reliabili
         for(std::string_view scheme : {"udp", "dtls", "tcp", "tls", "udpr", "unix", "inproc", "ws"})
         {
             const pio::endpoint ep{std::string{scheme}, "addr"};
-            const auto          hint       = sel.reliability_hint_of(pio::reliability::reliable);
-            const bool          admissible = sel.reliability_class(ep, hint) == verdict::admissible;
+            const auto hint       = sel.reliability_hint_of(pio::reliability::reliable);
+            const bool admissible = sel.reliability_class(ep, hint) == verdict::admissible;
             REQUIRE(admissible == pio::scheme_is_reliable(ep.scheme));
         }
 }

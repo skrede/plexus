@@ -35,7 +35,7 @@ TEST_CASE("crc32c of an empty span is zero", "[wire][crc32c]")
 TEST_CASE("crc32c is incremental over contiguous chunks", "[wire][crc32c]")
 {
     const std::string whole = "the quick brown fox jumps over the lazy dog";
-    const auto        bytes = as_bytes(whole);
+    const auto bytes        = as_bytes(whole);
 
     const std::uint32_t one_shot = crc32c(bytes);
 

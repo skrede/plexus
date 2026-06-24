@@ -42,7 +42,7 @@ TEST_CASE("reassembler reassembles out-of-order fragments into exactly one messa
     testing::harness h;
     test_reassembler r{h.ex};
 
-    int                    deliveries = 0;
+    int deliveries = 0;
     std::vector<std::byte> got;
     r.on_deliver(
             [&](std::span<const std::byte> b)
@@ -84,7 +84,7 @@ TEST_CASE("reassembler reclaims a stalled partial on the per-message timeout", "
 TEST_CASE("reassembler rejects a new partial that would breach the total-memory cap", "[fragment][reassemble]")
 {
     testing::harness h;
-    const auto       one_msg = 10 + test_reassembler::structural_cost(2);
+    const auto one_msg = 10 + test_reassembler::structural_cost(2);
     test_reassembler r{h.ex, {.total_memory_cap = one_msg + 5}};
 
     // First message takes a fragment in-flight, consuming part of the cap.

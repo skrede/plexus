@@ -32,7 +32,7 @@ TEST_CASE("crypto.datagram_replay a forged huge-sequence datagram does not wedge
     {
         auto wire = seal_datagrams(keys, 2);
 
-        wire_lower                                 recv_wire;
+        wire_lower recv_wire;
         datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
         bool protocol_closed = false;
@@ -70,7 +70,7 @@ TEST_CASE("crypto.datagram_replay a forged next-epoch datagram does not desync t
     {
         auto wire = seal_datagrams(keys, 3);
 
-        wire_lower                                 recv_wire;
+        wire_lower recv_wire;
         datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
         std::vector<std::vector<std::byte>> delivered;

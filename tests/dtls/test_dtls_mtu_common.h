@@ -39,25 +39,25 @@ namespace dtls_mtu_fixture {
 // binds in the min(configured_cap, DTLS_get_data_mtu) reject.
 struct mtu_link
 {
-    ::asio::io_context                  io;
-    ptls::tls_credential                server_cred;
-    ptls::tls_credential                client_cred;
+    ::asio::io_context io;
+    ptls::tls_credential server_cred;
+    ptls::tls_credential client_cred;
     plexus::io::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
     plexus::io::security::cookie_secret client_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server                   server_sock{io};
-    pasio::udp_server                   client_sock{io};
+    pasio::udp_server server_sock{io};
+    pasio::udp_server client_sock{io};
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
     std::unique_ptr<ptls::dtls_channel> client_ch;
 
-    bool                                server_complete{false};
-    bool                                client_complete{false};
+    bool server_complete{false};
+    bool client_complete{false};
     std::vector<std::vector<std::byte>> server_received;
-    bool                                client_too_large{false};
+    bool client_too_large{false};
 
     std::vector<std::vector<std::byte>> client_to_server;
     std::vector<std::vector<std::byte>> server_to_client;
-    int                                 client_records{0}; // client->server DTLS records since the last send
+    int client_records{0}; // client->server DTLS records since the last send
 
     mtu_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id, std::size_t max_payload, std::size_t record_mtu = ptls::dtls_channel::default_record_mtu)
             : server_cred(pdt::pin_one(server_id, client_id.digest))

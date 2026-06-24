@@ -77,20 +77,20 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // live channels.
 struct link
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder            req_messages{sink};
-    msg_forwarder            resp_messages{sink};
-    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx;  // the dialer slot's per-peer record
     plexus::io::peer_context<inproc_policy> resp_ctx; // the accepted slot's per-peer record
-    std::optional<session>                  requester;
-    std::optional<session>                  responder;
+    std::optional<session> requester;
+    std::optional<session> responder;
 
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;

@@ -53,17 +53,17 @@ inline std::string to_string(std::span<const std::byte> b)
 // control + rpc frames intact through the reassembler.
 struct live_rpc
 {
-    ::asio::io_context                   io;
-    pasio::asio_listener                 listener{io};
+    ::asio::io_context io;
+    pasio::asio_listener listener{io};
     std::unique_ptr<pasio::asio_channel> server_channel;
-    pasio::asio_channel                  client{io};
-    plexus::log::null_logger             sink;
+    pasio::asio_channel client{io};
+    plexus::log::null_logger sink;
 
     pio::frame_router server_router{sink}; // server: demux inbound rpc_request
     pio::frame_router client_router{sink}; // client: demux inbound rpc_response
 
-    std::optional<forwarder> provider;                                   // server side (constructed once accepted)
-    forwarder                caller{io, std::chrono::seconds(30), sink}; // client side; generous so the roundtrip never trips
+    std::optional<forwarder> provider;                    // server side (constructed once accepted)
+    forwarder caller{io, std::chrono::seconds(30), sink}; // client side; generous so the roundtrip never trips
 
     std::optional<forwarder::peer> caller_peer;
     std::optional<forwarder::peer> provider_peer;

@@ -12,15 +12,15 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
     for(int run = 0; run < 3; ++run)
     {
         session_fixture fx;
-        const auto      id = make_id(0x4C);
+        const auto id = make_id(0x4C);
 
-        in_memory_byte_sink    sink;
-        const int              per_topic = 16;
+        in_memory_byte_sink sink;
+        const int per_topic = 16;
         std::vector<std::byte> recovered_samples;
 
         {
             plexus::node_options opts;
-            inproc_node          n{fx.ex, fx.disc, id, fx.ta, opts};
+            inproc_node n{fx.ex, fx.disc, id, fx.ta, opts};
 
             // Attach through the PUBLIC verb — no router(), no internal recording type in
             // the attach path. A roomy ring so the full session is captured (recovered ==
@@ -35,8 +35,8 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
             {
                 plexus::topic_qos qos;
                 qos.latch = true;
-                plexus::publisher<>  pub_a{n, "topic.a", qos};
-                plexus::publisher<>  pub_b{n, "topic.b", qos};
+                plexus::publisher<> pub_a{n, "topic.a", qos};
+                plexus::publisher<> pub_b{n, "topic.b", qos};
                 plexus::subscriber<> sub_a{n, "topic.a", [](std::span<const std::byte>, const message_info &) {}};
                 plexus::subscriber<> sub_b{n, "topic.b", [](std::span<const std::byte>, const message_info &) {}};
                 fx.drive();
@@ -63,19 +63,19 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
 
         // Recover the captured stream offline (no codec in the path).
         record_stream_reader reader{sink.bytes()};
-        stream_definitions   defs;
+        stream_definitions defs;
         REQUIRE(reader.read_definitions(defs));
         REQUIRE(defs.node == id);
 
         std::vector<decoded_record> records;
-        const recovery_result       res = reader.recover(records);
+        const recovery_result res = reader.recover(records);
         REQUIRE(res.header_ok);
 
-        std::uint64_t produced    = 0;
-        std::uint64_t dropped     = 0;
-        std::size_t   samples     = 0;
-        bool          saw_topic_a = false;
-        bool          saw_topic_b = false;
+        std::uint64_t produced = 0;
+        std::uint64_t dropped  = 0;
+        std::size_t samples    = 0;
+        bool saw_topic_a       = false;
+        bool saw_topic_b       = false;
         for(const auto &r : records)
         {
             if(r.category == record_category::dropout)

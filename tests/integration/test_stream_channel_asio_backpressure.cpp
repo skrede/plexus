@@ -24,10 +24,10 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
     // the queue never reaches the cap, and the shed/stall edge never fires).
     auto run = [](pio::congestion mode)
     {
-        ::asio::io_context        io;
+        ::asio::io_context io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket   peer{io};
-        ::asio::ip::tcp::socket   client{io};
+        ::asio::ip::tcp::socket peer{io};
+        ::asio::ip::tcp::socket client{io};
         client.connect(acc.local_endpoint());
         acc.accept(peer); // peer adopts but NEVER reads
 
@@ -94,18 +94,18 @@ TEST_CASE("asio stream channel: a sustained multi-frame burst gathers into coale
     constexpr int k_frames     = 2000; // a sustained cell: deep enough to force gathering
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context        io;
+        ::asio::io_context io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket   raw_server{io};
-        ::asio::ip::tcp::socket   raw_client{io};
+        ::asio::ip::tcp::socket raw_server{io};
+        ::asio::ip::tcp::socket raw_client{io};
         raw_client.connect(acc.local_endpoint());
         acc.accept(raw_server);
 
         // A generous cap so the burst backlog accumulates (the gather has frames to coalesce)
         // without the cap shedding; congestion=block surfaces nothing while the peer reads.
         constexpr std::size_t cap = 64u * 1024u * 1024u;
-        pasio::asio_channel   server{io, std::move(raw_server), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
-        pasio::asio_channel   client{io, std::move(raw_client), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
+        pasio::asio_channel server{io, std::move(raw_server), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
+        pasio::asio_channel client{io, std::move(raw_client), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
 
         std::vector<std::vector<std::byte>> received;
         server.on_data([&](std::span<const std::byte> d) { received.emplace_back(d.begin(), d.end()); });
@@ -115,13 +115,13 @@ TEST_CASE("asio stream channel: a sustained multi-frame burst gathers into coale
         auto frame_for = [](int i)
         {
             wire::frame_header hdr{};
-            hdr.type                    = wire::msg_type::unidirectional;
-            const std::string      body = "frame-" + std::to_string(i);
+            hdr.type               = wire::msg_type::unidirectional;
+            const std::string body = "frame-" + std::to_string(i);
             std::vector<std::byte> payload(body.size());
             std::memcpy(payload.data(), body.data(), body.size());
             hdr.payload_len = payload.size();
             std::vector<std::byte> out;
-            auto                   h = wire::encode_header(hdr);
+            auto h = wire::encode_header(hdr);
             out.insert(out.end(), h.begin(), h.end());
             out.insert(out.end(), payload.begin(), payload.end());
             return out;

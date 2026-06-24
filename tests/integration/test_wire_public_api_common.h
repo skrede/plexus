@@ -133,7 +133,7 @@ inline plexus::node_options base_opts(bool eager)
 inline std::size_t count_wire_frames(std::span<const std::byte> stream)
 {
     record_stream_reader r{stream};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
     REQUIRE(r.recover(out).header_ok);

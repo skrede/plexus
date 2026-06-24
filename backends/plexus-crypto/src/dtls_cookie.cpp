@@ -18,7 +18,7 @@ namespace {
 int alloc_state_index() noexcept
 {
     static std::once_flag once;
-    static int            index = -1;
+    static int index = -1;
     std::call_once(once, [] { index = SSL_get_ex_new_index(0, nullptr, nullptr, nullptr, nullptr); });
     return index;
 }
@@ -26,7 +26,7 @@ int alloc_state_index() noexcept
 int alloc_addr_index() noexcept
 {
     static std::once_flag once;
-    static int            index = -1;
+    static int index = -1;
     std::call_once(once, [] { index = SSL_get_ex_new_index(0, nullptr, nullptr, nullptr, nullptr); });
     return index;
 }
@@ -34,7 +34,7 @@ int alloc_addr_index() noexcept
 int alloc_facts_index() noexcept
 {
     static std::once_flag once;
-    static int            index = -1;
+    static int index = -1;
     std::call_once(once, [] { index = SSL_get_ex_new_index(0, nullptr, nullptr, nullptr, nullptr); });
     return index;
 }
@@ -69,7 +69,7 @@ io::security::cookie_secret make_cookie_secret()
     // construction closed (a degraded RNG must never install a zero key).
     io::security::hmac_fn hmac = [](std::span<const std::byte> key, std::span<const std::byte> msg, std::span<std::byte> out)
     {
-        unsigned int         n = 0;
+        unsigned int n         = 0;
         const unsigned char *r = HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), reinterpret_cast<const unsigned char *>(msg.data()), msg.size(),
                                       reinterpret_cast<unsigned char *>(out.data()), &n);
         return r != nullptr && n >= out.size();
@@ -96,14 +96,14 @@ extern "C" int dtls_cookie_generate_cb(ssl_st *ssl, unsigned char *cookie, unsig
     auto *secret = secret_of(ssl);
     if(!secret)
         return 0;
-    std::size_t          addr_len = 0;
-    const unsigned char *addr     = addr_of(ssl, addr_len);
+    std::size_t addr_len      = 0;
+    const unsigned char *addr = addr_of(ssl, addr_len);
     if(!addr || addr_len == 0)
         return 0;
 
     secret->maybe_rotate(std::chrono::steady_clock::now());
     std::span<const std::byte> addr_bytes{reinterpret_cast<const std::byte *>(addr), addr_len};
-    std::span<std::byte>       out{reinterpret_cast<std::byte *>(cookie), io::security::cookie_secret::k_cookie_len};
+    std::span<std::byte> out{reinterpret_cast<std::byte *>(cookie), io::security::cookie_secret::k_cookie_len};
     if(!secret->mint(addr_bytes, out))
         return 0;
     *len = static_cast<unsigned int>(io::security::cookie_secret::k_cookie_len);
@@ -115,8 +115,8 @@ extern "C" int dtls_cookie_verify_cb(ssl_st *ssl, const unsigned char *cookie, u
     auto *secret = secret_of(ssl);
     if(!secret)
         return 0;
-    std::size_t          addr_len = 0;
-    const unsigned char *addr     = addr_of(ssl, addr_len);
+    std::size_t addr_len      = 0;
+    const unsigned char *addr = addr_of(ssl, addr_len);
     if(!addr || addr_len == 0)
         return 0;
 
@@ -128,8 +128,8 @@ extern "C" int dtls_cookie_verify_cb(ssl_st *ssl, const unsigned char *cookie, u
 
 extern "C" int plexus_alpn_select(ssl_st *, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *)
 {
-    static const unsigned char wanted[]   = {'p', 'l', 'e', 'x', 'u', 's', '/', '1'};
-    constexpr unsigned char    wanted_len = sizeof(wanted);
+    static const unsigned char wanted[] = {'p', 'l', 'e', 'x', 'u', 's', '/', '1'};
+    constexpr unsigned char wanted_len  = sizeof(wanted);
 
     // ALPN protocol_name_list: a sequence of length-prefixed names. Scan for an
     // exact "plexus/1"; on no overlap FAIL the handshake (fail-closed version gate).

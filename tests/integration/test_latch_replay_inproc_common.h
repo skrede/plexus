@@ -61,7 +61,7 @@ struct receive_sink
         channel.on_data([this](std::span<const std::byte> f) { router.route(f); });
     }
 
-    inproc_channel<>         channel;
+    inproc_channel<> channel;
     plexus::log::null_logger sink;
     plexus::io::frame_router router{sink};
     std::vector<std::string> bodies;

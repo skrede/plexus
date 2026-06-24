@@ -33,12 +33,12 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over udpr at shipped defaults,
     // runs past the 5 s default, so it is extended here exactly as a flow-control concern. The
     // SIZE authorities (ceiling, reassembly budget, back-pressure cap) stay at shipped defaults.
     constexpr ms reassembly_timeout{60000};
-    const auto   payload = ramp_payload(k_shipped_ceiling);
+    const auto payload = ramp_payload(k_shipped_ceiling);
 
     using demux = pasio::detail::udp_inbound_demux;
 
     constexpr int iterations = 2;
-    int           proven     = 0;
+    int proven               = 0;
     for(int iter = 0; iter < iterations; ++iter)
     {
         ::asio::io_context io;

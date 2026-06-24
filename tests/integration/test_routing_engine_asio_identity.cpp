@@ -15,18 +15,18 @@ TEST_CASE("routing over asio: one node dialing TWO peers near-simultaneously res
     // peer-B's published bytes would land in A's C-sink (or vice versa) — exactly the
     // cross-attribution this asserts against. Looped N to expose the race across
     // schedulings; the ctest invocation is re-run >=3 process runs.
-    constexpr int     k_iterations = 100;
-    const std::string from_b       = "payload-from-peer-b";
-    const std::string from_c       = "payload-from-peer-c";
-    int               proven       = 0;
+    constexpr int k_iterations = 100;
+    const std::string from_b   = "payload-from-peer-b";
+    const std::string from_c   = "payload-from-peer-c";
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        asio_node          c{io, 0xC3, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
-        const auto         id_c = make_id(0xC3);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        asio_node c{io, 0xC3, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
+        const auto id_c = make_id(0xC3);
 
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.note_peer(id_c, c.listen_ep());
@@ -109,18 +109,18 @@ TEST_CASE("routing over asio: a dial that completes OUT OF ORDER is correlated t
     // completed channel to ITS own slot. After C lands, B's listener is brought up on
     // its reserved port and B completes too; each slot must then resolve to its OWN
     // remote epoch over the wire. Looped to vary the scheduler interleavings.
-    constexpr int     k_iterations = 40;
-    const std::string from_b       = "out-of-order-from-b";
-    const std::string from_c       = "out-of-order-from-c";
-    int               proven       = 0;
+    constexpr int k_iterations = 40;
+    const std::string from_b   = "out-of-order-from-b";
+    const std::string from_c   = "out-of-order-from-c";
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          c{io, 0xC3, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false, /*listen_now=*/false};
-        const auto         id_b = make_id(0xB2);
-        const auto         id_c = make_id(0xC3);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node c{io, 0xC3, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false, /*listen_now=*/false};
+        const auto id_b = make_id(0xB2);
+        const auto id_c = make_id(0xC3);
 
         const auto b_port = reserve_closed_port(); // B's endpoint, listener still DOWN
         a.eng.note_peer(id_b, {"tcp", "127.0.0.1:" + std::to_string(b_port)});

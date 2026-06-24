@@ -55,8 +55,8 @@ using rpc_forwarder = pio::procedure_forwarder<pasio::asio_policy>;
 
 namespace multipeer_asio_fixture {
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
@@ -90,15 +90,15 @@ inline reconnect_config bounded_cfg(std::uint32_t max_attempts)
 // session before the transport.
 struct peer_node
 {
-    pasio::asio_transport                 transport;
-    plexus::log::null_logger              sink;
-    msg_forwarder                         messages;
-    rpc_forwarder                         procedures;
+    pasio::asio_transport transport;
+    plexus::log::null_logger sink;
+    msg_forwarder messages;
+    rpc_forwarder procedures;
     pio::peer_context<pasio::asio_policy> ctx;
-    std::optional<session>                responder;
-    pasio::asio_channel                  *accepted{nullptr};
-    plexus::node_id                       id;
-    endpoint                              ep;
+    std::optional<session> responder;
+    pasio::asio_channel *accepted{nullptr};
+    plexus::node_id id;
+    endpoint ep;
 
     peer_node(::asio::io_context &io, std::uint8_t seed)
             : transport(io)
@@ -134,10 +134,10 @@ struct peer_node
 // leg can arm a bounded dialer. Member ORDER: io_context/transport BEFORE the engine.
 struct multipeer_net
 {
-    ::asio::io_context                      io;
-    pasio::asio_transport                   transport{io};
-    plexus::log::null_logger                sink;
-    engine                                  a;
+    ::asio::io_context io;
+    pasio::asio_transport transport{io};
+    plexus::log::null_logger sink;
+    engine a;
     std::vector<std::unique_ptr<peer_node>> peers;
 
     multipeer_net(std::size_t n, const reconnect_config &a_redial = fast_cfg())

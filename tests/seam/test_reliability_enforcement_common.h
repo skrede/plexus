@@ -53,7 +53,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -77,8 +77,8 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 inline handshake_fsm_config make_cfg(std::uint8_t seed)
 {
@@ -107,17 +107,17 @@ inline reconnect_config forever_cfg()
 // the engines so teardown unwinds the engines' channels first.
 struct rendezvous
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t                   dialer_tp{ex, bus};
-    transport_t                   responder_tp{ex, bus};
-    plexus::log::null_logger      sink;
+    transport_t dialer_tp{ex, bus};
+    transport_t responder_tp{ex, bus};
+    plexus::log::null_logger sink;
 
     engine dialer{dialer_tp, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false};
     engine responder{responder_tp, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false};
 
     plexus::node_id peer{make_id(0xB2)};
-    endpoint        peer_ep;
+    endpoint peer_ep;
 
     // Stand the responder up under `scheme` so the bus keys its listener there and the
     // gate classifies the peer's reliability from it; teach the dialer the same endpoint.

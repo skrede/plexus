@@ -43,19 +43,19 @@ struct remote_dial_link
     // The secure member is never exercised on this tcp-only route: its credential
     // stays a default (invalid) one — the SSL_CTX is only ever touched when a "tls"
     // channel is actually dialed/accepted, which this link never does.
-    ptls::tls_credential  no_tls;
+    ptls::tls_credential no_tls;
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
-    ptls::tls_transport   secure{io, no_tls};
+    ptls::tls_transport secure{io, no_tls};
     // The datagram member stays inert on this tcp-only route — its socket is only ever
     // bound when a "udp" channel is actually dialed/accepted, which this link never does.
     pasio::udp_transport datagram{io};
     // The secure-datagram (DTLS) member is likewise inert here: it reuses the same default
     // (invalid) credential and binds no socket unless a "dtls" channel is dialed/accepted.
-    ptls::dtls_transport    secure_datagram{io, no_tls};
+    ptls::dtls_transport secure_datagram{io, no_tls};
     pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
-    std::optional<pio::endpoint>                   dialed_ep;
+    std::optional<pio::endpoint> dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
@@ -87,7 +87,7 @@ struct remote_dial_link
 TEST_CASE("mux select: a remote endpoint dials over TCP through the erased channel, looped", "[integration][mux][select][asio]")
 {
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         remote_dial_link l;
@@ -109,7 +109,7 @@ TEST_CASE("mux select: a remote endpoint dials over TCP through the erased chann
 TEST_CASE("mux select: an ACCEPTED TCP connection carries the tcp scheme through the erasure, looped", "[integration][mux][select][asio]")
 {
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         remote_dial_link l;

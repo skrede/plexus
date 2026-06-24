@@ -46,8 +46,8 @@ std::vector<wire::complete_frame> feed_in_chunks(wire::frame_reassembler &r, std
     std::vector<wire::complete_frame> out;
     for(std::size_t off = 0; off < bytes.size(); off += chunk)
     {
-        const auto len    = std::min(chunk, bytes.size() - off);
-        auto       result = r.feed(bytes.subspan(off, len));
+        const auto len = std::min(chunk, bytes.size() - off);
+        auto result    = r.feed(bytes.subspan(off, len));
         REQUIRE(result.error == wire::feed_error::none);
         for(auto &f : result.frames)
             out.push_back(std::move(f));
@@ -63,7 +63,7 @@ TEST_CASE("one framed message split one byte at a time reassembles to a single b
     const auto wire_bytes = framed(payload);
 
     wire::frame_reassembler r;
-    auto                    frames = feed_in_chunks(r, wire_bytes, 1); // sub-header AND mid-payload splits
+    auto frames = feed_in_chunks(r, wire_bytes, 1); // sub-header AND mid-payload splits
 
     REQUIRE(frames.size() == 1);
     REQUIRE(frames.front().payload.size() == wire_bytes.size());
@@ -90,8 +90,8 @@ TEST_CASE("a framed message split at the header/payload boundary reassembles int
     CHECK(second.frames.empty());
 
     // Feed the remaining payload bytes: the single frame now emerges intact.
-    const std::size_t fed   = wire::header_size - 3 + 10;
-    auto              third = r.feed(std::span<const std::byte>(wire_bytes).subspan(fed));
+    const std::size_t fed = wire::header_size - 3 + 10;
+    auto third            = r.feed(std::span<const std::byte>(wire_bytes).subspan(fed));
     REQUIRE(third.error == wire::feed_error::none);
     REQUIRE(third.frames.size() == 1);
     REQUIRE(third.frames.front().payload.size() == wire_bytes.size());

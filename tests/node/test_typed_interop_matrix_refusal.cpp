@@ -16,8 +16,8 @@ TEST_CASE("typed interop cell 5: a declared type mismatch is refused, no deliver
     pub_codec.tag = 0x11111111u;
 
     std::vector<sample> got;
-    typed_subscriber    s{n.a, "topic", plexus::typed_subscriber_options{}, [&](const sample &v) { got.push_back(v); }, sub_codec};
-    typed_publisher     p{n.b, "topic", plexus::typed_publisher_options{}, pub_codec};
+    typed_subscriber s{n.a, "topic", plexus::typed_subscriber_options{}, [&](const sample &v) { got.push_back(v); }, sub_codec};
+    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, pub_codec};
     n.drive();
 
     p.publish(sample{0x99u});
@@ -29,22 +29,22 @@ TEST_CASE("typed interop cell 5: a declared type mismatch is refused, no deliver
 
 TEST_CASE("typed interop cell 8: a typed inproc publisher to a bytes subscriber takes the byte path", "[node][typed][interop]")
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery   disc{{}};
-    inproc_node        pub_node{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
-    inproc_node        sub_node{ex, disc, make_id(0x0B), tb, make_opts(/*eager=*/true)};
+    static_discovery disc{{}};
+    inproc_node pub_node{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
+    inproc_node sub_node{ex, disc, make_id(0x0B), tb, make_opts(/*eager=*/true)};
     sub_node.listen({"inproc", "host-b:6000"});
     pub_node.listen({"inproc", "host-a:5000"});
     ex.drain();
     REQUIRE(sub_node.router().is_connected(pub_node.id()));
 
     std::vector<std::vector<std::byte>> got;
-    bytes_subscriber                    s{sub_node, "topic", [&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); }};
-    counting_codec                      codec;
-    auto                                encodes = codec.encodes;
+    bytes_subscriber s{sub_node, "topic", [&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); }};
+    counting_codec codec;
+    auto encodes = codec.encodes;
     // A borrowed loan would ride the fast path IF an eligible object subscriber existed; the
     // bytes subscriber has type_id nullopt so it is structurally ineligible. The publish
     // therefore serializes (encode invoked) and the bytes arrive as the encoding.
@@ -67,11 +67,11 @@ TEST_CASE("typed interop cell 9: a strict typed subscriber refuses an undeclared
     net n;
     n.connect();
 
-    std::vector<sample>              got;
+    std::vector<sample> got;
     plexus::typed_subscriber_options opts;
     opts.posture = plexus::io::attach_posture::strict;
     typed_subscriber s{n.a, "topic", opts, [&](const sample &v) { got.push_back(v); }};
-    bytes_publisher  p{n.b, "topic"}; // never declares a type -> undeclared producer
+    bytes_publisher p{n.b, "topic"}; // never declares a type -> undeclared producer
     n.drive();
 
     p.publish(as_bytes(encode_u32(0x77u)));
@@ -99,7 +99,7 @@ TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is
     {
         using value_type                          = other;
         std::shared_ptr<std::atomic<int>> encodes = std::make_shared<std::atomic<int>>(0);
-        plexus::wire_bytes<>              encode(const other &) const
+        plexus::wire_bytes<> encode(const other &) const
         {
             ++*encodes;
             auto owner = std::make_shared<std::vector<std::byte>>(4, std::byte{0});
@@ -120,8 +120,8 @@ TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is
     net n;
     n.connect();
 
-    int                            sample_calls = 0;
-    typed_subscriber               s{n.a, "topic", plexus::typed_subscriber_options{}, [&](const sample &) { ++sample_calls; }, counting_codec{}};
+    int sample_calls = 0;
+    typed_subscriber s{n.a, "topic", plexus::typed_subscriber_options{}, [&](const sample &) { ++sample_calls; }, counting_codec{}};
     plexus::publisher<other_codec> p{n.b, "topic", plexus::typed_publisher_options{}, other_codec{}};
     n.drive();
 

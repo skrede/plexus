@@ -67,13 +67,13 @@ inline stream::stream_inbound_config short_cfg()
 // pumps one io_context.
 struct loopback
 {
-    ::asio::io_context                   io;
-    pasio::asio_listener                 listener{io, short_cfg()};
+    ::asio::io_context io;
+    pasio::asio_listener listener{io, short_cfg()};
     std::unique_ptr<pasio::asio_channel> server;
-    ::asio::ip::tcp::socket              client{io};
+    ::asio::ip::tcp::socket client{io};
 
     std::optional<wire::close_cause> caused;
-    int                              closes{0};
+    int closes{0};
 
     loopback()
     {

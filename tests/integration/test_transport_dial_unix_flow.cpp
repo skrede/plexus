@@ -8,9 +8,9 @@ TEST_CASE("unix transport: a real published message carrying the minted epoch fl
           "AF_UNIX, looped",
           "[integration][transport][unix]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "dialed-published-bytes-over-unix";
-    int               delivered    = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "dialed-published-bytes-over-unix";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         dial_unix_link l;

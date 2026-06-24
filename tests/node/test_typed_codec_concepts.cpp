@@ -74,20 +74,20 @@ static_assert(plexus::identity_bearing<identified_codec>, "a codec with type_inf
 TEST_CASE("resolve_identity uses an identity_bearing codec's type_info when no argument is given", "[node][typed][concepts]")
 {
     identified_codec codec;
-    const auto       resolved = plexus::resolve_identity(codec, std::nullopt);
+    const auto resolved = plexus::resolve_identity(codec, std::nullopt);
     REQUIRE(resolved.type_id == 0xABCDu);
 }
 
 TEST_CASE("resolve_identity prefers an explicit argument over the codec's type_info", "[node][typed][concepts]")
 {
     identified_codec codec;
-    const auto       resolved = plexus::resolve_identity(codec, plexus::type_identity{0x1234u, "override"});
+    const auto resolved = plexus::resolve_identity(codec, plexus::type_identity{0x1234u, "override"});
     REQUIRE(resolved.type_id == 0x1234u);
 }
 
 TEST_CASE("resolve_identity resolves a non-identity-bearing codec through an explicit argument", "[node][typed][concepts]")
 {
     plain_codec codec;
-    const auto  resolved = plexus::resolve_identity(codec, plexus::type_identity{0x5678u, "explicit"});
+    const auto resolved = plexus::resolve_identity(codec, plexus::type_identity{0x5678u, "explicit"});
     REQUIRE(resolved.type_id == 0x5678u);
 }

@@ -54,7 +54,7 @@ struct capture
         sink.on_data([this](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
     }
 
-    inproc_channel<>                    sink;
+    inproc_channel<> sink;
     std::vector<std::vector<std::byte>> frames;
 };
 

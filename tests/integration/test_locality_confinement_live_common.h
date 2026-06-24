@@ -18,10 +18,10 @@ struct temp_sock
 
     temp_sock()
     {
-        char        tmpl[] = "/tmp/pxl-XXXXXX";
-        const char *made   = ::mkdtemp(tmpl);
-        dir                = made ? made : "";
-        path               = dir + "/s";
+        char tmpl[]      = "/tmp/pxl-XXXXXX";
+        const char *made = ::mkdtemp(tmpl);
+        dir              = made ? made : "";
+        path             = dir + "/s";
     }
 
     ~temp_sock()
@@ -50,16 +50,16 @@ template<typename Policy, typename Transport, typename Channel>
 struct live_link
 {
     ::asio::io_context io;
-    Transport          transport{io};
+    Transport transport{io};
 
-    plexus::log::null_logger         sink;
-    pio::message_forwarder<Policy>   pub_messages{sink};
-    pio::message_forwarder<Policy>   sub_messages{sink};
+    plexus::log::null_logger sink;
+    pio::message_forwarder<Policy> pub_messages{sink};
+    pio::message_forwarder<Policy> sub_messages{sink};
     pio::procedure_forwarder<Policy> pub_procedures{io, std::chrono::hours(1), sink};
     pio::procedure_forwarder<Policy> sub_procedures{io, std::chrono::hours(1), sink};
 
-    pio::peer_context<Policy>                pub_ctx;
-    pio::peer_context<Policy>                sub_ctx;
+    pio::peer_context<Policy> pub_ctx;
+    pio::peer_context<Policy> sub_ctx;
     std::optional<pio::peer_session<Policy>> publisher;  // the dialer end
     std::optional<pio::peer_session<Policy>> subscriber; // the accepted end
 

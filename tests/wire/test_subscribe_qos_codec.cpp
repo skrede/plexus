@@ -74,8 +74,8 @@ TEST_CASE("has_qos=false encode is byte-identical to the pre-region encoding", "
 
     // The reference: the same request with a default-constructed region and the
     // flag clear. Both must be byte-for-byte equal — the region never leaks.
-    subscribe_request plain     = base_request();
-    auto              reference = encode_subscribe_request(plain);
+    subscribe_request plain = base_request();
+    auto reference          = encode_subscribe_request(plain);
 
     CHECK(with_struct == reference);
     // And the encoded size is the pre-region minimum-plus-strings (no +32).

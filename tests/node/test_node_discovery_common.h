@@ -54,10 +54,10 @@ inline plexus::node_options make_opts()
 
 struct host
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 };
 
 // A browser that records every card it is notified of, for asserting advertise-at-birth

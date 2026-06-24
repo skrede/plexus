@@ -6,14 +6,14 @@ TEST_CASE("attach refcount gate emits exactly one procedure subscribe on 0->1", 
 {
     for(int iter = 0; iter < 100; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        capture           cap(ex);
-        auto              peer = make_peer(ch, cap, "provider-node");
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "provider-node");
 
         plexus::log::null_logger sink;
-        procedure_forwarder      fwd{ex, k_long_deadline, sink};
+        procedure_forwarder fwd{ex, k_long_deadline, sink};
         REQUIRE(fwd.attach(peer, "svc"));       // 0->1
         REQUIRE_FALSE(fwd.attach(peer, "svc")); // 1->2, no emit
         ex.drain();
@@ -29,14 +29,14 @@ TEST_CASE("attach succeeds on 0->1 for an arbitrary fqn (no remote registry)", "
     // remote topic). A call() needs no prior attach.
     for(int iter = 0; iter < 100; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        capture           cap(ex);
-        auto              peer = make_peer(ch, cap, "provider-node");
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "provider-node");
 
         plexus::log::null_logger sink;
-        procedure_forwarder      fwd{ex, k_long_deadline, sink};
+        procedure_forwarder fwd{ex, k_long_deadline, sink};
         REQUIRE(fwd.attach(peer, "never.advertised.anywhere"));
         ex.drain();
         REQUIRE(count_subscribes(cap) == 1);
@@ -58,8 +58,8 @@ TEST_CASE("roundtrip recovers exact opaque param and return bytes matched by cor
                                 reply(rpc_status::success, as_bytes(ret));
                             });
 
-        rpc_status        got_status = rpc_status::error;
-        std::string       got_return;
+        rpc_status got_status = rpc_status::error;
+        std::string got_return;
         const std::string param = "the-opaque-param";
         link.caller.call(link.caller_peer, "svc", as_bytes(param),
                          [&](rpc_status s, std::span<const std::byte> ret)
@@ -81,7 +81,7 @@ TEST_CASE("call to an fqn with no provider yields on_response(no_handler, {})", 
     {
         rpc_link link; // provider serves nothing
 
-        rpc_status  got      = rpc_status::success;
+        rpc_status got       = rpc_status::success;
         std::size_t ret_size = 999;
         link.caller.call(link.caller_peer, "absent.svc", {},
                          [&](rpc_status s, std::span<const std::byte> ret)
@@ -101,7 +101,7 @@ TEST_CASE("an orphan rpc_response warn-drops and fires no callback", "[procedure
     for(int iter = 0; iter < 100; ++iter)
     {
         counting_logger log;
-        rpc_link        link(log);
+        rpc_link link(log);
 
         // One real outstanding call (corr_id 1) so the peer's outstanding map
         // exists; then feed deliver_response a synthetic response for an unknown
@@ -127,7 +127,7 @@ TEST_CASE("detach_all fails every outstanding call with peer_disconnected", "[pr
         // undelivered, so the provider never replies. call() registers each pending
         // entry synchronously, so the outstanding table is populated regardless —
         // exactly the "a provider that never replies" state detach_all resolves.
-        constexpr int                       outstanding = 4;
+        constexpr int outstanding = 4;
         std::array<rpc_status, outstanding> got{};
         got.fill(rpc_status::success);
         for(int i = 0; i < outstanding; ++i)
@@ -154,7 +154,7 @@ TEST_CASE("concurrent outstanding calls each resolve to their own response", "[p
         // request's payload — cross-talk would surface as a mismatched echo.
         link.provider.serve("echo", [](std::span<const std::byte> param, procedure_forwarder::reply_fn &reply) { reply(rpc_status::success, param); });
 
-        constexpr int              n = 8;
+        constexpr int n = 8;
         std::array<std::string, n> got{};
         for(int i = 0; i < n; ++i)
         {

@@ -128,11 +128,11 @@ plexus::node_options make_opts(bool eager)
 
 struct net
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};

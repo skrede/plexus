@@ -40,9 +40,9 @@ int main()
     using engine_t = node_t::engine_type;
     static_assert(std::is_same_v<engine_t, plexus::io::routing_engine<policy, transport>>, "a single-transport node composes the engine directly over its policy");
 
-    plexus::inproc::inproc_bus<>        bus;
-    plexus::inproc::inproc_executor<>   executor{bus};
-    transport                           tr{executor, bus};
+    plexus::inproc::inproc_bus<> bus;
+    plexus::inproc::inproc_executor<> executor{bus};
+    transport tr{executor, bus};
     plexus::discovery::static_discovery disc{{}};
 
     plexus::node_id self{};

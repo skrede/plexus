@@ -4,8 +4,8 @@ using namespace attach_policy_fixture;
 
 TEST_CASE("io.attach_policy empty keystore refuses everything (fail-closed)", "[io][attach_policy]")
 {
-    psk_keystore_policy       policy{{}, fake_hmac()};
-    auto                      facts = facts_for(0x01, attach_role::initiator);
+    psk_keystore_policy policy{{}, fake_hmac()};
+    auto facts = facts_for(0x01, attach_role::initiator);
     std::array<std::byte, 32> proof{};
     facts.proof = proof;
     REQUIRE_FALSE(policy.decide(facts));

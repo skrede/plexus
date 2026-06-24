@@ -8,9 +8,9 @@ TEST_CASE("inproc peer_session: the opt-in 3-arg callback delivers a message_inf
           "intra-process locality, looped",
           "[integration][peer_session][inproc][message_info]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "info-bearing-bytes";
-    int               delivered    = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "info-bearing-bytes";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -19,7 +19,7 @@ TEST_CASE("inproc peer_session: the opt-in 3-arg callback delivers a message_inf
         // The 3-arg callback takes precedence over the 2-arg one set by the link ctor:
         // register it on the responder so the published frame's metadata reaches it.
         plexus::io::message_info got{};
-        bool                     got_one = false;
+        bool got_one = false;
         l.responder->on_message_with_info(
                 [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi)
                 {
@@ -58,17 +58,17 @@ TEST_CASE("inproc peer_session: a source-identity publish populates message_info
     // from the live frame_header and reconstructs publisher_gid{ m_ctx.peer_id, counter }.
     // The DIALER (requester) receives — the canonical demand flow (a subscriber dials the
     // publisher), where peer_id is the true dialed peer id. The responder is the producer.
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "attributed-bytes";
-    const auto        producer_id  = make_cfg(0x01).self_id; // the responder's node_id
-    int               delivered    = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "attributed-bytes";
+    const auto producer_id     = make_cfg(0x01).self_id; // the responder's node_id
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
         l.drive();
 
         plexus::io::message_info got{};
-        bool                     got_one = false;
+        bool got_one = false;
         l.requester->on_message_with_info(
                 [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi)
                 {
@@ -102,9 +102,9 @@ TEST_CASE("inproc peer_session: a source-identity publish populates message_info
 
 TEST_CASE("inproc peer_session: a real RPC round-trips post-handshake matched by correlation, looped", "[integration][peer_session][inproc]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string param        = "rpc-param";
-    int               answered     = 0;
+    constexpr int k_iterations = 100;
+    const std::string param    = "rpc-param";
+    int answered               = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -116,8 +116,8 @@ TEST_CASE("inproc peer_session: a real RPC round-trips post-handshake matched by
                                     reply(rpc_status::success, p); // echo the param back
                                 });
 
-        int         fired = 0;
-        rpc_status  got   = rpc_status::error;
+        int fired      = 0;
+        rpc_status got = rpc_status::error;
         std::string ret;
         l.req_procedures.call(
                 l.requester->rpc_peer(), "svc", as_bytes(param),

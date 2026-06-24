@@ -53,7 +53,7 @@ inline std::string to_string(std::span<const std::byte> b)
 // quiescence (deterministic — no wall clock, no polling).
 struct rpc_link
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
 
     inproc_channel<> caller_tx{ex};

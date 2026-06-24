@@ -33,18 +33,18 @@ TEST_CASE("host_identity: a spoofed external claim is ignored — the accessor b
           "authenticated peer",
           "[integration][host_identity]")
 {
-    admit_policy  admit;
+    admit_policy admit;
     security_seam req_seam  = honest_seam();
     security_seam resp_seam = honest_seam();
 
-    inproc_bus<>                            bus;
-    inproc_executor<>                       ex{bus};
-    inproc_transport<>                      transport{ex, bus};
-    plexus::log::null_logger                sink;
-    msg_forwarder                           req_messages{sink}, resp_messages{sink};
-    rpc_forwarder                           req_procedures{ex, k_long_timeout, sink}, resp_procedures{ex, k_long_timeout, sink};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    inproc_transport<> transport{ex, bus};
+    plexus::log::null_logger sink;
+    msg_forwarder req_messages{sink}, resp_messages{sink};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink}, resp_procedures{ex, k_long_timeout, sink};
     plexus::io::peer_context<inproc_policy> req_ctx, resp_ctx;
-    std::optional<session>                  requester, responder;
+    std::optional<session> requester, responder;
 
     const auto id_resp = make_id(0x01); // the dialed (accepting) node's true identity
     const auto id_req  = make_id(0x02); // the dialing node's true identity

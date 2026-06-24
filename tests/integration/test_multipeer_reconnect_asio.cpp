@@ -8,10 +8,10 @@ TEST_CASE("multipeer asio: concurrent real socket closes re-dial each dropped sl
           "survivors are undisturbed over real TCP",
           "[integration][multipeer][asio]")
 {
-    constexpr int         k_iterations = 30;
-    constexpr std::size_t k_n          = 3;
-    constexpr std::size_t k_dropped    = 2;
-    int                   proven       = 0;
+    constexpr int k_iterations      = 30;
+    constexpr std::size_t k_n       = 3;
+    constexpr std::size_t k_dropped = 2;
+    int proven                      = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         multipeer_net net(k_n);

@@ -51,7 +51,7 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest           digest{};
+    spki_digest digest{};
 
     explicit identity_fixture(const std::string &tag)
     {
@@ -123,8 +123,8 @@ TEST_CASE("tls_dial_teardown: an io_context destroyed mid-handshake leaks nothin
     // own io_context (and transport) is destroyed before the mutual handshake completes.
     for(int iter = 0; iter < 16; ++iter)
     {
-        ::asio::io_context  server_io;
-        auto                server_cred = make_cred(server_id, client_id.digest);
+        ::asio::io_context server_io;
+        auto server_cred = make_cred(server_id, client_id.digest);
         ptls::tls_transport server{server_io, server_cred};
         server.listen(pio::endpoint{"tls", "127.0.0.1:0"});
         for(int i = 0; i < 50 && server.port() == 0; ++i)
@@ -133,8 +133,8 @@ TEST_CASE("tls_dial_teardown: an io_context destroyed mid-handshake leaks nothin
         REQUIRE(port != 0);
 
         {
-            ::asio::io_context  client_io;
-            auto                client_cred = make_cred(client_id, server_id.digest);
+            ::asio::io_context client_io;
+            auto client_cred = make_cred(client_id, server_id.digest);
             ptls::tls_transport client{client_io, client_cred};
             client.dial(pio::endpoint{"tls", "127.0.0.1:" + std::to_string(port)});
 

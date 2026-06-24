@@ -10,7 +10,7 @@ namespace {
 // rejecting; each fragment rides one record bounded by the DTLS_get_data_mtu-derived budget.
 struct large_run
 {
-    std::size_t            records;
+    std::size_t records;
     std::vector<std::byte> got;
 };
 

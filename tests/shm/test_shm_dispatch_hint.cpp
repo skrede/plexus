@@ -73,7 +73,7 @@ TEST_CASE("selector: same-host x qualifying hint is SHM-eligible", "[shm][dispat
 TEST_CASE("selector: a topic_qos.dispatch drives the eligibility decision", "[shm][dispatch_hint]")
 {
     plexus::io::transport_selector selector;
-    const plexus::io::endpoint     same_host{"unix", "/tmp/sock"};
+    const plexus::io::endpoint same_host{"unix", "/tmp/sock"};
 
     const plexus::topic_qos hinted{.dispatch = dispatch_hint::frequent};
     const plexus::topic_qos plain{};

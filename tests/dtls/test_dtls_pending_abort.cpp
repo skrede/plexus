@@ -35,11 +35,11 @@ TEST_CASE("dtls.pending_abort: a transport destroyed mid-handshake frees the pen
     // everything down inside the loop body — the transport-owned m_pending must free
     // the channel and the io_context destruction must not fire a dangling timer.
     constexpr int k_iterations = 100;
-    int           aborted      = 0;
+    int aborted                = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
-        ::asio::io_context   io;
-        auto                 client_cred = pdt::pin_one(cli, srv.digest);
+        ::asio::io_context io;
+        auto client_cred = pdt::pin_one(cli, srv.digest);
         ptls::dtls_transport client(io, client_cred);
 
         bool dialed = false;
@@ -74,12 +74,12 @@ TEST_CASE("dtls.pending_abort: a silent listening server leaves the dial pending
     // transport-owned pending channel cleanly — the exact leak the TLS self-owning
     // cycle had, now closed by transport-owned dials. Run under asan to catch a leak.
     constexpr int k_iterations = 100;
-    int           aborted      = 0;
+    int aborted                = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
-        ::asio::io_context   io;
-        auto                 server_cred = pdt::pin_one(srv, cli.digest);
-        auto                 client_cred = pdt::pin_one(cli, srv.digest);
+        ::asio::io_context io;
+        auto server_cred = pdt::pin_one(srv, cli.digest);
+        auto client_cred = pdt::pin_one(cli, srv.digest);
         ptls::dtls_transport server(io, server_cred);
         ptls::dtls_transport client(io, client_cred);
 

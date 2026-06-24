@@ -9,10 +9,10 @@ TEST_CASE("integration.recording_qos a node declaring no recording QoS ships zer
     net n{base_opts(/*eager=*/false)}; // producer leaves node_options.capture at the off default
     n.connect();
 
-    counting_codec   codec;
-    auto             encodes = codec.encodes;
+    counting_codec codec;
+    auto encodes = codec.encodes;
     typed_subscriber sub{n.a, "topic", [](const sample &) {}};
-    typed_publisher  pub{n.b, "topic", plexus::typed_publisher_options{}, codec};
+    typed_publisher pub{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     publish_k(pub, n, 5);
@@ -26,10 +26,10 @@ TEST_CASE("integration.recording_qos a node-level payload default fires the enco
     net n{producer};
     n.connect();
 
-    counting_codec   codec;
-    auto             encodes = codec.encodes;
+    counting_codec codec;
+    auto encodes = codec.encodes;
     typed_subscriber sub{n.a, "topic", [](const sample &) {}};
-    typed_publisher  pub{n.b, "topic", plexus::typed_publisher_options{}, codec};
+    typed_publisher pub{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     constexpr int k = 5;

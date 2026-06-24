@@ -79,9 +79,9 @@ TEST_CASE("ring_layout: the cross-process structs are lock-free standard-layout"
 
 TEST_CASE("ring_core: claim/commit/consume round-trips a payload single-process", "[shm][ring_core]")
 {
-    constexpr std::uint64_t k_cells      = 64;
-    constexpr std::uint64_t k_slot       = 256;
-    constexpr int           k_iterations = 200;
+    constexpr std::uint64_t k_cells = 64;
+    constexpr std::uint64_t k_slot  = 256;
+    constexpr int k_iterations      = 200;
 
     backing_region control(control_region_bytes(k_cells));
     backing_region slab(slab_region_bytes(k_cells, k_slot));

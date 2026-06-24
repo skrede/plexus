@@ -56,8 +56,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
     const auto bytes = std::span<const std::byte>{reinterpret_cast<const std::byte *>(Data), Size};
 
     plexus::inproc::inproc_bus<std::chrono::steady_clock> bus;
-    fuzz_executor                                         ex{bus};
-    fuzz_reassembler                                      r{ex};
+    fuzz_executor ex{bus};
+    fuzz_reassembler r{ex};
 
     // (a) Drive the fail-closed fragment sub-header decode over the raw bytes, then
     // feed the decoded fields -- the wire-decode-to-reassembler path on real input.

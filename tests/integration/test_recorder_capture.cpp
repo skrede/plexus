@@ -10,8 +10,8 @@ TEST_CASE("pre_buffer mode runs drop-oldest and stays byte-bounded under a satur
 {
     for(int run = 0; run < 3; ++run)
     {
-        in_memory_byte_sink   sink;
-        manual_clock          clk;
+        in_memory_byte_sink sink;
+        manual_clock clk;
         pre_buffer_controller pre{sink, 1024, [&clk] { return clk(); }};
 
         const auto body = payload_of(48, std::byte{0x5A});
@@ -38,8 +38,8 @@ TEST_CASE("the freeze captures two indices with no allocation and no buffer copy
 {
     for(int run = 0; run < 3; ++run)
     {
-        in_memory_byte_sink   sink;
-        manual_clock          clk;
+        in_memory_byte_sink sink;
+        manual_clock clk;
         pre_buffer_controller pre{sink, 2048, [&clk] { return clk(); }};
 
         const auto body = payload_of(32, std::byte{0xC3});
@@ -58,8 +58,8 @@ TEST_CASE("the freeze captures two indices with no allocation and no buffer copy
 
 TEST_CASE("a manual trigger freezes and drains the held window to the byte_sink with no thread", "[recorder_capture][fdr]")
 {
-    in_memory_byte_sink   sink;
-    manual_clock          clk;
+    in_memory_byte_sink sink;
+    manual_clock clk;
     pre_buffer_controller pre{sink, 4096, [&clk] { return clk(); }};
 
     const auto body = payload_of(16, std::byte{0x11});

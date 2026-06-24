@@ -5,14 +5,14 @@
 TEST_CASE("encode_header produces 28 bytes", "[wire][codec]")
 {
     frame_header hdr{.type = msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0};
-    auto         buf = encode_header(hdr);
+    auto buf = encode_header(hdr);
     CHECK(buf.size() == 28);
 }
 
 TEST_CASE("encoded header starts with magic 0x56 0x50", "[wire][codec]")
 {
     frame_header hdr{.type = msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0};
-    auto         buf = encode_header(hdr);
+    auto buf = encode_header(hdr);
     CHECK(buf[0] == std::byte{0x56});
     CHECK(buf[1] == std::byte{0x50});
 }
@@ -42,16 +42,16 @@ TEST_CASE("header round-trip preserves all fields", "[wire][codec]")
 TEST_CASE("decode_header returns nullopt for short data", "[wire][codec]")
 {
     std::array<std::byte, 27> short_buf{}; // one below the 28-byte header_size
-    auto                      result = decode_header(short_buf);
+    auto result = decode_header(short_buf);
     CHECK_FALSE(result.has_value());
 }
 
 TEST_CASE("decode_header returns nullopt for bad magic", "[wire][codec]")
 {
     frame_header hdr{.type = msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0};
-    auto         buf = encode_header(hdr);
-    buf[0]           = std::byte{0xFF};
-    auto result      = decode_header(buf);
+    auto buf    = encode_header(hdr);
+    buf[0]      = std::byte{0xFF};
+    auto result = decode_header(buf);
     CHECK_FALSE(result.has_value());
 }
 
@@ -82,7 +82,7 @@ TEST_CASE("header fields are big-endian on wire", "[wire][codec]")
 
 TEST_CASE("encode_frame concatenates header and payload", "[wire][codec]")
 {
-    frame_header           hdr{.type = msg_type::subscribe, .flags = 0, .session_id = 0, .timestamp_ns = 100, .payload_len = 0};
+    frame_header hdr{.type = msg_type::subscribe, .flags = 0, .session_id = 0, .timestamp_ns = 100, .payload_len = 0};
     std::vector<std::byte> payload{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}};
 
     auto frame = encode_frame(hdr, payload);

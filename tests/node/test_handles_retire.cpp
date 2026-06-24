@@ -4,9 +4,9 @@ using namespace handles_fixture;
 
 TEST_CASE("handles: dropping a subscriber stops its callback and retires the engine demand", "[node][handles]")
 {
-    net                      n;
+    net n;
     std::vector<std::string> got;
-    inproc_publisher         p{n.b, "topic"};
+    inproc_publisher p{n.b, "topic"};
 
     {
         inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
@@ -27,10 +27,10 @@ TEST_CASE("handles: dropping a subscriber stops its callback and retires the eng
 
 TEST_CASE("handles: two subscribers on one fqn both fire and retire independently", "[node][handles]")
 {
-    net                      n;
+    net n;
     std::vector<std::string> got1;
     std::vector<std::string> got2;
-    inproc_publisher         p{n.b, "topic"};
+    inproc_publisher p{n.b, "topic"};
 
     auto s1 = inproc_subscriber{n.a, "topic", [&](std::span<const std::byte> b) { got1.push_back(to_string(b)); }};
     {

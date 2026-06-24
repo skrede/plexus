@@ -5,7 +5,7 @@ using namespace frame_router_fixture;
 TEST_CASE("frame_router warn-and-drops a short frame", "[forwarder][router]")
 {
     counting_logger log;
-    frame_router    router(log);
+    frame_router router(log);
 
     bool fired = false;
     router.on_subscribe([&](std::span<const std::byte>) { fired = true; });
@@ -20,7 +20,7 @@ TEST_CASE("frame_router warn-and-drops a short frame", "[forwarder][router]")
 TEST_CASE("frame_router warn-and-drops a bad-magic frame", "[forwarder][router]")
 {
     counting_logger log;
-    frame_router    router(log);
+    frame_router router(log);
 
     bool fired = false;
     router.on_subscribe([&](std::span<const std::byte>) { fired = true; });
@@ -36,7 +36,7 @@ TEST_CASE("frame_router warn-and-drops a bad-magic frame", "[forwarder][router]"
 TEST_CASE("frame_router warn-and-drops an unregistered type", "[forwarder][router]")
 {
     counting_logger log;
-    frame_router    router(log); // no consumers registered
+    frame_router router(log); // no consumers registered
 
     auto frame = make_frame(wire::msg_type::subscribe, "sub-inner");
     router.route(frame); // valid frame, but no subscribe consumer

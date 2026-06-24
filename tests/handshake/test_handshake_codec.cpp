@@ -144,12 +144,12 @@ TEST_CASE("handshake codec: the proof field round-trips byte-equal on request an
 
 TEST_CASE("handshake codec: a payload one byte below the widened size returns nullopt", "[handshake][codec][fingerprint]")
 {
-    auto                   req = encode_handshake_request(request_with(7));
+    auto req = encode_handshake_request(request_with(7));
     std::vector<std::byte> shortened(req.begin(), req.end() - 1);
     CHECK_FALSE(decode_handshake_request(shortened).has_value());
     CHECK(decode_handshake_request(req).has_value());
 
-    auto                   resp = encode_handshake_response(response_with(7, handshake_status::accepted));
+    auto resp = encode_handshake_response(response_with(7, handshake_status::accepted));
     std::vector<std::byte> resp_short(resp.begin(), resp.end() - 1);
     CHECK_FALSE(decode_handshake_response(resp_short).has_value());
     CHECK(decode_handshake_response(resp).has_value());

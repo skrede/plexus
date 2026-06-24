@@ -17,7 +17,7 @@
 
 TEST_CASE("shm.liburing_link plexus::asio::shm transitively carries liburing", "[shm][link]")
 {
-    ::asio::io_context         io;
+    ::asio::io_context io;
     std::atomic<std::uint32_t> word{0};
     std::atomic<std::uint32_t> park{0};
 

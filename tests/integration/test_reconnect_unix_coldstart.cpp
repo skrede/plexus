@@ -9,7 +9,7 @@ TEST_CASE("unix reconnect: a cold-start dial to a missing socket re-dials until 
           "[integration][reconnect][unix]")
 {
     constexpr int k_iterations = 30;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // No socket file bound yet: the initial dial is refused (ENOENT mapped to a

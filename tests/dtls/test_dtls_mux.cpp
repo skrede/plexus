@@ -5,7 +5,7 @@ using namespace dtls_mux_fixture;
 TEST_CASE("dtls.mux_select: the selector classifies dtls as remote, never local (locality exclusion)", "[dtls][mux][select]")
 {
     pio::transport_selector sel;
-    const auto              reserved = pio::reliability_hint::unspecified;
+    const auto reserved = pio::reliability_hint::unspecified;
 
     // "dtls" is a REMOTE-tier scheme — so locality confinement EXCLUDES it (a
     // host-confined process|local topic never rides dtls even though dtls encrypts).
@@ -24,7 +24,7 @@ TEST_CASE("dtls.mux: a dtls dial routes to the secure-datagram member, completes
     pdt::identity_fixture server_id("mux_srv");
     pdt::identity_fixture client_id("mux_cli");
 
-    const std::string      text = "secure-datagram-over-the-mux";
+    const std::string text = "secure-datagram-over-the-mux";
     std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(text.data()), reinterpret_cast<const std::byte *>(text.data()) + text.size());
 
     int completed = 0;
@@ -47,7 +47,7 @@ TEST_CASE("dtls.mux: a dtls dial routes to the secure-datagram member, completes
         // An app frame flows decrypted over the wrapped polymorphic_byte_channel — proves the route
         // landed a live secure-datagram channel, not merely a completed handshake.
         std::vector<std::byte> got;
-        bool                   received = false;
+        bool received = false;
         n.accepted->on_data(
                 [&](std::span<const std::byte> d)
                 {

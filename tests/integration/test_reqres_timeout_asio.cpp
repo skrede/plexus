@@ -41,11 +41,11 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // proven over the production receive path — not a synthetic stub.
 struct silent_rpc
 {
-    ::asio::io_context                   io;
-    pasio::asio_listener                 listener{io};
+    ::asio::io_context io;
+    pasio::asio_listener listener{io};
     std::unique_ptr<pasio::asio_channel> server_channel;
-    pasio::asio_channel                  client{io};
-    plexus::log::null_logger             sink;
+    pasio::asio_channel client{io};
+    plexus::log::null_logger sink;
 
     pio::frame_router server_router{sink};
     pio::frame_router client_router{sink};
@@ -108,14 +108,14 @@ TEST_CASE("a call whose real TCP provider never replies times out over live loop
     // ctest invocation is ALSO re-run >=3 process runs for cross-process
     // reproducibility (a live-timing claim is never made from a single run).
     constexpr int k_iterations = 20;
-    const auto    deadline     = std::chrono::milliseconds(150);
-    int           timed_out    = 0;
+    const auto deadline        = std::chrono::milliseconds(150);
+    int timed_out              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         silent_rpc h(deadline);
 
-        rpc_status got   = rpc_status::error;
-        int        fired = 0;
+        rpc_status got = rpc_status::error;
+        int fired      = 0;
         h.caller->call(*h.caller_peer, "svc", as_bytes(std::string{"param"}),
                        [&](rpc_status s, std::span<const std::byte>)
                        {
@@ -139,13 +139,13 @@ TEST_CASE("a per-call deadline override outlives the forwarder default over live
     // override — the override is what arms the timer, so the call still times out
     // promptly. Looped; re-run across process runs by the ctest verify loop.
     constexpr int k_iterations = 20;
-    int           timed_out    = 0;
+    int timed_out              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         silent_rpc h(std::chrono::hours(1)); // default deadline far in the future
 
-        rpc_status got   = rpc_status::error;
-        int        fired = 0;
+        rpc_status got = rpc_status::error;
+        int fired      = 0;
         h.caller->call(
                 *h.caller_peer, "svc", as_bytes(std::string{"param"}),
                 [&](rpc_status s, std::span<const std::byte>)

@@ -42,7 +42,7 @@ std::vector<std::byte> bytes_of(std::initializer_list<int> vals)
 
 TEST_CASE("handshake_gate buffers submissions before ready (the drain sees nothing)", "[io][handshake_gate]")
 {
-    recorder       rec;
+    recorder rec;
     handshake_gate gate{rec.drain()};
 
     gate.submit(bytes_of({1}));
@@ -55,7 +55,7 @@ TEST_CASE("handshake_gate buffers submissions before ready (the drain sees nothi
 
 TEST_CASE("handshake_gate mark_ready drains the buffer in FIFO order then flips ready", "[io][handshake_gate]")
 {
-    recorder       rec;
+    recorder rec;
     handshake_gate gate{rec.drain()};
 
     gate.submit(bytes_of({10}));
@@ -74,7 +74,7 @@ TEST_CASE("handshake_gate mark_ready drains the buffer in FIFO order then flips 
 
 TEST_CASE("handshake_gate passes submissions straight through after ready", "[io][handshake_gate]")
 {
-    recorder       rec;
+    recorder rec;
     handshake_gate gate{rec.drain()};
 
     gate.mark_ready(); // ready with an empty buffer: a no-op drain
@@ -88,7 +88,7 @@ TEST_CASE("handshake_gate passes submissions straight through after ready", "[io
 
 TEST_CASE("handshake_gate reset clears a pending buffer", "[io][handshake_gate]")
 {
-    recorder       rec;
+    recorder rec;
     handshake_gate gate{rec.drain()};
 
     gate.submit(bytes_of({1}));
@@ -105,7 +105,7 @@ TEST_CASE("handshake_gate reset clears a pending buffer", "[io][handshake_gate]"
 
 TEST_CASE("handshake_gate copies submissions into an owned node", "[io][handshake_gate]")
 {
-    recorder       rec;
+    recorder rec;
     handshake_gate gate{rec.drain()};
 
     auto scratch = bytes_of({1, 2, 3});

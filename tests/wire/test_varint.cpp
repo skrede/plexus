@@ -18,7 +18,7 @@ namespace {
 struct decode_result
 {
     std::optional<std::uint64_t> value;
-    std::size_t                  consumed;
+    std::size_t consumed;
 };
 
 decode_result round_trip(std::uint64_t v)
@@ -26,7 +26,7 @@ decode_result round_trip(std::uint64_t v)
     std::vector<std::byte> out;
     write_varint(out, v);
     std::size_t consumed = 0;
-    auto        decoded  = read_varint(out, consumed);
+    auto decoded         = read_varint(out, consumed);
     return {decoded, consumed};
 }
 
@@ -76,8 +76,8 @@ TEST_CASE("varint decode rejects a truncated continuation without advancing", "[
 {
     // A single byte with the continuation bit set but no following byte.
     std::vector<std::byte> buf{std::byte{0x80}};
-    std::size_t            consumed = 0;
-    const auto             decoded  = read_varint(buf, consumed);
+    std::size_t consumed = 0;
+    const auto decoded   = read_varint(buf, consumed);
     CHECK_FALSE(decoded.has_value());
     CHECK(consumed == 0);
 }
@@ -86,8 +86,8 @@ TEST_CASE("varint decode rejects an over-long encoding past 10 bytes", "[wire][v
 {
     // Eleven bytes, every one carrying the continuation bit: exceeds the u64 cap.
     std::vector<std::byte> buf(11, std::byte{0x80});
-    std::size_t            consumed = 0;
-    const auto             decoded  = read_varint(buf, consumed);
+    std::size_t consumed = 0;
+    const auto decoded   = read_varint(buf, consumed);
     CHECK_FALSE(decoded.has_value());
     CHECK(consumed == 0);
 }
@@ -100,7 +100,7 @@ TEST_CASE("varint decode rejects a 10th byte that overflows u64", "[wire][varint
     std::vector<std::byte> buf(9, std::byte{0x80});
     buf.push_back(std::byte{0x02}); // terminator, but bits beyond bit 63
     std::size_t consumed = 0;
-    const auto  decoded  = read_varint(buf, consumed);
+    const auto decoded   = read_varint(buf, consumed);
     CHECK_FALSE(decoded.has_value());
     CHECK(consumed == 0);
 }
@@ -111,7 +111,7 @@ TEST_CASE("varint decode advances consumed only by the bytes it read", "[wire][v
     write_varint(out, 0x80);        // two bytes
     out.push_back(std::byte{0xCD}); // a trailing byte the decode must not touch
     std::size_t consumed = 0;
-    const auto  decoded  = read_varint(out, consumed);
+    const auto decoded   = read_varint(out, consumed);
     REQUIRE(decoded.has_value());
     CHECK(*decoded == 0x80);
     CHECK(consumed == 2);
@@ -124,7 +124,7 @@ TEST_CASE("varint decode honors a non-zero starting consumed offset", "[wire][va
     out.push_back(std::byte{0x22});
     write_varint(out, 300);
     std::size_t consumed = 2;
-    const auto  decoded  = read_varint(out, consumed);
+    const auto decoded   = read_varint(out, consumed);
     REQUIRE(decoded.has_value());
     CHECK(*decoded == 300);
     CHECK(consumed > 2);
@@ -133,8 +133,8 @@ TEST_CASE("varint decode honors a non-zero starting consumed offset", "[wire][va
 TEST_CASE("varint decode of an empty span returns nullopt", "[wire][varint]")
 {
     std::span<const std::byte> empty;
-    std::size_t                consumed = 0;
-    const auto                 decoded  = read_varint(empty, consumed);
+    std::size_t consumed = 0;
+    const auto decoded   = read_varint(empty, consumed);
     CHECK_FALSE(decoded.has_value());
     CHECK(consumed == 0);
 }

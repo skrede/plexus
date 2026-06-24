@@ -9,7 +9,7 @@ TEST_CASE("unix reconnect: an established session whose channel drops re-dials a
           "[integration][reconnect][unix]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         unix_reconnect h(fast_cfg(), /*listen_first=*/true);

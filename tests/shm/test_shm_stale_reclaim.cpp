@@ -34,7 +34,7 @@ namespace {
 
 // A distinguishable byte the crashed creator stamps across the orphan region;
 // a non-zero pattern so a fresh (zero-filled) reclaim is unambiguous.
-constexpr std::byte   k_stale_byte{0xABu};
+constexpr std::byte k_stale_byte{0xABu};
 constexpr std::size_t k_region_bytes = 4096;
 
 // Stamp the whole mapped region with the stale sentinel.
@@ -99,7 +99,7 @@ TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_s
                 [&]() -> bool
                 {
                     posix_shm_region_broker broker;
-                    region_handle           orphan;
+                    region_handle orphan;
                     if(broker.create(name, k_region_bytes, pio::create_options{}, orphan) != pio::region_status::ok)
                         ::_exit(1);
                     stamp_stale(orphan);

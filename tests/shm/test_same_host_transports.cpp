@@ -72,7 +72,7 @@ constexpr std::uint32_t k_payload = 0x5A4E0FEEu;
 
 TEST_CASE("shm.same_host_transports the portable composition stands up a live node", "[shm][mux][node][same_host_transports]")
 {
-    ::asio::io_context                  io;
+    ::asio::io_context io;
     plexus::discovery::static_discovery disc{{}};
 
     pasio::same_host_transports ts{io};
@@ -90,7 +90,7 @@ TEST_CASE("shm.same_host_transports the portable composition stands up a live no
 
 TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by name", "[shm][same_host_transports][roundtrip]")
 {
-    const std::string        fqn  = "topic.same_host_transports." + std::to_string(::getpid());
+    const std::string fqn         = "topic.same_host_transports." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -108,7 +108,7 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
                 ;
 
             posix_shm_region_broker broker;
-            region_handle           ctrl, slab;
+            region_handle ctrl, slab;
             if(broker.attach(control_name(fqn), ctrl) == pio::region_status::ok && broker.attach(slab_name(fqn), slab) == pio::region_status::ok)
             {
                 pio::broadcast_ring ring;
@@ -123,7 +123,7 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
                         for(;;)
                         {
                             pio::broadcast_ring::consume_result out;
-                            const auto                          st = ring.consume(cursor, out);
+                            const auto st = ring.consume(cursor, out);
                             if(st == pio::loan_status::ok)
                             {
                                 std::uint32_t got = 0;
@@ -147,7 +147,7 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
         }
 
         posix_shm_region_broker broker;
-        region_handle           ctrl, slab;
+        region_handle ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 

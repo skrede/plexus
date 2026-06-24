@@ -103,7 +103,7 @@ TEST_CASE("locality: a non-default reach survives the declare -> qos_for round-t
           "[wire][locality]")
 {
     plexus::io::subscriber_registry<stub_channel> registry;
-    const std::uint64_t                           hash = 0xABCDEF01u;
+    const std::uint64_t hash = 0xABCDEF01u;
 
     // An undeclared topic reports the default any (no confinement).
     REQUIRE(registry.qos_for(hash).reach == locality::any);
@@ -121,8 +121,8 @@ TEST_CASE("subscriber_registry: record_drop for an undeclared topic mints no ent
 {
     namespace pdetail = plexus::io::detail;
     plexus::io::subscriber_registry<stub_channel> registry;
-    const std::uint64_t                           unknown = 0xDEADBEEFu;
-    const std::size_t                             band    = 0;
+    const std::uint64_t unknown = 0xDEADBEEFu;
+    const std::size_t band      = 0;
 
     // A drop bumped for a never-declared topic must not create a record: it would let
     // fqn_for memoize an empty fqn as a "resolved" view, conflating unknown with unnamed.

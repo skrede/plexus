@@ -34,7 +34,7 @@ std::vector<std::byte> bytes_of(std::initializer_list<unsigned char> vs)
 TEST_CASE("mock byte_channel records sent bytes verbatim and in order", "[testing][mock][fidelity]")
 {
     harness h;
-    auto    ch = h.make_channel();
+    auto ch = h.make_channel();
 
     const auto first  = bytes_of({0x01, 0x02, 0x03});
     const auto second = bytes_of({0xAA, 0xBB});
@@ -50,7 +50,7 @@ TEST_CASE("mock byte_channel records sent bytes verbatim and in order", "[testin
 TEST_CASE("mock byte_channel delivers on_data posted, never synchronously", "[testing][mock][fidelity]")
 {
     harness h;
-    auto    ch = h.make_channel();
+    auto ch = h.make_channel();
 
     std::vector<std::byte> received;
     ch.on_data([&](std::span<const std::byte> d) { received.assign(d.begin(), d.end()); });
@@ -68,9 +68,9 @@ TEST_CASE("mock byte_channel delivers on_data posted, never synchronously", "[te
 TEST_CASE("mock byte_channel injects error exactly once after drain", "[testing][mock][fidelity]")
 {
     harness h;
-    auto    ch = h.make_channel();
+    auto ch = h.make_channel();
 
-    int                  errors = 0;
+    int errors = 0;
     plexus::io::io_error seen{};
     ch.on_error(
             [&](plexus::io::io_error e)
@@ -90,7 +90,7 @@ TEST_CASE("mock byte_channel injects error exactly once after drain", "[testing]
 TEST_CASE("mock byte_channel injects close exactly once after drain", "[testing][mock][fidelity]")
 {
     harness h;
-    auto    ch = h.make_channel();
+    auto ch = h.make_channel();
 
     int closes = 0;
     ch.on_closed([&]() { ++closes; });
@@ -105,7 +105,7 @@ TEST_CASE("mock byte_channel injects close exactly once after drain", "[testing]
 TEST_CASE("mock byte_channel returns the configured remote endpoint", "[testing][mock][fidelity]")
 {
     harness h;
-    auto    ch = h.make_channel();
+    auto ch = h.make_channel();
 
     ch.set_remote_endpoint({"mock", "node-7"});
     const auto ep = ch.remote_endpoint();
@@ -117,7 +117,7 @@ TEST_CASE("mock byte_channel returns the configured remote endpoint", "[testing]
 TEST_CASE("mock byte_channel advance drives posted inbound across a step", "[testing][mock][fidelity]")
 {
     harness h;
-    auto    ch = h.make_channel();
+    auto ch = h.make_channel();
 
     bool fired = false;
     ch.on_data([&](std::span<const std::byte>) { fired = true; });

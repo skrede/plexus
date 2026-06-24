@@ -116,7 +116,7 @@ static_assert(plexus::io::byte_channel<broken_channel>,
 
 TEST_CASE("wire_bytes owner keeps the bytes alive past the source scope", "[seam]")
 {
-    const std::byte     *aliased = nullptr;
+    const std::byte *aliased = nullptr;
     plexus::wire_bytes<> wb;
 
     {

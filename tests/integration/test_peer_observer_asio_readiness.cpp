@@ -8,15 +8,15 @@ TEST_CASE("observer over asio: on_peer_ready over the REAL loop, then the awaite
           "over real TCP (first-publish-loss-free)",
           "[integration][observer][asio]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "ready-then-publish-over-tcp";
-    int               proven       = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "ready-then-publish-over-tcp";
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
         recording_observer rec;
         a.eng.add_observer(rec);
 
@@ -31,7 +31,7 @@ TEST_CASE("observer over asio: on_peer_ready over the REAL loop, then the awaite
 
         // The awaited publish: A is the subscriber; B publishes and the frame lands at
         // A's per-session sink — proving the subscribe round-trip wired the fan-out.
-        auto                    *a_to_b = a.eng.session_for(id_b);
+        auto *a_to_b = a.eng.session_for(id_b);
         std::vector<std::string> a_received;
         a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(to_string(d)); });
 
@@ -53,13 +53,13 @@ TEST_CASE("observer over asio: ready fires EXACTLY once per cycle across a real 
           "[integration][observer][asio]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
         recording_observer rec;
         a.eng.add_observer(rec);
 
@@ -86,13 +86,13 @@ TEST_CASE("observer over asio: premature-ready window — ready stays 1 across t
           "[integration][observer][asio]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
         recording_observer rec;
         a.eng.add_observer(rec);
 

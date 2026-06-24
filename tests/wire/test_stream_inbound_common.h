@@ -60,7 +60,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -82,7 +82,7 @@ using stream_t   = stream_inbound<timer_t, executor_t &>;
 // that payload_deadline(N) = N ms (N/1024 s) is directly legible — small frames
 // (N below 512) clamp to the 500 ms floor, larger frames get a proportionally
 // longer deadline. These are test tunables, not the production defaults.
-constexpr auto        k_floor      = std::chrono::milliseconds(500);
+constexpr auto k_floor             = std::chrono::milliseconds(500);
 constexpr std::size_t k_throughput = 1024; // bytes/sec -> 1 ns per byte * 1e6
 
 inline stream_inbound_config test_config()
@@ -110,8 +110,8 @@ inline std::vector<std::byte> encode_complete(std::size_t payload_size)
 
 struct counters
 {
-    int                        frames{0};
-    int                        closes{0};
+    int frames{0};
+    int closes{0};
     std::optional<close_cause> last_cause;
 };
 
@@ -120,9 +120,9 @@ struct counters
 struct fixture
 {
     inproc_bus<manual_clock> bus;
-    executor_t               ex{bus};
-    counters                 c;
-    stream_t                 stream{ex, test_config()};
+    executor_t ex{bus};
+    counters c;
+    stream_t stream{ex, test_config()};
 
     fixture()
     {

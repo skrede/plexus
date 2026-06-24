@@ -70,10 +70,10 @@ struct temp_sock
 
     temp_sock()
     {
-        char        tmpl[] = "/tmp/pxu-XXXXXX";
-        const char *made   = ::mkdtemp(tmpl);
-        dir                = made ? made : "";
-        path               = dir + "/s";
+        char tmpl[]      = "/tmp/pxu-XXXXXX";
+        const char *made = ::mkdtemp(tmpl);
+        dir              = made ? made : "";
+        path             = dir + "/s";
     }
 
     ~temp_sock()
@@ -90,14 +90,14 @@ struct temp_sock
 // ends and pumps one io_context.
 struct loopback
 {
-    temp_sock                              sock;
-    ::asio::io_context                     io;
-    pasio::unix_listener                   listener{io, short_cfg()};
-    std::unique_ptr<pasio::unix_channel>   server;
+    temp_sock sock;
+    ::asio::io_context io;
+    pasio::unix_listener listener{io, short_cfg()};
+    std::unique_ptr<pasio::unix_channel> server;
     ::asio::local::stream_protocol::socket client{io};
 
     std::optional<wire::close_cause> caused;
-    int                              closes{0};
+    int closes{0};
 
     loopback()
     {

@@ -48,8 +48,8 @@ public:
 private:
     struct impl;
 
-    ::asio::io_context   &m_io;
-    std::string           m_service_type;
+    ::asio::io_context &m_io;
+    std::string m_service_type;
     std::unique_ptr<impl> m_impl;
 };
 

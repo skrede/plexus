@@ -92,17 +92,17 @@ TEST_CASE("latched retention adds no allocation beyond the frame-once publish", 
     using sink_forwarder = plexus::io::message_forwarder<sink_policy>;
 
     const std::string payload = "steady-state-body";
-    constexpr int     K       = 256;
+    constexpr int K           = 256;
 
     // The per-publish allocation count over a single subscriber, topic either latched or not. The
     // retain holds the already-framed shared owner by addref, so it adds nothing beyond it.
     const auto allocs_per_publish = [&](bool latched)
     {
-        sink_executor            ex;
-        sink_channel             ch(ex);
+        sink_executor ex;
+        sink_channel ch(ex);
         plexus::log::null_logger log_sink;
-        sink_forwarder           fwd{log_sink};
-        sink_forwarder::peer     peer{ch, "node-a"};
+        sink_forwarder fwd{log_sink};
+        sink_forwarder::peer peer{ch, "node-a"};
         if(latched)
             fwd.latch("topic");
         fwd.attach_for_fanout(peer, "topic");

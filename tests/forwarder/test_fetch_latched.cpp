@@ -46,7 +46,7 @@ struct capture
         sink.on_data([this](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
     }
 
-    inproc_channel<>                    sink;
+    inproc_channel<> sink;
     std::vector<std::vector<std::byte>> frames;
 };
 
@@ -80,16 +80,16 @@ TEST_CASE("a none+pull subscriber gets 0 on subscribe, then fetch_latched caps a
     // Reproducibility: the PULL delivery effects are proven over repeated runs.
     for(int iter = 0; iter < 50; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        capture           cap(ex);
-        auto              peer = make_peer(ch, cap, "node-a");
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "node-a");
         // The topic_hash the wire fetch_latched_request would carry.
         const auto hash = plexus::wire::fqn_topic_hash("topic");
 
         plexus::log::null_logger sink;
-        forwarder                fwd{sink};
+        forwarder fwd{sink};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
         for(int i = 0; i < 5; ++i)
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));
@@ -119,14 +119,14 @@ TEST_CASE("a none+pull subscriber gets 0 on subscribe, then fetch_latched caps a
 
 TEST_CASE("fetch_latched against a never-declared topic replays zero frames (no crash)", "[fetch_latched][forwarder]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch(ex);
-    capture           cap(ex);
-    auto              peer = make_peer(ch, cap, "node-a");
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.fetch_latched(peer, plexus::wire::fqn_topic_hash("nope"), 5);
     ex.drain();
     REQUIRE(data_bodies(cap).empty());

@@ -17,20 +17,20 @@ using namespace serial_fixture;
 // is never made from one run).
 TEST_CASE("serial channel: a framed message round-trips over an openpty pair, looped", "[integration][serial][roundtrip]")
 {
-    constexpr int     k_iterations = 50;
-    const std::string payload      = "plexus-serial-pty-payload";
-    int               delivered    = 0;
+    constexpr int k_iterations = 50;
+    const std::string payload  = "plexus-serial-pty-payload";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        pty_pair           pty;
+        pty_pair pty;
         ::asio::io_context io;
 
         auto tx = adopt_channel(io, pty.take_master());
         auto rx = adopt_channel(io, pty.take_slave());
 
         std::optional<std::string> received;
-        plexus::log::null_logger   router_sink;
-        pio::frame_router          router{router_sink};
+        plexus::log::null_logger router_sink;
+        pio::frame_router router{router_sink};
         router.on_unidirectional(
                 [&](const wire::frame_header &, std::span<const std::byte> inner)
                 {
@@ -64,17 +64,17 @@ TEST_CASE("serial channel: a peer_session pair completes the point-at-port hands
           "[integration][serial][handshake]")
 {
     constexpr int k_iterations = 50;
-    int           completed    = 0;
+    int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        pty_pair           pty;
+        pty_pair pty;
         ::asio::io_context io;
 
         plexus::log::null_logger sink;
-        serial_msg_fwd           req_messages{sink};
-        serial_msg_fwd           resp_messages{sink};
-        serial_rpc_fwd           req_procedures{io, k_long_timeout, sink};
-        serial_rpc_fwd           resp_procedures{io, k_long_timeout, sink};
+        serial_msg_fwd req_messages{sink};
+        serial_msg_fwd resp_messages{sink};
+        serial_rpc_fwd req_procedures{io, k_long_timeout, sink};
+        serial_rpc_fwd resp_procedures{io, k_long_timeout, sink};
 
         pio::peer_context<pasio::serial_policy> req_ctx;  // the dialer (requester) slot
         pio::peer_context<pasio::serial_policy> resp_ctx; // the listener (responder) bootstrap slot

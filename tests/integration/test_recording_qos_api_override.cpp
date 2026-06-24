@@ -15,8 +15,8 @@ TEST_CASE("integration.recording_qos a per-topic publisher override raises captu
     // the (off) node default. Only the overridden topic encodes.
     counting_codec selected_codec;
     counting_codec bystander_codec;
-    auto           selected_encodes  = selected_codec.encodes;
-    auto           bystander_encodes = bystander_codec.encodes;
+    auto selected_encodes  = selected_codec.encodes;
+    auto bystander_encodes = bystander_codec.encodes;
 
     typed_subscriber sub_sel{n.a, "selected", [](const sample &) {}};
     typed_subscriber sub_by{n.a, "bystander", [](const sample &) {}};

@@ -53,8 +53,8 @@ using driver_t      = pio::reconnect<pasio::asio_policy, pasio::asio_transport, 
 
 namespace reconnect_asio_fixture {
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
@@ -72,14 +72,14 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // destruction unwinds channels before the io_context.
 struct tcp_reconnect
 {
-    ::asio::io_context    io;
+    ::asio::io_context io;
     pasio::asio_transport transport{io};
 
     plexus::log::null_logger sink;
-    msg_forwarder            req_messages{sink};
-    msg_forwarder            resp_messages{sink};
-    rpc_forwarder            req_procedures{io, k_long_timeout, sink};
-    rpc_forwarder            resp_procedures{io, k_long_timeout, sink};
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
+    rpc_forwarder req_procedures{io, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
 
     // The per-peer records own the channel + the epoch well and OUTLIVE every
     // incarnation, so each rebuilt session draws a strictly-later epoch with no
@@ -88,12 +88,12 @@ struct tcp_reconnect
     // std::optional sessions so destruction unwinds the session first.
     plexus::io::peer_context<pasio::asio_policy> req_ctx;
     plexus::io::peer_context<pasio::asio_policy> resp_ctx;
-    std::optional<driver_t>                      driver;
-    std::optional<session>                       requester;
-    std::optional<session>                       responder;
+    std::optional<driver_t> driver;
+    std::optional<session> requester;
+    std::optional<session> responder;
 
     std::uint16_t port{0};
-    int           drops_seen{0};
+    int drops_seen{0};
 
     // listen_first: bind the listener on an ephemeral port BEFORE the driver so the
     // driver dials the real port. When false the caller supplies a (closed) port to

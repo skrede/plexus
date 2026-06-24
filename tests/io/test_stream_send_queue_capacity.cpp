@@ -4,7 +4,7 @@ using namespace stream_send_queue_fixture;
 
 TEST_CASE("stream_send_queue default capacity is unbounded — the at-capacity signal is inert", "[io][stream_send_queue]")
 {
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink()};
 
     REQUIRE(q.full() == false);
@@ -16,7 +16,7 @@ TEST_CASE("stream_send_queue default capacity is unbounded — the at-capacity s
 
 TEST_CASE("stream_send_queue bounded capacity fires the at-capacity signal and refuses past the cap", "[io][stream_send_queue]")
 {
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink(), 2};
 
     REQUIRE(q.enqueue(bytes_of({1}))); // admitted, now in flight (1 byte)
@@ -40,7 +40,7 @@ TEST_CASE("stream_send_queue admits a single frame LARGER than the cap onto an e
     // size — the per-message ceiling (enforced upstream at publish) is the sole size authority.
     // So an EMPTY queue must admit one frame of any size, even one far past the cap; only the
     // EXTRA frames queued behind it are refused once the cap is reached.
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink(), 4}; // a tiny 4-byte backlog cap
 
     // A 10-byte frame (> the 4-byte cap) is admitted onto the empty queue and driven.
@@ -64,7 +64,7 @@ TEST_CASE("stream_send_queue admits a single frame LARGER than the cap onto an e
 
 TEST_CASE("stream_send_queue caps on summed BYTES, not entry count", "[io][stream_send_queue]")
 {
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink(), 8};
 
     REQUIRE(q.enqueue(bytes_of({1, 2, 3, 4, 5}))); // one ENTRY, 5 of 8 bytes
@@ -86,7 +86,7 @@ TEST_CASE("stream_send_queue near-cap boundary: byte accounting does not wrap an
     // Overflow boundary: a frame at cap-1 bytes followed by a small frame whose sum
     // exceeds the cap must be refused (compare-before-add), and the running total must
     // NOT wrap below the cap and re-admit. Cap = 16; first frame = 15 bytes (cap-1).
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink(), 16};
 
     REQUIRE(q.enqueue(std::vector<std::byte>(15))); // 15 of 16 bytes

@@ -8,7 +8,7 @@ TEST_CASE("mdnspp re-advertise on a live server updates the record in place", "[
 {
     ::asio::io_context io;
 
-    pmdns::mdnspp_discovery         advertiser(io, "_plexus._tcp.local.");
+    pmdns::mdnspp_discovery advertiser(io, "_plexus._tcp.local.");
     plexus::discovery::service_info local{"inplace._plexus._tcp.local.", {"tcp", "127.0.0.1:5566"}, {{"node_id", "0022"}, {"plexus/tcp/port", "5566"}}};
     advertiser.advertise(local);
 
@@ -22,8 +22,8 @@ TEST_CASE("mdnspp re-advertise on a live server updates the record in place", "[
     local.metadata.emplace_back("plexus/schema", "1");
     advertiser.advertise(local);
 
-    pmdns::mdnspp_discovery                          discovery(io, "_plexus._tcp.local.");
-    int                                              resolved_count = 0;
+    pmdns::mdnspp_discovery discovery(io, "_plexus._tcp.local.");
+    int resolved_count = 0;
     std::vector<std::pair<std::string, std::string>> resolved_metadata;
     discovery.browse(
             [&](const plexus::discovery::service_info &svc)

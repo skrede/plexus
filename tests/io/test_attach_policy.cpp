@@ -4,10 +4,10 @@ using namespace attach_policy_fixture;
 
 TEST_CASE("io.attach_policy admits a matching key-id with a valid recomputed proof", "[io][attach_policy]")
 {
-    const auto          material = material_of(0xA0);
+    const auto material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
 
-    auto       facts = facts_for(0x01, attach_role::initiator);
+    auto facts       = facts_for(0x01, attach_role::initiator);
     const auto proof = proof_for(material, facts);
     facts.proof      = proof;
 
@@ -16,7 +16,7 @@ TEST_CASE("io.attach_policy admits a matching key-id with a valid recomputed pro
 
 TEST_CASE("io.attach_policy refuses a wrong proof", "[io][attach_policy]")
 {
-    const auto          material = material_of(0xA0);
+    const auto material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
 
     auto facts = facts_for(0x01, attach_role::initiator);
@@ -29,10 +29,10 @@ TEST_CASE("io.attach_policy refuses a wrong proof", "[io][attach_policy]")
 
 TEST_CASE("io.attach_policy refuses an unknown / removed key-id", "[io][attach_policy]")
 {
-    const auto          material = material_of(0xA0);
+    const auto material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
 
-    auto       facts = facts_for(0x09, attach_role::initiator); // no key 0x09 in the store
+    auto facts       = facts_for(0x09, attach_role::initiator); // no key 0x09 in the store
     const auto proof = proof_for(material, facts);
     facts.proof      = proof;
 
@@ -41,8 +41,8 @@ TEST_CASE("io.attach_policy refuses an unknown / removed key-id", "[io][attach_p
 
 TEST_CASE("io.attach_policy dual single-key keystores each admit their own peer (rotation)", "[io][attach_policy]")
 {
-    const auto          old_key = material_of(0xA0);
-    const auto          new_key = material_of(0xB0);
+    const auto old_key = material_of(0xA0);
+    const auto new_key = material_of(0xB0);
     psk_keystore_policy policy{{{key_id_of(0x01), old_key}, {key_id_of(0x02), new_key}}, fake_hmac()};
 
     auto old_facts  = facts_for(0x01, attach_role::initiator);
@@ -64,12 +64,12 @@ TEST_CASE("io.attach_policy dual single-key keystores each admit their own peer 
 
 TEST_CASE("io.attach_policy refuses a proof presented under the other role (reflection)", "[io][attach_policy]")
 {
-    const auto          material = material_of(0xA0);
+    const auto material = material_of(0xA0);
     psk_keystore_policy policy{{{key_id_of(0x01), material}}, fake_hmac()};
 
     // Compute the proof for the initiator direction, then present it as a responder.
-    auto       as_initiator = facts_for(0x01, attach_role::initiator);
-    const auto reflected    = proof_for(material, as_initiator);
+    auto as_initiator    = facts_for(0x01, attach_role::initiator);
+    const auto reflected = proof_for(material, as_initiator);
 
     auto as_responder  = facts_for(0x01, attach_role::responder);
     as_responder.proof = reflected;

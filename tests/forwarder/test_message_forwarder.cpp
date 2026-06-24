@@ -6,14 +6,14 @@ TEST_CASE("attach refcount gate emits exactly one subscribe on 0->1", "[forwarde
 {
     for(int iter = 0; iter < 100; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        capture           cap(ex);
-        auto              peer = make_peer(ch, cap, "node-a");
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder                fwd{sink};
+        forwarder fwd{sink};
         REQUIRE(fwd.attach(peer, "alpha"));       // 0->1
         REQUIRE_FALSE(fwd.attach(peer, "alpha")); // 1->2, no emit
         ex.drain();
@@ -26,14 +26,14 @@ TEST_CASE("resurrection re-emits one subscribe per peer-rooted remembered topic"
 {
     for(int iter = 0; iter < 100; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        capture           cap(ex);
-        auto              peer = make_peer(ch, cap, "node-a");
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder                fwd{sink};
+        forwarder fwd{sink};
         fwd.remember_demand("node-a", "alpha");
         fwd.remember_demand("node-a", "beta");
         ex.drain();
@@ -51,18 +51,18 @@ TEST_CASE("resurrection carries the remembered type_id onto the re-subscribe", "
     // subscribe carrying that SAME type_id when the counted path resurrects it. Looped
     // over several remember/resurrect cycles (no success from a single run).
     constexpr std::uint64_t k_type_id = 0xC0FFEE1234567890ULL;
-    constexpr int           k_cycles  = 16;
-    int                     proven    = 0;
+    constexpr int k_cycles            = 16;
+    int proven                        = 0;
     for(int iter = 0; iter < k_cycles; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        capture           cap(ex);
-        auto              peer = make_peer(ch, cap, "node-a");
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder                fwd{sink};
+        forwarder fwd{sink};
         fwd.remember_demand("node-a", "alpha", plexus::io::subscriber_qos{}, k_type_id);
         resurrect(fwd, peer);
         ex.drain();
@@ -81,14 +81,14 @@ TEST_CASE("resurrection keeps an undeclared demand untyped on the re-subscribe",
     // undeclared sentinel (0), never a fabricated type.
     for(int iter = 0; iter < 16; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        capture           cap(ex);
-        auto              peer = make_peer(ch, cap, "node-a");
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder                fwd{sink};
+        forwarder fwd{sink};
         fwd.remember_demand("node-a", "alpha");
         resurrect(fwd, peer);
         ex.drain();
@@ -103,15 +103,15 @@ TEST_CASE("frame-once fan-out delivers byte-identical frames to each subscriber"
 {
     for(int iter = 0; iter < 100; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch_a(ex), ch_b(ex);
-        capture           cap_a(ex), cap_b(ex);
-        auto              peer_a = make_peer(ch_a, cap_a, "node-a");
-        auto              peer_b = make_peer(ch_b, cap_b, "node-b");
+        inproc_channel<> ch_a(ex), ch_b(ex);
+        capture cap_a(ex), cap_b(ex);
+        auto peer_a = make_peer(ch_a, cap_a, "node-a");
+        auto peer_b = make_peer(ch_b, cap_b, "node-b");
 
         plexus::log::null_logger sink;
-        forwarder                fwd{sink};
+        forwarder fwd{sink};
         fwd.attach(peer_a, "alpha");
         fwd.attach(peer_b, "alpha");
         ex.drain();
@@ -130,14 +130,14 @@ TEST_CASE("frame-once fan-out delivers byte-identical frames to each subscriber"
 
 TEST_CASE("detach_all stops fan-out", "[forwarder]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch(ex);
-    capture           cap(ex);
-    auto              peer = make_peer(ch, cap, "node-a");
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.attach(peer, "alpha");
     ex.drain();
     cap.frames.clear();

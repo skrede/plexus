@@ -6,7 +6,7 @@ TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary", "[
 {
     const auto keys = fixed_keys();
 
-    wire_lower                                 recv_wire;
+    wire_lower recv_wire;
     datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     std::vector<std::byte> delivered;
@@ -17,11 +17,11 @@ TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary", "[
     // epoch sealed with the matching forward-derived key at initial_epoch = e — so the
     // wire epoch byte wraps 0xff -> 0x00 and the seal/open nonce epoch field must agree.
     plexus::crypto::aead_key send_key = keys.k_send; // epoch 0 send key
-    const std::uint32_t      epochs   = 600;
+    const std::uint32_t epochs        = 600;
     for(std::uint32_t e = 0; e < epochs; ++e)
     {
-        wire_lower                                 send_wire;
-        derived_keys                               ek{.k_send = send_key, .k_recv = keys.k_recv};
+        wire_lower send_wire;
+        derived_keys ek{.k_send = send_key, .k_recv = keys.k_recv};
         datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, ek, e);
 
         std::vector<std::byte> on_wire;
@@ -41,11 +41,11 @@ TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary", "[
 
 TEST_CASE("crypto.datagram_replay drops a datagram below the window floor as too-old", "[crypto][datagram_replay]")
 {
-    const auto        keys        = fixed_keys();
+    const auto keys               = fixed_keys();
     const std::size_t past_window = plexus::crypto::k_anti_replay_window_bits + 8;
-    const auto        wire        = seal_datagrams(keys, past_window + 1);
+    const auto wire               = seal_datagrams(keys, past_window + 1);
 
-    wire_lower                                 recv_wire;
+    wire_lower recv_wire;
     datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     int delivered = 0;

@@ -26,7 +26,7 @@ TEST_CASE("zerocopy_take: wire_bytes aliases the slot and pins the refcount", "[
     {
         // A standin slab slot + its take_refcount (the ring would own these).
         alignas(8) std::byte slot[16]{};
-        const std::uint32_t  value = 0x5A5A0000u | static_cast<std::uint32_t>(i);
+        const std::uint32_t value = 0x5A5A0000u | static_cast<std::uint32_t>(i);
         std::memcpy(slot, &value, sizeof(value));
         std::atomic<std::uint32_t> refcount{0};
 
@@ -58,12 +58,12 @@ TEST_CASE("zerocopy_take: wire_bytes aliases the slot and pins the refcount", "[
 
 TEST_CASE("zerocopy_take: a moved wire_bytes owner unpins exactly once", "[shm][zerocopy_take]")
 {
-    alignas(8) std::byte       slot[8]{};
+    alignas(8) std::byte slot[8]{};
     std::atomic<std::uint32_t> refcount{0};
 
     {
-        taken_message                      msg = test::handle_test_access::make_taken(slot, sizeof(slot), &refcount);
-        plexus::wire_bytes<shm_slot_owner> a   = msg.as_wire_bytes();
+        taken_message msg                    = test::handle_test_access::make_taken(slot, sizeof(slot), &refcount);
+        plexus::wire_bytes<shm_slot_owner> a = msg.as_wire_bytes();
         REQUIRE(refcount.load() == 2); // handle pin + view pin
 
         // Move the owner out: the source becomes inert, the count is unchanged.

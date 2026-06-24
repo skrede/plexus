@@ -4,7 +4,7 @@ using namespace shm_ring_backpressure_fixture;
 
 TEST_CASE("ring_backpressure: a skip tombstone at the cursor stays congested (one-slot step)", "[shm][ring_backpressure]")
 {
-    fixture       f;
+    fixture f;
     std::uint32_t cursor_index = 0;
     REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
     const std::uint64_t pinned_pos = f.ring.tail_position();
@@ -22,7 +22,7 @@ TEST_CASE("ring_backpressure: a skip tombstone at the cursor stays congested (on
 
     // A consumer cursor exactly at the tombstoned position sees dif==0 &&
     // payload_len==k_skip_len -> congested (the one-slot step), NOT lagged.
-    const std::uint64_t            tomb_cursor = pinned_pos + fixture::k_cells;
+    const std::uint64_t tomb_cursor = pinned_pos + fixture::k_cells;
     broadcast_ring::consume_result tomb;
     REQUIRE(f.ring.consume(tomb_cursor, tomb) == loan_status::congested);
 
@@ -32,7 +32,7 @@ TEST_CASE("ring_backpressure: a skip tombstone at the cursor stays congested (on
 
 TEST_CASE("ring_backpressure: a lapped subscriber recovers in one take (O(1) jump)", "[shm][ring_backpressure]")
 {
-    fixture         f;
+    fixture f;
     slot_subscriber sub(f.ring);
     REQUIRE(sub.registered());
     const std::uint64_t start_cursor = sub.cursor();
@@ -66,7 +66,7 @@ TEST_CASE("ring_backpressure: a lapped subscriber recovers in one take (O(1) jum
 
 TEST_CASE("ring_backpressure: reliable gates on the slowest cursor (lossless)", "[shm][ring_backpressure]")
 {
-    fixture       f;
+    fixture f;
     std::uint32_t cursor_index = 0;
     REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
     std::uint64_t cursor = f.ring.tail_position();

@@ -11,7 +11,7 @@ TEST_CASE("obs tap: an rpc round-trip fires call once (caller), serve once (prov
     using plexus::wire::rpc_status;
 
     manual_clock::reset();
-    rpc_net            net;
+    rpc_net net;
     recording_observer caller_rec;
     recording_observer provider_rec;
     net.caller.add_observer(caller_rec);

@@ -7,12 +7,12 @@ TEST_CASE("udp fragment best_effort: an oversize payload reassembles byte-equal 
     // A small per-datagram budget so a modest payload fragments into many datagrams; the
     // total stays well inside the loopback socket buffer so a lossless best_effort burst
     // arrives intact and reassembles into ONE message.
-    constexpr std::size_t budget       = 256;
-    constexpr int         k_iterations = 20;
-    int                   proven       = 0;
+    constexpr std::size_t budget = 256;
+    constexpr int k_iterations   = 20;
+    int proven                   = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io};
         pasio::udp_transport client{io, budget, fast_hs};
 
@@ -53,12 +53,12 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
     // Inject the fragments of one message directly at the accepting channel but WITHHOLD
     // one: the message never completes, and the per-message reassembly timeout reclaims the
     // whole partial -> no on_data ever fires (no partial delivery).
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io, /*budget=*/256, fast_hs};
 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
-    int                                 deliveries = 0;
+    int deliveries = 0;
     server.on_accepted(
             [&](std::unique_ptr<pasio::udp_channel> ch)
             {
@@ -74,10 +74,10 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
     REQUIRE(accepted != nullptr);
 
     // Build 4 best_effort fragments of one msg_id and inject all but index 2.
-    auto                                payload = make_payload(1000, 0x5A);
-    const std::uint16_t                 msg_id  = 7;
+    auto payload               = make_payload(1000, 0x5A);
+    const std::uint16_t msg_id = 7;
     std::vector<std::vector<std::byte>> datagrams;
-    pio::fragment_sink                  sink = [&](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
+    pio::fragment_sink sink = [&](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
     {
         std::vector<std::byte> dg;
         wire::wrap_udp_fragment_into(dg, wire::udp_envelope_kind::best_effort, static_cast<std::uint16_t>(idx), msg_id, idx, cnt, slice);

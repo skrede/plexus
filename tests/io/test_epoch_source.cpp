@@ -16,7 +16,7 @@ using plexus::io::epoch_source;
 
 TEST_CASE("epoch_source: mints strictly-distinct, non-zero epochs past the u8 boundary", "[io][epoch_source]")
 {
-    epoch_source            well;
+    epoch_source well;
     std::set<std::uint64_t> seen;
 
     // 600 mints crosses the old u8 wrap (256) more than twice over: under u8 the

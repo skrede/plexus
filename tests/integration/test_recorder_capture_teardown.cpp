@@ -13,13 +13,13 @@ TEST_CASE("a recorder destroyed mid-session deregisters before teardown and surv
     // post-dtor. The handle deregisters its tap and drains the ring out in its dtor, so the
     // already-posted self-re-posting drain task finds its block expired and exits without
     // reading a freed ring. asan (-fno-sanitize-recover) is the real gate.
-    session_fixture     fx;
+    session_fixture fx;
     in_memory_byte_sink sink;
-    const auto          id = make_id(0x5D);
+    const auto id = make_id(0x5D);
 
     {
         plexus::node_options opts;
-        inproc_node          n{fx.ex, fx.disc, id, fx.ta, opts};
+        inproc_node n{fx.ex, fx.disc, id, fx.ta, opts};
 
         {
             auto rec = n.make_recorder(sink);
@@ -29,7 +29,7 @@ TEST_CASE("a recorder destroyed mid-session deregisters before teardown and surv
             {
                 plexus::topic_qos qos;
                 qos.latch = true;
-                plexus::publisher<>  pub{n, "teardown.topic", qos};
+                plexus::publisher<> pub{n, "teardown.topic", qos};
                 plexus::subscriber<> sub{n, "teardown.topic", [](std::span<const std::byte>, const message_info &) {}};
                 for(int i = 0; i < 8; ++i)
                 {
@@ -51,6 +51,6 @@ TEST_CASE("a recorder destroyed mid-session deregisters before teardown and surv
 
     // The pre-dtor records were drained out; the stream head is recoverable.
     record_stream_reader reader{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE(reader.read_definitions(defs));
 }

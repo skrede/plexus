@@ -15,7 +15,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -52,16 +52,16 @@ using manual_rpc     = plexus::io::procedure_forwarder<manual_policy>;
 // handshake timer resolves it.
 struct timeout_harness
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    inproc_channel<manual_clock>  peer_ch{ex}; // a silent peer that never responds
+    inproc_channel<manual_clock> peer_ch{ex}; // a silent peer that never responds
 
     plexus::log::null_logger sink;
-    manual_msg               messages{sink};
-    manual_rpc               procedures{ex, std::chrono::hours(1), sink};
+    manual_msg messages{sink};
+    manual_rpc procedures{ex, std::chrono::hours(1), sink};
 
     plexus::io::peer_context<manual_policy> ctx; // the record owns the dialer channel
-    manual_session                          requester;
+    manual_session requester;
 
     explicit timeout_harness(std::chrono::nanoseconds timeout)
             : ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}
@@ -86,7 +86,7 @@ TEST_CASE("inproc peer_session: a handshake that never completes aborts once the
     for(int iter = 0; iter < 100; ++iter)
     {
         manual_clock::reset();
-        const auto      deadline = std::chrono::milliseconds(50);
+        const auto deadline = std::chrono::milliseconds(50);
         timeout_harness h(deadline);
 
         // Before the deadline: request sent, no response arrived — no abort.
@@ -107,20 +107,20 @@ namespace {
 // CAN complete before the deadline.
 struct manual_link
 {
-    inproc_bus<manual_clock>       bus;
-    inproc_executor<manual_clock>  ex{bus};
+    inproc_bus<manual_clock> bus;
+    inproc_executor<manual_clock> ex{bus};
     inproc_transport<manual_clock> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    manual_msg               req_messages{sink};
-    manual_msg               resp_messages{sink};
-    manual_rpc               req_procedures{ex, std::chrono::hours(1), sink};
-    manual_rpc               resp_procedures{ex, std::chrono::hours(1), sink};
+    manual_msg req_messages{sink};
+    manual_msg resp_messages{sink};
+    manual_rpc req_procedures{ex, std::chrono::hours(1), sink};
+    manual_rpc resp_procedures{ex, std::chrono::hours(1), sink};
 
     plexus::io::peer_context<manual_policy> req_ctx;  // the dialer slot's per-peer record
     plexus::io::peer_context<manual_policy> resp_ctx; // the accepted slot's per-peer record
-    std::optional<manual_session>           requester;
-    std::optional<manual_session>           responder;
+    std::optional<manual_session> requester;
+    std::optional<manual_session> responder;
 
     explicit manual_link(std::chrono::nanoseconds timeout)
     {
@@ -159,7 +159,7 @@ TEST_CASE("inproc peer_session: completing before the deadline cancels the timer
     for(int iter = 0; iter < 100; ++iter)
     {
         manual_clock::reset();
-        const auto  deadline = std::chrono::milliseconds(50);
+        const auto deadline = std::chrono::milliseconds(50);
         manual_link l(deadline);
 
         l.drive();

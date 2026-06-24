@@ -58,7 +58,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -90,8 +90,8 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 inline std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -123,7 +123,7 @@ inline reconnect_config forever_cfg()
 struct fan_net
 {
     static constexpr std::uint8_t k_pub_seed = 0xD0;
-    static constexpr const char  *k_topic    = "topic";
+    static constexpr const char *k_topic     = "topic";
 
     explicit fan_net(std::size_t subscriber_count)
             : pub_transport(ex, bus)
@@ -132,9 +132,9 @@ struct fan_net
         pub.listen({"inproc", "pub"});
         for(std::size_t i = 0; i < subscriber_count; ++i)
         {
-            const auto        seed = static_cast<std::uint8_t>(0x10 + i);
-            auto              t    = std::make_unique<transport_t>(ex, bus);
-            auto              e    = std::make_unique<engine>(*t, ex, make_cfg(seed), k_long_timeout, forever_cfg(), k_seed, sink, false);
+            const auto seed        = static_cast<std::uint8_t>(0x10 + i);
+            auto t                 = std::make_unique<transport_t>(ex, bus);
+            auto e                 = std::make_unique<engine>(*t, ex, make_cfg(seed), k_long_timeout, forever_cfg(), k_seed, sink, false);
             const std::string name = "sub-" + std::to_string(i);
             e->listen({"inproc", name});
             e->note_peer(pub_id(), {"inproc", "pub"});
@@ -154,13 +154,13 @@ struct fan_net
         ex.drain();
     }
 
-    inproc_bus<manual_clock>                  bus;
-    inproc_executor<manual_clock>             ex{bus};
-    transport_t                               pub_transport;
-    plexus::log::null_logger                  sink;
-    engine                                    pub;
+    inproc_bus<manual_clock> bus;
+    inproc_executor<manual_clock> ex{bus};
+    transport_t pub_transport;
+    plexus::log::null_logger sink;
+    engine pub;
     std::vector<std::unique_ptr<transport_t>> sub_transports;
-    std::vector<std::unique_ptr<engine>>      subs;
+    std::vector<std::unique_ptr<engine>> subs;
 };
 
 // A caller and a provider engine on one inproc bus, connected through the production
@@ -170,7 +170,7 @@ struct rpc_net
 {
     static constexpr std::uint8_t k_caller_seed   = 0xA1;
     static constexpr std::uint8_t k_provider_seed = 0xB2;
-    static constexpr const char  *k_proc          = "svc";
+    static constexpr const char *k_proc           = "svc";
 
     rpc_net()
             : caller_transport(ex, bus)
@@ -198,13 +198,13 @@ struct rpc_net
         ex.drain();
     }
 
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t                   caller_transport;
-    transport_t                   provider_transport;
-    plexus::log::null_logger      sink;
-    engine                        caller;
-    engine                        provider;
+    transport_t caller_transport;
+    transport_t provider_transport;
+    plexus::log::null_logger sink;
+    engine caller;
+    engine provider;
 };
 
 }

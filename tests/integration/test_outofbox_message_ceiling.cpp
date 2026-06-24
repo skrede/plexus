@@ -10,15 +10,15 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over TCP at shipped defaults, 
     const auto frame = ceiling_frame(body);
 
     constexpr int iterations = 2;
-    int           proven     = 0;
+    int proven               = 0;
     for(int iter = 0; iter < iterations; ++iter)
     {
-        ::asio::io_context    io;
+        ::asio::io_context io;
         pasio::asio_transport server{io}; // NO size/back-pressure knobs — full defaults
         pasio::asio_transport client{io};
 
         std::unique_ptr<pasio::asio_channel> accepted, dialed;
-        std::vector<std::byte>               got;
+        std::vector<std::byte> got;
         server.on_accepted(
                 [&](std::unique_ptr<pasio::asio_channel> ch)
                 {
@@ -48,20 +48,20 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over AF_UNIX at shipped defaul
     const auto frame = ceiling_frame(body);
 
     constexpr int iterations = 2;
-    int           proven     = 0;
+    int proven               = 0;
     for(int iter = 0; iter < iterations; ++iter)
     {
-        char        tmpl[] = "/tmp/pxo-XXXXXX";
-        const char *made   = ::mkdtemp(tmpl);
+        char tmpl[]      = "/tmp/pxo-XXXXXX";
+        const char *made = ::mkdtemp(tmpl);
         REQUIRE(made != nullptr);
         const std::string path = std::string{made} + "/s";
 
-        ::asio::io_context    io;
+        ::asio::io_context io;
         pasio::unix_transport server{io}; // full defaults
         pasio::unix_transport client{io};
 
         std::unique_ptr<pasio::unix_channel> accepted, dialed;
-        std::vector<std::byte>               got;
+        std::vector<std::byte> got;
         server.on_accepted(
                 [&](std::unique_ptr<pasio::unix_channel> ch)
                 {

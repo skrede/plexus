@@ -11,7 +11,7 @@ TEST_CASE("integration.reassembler_dos malformed fragments are rejected without 
     for(int loop = 0; loop < 8; ++loop)
     {
         plexus::testing::harness h;
-        test_reassembler         r{h.ex};
+        test_reassembler r{h.ex};
 
         // idx >= cnt, cnt == 0, and cnt past the max_fragment_count ceiling are each rejected
         // before any indexing — looped so a state-carrying regression is caught.
@@ -47,7 +47,7 @@ TEST_CASE("integration.reassembler_dos a stalled partial is evicted on the per-m
     for(int loop = 0; loop < 8; ++loop)
     {
         plexus::testing::harness h;
-        test_reassembler         r{h.ex, {.per_message_timeout = timeout}};
+        test_reassembler r{h.ex, {.per_message_timeout = timeout}};
 
         bool delivered = false;
         r.on_deliver([&](std::span<const std::byte>) { delivered = true; });
@@ -83,8 +83,8 @@ TEST_CASE("integration.reassembler_dos the demux cap bounds the spoofed-source c
     using demux = plexus::datagram::detail::basic_inbound_demux<int, std::uint32_t, std::hash<std::uint32_t>>;
 
     constexpr std::size_t cap = 8;
-    demux                 d{cap};
-    int                   channels[cap];
+    demux d{cap};
+    int channels[cap];
 
     // A spoofed-source flood of distinct endpoints fills exactly the cap, then every
     // further NEW source is refused (insert returns false) so the caller drops it rather

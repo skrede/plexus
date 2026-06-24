@@ -6,14 +6,14 @@ using namespace host_identity_fixture;
 
 TEST_CASE("host_identity: a plaintext (no security posture) attach has no authenticated identity", "[integration][host_identity]")
 {
-    inproc_bus<>                            bus;
-    inproc_executor<>                       ex{bus};
-    inproc_transport<>                      transport{ex, bus};
-    plexus::log::null_logger                sink;
-    msg_forwarder                           req_messages{sink}, resp_messages{sink};
-    rpc_forwarder                           req_procedures{ex, k_long_timeout, sink}, resp_procedures{ex, k_long_timeout, sink};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    inproc_transport<> transport{ex, bus};
+    plexus::log::null_logger sink;
+    msg_forwarder req_messages{sink}, resp_messages{sink};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink}, resp_procedures{ex, k_long_timeout, sink};
     plexus::io::peer_context<inproc_policy> req_ctx, resp_ctx;
-    std::optional<session>                  requester, responder;
+    std::optional<session> requester, responder;
 
     transport.on_accepted(
             [&](std::unique_ptr<inproc_channel<>> ch)

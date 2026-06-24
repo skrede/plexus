@@ -72,7 +72,7 @@ TEST_CASE("dtls.mux: a same-host (unix) dial routes to the local member, never t
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         const std::string path = std::filesystem::temp_directory_path() / ("plexus_dtls_mux_unix_" + std::to_string(::getpid()) + "_" + std::to_string(iter) + ".sock");
-        std::error_code   rc;
+        std::error_code rc;
         std::filesystem::remove(path, rc);
 
         mux_pair n(server_id, client_id);

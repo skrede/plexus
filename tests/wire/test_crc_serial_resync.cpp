@@ -65,8 +65,8 @@ TEST_CASE("crc_serial: a lying oversized payload_len stays bounded — no over-r
     // A tiny payload cap so a crafted header that claims more than the cap exercises the
     // lying-length branch deterministically (independent of the 16 MiB default).
     crc_serial_inbound dec{/*max_payload=*/16};
-    int                drops = 0;
-    std::string        out;
+    int drops = 0;
+    std::string out;
     dec.on_match([&](std::span<const std::byte> f) { out.assign(reinterpret_cast<const char *>(f.data()), f.size()); });
     dec.on_drop(
             [&](close_cause c)
@@ -78,7 +78,7 @@ TEST_CASE("crc_serial: a lying oversized payload_len stays bounded — no over-r
     // A well-formed header whose declared payload_len (4096) dwarfs the 16-byte cap, with
     // only a few trailing bytes: the decorator must NOT wait to buffer 4096 bytes nor read
     // past the buffer — it drops on the over-cap length and resyncs.
-    auto                   hdr = encode_header(make_header(4096));
+    auto hdr = encode_header(make_header(4096));
     std::vector<std::byte> stream{hdr.begin(), hdr.end()};
     for(int i = 0; i < 8; ++i)
         stream.push_back(std::byte{0x00});

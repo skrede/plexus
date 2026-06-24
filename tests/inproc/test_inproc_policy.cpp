@@ -33,7 +33,7 @@ static_assert(plexus::Policy<inproc_policy>);
 
 TEST_CASE("inproc executor runs posted callbacks in order and drains to quiescence", "[inproc]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
 
     std::vector<int> order;
@@ -49,10 +49,10 @@ TEST_CASE("inproc executor runs posted callbacks in order and drains to quiescen
 
 TEST_CASE("inproc channel delivers bytes only after drain, never synchronously", "[inproc]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  a(ex);
-    inproc_channel<>  b(ex);
+    inproc_channel<> a(ex);
+    inproc_channel<> b(ex);
     a.connect_to(b.local_endpoint());
     b.connect_to(a.local_endpoint());
 
@@ -68,15 +68,15 @@ TEST_CASE("inproc channel delivers bytes only after drain, never synchronously",
 
 TEST_CASE("inproc channel close notifies the partner via the step-loop", "[inproc]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  a(ex);
-    inproc_channel<>  b(ex);
+    inproc_channel<> a(ex);
+    inproc_channel<> b(ex);
     a.connect_to(b.local_endpoint());
     b.connect_to(a.local_endpoint());
 
-    bool                 closed = false;
-    plexus::io::io_error err    = plexus::io::io_error::unknown;
+    bool closed              = false;
+    plexus::io::io_error err = plexus::io::io_error::unknown;
     b.on_closed([&] { closed = true; });
     b.on_error([&](plexus::io::io_error e) { err = e; });
 
@@ -91,7 +91,7 @@ TEST_CASE("static_discovery resolves a seeded name to its endpoint", "[inproc]")
 {
     using namespace plexus::discovery;
     plexus::io::endpoint ep{"inproc", "node-a"};
-    static_discovery     disc(std::vector<service_info>{{"alpha", ep, {}}});
+    static_discovery disc(std::vector<service_info>{{"alpha", ep, {}}});
 
     std::vector<service_info> resolved;
     disc.browse([&](const service_info &s) { resolved.push_back(s); });
@@ -104,7 +104,7 @@ TEST_CASE("static_discovery resolves a seeded name to its endpoint", "[inproc]")
 TEST_CASE("null_logger is usable through a logger& and is a no-op", "[inproc]")
 {
     plexus::log::null_logger sink;
-    plexus::log::logger     &as_base = sink;
+    plexus::log::logger &as_base = sink;
     as_base.warn("dropped on the floor"); // compiles, no-op, no observable effect
     SUCCEED("null_logger warn-and-drop seam exists");
 }
@@ -112,9 +112,9 @@ TEST_CASE("null_logger is usable through a logger& and is a no-op", "[inproc]")
 TEST_CASE("alloc_counter snapshots a global new/delete delta", "[inproc]")
 {
     plexus::testing::reset_alloc_count();
-    const auto     before      = plexus::testing::alloc_count();
-    volatile auto *p           = new int(7);
-    const auto     after_alloc = plexus::testing::alloc_count();
+    const auto before      = plexus::testing::alloc_count();
+    volatile auto *p       = new int(7);
+    const auto after_alloc = plexus::testing::alloc_count();
     delete p;
     REQUIRE(after_alloc > before); // the override counted the allocation
 }

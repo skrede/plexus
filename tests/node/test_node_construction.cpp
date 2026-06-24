@@ -56,9 +56,9 @@ plexus::node_options make_opts()
 // the substrate it borrows.
 struct host
 {
-    inproc_bus<>                        bus;
-    inproc_executor<>                   ex{bus};
-    inproc_transport<>                  transport{ex, bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    inproc_transport<> transport{ex, bus};
     plexus::discovery::static_discovery disc{{}};
 };
 
@@ -87,8 +87,8 @@ static_assert(!std::is_move_constructible_v<inproc_node>);
 
 TEST_CASE("node: constructs over the inproc substrate with a verbatim node_id", "[node][construction]")
 {
-    host        h;
-    const auto  id = make_id(0xA1);
+    host h;
+    const auto id = make_id(0xA1);
     inproc_node n{h.ex, h.disc, id, h.transport, make_opts()};
 
     REQUIRE(n.id() == id);
@@ -96,7 +96,7 @@ TEST_CASE("node: constructs over the inproc substrate with a verbatim node_id", 
 
 TEST_CASE("node: the escape hatches return the live engine objects", "[node][escape-hatch]")
 {
-    host        h;
+    host h;
     inproc_node n{h.ex, h.disc, make_id(0xB2), h.transport, make_opts()};
 
     // router() is the live engine; message_forwarder() forwards router().messages().
@@ -136,7 +136,7 @@ TEST_CASE("node: node_id_from_name is deterministic and distinct per name", "[no
 
 TEST_CASE("node: node_id_from_name equals the name-ctor's identity", "[node][identity]")
 {
-    host        h;
+    host h;
     inproc_node n{h.ex, h.disc, std::string_view{"sensor.front"}, h.transport, make_opts()};
 
     REQUIRE(n.id() == plexus::node_id_from_name("sensor.front"));

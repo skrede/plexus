@@ -32,10 +32,10 @@ namespace {
 // LE CRC32C trailer — exactly what serial egress puts on the line.
 std::vector<std::byte> wire_frame(const std::string &payload)
 {
-    const auto             framed  = make_data_frame(payload, /*session_id=*/1);
-    const auto             header  = std::span<const std::byte>{framed}.first(wire::header_size);
-    const auto             inner   = std::span<const std::byte>{framed}.subspan(wire::header_size);
-    const auto             trailer = stream::crc_trailer(header, inner);
+    const auto framed  = make_data_frame(payload, /*session_id=*/1);
+    const auto header  = std::span<const std::byte>{framed}.first(wire::header_size);
+    const auto inner   = std::span<const std::byte>{framed}.subspan(wire::header_size);
+    const auto trailer = stream::crc_trailer(header, inner);
     std::vector<std::byte> out{framed.begin(), framed.end()};
     out.insert(out.end(), trailer.begin(), trailer.end());
     return out;
@@ -49,11 +49,11 @@ void write_raw(int fd, std::span<const std::byte> bytes)
 struct rx_probe
 {
     std::optional<std::string> received;
-    int                        drops{0};
-    bool                       protocol_closed{false};
-    bool                       closed{false};
-    plexus::log::null_logger   sink;
-    pio::frame_router          router{sink};
+    int drops{0};
+    bool protocol_closed{false};
+    bool closed{false};
+    plexus::log::null_logger sink;
+    pio::frame_router router{sink};
 
     void wire(pasio::serial_channel &ch)
     {
@@ -83,13 +83,13 @@ TEST_CASE("serial resync: a byte-FLIPPED frame is dropped and the link recovers 
           "[integration][serial][resync]")
 {
     constexpr int k_iterations = 25;
-    int           recovered    = 0;
+    int recovered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        pty_pair           pty;
+        pty_pair pty;
         ::asio::io_context io;
-        const int          master = pty.take_master();
-        auto               rx     = adopt_channel(io, pty.take_slave());
+        const int master = pty.take_master();
+        auto rx          = adopt_channel(io, pty.take_slave());
 
         rx_probe probe;
         probe.wire(*rx);
@@ -117,13 +117,13 @@ TEST_CASE("serial resync: a byte-DROPPED (truncated) frame desyncs but the next 
           "[integration][serial][resync]")
 {
     constexpr int k_iterations = 25;
-    int           recovered    = 0;
+    int recovered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        pty_pair           pty;
+        pty_pair pty;
         ::asio::io_context io;
-        const int          master = pty.take_master();
-        auto               rx     = adopt_channel(io, pty.take_slave());
+        const int master = pty.take_master();
+        auto rx          = adopt_channel(io, pty.take_slave());
 
         rx_probe probe;
         probe.wire(*rx);
@@ -131,7 +131,7 @@ TEST_CASE("serial resync: a byte-DROPPED (truncated) frame desyncs but the next 
         // Drop one byte mid-frame: the trailer no longer sits where the (now-shifted) length
         // implies, so the CRC check fails and the boundary desyncs. The decorator must resync
         // on the next magic anchor rather than wedge.
-        auto                   full = wire_frame("corrupt-drop");
+        auto full = wire_frame("corrupt-drop");
         std::vector<std::byte> truncated{full.begin(), full.end() - 1};
         write_raw(master, truncated);
         write_raw(master, wire_frame("recovered-after-drop"));
@@ -153,10 +153,10 @@ TEST_CASE("serial resync: corruption is non-fatal — neither on_protocol_close 
     constexpr int k_iterations = 25;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        pty_pair           pty;
+        pty_pair pty;
         ::asio::io_context io;
-        const int          master = pty.take_master();
-        auto               rx     = adopt_channel(io, pty.take_slave());
+        const int master = pty.take_master();
+        auto rx          = adopt_channel(io, pty.take_slave());
 
         rx_probe probe;
         probe.wire(*rx);

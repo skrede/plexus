@@ -21,9 +21,9 @@ TEST_CASE("locality confinement: the fan-out gate delivers a topic only to its i
 {
     using forwarder = plexus::io::message_forwarder<tagged_policy>;
 
-    constexpr int     k_iterations = 100;
-    const std::string fqn          = "demo.confined.topic";
-    const std::string payload      = "confined-bytes";
+    constexpr int k_iterations = 100;
+    const std::string fqn      = "demo.confined.topic";
+    const std::string payload  = "confined-bytes";
 
     // The realistic subscriber set: a node fans toward WIRE peers only — a same-host
     // AF_UNIX peer (local tier) and an off-host TCP peer (remote tier). No process-tier
@@ -37,7 +37,7 @@ TEST_CASE("locality confinement: the fan-out gate delivers a topic only to its i
         tagged_channel remote_ch{"tcp"};
 
         plexus::log::null_logger sink;
-        forwarder                fwd{sink};
+        forwarder fwd{sink};
         fwd.attach(forwarder::peer{local_ch, "local-node"}, fqn);
         fwd.attach(forwarder::peer{remote_ch, "remote-node"}, fqn);
 

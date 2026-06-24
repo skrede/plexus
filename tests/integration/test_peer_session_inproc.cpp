@@ -7,7 +7,7 @@ using namespace peer_session_inproc_fixture;
 TEST_CASE("inproc peer_session pair completes the handshake, mints epochs, installs once, looped", "[integration][peer_session][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -32,10 +32,10 @@ TEST_CASE("inproc peer_session: a dialed (one-directional) connection completes 
           "flows both ways, looped",
           "[integration][peer_session][inproc]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string downward     = "dialer-to-responder";
-    const std::string upward       = "responder-to-dialer";
-    int               proven       = 0;
+    constexpr int k_iterations = 100;
+    const std::string downward = "dialer-to-responder";
+    const std::string upward   = "responder-to-dialer";
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l; // the dial rendezvous: only the dialer dials, the accepted end bootstraps
@@ -77,9 +77,9 @@ TEST_CASE("inproc peer_session: a real published message flows post-handshake an
           "epoch, looped",
           "[integration][peer_session][inproc]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "real-published-bytes";
-    int               delivered    = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "real-published-bytes";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;

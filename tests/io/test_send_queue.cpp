@@ -4,7 +4,7 @@ using namespace send_queue_fixture;
 
 TEST_CASE("send_queue copies caller bytes into an owned node on enqueue", "[io][send_queue]")
 {
-    recorder   rec;
+    recorder rec;
     send_queue q{rec.sink()};
 
     auto scratch = bytes_of({1, 2, 3});
@@ -21,7 +21,7 @@ TEST_CASE("send_queue copies caller bytes into an owned node on enqueue", "[io][
 
 TEST_CASE("send_queue keeps at most one send-sink invocation outstanding", "[io][send_queue]")
 {
-    recorder   rec;
+    recorder rec;
     send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({1}), 1);
@@ -41,7 +41,7 @@ TEST_CASE("send_queue keeps at most one send-sink invocation outstanding", "[io]
 
 TEST_CASE("send_queue drains in FIFO order across a burst", "[io][send_queue]")
 {
-    recorder   rec;
+    recorder rec;
     send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({10}), 100);
@@ -64,7 +64,7 @@ TEST_CASE("send_queue drains in FIFO order across a burst", "[io][send_queue]")
 
 TEST_CASE("send_queue close() clears a pending queue and guards a late completion", "[io][send_queue]")
 {
-    recorder   rec;
+    recorder rec;
     send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({1}), 1);

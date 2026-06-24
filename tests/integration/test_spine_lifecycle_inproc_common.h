@@ -79,10 +79,10 @@ inline plexus::node_options make_eager_opts()
 // pumped after the node's dtor returns.
 struct fixture
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     void drive()
     {
@@ -95,11 +95,11 @@ struct fixture
 // unsubscribe that drives the producer's detach -> on_qos_change{unsubscribed}.
 struct pair_fixture
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     plexus::node_id id_a{make_id(0xA1)};
     plexus::node_id id_b{make_id(0xB1)};

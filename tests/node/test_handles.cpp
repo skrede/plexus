@@ -20,7 +20,7 @@ TEST_CASE("handles: a subscriber is move-only", "[node][handles]")
 
 TEST_CASE("handles: moving a subscriber transfers the demand; the moved-from dtor is a no-op", "[node][handles]")
 {
-    net                      n;
+    net n;
     std::vector<std::string> got;
 
     {

@@ -8,7 +8,7 @@ TEST_CASE("udp burst: N best_effort datagrams queued in one turn each arrive int
 {
     constexpr int k_iterations = 100;
     constexpr int k_burst      = 8;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         pair_fixture h;
@@ -38,21 +38,21 @@ TEST_CASE("udp burst: N best_effort datagrams queued in one turn each arrive int
 TEST_CASE("udp burst: two channels over one server each send in the same turn without overlap", "[udp][burst][reproducibility]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // One listening server, TWO dialing clients (each its own transport/server), so
         // two DISTINCT accepted channels share the listening server's ONE outbound socket
         // for their handshake responses and any sends. The interest is the listening
         // server's send path: it must keep each in-flight datagram alive.
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io};
         pasio::udp_transport client_a{io, pasio::udp_channel::default_max_payload, fast_hs};
         pasio::udp_transport client_b{io, pasio::udp_channel::default_max_payload, fast_hs};
 
         std::vector<std::unique_ptr<pasio::udp_channel>> accepted;
-        std::unique_ptr<pasio::udp_channel>              dia_a, dia_b;
-        std::vector<std::string>                         dialer_seen; // every payload the two dialers receive
+        std::unique_ptr<pasio::udp_channel> dia_a, dia_b;
+        std::vector<std::string> dialer_seen; // every payload the two dialers receive
         server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted.push_back(std::move(ch)); });
         server.listen({"udp", "127.0.0.1:0"});
         pump_until(io, [&] { return server.port() != 0; });

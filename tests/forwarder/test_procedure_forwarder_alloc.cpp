@@ -97,11 +97,11 @@ TEST_CASE("steady-state provider dispatch + reply framing allocates nothing", "[
     // Policy so the only heap traffic that could appear is the forwarder's own.
     using sink_forwarder = plexus::io::procedure_forwarder<sink_policy>;
 
-    sink_executor            ex;
-    sink_channel             provider_ch(ex);
+    sink_executor ex;
+    sink_channel provider_ch(ex);
     plexus::log::null_logger log_sink;
-    sink_forwarder           provider{ex, k_long_deadline, log_sink};
-    sink_forwarder::peer     provider_peer{provider_ch, "caller-node"};
+    sink_forwarder provider{ex, k_long_deadline, log_sink};
+    sink_forwarder::peer provider_peer{provider_ch, "caller-node"};
 
     // A handler that replies with a fixed return span captured by reference: the
     // reply itself moves no heap (the body lives in the test frame).
@@ -111,14 +111,14 @@ TEST_CASE("steady-state provider dispatch + reply framing allocates nothing", "[
     // The inbound request inner (header-off), built ONCE outside the gate and reused
     // every iteration, so the gate measures only the forwarder's decode + dispatch +
     // reply-framing path.
-    const std::string                  param = "steady-param";
+    const std::string param = "steady-param";
     plexus::wire::bidirectional_header req_hdr{.source         = plexus::wire::endpoint_source_type::caller,
                                                .sequence       = 0,
                                                .topic_hash     = plexus::wire::fqn_topic_hash("svc"),
                                                .type_hash_1    = 0,
                                                .type_hash_2    = 0,
                                                .correlation_id = 1};
-    std::vector<std::byte>             req_inner;
+    std::vector<std::byte> req_inner;
     plexus::wire::encode_rpc_request_into(req_inner, req_hdr, as_bytes(param));
 
     // Warm-up: one dispatch grows the reply + frame scratch to steady-state size.

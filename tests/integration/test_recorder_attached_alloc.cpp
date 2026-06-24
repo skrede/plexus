@@ -63,7 +63,7 @@ public:
 
 private:
     std::vector<std::byte> m_buf;
-    std::size_t            m_at;
+    std::size_t m_at;
 };
 
 std::uint64_t monotonic_clock()
@@ -76,8 +76,8 @@ std::uint64_t monotonic_clock()
 
 TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after attach", "[integration]")
 {
-    constexpr int     warm = 256;
-    constexpr int     K    = 8192;
+    constexpr int warm     = 256;
+    constexpr int K        = 8192;
     const std::size_t ring = 1u << 20;
 
     const std::vector<std::byte> body(64, std::byte{0x5A});
@@ -85,7 +85,7 @@ TEST_CASE("recorder-attached steady-state push/encode/drain allocates zero after
     for(int run = 0; run < 3; ++run)
     {
         fixed_capacity_sink sink{1u << 20};
-        flat_recorder       rec{sink, ring, [] { return monotonic_clock(); }};
+        flat_recorder rec{sink, ring, [] { return monotonic_clock(); }};
 
         auto push = [&](std::uint64_t i)
         {
@@ -119,17 +119,17 @@ TEST_CASE("wire-attached steady-state record_wire/drain allocates zero after att
     // the recorder's own write/drain path with the frame bytes already in hand (the fidelity is
     // capture_fidelity::wire, so an overflow would shed at the wire tier). Mirrors the
     // recorder-attached sample gate exactly. Loops >=3x (medians).
-    constexpr int     warm = 256;
-    constexpr int     K    = 8192;
+    constexpr int warm     = 256;
+    constexpr int K        = 8192;
     const std::size_t ring = 1u << 20;
 
     const std::vector<std::byte> frame(128, std::byte{0xC7});
-    const node_id                peer{};
+    const node_id peer{};
 
     for(int run = 0; run < 3; ++run)
     {
         fixed_capacity_sink sink{1u << 20};
-        flat_recorder       rec{sink, ring, [] { return monotonic_clock(); }};
+        flat_recorder rec{sink, ring, [] { return monotonic_clock(); }};
 
         auto push = [&](std::uint64_t seq)
         {
@@ -157,9 +157,9 @@ TEST_CASE("the inert baseline (no recorder) is itself zero on the same loop", "[
     // attached gate's zero is attributable to the recorder being grown-once, not to an empty
     // loop. (The full no-recorder hot-path inert baseline lives in test_hot_path_alloc /
     // test_typed_inproc_alloc; this cell is the local contrast.)
-    constexpr int                K = 8192;
+    constexpr int K = 8192;
     const std::vector<std::byte> body(64, std::byte{0x5A});
-    std::vector<std::byte>       buf(body.size());
+    std::vector<std::byte> buf(body.size());
 
     for(int i = 0; i < 64; ++i)
         std::copy(body.begin(), body.end(), buf.begin());

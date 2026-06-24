@@ -63,17 +63,17 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, std::uint64_t fingerprint)
 // resp_fp. After drive() both have completed and recorded their same-host verdict.
 struct link
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder            req_messages{sink}, resp_messages{sink};
-    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages{sink}, resp_messages{sink};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> req_ctx, resp_ctx;
-    std::optional<session>                  requester, responder;
+    std::optional<session> requester, responder;
 
     link(std::uint64_t req_fp, std::uint64_t resp_fp)
     {

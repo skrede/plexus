@@ -9,13 +9,13 @@ TEST_CASE("observer over asio: connected fires once and ready fires immediately 
           "[integration][observer][asio]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
         recording_observer rec;
         a.eng.add_observer(rec);
 
@@ -39,13 +39,13 @@ TEST_CASE("observer over asio: a real socket drop+redial fires reconnected (NOT 
           "[integration][observer][asio]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
         recording_observer rec;
         a.eng.add_observer(rec);
 
@@ -75,14 +75,14 @@ TEST_CASE("observer over asio: dead fires once when the driver surrenders agains
           "[integration][observer][asio]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
         // A dials a reserved-then-closed port that never binds: every dial is refused,
         // so the bounded driver surrenders and fires dead.
-        asio_node          a{io, 0xA1, /*eager=*/false, bounded_cfg(/*max_attempts=*/3)};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false, bounded_cfg(/*max_attempts=*/3)};
+        const auto id_b = make_id(0xB2);
         recording_observer rec;
         a.eng.add_observer(rec);
 
@@ -105,16 +105,16 @@ TEST_CASE("observer over asio: rejected fires once carrying the real refusal rea
           "[integration][observer][asio]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
         // A requires compatible >= 2; B advertises version 1, so A rejects B's accept
         // response over the wire -> A fires rejected(reject_version). A's redial is
         // bounded so a rejected (protocol-error) close does not spin forever.
-        asio_node          a{io, 0xA1, /*eager=*/false, bounded_cfg(2), /*compatible=*/2};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false, bounded_cfg(2), /*compatible=*/2};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
         recording_observer rec;
         a.eng.add_observer(rec);
 

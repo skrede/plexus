@@ -34,11 +34,11 @@ TEST_CASE("shm.node_composition a variadic node composes shm+unix+tcp from its b
 {
     using shm_node = plexus::node<pasio::asio_policy, pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport>;
 
-    ::asio::io_context                      io;
+    ::asio::io_context io;
     plexus::native::posix_shm_region_broker broker;
-    plexus::discovery::static_discovery     disc{{}};
+    plexus::discovery::static_discovery disc{{}};
 
-    auto                  shm = pasio::shm::make_shm_member(io, broker);
+    auto shm = pasio::shm::make_shm_member(io, broker);
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
 
@@ -54,11 +54,11 @@ TEST_CASE("shm.node_composition the shm-bearing node brings up a same-host liste
 {
     using shm_node = plexus::node<pasio::asio_policy, pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport>;
 
-    ::asio::io_context                      io;
+    ::asio::io_context io;
     plexus::native::posix_shm_region_broker broker;
-    plexus::discovery::static_discovery     disc{{}};
+    plexus::discovery::static_discovery disc{{}};
 
-    auto                  shm = pasio::shm::make_shm_member(io, broker);
+    auto shm = pasio::shm::make_shm_member(io, broker);
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
 

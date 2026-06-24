@@ -7,7 +7,7 @@ using namespace routing_inproc_fixture;
 TEST_CASE("inproc routing: note_peer records awareness and dials NOTHING (awareness without connect)", "[integration][routing][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -30,7 +30,7 @@ TEST_CASE("inproc routing: LAZY (default) opens no session until a demand call, 
           "[integration][routing][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -56,7 +56,7 @@ TEST_CASE("inproc routing: a demand subscribe (not just reach) dials a known-but
           "[integration][routing][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
@@ -79,7 +79,7 @@ TEST_CASE("inproc routing: EAGER (opt-in knob) dials and completes off note_peer
           "[integration][routing][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();

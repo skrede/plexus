@@ -16,33 +16,33 @@ TEST_CASE("asio stream channel: a 16 MB single frame round-trips byte-identicall
     // Looped in-body and re-run across process runs (a transport claim is never made from one
     // run); the frame body encodes a position ramp so a reorder or corruption is caught, not
     // just a size mismatch.
-    constexpr std::size_t         k_payload = 16u * 1024u * 1024u;
-    constexpr std::size_t         k_ceiling = 20u * 1024u * 1024u;
+    constexpr std::size_t k_payload = 16u * 1024u * 1024u;
+    constexpr std::size_t k_ceiling = 20u * 1024u * 1024u;
     stream::stream_inbound_config cfg{};
     cfg.max_payload_size          = k_ceiling;
     cfg.buffered_bytes_cap        = k_ceiling + wire::header_size;
     constexpr std::size_t k_queue = k_ceiling + 4u * 1024u * 1024u;
 
     constexpr int k_iterations = 3;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context        io;
+        ::asio::io_context io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket   raw_server{io};
-        ::asio::ip::tcp::socket   raw_client{io};
+        ::asio::ip::tcp::socket raw_server{io};
+        ::asio::ip::tcp::socket raw_client{io};
         raw_client.connect(acc.local_endpoint());
         acc.accept(raw_server);
 
         pasio::asio_channel server{io, std::move(raw_server), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
         pasio::asio_channel client{io, std::move(raw_client), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
 
-        std::vector<std::byte>           got;
+        std::vector<std::byte> got;
         std::optional<wire::close_cause> closed;
         server.on_data([&](std::span<const std::byte> d) { got.assign(d.begin(), d.end()); });
         server.on_protocol_close([&](wire::close_cause c) { closed = c; });
 
-        const auto         body = ramp_payload(k_payload);
+        const auto body = ramp_payload(k_payload);
         wire::frame_header hdr{};
         hdr.type         = wire::msg_type::unidirectional;
         hdr.payload_len  = body.size();
@@ -93,15 +93,15 @@ struct session_under_peer
     using msg_forwarder = pio::message_forwarder<asio_policy>;
     using rpc_forwarder = pio::procedure_forwarder<asio_policy>;
 
-    ::asio::io_context      io;
-    pasio::asio_listener    listener{io, short_cfg()};
+    ::asio::io_context io;
+    pasio::asio_listener listener{io, short_cfg()};
     ::asio::ip::tcp::socket client{io};
 
-    plexus::log::null_logger       sink;
-    msg_forwarder                  messages{sink};
-    rpc_forwarder                  procedures{io, k_long_timeout, sink};
+    plexus::log::null_logger sink;
+    msg_forwarder messages{sink};
+    rpc_forwarder procedures{io, k_long_timeout, sink};
     pio::peer_context<asio_policy> ctx;
-    std::optional<session>         peer;
+    std::optional<session> peer;
 
     int drops{0};
 
@@ -151,7 +151,7 @@ TEST_CASE("asio stream channel: a FRAMING protocol-close does NOT re-dial while 
           "[integration][asio][hardening]")
 {
     constexpr int k_iterations = 20;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // Framing close: a header-size+ bad-magic run trips invalid_magic in the

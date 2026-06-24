@@ -16,7 +16,7 @@ using namespace plexus::wire;
 TEST_CASE("wire::writer then wire::reader round-trips a u8/u64/u64 field list", "[wire][cursor]")
 {
     std::vector<std::byte> buf(sizeof(std::uint8_t) + 2 * sizeof(std::uint64_t));
-    writer                 w{buf};
+    writer w{buf};
     w.u8(0xA5);
     w.u64(0xDEADBEEFCAFEBABEull);
     w.u64(0x0102030405060708ull);
@@ -33,8 +33,8 @@ TEST_CASE("wire::writer then wire::reader round-trips a u8/u64/u64 field list", 
 TEST_CASE("wire::writer/reader round-trip an opaque blob via bytes()", "[wire][cursor]")
 {
     std::array<std::byte, 4> blob{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
-    std::vector<std::byte>   buf(sizeof(std::uint16_t) + blob.size());
-    writer                   w{buf};
+    std::vector<std::byte> buf(sizeof(std::uint16_t) + blob.size());
+    writer w{buf};
     w.u16(0x1234);
     w.bytes(blob);
 
@@ -48,8 +48,8 @@ TEST_CASE("wire::writer/reader round-trip an opaque blob via bytes()", "[wire][c
 TEST_CASE("wire::reader one byte short of a u64 fails closed without over-reading", "[wire][cursor]")
 {
     std::array<std::byte, 7> short_buf{};
-    reader                   r{short_buf};
-    auto                     v = r.u64();
+    reader r{short_buf};
+    auto v = r.u64();
     REQUIRE(v == 0);
     REQUIRE_FALSE(r.ok());
     // A later read on a failed reader stays a no-op (no over-read, sentinel return).
@@ -60,7 +60,7 @@ TEST_CASE("wire::reader one byte short of a u64 fails closed without over-readin
 TEST_CASE("wire::reader mid-field truncation between two fields fails closed", "[wire][cursor]")
 {
     std::array<std::byte, sizeof(std::uint8_t) + 3> buf{};
-    reader                                          r{buf};
+    reader r{buf};
     (void)r.u8();
     REQUIRE(r.ok());
     auto v = r.u32();
@@ -74,11 +74,11 @@ TEST_CASE("wire::reader.varint() rejects an over-long continuation exactly like 
     overlong.fill(std::byte{0x80});
 
     std::size_t consumed = 0;
-    auto        direct   = read_varint(std::span<const std::byte>{overlong}, consumed);
+    auto direct          = read_varint(std::span<const std::byte>{overlong}, consumed);
     REQUIRE_FALSE(direct.has_value());
 
     reader r{overlong};
-    auto   via_cursor = r.varint();
+    auto via_cursor = r.varint();
     REQUIRE_FALSE(via_cursor.has_value());
     REQUIRE_FALSE(r.ok());
 }
@@ -90,7 +90,7 @@ TEST_CASE("wire::reader.varint() round-trips a well-formed varint and advances t
     buf.push_back(std::byte{0xEE});
 
     reader r{buf};
-    auto   value = r.varint();
+    auto value = r.varint();
     REQUIRE(value.has_value());
     REQUIRE(*value == 300u);
     REQUIRE(r.ok());
@@ -100,7 +100,7 @@ TEST_CASE("wire::reader.varint() round-trips a well-formed varint and advances t
 
 TEST_CASE("wire::writer into a reserved buffer does not reallocate", "[wire][cursor][noalloc]")
 {
-    constexpr std::size_t  frame_size = sizeof(std::uint8_t) + 2 * sizeof(std::uint64_t);
+    constexpr std::size_t frame_size = sizeof(std::uint8_t) + 2 * sizeof(std::uint64_t);
     std::vector<std::byte> buf;
     buf.resize(frame_size);
 

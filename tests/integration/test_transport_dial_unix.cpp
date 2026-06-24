@@ -9,7 +9,7 @@ TEST_CASE("unix transport: a DIALED peer_session pair completes the handshake ov
           "[integration][transport][unix]")
 {
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         dial_unix_link l;

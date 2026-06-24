@@ -8,7 +8,7 @@ TEST_CASE("integration.spine the wire unsubscribe (refcount 1->0) surfaces on_qo
           "unsubscribed",
           "[integration][inproc][spine]")
 {
-    pair_fixture       fx;
+    pair_fixture fx;
     recording_observer rec;
     fx.b.router().add_observer(rec); // the subscriber node owns the demand-side wire edge
     fx.connect();

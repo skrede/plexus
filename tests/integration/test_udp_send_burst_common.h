@@ -87,12 +87,12 @@ inline void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
 // A listen+dial best_effort pair on one io_context (handshake established).
 struct pair_fixture
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs};
 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
-    std::vector<std::string>            received;
+    std::vector<std::string> received;
 
     pair_fixture()
     {

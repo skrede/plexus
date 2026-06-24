@@ -50,7 +50,7 @@ struct sink_channel
     }
 
     std::vector<std::byte> last;
-    int                    pending{0};
+    int pending{0};
 };
 
 struct sink_timer
@@ -110,8 +110,8 @@ TEST_CASE("inproc rpc dispatch path is allocation-free; the correlation table ch
     using sink_forwarder = plexus::io::procedure_forwarder<sink_policy>;
 
     sink_executor ex;
-    sink_channel  caller_ch(ex);
-    sink_channel  provider_ch(ex);
+    sink_channel caller_ch(ex);
+    sink_channel provider_ch(ex);
 
     plexus::log::null_logger log_sink;
 
@@ -130,8 +130,8 @@ TEST_CASE("inproc rpc dispatch path is allocation-free; the correlation table ch
     const std::string ret_body = "return-bytes";
     provider.serve("svc", [&](std::span<const std::byte>, sink_forwarder::reply_fn &reply) { reply(rpc_status::success, as_bytes(ret_body)); });
 
-    const std::string param   = "steady-param";
-    int               replies = 0;
+    const std::string param = "steady-param";
+    int replies             = 0;
 
     auto run_request = [&]
     {
@@ -183,9 +183,9 @@ TEST_CASE("inproc rpc dispatch path is allocation-free; the correlation table ch
         return plexus::testing::alloc_count() - before;
     };
 
-    const int         replies_before = replies;
-    const std::size_t allocs_k       = correlate_round_allocs(K);
-    const std::size_t allocs_2k      = correlate_round_allocs(2 * K);
+    const int replies_before    = replies;
+    const std::size_t allocs_k  = correlate_round_allocs(K);
+    const std::size_t allocs_2k = correlate_round_allocs(2 * K);
     REQUIRE(replies - replies_before == K + 2 * K); // every cycle resolved
 
     // Per-call cost is a fixed small constant (no per-throughput growth): doubling the loop

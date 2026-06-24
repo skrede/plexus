@@ -6,7 +6,7 @@ TEST_CASE("udp reliable_datagram: a 'udpr' dial mints reliable-mode channels on 
           "(symmetric)",
           "[udp][reliable_datagram][mode]")
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs};
 
@@ -31,7 +31,7 @@ TEST_CASE("udp reliable_datagram: a 'udpr' dial mints reliable-mode channels on 
 
 TEST_CASE("udp reliable_datagram: a 'udp' dial stays best_effort (the opt-in is scheme-gated)", "[udp][reliable_datagram][mode]")
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs};
 
@@ -60,12 +60,12 @@ TEST_CASE("udp reliable_datagram: a message beyond the max-message size is rejec
     // too-big message: a reliable send() of a payload beyond the bounded max-MESSAGE size
     // surfaces message_too_large at publish (the channel stays open), exactly like the
     // best_effort path — never a silent drop. A merely-oversize payload is fragmented.
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs};
 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
-    std::optional<pio::io_error>        dialed_error;
+    std::optional<pio::io_error> dialed_error;
     server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted = std::move(ch); });
     server.listen({"udp", "127.0.0.1:0"});
     pump_until(io, [&] { return server.port() != 0; });

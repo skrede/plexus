@@ -134,14 +134,14 @@ public:
     }
 
 private:
-    plexus::inproc::inproc_executor<Clock>                              *m_exec;
-    io::endpoint                                                         m_remote{"mock", "peer"};
-    std::vector<std::vector<std::byte>>                                  m_sent;
+    plexus::inproc::inproc_executor<Clock> *m_exec;
+    io::endpoint m_remote{"mock", "peer"};
+    std::vector<std::vector<std::byte>> m_sent;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                           m_on_closed;
-    plexus::detail::move_only_function<void(io::io_error)>               m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)>          m_on_protocol_close;
-    bool                                                                 m_closed{false};
+    plexus::detail::move_only_function<void()> m_on_closed;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
+    bool m_closed{false};
 };
 
 // The deterministic test Policy: reuses the inproc step-executor and virtual-clock

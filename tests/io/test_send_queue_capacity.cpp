@@ -4,7 +4,7 @@ using namespace send_queue_fixture;
 
 TEST_CASE("send_queue default capacity is unbounded — the at-capacity signal is inert", "[io][send_queue]")
 {
-    recorder   rec;
+    recorder rec;
     send_queue q{rec.sink()}; // default capacity
 
     REQUIRE(q.full() == false);
@@ -16,7 +16,7 @@ TEST_CASE("send_queue default capacity is unbounded — the at-capacity signal i
 
 TEST_CASE("send_queue bounded capacity fires the at-capacity signal and refuses past the cap", "[io][send_queue]")
 {
-    recorder   rec;
+    recorder rec;
     send_queue q{rec.sink(), 2}; // finite BYTE budget of two (single-byte frames)
 
     REQUIRE(q.enqueue(bytes_of({1}), 1)); // admitted, now in flight (1 byte)
@@ -38,7 +38,7 @@ TEST_CASE("send_queue bounded capacity fires the at-capacity signal and refuses 
 
 TEST_CASE("send_queue caps on summed BYTES, not entry count — one large frame trips a byte budget", "[io][send_queue]")
 {
-    recorder   rec;
+    recorder rec;
     send_queue q{rec.sink(), 8}; // an 8-byte budget
 
     // A single 5-byte frame is one ENTRY (count==1) but consumes 5 of 8 bytes.
@@ -63,7 +63,7 @@ TEST_CASE("send_queue near-cap boundary: byte accounting does not wrap and refus
     // overflow boundary: a frame at cap-1 bytes followed by a small frame whose sum
     // exceeds the cap must be refused (compare-before-add), and the running total must NOT
     // wrap below the cap and re-admit. Cap = 16; first frame = 15 bytes (cap-1).
-    recorder   rec;
+    recorder rec;
     send_queue q{rec.sink(), 16};
 
     REQUIRE(q.enqueue(std::vector<std::byte>(15), 1)); // 15 of 16 bytes

@@ -29,7 +29,7 @@ using plexus::io::detail::priority_band_queue;
 // tests drive the real slot representation rather than a borrowed span.
 inline wire_bytes<> owned(const std::string &s)
 {
-    auto                       buf = std::make_shared<std::vector<std::byte>>(reinterpret_cast<const std::byte *>(s.data()), reinterpret_cast<const std::byte *>(s.data()) + s.size());
+    auto buf = std::make_shared<std::vector<std::byte>>(reinterpret_cast<const std::byte *>(s.data()), reinterpret_cast<const std::byte *>(s.data()) + s.size());
     std::span<const std::byte> view{*buf};
     return wire_bytes<>{view, std::shared_ptr<const void>{std::move(buf)}};
 }

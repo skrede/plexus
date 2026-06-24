@@ -13,7 +13,7 @@ int roundtrip_clean(const char *scheme, std::size_t budget, std::size_t payload_
     int proven = 0;
     for(int iter = 0; iter < iterations; ++iter)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder, arq};
         pasio::udp_transport client{io, budget, fast_hs, arq};
 
@@ -107,19 +107,19 @@ TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured â
     // A size that fits the kernel receive buffer so the ONLY loss is the shim's (an
     // overrun-driven drop would confound the attribution): ~55 fragments at a 1200-byte
     // budget, each subject to the deterministic 8% drop.
-    constexpr std::size_t            budget       = 1200;
-    constexpr std::size_t            payload_size = 64u * 1024;
+    constexpr std::size_t budget       = 1200;
+    constexpr std::size_t payload_size = 64u * 1024;
     const ptest::loss_reorder_config loss{.loss_num = 8, .loss_den = 100, .reorder_depth = 0, .seed = 0x5151ull};
 
     auto run_leg = [&](const char *scheme)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io, budget, pasio::udp_transport::arq_type::default_ladder, large_arq()};
         pasio::udp_transport client{io, budget, fast_hs, large_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
-        int                                 deliveries = 0;
-        std::vector<std::byte>              last;
+        int deliveries = 0;
+        std::vector<std::byte> last;
         server.on_accepted(
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {

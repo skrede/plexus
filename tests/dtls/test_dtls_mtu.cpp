@@ -10,8 +10,8 @@ TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fra
     pdt::identity_fixture cli("mtu_cli");
 
     constexpr int k_iterations = 100;
-    int           proven       = 0;
-    std::size_t   observed_cap = 0;
+    int proven                 = 0;
+    std::size_t observed_cap   = 0;
 
     for(int i = 0; i < k_iterations; ++i)
     {
@@ -31,7 +31,7 @@ TEST_CASE("dtls.mtu: a frame at the data-MTU rides one record, one byte over fra
         // mtu_budget default rather than restating a stale 1400-era constant.
         constexpr std::size_t k_record_mtu          = ptls::dtls_channel::default_record_mtu;
         constexpr std::size_t k_max_record_overhead = 37u + plexus::wire::udp_envelope_overhead; // DTLS 1.2 AEAD-GCM record + udp envelope
-        const std::size_t     cap                   = l.probe_one_record_ceiling(100, k_record_mtu);
+        const std::size_t cap                       = l.probe_one_record_ceiling(100, k_record_mtu);
         REQUIRE(cap >= k_record_mtu - k_max_record_overhead); // within the overhead band below the record MTU
         REQUIRE(cap < k_record_mtu);                          // strictly below (overhead subtracted)
         observed_cap = cap;
@@ -63,7 +63,7 @@ TEST_CASE("dtls.mtu: a low configured cap binds the single-record ceiling below 
     constexpr std::size_t k_cap = 200;
 
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         mtu_link l(srv, cli, k_cap);

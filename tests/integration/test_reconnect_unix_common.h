@@ -58,8 +58,8 @@ using driver_t      = pio::reconnect<pasio::unix_policy, pasio::unix_transport, 
 
 namespace reconnect_unix_fixture {
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
@@ -76,10 +76,10 @@ struct temp_sock
 
     temp_sock()
     {
-        char        tmpl[] = "/tmp/pxu-XXXXXX";
-        const char *made   = ::mkdtemp(tmpl);
-        dir                = made ? made : "";
-        path               = dir + "/s";
+        char tmpl[]      = "/tmp/pxu-XXXXXX";
+        const char *made = ::mkdtemp(tmpl);
+        dir              = made ? made : "";
+        path             = dir + "/s";
     }
 
     ~temp_sock()
@@ -100,21 +100,21 @@ struct temp_sock
 // channels before the io_context.
 struct unix_reconnect
 {
-    temp_sock             sock;
-    ::asio::io_context    io;
+    temp_sock sock;
+    ::asio::io_context io;
     pasio::unix_transport transport{io};
 
     plexus::log::null_logger sink;
-    msg_forwarder            req_messages{sink};
-    msg_forwarder            resp_messages{sink};
-    rpc_forwarder            req_procedures{io, k_long_timeout, sink};
-    rpc_forwarder            resp_procedures{io, k_long_timeout, sink};
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
+    rpc_forwarder req_procedures{io, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
 
     plexus::io::peer_context<pasio::unix_policy> req_ctx;
     plexus::io::peer_context<pasio::unix_policy> resp_ctx;
-    std::optional<driver_t>                      driver;
-    std::optional<session>                       requester;
-    std::optional<session>                       responder;
+    std::optional<driver_t> driver;
+    std::optional<session> requester;
+    std::optional<session> responder;
 
     int drops_seen{0};
 

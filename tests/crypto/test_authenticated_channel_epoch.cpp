@@ -9,12 +9,12 @@ TEST_CASE("crypto.authenticated_channel round-trips across the 256-epoch boundar
     wire_lower recv_wire;
     // A rekey every frame so a few hundred sends cross epoch 256 (the wire epoch byte
     // wraps 0xff -> 0x00) — the seal/open nonce epoch field must agree past 255.
-    const std::uint64_t               threshold = 1;
+    const std::uint64_t threshold = 1;
     authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys, 0, threshold);
     authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys), 0, threshold);
 
     std::vector<std::byte> delivered;
-    bool                   closed = false;
+    bool closed = false;
     receiver.on_data([&](std::span<const std::byte> f) { delivered.assign(f.begin(), f.end()); });
     receiver.on_protocol_close([&](plexus::wire::close_cause) { closed = true; });
     send_wire.m_sink = [&](std::span<const std::byte> b) { recv_wire.feed(b); };
@@ -38,8 +38,8 @@ TEST_CASE("crypto.authenticated_channel fragment budget subtracts the AEAD overh
     using plexus::io::k_aead_fragment_overhead;
 
     const std::size_t transport_budget = 1400;
-    const auto        plain            = effective_fragment_budget(transport_budget, false);
-    const auto        aead             = effective_fragment_budget(transport_budget, true);
+    const auto plain                   = effective_fragment_budget(transport_budget, false);
+    const auto aead                    = effective_fragment_budget(transport_budget, true);
 
     REQUIRE(k_aead_fragment_overhead == 8 + 1 + 16);
     REQUIRE(aead == plain - k_aead_fragment_overhead);

@@ -74,8 +74,8 @@ static_assert(plexus::Policy<rig_policy>);
 using transport_t = inproc_transport<clock_t_>;
 using engine      = plexus::io::routing_engine<rig_policy, transport_t, clock_t_>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -106,20 +106,20 @@ reconnect_config forever_cfg()
 // both sides attached for fan-out on one topic so a publish on A flows to B.
 struct rig
 {
-    inproc_bus<clock_t_>      bus;
+    inproc_bus<clock_t_> bus;
     inproc_executor<clock_t_> ex{bus};
-    transport_t               transport_a{ex, bus};
-    transport_t               transport_b{ex, bus};
-    plexus::log::null_logger  sink;
-    engine                    a;
-    engine                    b;
+    transport_t transport_a{ex, bus};
+    transport_t transport_b{ex, bus};
+    plexus::log::null_logger sink;
+    engine a;
+    engine b;
 
     plexus::node_id id_a{make_id(0xA1)};
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint        ep_a{"inproc", "node-a"};
-    endpoint        ep_b{"inproc", "node-b"};
+    endpoint ep_a{"inproc", "node-a"};
+    endpoint ep_b{"inproc", "node-b"};
 
-    std::uint64_t         received{0};
+    std::uint64_t received{0};
     engine::session_type *a_to_b{nullptr};
 
     rig()
@@ -159,10 +159,10 @@ int main(int argc, char **argv)
 {
     // Args: [iterations] [payload_bytes]. Defaults sized for a multi-second steady
     // window at this no-syscall throughput so perf gathers a stable sample set.
-    const std::uint64_t iterations    = argc > 1 ? std::strtoull(argv[1], nullptr, 10) : 20'000'000ull;
-    const std::size_t   payload_bytes = argc > 2 ? std::strtoull(argv[2], nullptr, 10) : 64;
+    const std::uint64_t iterations  = argc > 1 ? std::strtoull(argv[1], nullptr, 10) : 20'000'000ull;
+    const std::size_t payload_bytes = argc > 2 ? std::strtoull(argv[2], nullptr, 10) : 64;
 
-    rig               net;
+    rig net;
     const std::string payload(payload_bytes, 'x');
 
     // Warmup: let the codec scratch buffers and the fan-out path reach steady-state
@@ -178,11 +178,11 @@ int main(int argc, char **argv)
         net.publish_once(payload);
     const auto t1 = clock_t_::now();
 
-    const std::size_t   allocs     = plexus::testing::alloc_count();
-    const std::uint64_t delivered  = net.received - baseline;
-    const double        secs       = std::chrono::duration<double>(t1 - t0).count();
-    const double        per_pub_ns = secs * 1e9 / static_cast<double>(iterations);
-    const double        mpps       = static_cast<double>(iterations) / secs / 1e6;
+    const std::size_t allocs      = plexus::testing::alloc_count();
+    const std::uint64_t delivered = net.received - baseline;
+    const double secs             = std::chrono::duration<double>(t1 - t0).count();
+    const double per_pub_ns       = secs * 1e9 / static_cast<double>(iterations);
+    const double mpps             = static_cast<double>(iterations) / secs / 1e6;
 
     std::printf("inproc upper-layer rig: iterations=%llu payload=%zuB delivered=%llu\n", static_cast<unsigned long long>(iterations), payload_bytes,
                 static_cast<unsigned long long>(delivered));

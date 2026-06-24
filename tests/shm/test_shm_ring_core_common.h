@@ -48,8 +48,8 @@ struct backing_region
 
 private:
     std::vector<std::byte> m_storage;
-    std::byte             *m_data{nullptr};
-    std::size_t            m_size{0};
+    std::byte *m_data{nullptr};
+    std::size_t m_size{0};
 };
 
 } // namespace shm_ring_core_fixture

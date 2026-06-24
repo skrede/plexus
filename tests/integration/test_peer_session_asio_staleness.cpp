@@ -8,9 +8,9 @@ TEST_CASE("asio peer_session: the 3-arg callback reports NON-intra-process local
           "looped",
           "[integration][peer_session][asio][message_info]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "info-bearing-bytes-over-tcp";
-    int               delivered    = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "info-bearing-bytes-over-tcp";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l;
@@ -19,7 +19,7 @@ TEST_CASE("asio peer_session: the 3-arg callback reports NON-intra-process local
         REQUIRE(l.responder->is_complete());
 
         plexus::io::message_info got{};
-        bool                     got_one = false;
+        bool got_one = false;
         l.responder->on_message_with_info(
                 [&](std::string_view, std::span<const std::byte> d, const plexus::io::message_info &mi)
                 {
@@ -52,10 +52,10 @@ TEST_CASE("asio peer_session: the data-path staleness gate FIRES over TCP — a 
           "dropped, looped",
           "[integration][peer_session][asio]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string good         = "latched-epoch-bytes";
-    const std::string stale        = "stale-session-bytes";
-    int               proven       = 0;
+    constexpr int k_iterations = 100;
+    const std::string good     = "latched-epoch-bytes";
+    const std::string stale    = "stale-session-bytes";
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l;
@@ -79,7 +79,7 @@ TEST_CASE("asio peer_session: the data-path staleness gate FIRES over TCP — a 
         // gates synchronously (no post), so the drop is observable immediately — a
         // wall-clock wait would only risk a false green under load.
         const std::uint8_t stale_epoch = static_cast<std::uint8_t>(latched == 200 ? 199 : 200);
-        auto               stale_frame = make_data_frame(stale, stale_epoch);
+        auto stale_frame               = make_data_frame(stale, stale_epoch);
         l.responder->on_receive(stale_frame);
         REQUIRE(l.resp_received.size() == 1); // DROPPED, not delivered
 

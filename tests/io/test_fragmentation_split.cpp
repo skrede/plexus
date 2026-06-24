@@ -6,16 +6,16 @@ namespace {
 
 struct recorded_fragment
 {
-    std::uint32_t          idx;
-    std::uint32_t          cnt;
+    std::uint32_t idx;
+    std::uint32_t cnt;
     std::vector<std::byte> bytes;
 };
 
 std::vector<recorded_fragment> collect(std::span<const std::byte> payload, std::size_t budget, bool aead_decorated = false)
 {
     std::vector<recorded_fragment> seen;
-    io::fragment_sink sink     = [&seen](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> b) { seen.push_back({idx, cnt, std::vector<std::byte>(b.begin(), b.end())}); };
-    const auto        returned = io::split(payload, budget, /*msg_id*/ 1, sink, aead_decorated);
+    io::fragment_sink sink = [&seen](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> b) { seen.push_back({idx, cnt, std::vector<std::byte>(b.begin(), b.end())}); };
+    const auto returned    = io::split(payload, budget, /*msg_id*/ 1, sink, aead_decorated);
     REQUIRE(returned == seen.size());
     return seen;
 }
@@ -41,7 +41,7 @@ TEST_CASE("the splitter fragments against the default budget and honors an upwar
 TEST_CASE("split against a budget yields one fragment when the payload fits", "[fragment][split]")
 {
     const std::vector<std::byte> payload(100);
-    auto                         frags = collect(payload, /*budget*/ 1400);
+    auto frags = collect(payload, /*budget*/ 1400);
     REQUIRE(frags.size() == 1);
     CHECK(frags[0].idx == 0);
     CHECK(frags[0].cnt == 1);
@@ -50,8 +50,8 @@ TEST_CASE("split against a budget yields one fragment when the payload fits", "[
 
 TEST_CASE("split a payload just over the effective budget yields two fragments", "[fragment][split]")
 {
-    const std::size_t            budget = 100;
-    const std::size_t            eff    = io::effective_fragment_budget(budget);
+    const std::size_t budget = 100;
+    const std::size_t eff    = io::effective_fragment_budget(budget);
     const std::vector<std::byte> payload(eff + 1);
 
     auto frags = collect(payload, budget);
@@ -64,8 +64,8 @@ TEST_CASE("split a payload just over the effective budget yields two fragments",
 
 TEST_CASE("split a large payload yields N fragments, N-1 full-sized in index order", "[fragment][split]")
 {
-    const std::size_t            budget = 200;
-    const std::size_t            eff    = io::effective_fragment_budget(budget);
+    const std::size_t budget = 200;
+    const std::size_t eff    = io::effective_fragment_budget(budget);
     const std::vector<std::byte> payload(eff * 4 + 7);
 
     auto frags = collect(payload, budget);
@@ -106,7 +106,7 @@ TEST_CASE("an AEAD-decorated split leaves room for the per-fragment seal overhea
 
 TEST_CASE("a non-AEAD split is byte-identical to the default path", "[fragment][split][aead]")
 {
-    const std::size_t            budget = 512;
+    const std::size_t budget = 512;
     const std::vector<std::byte> payload(io::effective_fragment_budget(budget) * 2 + 5);
 
     const auto plain = collect(payload, budget, /*aead_decorated=*/false);

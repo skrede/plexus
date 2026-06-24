@@ -5,12 +5,12 @@ using namespace bytes_pubsub_fixture;
 TEST_CASE("bytes pub/sub: end-to-end delivery is byte-identical, looped", "[node][pubsub]")
 {
     constexpr int k_iterations = 8;
-    net           n;
+    net n;
     n.connect();
 
     std::vector<std::string> got;
-    inproc_subscriber        s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
-    inproc_publisher         p{n.b, "topic"};
+    inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_publisher p{n.b, "topic"};
     n.drive();
 
     int delivered = 0;
@@ -31,13 +31,13 @@ TEST_CASE("bytes pub/sub: the 3-arg callback receives a populated message_info w
     net n;
     n.connect();
 
-    std::vector<std::string>  got;
+    std::vector<std::string> got;
     std::vector<message_info> infos;
-    inproc_subscriber         s{n.a, "topic", [&](std::span<const std::byte> b, const message_info &mi)
-                                {
+    inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b, const message_info &mi)
+                        {
                             got.push_back(to_string(b));
                             infos.push_back(mi);
-                                }};
+                        }};
     // A source-identity-emitting publisher: its gid rides the frame and reaches the info.
     inproc_publisher p{n.b, "topic", plexus::topic_qos{}, /*emit_source_identity=*/true};
     n.drive();

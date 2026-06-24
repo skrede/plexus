@@ -9,9 +9,9 @@ TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired fram
     SECTION("a paired frame mid-ladder establishes and stops further transmits")
     {
         ::asio::io_context io;
-        arq_t              arq{io, fast_ladder};
+        arq_t arq{io, fast_ladder};
 
-        int  transmits   = 0;
+        int transmits    = 0;
         bool established = false;
         bool timed_out   = false;
         arq.on_transmit([&] { ++transmits; });
@@ -34,9 +34,9 @@ TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired fram
     SECTION("exhausting the ladder surfaces a timeout abort")
     {
         ::asio::io_context io;
-        arq_t              arq{io, fast_ladder};
+        arq_t arq{io, fast_ladder};
 
-        int  transmits = 0;
+        int transmits  = 0;
         bool timed_out = false;
         arq.on_transmit([&] { ++transmits; });
         arq.on_timeout([&] { timed_out = true; });

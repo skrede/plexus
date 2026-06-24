@@ -7,15 +7,15 @@ using namespace udp_repro_fixture;
 TEST_CASE("integration udp reproducibility: reliable-ARQ delivers in order over loss every iteration", "[integration][udp][reproducibility]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
         pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
-        std::vector<std::string>            delivered;
+        std::vector<std::string> delivered;
         server.on_accepted(
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {

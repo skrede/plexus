@@ -23,7 +23,7 @@ TEST_CASE("priority_band queue: a fresh queue has no work and front_highest is n
 TEST_CASE("priority_band queue: FIFO order is preserved within a band", "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t   b = band_of(priority::normal);
+    const std::size_t b = band_of(priority::normal);
     REQUIRE(q.enqueue(b, congestion::block, owned("a")));
     REQUIRE(q.enqueue(b, congestion::block, owned("b")));
     REQUIRE(q.enqueue(b, congestion::block, owned("c")));
@@ -59,7 +59,7 @@ TEST_CASE("priority_band queue: strict cross-band priority, a lower band index d
 TEST_CASE("priority_band queue: block at a full band refuses the new frame and bumps blocked_count", "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t   b = band_of(priority::high);
+    const std::size_t b = band_of(priority::high);
     fill_band(q, b);
 
     REQUIRE(q.blocked_count(b) == 0);
@@ -81,7 +81,7 @@ TEST_CASE("priority_band queue: drop_newest at a full band refuses the new frame
           "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t   b = band_of(priority::high);
+    const std::size_t b = band_of(priority::high);
     fill_band(q, b);
 
     REQUIRE(q.dropped_newest_count(b) == 0);
@@ -103,7 +103,7 @@ TEST_CASE("priority_band queue: drop_oldest at a full band evicts the oldest and
           "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t   b = band_of(priority::high);
+    const std::size_t b = band_of(priority::high);
     fill_band(q, b);
 
     REQUIRE(q.dropped_oldest_count(b) == 0);

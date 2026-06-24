@@ -39,8 +39,8 @@ struct small_adder
 struct large_callable
 {
     std::array<std::byte, 256> payload{};
-    int                        base = 7;
-    int                        operator()(int x) const
+    int base = 7;
+    int operator()(int x) const
     {
         return base + x;
     }
@@ -72,7 +72,7 @@ TEST_CASE("move_only_function spills a large callable to the heap and invokes it
 
 TEST_CASE("move_only_function admits a move-only callable", "[io][move_only_function]")
 {
-    auto                         owned = std::make_unique<int>(40);
+    auto owned = std::make_unique<int>(40);
     move_only_function<int(int)> fn{[p = std::move(owned)](int x) { return *p + x; }};
 
     REQUIRE(static_cast<bool>(fn));

@@ -9,7 +9,7 @@ namespace {
 // external_complete) CARRYING the dialed endpoint.
 struct dial_link
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     ptls::tls_credential server_cred;
     ptls::tls_credential client_cred;
     ptls::dtls_transport server;
@@ -17,8 +17,8 @@ struct dial_link
 
     std::unique_ptr<ptls::dtls_channel> accepted;
     std::unique_ptr<ptls::dtls_channel> dialed;
-    pdt::pio::endpoint                  dialed_ep;
-    bool                                dial_failed{false};
+    pdt::pio::endpoint dialed_ep;
+    bool dial_failed{false};
     std::vector<std::vector<std::byte>> server_received;
 
     dial_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
@@ -62,7 +62,7 @@ TEST_CASE("dtls.handshake: a dialed transport pair completes a mutual DTLS hands
     pdt::identity_fixture client_id("tx_cli");
 
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         dial_link l(server_id, client_id);
@@ -85,7 +85,7 @@ TEST_CASE("dtls.external_complete: the FSM resolves with cert identity and no pl
     pdt::identity_fixture client_id("ec_cli");
 
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         dial_link l(server_id, client_id);
@@ -104,7 +104,7 @@ TEST_CASE("dtls.external_complete: the FSM resolves with cert identity and no pl
         REQUIRE(l.dialed_ep.scheme == "dtls");
 
         // An app frame flows decrypted — proves the resolved session is a live channel.
-        const std::string      payload = "post-external-complete-frame";
+        const std::string payload = "post-external-complete-frame";
         std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()), reinterpret_cast<const std::byte *>(payload.data()) + payload.size());
         l.dialed->send(std::span<const std::byte>{frame});
         l.pump_until([&] { return !l.server_received.empty(); });

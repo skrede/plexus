@@ -20,7 +20,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
         // Bit 1 selects the flag-gated source-identity decode path so the fuzzer
         // exercises the trailing varint endpoint-counter region (read_varint) too.
         const bool has_source_identity = Size > 0 && (Data[0] & 0x02) != 0;
-        auto       result              = decode_unidirectional(bytes, has_source_identity);
+        auto result                    = decode_unidirectional(bytes, has_source_identity);
         fuzz_consume(result);
     }
     else

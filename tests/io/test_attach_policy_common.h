@@ -85,7 +85,7 @@ inline std::array<std::byte, 32> proof_for(std::span<const std::byte> material, 
 {
     static constexpr std::array<std::byte, 13> label{std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'u'}, std::byte{'s'}, std::byte{'-'},
                                                      std::byte{'a'}, std::byte{'t'}, std::byte{'t'}, std::byte{'a'}, std::byte{'c'}, std::byte{'h'}};
-    std::vector<std::byte>                     msg;
+    std::vector<std::byte> msg;
     msg.insert(msg.end(), label.begin(), label.end());
     msg.push_back(static_cast<std::byte>(f.role));
     msg.insert(msg.end(), f.initiator_id.begin(), f.initiator_id.end());

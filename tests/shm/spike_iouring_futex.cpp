@@ -48,7 +48,7 @@ TEST_CASE("spike: io_uring futex-wait CQE reaped through the asio reactor", "[sh
     REQUIRE(word != MAP_FAILED);
     *word = 0;
 
-    io_uring  ring;
+    io_uring ring;
     const int ring_rc = ::io_uring_queue_init(8, &ring, 0);
     REQUIRE(ring_rc == 0);
 
@@ -83,7 +83,7 @@ TEST_CASE("spike: io_uring futex-wait CQE reaped through the asio reactor", "[sh
     }
     REQUIRE(pid > 0);
 
-    asio::io_context               io;
+    asio::io_context io;
     asio::posix::stream_descriptor evt(io, evfd);
 
     bool wait_fired = false;

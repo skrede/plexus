@@ -4,19 +4,19 @@ using namespace message_info_fixture;
 
 TEST_CASE("message_info: the existing 2-arg deliver hands up the topic and bytes", "[forwarder][message_info]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch(ex);
-    auto              peer = make_peer(ch, "node-a");
+    inproc_channel<> ch(ex);
+    auto peer = make_peer(ch, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
-    const std::string                   body = "payload";
+    const std::string body = "payload";
     plexus::wire::unidirectional_header uhdr{.source = plexus::wire::endpoint_source_type::publisher, .sequence = 7, .topic_hash = plexus::wire::fqn_topic_hash("alpha")};
-    auto                                inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
+    auto inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
 
     std::string got_fqn;
     std::string got_bytes;
@@ -33,20 +33,20 @@ TEST_CASE("message_info: the existing 2-arg deliver hands up the topic and bytes
 
 TEST_CASE("message_info: the metadata overload delivers a fully-populated info", "[forwarder][message_info]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch(ex);
-    auto              peer = make_peer(ch, "node-a");
+    inproc_channel<> ch(ex);
+    auto peer = make_peer(ch, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
-    const std::string                   body       = "payload";
-    constexpr std::uint64_t             k_sequence = 42;
+    const std::string body             = "payload";
+    constexpr std::uint64_t k_sequence = 42;
     plexus::wire::unidirectional_header uhdr{.source = plexus::wire::endpoint_source_type::publisher, .sequence = k_sequence, .topic_hash = plexus::wire::fqn_topic_hash("alpha")};
-    auto                                inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
+    auto inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body));
 
     // The header-derived half of message_info as the session stamps it at on_receive:
     // a known source_timestamp from the frame header and a later receiver stamp.
@@ -55,10 +55,10 @@ TEST_CASE("message_info: the metadata overload delivers a fully-populated info",
     session_info.reception_timestamp = 2000;
     session_info.from_intra_process  = true;
 
-    std::string  got_fqn;
-    std::string  got_bytes;
+    std::string got_fqn;
+    std::string got_bytes;
     message_info got{};
-    bool         delivered = false;
+    bool delivered = false;
     fwd.deliver(peer, inner, session_info, peer_node_id(), /*has_source_identity=*/false,
                 [&](std::string_view fqn, std::span<const std::byte> data, const message_info &mi)
                 {
@@ -81,24 +81,24 @@ TEST_CASE("message_info: the metadata overload delivers a fully-populated info",
 
 TEST_CASE("message_info: the metadata overload reconstructs source_identity from a flag-gated gid", "[forwarder][message_info][gid]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch(ex);
-    auto              peer = make_peer(ch, "node-a");
+    inproc_channel<> ch(ex);
+    auto peer = make_peer(ch, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     REQUIRE(fwd.attach(peer, "alpha"));
     ex.drain();
 
-    const std::string                   body      = "payload";
-    constexpr std::uint64_t             k_counter = 0x2A; // the endpoint counter on the wire
+    const std::string body            = "payload";
+    constexpr std::uint64_t k_counter = 0x2A; // the endpoint counter on the wire
     plexus::wire::unidirectional_header uhdr{.source = plexus::wire::endpoint_source_type::publisher, .sequence = 9, .topic_hash = plexus::wire::fqn_topic_hash("alpha")};
     // A flag-gated frame: the varint endpoint counter rides the inner payload.
     auto inner = plexus::wire::encode_unidirectional(uhdr, as_bytes(body), k_counter);
 
     message_info got{};
-    bool         delivered = false;
+    bool delivered = false;
     fwd.deliver(peer, inner, message_info{}, peer_node_id(0xCD), /*has_source_identity=*/true,
                 [&](std::string_view, std::span<const std::byte>, const message_info &mi)
                 {

@@ -3,7 +3,7 @@
 TEST_CASE("udp selector: the tier classifies same-host local and everything else remote", "[udp][selector][tier]")
 {
     pio::transport_selector sel;
-    const auto              any = pio::reliability_hint::unspecified;
+    const auto any = pio::reliability_hint::unspecified;
 
     // Locality wins: a same-host scheme is local regardless of the reliability hint.
     REQUIRE(sel.select({"unix", "/tmp/s"}, any) == pio::transport_kind::local);
@@ -72,9 +72,9 @@ TEST_CASE("udp selector: select consumes the hint without changing the tier", "[
 TEST_CASE("udp selector: reliability_class enforces the no-silent-downgrade rule", "[udp][selector][reliability]")
 {
     pio::transport_selector sel;
-    const auto              reliable    = pio::reliability_hint::reliable;
-    const auto              best_effort = pio::reliability_hint::best_effort;
-    using verdict                       = pio::reliability_admissibility;
+    const auto reliable    = pio::reliability_hint::reliable;
+    const auto best_effort = pio::reliability_hint::best_effort;
+    using verdict          = pio::reliability_admissibility;
 
     // A reliable hint over a best_effort scheme (udp/dtls) is refused — never silently
     // downgraded to a lossy path.
@@ -102,7 +102,7 @@ TEST_CASE("udp selector: reliability_class enforces the no-silent-downgrade rule
     for(std::string_view scheme : {"udp", "dtls", "tcp", "tls", "udpr", "unix", "inproc", "ws"})
     {
         const pio::endpoint ep{std::string{scheme}, "addr"};
-        const bool          admissible = sel.reliability_class(ep, reliable) == verdict::admissible;
+        const bool admissible = sel.reliability_class(ep, reliable) == verdict::admissible;
         REQUIRE(admissible == pio::scheme_is_reliable(ep.scheme));
     }
 }

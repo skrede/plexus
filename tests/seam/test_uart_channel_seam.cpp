@@ -62,7 +62,7 @@ TEST_CASE("uart_channel delivers a verified frame synchronously, no owning per-f
     plexus::mcu::uart_channel ch{0, k_max_payload, k_ring};
 
     std::vector<std::byte> received;
-    bool                   protocol_closed = false;
+    bool protocol_closed = false;
     ch.on_data([&](std::span<const std::byte> frame) { received.assign(frame.begin(), frame.end()); });
     ch.on_protocol_close([&](plexus::wire::close_cause) { protocol_closed = true; });
 
@@ -81,9 +81,9 @@ TEST_CASE("uart_channel drops+resyncs a garbled stream and never wedges", "[seam
     plexus::test::reset_uart_fixture();
 
     // Leading line noise + a magic anchor with a corrupt trailer, then a clean frame.
-    auto       garbage = bytes_of({0x00, 0xFF, 0x13, 0x37});
+    auto garbage       = bytes_of({0x00, 0xFF, 0x13, 0x37});
     const auto payload = bytes_of({0x01, 0x02, 0x03});
-    auto       bad     = on_wire(payload);
+    auto bad           = on_wire(payload);
     bad.back()         = std::byte(bad.back() == std::byte{0} ? 0x01 : 0x00); // flip the CRC
     auto good          = on_wire(payload);
 
@@ -94,7 +94,7 @@ TEST_CASE("uart_channel drops+resyncs a garbled stream and never wedges", "[seam
 
     plexus::mcu::uart_channel ch{0, k_max_payload, k_ring};
 
-    int  deliveries      = 0;
+    int deliveries       = 0;
     bool protocol_closed = false;
     ch.on_data([&](std::span<const std::byte>) { ++deliveries; });
     ch.on_protocol_close([&](plexus::wire::close_cause) { protocol_closed = true; });

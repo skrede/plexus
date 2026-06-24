@@ -109,9 +109,9 @@ plexus::node_options base_opts()
 
 TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the framed buffer", "[payload_fidelity_capture]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    static_discovery  disc{{}};
+    static_discovery disc{{}};
 
     inproc_transport<> consumer_tp{ex, bus};
     inproc_transport<> producer_tp{ex, bus};
@@ -120,7 +120,7 @@ TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the frame
     bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
 
     in_memory_byte_sink sink;
-    auto                recorder = producer.make_recorder(sink);
+    auto recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
@@ -149,11 +149,11 @@ TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the frame
     REQUIRE(!stream.empty());
 
     plexus::io::recording::record_stream_reader reader{stream};
-    plexus::io::recording::stream_definitions   defs;
+    plexus::io::recording::stream_definitions defs;
     REQUIRE(reader.read_definitions(defs));
 
     std::vector<plexus::io::recording::decoded_record> records;
-    const auto                                         recovery = reader.recover(records);
+    const auto recovery = reader.recover(records);
     REQUIRE(recovery.header_ok);
 
     const auto telemetry_hash = plexus::wire::fqn_topic_hash("telemetry");

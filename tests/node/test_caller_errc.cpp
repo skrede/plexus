@@ -87,19 +87,19 @@ bool pump_until(inproc_executor<> &ex, Pred done, std::chrono::milliseconds budg
 TEST_CASE("caller errc: no-provider completes POSTED with no_provider and never hangs, looped", "[node][call][errc]")
 {
     constexpr int k_iterations = 5;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        inproc_bus<>       bus;
-        inproc_executor<>  ex{bus};
+        inproc_bus<> bus;
+        inproc_executor<> ex{bus};
         inproc_transport<> ta{ex, bus};
-        static_discovery   disc{{}};
+        static_discovery disc{{}};
 
         // A lone node with NO peer known — no connected provider for any fqn.
-        inproc_node   a{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
+        inproc_node a{ex, disc, make_id(0x0A), ta, make_opts(/*eager=*/false)};
         inproc_caller call{a, "rpc"};
 
-        bool                           fired = false;
+        bool fired = false;
         std::optional<std::error_code> err;
         call.call(as_bytes(std::string{"req"}),
                   [&](plexus::expected<reply_t, std::error_code> r)
@@ -124,14 +124,14 @@ TEST_CASE("caller errc: no-provider completes POSTED with no_provider and never 
 
 TEST_CASE("caller errc: a provider that never replies resolves timeout through the deadline path", "[node][call][errc]")
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
-    const auto  id_a = make_id(0x0A);
-    const auto  id_b = make_id(0x0B);
+    const auto id_a = make_id(0x0A);
+    const auto id_b = make_id(0x0B);
     inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
     inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
     a.listen({"inproc", "host-a:5000"});
@@ -143,9 +143,9 @@ TEST_CASE("caller errc: a provider that never replies resolves timeout through t
     // deadline resolves the call (rpc_status::timeout -> call_errc::timeout).
     inproc_procedure proc{b, "rpc", [](std::span<const std::byte>, inproc_procedure::reply_fn &) { /* never replies */ }};
 
-    inproc_caller                  call{a, "rpc"};
+    inproc_caller call{a, "rpc"};
     std::optional<std::error_code> err;
-    plexus::call_options           opts;
+    plexus::call_options opts;
     opts.deadline = std::chrono::milliseconds(20);
     call.call(as_bytes(std::string{"req"}), opts,
               [&](plexus::expected<reply_t, std::error_code> r)

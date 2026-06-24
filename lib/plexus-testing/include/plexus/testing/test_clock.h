@@ -19,7 +19,7 @@ struct test_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }

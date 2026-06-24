@@ -4,15 +4,15 @@ using namespace latch_forwarder_fixture;
 
 TEST_CASE("latch replay targets only the new subscriber, no double-receive", "[latch][forwarder]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch_a(ex), ch_b(ex);
-    capture           cap_a(ex), cap_b(ex);
-    auto              peer_a = make_peer(ch_a, cap_a, "node-a");
-    auto              peer_b = make_peer(ch_b, cap_b, "node-b");
+    inproc_channel<> ch_a(ex), ch_b(ex);
+    capture cap_a(ex), cap_b(ex);
+    auto peer_a = make_peer(ch_a, cap_a, "node-a");
+    auto peer_b = make_peer(ch_b, cap_b, "node-b");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.latch("topic");
     REQUIRE(fwd.attach_for_fanout(peer_a, "topic")); // A before the publish
     ex.drain();
@@ -36,14 +36,14 @@ TEST_CASE("latch replay targets only the new subscriber, no double-receive", "[l
 
 TEST_CASE("latch retention survives subscriber churn", "[latch][forwarder]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch_a(ex);
-    capture           cap_a(ex);
-    auto              peer_a = make_peer(ch_a, cap_a, "node-a");
+    inproc_channel<> ch_a(ex);
+    capture cap_a(ex);
+    auto peer_a = make_peer(ch_a, cap_a, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.latch("topic");
     fwd.publish("topic", as_bytes(std::string{"survivor"}));
     REQUIRE(fwd.attach_for_fanout(peer_a, "topic"));
@@ -51,8 +51,8 @@ TEST_CASE("latch retention survives subscriber churn", "[latch][forwarder]")
     fwd.detach_all(peer_a); // the last subscriber leaves
 
     inproc_channel<> ch_b(ex);
-    capture          cap_b(ex);
-    auto             peer_b = make_peer(ch_b, cap_b, "node-b");
+    capture cap_b(ex);
+    auto peer_b = make_peer(ch_b, cap_b, "node-b");
     // The new late joiner must declare durability::latest — only that durability gets the replay.
     plexus::io::subscriber_qos sub_qos_b;
     sub_qos_b.durability_mode = plexus::io::durability::latest;
@@ -66,14 +66,14 @@ TEST_CASE("latch retention survives subscriber churn", "[latch][forwarder]")
 
 TEST_CASE("multi-publisher to one latched topic is last-writer-wins", "[latch][forwarder]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex(bus);
-    inproc_channel<>  ch(ex);
-    capture           cap(ex);
-    auto              peer = make_peer(ch, cap, "node-a");
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "node-a");
 
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
     fwd.latch("topic");
     fwd.publish("topic", as_bytes(std::string{"writer-1"}));
     fwd.publish("topic", as_bytes(std::string{"writer-2"}));

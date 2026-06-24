@@ -79,7 +79,7 @@ struct counting_logger final : plexus::log::logger
 // frame_router. drive() drains the step-loop.
 struct rpc_link
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
 
     inproc_channel<> caller_tx{ex};
@@ -138,7 +138,7 @@ struct capture
         sink.on_data([this](std::span<const std::byte> d) { frames.emplace_back(d.begin(), d.end()); });
     }
 
-    inproc_channel<>                    sink;
+    inproc_channel<> sink;
     std::vector<std::vector<std::byte>> frames;
 };
 

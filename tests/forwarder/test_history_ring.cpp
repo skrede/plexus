@@ -7,14 +7,14 @@ TEST_CASE("durability=all on a depth-N ring replays EXACTLY the last N oldest->n
     // Reproducibility: the exactly-N delivery effect is proven over repeated runs.
     for(int iter = 0; iter < 50; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        capture           cap(ex);
-        auto              peer = make_peer(ch, cap, "node-a");
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder                fwd{sink};
+        forwarder fwd{sink};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
         for(int i = 0; i < 7; ++i) // N+k: publish v0..v6 with zero subscribers
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));
@@ -35,14 +35,14 @@ TEST_CASE("durability=all with fewer than N retained replays all of them oldest-
 {
     for(int iter = 0; iter < 50; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        capture           cap(ex);
-        auto              peer = make_peer(ch, cap, "node-a");
+        inproc_channel<> ch(ex);
+        capture cap(ex);
+        auto peer = make_peer(ch, cap, "node-a");
 
         plexus::log::null_logger sink;
-        forwarder                fwd{sink};
+        forwarder fwd{sink};
         fwd.declare("topic", topic_qos{.latch = true, .depth = 5});
         for(int i = 0; i < 3; ++i)
             fwd.publish("topic", as_bytes("v" + std::to_string(i)));

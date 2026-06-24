@@ -42,8 +42,8 @@ struct backing_region
 
 private:
     std::vector<std::byte> m_storage;
-    std::byte             *m_data{nullptr};
-    std::size_t            m_size{0};
+    std::byte *m_data{nullptr};
+    std::size_t m_size{0};
 };
 
 // Each published value carries a self-describing pattern (two copies of a 32-bit
@@ -68,7 +68,7 @@ TEST_CASE("ring_dekker: best_effort overwrite never tears a live pin", "[shm][ri
     broadcast_ring ring;
     REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) == loan_status::ok);
 
-    std::atomic<bool>          torn{false};
+    std::atomic<bool> torn{false};
     std::atomic<std::uint64_t> pins_verified{0};
 
     std::thread producer(
@@ -77,14 +77,14 @@ TEST_CASE("ring_dekker: best_effort overwrite never tears a live pin", "[shm][ri
                 for(std::uint64_t i = 1; i <= k_publishes; ++i)
                 {
                     broadcast_ring::claim_result claim;
-                    loan_status                  st;
+                    loan_status st;
                     do
                         st = ring.claim_with_policy(sizeof(payload), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim);
                     while(st == loan_status::congested);
                     if(st != loan_status::ok)
                         continue;
                     const auto v = static_cast<std::uint32_t>(i);
-                    payload    p{v, v};
+                    payload p{v, v};
                     std::memcpy(claim.slab.data(), &p, sizeof(p));
                     ring.commit(claim.position, sizeof(p));
                 }
@@ -100,7 +100,7 @@ TEST_CASE("ring_dekker: best_effort overwrite never tears a live pin", "[shm][ri
                 for(std::uint64_t spins = 0; spins < k_publishes * 64; ++spins)
                 {
                     broadcast_ring::consume_result consumed;
-                    const loan_status              st = ring.consume(cursor, consumed);
+                    const loan_status st = ring.consume(cursor, consumed);
                     if(st == loan_status::empty)
                         continue;
                     if(st == loan_status::congested)

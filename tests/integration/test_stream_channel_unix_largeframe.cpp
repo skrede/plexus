@@ -26,35 +26,35 @@ TEST_CASE("unix stream channel: a 16 MB single frame round-trips byte-identicall
     // byte cap holds the whole framed message under congestion=block. Looped in-body and
     // re-run across process runs (a transport claim is never made from one run); a position
     // ramp in the body catches a reorder/corruption, not just a size mismatch.
-    namespace pio                           = plexus::io;
-    constexpr std::size_t         k_payload = 16u * 1024u * 1024u;
-    constexpr std::size_t         k_ceiling = 20u * 1024u * 1024u;
+    namespace pio                   = plexus::io;
+    constexpr std::size_t k_payload = 16u * 1024u * 1024u;
+    constexpr std::size_t k_ceiling = 20u * 1024u * 1024u;
     stream::stream_inbound_config cfg{};
     cfg.max_payload_size          = k_ceiling;
     cfg.buffered_bytes_cap        = k_ceiling + wire::header_size;
     constexpr std::size_t k_queue = k_ceiling + 4u * 1024u * 1024u;
 
     constexpr int k_iterations = 3;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        temp_sock                                sock;
-        ::asio::io_context                       io;
+        temp_sock sock;
+        ::asio::io_context io;
         ::asio::local::stream_protocol::acceptor acc{io, ::asio::local::stream_protocol::endpoint(sock.path)};
-        ::asio::local::stream_protocol::socket   raw_server{io};
-        ::asio::local::stream_protocol::socket   raw_client{io};
+        ::asio::local::stream_protocol::socket raw_server{io};
+        ::asio::local::stream_protocol::socket raw_client{io};
         raw_client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         acc.accept(raw_server);
 
         pasio::unix_channel server{io, std::move(raw_server), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
         pasio::unix_channel client{io, std::move(raw_client), cfg, pio::congestion::block, pio::egress_capacity::of_bytes(k_queue)};
 
-        std::vector<std::byte>           got;
+        std::vector<std::byte> got;
         std::optional<wire::close_cause> closed;
         server.on_data([&](std::span<const std::byte> d) { got.assign(d.begin(), d.end()); });
         server.on_protocol_close([&](wire::close_cause c) { closed = c; });
 
-        const auto         body = ramp_payload(k_payload);
+        const auto body = ramp_payload(k_payload);
         wire::frame_header hdr{};
         hdr.type         = wire::msg_type::unidirectional;
         hdr.payload_len  = body.size();

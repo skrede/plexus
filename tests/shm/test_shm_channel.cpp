@@ -35,7 +35,7 @@ namespace {
 struct recording_notifier
 {
     std::uint32_t signals = 0;
-    bool          armed   = false;
+    bool armed            = false;
 
     void signal() noexcept
     {
@@ -70,8 +70,8 @@ struct backing_region
 
 private:
     std::vector<std::byte> m_storage;
-    std::byte             *m_data{nullptr};
-    std::size_t            m_size{0};
+    std::byte *m_data{nullptr};
+    std::size_t m_size{0};
 };
 
 struct fixture
@@ -79,9 +79,9 @@ struct fixture
     static constexpr std::uint64_t k_cells = 64;
     static constexpr std::uint64_t k_slot  = 64;
 
-    backing_region     control{control_region_bytes(k_cells)};
-    backing_region     slab{slab_region_bytes(k_cells, k_slot)};
-    broadcast_ring     ring;
+    backing_region control{control_region_bytes(k_cells)};
+    backing_region slab{slab_region_bytes(k_cells, k_slot)};
+    broadcast_ring ring;
     recording_notifier notify;
 
     fixture()
@@ -104,14 +104,14 @@ TEST_CASE("shm.channel send->drain round-trips a payload, signaling once per sen
     for(int i = 0; i < k_iterations; ++i)
     {
         const std::uint32_t value = 0xA5A50000u | static_cast<std::uint32_t>(i & 0xffff);
-        std::byte           payload[sizeof(value)];
+        std::byte payload[sizeof(value)];
         std::memcpy(payload, &value, sizeof(value));
 
         REQUIRE(channel.send(std::span<const std::byte>(payload, sizeof(payload))) == loan_status::ok);
 
-        std::uint32_t                               delivered = 0;
-        int                                         count     = 0;
-        shm_channel<recording_notifier>::deliver_fn deliver   = [&](plexus::wire_bytes<shm_slot_owner> wb)
+        std::uint32_t delivered                             = 0;
+        int count                                           = 0;
+        shm_channel<recording_notifier>::deliver_fn deliver = [&](plexus::wire_bytes<shm_slot_owner> wb)
         {
             REQUIRE(wb.size() == sizeof(value));
             std::memcpy(&delivered, wb.data(), sizeof(delivered));
@@ -129,7 +129,7 @@ TEST_CASE("shm.channel send->drain round-trips a payload, signaling once per sen
 
 TEST_CASE("shm.oversize a payload over the slot capacity returns rejected without signaling", "[shm][oversize]")
 {
-    fixture                         f;
+    fixture f;
     shm_channel<recording_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
     // A payload one byte over the slot capacity: send() must reject it, with NO
@@ -141,8 +141,8 @@ TEST_CASE("shm.oversize a payload over the slot capacity returns rejected withou
     REQUIRE(f.notify.signals == 0u); // the reject never signaled
 
     // No message landed: a drain delivers nothing.
-    int                                         delivered = 0;
-    shm_channel<recording_notifier>::deliver_fn deliver   = [&](plexus::wire_bytes<shm_slot_owner>) { ++delivered; };
+    int delivered                                       = 0;
+    shm_channel<recording_notifier>::deliver_fn deliver = [&](plexus::wire_bytes<shm_slot_owner>) { ++delivered; };
     channel.drain(deliver);
     REQUIRE(delivered == 0);
 

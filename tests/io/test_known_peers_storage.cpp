@@ -78,7 +78,7 @@ TEST_CASE("known_peers_storage fixed variant satisfies the same 4-verb contract"
 
 TEST_CASE("known_peers_storage fixed variant fills to capacity and overwrites in place", "[io][known_peers]")
 {
-    constexpr std::size_t                      cap = 4;
+    constexpr std::size_t cap = 4;
     basic_known_peers<fixed_peer_storage<cap>> table;
 
     for(std::size_t i = 0; i < cap; ++i)
@@ -100,7 +100,7 @@ TEST_CASE("known_peers_storage fixed variant fills to capacity and overwrites in
 
 TEST_CASE("known_peers_storage fixed variant fails closed on over-capacity", "[io][known_peers]")
 {
-    constexpr std::size_t                      cap = 2;
+    constexpr std::size_t cap = 2;
     basic_known_peers<fixed_peer_storage<cap>> table;
 
     table.note_peer(id_of(std::byte{0x01}), ep_of("a"));

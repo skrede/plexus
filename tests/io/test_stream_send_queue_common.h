@@ -30,9 +30,9 @@ namespace stream_send_queue_fixture {
 // also recorded so a test can assert the owner path passes a view, not a copy.
 struct recorder
 {
-    std::vector<std::vector<std::vector<std::byte>>> calls;          // [turn][node][bytes]
-    std::vector<const std::byte *>                   first_view_ptr; // [turn] -> &views[0][0]
-    std::vector<stream_send_queue::completion>       pending;
+    std::vector<std::vector<std::vector<std::byte>>> calls; // [turn][node][bytes]
+    std::vector<const std::byte *> first_view_ptr;          // [turn] -> &views[0][0]
+    std::vector<stream_send_queue::completion> pending;
 
     stream_send_queue::send_sink sink()
     {

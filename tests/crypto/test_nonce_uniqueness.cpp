@@ -5,8 +5,8 @@ using namespace nonce_uniqueness_fixture;
 TEST_CASE("crypto.nonce_uniqueness holds across flow, reconnect, and restart (looped)", "[crypto][nonce]")
 {
     std::set<nonce_tuple> seen;
-    const std::uint64_t   rekey_threshold = 64; // exercise several rekeys per session
-    const std::uint64_t   per_session     = 500;
+    const std::uint64_t rekey_threshold = 64; // exercise several rekeys per session
+    const std::uint64_t per_session     = 500;
 
     // N looped runs of the three-scenario set with a deterministic, RNG-free
     // construction — a second ctest invocation reproduces the identical pass.
@@ -31,7 +31,7 @@ TEST_CASE("crypto.nonce_uniqueness holds across a > 256-rekey session (epoch byt
     // wrap — the wire-byte collision (epoch 5 and 261 share byte 5) never reuses a
     // (key,nonce) pair because the keys differ.
     std::set<nonce_tuple> seen;
-    const std::uint64_t   frames = 600; // well past 256 rekeys at threshold 1
+    const std::uint64_t frames = 600; // well past 256 rekeys at threshold 1
     drive_flow(seen, /*session_salt=*/77, frames, /*rekey_threshold=*/1);
     REQUIRE(seen.size() == static_cast<std::size_t>(frames));
 

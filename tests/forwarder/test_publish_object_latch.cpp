@@ -4,11 +4,11 @@ using namespace publish_object_fixture;
 
 TEST_CASE("publish_object: a process-excluding reach mask produces no object and no encode", "[forwarder][object]")
 {
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
-    sink_peer                s(ex, "node-a");
+    forwarder fwd{sink};
+    sink_peer s(ex, "node-a");
 
     // reach excludes the process tier, so the single same-process subscriber is gated
     // out before eligibility — no fast path, and (no byte-eligible subscriber remains)
@@ -37,11 +37,11 @@ TEST_CASE("publish_object: a process-excluding reach mask produces no object and
 
 TEST_CASE("publish_object: a latched topic forces one encode even when every subscriber fast-paths", "[forwarder][object]")
 {
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
-    sink_peer                typed(ex, "node-typed");
+    forwarder fwd{sink};
+    sink_peer typed(ex, "node-typed");
 
     plexus::topic_qos qos;
     qos.latch = true;
@@ -76,10 +76,10 @@ TEST_CASE("publish_object: a latched topic forces one encode even when every sub
 
 TEST_CASE("publish_object: the caller reference is balanced when no subscriber matches", "[forwarder][object]")
 {
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
+    forwarder fwd{sink};
 
     // No subscribers, unlatched topic: nothing to deliver, encode never runs, but the
     // caller's reference must still be released exactly once.

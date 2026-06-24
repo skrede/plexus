@@ -65,7 +65,7 @@ using plexus::io::k_rxo_field_max_message_bytes;
 namespace rxo_fixture {
 
 constexpr auto k_long_timeout = std::chrono::hours(1);
-constexpr int  k_loops        = 50;
+constexpr int k_loops         = 50;
 
 inline std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -92,24 +92,24 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // the bus so destruction unwinds the channels first).
 struct link
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder            sub_messages{sink};  // the subscriber's forwarder
-    msg_forwarder            prod_messages{sink}; // the producer's forwarder
-    rpc_forwarder            sub_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder            prod_procedures{ex, k_long_timeout, sink};
+    msg_forwarder sub_messages{sink};  // the subscriber's forwarder
+    msg_forwarder prod_messages{sink}; // the producer's forwarder
+    rpc_forwarder sub_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder prod_procedures{ex, k_long_timeout, sink};
 
     plexus::io::peer_context<inproc_policy> sub_ctx;
     plexus::io::peer_context<inproc_policy> prod_ctx;
-    std::optional<session>                  subscriber;
-    std::optional<session>                  producer;
+    std::optional<session> subscriber;
+    std::optional<session> producer;
 
-    std::vector<std::string>      received; // data delivered to the subscriber
+    std::vector<std::string> received;      // data delivered to the subscriber
     std::vector<subscribe_status> refusals; // on_subscribe_refused statuses
-    std::vector<std::uint8_t>     degraded; // on_subscribe_degraded bitmasks
+    std::vector<std::uint8_t> degraded;     // on_subscribe_degraded bitmasks
 
     explicit link()
     {

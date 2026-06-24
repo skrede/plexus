@@ -93,12 +93,12 @@ inline std::vector<std::byte> make_data_frame(const std::string &payload, std::u
     using plexus::inproc::inproc_channel;
     using inproc_msg = pio::message_forwarder<plexus::inproc::inproc_policy>;
 
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink;
-    inproc_msg               framer{sink};
-    inproc_channel<>         capture(ex);
-    inproc_channel<>         tx(ex);
+    inproc_msg framer{sink};
+    inproc_channel<> capture(ex);
+    inproc_channel<> tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
     capture.on_data([&](std::span<const std::byte> f) { captured.assign(f.begin(), f.end()); });

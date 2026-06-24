@@ -39,9 +39,9 @@ inline frame_header make_header(std::size_t payload_len)
 
 inline std::vector<std::byte> framed(std::string_view payload)
 {
-    const auto             pl    = as_bytes(payload);
-    const auto             hdr   = encode_header(make_header(pl.size()));
-    const auto             trail = crc_trailer(std::span<const std::byte>{hdr}, pl);
+    const auto pl    = as_bytes(payload);
+    const auto hdr   = encode_header(make_header(pl.size()));
+    const auto trail = crc_trailer(std::span<const std::byte>{hdr}, pl);
     std::vector<std::byte> out;
     out.insert(out.end(), hdr.begin(), hdr.end());
     out.insert(out.end(), pl.begin(), pl.end());
@@ -58,7 +58,7 @@ inline std::string header_on(std::string_view payload)
 struct sink
 {
     std::vector<std::string> emitted;
-    int                      drops{0};
+    int drops{0};
 
     crc_serial_inbound make()
     {

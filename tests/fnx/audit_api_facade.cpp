@@ -32,9 +32,9 @@ int main()
     using transport = plexus::inproc::inproc_transport<>;
     using node_t    = plexus::node<policy, transport>;
 
-    plexus::inproc::inproc_bus<>        bus;
-    plexus::inproc::inproc_executor<>   executor{bus};
-    transport                           tr{executor, bus};
+    plexus::inproc::inproc_bus<> bus;
+    plexus::inproc::inproc_executor<> executor{bus};
+    transport tr{executor, bus};
     plexus::discovery::static_discovery disc{{}};
 
     plexus::node_id self{};

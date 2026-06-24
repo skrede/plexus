@@ -101,15 +101,15 @@ TEST_CASE("frame-once fan-out: the per-publish allocation does not scale with th
     using sink_forwarder = plexus::io::message_forwarder<sink_policy>;
 
     const std::string payload = "steady-state-body";
-    constexpr int     K       = 256;
+    constexpr int K           = 256;
 
     // The per-publish allocation count for a fan-out of N subscribers, after warm-up.
     const auto allocs_per_publish = [&](int subscribers)
     {
-        sink_executor                              ex;
+        sink_executor ex;
         std::vector<std::unique_ptr<sink_channel>> chs;
-        plexus::log::null_logger                   log_sink;
-        sink_forwarder                             fwd{log_sink};
+        plexus::log::null_logger log_sink;
+        sink_forwarder fwd{log_sink};
         for(int i = 0; i < subscribers; ++i)
         {
             chs.emplace_back(std::make_unique<sink_channel>(ex));

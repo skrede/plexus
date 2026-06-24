@@ -7,7 +7,7 @@ TEST_CASE("crypto.datagram_replay delivers an out-of-order but fresh datagram", 
     const auto keys = fixed_keys();
     const auto wire = seal_datagrams(keys, 5);
 
-    wire_lower                                 recv_wire;
+    wire_lower recv_wire;
     datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     std::vector<std::vector<std::byte>> delivered;
@@ -28,7 +28,7 @@ TEST_CASE("crypto.datagram_replay drops and counts a replayed datagram with no e
     const auto keys = fixed_keys();
     const auto wire = seal_datagrams(keys, 3);
 
-    wire_lower                                 recv_wire;
+    wire_lower recv_wire;
     datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     bool protocol_closed = false;
@@ -52,9 +52,9 @@ TEST_CASE("crypto.datagram_replay drops and counts a replayed datagram with no e
 TEST_CASE("crypto.datagram_replay drops and counts a bad-tag datagram without teardown", "[crypto][datagram_replay]")
 {
     const auto keys = fixed_keys();
-    auto       wire = seal_datagrams(keys, 2);
+    auto wire       = seal_datagrams(keys, 2);
 
-    wire_lower                                 recv_wire;
+    wire_lower recv_wire;
     datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
     bool protocol_closed = false;

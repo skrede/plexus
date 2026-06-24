@@ -6,7 +6,7 @@ using namespace recording_channel_fixture;
 
 TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame", "[recording_channel][wire]")
 {
-    auto                         *raw = new test_lower;
+    auto *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::tuple<wire_direction, std::uint64_t, std::vector<std::byte>>> taps;
@@ -26,7 +26,7 @@ TEST_CASE("recording_channel forwards send bytes verbatim and taps the OUT frame
 
 TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN frame", "[recording_channel][wire]")
 {
-    auto                         *raw = new test_lower;
+    auto *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::tuple<wire_direction, std::uint64_t, std::vector<std::byte>>> taps;
@@ -49,7 +49,7 @@ TEST_CASE("recording_channel re-emits inbound bytes verbatim and taps the IN fra
 
 TEST_CASE("recording_channel with no tap installed never fires the edge", "[recording_channel][wire]")
 {
-    auto                         *raw = new test_lower;
+    auto *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::byte> upward;

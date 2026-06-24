@@ -8,7 +8,7 @@ TEST_CASE("stream_send_queue fail-on-error edge: a composer that closes the bloc
     // the completion would chain, so the post-close completion is a guarded no-op (the
     // next queued frame is NOT written through the failed socket). This pins the
     // fail-before-chain semantics — the error is surfaced to the composer, never swallowed.
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({1}));
@@ -45,7 +45,7 @@ TEST_CASE("stream_send_queue gathers a multi-frame burst into ONE drain turn ove
     // The gather-write: a drain turn with N>1 queued frames issues exactly ONE sink call
     // carrying a SEQUENCE of N views, not N separate calls. The first frame drives
     // alone; the rest gather into the next turn behind it.
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({1})); // turn 0, in flight alone
@@ -71,7 +71,7 @@ TEST_CASE("stream_send_queue bounds the gather count per drain turn", "[io][stre
 {
     // The gather is bounded: at most gather_limit frames coalesce per turn, so a deep
     // backlog drains in ceil(backlog / limit) turns, never one unbounded iovec.
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink(), stream_send_queue::unbounded, /*gather_limit=*/3};
 
     for(int i = 0; i < 7; ++i)
@@ -99,12 +99,12 @@ TEST_CASE("stream_send_queue holds a wire_bytes owner with no copy and keeps it 
     // passes its VIEW (no intermediate copy — the presented pointer equals the owner's
     // bytes), and the owner stays referenced by the block until the SINGLE completion
     // fires (releasing it before would be a read-after-free under a real gather-write).
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink()};
 
     std::shared_ptr<std::vector<std::byte>> keep;
-    auto                                    frame       = owned_frame({7, 8, 9}, keep);
-    const std::byte                        *owner_bytes = frame.data();
+    auto frame                   = owned_frame({7, 8, 9}, keep);
+    const std::byte *owner_bytes = frame.data();
     REQUIRE(keep.use_count() == 2); // the test's keep + the frame's owner
 
     q.enqueue(std::move(frame));
@@ -131,17 +131,17 @@ TEST_CASE("stream_send_queue keeps ALL gathered owners alive until the single co
     // The gather-write hazard: ONE completion for N frames, so ALL N owners must outlive
     // it. Gather three owner frames into one turn, drop every external reference, and
     // assert none is freed until the single completion fires.
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink()};
 
     // A first frame drives alone; three owner frames then gather into the next turn.
     q.enqueue(bytes_of({0}));
 
     std::shared_ptr<std::vector<std::byte>> k1, k2, k3;
-    auto                                    f1 = owned_frame({1}, k1);
-    auto                                    f2 = owned_frame({2}, k2);
-    auto                                    f3 = owned_frame({3}, k3);
-    std::weak_ptr<std::vector<std::byte>>   w1{k1}, w2{k2}, w3{k3};
+    auto f1 = owned_frame({1}, k1);
+    auto f2 = owned_frame({2}, k2);
+    auto f3 = owned_frame({3}, k3);
+    std::weak_ptr<std::vector<std::byte>> w1{k1}, w2{k2}, w3{k3};
 
     q.enqueue(std::move(f1));
     q.enqueue(std::move(f2));

@@ -10,16 +10,16 @@ static_assert(plexus::io::transport_backend<pasio::udp_transport, pasio::udp_pol
 // handshake ARQ establishes before any data flows, capturing the accepted + dialed channels.
 struct loopback
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io};
 
     std::unique_ptr<pasio::udp_channel> accepted;
     std::unique_ptr<pasio::udp_channel> dialed;
 
-    std::vector<std::string>            received; // frames posted to the accepted channel
+    std::vector<std::string> received; // frames posted to the accepted channel
     std::optional<plexus::io::io_error> client_error;
-    int                                 accepted_protocol_closes{0};
+    int accepted_protocol_closes{0};
 
     loopback()
     {
@@ -61,7 +61,7 @@ struct loopback
 TEST_CASE("udp best_effort: a dialed channel sends a frame the accepting channel posts identically", "[udp][transport]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;
@@ -69,7 +69,7 @@ TEST_CASE("udp best_effort: a dialed channel sends a frame the accepting channel
         REQUIRE(h.accepted != nullptr);
 
         const std::string payload = "best_effort-" + std::to_string(iter);
-        auto              frame   = bytes_of(payload);
+        auto frame                = bytes_of(payload);
         h.dialed->send(frame);
 
         h.pump_until([&] { return !h.received.empty(); });
@@ -136,7 +136,7 @@ TEST_CASE("udp oversize: a message beyond the max-message size is rejected at pu
 
 TEST_CASE("udp dial: a malformed port fails closed via on_dial_failed, never throwing", "[udp][transport][parse]")
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport client{io};
 
     std::optional<plexus::io::io_error> dial_error;
@@ -170,7 +170,7 @@ TEST_CASE("udp best_effort drops a kind=1 datagram without spinning up an ARQ en
     // DROPPED on a best_effort channel — never routed to the reliable path that would
     // construct an unsolicited ARQ engine and start acking. With seq=0 it would otherwise
     // be a valid first segment.
-    auto                   payload = bytes_of("spoofed-reliable");
+    auto payload = bytes_of("spoofed-reliable");
     std::vector<std::byte> inner(1 + payload.size());
     inner[0] = static_cast<std::byte>(wire::udp_arq_kind::segment);
     for(std::size_t i = 0; i < payload.size(); ++i)

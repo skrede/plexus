@@ -7,16 +7,16 @@ namespace {
 // The cred pair is injected so the verify cases can mis-pin either side.
 struct relay_link
 {
-    ::asio::io_context          io;
-    ptls::tls_credential        server_cred;
-    ptls::tls_credential        client_cred;
-    ptls::dtls_transport        server;
-    ptls::dtls_transport        client;
+    ::asio::io_context io;
+    ptls::tls_credential server_cred;
+    ptls::tls_credential client_cred;
+    ptls::dtls_transport server;
+    ptls::dtls_transport client;
     std::unique_ptr<pdt::relay> link;
 
     std::unique_ptr<ptls::dtls_channel> accepted;
     std::unique_ptr<ptls::dtls_channel> dialed;
-    bool                                dial_failed{false};
+    bool dial_failed{false};
 
     relay_link(ptls::tls_credential srv, ptls::tls_credential cli)
             : server_cred(std::move(srv))
@@ -111,12 +111,12 @@ TEST_CASE("dtls.dial_abort: an io_context destroyed mid-handshake leaks nothing,
     // mid-handshake must free the transport-owned pending channel cleanly (the leak
     // the TLS self-owning-channel cycle had). Run under asan to catch a leak/UAF.
     constexpr int k_iterations = 100;
-    int           aborted      = 0;
+    int aborted                = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
-        ::asio::io_context   io;
-        auto                 server_cred = pdt::pin_one(srv, cli.digest);
-        auto                 client_cred = pdt::pin_one(cli, srv.digest);
+        ::asio::io_context io;
+        auto server_cred = pdt::pin_one(srv, cli.digest);
+        auto client_cred = pdt::pin_one(cli, srv.digest);
         ptls::dtls_transport server(io, server_cred);
         ptls::dtls_transport client(io, client_cred);
 
@@ -144,7 +144,7 @@ TEST_CASE("dtls.handshake_loss: the handshake completes through a lossy relay, l
     pdt::identity_fixture cli("loss_cli");
 
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         relay_link l(pdt::pin_one(srv, cli.digest), pdt::pin_one(cli, srv.digest));

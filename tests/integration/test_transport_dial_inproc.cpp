@@ -59,20 +59,20 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // executor, transport, then the channels/sessions declared after.
 struct dial_link
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
     plexus::log::null_logger sink;
-    msg_forwarder            req_messages{sink};
-    msg_forwarder            resp_messages{sink};
-    rpc_forwarder            req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder            resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages{sink};
+    msg_forwarder resp_messages{sink};
+    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
+    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
 
-    plexus::io::peer_context<inproc_policy> req_ctx;   // the dialer slot's per-peer record
-    plexus::io::peer_context<inproc_policy> resp_ctx;  // the accepted slot's per-peer record
-    std::optional<session>                  requester; // the dialer end
-    std::optional<session>                  responder; // the accepted end
+    plexus::io::peer_context<inproc_policy> req_ctx;  // the dialer slot's per-peer record
+    plexus::io::peer_context<inproc_policy> resp_ctx; // the accepted slot's per-peer record
+    std::optional<session> requester;                 // the dialer end
+    std::optional<session> responder;                 // the accepted end
 
     bool dial_refused{false};
 
@@ -113,7 +113,7 @@ TEST_CASE("inproc transport: a DIALED peer_session pair completes the handshake 
           "[integration][transport][inproc]")
 {
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         dial_link l;
@@ -140,12 +140,12 @@ TEST_CASE("inproc transport: dialing an unregistered endpoint surfaces connectio
           "on_dial_failed",
           "[integration][transport][inproc]")
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> transport{ex, bus};
 
     std::optional<plexus::io::io_error> failed;
-    bool                                dialed = false;
+    bool dialed = false;
     transport.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e) { failed = e; });
     transport.on_dialed([&](std::unique_ptr<inproc_channel<>>, const plexus::io::endpoint &) { dialed = true; });
 

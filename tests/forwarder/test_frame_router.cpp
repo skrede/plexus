@@ -5,7 +5,7 @@ using namespace frame_router_fixture;
 TEST_CASE("frame_router dispatches each type to its registered consumer with the inner span", "[forwarder][router]")
 {
     counting_logger log;
-    frame_router    router(log);
+    frame_router router(log);
 
     std::size_t uni = 0, sub = 0, unsub = 0, sub_resp = 0, rpc_req = 0, rpc_resp = 0;
     std::string last_inner;
@@ -49,9 +49,9 @@ TEST_CASE("frame_router dispatches each type to its registered consumer with the
 
     struct arm
     {
-        wire::msg_type   type;
+        wire::msg_type type;
         std::string_view body;
-        std::size_t     *hits;
+        std::size_t *hits;
     };
     const std::array<arm, 6> arms{{{wire::msg_type::unidirectional, "uni-inner", &uni},
                                    {wire::msg_type::subscribe, "sub-inner", &sub},
@@ -62,7 +62,7 @@ TEST_CASE("frame_router dispatches each type to its registered consumer with the
 
     for(const auto &a : arms)
     {
-        auto       frame  = make_frame(a.type, a.body);
+        auto frame        = make_frame(a.type, a.body);
         const auto before = *a.hits;
         router.route(frame);
         REQUIRE(*a.hits == before + 1); // exactly the matching consumer fired
@@ -77,7 +77,7 @@ TEST_CASE("frame_router dispatches each type to its registered consumer with the
 TEST_CASE("frame_router delivers a handshake_req / handshake_resp to a registered consumer", "[forwarder][router]")
 {
     counting_logger log;
-    frame_router    router(log);
+    frame_router router(log);
 
     std::size_t hs_req = 0, hs_resp = 0;
     std::string last_inner;
@@ -108,7 +108,7 @@ TEST_CASE("frame_router delivers a handshake_req / handshake_resp to a registere
 TEST_CASE("frame_router warn-and-drops a handshake frame with no consumer", "[forwarder][router]")
 {
     counting_logger log;
-    frame_router    router(log); // no handshake consumers registered
+    frame_router router(log); // no handshake consumers registered
 
     router.route(make_frame(wire::msg_type::handshake_req, "hs-req-inner"));
     router.route(make_frame(wire::msg_type::handshake_resp, "hs-resp-inner"));

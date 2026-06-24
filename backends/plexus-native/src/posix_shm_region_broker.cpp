@@ -63,14 +63,20 @@ shm_error map_errno(int e)
 {
     switch(e)
     {
-        case EEXIST:       return shm_error::already_exists;
-        case ENOENT:       return shm_error::not_found;
+        case EEXIST:
+            return shm_error::already_exists;
+        case ENOENT:
+            return shm_error::not_found;
         case EACCES:
-        case EPERM:        return shm_error::permission_denied;
-        case ENOSPC:       return shm_error::no_space;
+        case EPERM:
+            return shm_error::permission_denied;
+        case ENOSPC:
+            return shm_error::no_space;
         case EINVAL:
-        case ENAMETOOLONG: return shm_error::name_invalid;
-        default:           return shm_error::unknown;
+        case ENAMETOOLONG:
+            return shm_error::name_invalid;
+        default:
+            return shm_error::unknown;
     }
 }
 
@@ -87,14 +93,19 @@ plexus::shm::region_status to_status(shm_error e)
     using rs = plexus::shm::region_status;
     switch(e)
     {
-        case shm_error::ok:                return rs::ok;
-        case shm_error::already_exists:    return rs::already_exists;
-        case shm_error::not_found:         return rs::not_found;
-        case shm_error::permission_denied: return rs::denied;
-        case shm_error::no_space:          return rs::failed;
-        case shm_error::name_invalid:      return rs::failed;
-        case shm_error::map_failed:        return rs::failed;
-        case shm_error::unknown:           return rs::failed;
+        case shm_error::ok:
+            return rs::ok;
+        case shm_error::already_exists:
+            return rs::already_exists;
+        case shm_error::not_found:
+            return rs::not_found;
+        case shm_error::permission_denied:
+            return rs::denied;
+        case shm_error::no_space:
+        case shm_error::name_invalid:
+        case shm_error::map_failed:
+        case shm_error::unknown:
+            return rs::failed;
     }
     return rs::failed;
 }
@@ -131,7 +142,7 @@ plexus::shm::region_status posix_shm_region_broker::finish_attach(int fd, std::s
         return to_status(map_errno(e));
     }
     const auto length = static_cast<std::size_t>(st.st_size);
-    void      *base   = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    void *base        = ::mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(base == MAP_FAILED)
     {
         ::close(fd);

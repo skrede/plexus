@@ -22,7 +22,7 @@ TEST_CASE("asio_policy constructs its timer and channel from the io_context", "[
 {
     ::asio::io_context io;
 
-    asio_timer   timer(io);
+    asio_timer timer(io);
     asio_channel channel(io);
 
     // The timer is constructible from the executor alone (still a Policy constraint).
@@ -35,7 +35,7 @@ TEST_CASE("asio_policy constructs its timer and channel from the io_context", "[
 
     // Exercise the timer's error_code-overload ctor the Policy concept still requires.
     std::error_code ec;
-    asio_timer      timer_ec(io, ec);
+    asio_timer timer_ec(io, ec);
     CHECK_FALSE(ec);
 }
 

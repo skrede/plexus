@@ -79,7 +79,7 @@ TEST_CASE("interop: a mismatched-protocol peer is aborted with reject_version", 
 TEST_CASE("interop: a matching-protocol peer clears the version gate", "[handshake][interop]")
 {
     handshake_fsm fsm(config_for(id_with_tail(0xAA)));
-    const auto    req = request_with_protocol(id_with_tail(0xBB), k_protocol_version);
+    const auto req = request_with_protocol(id_with_tail(0xBB), k_protocol_version);
 
     const auto result = fsm.on_request(req, /*inbound_is_bootstrap=*/true);
 

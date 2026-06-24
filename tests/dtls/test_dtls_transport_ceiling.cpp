@@ -28,7 +28,7 @@ namespace {
 // accepted channel lands via on_accepted, the dialed channel via on_dialed.
 struct ceiling_link
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     ptls::tls_credential server_cred;
     ptls::tls_credential client_cred;
     ptls::dtls_transport server;
@@ -36,9 +36,9 @@ struct ceiling_link
 
     std::unique_ptr<ptls::dtls_channel> accepted;
     std::unique_ptr<ptls::dtls_channel> dialed;
-    bool                                dial_failed{false};
+    bool dial_failed{false};
     std::vector<std::vector<std::byte>> server_received;
-    std::optional<pio::io_error>        dialed_error;
+    std::optional<pio::io_error> dialed_error;
 
     ceiling_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id, std::size_t max_payload, std::size_t global_default, std::size_t reassembly_budget)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
@@ -91,7 +91,7 @@ TEST_CASE("dtls.transport_ceiling: a transport-configured LOW per-message ceilin
     constexpr std::size_t k_over    = 5000; // > k_ceiling, << the 8 MiB default
 
     constexpr int k_iterations = 50;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         ceiling_link l(srv, cli, ptls::dtls_channel::default_max_payload, k_ceiling, k_budget);

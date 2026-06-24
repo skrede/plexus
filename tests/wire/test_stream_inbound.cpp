@@ -44,8 +44,8 @@ TEST_CASE("wire stream_inbound: a slow byte-dribble does not reset the deadline 
         // each, never completing the header. While the size is unknown the deadline
         // is the floor; a fresh frame arms it ONCE (idle->frame) and the continuing
         // dribble must NOT re-arm it. Cumulative advance crosses the floor -> close.
-        auto       frame = encode_complete(64);
-        const auto step  = std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor) / 8;
+        auto frame      = encode_complete(64);
+        const auto step = std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor) / 8;
 
         for(std::size_t i = 0; i < header_size - 4; ++i)
         {
@@ -78,8 +78,8 @@ TEST_CASE("wire stream_inbound: a sub-throughput large frame closes on the throu
         // 4 s deadline), then deliver the payload in slices whose cumulative
         // virtual time exceeds 4 s before the last byte lands -> close fires.
         constexpr std::size_t k_payload = 4096;
-        auto                  frame     = encode_complete(k_payload);
-        const auto            deadline  = payload_deadline(k_payload);
+        auto frame                      = encode_complete(k_payload);
+        const auto deadline             = payload_deadline(k_payload);
 
         // Header arms the size-based deadline.
         f.feed(std::span<const std::byte>{frame}.subspan(0, header_size));
@@ -87,9 +87,9 @@ TEST_CASE("wire stream_inbound: a sub-throughput large frame closes on the throu
 
         // Deliver the payload slower than the floor: advance past the deadline
         // across slices, NEVER completing in time. The dribble must not re-arm.
-        std::size_t       offset = header_size;
-        const std::size_t chunk  = 256;
-        const auto        step   = deadline / 4; // 4 slices * step = deadline; we overrun it
+        std::size_t offset      = header_size;
+        const std::size_t chunk = 256;
+        const auto step         = deadline / 4; // 4 slices * step = deadline; we overrun it
         while(offset + chunk < frame.size() && f.c.closes == 0)
         {
             f.feed(std::span<const std::byte>{frame}.subspan(offset, chunk));
@@ -118,13 +118,13 @@ TEST_CASE("wire stream_inbound: a frame that completes within its size-proportio
         // allowance). Feed it in slices whose cumulative time stays UNDER 8 s and
         // complete it -> on_frame, zero closes.
         constexpr std::size_t k_payload = 8192;
-        auto                  frame     = encode_complete(k_payload);
-        const auto            deadline  = payload_deadline(k_payload);
+        auto frame                      = encode_complete(k_payload);
+        const auto deadline             = payload_deadline(k_payload);
         REQUIRE(deadline > std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor));
 
-        const auto        step   = deadline / 16; // many slices, each tiny
-        std::size_t       offset = 0;
-        const std::size_t chunk  = 1024;
+        const auto step         = deadline / 16; // many slices, each tiny
+        std::size_t offset      = 0;
+        const std::size_t chunk = 1024;
         while(offset + chunk < frame.size())
         {
             f.feed(std::span<const std::byte>{frame}.subspan(offset, chunk));
@@ -155,7 +155,7 @@ TEST_CASE("wire stream_inbound: a normal back-to-back complete-frame stream rais
         fixture f;
 
         std::vector<std::byte> stream_bytes;
-        constexpr int          k_frames = 5;
+        constexpr int k_frames = 5;
         for(int n = 0; n < k_frames; ++n)
         {
             auto frame = encode_complete(32 + static_cast<std::size_t>(n) * 16);

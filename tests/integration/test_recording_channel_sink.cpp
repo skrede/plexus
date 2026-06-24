@@ -6,7 +6,7 @@ using namespace recording_channel_fixture;
 
 TEST_CASE("recording_channel stamps strictly monotonic independent per-direction sequences", "[recording_channel][wire]")
 {
-    auto                         *raw = new test_lower;
+    auto *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     std::vector<std::uint64_t> out_seq;
@@ -28,15 +28,15 @@ TEST_CASE("recording_channel stamps strictly monotonic independent per-direction
 TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_frame", "[recording_channel][wire][recorder]")
 {
     in_memory_byte_sink sink;
-    std::uint64_t       tick = 0;
-    flat_recorder       recorder{sink, 64u * 1024u, [&tick] { return ++tick; }};
+    std::uint64_t tick = 0;
+    flat_recorder recorder{sink, 64u * 1024u, [&tick] { return ++tick; }};
     recorder.open(make_node(2), plexus::io::topic_capture_rule{});
 
     recording_sink tap{recorder};
 
     // Drive a captured frame through the decorator's tap into the sink's on_wire override,
     // exactly as the posted engine edge would (the tap builds a wire_record, on_wire records).
-    auto                         *raw = new test_lower;
+    auto *raw = new test_lower;
     recording_channel<test_lower> ch{std::unique_ptr<test_lower>(raw)};
 
     const node_id peer = make_node(9);
@@ -55,7 +55,7 @@ TEST_CASE("a wire_record reaches the recorder through recording_sink as a wire_f
     recorder.flush();
 
     record_stream_reader r{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
     REQUIRE(r.recover(out).header_ok);

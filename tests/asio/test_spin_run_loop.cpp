@@ -52,14 +52,14 @@ std::string str_of(std::span<const std::byte> b)
 // at the requested budget so the driver -- not a raw poll loop -- carries every leg.
 struct spin_loopback
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::spin_run_loop loop;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io};
 
     std::unique_ptr<pasio::udp_channel> accepted;
     std::unique_ptr<pasio::udp_channel> dialed;
-    std::vector<std::string>            received;
+    std::vector<std::string> received;
 
     explicit spin_loopback(std::uint32_t spin_budget)
             : loop(io, spin_budget)
@@ -90,7 +90,7 @@ struct spin_loopback
 void round_trips_at(std::uint32_t spin_budget)
 {
     constexpr int k_iterations = 50;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         spin_loopback h{spin_budget};
@@ -98,7 +98,7 @@ void round_trips_at(std::uint32_t spin_budget)
         REQUIRE(h.accepted != nullptr);
 
         const std::string payload = "spin-" + std::to_string(iter);
-        auto              frame   = bytes_of(payload);
+        auto frame                = bytes_of(payload);
         h.dialed->send(frame);
 
         h.pump_until([&] { return !h.received.empty(); });
@@ -125,7 +125,7 @@ TEST_CASE("spin_run_loop budget 0 (drain-then-park) delivers identically -- the 
 
 TEST_CASE("spin_run_loop::run() exits when the io_context is stopped", "[asio][spin]")
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::spin_run_loop loop{io};
 
     bool ran = false;

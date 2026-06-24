@@ -18,9 +18,9 @@
 static bool crypto_roundtrip()
 {
     using namespace plexus::crypto;
-    const aead_key                                key{};
+    const aead_key key{};
     const std::array<std::byte, k_aead_nonce_len> nonce{};
-    const std::array<std::byte, 5>                plaintext{std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'!'}};
+    const std::array<std::byte, 5> plaintext{std::byte{'p'}, std::byte{'l'}, std::byte{'e'}, std::byte{'x'}, std::byte{'!'}};
 
     std::vector<std::byte> sealed;
     if(!seal(aead_cipher_id::chacha20_poly1305, key, nonce, {}, plaintext, sealed))
@@ -44,7 +44,7 @@ int main()
     plexus::node_id id{};
     id[0] = std::byte{0x42};
 
-    std::byte            storage[4]{};
+    std::byte storage[4]{};
     plexus::wire_bytes<> bytes{std::span<const std::byte>{storage}, nullptr};
     if(bytes.size() != sizeof(storage))
         return 1;

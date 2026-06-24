@@ -4,7 +4,7 @@ using namespace shm_ring_backpressure_fixture;
 
 TEST_CASE("ring_backpressure: best_effort overwrite skips a pinned slot", "[shm][ring_backpressure]")
 {
-    fixture       f;
+    fixture f;
     std::uint32_t cursor_index = 0;
     REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
     std::uint64_t cursor = f.ring.tail_position();
@@ -31,7 +31,7 @@ TEST_CASE("ring_backpressure: best_effort overwrite skips a pinned slot", "[shm]
 
 TEST_CASE("ring_backpressure: a full-lap-pinned ring returns congested", "[shm][ring_backpressure]")
 {
-    fixture       f;
+    fixture f;
     std::uint32_t cursor_index = 0;
     REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
 
@@ -59,7 +59,7 @@ TEST_CASE("ring_backpressure: a full-lap-pinned ring returns congested", "[shm][
 
 TEST_CASE("ring_backpressure: a full-ring lap-behind reports lagged carrying the tail", "[shm][ring_backpressure]")
 {
-    fixture       f;
+    fixture f;
     std::uint32_t cursor_index = 0;
     REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
     const std::uint64_t start = f.ring.tail_position();

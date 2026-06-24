@@ -9,10 +9,10 @@ TEST_CASE("obs tap: one publish to N subscribers fires published once and delive
           "[integration][observer][tap]")
 {
     constexpr std::size_t k_subscribers = 3;
-    const std::string     payload       = "tap-fan-out";
+    const std::string payload           = "tap-fan-out";
 
     manual_clock::reset();
-    fan_net            net{k_subscribers};
+    fan_net net{k_subscribers};
     recording_observer rec;
     net.pub.add_observer(rec);
     net.drive(); // settle the N subscribe round-trips
@@ -36,7 +36,7 @@ TEST_CASE("obs tap: the delivered view borrows the surfaced owner (a shared addr
     const std::string payload = "tap-zero-copy";
 
     manual_clock::reset();
-    fan_net            net{1};
+    fan_net net{1};
     recording_observer rec;
     net.pub.add_observer(rec);
     net.drive();

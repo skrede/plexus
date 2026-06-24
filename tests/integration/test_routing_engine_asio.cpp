@@ -9,13 +9,13 @@ TEST_CASE("routing over asio: LAZY opens no connection until a demand call, then
           "[integration][routing][asio]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
 
         // Awareness alone: no demand, so the lazy engine dials NOTHING.
         a.eng.note_peer(id_b, b.listen_ep());
@@ -37,15 +37,15 @@ TEST_CASE("routing over asio: a demand subscribe carries a real published messag
           "epoch over real TCP",
           "[integration][routing][asio]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "routed-published-bytes-over-tcp";
-    int               delivered    = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "routed-published-bytes-over-tcp";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
 
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.subscribe(id_b, "topic");
@@ -87,13 +87,13 @@ TEST_CASE("routing over asio: EAGER dials and completes off note_peer ALONE with
           "[integration][routing][asio]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/true};
-        asio_node          b{io, 0xB2, /*eager=*/true};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/true};
+        asio_node b{io, 0xB2, /*eager=*/true};
+        const auto id_b = make_id(0xB2);
 
         // No reach/subscribe/call: awareness ALONE triggers the dial+handshake.
         a.eng.note_peer(id_b, b.listen_ep());

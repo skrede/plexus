@@ -21,7 +21,7 @@ TEST_CASE("concurrent outstanding req/res over real TCP each resolve to their ow
         h.provider->serve("echo", [](std::span<const std::byte> param, forwarder::reply_fn &reply) { reply(rpc_status::success, param); });
 
         std::array<std::string, m_outstanding> got{};
-        std::array<rpc_status, m_outstanding>  status{};
+        std::array<rpc_status, m_outstanding> status{};
         status.fill(rpc_status::error);
         for(int i = 0; i < m_outstanding; ++i)
         {

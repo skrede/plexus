@@ -57,14 +57,14 @@ inline ptls::tls_credential pin_one_tls(const pdt::identity_fixture &self, const
 // own quintet (the concrete completion callbacks are single-slot).
 struct mux_face
 {
-    ::asio::io_context     &io;
-    ptls::tls_credential    tls_cred;
-    ptls::tls_credential    dtls_cred;
-    pasio::unix_transport   local{io};
-    pasio::asio_transport   remote{io};
-    ptls::tls_transport     secure;
-    pasio::udp_transport    datagram{io};
-    ptls::dtls_transport    secure_datagram;
+    ::asio::io_context &io;
+    ptls::tls_credential tls_cred;
+    ptls::tls_credential dtls_cred;
+    pasio::unix_transport local{io};
+    pasio::asio_transport remote{io};
+    ptls::tls_transport secure;
+    pasio::udp_transport datagram{io};
+    ptls::dtls_transport secure_datagram;
     pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
     mux_face(::asio::io_context &ctx, ptls::tls_credential tls_c, ptls::tls_credential dtls_c)
@@ -85,10 +85,10 @@ struct mux_face
 struct mux_pair
 {
     ::asio::io_context io;
-    mux_face           listen_face;
-    mux_face           dial_face;
+    mux_face listen_face;
+    mux_face dial_face;
 
-    std::optional<pio::endpoint>                   dialed_ep;
+    std::optional<pio::endpoint> dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 

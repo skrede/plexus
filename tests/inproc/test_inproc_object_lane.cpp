@@ -28,8 +28,8 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // the slot drops to zero. A balanced run ends with refs == 0 and release_calls == 1.
 struct counted_payload
 {
-    int       value{0};
-    int       release_calls{0};
+    int value{0};
+    int release_calls{0};
     loan_slot slot{};
 };
 
@@ -47,10 +47,10 @@ object_carrier make_carrier(counted_payload &p, std::uint64_t topic, std::uint64
 
 struct pair_fixture
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    inproc_channel<>  a{ex};
-    inproc_channel<>  b{ex};
+    inproc_channel<> a{ex};
+    inproc_channel<> b{ex};
 
     pair_fixture()
     {
@@ -63,12 +63,12 @@ struct pair_fixture
 
 TEST_CASE("inproc object lane delivers the carrier to the partner with field fidelity", "[inproc][object]")
 {
-    pair_fixture    fx;
+    pair_fixture fx;
     counted_payload p;
     p.value = 42;
 
     object_carrier received{};
-    bool           got = false;
+    bool got = false;
     fx.b.on_object(
             [&](const object_carrier &c)
             {
@@ -94,7 +94,7 @@ TEST_CASE("inproc object lane delivers the carrier to the partner with field fid
 
 TEST_CASE("inproc object lane preserves FIFO ordering with interleaved byte packets", "[inproc][object]")
 {
-    pair_fixture    fx;
+    pair_fixture fx;
     counted_payload p0, p1;
 
     std::vector<std::string> order;
@@ -122,7 +122,7 @@ TEST_CASE("inproc object lane preserves FIFO ordering with interleaved byte pack
 
 TEST_CASE("inproc object lane releases on a closed partner with no handler fire", "[inproc][object]")
 {
-    pair_fixture    fx;
+    pair_fixture fx;
     counted_payload p;
 
     bool fired = false;
@@ -139,9 +139,9 @@ TEST_CASE("inproc object lane releases on a closed partner with no handler fire"
 
 TEST_CASE("inproc object lane releases when the target endpoint has vanished", "[inproc][object]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    counted_payload   p;
+    counted_payload p;
 
     {
         inproc_channel<> a{ex};
@@ -169,7 +169,7 @@ TEST_CASE("inproc object lane balances refcounts across a multi-packet burst", "
                 plexus::io::release(c);
             });
 
-    constexpr int                k_burst = 32;
+    constexpr int k_burst = 32;
     std::vector<counted_payload> payloads(k_burst);
     for(int i = 0; i < k_burst; ++i)
         fx.a.send_object(make_carrier(payloads[i], 1, 1, static_cast<std::uint64_t>(i)));

@@ -12,7 +12,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
     // applies SO_SNDBUF/SO_RCVBUF + SO_KEEPALIVE so a get_option readback MOVES off the
     // default (the kernel may double or clamp, so the assertion is "moved", not "equals"),
     // while a default-constructed channel leaves the buffers untouched and keepalive off.
-    ::asio::io_context        io;
+    ::asio::io_context io;
     ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
 
     auto connected_pair = [&]
@@ -30,7 +30,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
     int default_rcv = 0;
     {
         auto [peer, client] = connected_pair();
-        ::asio::socket_base::send_buffer_size    snd;
+        ::asio::socket_base::send_buffer_size snd;
         ::asio::socket_base::receive_buffer_size rcv;
         client.get_option(snd);
         client.get_option(rcv);
@@ -50,9 +50,9 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
         opts.keepalive = true;
         pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::bounded_default(), opts};
 
-        ::asio::socket_base::send_buffer_size    snd;
+        ::asio::socket_base::send_buffer_size snd;
         ::asio::socket_base::receive_buffer_size rcv;
-        ::asio::socket_base::keep_alive          ka;
+        ::asio::socket_base::keep_alive ka;
         ch.socket().get_option(snd);
         ch.socket().get_option(rcv);
         ch.socket().get_option(ka);
@@ -67,9 +67,9 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
         auto [peer, client] = connected_pair();
         pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{}, pio::congestion::block};
 
-        ::asio::socket_base::send_buffer_size    snd;
+        ::asio::socket_base::send_buffer_size snd;
         ::asio::socket_base::receive_buffer_size rcv;
-        ::asio::socket_base::keep_alive          ka;
+        ::asio::socket_base::keep_alive ka;
         ch.socket().get_option(snd);
         ch.socket().get_option(rcv);
         ch.socket().get_option(ka);
@@ -83,7 +83,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
 TEST_CASE("asio stream channel: a bad-magic byte run fires on_protocol_close(invalid_magic)", "[integration][asio][hardening]")
 {
     constexpr int k_iterations = 20;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;
@@ -112,7 +112,7 @@ TEST_CASE("asio stream channel: a header with a withheld payload fires "
           "[integration][asio][hardening]")
 {
     constexpr int k_iterations = 20;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;

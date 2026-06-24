@@ -40,8 +40,8 @@ bool feed_aad(EVP_CIPHER_CTX *ctx, std::span<const std::byte> aad, bool sealing)
 {
     if(aad.empty())
         return true;
-    int       len = 0;
-    const int n   = static_cast<int>(aad.size());
+    int len     = 0;
+    const int n = static_cast<int>(aad.size());
     return (sealing ? EVP_EncryptUpdate(ctx, nullptr, &len, as_uc(aad.data()), n) : EVP_DecryptUpdate(ctx, nullptr, &len, as_uc(aad.data()), n)) == 1;
 }
 
@@ -90,9 +90,9 @@ bool open(aead_cipher_id cipher, const aead_key &key, std::span<const std::byte,
 {
     if(ciphertext_and_tag.size() < k_aead_tag_len)
         return false;
-    const auto  ct_len = ciphertext_and_tag.size() - k_aead_tag_len;
-    const auto *ct     = ciphertext_and_tag.data();
-    const auto *tag    = ciphertext_and_tag.data() + ct_len;
+    const auto ct_len = ciphertext_and_tag.size() - k_aead_tag_len;
+    const auto *ct    = ciphertext_and_tag.data();
+    const auto *tag   = ciphertext_and_tag.data() + ct_len;
 
     cipher_ctx ctx{EVP_CIPHER_CTX_new()};
     if(!ctx)

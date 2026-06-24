@@ -7,8 +7,8 @@ using namespace record_stream_fixture;
 TEST_CASE("recording_sink captures synthetic edges through the recorder to a byte_sink", "[record_stream][recorder]")
 {
     in_memory_byte_sink sink;
-    std::uint64_t       tick = 0;
-    flat_recorder       recorder{sink, 64u * 1024u, [&tick] { return ++tick; }};
+    std::uint64_t tick = 0;
+    flat_recorder recorder{sink, 64u * 1024u, [&tick] { return ++tick; }};
 
     recorder.open(make_node(2), topic_capture_rule{});
 
@@ -25,9 +25,9 @@ TEST_CASE("recording_sink captures synthetic edges through the recorder to a byt
     ee.topic_hash = plexus::wire::fqn_topic_hash("sensor/imu");
     tap.on_endpoint("sensor/imu", ee);
 
-    const std::string              body = "imu-sample-bytes";
+    const std::string body = "imu-sample-bytes";
     const plexus::io::message_view view{bytes_of(body), {}};
-    message_info                   info{};
+    message_info info{};
     info.publication_sequence = 9;
     tap.on_message_delivered("sensor/imu", info, view);
 
@@ -36,12 +36,12 @@ TEST_CASE("recording_sink captures synthetic edges through the recorder to a byt
     recorder.flush();
 
     record_stream_reader r{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE(r.read_definitions(defs));
     REQUIRE(defs.node == make_node(2));
 
     std::vector<decoded_record> out;
-    const recovery_result       res = r.recover(out);
+    const recovery_result res = r.recover(out);
     REQUIRE(res.header_ok);
     REQUIRE_FALSE(res.corruption_skipped);
     REQUIRE(out.size() == 3);
@@ -60,7 +60,7 @@ TEST_CASE("recording_sink captures synthetic edges through the recorder to a byt
 TEST_CASE("record stream round-trips the opaque schema table and crypto position offline", "[record_stream]")
 {
     record_stream_writer w;
-    in_memory_byte_sink  sink;
+    in_memory_byte_sink sink;
 
     const std::array<std::byte, 4> blob_a{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04}};
     const std::array<std::byte, 2> blob_b{std::byte{0xFE}, std::byte{0xED}};
@@ -71,7 +71,7 @@ TEST_CASE("record stream round-trips the opaque schema table and crypto position
     sink.write(w.begin_stream(99u, make_node(7), topic_capture_rule{}, std::span<const type_schema_entry>{rows}, capture_crypto_position::ciphertext));
 
     record_stream_reader r{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE(r.read_definitions(defs));
     REQUIRE(defs.clock_epoch == 99u);
     REQUIRE(defs.node == make_node(7));
@@ -94,12 +94,12 @@ TEST_CASE("record stream round-trips the opaque schema table and crypto position
 TEST_CASE("record stream recovers an empty schema table with a default crypto position", "[record_stream]")
 {
     record_stream_writer w;
-    in_memory_byte_sink  sink;
+    in_memory_byte_sink sink;
 
     sink.write(w.begin_stream(3u, make_node(8), topic_capture_rule{}, {}));
 
     record_stream_reader r{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE(r.read_definitions(defs));
     REQUIRE(defs.clock_epoch == 3u);
     REQUIRE(defs.schema.empty());
@@ -109,7 +109,7 @@ TEST_CASE("record stream recovers an empty schema table with a default crypto po
 TEST_CASE("record stream rejects a preamble written at the prior format version", "[record_stream]")
 {
     record_stream_writer w;
-    in_memory_byte_sink  sink;
+    in_memory_byte_sink sink;
     sink.write(w.begin_stream(1u, make_node(1), topic_capture_rule{}, {}));
 
     // Rewrite the version field (the u16 right after the u32 magic) to the prior version; the
@@ -119,6 +119,6 @@ TEST_CASE("record stream rejects a preamble written at the prior format version"
     stream[sizeof(std::uint32_t) + 1] = std::byte{0x01};
 
     record_stream_reader r{stream};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE_FALSE(r.read_definitions(defs));
 }

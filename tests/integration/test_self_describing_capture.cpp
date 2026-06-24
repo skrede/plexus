@@ -6,9 +6,9 @@ using namespace self_describing_fixture;
 
 TEST_CASE("a declared schema + crypto position + producer type_id round-trip through the preamble", "[self_describing_capture]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    static_discovery  disc{{}};
+    static_discovery disc{{}};
 
     inproc_transport<> consumer_tp{ex, bus};
     inproc_transport<> producer_tp{ex, bus};
@@ -30,7 +30,7 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
             .type_id = k_reading_type_id, .message_encoding = "json", .schema_name = "reading", .schema_encoding = "jsonschema", .schema_data = as_bytes(schema_blob)});
 
     in_memory_byte_sink sink;
-    auto                recorder = producer.make_recorder(sink, std::move(ropts));
+    auto recorder = producer.make_recorder(sink, std::move(ropts));
 
     const std::uint32_t published = 0xCAFEu;
     capture_one(producer, consumer, ex, recorder, published);
@@ -39,7 +39,7 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
     REQUIRE(!stream.empty());
 
     plexus::io::recording::record_stream_reader reader{stream};
-    plexus::io::recording::stream_definitions   defs;
+    plexus::io::recording::stream_definitions defs;
     REQUIRE(reader.read_definitions(defs));
 
     // The preamble crypto position equals the node's declared wire position.
@@ -56,7 +56,7 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
     REQUIRE(e.schema_data == expected_blob);
 
     std::vector<plexus::io::recording::decoded_record> records;
-    const auto                                         recovery = reader.recover(records);
+    const auto recovery = reader.recover(records);
     REQUIRE(recovery.header_ok);
 
     const auto telemetry_hash = plexus::wire::fqn_topic_hash("telemetry");
@@ -78,9 +78,9 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
 
 TEST_CASE("a recorder that declares nothing still writes a valid opaque stream", "[self_describing_capture]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    static_discovery  disc{{}};
+    static_discovery disc{{}};
 
     inproc_transport<> consumer_tp{ex, bus};
     inproc_transport<> producer_tp{ex, bus};
@@ -93,7 +93,7 @@ TEST_CASE("a recorder that declares nothing still writes a valid opaque stream",
     ex.drain();
 
     in_memory_byte_sink sink;
-    auto                recorder = producer.make_recorder(sink); // default options: empty schemas
+    auto recorder = producer.make_recorder(sink); // default options: empty schemas
 
     capture_one(producer, consumer, ex, recorder, 0x1234u);
 
@@ -101,7 +101,7 @@ TEST_CASE("a recorder that declares nothing still writes a valid opaque stream",
     REQUIRE(!stream.empty());
 
     plexus::io::recording::record_stream_reader reader{stream};
-    plexus::io::recording::stream_definitions   defs;
+    plexus::io::recording::stream_definitions defs;
     REQUIRE(reader.read_definitions(defs));
     REQUIRE(defs.schema.empty());
     // The unset node wire position defaults to cleartext.

@@ -42,9 +42,9 @@ namespace stream = plexus::stream;
 
 namespace {
 
-constexpr std::size_t k_cap    = 4096;
-constexpr int         k_loops  = 4;
-constexpr int         k_frames = 4096;
+constexpr std::size_t k_cap = 4096;
+constexpr int k_loops       = 4;
+constexpr int k_frames      = 4096;
 
 // Drive a never-reading-peer saturating loop over a stream channel, asserting the outbox
 // never grows past the cap across the WHOLE saturating run. The channel is fed 1 KiB
@@ -72,10 +72,10 @@ struct unix_pair
 
     unix_pair()
     {
-        char        tmpl[] = "/tmp/pxsat-XXXXXX";
-        const char *made   = ::mkdtemp(tmpl);
-        dir                = made ? made : "";
-        path               = dir + "/s";
+        char tmpl[]      = "/tmp/pxsat-XXXXXX";
+        const char *made = ::mkdtemp(tmpl);
+        dir              = made ? made : "";
+        path             = dir + "/s";
     }
 
     ~unix_pair()
@@ -100,10 +100,10 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
     // teardown precludes a non-blocking flush) and records the residual as a drop.
     for(int loop = 0; loop < k_loops; ++loop)
     {
-        ::asio::io_context        io;
+        ::asio::io_context io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket   peer{io};
-        ::asio::ip::tcp::socket   client{io};
+        ::asio::ip::tcp::socket peer{io};
+        ::asio::ip::tcp::socket client{io};
         client.connect(acc.local_endpoint());
         acc.accept(peer); // peer adopts but NEVER reads
 
@@ -149,10 +149,10 @@ TEST_CASE("egress_saturation_bounded tcp: a saturating publisher stays memory-bo
 {
     for(int loop = 0; loop < k_loops; ++loop)
     {
-        ::asio::io_context        io;
+        ::asio::io_context io;
         ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
-        ::asio::ip::tcp::socket   peer{io};
-        ::asio::ip::tcp::socket   client{io};
+        ::asio::ip::tcp::socket peer{io};
+        ::asio::ip::tcp::socket client{io};
         client.connect(acc.local_endpoint());
         acc.accept(peer); // peer adopts but NEVER reads
 
@@ -167,11 +167,11 @@ TEST_CASE("egress_saturation_bounded unix: a saturating publisher stays memory-b
 {
     for(int loop = 0; loop < k_loops; ++loop)
     {
-        unix_pair                                sock;
-        ::asio::io_context                       io;
+        unix_pair sock;
+        ::asio::io_context io;
         ::asio::local::stream_protocol::acceptor acc{io, ::asio::local::stream_protocol::endpoint(sock.path)};
-        ::asio::local::stream_protocol::socket   peer{io};
-        ::asio::local::stream_protocol::socket   client{io};
+        ::asio::local::stream_protocol::socket peer{io};
+        ::asio::local::stream_protocol::socket client{io};
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         acc.accept(peer); // peer adopts but NEVER reads
 

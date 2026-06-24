@@ -99,14 +99,14 @@ TEST_CASE("late join: a publisher that joins after the subscriber's standing dem
           "[node][late-join]")
 {
     constexpr int k_iterations = 8;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        inproc_bus<>       bus;
-        inproc_executor<>  ex{bus};
+        inproc_bus<> bus;
+        inproc_executor<> ex{bus};
         inproc_transport<> ta{ex, bus};
         inproc_transport<> tb{ex, bus};
-        static_discovery   disc{{}};
+        static_discovery disc{{}};
 
         const auto id_a = make_id(0x0A);
         const auto id_b = make_id(0x0B);
@@ -115,7 +115,7 @@ TEST_CASE("late join: a publisher that joins after the subscriber's standing dem
         inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
 
         std::vector<std::string> got;
-        inproc_subscriber        s{a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber s{a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         a.listen({"inproc", "host-a:5000"});
         ex.drain();
 
@@ -151,29 +151,29 @@ TEST_CASE("late join: a subscriber that joins after the publisher is already pre
           "[node][late-join]")
 {
     constexpr int k_iterations = 8;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        inproc_bus<>       bus;
-        inproc_executor<>  ex{bus};
+        inproc_bus<> bus;
+        inproc_executor<> ex{bus};
         inproc_transport<> ta{ex, bus};
         inproc_transport<> tb{ex, bus};
-        static_discovery   disc{{}};
+        static_discovery disc{{}};
 
         const auto id_a = make_id(0x0A);
         const auto id_b = make_id(0x0B);
 
         // B: the publisher, present first, lazy (it accepts the late subscriber's dial).
-        inproc_node      b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
+        inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
         inproc_publisher p{b, "topic"};
         b.listen({"inproc", "host-b:6000"});
         ex.drain();
 
         // A joins LATE: it discovers B's live record, dials eagerly, installs its standing
         // demand, and B reacts to the in-band subscribe — no user action on join timing.
-        inproc_node              a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
+        inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
         std::vector<std::string> got;
-        inproc_subscriber        s{a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber s{a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         a.listen({"inproc", "host-a:5000"});
         REQUIRE(pump_until(ex, [&] { return a.router().is_connected(id_b); }));
         // Let A's standing subscribe demand round-trip to B and register the fanout before

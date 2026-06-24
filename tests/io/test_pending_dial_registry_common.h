@@ -22,7 +22,7 @@ namespace pending_dial_registry_fixture {
 struct fake_channel
 {
     int *destroyed;
-    int  id;
+    int id;
 
     explicit fake_channel(int *counter, int identity)
             : destroyed(counter)

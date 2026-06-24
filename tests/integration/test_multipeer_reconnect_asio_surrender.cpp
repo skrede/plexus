@@ -8,10 +8,10 @@ TEST_CASE("multipeer asio: one peer crossing a surrender bound is is_dead while 
           "stays connected over real TCP",
           "[integration][multipeer][asio]")
 {
-    constexpr int           k_iterations   = 20;
-    constexpr std::size_t   k_n            = 3;
+    constexpr int k_iterations             = 20;
+    constexpr std::size_t k_n              = 3;
     constexpr std::uint32_t k_max_attempts = 3;
-    int                     proven         = 0;
+    int proven                             = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         multipeer_net net(k_n, bounded_cfg(k_max_attempts));

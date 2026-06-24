@@ -50,7 +50,7 @@ bool no_nonce_reuse(std::uint64_t threshold)
     // Exhaustive over the tractable cells; the larger cells inherit the same structural
     // monotonicity (a strictly increasing counter cannot revisit a value), spot-checked
     // by walking the final window where a wrap would first show.
-    const std::uint64_t               window_start = threshold > (1ull << 16) ? threshold - (1ull << 16) : 0;
+    const std::uint64_t window_start = threshold > (1ull << 16) ? threshold - (1ull << 16) : 0;
     std::unordered_set<std::uint64_t> seen;
     seen.reserve(threshold - window_start);
     for(std::uint64_t seq = window_start; seq < threshold; ++seq)
@@ -70,7 +70,7 @@ unsigned margin_log2(std::uint64_t threshold)
 
 aead_key derive_send(std::uint8_t epoch_byte)
 {
-    const auto                psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
+    const auto psk = bytes_of("a-shared-pre-shared-key-of-decent-length");
     std::array<std::byte, 16> in_nonce{};
     std::array<std::byte, 16> rs_nonce{};
     std::array<std::byte, 32> transcript{};

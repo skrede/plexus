@@ -11,12 +11,12 @@ namespace {
 // exercises the production staleness gate, not a hand-strip.
 std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t session_id)
 {
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink;
-    msg_forwarder            framer{sink};
-    inproc_channel<>         capture(ex);
-    inproc_channel<>         tx(ex);
+    msg_forwarder framer{sink};
+    inproc_channel<> capture(ex);
+    inproc_channel<> tx(ex);
     tx.connect_to(capture.local_endpoint());
     std::vector<std::byte> captured;
     capture.on_data([&](std::span<const std::byte> f) { captured.assign(f.begin(), f.end()); });
@@ -34,10 +34,10 @@ TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatc
           "dropped, the latched epoch delivered, looped",
           "[integration][peer_session][inproc]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string good         = "latched-epoch-bytes";
-    const std::string stale        = "stale-session-bytes";
-    int               proven       = 0;
+    constexpr int k_iterations = 100;
+    const std::string good     = "latched-epoch-bytes";
+    const std::string stale    = "stale-session-bytes";
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -56,7 +56,7 @@ TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatc
         // A frame for the SAME topic carrying a DIFFERENT non-zero epoch is dropped:
         // the sink does not grow.
         const std::uint8_t stale_epoch = static_cast<std::uint8_t>(latched == 200 ? 199 : 200);
-        auto               stale_frame = make_data_frame(stale, stale_epoch);
+        auto stale_frame               = make_data_frame(stale, stale_epoch);
         l.responder->on_receive(stale_frame);
         l.drive();
         REQUIRE(l.resp_received.size() == 1); // DROPPED, not delivered
@@ -80,10 +80,10 @@ TEST_CASE("inproc peer_session: the staleness gate distinguishes epochs beyond t
     // u64 values. The gate must latch one and drop the other. Under the retired u8
     // width these collided, so a dead incarnation's straggler (epoch 1) was wrongly
     // accepted against a live epoch-257 session. The u64 width makes them distinct.
-    constexpr int           k_iterations   = 100;
+    constexpr int k_iterations             = 100;
     constexpr std::uint64_t latched_epoch  = 257; // the live session's epoch
     constexpr std::uint64_t aliasing_epoch = 1;   // would alias 257 under u8
-    int                     proven         = 0;
+    int proven                             = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         link l;
@@ -124,7 +124,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -161,16 +161,16 @@ using manual_rpc     = plexus::io::procedure_forwarder<manual_policy>;
 // handshake never completes, so the armed handshake timer is what resolves it.
 struct timeout_harness
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    inproc_channel<manual_clock>  peer_ch{ex}; // a silent peer that never responds
+    inproc_channel<manual_clock> peer_ch{ex}; // a silent peer that never responds
 
     plexus::log::null_logger sink;
-    manual_msg               messages{sink};
-    manual_rpc               procedures{ex, std::chrono::hours(1), sink};
+    manual_msg messages{sink};
+    manual_rpc procedures{ex, std::chrono::hours(1), sink};
 
     plexus::io::peer_context<manual_policy> ctx; // the record owns the dialer channel
-    manual_session                          requester;
+    manual_session requester;
 
     explicit timeout_harness(std::chrono::nanoseconds timeout)
             : ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}

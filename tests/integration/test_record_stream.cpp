@@ -25,8 +25,8 @@ TEST_CASE("record stream populates the wire variant with no ordinal reorder", "[
 TEST_CASE("record stream round-trips a wire frame byte-identically offline", "[record_stream][wire]")
 {
     record_stream_writer w;
-    byte_ring            ring{64u * 1024u};
-    in_memory_byte_sink  sink;
+    byte_ring ring{64u * 1024u};
+    in_memory_byte_sink sink;
 
     sink.write(w.begin_stream(5u, make_node(3), topic_capture_rule{}, {}));
     ring.try_push(w.sync_marker());
@@ -44,10 +44,10 @@ TEST_CASE("record stream round-trips a wire frame byte-identically offline", "[r
         ;
 
     record_stream_reader r{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
-    const recovery_result       res = r.recover(out);
+    const recovery_result res = r.recover(out);
     REQUIRE(res.header_ok);
     REQUIRE_FALSE(res.corruption_skipped);
     REQUIRE(out.size() == 2);
@@ -68,8 +68,8 @@ TEST_CASE("record stream round-trips a wire frame byte-identically offline", "[r
 TEST_CASE("record stream interleaves a wire frame with the other categories", "[record_stream][wire]")
 {
     record_stream_writer w;
-    byte_ring            ring{64u * 1024u};
-    in_memory_byte_sink  sink;
+    byte_ring ring{64u * 1024u};
+    in_memory_byte_sink sink;
 
     sink.write(w.begin_stream(1u, make_node(4), topic_capture_rule{}, {}));
     ring.try_push(w.sync_marker());
@@ -90,10 +90,10 @@ TEST_CASE("record stream interleaves a wire frame with the other categories", "[
         ;
 
     record_stream_reader r{sink.bytes()};
-    stream_definitions   defs;
+    stream_definitions defs;
     REQUIRE(r.read_definitions(defs));
     std::vector<decoded_record> out;
-    const recovery_result       res = r.recover(out);
+    const recovery_result res = r.recover(out);
     REQUIRE(res.header_ok);
     REQUIRE_FALSE(res.trailing_partial_dropped);
     REQUIRE(out.size() == 3);
@@ -105,11 +105,11 @@ TEST_CASE("record stream interleaves a wire frame with the other categories", "[
     // Truncating one byte short of the end drops only the trailing partial; the wire frame
     // ahead of it survives the recovery scan.
     const std::span<const std::byte> all{sink.bytes()};
-    record_stream_reader             rt{all.first(all.size() - 1)};
-    stream_definitions               td;
+    record_stream_reader rt{all.first(all.size() - 1)};
+    stream_definitions td;
     REQUIRE(rt.read_definitions(td));
     std::vector<decoded_record> trunc;
-    const recovery_result       tr = rt.recover(trunc);
+    const recovery_result tr = rt.recover(trunc);
     REQUIRE(tr.trailing_partial_dropped);
     REQUIRE(trunc.size() == 2);
     REQUIRE(trunc[1].category == record_category::wire_frame);

@@ -4,8 +4,8 @@ using namespace node_discovery_fixture;
 
 TEST_CASE("node discovery: a peer's card lands in known(), own card skipped", "[node][discovery]")
 {
-    host        h;
-    const auto  id_a = make_id(0x0A);
+    host h;
+    const auto id_a = make_id(0x0A);
     inproc_node a{h.ex, h.disc, id_a, h.transport, make_opts()};
 
     // A's own listen re-advertise must NOT make A aware of itself.
@@ -15,8 +15,8 @@ TEST_CASE("node discovery: a peer's card lands in known(), own card skipped", "[
     // A second node on the SAME discovery advertises at construction + listen; A's
     // retained browse handler notes it with the card-derived endpoint.
     inproc_transport<> transport_b2{h.ex, h.bus};
-    const auto         id_b = make_id(0x0B);
-    inproc_node        b{h.ex, h.disc, id_b, transport_b2, make_opts()};
+    const auto id_b = make_id(0x0B);
+    inproc_node b{h.ex, h.disc, id_b, transport_b2, make_opts()};
     b.listen({"inproc", "host-b:6000"});
 
     REQUIRE(a.router().known().contains(id_b));
@@ -30,8 +30,8 @@ TEST_CASE("node discovery: a peer's card lands in known(), own card skipped", "[
 
 TEST_CASE("node discovery: malformed cards produce no awareness entry and no crash", "[node][discovery]")
 {
-    host        h;
-    const auto  id_a = make_id(0xAA);
+    host h;
+    const auto id_a = make_id(0xAA);
     inproc_node a{h.ex, h.disc, id_a, h.transport, make_opts()};
     a.listen({"inproc", "host-a:5000"});
 

@@ -28,7 +28,7 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
     // Every slot is pinned: a best_effort send can find no recyclable cell and the
     // status is OBSERVABLE on the return -- the value is not silently dropped.
     std::uint32_t payload = 0xFEEDFACEu;
-    std::byte     bytes[sizeof(payload)];
+    std::byte bytes[sizeof(payload)];
     std::memcpy(bytes, &payload, sizeof(payload));
     REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) == loan_status::congested);
 
@@ -40,8 +40,8 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
 
 TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging consumer", "[shm][backpressure]")
 {
-    constexpr std::uint64_t   k_cells = 16;
-    constexpr int             k_total = 4000; // many laps so the producer must block repeatedly
+    constexpr std::uint64_t k_cells = 16;
+    constexpr int k_total           = 4000; // many laps so the producer must block repeatedly
     ring_fixture<k_cells, 64> f;
 
     // The producer blocks (reliable + block) on the slowest registered cursor: it
@@ -77,7 +77,7 @@ TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging c
     for(int i = 0; i < k_total; ++i)
     {
         const std::uint32_t v = static_cast<std::uint32_t>(i);
-        std::byte           bytes[sizeof(v)];
+        std::byte bytes[sizeof(v)];
         std::memcpy(bytes, &v, sizeof(v));
         REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) == loan_status::ok);
     }

@@ -20,7 +20,7 @@ TEST_CASE("udp isn: a legacy handshake without the ISN bytes decodes to ISN 0", 
     namespace iod = plexus::datagram::detail;
 
     // A 2-byte [hs_type, channel_mode] frame (the pre-ISN layout) — the ISN bytes absent.
-    const std::byte        inner[2]{static_cast<std::byte>(iod::udp_hs_type::response), static_cast<std::byte>(iod::udp_channel_mode::reliable_datagram)};
+    const std::byte inner[2]{static_cast<std::byte>(iod::udp_hs_type::response), static_cast<std::byte>(iod::udp_channel_mode::reliable_datagram)};
     std::vector<std::byte> legacy;
     wire::wrap_udp_into(legacy, wire::udp_envelope_kind::reliable_arq, 0, std::span<const std::byte>{inner, 2});
 
@@ -34,8 +34,8 @@ TEST_CASE("udp isn: an unknown channel-mode byte still fails closed", "[udp][isn
 {
     namespace iod = plexus::datagram::detail;
 
-    const std::byte        inner[4]{static_cast<std::byte>(iod::udp_hs_type::request), std::byte{0x7F}, // an undefined mode
-                                    std::byte{0x11}, std::byte{0x22}};
+    const std::byte inner[4]{static_cast<std::byte>(iod::udp_hs_type::request), std::byte{0x7F}, // an undefined mode
+                             std::byte{0x11}, std::byte{0x22}};
     std::vector<std::byte> bad;
     wire::wrap_udp_into(bad, wire::udp_envelope_kind::reliable_arq, 0, std::span<const std::byte>{inner, 4});
 
@@ -45,15 +45,15 @@ TEST_CASE("udp isn: an unknown channel-mode byte still fails closed", "[udp][isn
 TEST_CASE("udp isn: a normal udpr session round-trips with a non-zero negotiated ISN", "[udp][isn]")
 {
     constexpr int k_iterations = 50;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
         pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
-        std::vector<std::string>            delivered;
+        std::vector<std::string> delivered;
         server.on_accepted(
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {

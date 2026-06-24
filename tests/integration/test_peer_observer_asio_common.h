@@ -49,8 +49,8 @@ using engine = pio::routing_engine<pasio::asio_policy, pasio::asio_transport, st
 
 namespace observer_asio_fixture {
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 inline std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -95,10 +95,10 @@ inline reconnect_config bounded_cfg(std::uint32_t max_attempts)
 
 struct asio_node
 {
-    ::asio::io_context      &io;
-    pasio::asio_transport    transport;
+    ::asio::io_context &io;
+    pasio::asio_transport transport;
     plexus::log::null_logger sink;
-    engine                   eng;
+    engine eng;
 
     asio_node(::asio::io_context &shared, std::uint8_t id_seed, bool eager, const reconnect_config &redial = forever_cfg(), std::uint8_t compatible = 1)
             : io(shared)
@@ -116,7 +116,7 @@ struct asio_node
 
 inline std::uint16_t reserve_closed_port()
 {
-    ::asio::io_context    probe_io;
+    ::asio::io_context probe_io;
     pasio::asio_transport probe{probe_io};
     probe.listen({"tcp", "127.0.0.1:0"});
     const auto port = probe.port();

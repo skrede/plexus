@@ -72,7 +72,7 @@ TEST_CASE("udp ack: a short or mis-marked buffer decodes fail-closed", "[udp][ac
 
 TEST_CASE("udp segment: the marker wraps and strips a payload round-trip", "[udp][ack]")
 {
-    auto                   payload = bytes_of({0x01, 0x02, 0x03, 0xFF});
+    auto payload = bytes_of({0x01, 0x02, 0x03, 0xFF});
     std::vector<std::byte> framed;
     wire::encode_udp_segment_into(framed, payload);
     REQUIRE(framed.size() == payload.size() + 1);
@@ -97,7 +97,7 @@ TEST_CASE("udp arq demux: peek classifies segment vs ack and rejects unknown/han
     wire::encode_udp_segment_into(seg, bytes_of({0xAA}));
     REQUIRE(wire::peek_udp_arq_kind(seg) == wire::udp_arq_kind::segment);
 
-    wire::udp_ack          ack;
+    wire::udp_ack ack;
     std::vector<std::byte> ackbuf;
     wire::encode_udp_ack_into(ackbuf, ack);
     REQUIRE(wire::peek_udp_arq_kind(ackbuf) == wire::udp_arq_kind::ack);

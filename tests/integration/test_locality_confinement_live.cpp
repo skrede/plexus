@@ -11,10 +11,10 @@ TEST_CASE("locality confinement (live AF_UNIX): a remote-confined topic never cr
           "[integration][locality][confinement][unix]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        temp_sock                                                                 sock;
+        temp_sock sock;
         live_link<pasio::unix_policy, pasio::unix_transport, pasio::unix_channel> l;
         l.wire();
         l.transport.listen({"unix", sock.path});
@@ -35,7 +35,7 @@ TEST_CASE("locality confinement (live TCP): a local-confined topic never crosses
           "[integration][locality][confinement][tcp]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         live_link<pasio::asio_policy, pasio::asio_transport, pasio::asio_channel> l;

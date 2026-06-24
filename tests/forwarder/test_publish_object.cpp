@@ -4,11 +4,11 @@ using namespace publish_object_fixture;
 
 TEST_CASE("publish_object: a matching process-tier subscriber receives the object, encode never runs", "[forwarder][object]")
 {
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
-    sink_peer                s(ex, "node-a");
+    forwarder fwd{sink};
+    sink_peer s(ex, "node-a");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
     REQUIRE(fwd.attach_for_fanout(s.peer(), "alpha", k_tag));
@@ -35,11 +35,11 @@ TEST_CASE("publish_object: a matching process-tier subscriber receives the objec
 
 TEST_CASE("publish_object: a bytes-family subscriber takes the byte path with one encode", "[forwarder][object]")
 {
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
-    sink_peer                s(ex, "node-a");
+    forwarder fwd{sink};
+    sink_peer s(ex, "node-a");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
     // No subscriber type_id: a bytes-family attach. Eligibility's type_id gate fails.
@@ -64,12 +64,12 @@ TEST_CASE("publish_object: a bytes-family subscriber takes the byte path with on
 
 TEST_CASE("publish_object: a mixed subscriber set delivers object AND bytes with exactly one encode", "[forwarder][object]")
 {
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
-    sink_peer                typed(ex, "node-typed");
-    sink_peer                bytes(ex, "node-bytes");
+    forwarder fwd{sink};
+    sink_peer typed(ex, "node-typed");
+    sink_peer bytes(ex, "node-bytes");
 
     fwd.declare("alpha", plexus::topic_qos{}, k_tag);
     REQUIRE(fwd.attach_for_fanout(typed.peer(), "alpha", k_tag));
@@ -96,11 +96,11 @@ TEST_CASE("publish_object: a mixed subscriber set delivers object AND bytes with
 
 TEST_CASE("publish_object: a tag mismatch falls back to the byte path", "[forwarder][object]")
 {
-    inproc_bus<>             bus;
-    inproc_executor<>        ex(bus);
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
     plexus::log::null_logger sink;
-    forwarder                fwd{sink};
-    sink_peer                s(ex, "node-a");
+    forwarder fwd{sink};
+    sink_peer s(ex, "node-a");
 
     // Producer + subscriber both declare the SAME type (so attach is accepted), but
     // the published carrier carries a DIFFERENT wire tag — eligibility's tag compare

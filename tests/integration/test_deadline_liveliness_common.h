@@ -60,7 +60,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -98,9 +98,9 @@ constexpr auto k_lease  = k_tick_granularity * 8; // 800ms lease
 static_assert(k_period >= k_tick_granularity, "a deadline period below the tick granularity never crosses a tick");
 static_assert(k_lease >= k_tick_granularity, "a lease below the tick granularity never crosses a tick");
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu;
-constexpr int           k_loops        = 50;
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
+constexpr int k_loops          = 50;
 
 inline std::uint64_t ns_of(std::chrono::nanoseconds d)
 {
@@ -135,19 +135,19 @@ inline reconnect_config forever_cfg()
 // periods; B fans the topic back to A. The monitor lives on A (the receiving engine).
 struct net
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t                   transport_a{ex, bus};
-    transport_t                   transport_b{ex, bus};
-    plexus::log::null_logger      sink;
+    transport_t transport_a{ex, bus};
+    transport_t transport_b{ex, bus};
+    plexus::log::null_logger sink;
 
     engine a;
     engine b;
 
     plexus::node_id id_a{make_id(0xA1)};
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint        ep_a{"inproc", "node-a"};
-    endpoint        ep_b{"inproc", "node-b"};
+    endpoint ep_a{"inproc", "node-a"};
+    endpoint ep_b{"inproc", "node-b"};
 
     std::vector<liveness_event> events;
 

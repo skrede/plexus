@@ -4,11 +4,11 @@ using namespace node_discovery_fixture;
 
 TEST_CASE("node discovery: a dial-only node advertises its card at birth", "[node][discovery]")
 {
-    host              h;
+    host h;
     recording_browser browser;
     browser.attach(h.disc);
 
-    const auto  id = make_id(0xA1);
+    const auto id = make_id(0xA1);
     inproc_node n{h.ex, h.disc, id, h.transport, make_opts()};
 
     const auto *card = browser.latest_for(plexus::io::node_name_of(id));
@@ -24,13 +24,13 @@ TEST_CASE("node discovery: a dial-only node advertises its card at birth", "[nod
 
 TEST_CASE("node discovery: listen() appends a port key and re-advertises live", "[node][discovery]")
 {
-    host              h;
+    host h;
     recording_browser browser;
     browser.attach(h.disc);
 
-    const auto  id = make_id(0xB2);
+    const auto id = make_id(0xB2);
     inproc_node n{h.ex, h.disc, id, h.transport, make_opts()};
-    const auto  name = plexus::io::node_name_of(id);
+    const auto name = plexus::io::node_name_of(id);
 
     REQUIRE_FALSE(has_port_key(*browser.latest_for(name)));
 

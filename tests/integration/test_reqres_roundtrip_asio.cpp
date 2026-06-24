@@ -12,7 +12,7 @@ TEST_CASE("req/res round-trips over real TCP loopback through plexus-asio, loope
     // one-off pass. The ctest invocation is ALSO repeated >=3 process runs (the
     // CMake verify loop) for cross-process reproducibility.
     constexpr int k_iterations = 100;
-    int           resolved     = 0;
+    int resolved               = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         live_rpc h;
@@ -26,8 +26,8 @@ TEST_CASE("req/res round-trips over real TCP loopback through plexus-asio, loope
                               reply(rpc_status::success, as_bytes(ret));
                           });
 
-        rpc_status        got_status = rpc_status::error;
-        std::string       got_return;
+        rpc_status got_status = rpc_status::error;
+        std::string got_return;
         const std::string param = "param-" + std::to_string(iter);
         h.caller.call(*h.caller_peer, "svc", as_bytes(param),
                       [&](rpc_status s, std::span<const std::byte> ret)

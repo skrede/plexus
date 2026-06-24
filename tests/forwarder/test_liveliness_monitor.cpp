@@ -9,15 +9,15 @@ TEST_CASE("liveliness monitor: a data gap beyond the deadline period fires exact
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock>      bus;
+        inproc_bus<test_clock> bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor    m{ex};
+        monitor m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
 
-        const node_id       id         = make_id(0x11);
+        const node_id id               = make_id(0x11);
         const std::uint64_t topic_hash = 0xABCDull;
         m.register_endpoint(id, topic_hash, static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()), 0);
 
@@ -57,10 +57,10 @@ TEST_CASE("liveliness monitor: a presence gap beyond the lease fires exactly one
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock>      bus;
+        inproc_bus<test_clock> bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor    m{ex};
+        monitor m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
@@ -107,15 +107,15 @@ TEST_CASE("liveliness monitor: the two stamps are distinct — a heartbeat refre
     for(int iter = 0; iter < k_loops; ++iter)
     {
         test_clock::reset();
-        inproc_bus<test_clock>      bus;
+        inproc_bus<test_clock> bus;
         inproc_executor<test_clock> ex{bus};
 
-        monitor    m{ex};
+        monitor m{ex};
         event_sink sink;
         sink.attach(m);
         m.start();
 
-        const node_id       id         = make_id(0x33);
+        const node_id id               = make_id(0x33);
         const std::uint64_t topic_hash = 0xBEEFull;
         // L > P so the deadline lapses first; both periods >= the granularity.
         m.register_endpoint(id, topic_hash, static_cast<std::uint64_t>(std::chrono::nanoseconds(k_period).count()),

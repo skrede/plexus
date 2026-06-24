@@ -49,8 +49,8 @@ struct backing_region
 
 private:
     std::vector<std::byte> m_storage;
-    std::byte             *m_data{nullptr};
-    std::size_t            m_size{0};
+    std::byte *m_data{nullptr};
+    std::size_t m_size{0};
 };
 
 struct fixture
@@ -71,7 +71,7 @@ struct fixture
     void publish(std::uint32_t value)
     {
         slot_publisher pub{ring, plexus::io::reliability::reliable, plexus::io::congestion::block};
-        loaned_buffer  slot;
+        loaned_buffer slot;
         REQUIRE(pub.loan(sizeof(value), slot) == loan_status::ok);
         std::memcpy(slot.bytes().data(), &value, sizeof(value));
         slot.set_filled(sizeof(value));
@@ -83,7 +83,7 @@ struct fixture
 
 TEST_CASE("shm.spin_park: budget 0 parks immediately on an empty ring", "[shm][spin_park]")
 {
-    fixture         f;
+    fixture f;
     slot_subscriber sub{f.ring, /*spin_budget=*/0};
 
     taken_message msg;
@@ -94,7 +94,7 @@ TEST_CASE("shm.spin_park: a present message is taken regardless of the spin budg
 {
     for(std::uint32_t budget : {0u, 64u, 256u, 4096u})
     {
-        fixture         f;
+        fixture f;
         slot_subscriber sub{f.ring, budget};
         f.publish(0xC0FFEE01u);
 
@@ -108,8 +108,8 @@ TEST_CASE("shm.spin_park: a present message is taken regardless of the spin budg
 
 TEST_CASE("shm.spin_park: a message landing during the spin window is caught without parking", "[shm][spin_park]")
 {
-    constexpr int k_iterations   = 50;
-    int           caught_by_spin = 0;
+    constexpr int k_iterations = 50;
+    int caught_by_spin         = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         fixture f;
@@ -117,7 +117,7 @@ TEST_CASE("shm.spin_park: a message landing during the spin window is caught wit
         slot_subscriber sub{f.ring, /*spin_budget=*/4'000'000};
 
         std::atomic<bool> go{false};
-        std::thread       producer(
+        std::thread producer(
                 [&]
                 {
                     while(!go.load(std::memory_order_acquire))
@@ -128,7 +128,7 @@ TEST_CASE("shm.spin_park: a message landing during the spin window is caught wit
                 });
 
         go.store(true, std::memory_order_release);
-        taken_message     msg;
+        taken_message msg;
         const loan_status st = sub.take(msg); // spins; should catch the late publish
         producer.join();
 
@@ -148,7 +148,7 @@ TEST_CASE("shm.spin_park: a message landing during the spin window is caught wit
 
 TEST_CASE("shm.spin_park: an idle subscriber with a budget terminates to empty (parks)", "[shm][spin_park]")
 {
-    fixture         f;
+    fixture f;
     slot_subscriber sub{f.ring, /*spin_budget=*/100'000};
 
     // No publisher: the spin must exhaust its budget and return empty (bounded, never

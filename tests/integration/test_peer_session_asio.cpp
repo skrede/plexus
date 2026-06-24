@@ -7,7 +7,7 @@ using namespace peer_session_asio_fixture;
 TEST_CASE("asio peer_session pair completes the handshake over real TCP and mints epochs, looped", "[integration][peer_session][asio]")
 {
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l;
@@ -27,10 +27,10 @@ TEST_CASE("asio peer_session: a dialed (one-directional) connection completes BO
           "gated data flows both ways, looped",
           "[integration][peer_session][asio]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string downward     = "dialer-to-responder-over-tcp";
-    const std::string upward       = "responder-to-dialer-over-tcp";
-    int               proven       = 0;
+    constexpr int k_iterations = 100;
+    const std::string downward = "dialer-to-responder-over-tcp";
+    const std::string upward   = "responder-to-dialer-over-tcp";
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l; // the dial rendezvous: only the dialer dials, the accepted end bootstraps
@@ -69,9 +69,9 @@ TEST_CASE("asio peer_session: a real published message flows post-handshake over
           "the epoch, looped",
           "[integration][peer_session][asio]")
 {
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "real-published-bytes-over-tcp";
-    int               delivered    = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "real-published-bytes-over-tcp";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         tcp_link l;

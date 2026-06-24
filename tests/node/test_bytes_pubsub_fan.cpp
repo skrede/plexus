@@ -8,8 +8,8 @@ TEST_CASE("bytes pub/sub: the 2-arg path is unchanged when a source-identity top
     n.connect();
 
     std::vector<std::string> got;
-    inproc_subscriber        s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
-    inproc_publisher         p{n.b, "topic", plexus::topic_qos{}, /*emit_source_identity=*/true};
+    inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+    inproc_publisher p{n.b, "topic", plexus::topic_qos{}, /*emit_source_identity=*/true};
     n.drive();
 
     p.publish(as_bytes("bytes-only"));
@@ -24,7 +24,7 @@ TEST_CASE("bytes pub/sub: the standing fan reaches a peer discovered AFTER the s
           "[node][pubsub]")
 {
     constexpr int k_iterations = 5;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         net n;
@@ -32,7 +32,7 @@ TEST_CASE("bytes pub/sub: the standing fan reaches a peer discovered AFTER the s
         // A subscribes with NO peer known yet (B has not been constructed-as-connected;
         // only A has listened). The demand is standing.
         std::vector<std::string> got;
-        inproc_subscriber        s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
+        inproc_subscriber s{n.a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         n.a.listen({"inproc", "host-a:5000"});
         n.drive();
 

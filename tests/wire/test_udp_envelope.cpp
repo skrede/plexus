@@ -123,7 +123,7 @@ TEST_CASE("udp envelope: a datagram with the FRAGMENTED bit set decodes (reserve
 {
     // Hand-craft a datagram with kind=0 and the FRAGMENTED bit set, plus a 2-byte frame.
     const auto wire = bytes({0x01, 0x00, 0x2A, 0xDE, 0xAD});
-    auto       dec  = unwrap_udp(wire);
+    auto dec        = unwrap_udp(wire);
     REQUIRE(dec.has_value());
     REQUIRE(dec->kind == udp_envelope_kind::best_effort);
     REQUIRE(dec->fragmented);
@@ -142,7 +142,7 @@ TEST_CASE("udp envelope: a buffer shorter than the overhead unwraps to nullopt (
 
 TEST_CASE("udp envelope: wrap_udp_into reuses the buffer and matches the allocating overload", "[udp][envelope]")
 {
-    const auto             frame = bytes({0xCA, 0xFE, 0xBA, 0xBE});
+    const auto frame = bytes({0xCA, 0xFE, 0xBA, 0xBE});
     std::vector<std::byte> scratch;
     wrap_udp_into(scratch, udp_envelope_kind::reliable_arq, 4096, frame);
 

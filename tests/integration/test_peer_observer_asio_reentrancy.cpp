@@ -9,13 +9,13 @@ TEST_CASE("observer over asio: an accepted (inbound) peer fires connected/discon
           "[integration][observer][asio]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
         recording_observer rec;
         b.eng.add_observer(rec); // observe the ACCEPTING node's inbound slot
 
@@ -51,10 +51,10 @@ TEST_CASE("observer over asio: calling engine.subscribe from inside an observer 
 {
     struct reentrant_observer final : public plexus::io::observer
     {
-        engine         *eng{nullptr};
+        engine *eng{nullptr};
         plexus::node_id target{};
-        int             connected{0};
-        void            on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
+        int connected{0};
+        void on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
         {
             ++connected;
             if(eng)
@@ -63,13 +63,13 @@ TEST_CASE("observer over asio: calling engine.subscribe from inside an observer 
     };
 
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        asio_node          a{io, 0xA1, /*eager=*/false};
-        asio_node          b{io, 0xB2, /*eager=*/false};
-        const auto         id_b = make_id(0xB2);
+        asio_node a{io, 0xA1, /*eager=*/false};
+        asio_node b{io, 0xB2, /*eager=*/false};
+        const auto id_b = make_id(0xB2);
         reentrant_observer obs;
         obs.eng    = &a.eng;
         obs.target = id_b;

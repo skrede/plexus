@@ -21,7 +21,7 @@ namespace plexus::testing {
 // executor so the clock/executor wiring lives in one place.
 struct harness
 {
-    plexus::inproc::inproc_bus<test_clock>      bus;
+    plexus::inproc::inproc_bus<test_clock> bus;
     plexus::inproc::inproc_executor<test_clock> ex{bus};
 
     harness()

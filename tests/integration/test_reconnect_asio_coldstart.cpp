@@ -9,11 +9,11 @@ TEST_CASE("asio reconnect: a dial to a closed port re-dials until a listener app
           "[integration][reconnect][asio]")
 {
     constexpr int k_iterations = 30;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         // Bind a listener to learn a free port, then stop it so the port is CLOSED.
-        ::asio::io_context    probe_io;
+        ::asio::io_context probe_io;
         pasio::asio_transport probe{probe_io};
         probe.listen({"tcp", "127.0.0.1:0"});
         const auto port = probe.port();

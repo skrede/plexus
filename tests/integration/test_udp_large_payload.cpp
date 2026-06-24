@@ -13,7 +13,7 @@ TEST_CASE("loss_shim drops a fixed-seed fraction deterministically across two ru
 
     auto run_once = [&]
     {
-        ptest::loss_reorder_scheduler       sched{cfg};
+        ptest::loss_reorder_scheduler sched{cfg};
         std::vector<std::vector<std::byte>> emitted;
         for(int i = 0; i < 500; ++i)
         {
@@ -48,7 +48,7 @@ TEST_CASE("loss_shim drops a fixed-seed fraction deterministically across two ru
 
 TEST_CASE("loss_shim with zero loss and zero reorder is an order-preserving pass-through", "[loss_shim]")
 {
-    ptest::loss_reorder_scheduler       sched{ptest::loss_reorder_config{}};
+    ptest::loss_reorder_scheduler sched{ptest::loss_reorder_config{}};
     std::vector<std::vector<std::byte>> emitted;
     for(int i = 0; i < 64; ++i)
     {

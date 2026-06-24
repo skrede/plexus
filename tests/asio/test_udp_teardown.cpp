@@ -55,7 +55,7 @@ std::vector<std::byte> bytes_of(const std::string &s)
 // the accepted server channel (the engine-owned channel the demux keeps routing to).
 struct loopback
 {
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io};
 
@@ -108,7 +108,7 @@ TEST_CASE("udp.teardown: an inbound datagram after the engine destroys a complet
     // so on_datagram -> lookup -> deliver_inbound is a heap-use-after-free (asan). The
     // fix erases the demux entry on teardown, so the datagram resolves to a clean MISS.
     constexpr int k_iterations = 50;
-    int           survived     = 0;
+    int survived               = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         loopback h;
@@ -139,7 +139,7 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
     // After an engine teardown erases the torn-down entry, a genuinely new dialer must
     // still accept cleanly — the teardown erase must not corrupt the demux or the
     // transport's accept path.
-    ::asio::io_context   io;
+    ::asio::io_context io;
     pasio::udp_transport server{io};
 
     std::vector<std::unique_ptr<pasio::udp_channel>> accepted;
@@ -158,7 +158,7 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
     };
     pump([&] { return server.port() != 0; });
 
-    pasio::udp_transport                first{io};
+    pasio::udp_transport first{io};
     std::unique_ptr<pasio::udp_channel> first_dialed;
     first.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { first_dialed = std::move(ch); });
     first.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
@@ -174,7 +174,7 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
             io.restart();
     }
 
-    pasio::udp_transport                second{io};
+    pasio::udp_transport second{io};
     std::unique_ptr<pasio::udp_channel> second_dialed;
     second.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { second_dialed = std::move(ch); });
     second.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});

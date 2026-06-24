@@ -6,9 +6,9 @@ using namespace self_describing_fixture;
 
 TEST_CASE("a declared schema larger than the writer's default scratch round-trips", "[self_describing_capture]")
 {
-    inproc_bus<>      bus;
+    inproc_bus<> bus;
     inproc_executor<> ex{bus};
-    static_discovery  disc{{}};
+    static_discovery disc{{}};
 
     inproc_transport<> consumer_tp{ex, bus};
     inproc_transport<> producer_tp{ex, bus};
@@ -29,7 +29,7 @@ TEST_CASE("a declared schema larger than the writer's default scratch round-trip
             plexus::type_schema{.type_id = k_reading_type_id, .message_encoding = "json", .schema_name = "reading", .schema_encoding = "jsonschema", .schema_data = as_bytes(big_blob)});
 
     in_memory_byte_sink sink;
-    auto                recorder = producer.make_recorder(sink, std::move(ropts));
+    auto recorder = producer.make_recorder(sink, std::move(ropts));
 
     capture_one(producer, consumer, ex, recorder, 0xBEEFu);
 
@@ -37,7 +37,7 @@ TEST_CASE("a declared schema larger than the writer's default scratch round-trip
     REQUIRE(!stream.empty());
 
     plexus::io::recording::record_stream_reader reader{stream};
-    plexus::io::recording::stream_definitions   defs;
+    plexus::io::recording::stream_definitions defs;
     REQUIRE(reader.read_definitions(defs));
     REQUIRE(defs.schema.size() == 1);
     REQUIRE(defs.schema.front().schema_data.size() == big_blob.size());

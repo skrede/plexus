@@ -68,7 +68,7 @@ struct stub_notifier
         m_drain = nullptr;
     }
 
-    int                                        signals = 0;
+    int signals = 0;
     plexus::detail::move_only_function<void()> m_drain;
 };
 
@@ -79,7 +79,7 @@ static_assert(notifier<stub_notifier>, "stub_notifier must satisfy notifier");
 
 TEST_CASE("seams: a stub broker satisfies region_broker and round-trips create/attach", "[shm][seams]")
 {
-    stub_broker        broker;
+    stub_broker broker;
     stub_region_handle h{};
 
     REQUIRE(broker.create("name", 4096, create_options{}, h) == region_status::ok);

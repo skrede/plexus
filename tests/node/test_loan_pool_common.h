@@ -22,7 +22,7 @@ struct counted
 {
     static inline int live        = 0;
     static inline int constructed = 0;
-    std::uint32_t     value;
+    std::uint32_t value;
 
     explicit counted(std::uint32_t v = 0)
             : value(v)

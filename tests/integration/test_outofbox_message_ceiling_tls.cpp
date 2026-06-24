@@ -18,7 +18,7 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest           digest{};
+    spki_digest digest{};
 
     explicit identity_fixture(const std::string &tag)
     {
@@ -86,20 +86,20 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over mutual-TLS at shipped def
     const auto frame = ceiling_frame(body);
 
     constexpr int iterations = 2;
-    int           proven     = 0;
+    int proven               = 0;
     for(int iter = 0; iter < iterations; ++iter)
     {
         ::asio::io_context io;
-        auto               server_cred = make_cred(server_id, client_id.digest);
-        auto               client_cred = make_cred(client_id, server_id.digest);
+        auto server_cred = make_cred(server_id, client_id.digest);
+        auto client_cred = make_cred(client_id, server_id.digest);
         // The credential is required; every SIZE/back-pressure knob keeps its shipped default.
         ptls::tls_transport server{io, server_cred};
         ptls::tls_transport client{io, client_cred};
 
         std::unique_ptr<ptls::tls_channel> accepted, dialed;
-        std::vector<std::byte>             got;
-        std::optional<wire::close_cause>   closed;
-        bool                               dial_failed = false;
+        std::vector<std::byte> got;
+        std::optional<wire::close_cause> closed;
+        bool dial_failed = false;
         server.on_accepted(
                 [&](std::unique_ptr<ptls::tls_channel> ch)
                 {

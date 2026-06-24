@@ -61,7 +61,7 @@ TEST_CASE("loan pool: exhaustion returns an empty loan and recovers after a rele
 {
     reset_counts();
     constexpr std::size_t k_capacity = 3;
-    loan_pool<counted>    pool{k_capacity};
+    loan_pool<counted> pool{k_capacity};
 
     plexus::detail::loan<counted> held[k_capacity];
     for(std::size_t i = 0; i < k_capacity; ++i)

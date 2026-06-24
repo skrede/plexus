@@ -27,10 +27,10 @@ struct recorder
     struct sent
     {
         std::vector<std::byte> bytes;
-        int                    dest;
+        int dest;
     };
 
-    std::vector<sent>                   calls;
+    std::vector<sent> calls;
     std::vector<send_queue::completion> pending;
 
     send_queue::send_sink sink()

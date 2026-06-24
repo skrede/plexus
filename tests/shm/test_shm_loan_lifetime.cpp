@@ -41,7 +41,7 @@ TEST_CASE("loan_lifetime: a moved-from loaned_buffer is inert", "[shm][loan_life
 
 TEST_CASE("loan_lifetime: a moved-from taken_message unpins exactly once", "[shm][loan_lifetime]")
 {
-    alignas(8) std::byte       slot[8]{};
+    alignas(8) std::byte slot[8]{};
     std::atomic<std::uint32_t> refcount{0};
 
     {

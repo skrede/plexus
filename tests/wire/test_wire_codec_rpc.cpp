@@ -4,7 +4,7 @@
 
 TEST_CASE("RPC request frame: round-trip encode/decode", "[wire][rpc]")
 {
-    bidirectional_header     hdr{.source = endpoint_source_type::caller, .sequence = 1, .topic_hash = 0xAAAA, .type_hash_1 = 0xBBBB, .type_hash_2 = 0xCCCC, .correlation_id = 42};
+    bidirectional_header hdr{.source = endpoint_source_type::caller, .sequence = 1, .topic_hash = 0xAAAA, .type_hash_1 = 0xBBBB, .type_hash_2 = 0xCCCC, .correlation_id = 42};
     std::array<std::byte, 4> param_data{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04}};
 
     auto encoded = encode_rpc_request(hdr, param_data);
@@ -22,7 +22,7 @@ TEST_CASE("RPC request frame: round-trip encode/decode", "[wire][rpc]")
 
 TEST_CASE("RPC response frame: round-trip with success status", "[wire][rpc]")
 {
-    bidirectional_header     hdr{.source = endpoint_source_type::procedure, .sequence = 2, .topic_hash = 0xAAAA, .type_hash_1 = 0xCCCC, .type_hash_2 = 0xBBBB, .correlation_id = 42};
+    bidirectional_header hdr{.source = endpoint_source_type::procedure, .sequence = 2, .topic_hash = 0xAAAA, .type_hash_1 = 0xCCCC, .type_hash_2 = 0xBBBB, .correlation_id = 42};
     std::array<std::byte, 4> return_data{std::byte{0x10}, std::byte{0x20}, std::byte{0x30}, std::byte{0x40}};
 
     auto encoded = encode_rpc_response(hdr, rpc_status::success, return_data);
@@ -53,15 +53,15 @@ TEST_CASE("RPC response frame: round-trip with error status", "[wire][rpc]")
 
 TEST_CASE("RPC response frame: zero-alloc _into matches the allocating encode", "[wire][rpc]")
 {
-    bidirectional_header     hdr{.source = endpoint_source_type::procedure, .sequence = 11, .topic_hash = 0x1234, .type_hash_1 = 0xCCCC, .type_hash_2 = 0xBBBB, .correlation_id = 7};
+    bidirectional_header hdr{.source = endpoint_source_type::procedure, .sequence = 11, .topic_hash = 0x1234, .type_hash_1 = 0xCCCC, .type_hash_2 = 0xBBBB, .correlation_id = 7};
     std::array<std::byte, 3> return_data{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}};
 
-    auto                   allocating = encode_rpc_response(hdr, rpc_status::success, return_data);
+    auto allocating = encode_rpc_response(hdr, rpc_status::success, return_data);
     std::vector<std::byte> reused;
     encode_rpc_response_into(reused, hdr, rpc_status::success, return_data);
     CHECK(reused == allocating);
 
-    auto                   req_allocating = encode_rpc_request(hdr, return_data);
+    auto req_allocating = encode_rpc_request(hdr, return_data);
     std::vector<std::byte> req_reused;
     encode_rpc_request_into(req_reused, hdr, return_data);
     CHECK(req_reused == req_allocating);
@@ -69,7 +69,7 @@ TEST_CASE("RPC response frame: zero-alloc _into matches the allocating encode", 
 
 TEST_CASE("RPC response frame: status byte above the highest enumerator returns nullopt", "[wire][rpc]")
 {
-    bidirectional_header     hdr{.source = endpoint_source_type::procedure, .sequence = 4, .topic_hash = 0xAAAA, .type_hash_1 = 0xCCCC, .type_hash_2 = 0xBBBB, .correlation_id = 42};
+    bidirectional_header hdr{.source = endpoint_source_type::procedure, .sequence = 4, .topic_hash = 0xAAAA, .type_hash_1 = 0xCCCC, .type_hash_2 = 0xBBBB, .correlation_id = 42};
     std::array<std::byte, 4> return_data{std::byte{0x10}, std::byte{0x20}, std::byte{0x30}, std::byte{0x40}};
 
     auto encoded                       = encode_rpc_response(hdr, rpc_status::success, return_data);
@@ -81,7 +81,7 @@ TEST_CASE("RPC response frame: status byte above the highest enumerator returns 
 
 TEST_CASE("RPC response frame: in-range reserved-gap status byte returns nullopt", "[wire][rpc]")
 {
-    bidirectional_header     hdr{.source = endpoint_source_type::procedure, .sequence = 6, .topic_hash = 0xAAAA, .type_hash_1 = 0xCCCC, .type_hash_2 = 0xBBBB, .correlation_id = 42};
+    bidirectional_header hdr{.source = endpoint_source_type::procedure, .sequence = 6, .topic_hash = 0xAAAA, .type_hash_1 = 0xCCCC, .type_hash_2 = 0xBBBB, .correlation_id = 42};
     std::array<std::byte, 2> return_data{std::byte{0x10}, std::byte{0x20}};
 
     // 6 sits below the highest enumerator (20) but is a reserved gap with no

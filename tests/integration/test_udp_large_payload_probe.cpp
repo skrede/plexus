@@ -29,7 +29,7 @@ constexpr std::size_t k_socket_buf = 4u * 1024u * 1024u;
 // node-options params (congestion/peer-cap/socket-buffers/send-queue keep their defaults).
 struct large_result
 {
-    int                       proven;
+    int proven;
     std::chrono::milliseconds last_wall;
 };
 
@@ -40,16 +40,16 @@ large_result roundtrip_large(std::size_t budget, std::size_t payload_size, std::
     // per-message reclaim window, which would evict the partial mid-flight; extend it so an
     // honest slow large message completes (the reclaim still bounds a genuinely stalled one).
     constexpr ms reassembly_timeout{60000};
-    using clock                      = std::chrono::steady_clock;
-    int                       proven = 0;
+    using clock = std::chrono::steady_clock;
+    int proven  = 0;
     std::chrono::milliseconds last_wall{0};
     for(int iter = 0; iter < iterations; ++iter)
     {
         // The backpressure queue holds the message's not-yet-windowed fragments, so it must
         // reach the whole message (plus headroom); the kernel buffers are raised to the
         // host max so the paced in-flight batch is buffered, not dropped at the socket.
-        const std::size_t    backpressure = payload_size + 4u * 1024u * 1024u;
-        ::asio::io_context   io;
+        const std::size_t backpressure = payload_size + 4u * 1024u * 1024u;
+        ::asio::io_context io;
         pasio::udp_transport server{io,
                                     budget,
                                     pasio::udp_transport::arq_type::default_ladder,
@@ -94,8 +94,8 @@ large_result roundtrip_large(std::size_t budget, std::size_t payload_size, std::
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
-        auto       payload = make_payload(payload_size, static_cast<std::uint8_t>(iter));
-        const auto t0      = clock::now();
+        auto payload  = make_payload(payload_size, static_cast<std::uint8_t>(iter));
+        const auto t0 = clock::now();
         dialed->send(payload);
         pump_until(io, [&] { return !got.empty(); }, ms{55000});
         last_wall = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - t0);
@@ -140,7 +140,7 @@ TEST_CASE("udp_large_payload: a probe sweep records the highest single message t
     // ARQ window keeps the in-flight batch under the kernel buffers at every size. A size
     // that fails to fully reassemble within the bound stops the sweep — the last success is
     // the recorded ceiling for this host/run.
-    constexpr std::size_t            budget = 8u * 1024u;
+    constexpr std::size_t budget = 8u * 1024u;
     const std::array<std::size_t, 2> sizes{16u * 1024u * 1024u, 24u * 1024u * 1024u};
 
     std::size_t highest = 0;
@@ -148,7 +148,7 @@ TEST_CASE("udp_large_payload: a probe sweep records the highest single message t
     {
         const std::size_t ceiling    = size + 4u * 1024u * 1024u;
         const std::size_t reassembly = ceiling + 4u * 1024u * 1024u;
-        const auto        r          = roundtrip_large(budget, size, ceiling, reassembly, paced_arq(), /*iterations=*/1);
+        const auto r                 = roundtrip_large(budget, size, ceiling, reassembly, paced_arq(), /*iterations=*/1);
         if(r.proven != 1)
             break; // first size that does not fully arrive caps the sweep
         highest = size;

@@ -19,7 +19,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -59,7 +59,7 @@ using manual_forwarder = plexus::io::procedure_forwarder<manual_policy>;
 // reply serves its own handler.
 struct manual_link
 {
-    plexus::inproc::inproc_bus<manual_clock>      bus;
+    plexus::inproc::inproc_bus<manual_clock> bus;
     plexus::inproc::inproc_executor<manual_clock> ex{bus};
 
     plexus::inproc::inproc_channel<manual_clock> caller_tx{ex};
@@ -107,7 +107,7 @@ TEST_CASE("a call whose provider never replies fires exactly one timeout once th
     for(int iter = 0; iter < 100; ++iter)
     {
         manual_clock::reset();
-        const auto  deadline = std::chrono::milliseconds(50);
+        const auto deadline = std::chrono::milliseconds(50);
         manual_link link(deadline);
 
         // A provider that receives the request and is dispatched, but NEVER replies
@@ -116,8 +116,8 @@ TEST_CASE("a call whose provider never replies fires exactly one timeout once th
         // would instead bounce back a no_handler response and resolve the call early.
         link.provider.serve("svc", [](std::span<const std::byte>, manual_forwarder::reply_fn &) {});
 
-        int         fired    = 0;
-        rpc_status  got      = rpc_status::error;
+        int fired            = 0;
+        rpc_status got       = rpc_status::error;
         std::size_t ret_size = 999;
         link.caller.call(link.caller_peer, "svc", {},
                          [&](rpc_status s, std::span<const std::byte> ret)
@@ -160,14 +160,14 @@ TEST_CASE("a call answered before the deadline fires success and no later timeou
     for(int iter = 0; iter < 100; ++iter)
     {
         manual_clock::reset();
-        const auto  deadline = std::chrono::milliseconds(50);
+        const auto deadline = std::chrono::milliseconds(50);
         manual_link link(deadline);
 
         link.provider.serve("svc", [](std::span<const std::byte> param, manual_forwarder::reply_fn &reply) { reply(rpc_status::success, param); });
 
-        int               fired = 0;
-        rpc_status        got   = rpc_status::error;
-        std::string       ret;
+        int fired      = 0;
+        rpc_status got = rpc_status::error;
+        std::string ret;
         const std::string param = "answered";
         link.caller.call(link.caller_peer, "svc", as_bytes(param),
                          [&](rpc_status s, std::span<const std::byte> r)

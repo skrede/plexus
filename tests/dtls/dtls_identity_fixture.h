@@ -43,8 +43,8 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest           digest{};
-    std::string           subject;
+    spki_digest digest{};
+    std::string subject;
 
     explicit identity_fixture(const std::string &tag)
     {

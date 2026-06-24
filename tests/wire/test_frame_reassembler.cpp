@@ -2,9 +2,9 @@
 
 TEST_CASE("reassembler extracts single complete frame", "[wire][reassembler]")
 {
-    frame_reassembler      ra;
+    frame_reassembler ra;
     std::vector<std::byte> payload{std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}, std::byte{0xDD}, std::byte{0xEE}};
-    auto                   frame = make_frame(msg_type::unidirectional, 0, 1000, payload);
+    auto frame = make_frame(msg_type::unidirectional, 0, 1000, payload);
 
     auto result = ra.feed(frame);
 
@@ -18,7 +18,7 @@ TEST_CASE("reassembler extracts single complete frame", "[wire][reassembler]")
 
 TEST_CASE("reassembler extracts multiple frames from single feed", "[wire][reassembler]")
 {
-    frame_reassembler      ra;
+    frame_reassembler ra;
     std::vector<std::byte> p1{std::byte{0x01}, std::byte{0x02}};
     std::vector<std::byte> p2{std::byte{0x03}, std::byte{0x04}, std::byte{0x05}};
 
@@ -41,9 +41,9 @@ TEST_CASE("reassembler extracts multiple frames from single feed", "[wire][reass
 
 TEST_CASE("reassembler handles header split mid-way", "[wire][reassembler]")
 {
-    frame_reassembler      ra;
+    frame_reassembler ra;
     std::vector<std::byte> payload{std::byte{0xFF}};
-    auto                   frame = make_frame(msg_type::unidirectional, 0, 500, payload);
+    auto frame = make_frame(msg_type::unidirectional, 0, 500, payload);
 
     auto first_half  = std::span<const std::byte>{frame}.subspan(0, 10);
     auto second_half = std::span<const std::byte>{frame}.subspan(10);
@@ -61,9 +61,9 @@ TEST_CASE("reassembler handles header split mid-way", "[wire][reassembler]")
 
 TEST_CASE("reassembler handles payload split", "[wire][reassembler]")
 {
-    frame_reassembler      ra;
+    frame_reassembler ra;
     std::vector<std::byte> payload(100, std::byte{0x42});
-    auto                   frame = make_frame(msg_type::unidirectional, 0, 700, payload);
+    auto frame = make_frame(msg_type::unidirectional, 0, 700, payload);
 
     auto header_plus_half = std::span<const std::byte>{frame}.subspan(0, header_size + 50);
     auto rest             = std::span<const std::byte>{frame}.subspan(header_size + 50);
@@ -79,9 +79,9 @@ TEST_CASE("reassembler handles payload split", "[wire][reassembler]")
 
 TEST_CASE("reassembler handles single-byte drip feed", "[wire][reassembler]")
 {
-    frame_reassembler      ra;
+    frame_reassembler ra;
     std::vector<std::byte> payload{std::byte{0x10}, std::byte{0x20}, std::byte{0x30}};
-    auto                   frame = make_frame(msg_type::unidirectional, 0, 900, payload);
+    auto frame = make_frame(msg_type::unidirectional, 0, 900, payload);
 
     REQUIRE(frame.size() == header_size + 3);
 
@@ -100,7 +100,7 @@ TEST_CASE("reassembler handles single-byte drip feed", "[wire][reassembler]")
 TEST_CASE("reassembler returns empty on zero-length feed", "[wire][reassembler]")
 {
     frame_reassembler ra;
-    auto              result = ra.feed(std::span<const std::byte>{});
+    auto result = ra.feed(std::span<const std::byte>{});
 
     CHECK(result.error == feed_error::none);
     CHECK(result.frames.empty());
@@ -108,9 +108,9 @@ TEST_CASE("reassembler returns empty on zero-length feed", "[wire][reassembler]"
 
 TEST_CASE("reassembler reports invalid magic error", "[wire][reassembler]")
 {
-    frame_reassembler      ra;
+    frame_reassembler ra;
     std::vector<std::byte> payload{std::byte{0x01}};
-    auto                   frame = make_frame(msg_type::unidirectional, 0, 1000, payload);
+    auto frame = make_frame(msg_type::unidirectional, 0, 1000, payload);
 
     frame[0] = std::byte{0xFF};
 
@@ -125,7 +125,7 @@ TEST_CASE("reassembler reports payload too large error", "[wire][reassembler]")
     frame_reassembler ra(100);
 
     frame_header hdr{.type = msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 1000, .payload_len = 200};
-    auto         header_bytes = encode_header(hdr);
+    auto header_bytes = encode_header(hdr);
 
     auto result = ra.feed(header_bytes);
     CHECK(result.error == feed_error::payload_too_large);
@@ -135,9 +135,9 @@ TEST_CASE("reassembler reports payload too large error", "[wire][reassembler]")
 
 TEST_CASE("reassembler reset clears state", "[wire][reassembler]")
 {
-    frame_reassembler      ra;
+    frame_reassembler ra;
     std::vector<std::byte> payload{std::byte{0xAA}};
-    auto                   frame = make_frame(msg_type::unidirectional, 0, 1000, payload);
+    auto frame = make_frame(msg_type::unidirectional, 0, 1000, payload);
 
     auto partial = std::span<const std::byte>{frame}.subspan(0, 10);
     ra.feed(partial);
@@ -154,9 +154,9 @@ TEST_CASE("reassembler reset clears state", "[wire][reassembler]")
 
 TEST_CASE("reassembler buffered_bytes reports correctly", "[wire][reassembler]")
 {
-    frame_reassembler      ra;
+    frame_reassembler ra;
     std::vector<std::byte> payload{std::byte{0x01}, std::byte{0x02}};
-    auto                   frame = make_frame(msg_type::unidirectional, 0, 1000, payload);
+    auto frame = make_frame(msg_type::unidirectional, 0, 1000, payload);
 
     auto partial = std::span<const std::byte>{frame}.subspan(0, 15);
     ra.feed(partial);

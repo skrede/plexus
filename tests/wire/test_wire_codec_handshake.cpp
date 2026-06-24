@@ -85,7 +85,7 @@ TEST_CASE("Handshake response: status cutoff rejects 0x00 and every byte 0x06..0
 
 TEST_CASE("Handshake response: each defined status byte 0x01..0x05 decodes to its enumerator", "[wire][handshake]")
 {
-    auto                                            encoded   = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
+    auto encoded                                              = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
     const std::pair<std::uint8_t, handshake_status> defined[] = {{0x01, handshake_status::accepted},
                                                                  {0x02, handshake_status::version_incompatible},
                                                                  {0x03, handshake_status::identity_conflict},
@@ -103,14 +103,14 @@ TEST_CASE("Handshake response: each defined status byte 0x01..0x05 decodes to it
 
 TEST_CASE("Handshake encode-into: byte-identical to the allocating encoder", "[wire][handshake]")
 {
-    auto                   req            = make_request(id_mixed_high_bit());
-    auto                   req_allocating = encode_handshake_request(req);
+    auto req            = make_request(id_mixed_high_bit());
+    auto req_allocating = encode_handshake_request(req);
     std::vector<std::byte> req_reused;
     encode_handshake_request_into(req_reused, req);
     CHECK(req_reused == req_allocating);
 
-    auto                   resp            = make_response(id_mixed_high_bit(), handshake_status::identity_conflict);
-    auto                   resp_allocating = encode_handshake_response(resp);
+    auto resp            = make_response(id_mixed_high_bit(), handshake_status::identity_conflict);
+    auto resp_allocating = encode_handshake_response(resp);
     std::vector<std::byte> resp_reused;
     encode_handshake_response_into(resp_reused, resp);
     CHECK(resp_reused == resp_allocating);

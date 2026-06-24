@@ -9,19 +9,19 @@ namespace {
 // handshake + completion edge is exercised in isolation.
 struct channel_link
 {
-    ::asio::io_context                  io;
-    ptls::tls_credential                server_cred;
-    ptls::tls_credential                client_cred;
+    ::asio::io_context io;
+    ptls::tls_credential server_cred;
+    ptls::tls_credential client_cred;
     plexus::io::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
     plexus::io::security::cookie_secret client_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server                   server_sock{io};
-    pasio::udp_server                   client_sock{io};
+    pasio::udp_server server_sock{io};
+    pasio::udp_server client_sock{io};
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
     std::unique_ptr<ptls::dtls_channel> client_ch;
 
-    bool                                server_complete{false};
-    bool                                client_complete{false};
+    bool server_complete{false};
+    bool client_complete{false};
     std::vector<std::vector<std::byte>> server_received;
 
     std::vector<std::vector<std::byte>> client_to_server; // datagrams the server socket got
@@ -83,7 +83,7 @@ TEST_CASE("dtls.channel_handshake: two channels complete a mutual handshake over
     pdt::identity_fixture client_id("ch_cli");
 
     constexpr int k_iterations = 100;
-    int           completed    = 0;
+    int completed              = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         channel_link l(server_id, client_id);
@@ -117,11 +117,11 @@ TEST_CASE("dtls.channel_appdata: an app frame flows decrypted post-handshake, lo
     pdt::identity_fixture server_id("ad_srv");
     pdt::identity_fixture client_id("ad_cli");
 
-    const std::string      payload = "secret-datagram-over-dtls";
+    const std::string payload = "secret-datagram-over-dtls";
     std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()), reinterpret_cast<const std::byte *>(payload.data()) + payload.size());
 
     constexpr int k_iterations = 100;
-    int           delivered    = 0;
+    int delivered              = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
         channel_link l(server_id, client_id);

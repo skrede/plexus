@@ -7,15 +7,15 @@ using namespace udp_repro_fixture;
 TEST_CASE("integration udp reproducibility: best_effort delivers the clean path every iteration", "[integration][udp][reproducibility]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io};
         pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
-        std::optional<std::string>          got;
+        std::optional<std::string> got;
         server.on_accepted(
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {

@@ -10,8 +10,8 @@ TEST_CASE("inproc stamp demand: a 3-arg subscriber with default qos sees populat
     n.connect();
 
     std::vector<message_info> infos;
-    typed_subscriber          s{n.a, "topic", [&](const sample &, const message_info &info) { infos.push_back(info); }};
-    typed_publisher           p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
+    typed_subscriber s{n.a, "topic", [&](const sample &, const message_info &info) { infos.push_back(info); }};
+    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
     n.drive();
 
     auto loan = p.borrow();
@@ -35,8 +35,8 @@ TEST_CASE("inproc stamp demand: a 3-arg subscriber that opts out sees a document
     opts.qos.wants_message_info = false; // an informed 3-arg opt-out: deliver no timestamps
 
     std::vector<message_info> infos;
-    typed_subscriber          s{n.a, "topic", opts, [&](const sample &, const message_info &info) { infos.push_back(info); }};
-    typed_publisher           p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
+    typed_subscriber s{n.a, "topic", opts, [&](const sample &, const message_info &info) { infos.push_back(info); }};
+    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, counting_codec{}};
     n.drive();
 
     auto loan = p.borrow();

@@ -7,15 +7,15 @@ TEST_CASE("udp isn: a spoofed seq=0 reliable-data segment is rejected on a non-z
           "[udp][isn][spoof]")
 {
     constexpr int k_iterations = 50;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        ::asio::io_context   io;
+        ::asio::io_context io;
         pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
         pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
 
         std::unique_ptr<pasio::udp_channel> accepted, dialed;
-        std::vector<std::string>            delivered;
+        std::vector<std::string> delivered;
         server.on_accepted(
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
@@ -70,8 +70,8 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
     namespace iod            = plexus::datagram::detail;
     constexpr int k_sessions = 64;
 
-    ::asio::io_context         io;
-    pasio::udp_server          sniffer{io};
+    ::asio::io_context io;
+    pasio::udp_server sniffer{io};
     std::vector<std::uint16_t> isns;
     sniffer.on_datagram(
             [&](const ::asio::ip::udp::endpoint &, std::span<const std::byte> b)
@@ -104,7 +104,7 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
 
     // No fixed step: a counter / single-stride sequence would show one dominant delta. Across
     // arrival order the consecutive deltas must vary (a CSPRNG yields a spread of deltas).
-    std::size_t      distinct_deltas = 0;
+    std::size_t distinct_deltas = 0;
     std::vector<int> deltas;
     for(std::size_t i = 1; i < isns.size(); ++i)
         deltas.push_back(static_cast<int>(isns[i]) - static_cast<int>(isns[i - 1]));

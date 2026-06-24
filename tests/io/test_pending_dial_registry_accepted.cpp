@@ -4,11 +4,11 @@ using namespace pending_dial_registry_fixture;
 
 TEST_CASE("pending_dial_registry insert_accepted+adopt_accepted transfers ownership out", "[io][pending_dial_registry]")
 {
-    int           destroyed = 0;
+    int destroyed = 0;
     deferred_sink sink;
-    registry      reg{sink.callback()};
+    registry reg{sink.callback()};
 
-    auto  ch  = std::make_unique<fake_channel>(&destroyed, 5);
+    auto ch   = std::make_unique<fake_channel>(&destroyed, 5);
     auto *raw = ch.get();
     reg.insert_accepted(raw, std::move(ch));
     REQUIRE(reg.accepted_size() == 1);
@@ -23,11 +23,11 @@ TEST_CASE("pending_dial_registry fail_accepted routes the freed accepted channel
           "deferred-destroy callback",
           "[io][pending_dial_registry]")
 {
-    int           destroyed = 0;
+    int destroyed = 0;
     deferred_sink sink;
-    registry      reg{sink.callback()};
+    registry reg{sink.callback()};
 
-    auto  ch  = std::make_unique<fake_channel>(&destroyed, 77);
+    auto ch   = std::make_unique<fake_channel>(&destroyed, 77);
     auto *raw = ch.get();
     reg.insert_accepted(raw, std::move(ch));
     REQUIRE(reg.accepted_size() == 1);
@@ -48,9 +48,9 @@ TEST_CASE("pending_dial_registry fail_accepted routes the freed accepted channel
 
 TEST_CASE("pending_dial_registry fail_accepted on a miss is a no-op", "[io][pending_dial_registry]")
 {
-    int           destroyed = 0;
+    int destroyed = 0;
     deferred_sink sink;
-    registry      reg{sink.callback()};
+    registry reg{sink.callback()};
 
     fake_channel never_inserted{&destroyed, 0};
     reg.fail_accepted(&never_inserted);
@@ -62,12 +62,12 @@ TEST_CASE("pending_dial_registry fail_accepted on a miss is a no-op", "[io][pend
 
 TEST_CASE("pending_dial_registry clear empties both tables", "[io][pending_dial_registry]")
 {
-    int           destroyed = 0;
+    int destroyed = 0;
     deferred_sink sink;
-    registry      reg{sink.callback()};
+    registry reg{sink.callback()};
 
-    auto  a     = std::make_unique<fake_channel>(&destroyed, 1);
-    auto  b     = std::make_unique<fake_channel>(&destroyed, 2);
+    auto a      = std::make_unique<fake_channel>(&destroyed, 1);
+    auto b      = std::make_unique<fake_channel>(&destroyed, 2);
     auto *raw_a = a.get();
     auto *raw_b = b.get();
     reg.insert(raw_a, std::move(a));

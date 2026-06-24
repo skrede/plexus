@@ -31,13 +31,13 @@ namespace ptls = plexus::tls;
 // dialed here.
 struct mux_face
 {
-    ::asio::io_context     &io;
-    ptls::tls_credential    no_tls;
-    pasio::unix_transport   local{io};
-    pasio::asio_transport   remote{io};
-    ptls::tls_transport     secure{io, no_tls};
-    pasio::udp_transport    datagram{io};
-    ptls::dtls_transport    secure_datagram{io, no_tls};
+    ::asio::io_context &io;
+    ptls::tls_credential no_tls;
+    pasio::unix_transport local{io};
+    pasio::asio_transport remote{io};
+    ptls::tls_transport secure{io, no_tls};
+    pasio::udp_transport datagram{io};
+    ptls::dtls_transport secure_datagram{io, no_tls};
     pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
 
     explicit mux_face(::asio::io_context &ctx)
@@ -53,10 +53,10 @@ struct mux_face
 struct mux_pair
 {
     ::asio::io_context io;
-    mux_face           listen_face{io};
-    mux_face           dial_face{io};
+    mux_face listen_face{io};
+    mux_face dial_face{io};
 
-    std::optional<plexus::io::endpoint>            dialed_ep;
+    std::optional<plexus::io::endpoint> dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
@@ -89,7 +89,7 @@ struct mux_pair
 TEST_CASE("udp mux: a best_effort 'udp' dial routes to the UDP member and a frame flows end-to-end", "[udp][mux][route]")
 {
     constexpr int k_iterations = 100;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         mux_pair n;
@@ -111,7 +111,7 @@ TEST_CASE("udp mux: a best_effort 'udp' dial routes to the UDP member and a fram
         std::optional<std::string> got;
         n.accepted->on_data([&](std::span<const std::byte> b) { got = str_of(b); });
         const std::string payload = "mux-udp-" + std::to_string(iter);
-        auto              frame   = bytes_of(payload);
+        auto frame                = bytes_of(payload);
         n.dialed->send(frame);
         n.pump_until([&] { return got.has_value(); });
         REQUIRE(got.has_value());
@@ -172,7 +172,7 @@ TEST_CASE("udp mux: a reliable_datagram 'udpr' dial routes to the UDP+ARQ member
     std::optional<std::string> got;
     n.accepted->on_data([&](std::span<const std::byte> b) { got = str_of(b); });
     const std::string payload = "mux-udpr-reliable";
-    auto              frame   = bytes_of(payload);
+    auto frame                = bytes_of(payload);
     n.dialed->send(frame);
     n.pump_until([&] { return got.has_value(); });
     REQUIRE(got.has_value());

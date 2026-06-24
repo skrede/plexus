@@ -13,12 +13,12 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     // real mDNS resolve (announce -> query -> aggregate) progresses on the shared
     // executor — positive evidence the discovery path runs on `io`, not merely
     // that its callback was armed.
-    pmdns::mdnspp_discovery         advertiser(io, "_plexus._tcp.local.");
+    pmdns::mdnspp_discovery advertiser(io, "_plexus._tcp.local.");
     plexus::discovery::service_info local{"probe._plexus._tcp.local.", {"tcp", "127.0.0.1:5555"}, {{"node_id", "0011"}, {"plexus/tcp/port", "5555"}}};
     advertiser.advertise(local);
 
-    pmdns::mdnspp_discovery                          discovery(io, "_plexus._tcp.local.");
-    int                                              resolved_count = 0;
+    pmdns::mdnspp_discovery discovery(io, "_plexus._tcp.local.");
+    int resolved_count = 0;
     std::vector<std::pair<std::string, std::string>> resolved_metadata;
     discovery.browse(
             [&](const plexus::discovery::service_info &svc)
@@ -29,16 +29,16 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
             });
 
     // --- Transport round-trip on the SAME context ---
-    pasio::asio_listener                 listener(io);
+    pasio::asio_listener listener(io);
     std::unique_ptr<pasio::asio_channel> server_channel;
     listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch) { server_channel = std::move(ch); });
     listener.start({"tcp", "127.0.0.1:0"});
     auto port = listener.port();
 
-    pasio::asio_channel                   client(io);
+    pasio::asio_channel client(io);
     std::optional<std::vector<std::byte>> received;
-    plexus::log::null_logger              router_sink;
-    pio::frame_router                     router{router_sink};
+    plexus::log::null_logger router_sink;
+    pio::frame_router router{router_sink};
     router.on_unidirectional(
             [&](const wire::frame_header &, std::span<const std::byte> inner)
             {
@@ -58,10 +58,10 @@ TEST_CASE("mdnspp discovery and plexus asio transport progress on one io_context
     while(!server_channel)
         io.poll_one();
 
-    const auto                                       payload = bytes_of("shared-executor-payload");
-    const std::string                                fqn     = "demo._plexus._tcp.local.";
-    plexus::log::null_logger                         sink;
-    pio::message_forwarder<pasio::asio_policy>       fwd{sink};
+    const auto payload    = bytes_of("shared-executor-payload");
+    const std::string fqn = "demo._plexus._tcp.local.";
+    plexus::log::null_logger sink;
+    pio::message_forwarder<pasio::asio_policy> fwd{sink};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "peer-node"};
     fwd.attach(sub, fqn);
     // The subscribe is now frame_header-wrapped (control frames are framed like

@@ -53,9 +53,9 @@ bool hkdf(int mode, std::span<const unsigned char> key, std::span<const unsigned
     if(!ctx)
         return false;
 
-    char        digest[]   = "SHA256";
-    int         local_mode = mode;
-    OSSL_PARAM  params[5];
+    char digest[]  = "SHA256";
+    int local_mode = mode;
+    OSSL_PARAM params[5];
     std::size_t n      = 0;
     params[n++]        = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST, digest, 0);
     params[n++]        = OSSL_PARAM_construct_int(OSSL_KDF_PARAM_MODE, &local_mode);

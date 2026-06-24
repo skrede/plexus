@@ -40,7 +40,7 @@ template<typename UIntT>
 void expect_some(std::span<const std::byte> input, std::size_t start_consumed, std::size_t element_size, std::size_t expect_consumed_after, std::size_t expect_payload_bytes)
 {
     std::size_t consumed = start_consumed;
-    auto        result   = read_length_prefixed<UIntT>(input, consumed, element_size);
+    auto result          = read_length_prefixed<UIntT>(input, consumed, element_size);
     REQUIRE(result.has_value());
     CHECK(consumed == expect_consumed_after);
     CHECK(result->size() == expect_payload_bytes);
@@ -50,7 +50,7 @@ template<typename UIntT>
 void expect_none(std::span<const std::byte> input, std::size_t start_consumed, std::size_t element_size)
 {
     std::size_t consumed = start_consumed;
-    auto        result   = read_length_prefixed<UIntT>(input, consumed, element_size);
+    auto result          = read_length_prefixed<UIntT>(input, consumed, element_size);
     CHECK_FALSE(result.has_value());
     CHECK(consumed == start_consumed);
 }
@@ -100,7 +100,7 @@ TEST_CASE("read_length_prefixed<uint16_t> bounds + overflow table", "[wire][leng
     SECTION("non-zero start_consumed, prefix at offset")
     {
         std::vector<std::byte> v(2, std::byte{0xCC});
-        auto                   p = with_payload<std::uint16_t>(2, 2);
+        auto p = with_payload<std::uint16_t>(2, 2);
         v.insert(v.end(), p.begin(), p.end());
         expect_some<std::uint16_t>(v, 2, 1, 6, 2);
     }

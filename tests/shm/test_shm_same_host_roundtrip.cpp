@@ -69,7 +69,7 @@ constexpr std::uint32_t k_payload = 0xC0FFEEu;
 TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named ring", "[shm][same_host_roundtrip]")
 {
     // The fqn unique to this process so concurrent ctest shards never collide.
-    const std::string        fqn  = "topic.roundtrip." + std::to_string(::getpid());
+    const std::string fqn         = "topic.roundtrip." + std::to_string(::getpid());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -89,7 +89,7 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
                 ; // wait for the creator to stamp the regions
 
             posix_shm_region_broker broker;
-            region_handle           ctrl, slab;
+            region_handle ctrl, slab;
             if(broker.attach(control_name(fqn), ctrl) == pio::region_status::ok && broker.attach(slab_name(fqn), slab) == pio::region_status::ok)
             {
                 pio::broadcast_ring ring;
@@ -109,7 +109,7 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
                         for(;;)
                         {
                             pio::broadcast_ring::consume_result out;
-                            const auto                          st = ring.consume(cursor, out);
+                            const auto st = ring.consume(cursor, out);
                             if(st == pio::loan_status::ok)
                             {
                                 std::uint32_t got = 0;
@@ -137,7 +137,7 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
         // CREATOR parent: create the two regions, build the ring, publish ONE value,
         // wait for the consumer to read it, then tear down.
         posix_shm_region_broker broker;
-        region_handle           ctrl, slab;
+        region_handle ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 

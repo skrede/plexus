@@ -4,7 +4,7 @@ using namespace stream_send_queue_fixture;
 
 TEST_CASE("stream_send_queue copies caller bytes into an owned node on enqueue", "[io][stream_send_queue]")
 {
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink()};
 
     auto scratch = bytes_of({1, 2, 3});
@@ -23,7 +23,7 @@ TEST_CASE("stream_send_queue keeps at most one send-sink invocation outstanding"
     // The first enqueue drives immediately and alone; the next two park behind the
     // in-flight turn and gather into the NEXT turn. At most ONE turn is outstanding at a
     // time (the serial discipline), and the parked frames coalesce into a single call.
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({1})); // turn 0: in flight alone
@@ -46,7 +46,7 @@ TEST_CASE("stream_send_queue drains in FIFO order across a burst", "[io][stream_
 {
     // Enqueue while a turn is in flight: the in-flight front gathers alone, the later
     // frames gather into the NEXT turn in FIFO order behind it.
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({10})); // turn 0: in flight alone
@@ -67,7 +67,7 @@ TEST_CASE("stream_send_queue drains in FIFO order across a burst", "[io][stream_
 
 TEST_CASE("stream_send_queue close() clears a pending queue and guards a late completion", "[io][stream_send_queue]")
 {
-    recorder          rec;
+    recorder rec;
     stream_send_queue q{rec.sink()};
 
     q.enqueue(bytes_of({1})); // gathers into the in-flight turn

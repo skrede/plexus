@@ -13,19 +13,19 @@ TEST_CASE("inproc latch replay delivers the late joiner the retained value throu
     // iteration rather than a one-off pass. The subscriber routes the replayed frame
     // through a real frame_router::on_unidirectional, so the assertion proves the
     // retained bytes survive the production demux byte-identical, not a hand-strip.
-    constexpr int     k_iterations = 100;
-    const std::string payload      = "retained-opaque-value";
-    int               delivered    = 0;
+    constexpr int k_iterations = 100;
+    const std::string payload  = "retained-opaque-value";
+    int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        receive_sink      sink(ex);
-        auto              peer = make_peer(ch, sink, "late-node");
+        inproc_channel<> ch(ex);
+        receive_sink sink(ex);
+        auto peer = make_peer(ch, sink, "late-node");
 
         plexus::log::null_logger log_sink;
-        forwarder                fwd{log_sink};
+        forwarder fwd{log_sink};
         fwd.latch("topic");
         fwd.publish("topic", as_bytes(payload)); // retained with ZERO subscribers
         ex.drain();
@@ -53,17 +53,17 @@ TEST_CASE("inproc non-latched topic does not replay on a late subscribe, looped"
     // live publish arrives. Deterministic over inproc — this is the authoritative
     // negative guard (no grace window needed; the drain is exhaustive).
     constexpr int k_iterations = 100;
-    int           held         = 0;
+    int held                   = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        inproc_bus<>      bus;
+        inproc_bus<> bus;
         inproc_executor<> ex(bus);
-        inproc_channel<>  ch(ex);
-        receive_sink      sink(ex);
-        auto              peer = make_peer(ch, sink, "late-node");
+        inproc_channel<> ch(ex);
+        receive_sink sink(ex);
+        auto peer = make_peer(ch, sink, "late-node");
 
         plexus::log::null_logger log_sink;
-        forwarder                fwd{log_sink};
+        forwarder fwd{log_sink};
         fwd.publish("topic", as_bytes(std::string{"live-only"})); // not latched, no subscriber
         ex.drain();
 

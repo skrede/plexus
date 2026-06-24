@@ -15,21 +15,21 @@ struct large_link
 {
     static constexpr std::size_t k_socket_buf = 4u * 1024u * 1024u; // the host rmem_max/wmem_max ceiling
 
-    ::asio::io_context           io;
-    ptls::tls_credential         server_cred;
-    ptls::tls_credential         client_cred;
+    ::asio::io_context io;
+    ptls::tls_credential server_cred;
+    ptls::tls_credential client_cred;
     pio::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
     pio::security::cookie_secret client_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server            server_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
-    pasio::udp_server            client_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
+    pasio::udp_server server_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
+    pasio::udp_server client_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
     std::unique_ptr<ptls::dtls_channel> client_ch;
 
-    bool                                server_complete{false};
-    bool                                client_complete{false};
+    bool server_complete{false};
+    bool client_complete{false};
     std::vector<std::vector<std::byte>> server_received;
-    std::optional<pio::io_error>        client_error;
+    std::optional<pio::io_error> client_error;
 
     std::vector<std::vector<std::byte>> client_to_server;
     std::vector<std::vector<std::byte>> server_to_client;
@@ -123,7 +123,7 @@ TEST_CASE("dtls.fragment: the lifted message ceiling fragments a message above t
     constexpr std::size_t k_reliable = 3u * 1024u * 1024u;  // the host-reliable best-effort ceiling (under rmem_max)
 
     constexpr int k_iterations = 3;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         large_link l(srv, cli, k_ceiling);

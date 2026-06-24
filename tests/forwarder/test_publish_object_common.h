@@ -41,8 +41,8 @@ using forwarder = plexus::io::message_forwarder<inproc_policy>;
 struct counted_payload
 {
     std::string value;
-    int         release_calls{0};
-    loan_slot   slot{};
+    int release_calls{0};
+    loan_slot slot{};
 };
 
 inline object_carrier make_carrier(counted_payload &p, std::uint64_t tag)
@@ -81,11 +81,11 @@ struct sink_peer
         return forwarder::peer{fwd_channel, name};
     }
 
-    inproc_channel<>                    fwd_channel;
-    inproc_channel<>                    sink;
-    std::string                         name;
+    inproc_channel<> fwd_channel;
+    inproc_channel<> sink;
+    std::string name;
     std::vector<std::vector<std::byte>> byte_frames;
-    std::vector<object_carrier>         objects;
+    std::vector<object_carrier> objects;
 };
 
 inline std::size_t count_data_frames(const sink_peer &s)

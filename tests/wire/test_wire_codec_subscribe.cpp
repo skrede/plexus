@@ -44,7 +44,7 @@ TEST_CASE("subscribe request with long strings", "[wire][subscribe]")
 TEST_CASE("subscribe decode fails on truncated payload", "[wire][subscribe]")
 {
     std::array<std::byte, 10> short_buf{};
-    auto                      result = decode_subscribe_request(short_buf);
+    auto result = decode_subscribe_request(short_buf);
     CHECK_FALSE(result.has_value());
 }
 

@@ -7,7 +7,7 @@ using namespace stream_channel_unix_fixture;
 TEST_CASE("unix stream channel: a bad-magic byte run fires on_protocol_close(invalid_magic)", "[integration][unix][hardening]")
 {
     constexpr int k_iterations = 20;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;
@@ -36,7 +36,7 @@ TEST_CASE("unix stream channel: a header with a withheld payload fires "
           "[integration][unix][hardening]")
 {
     constexpr int k_iterations = 20;
-    int           proven       = 0;
+    int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         loopback h;
@@ -70,12 +70,12 @@ TEST_CASE("stream_channel_unix bound: congestion verdicts are byte-identical to 
     namespace pio = plexus::io;
     auto run      = [](pio::congestion mode)
     {
-        constexpr std::size_t                    cap = 4096;
-        temp_sock                                sock;
-        ::asio::io_context                       io;
+        constexpr std::size_t cap = 4096;
+        temp_sock sock;
+        ::asio::io_context io;
         ::asio::local::stream_protocol::acceptor acc{io, ::asio::local::stream_protocol::endpoint(sock.path)};
-        ::asio::local::stream_protocol::socket   peer{io};
-        ::asio::local::stream_protocol::socket   client{io};
+        ::asio::local::stream_protocol::socket peer{io};
+        ::asio::local::stream_protocol::socket client{io};
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));
         acc.accept(peer); // peer adopts but NEVER reads
 

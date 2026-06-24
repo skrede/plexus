@@ -66,7 +66,7 @@ struct manual_clock
     static constexpr bool is_steady = false;
 
     static inline time_point current{};
-    static time_point        now() noexcept
+    static time_point now() noexcept
     {
         return current;
     }
@@ -98,8 +98,8 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-constexpr auto          k_long_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed         = 0xC0FFEEu; // fixed seed -> reproducible backoff
+constexpr auto k_long_timeout  = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu; // fixed seed -> reproducible backoff
 
 inline std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -149,20 +149,20 @@ struct discovery_stub
 // engines run with.
 struct two_node
 {
-    inproc_bus<manual_clock>      bus;
+    inproc_bus<manual_clock> bus;
     inproc_executor<manual_clock> ex{bus};
-    transport_t                   transport_a{ex, bus};
-    transport_t                   transport_b{ex, bus};
-    plexus::log::null_logger      sink;
+    transport_t transport_a{ex, bus};
+    transport_t transport_b{ex, bus};
+    plexus::log::null_logger sink;
 
     engine a;
     engine b;
 
-    discovery_stub  discovery;
+    discovery_stub discovery;
     plexus::node_id id_a{make_id(0xA1)};
     plexus::node_id id_b{make_id(0xB2)};
-    endpoint        ep_a{"inproc", "node-a"};
-    endpoint        ep_b{"inproc", "node-b"};
+    endpoint ep_a{"inproc", "node-a"};
+    endpoint ep_b{"inproc", "node-b"};
 
     explicit two_node(bool eager = false)
             : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, eager)

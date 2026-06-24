@@ -88,7 +88,7 @@ TEST_CASE("call family: the family-form spelling names the same caller/procedure
     n.connect();
 
     family_procedure proc{n.b, "rpc", [](const u32_value &req) -> plexus::expected<u32_value, std::error_code> { return u32_value{req.value + 1}; }};
-    family_caller    call{n.a, "rpc"};
+    family_caller call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::uint32_t> got;

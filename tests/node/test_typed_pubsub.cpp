@@ -8,7 +8,7 @@ TEST_CASE("typed pub/sub: a bytes producer's encoded frame decodes to a value-eq
     n.connect();
 
     std::vector<sample> got;
-    typed_subscriber    s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
+    typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v); }};
     // A bytes publisher on the SAME topic forces the byte path: the typed subscriber must
     // decode the wire frame (no shared in-process object), proving encode->bytes->decode
     // value equality end to end.
@@ -29,17 +29,17 @@ TEST_CASE("typed pub/sub: the fast path delivers by address with zero encodes", 
     n.connect();
 
     std::vector<const sample *> seen_addr;
-    std::vector<std::uint32_t>  seen_value;
-    std::vector<message_info>   infos;
-    typed_subscriber            s{n.a, "topic", [&](const sample &v, const message_info &info)
-                                  {
+    std::vector<std::uint32_t> seen_value;
+    std::vector<message_info> infos;
+    typed_subscriber s{n.a, "topic", [&](const sample &v, const message_info &info)
+                       {
                            seen_addr.push_back(&v);
                            seen_value.push_back(v.value);
                            infos.push_back(info);
-                                  }};
-    counting_codec              codec;
-    auto                        encodes = codec.encodes;
-    typed_publisher             p{n.b, "topic", plexus::typed_publisher_options{}, codec};
+                       }};
+    counting_codec codec;
+    auto encodes = codec.encodes;
+    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     // Borrow, mark the object (mutate a field), capture its address, publish.
@@ -70,10 +70,10 @@ TEST_CASE("typed pub/sub: publish(const T&) delivers value-equal over the fast p
     n.connect();
 
     std::vector<std::uint32_t> got;
-    typed_subscriber           s{n.a, "topic", [&](const sample &v) { got.push_back(v.value); }};
-    counting_codec             codec;
-    auto                       encodes = codec.encodes;
-    typed_publisher            p{n.b, "topic", plexus::typed_publisher_options{}, codec};
+    typed_subscriber s{n.a, "topic", [&](const sample &v) { got.push_back(v.value); }};
+    counting_codec codec;
+    auto encodes = codec.encodes;
+    typed_publisher p{n.b, "topic", plexus::typed_publisher_options{}, codec};
     n.drive();
 
     p.publish(sample{0x55AA55AAu});

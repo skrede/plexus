@@ -5,7 +5,7 @@ using namespace call_family_fixture;
 TEST_CASE("call family: round-trip is byte-identical, looped", "[node][call]")
 {
     constexpr int k_iterations = 5;
-    net           n;
+    net n;
     n.connect();
 
     // The provider echoes "reply:<param>".
@@ -14,16 +14,16 @@ TEST_CASE("call family: round-trip is byte-identical, looped", "[node][call]")
                               const std::string out = "reply:" + to_string(param);
                               reply(plexus::wire::rpc_status::success, as_bytes(out));
                           }};
-    inproc_caller    call{n.a, "rpc"};
+    inproc_caller call{n.a, "rpc"};
     n.drive();
 
     int delivered = 0;
     for(int i = 0; i < k_iterations; ++i)
     {
-        const std::string              req = "req-" + std::to_string(i);
-        std::optional<std::string>     got;
+        const std::string req = "req-" + std::to_string(i);
+        std::optional<std::string> got;
         std::optional<plexus::node_id> provider;
-        bool                           reception_stamped = false;
+        bool reception_stamped = false;
         call.call(as_bytes(req),
                   [&](plexus::expected<reply_t, std::error_code> r)
                   {
@@ -49,7 +49,7 @@ TEST_CASE("call family: a second local serve on one fqn throws and leaves the fi
     net n;
     n.connect();
 
-    int              first_calls = 0;
+    int first_calls = 0;
     inproc_procedure proc{n.b, "rpc", [&](std::span<const std::byte>, inproc_procedure::reply_fn &reply)
                           {
                               ++first_calls;
@@ -84,7 +84,7 @@ TEST_CASE("call family: dropping the procedure retires it to no_handler", "[node
                               [](std::span<const std::byte>, inproc_procedure::reply_fn &reply) { reply(plexus::wire::rpc_status::success, as_bytes(std::string{"served"})); }};
         n.drive();
 
-        inproc_caller              call{n.a, "rpc"};
+        inproc_caller call{n.a, "rpc"};
         std::optional<std::string> got;
         call.call(as_bytes(std::string{"q"}),
                   [&](plexus::expected<reply_t, std::error_code> r)
@@ -97,9 +97,9 @@ TEST_CASE("call family: dropping the procedure retires it to no_handler", "[node
     }
     // proc dropped here — its handler is retired.
 
-    inproc_caller                  call{n.a, "rpc"};
+    inproc_caller call{n.a, "rpc"};
     std::optional<std::error_code> err;
-    plexus::call_options           opts;
+    plexus::call_options opts;
     opts.deadline = std::chrono::milliseconds(50);
     call.call(as_bytes(std::string{"q"}), opts,
               [&](plexus::expected<reply_t, std::error_code> r)

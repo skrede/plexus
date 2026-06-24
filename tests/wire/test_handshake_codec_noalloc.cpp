@@ -59,9 +59,9 @@ handshake_response sample_response()
 
 TEST_CASE("Handshake encode-into: zero allocation across a steady-state loop", "[wire][handshake][noalloc]")
 {
-    constexpr int K    = 1024;
-    const auto    req  = sample_request();
-    const auto    resp = sample_response();
+    constexpr int K = 1024;
+    const auto req  = sample_request();
+    const auto resp = sample_response();
 
     std::vector<std::byte> req_buf;
     std::vector<std::byte> resp_buf;

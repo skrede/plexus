@@ -4,9 +4,9 @@ using namespace authenticated_channel_fixture;
 
 TEST_CASE("crypto.authenticated_channel round-trips a plaintext header-on frame", "[crypto][authenticated_channel]")
 {
-    const auto                        keys = fixed_keys();
-    wire_lower                        send_wire;
-    wire_lower                        recv_wire;
+    const auto keys = fixed_keys();
+    wire_lower send_wire;
+    wire_lower recv_wire;
     authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys);
     authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
@@ -23,9 +23,9 @@ TEST_CASE("crypto.authenticated_channel round-trips a plaintext header-on frame"
 
 TEST_CASE("crypto.authenticated_channel a tampered frame fires on_protocol_close, not on_error", "[crypto][authenticated_channel]")
 {
-    const auto                        keys = fixed_keys();
-    wire_lower                        send_wire;
-    wire_lower                        recv_wire;
+    const auto keys = fixed_keys();
+    wire_lower send_wire;
+    wire_lower recv_wire;
     authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys);
     authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
@@ -51,8 +51,8 @@ TEST_CASE("crypto.authenticated_channel a tampered frame fires on_protocol_close
 
 TEST_CASE("crypto.authenticated_channel send nonce sequence is a monotonic counter", "[crypto][authenticated_channel]")
 {
-    const auto                        keys = fixed_keys();
-    wire_lower                        send_wire;
+    const auto keys = fixed_keys();
+    wire_lower send_wire;
     authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys);
 
     REQUIRE(sender.send_sequence() == 0);
@@ -73,7 +73,7 @@ TEST_CASE("crypto.authenticated_channel rekeys at the threshold and straddles an
     wire_lower recv_wire;
     // A small rekey threshold so a rekey is exercised behaviorally without sealing 2^20
     // frames; the threshold is a real configurable knob, not a test backdoor.
-    const std::uint64_t               threshold = 4;
+    const std::uint64_t threshold = 4;
     authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys, 0, threshold);
     authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys), 0, threshold);
 

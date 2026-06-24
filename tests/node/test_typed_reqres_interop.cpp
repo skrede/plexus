@@ -9,7 +9,7 @@ TEST_CASE("typed reqres: a typed caller against a bytes procedure replying error
 
     // A BYTES procedure replies a bare rpc_status::error with no varint payload.
     bytes_procedure proc{n.b, "rpc", [](std::span<const std::byte>, bytes_procedure::reply_fn &reply) { reply(plexus::wire::rpc_status::error, {}); }};
-    typed_caller    call{n.a, "rpc"};
+    typed_caller call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::error_code> err;
@@ -31,7 +31,7 @@ TEST_CASE("typed reqres: a reply-decode failure surfaces as deserialize_failed",
 
     // A BYTES procedure replies success with a malformed (non-4-byte) response payload.
     bytes_procedure proc{n.b, "rpc", [](std::span<const std::byte>, bytes_procedure::reply_fn &reply) { reply(plexus::wire::rpc_status::success, as_bytes(std::string{"no"})); }};
-    typed_caller    call{n.a, "rpc"};
+    typed_caller call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::error_code> err;
@@ -73,7 +73,7 @@ TEST_CASE("typed reqres: the family-form spelling round-trips the typed reqres",
     n.connect();
 
     family_procedure proc{n.b, "rpc", [](const request_t &req) -> plexus::expected<response_t, std::error_code> { return response_t{req.value * 2}; }};
-    family_caller    call{n.a, "rpc"};
+    family_caller call{n.a, "rpc"};
     n.drive();
 
     std::optional<std::uint32_t> got;

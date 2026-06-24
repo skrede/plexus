@@ -61,7 +61,7 @@ struct counting_codec
 {
     using value_type = sample;
 
-    std::uint64_t                     tag     = 0xABCD1234u;
+    std::uint64_t tag                         = 0xABCD1234u;
     std::shared_ptr<std::atomic<int>> encodes = std::make_shared<std::atomic<int>>(0);
 
     plexus::wire_bytes<> encode(const sample &v) const
@@ -130,11 +130,11 @@ inline std::vector<std::byte> encode_u32(std::uint32_t v)
 // bytes fixture — both-eager double-delivers on a shared bus.
 struct net
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
     inproc_transport<> tb{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     plexus::node_id id_a{make_id(0x0A)};
     plexus::node_id id_b{make_id(0x0B)};

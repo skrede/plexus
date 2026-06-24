@@ -7,7 +7,7 @@ using namespace priority_band_fixture;
 TEST_CASE("priority_band queue: a warm drop_oldest evict-and-admit loop allocates nothing", "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const std::size_t   b = band_of(priority::normal);
+    const std::size_t b = band_of(priority::normal);
     // ONE pre-built owner is shared into the band on every admit (the frame-once carrier):
     // the band moves/holds the handle and addref-shares it, never allocating its own buffer.
     const wire_bytes<> frame = owned(std::string(64, 'x'));
@@ -30,7 +30,7 @@ TEST_CASE("priority_band queue: a warm drop_oldest evict-and-admit loop allocate
 TEST_CASE("priority_band queue: a steady enqueue/pop loop allocates nothing after warm-up", "[priority_band][forwarder]")
 {
     priority_band_queue q;
-    const wire_bytes<>  frame = owned(std::string(64, 'x'));
+    const wire_bytes<> frame = owned(std::string(64, 'x'));
 
     // Warm: touch every band's full slot ring once, then drain it back to empty.
     for(std::size_t band = 0; band < k_egress_bands; ++band)

@@ -99,11 +99,11 @@ inline std::vector<std::byte> payload_of(std::size_t n, std::byte fill)
 inline std::vector<decoded_record> decode_window(std::span<const std::byte> stream)
 {
     std::vector<decoded_record> out;
-    std::size_t                 at = 0;
+    std::size_t at = 0;
     while(at < stream.size())
     {
         std::size_t len_off = at;
-        const auto  len     = plexus::wire::read_varint(stream, len_off);
+        const auto len      = plexus::wire::read_varint(stream, len_off);
         if(!len)
             break;
         const std::size_t end = len_off + static_cast<std::size_t>(*len);
@@ -113,7 +113,7 @@ inline std::vector<decoded_record> decode_window(std::span<const std::byte> stre
         if(payload.size() >= sizeof(std::uint32_t))
         {
             decoded_record rec;
-            const auto     body = payload.first(payload.size() - sizeof(std::uint32_t));
+            const auto body = payload.first(payload.size() - sizeof(std::uint32_t));
             if(plexus::io::recording::decode_record_body(body, rec))
                 out.push_back(rec);
         }
@@ -153,10 +153,10 @@ inline plexus::node_id make_id(std::uint8_t seed)
 // that proves the deregister-before-teardown discipline.
 struct session_fixture
 {
-    inproc_bus<>       bus;
-    inproc_executor<>  ex{bus};
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
     inproc_transport<> ta{ex, bus};
-    static_discovery   disc{{}};
+    static_discovery disc{{}};
 
     void drive()
     {

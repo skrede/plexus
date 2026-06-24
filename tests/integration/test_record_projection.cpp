@@ -56,8 +56,8 @@ std::span<const std::byte> bytes_of(const std::string &s)
 std::vector<std::byte> encode_one_sample(const std::string &payload)
 {
     record_stream_writer w;
-    byte_ring            ring{64u * 1024u};
-    in_memory_byte_sink  sink;
+    byte_ring ring{64u * 1024u};
+    in_memory_byte_sink sink;
 
     sink.write(w.begin_stream(7u, make_node(1), topic_capture_rule{}, {}));
     ring.try_push(w.sync_marker());
@@ -93,7 +93,7 @@ TEST_CASE("projection input survives the input stream being freed before its pay
     std::vector<std::byte> overwrite(n, std::byte{0xEE});
     REQUIRE(overwrite.size() == n);
 
-    const auto       &got = proj->records[0].payload;
+    const auto &got = proj->records[0].payload;
     const std::string recovered{reinterpret_cast<const char *>(got.data()), got.size()};
     REQUIRE(recovered == payload);
 }
