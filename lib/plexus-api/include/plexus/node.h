@@ -154,7 +154,7 @@ class procedure;
 template<typename Policy, typename... Transports>
     requires plexus::Policy<Policy> && (sizeof...(Transports) >= 1) &&
         (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, Policy> : (io::mux_member<Transports> && ...))
-class node
+class basic_node
 {
     // The registration/retire seams are private; the endpoint handles reach them only as friends
     // (there is no public node.publish/subscribe factory).
@@ -178,7 +178,7 @@ public:
     using transport_tuple  = std::tuple<Transports...>;
 
     // The node_id is taken verbatim: plexus compares the identity, never mints or interprets it.
-    node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id, Transports &...transports, const node_options &opts)
+    basic_node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id, Transports &...transports, const node_options &opts)
             : m_id(id)
             , m_executor(executor)
             , m_disc(disc)
@@ -206,20 +206,20 @@ public:
         m_engine.post_participant({io::participant_edge::created, m_id});
     }
 
-    node(executor_type executor, discovery::discovery &disc, std::string_view name, Transports &...transports, const node_options &opts)
-            : node(executor, disc, detail::hash_node_id(name), transports..., opts)
+    basic_node(executor_type executor, discovery::discovery &disc, std::string_view name, Transports &...transports, const node_options &opts)
+            : basic_node(executor, disc, detail::hash_node_id(name), transports..., opts)
     {
     }
 
-    node(const node &)            = delete;
-    node &operator=(const node &) = delete;
-    node(node &&)                 = delete;
-    node &operator=(node &&)      = delete;
+    basic_node(const basic_node &)            = delete;
+    basic_node &operator=(const basic_node &) = delete;
+    basic_node(basic_node &&)                 = delete;
+    basic_node &operator=(basic_node &&)      = delete;
 
     // The peer watcher is deregistered FIRST so the teardown edge's observer snapshot (captured in
     // place of the engine, which is destroyed before the executor drains the closure) holds only
     // externally-owned observers that outlive the drain. A dtor must not throw — the post is wrapped.
-    ~node()
+    ~basic_node()
     {
 #if defined(__cpp_exceptions)
         try
@@ -328,12 +328,12 @@ public:
         return recorder<engine_type, Policy>{m_engine, m_executor, m_id, sink, std::move(opts), m_wire_crypto_position};
     }
 
-    friend struct detail::peer_watch<node>;
+    friend struct detail::peer_watch<basic_node>;
 
 private:
     using object_entry = detail::object_entry;
     using subscription = detail::subscription;
-    using peer_watch   = detail::peer_watch<node>;
+    using peer_watch   = detail::peer_watch<basic_node>;
 
     using registration_id = std::uint64_t;
 
@@ -556,19 +556,19 @@ private:
         s.ctx               = this;
         s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos, bool emit, std::optional<std::uint64_t> type_id, const void *geometry,
                                  std::optional<io::topic_capture_rule> capture)
-        { static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, geometry, capture); };
-        s.publish        = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes) { static_cast<node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
+        { static_cast<basic_node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, geometry, capture); };
+        s.publish        = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes) { static_cast<basic_node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
         s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier, io::encode_thunk encode)
-        { static_cast<node *>(ctx)->m_engine.messages().publish_object(fqn, carrier, [&] { return io::invoke(encode); }); };
+        { static_cast<basic_node *>(ctx)->m_engine.messages().publish_object(fqn, carrier, [&] { return io::invoke(encode); }); };
         s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos, io::bytes_cb cb, std::optional<std::uint64_t> type_id, const void *native_key,
                                    io::object_dispatch dispatch, std::optional<io::topic_capture_rule> capture) -> registration_id
-        { return static_cast<node *>(ctx)->register_subscriber_seam(fqn, qos, std::move(cb), type_id, object_entry{native_key, std::move(dispatch)}, capture); };
-        s.retire_subscriber = [](void *ctx, registration_id rid) { static_cast<node *>(ctx)->retire_subscriber_seam(rid); };
-        s.retire_publisher  = [](void *ctx, std::string_view fqn) { static_cast<node *>(ctx)->retire_publisher_seam(fqn); };
-        s.serve_procedure   = [](void *ctx, std::string_view fqn, io::handler_fn handler) { static_cast<node *>(ctx)->serve_procedure_seam(fqn, std::move(handler)); };
-        s.retire_procedure  = [](void *ctx, std::string_view fqn) { static_cast<node *>(ctx)->retire_procedure_seam(fqn); };
+        { return static_cast<basic_node *>(ctx)->register_subscriber_seam(fqn, qos, std::move(cb), type_id, object_entry{native_key, std::move(dispatch)}, capture); };
+        s.retire_subscriber = [](void *ctx, registration_id rid) { static_cast<basic_node *>(ctx)->retire_subscriber_seam(rid); };
+        s.retire_publisher  = [](void *ctx, std::string_view fqn) { static_cast<basic_node *>(ctx)->retire_publisher_seam(fqn); };
+        s.serve_procedure   = [](void *ctx, std::string_view fqn, io::handler_fn handler) { static_cast<basic_node *>(ctx)->serve_procedure_seam(fqn, std::move(handler)); };
+        s.retire_procedure  = [](void *ctx, std::string_view fqn) { static_cast<basic_node *>(ctx)->retire_procedure_seam(fqn); };
         s.call              = [](void *ctx, std::string_view fqn, std::span<const std::byte> param, io::on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
-        { static_cast<node *>(ctx)->call_seam(fqn, param, std::move(on_reply), deadline); };
+        { static_cast<basic_node *>(ctx)->call_seam(fqn, param, std::move(on_reply), deadline); };
         return s;
     }
 
@@ -652,6 +652,12 @@ private:
 
     engine_type m_engine;
 };
+
+// Transitional: every existing plexus::node<...> spelling migrates onto basic_node through this
+// alias. It retires once call sites respell, freeing the plexus::node name for the eventual
+// non-templated native default.
+template<typename Policy, typename... Transports>
+using node = basic_node<Policy, Transports...>;
 
 }
 

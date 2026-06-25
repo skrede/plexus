@@ -2,8 +2,11 @@
 #include "plexus/asio/shm/linux/shm_member.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
+#include "plexus/asio/node_aliases.h"
 
 #include "plexus/node.h"
+#include "plexus/expected.h"
+#include "plexus/wire_bytes.h"
 #include "plexus/node_options.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
@@ -16,8 +19,11 @@
 
 #include <asio/io_context.hpp>
 
+#include "plexus/shm/ring_geometry_mode.h"
+
 #include <string>
 #include <cstddef>
+#include <type_traits>
 
 // The variadic-leaf shm node composition: a node<asio_policy, shm_member, unix_transport,
 // asio_transport> builds its own multiplexer from the borrowed leaves (the consumer's
@@ -71,4 +77,34 @@ TEST_CASE("shm.node_composition the shm-bearing node brings up a same-host liste
     io.poll();
 
     SUCCEED("the shm-bearing node stood up a same-host listener");
+}
+
+namespace {
+
+struct probe_codec
+{
+    using value_type = int;
+    plexus::wire_bytes<> encode(const int &) const
+    {
+        return {};
+    }
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte>, int &) const
+    {
+        return {};
+    }
+};
+
+}
+
+// Forces the option-3 geometry front-door body (opts.geometry = &geom; delegate to the generic
+// advertise path) to be instantiated and type-checked at compile time, without standing up a live
+// shm region — the xproc round-trip suites own the data-path provisioning.
+template plexus::publisher<probe_codec> pasio::shm::advertise<probe_codec, pasio::shm::node>(pasio::shm::node &, std::string_view, plexus::shm::shm_geometry, plexus::typed_publisher_options,
+                                                                                            probe_codec);
+
+TEST_CASE("shm.node_composition the backend alias names the shm-first pack", "[shm][mux][node]")
+{
+    static_assert(std::is_same_v<pasio::shm::node, plexus::node<pasio::asio_policy, pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport>>,
+                  "plexus::asio::shm::node must name the shm-member-first composition pack");
+    SUCCEED("plexus::asio::shm::node names the shm-member-first pack; the geometry front-door instantiates");
 }
