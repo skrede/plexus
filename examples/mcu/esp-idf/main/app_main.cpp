@@ -8,12 +8,10 @@
 //
 // The node lives off the task stack — heap-allocated once at setup (a one-time allocation, not
 // a hot-path one) so the constrained main stack does not have to carry the engine object. The
-// composition and its super-loop run in a dedicated task the example creates and sizes to the
-// engine's measured footprint; the user owns that task and drives the executor in it, with no
-// background plexus thread. The block-with-timeout park is LOAD-BEARING — it yields to the
-// FreeRTOS idle task and feeds the task watchdog; a busy spin here trips a watchdog reset. The
-// tick stays 100 Hz. plexus owns UART0 (console NONE); the magic-byte resync in the framing
-// layer absorbs the un-suppressable boot-ROM preamble.
+// composition runs in a dedicated task the example creates and sizes to the engine's measured
+// footprint; the user owns that task and drives the executor in it through the device facade,
+// with no background plexus thread. plexus owns UART0 (console NONE); the magic-byte resync in
+// the framing layer absorbs the un-suppressable boot-ROM preamble.
 
 #include "uart_transport.h"
 
@@ -26,6 +24,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/reconnect_config.h"
 
+#include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
 
@@ -97,8 +96,8 @@ struct sample_loop
     }
 };
 
-// The user's one task: it owns the executor and drives the cooperative super-loop. The engine
-// object is heap-allocated here so it does not sit on this task's stack; ex/transport/disc/opts
+// The user's one task: it owns the executor and hands it to the device facade to drive. The
+// engine object is heap-allocated here so it does not sit on this task's stack; ex/transport/disc/opts
 // are task-scope locals declared ABOVE the node — the node borrows them by reference, so they
 // must outlive it. This is the example's own task, not a plexus-spawned thread.
 void plexus_task(void *)
@@ -131,23 +130,10 @@ void plexus_task(void *)
     configure_sample_pin();
     loop.arm();
 
-    for(;;)
-    {
-        // The NON-BLOCKING UART drain step: transport.poll() forwards to the delivered
-        // channel.poll() — uart_read_bytes(...,0) -> decorator.feed -> on_data -> engine. The
-        // engine owns the channel; the transport keeps a non-owning handle to poll it here.
-        transport.poll();
-
-        // Drain ALL ready work the poll (and the timer) produced. pump() never blocks.
-        while(ex.pump())
-        {
-        }
-
-        // QUIESCENT: the UNCHANGED block-with-timeout park feeds the task watchdog and yields
-        // to the idle task. The timeout bounds the wait so the armed timer still fires on
-        // schedule. Never a busy-poll: a spin here starves the idle task into a watchdog reset.
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
+    // The facade owns the cooperative loop discipline: it polls the UART into ready work,
+    // drains the executor, then parks watchdog-safe — never returning. The park floor keeps
+    // the idle task fed, so the loop cannot collapse into the spin that trips a watchdog reset.
+    plexus::freertos::run(ex, transport);
 }
 
 }
