@@ -37,6 +37,11 @@ public:
     freertos_executor(freertos_executor &&)                 = delete;
     freertos_executor &operator=(freertos_executor &&)      = delete;
 
+    ~freertos_executor()
+    {
+        vQueueDelete(m_queue);
+    }
+
     void post(plexus::detail::move_only_function<void()> fn)
     {
         m_posted.push_back(std::move(fn));

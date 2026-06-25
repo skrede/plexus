@@ -54,6 +54,11 @@ inline QueueHandle_t xQueueCreate(std::uint32_t /*length*/, std::uint32_t /*item
     return new plexus::freertos::detail::host_queue;
 }
 
+inline void vQueueDelete(QueueHandle_t q) noexcept
+{
+    delete q;
+}
+
 // Non-blocking host semantics: receive returns pdFALSE when the queue is empty,
 // regardless of the requested wait — the host loop never blocks (the device
 // block-with-timeout lives in the super-loop driver, not here).

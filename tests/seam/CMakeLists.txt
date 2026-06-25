@@ -36,6 +36,19 @@ target_link_libraries(test_uart_channel_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_uart_channel_seam TEST_PREFIX "seam.")
 
+# Host proof for the constrained-target device facade: drives the borrow-only tick/run
+# loop discipline (poll -> drain -> watchdog-safe park) over a fake pollable and a
+# host freertos_executor. The host shim's no-op vTaskDelay makes the facade run
+# off-target. Links the constrained-target substrate alongside the core and wire
+# layers; registered under the same `seam.` prefix.
+add_executable(test_device_runtime test_device_runtime.cpp)
+target_link_libraries(test_device_runtime PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_device_runtime TEST_PREFIX "seam.")
+
 # The permissive/strict reliability enforcement gate on the routing_engine subscribe
 # demand path — a deterministic inproc seam test (no backend socket). Links the inproc
 # Policy substrate for the engine harness. Registered under the `udp.` prefix so
