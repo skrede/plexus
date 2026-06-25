@@ -58,6 +58,17 @@ add_executable(test_attach_policy
 target_link_libraries(test_attach_policy PRIVATE plexus::core Catch2::Catch2WithMain)
 catch_discover_tests(test_attach_policy TEST_PREFIX "io.")
 
+# The dial-by-endpoint oracle drives the full routing_engine over the inproc backend (two engines on
+# one shared bus), so it links the inproc backend and the wire layer alongside core — not a sans-IO
+# core-only unit like its siblings above.
+add_executable(test_routing_engine_dial test_routing_engine_dial.cpp)
+target_link_libraries(test_routing_engine_dial PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_routing_engine_dial TEST_PREFIX "io.")
+
 # The mtu_budget oracle pins the oversize-boundary arithmetic against the real
 # wire::udp_envelope_overhead constant, so it additionally links the header-only
 # plexus::wire interface target alongside the datagram family that homes mtu_budget

@@ -251,6 +251,13 @@ public:
         }
     }
 
+    // A directly-dialed endpoint is not advertisable (no card, no listen key): forward to the engine
+    // and nothing else. The peer's real id arrives in the handshake.
+    void dial(const io::endpoint &ep)
+    {
+        m_engine.dial(ep);
+    }
+
     const plexus::node_id &id() const noexcept
     {
         return m_id;

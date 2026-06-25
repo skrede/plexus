@@ -7,6 +7,7 @@
 #include "plexus/io/locality.h"
 #include "plexus/io/observer.h"
 #include "plexus/io/node_name.h"
+#include "plexus/io/endpoint_id.h"
 #include "plexus/io/known_peers.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/capture_policy.h"
@@ -122,6 +123,18 @@ public:
     void listen(const endpoint &ep)
     {
         m_transport.listen(ep);
+    }
+
+    // The general point-to-point verb for an endpoint discovery cannot advertise (a serial port, a
+    // pre-known socket): mint a stable provisional id from the endpoint and drive the same slot path
+    // reach uses. The real peer id arrives in the handshake; the slot stays under the provisional id.
+    void dial(const endpoint &ep)
+    {
+        const auto id = endpoint_id(ep);
+        if(m_registry.is_connected(id))
+            return;
+        m_registry.ensure_slot(id, ep, node_name_of(id));
+        m_registry.driver_for(id).start();
     }
 
     void note_peer(const node_id &id, const endpoint &ep)
