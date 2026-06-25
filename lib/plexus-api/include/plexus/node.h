@@ -33,7 +33,7 @@
 #include "plexus/detail/compat.h"
 #include "plexus/detail/fail_closed.h"
 #include "plexus/detail/address_parse.h"
-#include "plexus/detail/node_shm_wiring.h"
+#include "plexus/detail/node_upgrade_wiring.h"
 #include "plexus/detail/function_traits.h"
 #include "plexus/detail/node_internals.h"
 
@@ -346,7 +346,7 @@ private:
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
-        provision_same_host_ring(fqn, subscriber_effective_bytes(qos), std::nullopt);
+        provision_same_host_ring(fqn, subscriber_effective_bytes(qos), nullptr);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
             m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any, type_id);
@@ -371,14 +371,14 @@ private:
     // The declaration persists for the node's life (stable identity for subscriber correlation);
     // the handle's lifetime is distinct, so retire_publisher_seam only posts the drop edge.
     void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity, std::optional<std::uint64_t> type_id = std::nullopt,
-                                std::optional<shm::shm_geometry> shm_geometry = std::nullopt, std::optional<io::topic_capture_rule> capture = std::nullopt)
+                                const void *geometry = nullptr, std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
         m_engine.messages().declare(fqn, qos, type_id, emit_source_identity);
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_declared, wire::fqn_topic_hash(fqn), type_id});
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
-        provision_same_host_ring(fqn, effective_bytes, shm_geometry);
+        provision_same_host_ring(fqn, effective_bytes, geometry);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
     }
 
@@ -387,12 +387,13 @@ private:
         m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_dropped, wire::fqn_topic_hash(fqn), std::nullopt});
     }
 
-    // An absent per-topic override resolves to each shm member's own default_geometry(); a
-    // composition with no shm member is a no-op.
-    void provision_same_host_ring(std::string_view fqn, std::size_t effective_bytes, std::optional<shm::shm_geometry> geom)
+    // An absent per-topic override (null) resolves to each shm member's own default_geometry(); a
+    // composition with no shm member is a no-op. The override is the opaque carrier the declare
+    // seam crosses; each member recovers its own geometry type from it member-side.
+    void provision_same_host_ring(std::string_view fqn, std::size_t effective_bytes, const void *geometry)
     {
         std::string key{fqn};
-        for_each_shm_member([&](auto &m) { m.set_topic_geometry(key, effective_bytes, geom.value_or(m.default_geometry())); });
+        for_each_shm_member([&](auto &m) { m.set_topic_geometry(key, effective_bytes, m.geometry_from(geometry)); });
     }
 
     std::size_t subscriber_effective_bytes(const io::subscriber_qos &qos) const noexcept
@@ -432,8 +433,14 @@ private:
         }
     }
 
+    // Keys on the member's name-free geometry surface (default_geometry + the opaque-pointer
+    // recover) rather than the concrete override type, so the probe names no shm type: a member
+    // that has these provisions its own ring; a plain leaf is a compile-time no-op.
     template<typename M>
-    static constexpr bool has_topic_geometry = requires(M &m) { m.set_topic_geometry(std::string{}, std::size_t{}, shm::shm_geometry{}); };
+    static constexpr bool has_topic_geometry = requires(M &m) {
+        m.set_topic_geometry(std::string{}, std::size_t{}, m.default_geometry());
+        m.geometry_from(static_cast<const void *>(nullptr));
+    };
 
     // Routes to the first connection-order peer with a complete session. With NO connected
     // provider the completion is POSTED with an absent status (the out-of-band no_provider
@@ -549,12 +556,7 @@ private:
         s.ctx               = this;
         s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos, bool emit, std::optional<std::uint64_t> type_id, const void *geometry,
                                  std::optional<io::topic_capture_rule> capture)
-        {
-            std::optional<shm::shm_geometry> shm_geometry;
-            if(geometry != nullptr)
-                shm_geometry = *static_cast<const shm::shm_geometry *>(geometry);
-            static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, shm_geometry, capture);
-        };
+        { static_cast<node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, geometry, capture); };
         s.publish        = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes) { static_cast<node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
         s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier, io::encode_thunk encode)
         { static_cast<node *>(ctx)->m_engine.messages().publish_object(fqn, carrier, [&] { return io::invoke(encode); }); };

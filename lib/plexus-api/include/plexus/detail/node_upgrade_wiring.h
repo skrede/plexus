@@ -1,12 +1,10 @@
-#ifndef HPP_GUARD_PLEXUS_DETAIL_NODE_SHM_WIRING_H
-#define HPP_GUARD_PLEXUS_DETAIL_NODE_SHM_WIRING_H
+#ifndef HPP_GUARD_PLEXUS_DETAIL_NODE_UPGRADE_WIRING_H
+#define HPP_GUARD_PLEXUS_DETAIL_NODE_UPGRADE_WIRING_H
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/polymorphic_byte_channel.h"
-#include "plexus/shm/shm_selection.h"
-#include "plexus/shm/shm_preference_hook.h"
 
 #include <span>
 #include <string>
@@ -35,13 +33,13 @@ std::unique_ptr<EngineChannel> wrap_companion(std::unique_ptr<C> ch)
         return ch;
 }
 
-// The if constexpr is load-bearing: prefer_upgradeable_hook only instantiates for a can_acquire
-// leaf, so a non-shm leaf never forces an uncompilable prefer_upgradeable_hook<that-leaf>.
+// The if constexpr is load-bearing: companion_selection_hook only instantiates for a can_acquire
+// leaf, so a non-shm leaf never forces an uncompilable companion_selection_hook<that-leaf>.
 template<typename M>
 void bind_shm_hook(io::selection_hook &hook, M &member)
 {
     if constexpr(node_has_can_acquire<M>)
-        hook = shm::prefer_upgradeable_hook(member);
+        hook = member.companion_selection_hook();
 }
 
 // Captures the shm member by reference; it outlives the node-owned glue. Precondition: at least one
@@ -81,10 +79,7 @@ void install_same_host_upgrade(Engine &engine, Member &member)
                 std::unique_ptr<typename Member::channel_type> ch = member.mint_companion(key);
                 if(!ch)
                     return {};
-                const auto g = member.resolved_geometry_for(key);
-                // The per-message route is fixed at mint time: a message rides the ring when
-                // route_message_medium picks shm for the resolved mode and capacity.
-                auto fits = [mode = g.mode, cap = g.slot_capacity](std::size_t bytes) { return shm::route_message_medium(mode, bytes, cap) == shm::same_host_medium::shm; };
+                auto fits = member.companion_route(key);
                 return {wrap_companion<engine_channel>(std::move(ch)), std::move(fits)};
             });
     // Each drained frame is injected into the matching peer session, resolved by node_name. The

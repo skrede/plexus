@@ -11,7 +11,7 @@
 // The proof is structural by absence: this TU deliberately includes no shm transport
 // header, so the shm member type is out of scope here. A build that silently depended
 // on it would fail. The load-bearing textual assertion is the include-audit grep over
-// node.h / node_shm_wiring.h; this TU instantiates the full non-shm node + its
+// node.h / node_upgrade_wiring.h; this TU instantiates the full non-shm node + its
 // routing_engine under the build-fnx -fno-exceptions flags to prove the instantiation
 // compiles shm-free.
 

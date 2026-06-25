@@ -232,7 +232,7 @@ plexus::topic_qos companion_qos()
     return qos;
 }
 
-std::optional<pio::shm_geometry> companion_geometry()
+pio::shm_geometry companion_geometry()
 {
     return pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback};
 }
@@ -351,9 +351,11 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
         // The bytes publisher with the companion QoS (a qualifying same-host hint) + the
         // wire_fallback geometry: the public declare path provisions the capped same-host
         // ring geometry so the coordinator mints a bounded companion the publish fan splits
-        // per message (fitting -> SHM, over-cap -> wire).
+        // per message (fitting -> SHM, over-cap -> wire). The override crosses as the opaque
+        // producer-side pointer the declare seam carries (the concrete type stays the caller's).
+        const pio::shm_geometry geometry = companion_geometry();
         plexus::publisher<> companion_pub{node, fqn, companion_qos(),
-                                          /*emit_source_identity=*/false, companion_geometry()};
+                                          /*emit_source_identity=*/false, &geometry};
 
         bool consumer_done  = false;
         bool ring_signaled  = false;

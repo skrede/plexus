@@ -195,6 +195,23 @@ public:
         return {p.mode, geom.slot_capacity};
     }
 
+    // The runtime-acquire selection hook this member contributes to a multi-candidate local tier:
+    // prefer the ring when it acquires, else fall back to the stream. The companion seam the node
+    // drives generically, so the node never names an shm selection symbol.
+    io::selection_hook companion_selection_hook()
+    {
+        return prefer_upgradeable_hook(*this);
+    }
+
+    // The per-message route a co-host (peer, topic) pair runs: a message rides the ring when the
+    // resolved mode and capacity route it to shm. Captures the resolved geometry by value, so the
+    // route is fixed at mint time.
+    plexus::detail::move_only_function<bool(std::size_t)> companion_route(const std::string &fqn)
+    {
+        const auto g = resolved_geometry_for(fqn);
+        return [mode = g.mode, cap = g.slot_capacity](std::size_t bytes) { return route_message_medium(mode, bytes, cap) == same_host_medium::shm; };
+    }
+
     // The registry already defaults to k_max_ring_slab_bytes, so a caller need only invoke this
     // to RAISE the ceiling for a larger reliable ring.
     void set_max_ring_slab_bytes(std::uint64_t bytes) noexcept
@@ -207,6 +224,14 @@ public:
     shm_geometry default_geometry() const noexcept
     {
         return m_default_geometry;
+    }
+
+    // Recover a per-topic override the api carries as an opaque pointer at the declare seam (null =
+    // none, the default). A LOCAL value the producer supplied for this synchronous declare; the
+    // concrete type stays member-side so the generic api names no shm geometry type.
+    shm_geometry geometry_from(const void *override_or_null) const noexcept
+    {
+        return override_or_null != nullptr ? *static_cast<const shm_geometry *>(override_or_null) : m_default_geometry;
     }
 
     // The upgrade policy the medium coordinator consults on a co-host demand edge. The default

@@ -8,6 +8,7 @@ idf_component_register(SRCS "app_main.cpp" INCLUDE_DIRS "."
 target_include_directories(${COMPONENT_LIB} PRIVATE
     "${PLEXUS_ROOT}/lib/plexus-core/include"
     "${PLEXUS_ROOT}/lib/plexus-wire/include"
+    "${PLEXUS_ROOT}/lib/plexus-stream/include"
     "${PLEXUS_ROOT}/lib/plexus-api/include"
     "${PLEXUS_ROOT}/backends/plexus-mcu/include")
 

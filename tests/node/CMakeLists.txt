@@ -12,6 +12,15 @@ add_executable(core_standalone core_standalone.cpp)
 target_link_libraries(core_standalone PRIVATE plexus::core plexus::inproc)
 add_test(NAME node.core_standalone COMMAND core_standalone)
 
+# The UART-only node compile gate: a single non-shm transport leaf composed into the full
+# node facade, linking ONLY plexus::plexus + plexus::core so the shm include tree is off the
+# path. A facade header reaching for an shm header — or naming an shm:: symbol on this plain
+# pack — would fail header-not-found. The proof is that it BUILDS and LINKS shm-free; it runs
+# as an ordinary ctest entry so the gate is tracked.
+add_executable(core_only_node_compile test_core_only_node_compile.cpp)
+target_link_libraries(core_only_node_compile PRIVATE plexus::plexus plexus::core)
+add_test(NAME node.core_only_node_compile COMMAND core_only_node_compile)
+
 # The install + out-of-tree consume check: a real install to a throwaway prefix, then a
 # fresh find_package(plexus CONFIG REQUIRED COMPONENTS ...) + compile + link + RUN of a
 # consumer. The component set mirrors this build's enabled backends so the check proves

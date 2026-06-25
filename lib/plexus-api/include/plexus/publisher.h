@@ -29,15 +29,18 @@ namespace plexus {
 template<typename Codec>
 class publisher;
 
-// An explicit type_id overrides the codec's own. shm_geometry / capture are optional because
-// absence is meaningful: unset falls back to the node-level default, present overrides per topic.
+// An explicit type_id overrides the codec's own. capture is optional because absence is meaningful:
+// unset falls back to the node-level default, present overrides per topic. geometry is an OPAQUE
+// per-topic same-host provisioning override (null = the node-level default): a producer-side local
+// value the backend front-door fills with its concrete geometry type; the generic api stays
+// transport-name-free.
 struct typed_publisher_options
 {
     topic_qos qos{};
     bool emit_source_identity = false;
     std::size_t pool_depth    = 8;
     std::optional<type_identity> type_id{};
-    std::optional<shm::shm_geometry> shm_geometry{};
+    const void *geometry = nullptr;
     std::optional<recording_qos> capture{};
 };
 
@@ -48,12 +51,11 @@ class publisher<void>
 {
 public:
     template<typename Policy, typename... NodeTs>
-    publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {}, bool emit_source_identity = false,
-              std::optional<shm::shm_geometry> shm_geometry = std::nullopt)
+    publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {}, bool emit_source_identity = false, const void *geometry = nullptr)
             : m_seam(n.endpoint_seam_for())
             , m_fqn(fqn)
     {
-        m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt, shm_geometry ? &*shm_geometry : nullptr, std::nullopt);
+        m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt, geometry, std::nullopt);
     }
 
     void publish(std::span<const std::byte> bytes)
@@ -111,7 +113,7 @@ public:
                       "plexus: a typed publisher needs a codec satisfying typed_codec "
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
-        m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity, m_identity.type_id, opts.shm_geometry ? &*opts.shm_geometry : nullptr,
+        m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity, m_identity.type_id, opts.geometry,
                                  opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
     }
 
