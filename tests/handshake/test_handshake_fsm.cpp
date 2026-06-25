@@ -60,6 +60,15 @@ handshake_fsm_config config_for(node_id self) noexcept
     return handshake_fsm_config{.self_id = self, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
+// As config_for, but with a bounded handshake-request retry budget. retry=0 is the
+// default abort-on-timeout; a non-zero budget re-sends the request before aborting.
+handshake_fsm_config config_with_retry(node_id self, std::uint32_t retry) noexcept
+{
+    auto cfg            = config_for(self);
+    cfg.handshake_retry = retry;
+    return cfg;
+}
+
 // A request that passes every gate by default: matching protocol, compatible
 // version, and the given peer identity. Individual fields are overridden per case.
 handshake_request good_request(node_id peer) noexcept
@@ -758,5 +767,67 @@ TEST_CASE("J: compile-time pins, node_id order, and zero-alloc steady step", "[h
 
         REQUIRE(r.action == fsm_action::complete);
         REQUIRE(delta == 0);
+    }
+}
+
+// Group K — the bounded lost-handshake retransmit. With retry=0 (the default) the
+// first handshaking-state timeout aborts, byte-identical to the locked behavior; a
+// non-zero budget re-sends the request and STAYS handshaking for exactly that many
+// timeouts before the next one aborts; a dialing-state timeout is untouched.
+TEST_CASE("K: bounded handshake-request retransmit on the handshaking timeout", "[handshake]")
+{
+    auto handshaking = [](std::uint32_t retry)
+    {
+        handshake_fsm fsm(config_with_retry(k_self, retry));
+        fsm.on_dial_started();
+        fsm.on_outbound_connected();
+        return fsm;
+    };
+
+    SECTION("K1: retry=0 first handshaking timeout aborts (locked default, unchanged)")
+    {
+        auto fsm = handshaking(0);
+        auto r   = fsm.on_timeout();
+        REQUIRE(r.action == fsm_action::abort);
+        REQUIRE(fsm.state() == peer_fsm_state::not_connected);
+    }
+
+    SECTION("K2: retry=2 re-sends twice staying handshaking, the third timeout aborts")
+    {
+        auto fsm = handshaking(2);
+
+        auto first = fsm.on_timeout();
+        REQUIRE(first.action == fsm_action::send_request);
+        REQUIRE(fsm.state() == peer_fsm_state::handshaking);
+
+        auto second = fsm.on_timeout();
+        REQUIRE(second.action == fsm_action::send_request);
+        REQUIRE(fsm.state() == peer_fsm_state::handshaking);
+
+        auto third = fsm.on_timeout();
+        REQUIRE(third.action == fsm_action::abort);
+        REQUIRE(fsm.state() == peer_fsm_state::not_connected);
+    }
+
+    SECTION("K3: a dialing-state timeout still returns retry regardless of the budget")
+    {
+        handshake_fsm fsm(config_with_retry(k_self, 3));
+        fsm.on_dial_started();
+        auto r = fsm.on_timeout();
+        REQUIRE(r.action == fsm_action::retry);
+        REQUIRE(fsm.state() == peer_fsm_state::dialing);
+    }
+
+    SECTION("K4: on_torn_down restores the full budget for a fresh cycle")
+    {
+        auto fsm = handshaking(1);
+        REQUIRE(fsm.on_timeout().action == fsm_action::send_request);
+        REQUIRE(fsm.on_timeout().action == fsm_action::abort);
+
+        fsm.on_torn_down();
+        fsm.on_dial_started();
+        fsm.on_outbound_connected();
+        REQUIRE(fsm.on_timeout().action == fsm_action::send_request);
+        REQUIRE(fsm.on_timeout().action == fsm_action::abort);
     }
 }

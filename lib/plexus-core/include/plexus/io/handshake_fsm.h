@@ -28,6 +28,7 @@ public:
             , m_cfg(cfg)
             , m_peer_fingerprint{}
             , m_last_seen_their_protocol_version{0}
+            , m_handshake_retry_remaining{cfg.handshake_retry}
     {
     }
 
@@ -76,6 +77,11 @@ public:
     {
         if(m_state == peer_fsm_state::handshaking)
         {
+            if(m_handshake_retry_remaining > 0)
+            {
+                --m_handshake_retry_remaining;
+                return {.action = fsm_action::send_request};
+            }
             m_state = peer_fsm_state::not_connected;
             return {.action = fsm_action::abort};
         }
@@ -97,9 +103,10 @@ public:
 
     fsm_step_result on_torn_down() noexcept
     {
-        m_state            = peer_fsm_state::not_connected;
-        m_inbound_pending  = false;
-        m_complete_emitted = false;
+        m_state                     = peer_fsm_state::not_connected;
+        m_inbound_pending           = false;
+        m_complete_emitted          = false;
+        m_handshake_retry_remaining = m_cfg.handshake_retry;
         return {};
     }
 
@@ -225,6 +232,7 @@ private:
     handshake_fsm_config m_cfg;
     host_fingerprint m_peer_fingerprint;
     std::uint8_t m_last_seen_their_protocol_version;
+    std::uint32_t m_handshake_retry_remaining;
 };
 
 }

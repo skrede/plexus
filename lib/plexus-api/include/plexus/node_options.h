@@ -39,6 +39,11 @@ struct node_options
 
     std::chrono::nanoseconds handshake_timeout{std::chrono::seconds(5)};
 
+    // 0 is today's abort-on-timeout; a non-zero count re-sends a lost handshake request that many
+    // times (each spaced one handshake_timeout window) before surrendering to the same abort. Only a
+    // directly-dialed point-to-point host (no card to redial off) needs it set; it is node-WIDE.
+    std::uint32_t handshake_retry{0};
+
     // REQUIRED: the reconnect backoff/surrender cadence is tuned per deployment, so a zeroed
     // default would silently ship an un-tuned cadence.
     io::reconnect_config reconnect;

@@ -587,7 +587,8 @@ private:
                                         .compatible_version_major = opts.handshake.compatible_version_major,
                                         .compatible_version_minor = opts.handshake.compatible_version_minor,
                                         .local_fingerprint        = opts.handshake.local_fingerprint,
-                                        .attach_policy            = opts.attach_policy};
+                                        .attach_policy            = opts.attach_policy,
+                                        .handshake_retry          = opts.handshake_retry};
     }
 
     log::logger &resolve_logger(const node_options &opts)

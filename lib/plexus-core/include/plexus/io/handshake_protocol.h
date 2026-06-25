@@ -62,6 +62,10 @@ struct handshake_fsm_config
     std::uint8_t compatible_version_minor;
     host_fingerprint local_fingerprint{};
     const security::attach_policy *attach_policy{nullptr};
+    // 0 (the default) aborts on the first handshaking-state timeout exactly as before; a non-zero
+    // budget re-sends the request that many times before surrendering to the same abort. Only a
+    // directly-dialed point-to-point slot sets it, so the generic timeout edge is unchanged by default.
+    std::uint32_t handshake_retry{0};
 };
 
 }

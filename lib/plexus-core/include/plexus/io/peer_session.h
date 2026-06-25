@@ -393,7 +393,12 @@ private:
                 {
                     if(ec)
                         return;
-                    detail::execute(*this, m_fsm.on_timeout());
+                    const auto step = m_fsm.on_timeout();
+                    detail::execute(*this, step);
+                    // A bounded handshake re-send keeps the window open: re-arm here so a subsequent
+                    // loss is also bounded. arm_handshake_timer stays the single source of the window.
+                    if(step.action == fsm_action::send_request)
+                        arm_handshake_timer();
                 });
     }
 };
