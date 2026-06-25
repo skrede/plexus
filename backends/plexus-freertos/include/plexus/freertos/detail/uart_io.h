@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_MCU_DETAIL_UART_IO_H
-#define HPP_GUARD_PLEXUS_MCU_DETAIL_UART_IO_H
+#ifndef HPP_GUARD_PLEXUS_FREERTOS_DETAIL_UART_IO_H
+#define HPP_GUARD_PLEXUS_FREERTOS_DETAIL_UART_IO_H
 
 // The asio->UART transport leg, factored out of uart_channel so the channel header
 // stays the byte_channel shell and stays under the file-size ceiling. These are the
@@ -15,7 +15,7 @@
 #include <span>
 #include <cstddef>
 
-namespace plexus::mcu::detail {
+namespace plexus::freertos::detail {
 
 // One non-blocking RX step: drain whatever the driver's ISR-fed ring currently holds
 // into the caller's fixed scratch (ticks=0 never parks the cooperative loop). Returns

@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_MCU_FREERTOS_TIMER_H
-#define HPP_GUARD_PLEXUS_MCU_FREERTOS_TIMER_H
+#ifndef HPP_GUARD_PLEXUS_FREERTOS_FREERTOS_TIMER_H
+#define HPP_GUARD_PLEXUS_FREERTOS_FREERTOS_TIMER_H
 
-#include "plexus/mcu/freertos_executor.h"
+#include "plexus/freertos/freertos_executor.h"
 
 #include "plexus/detail/compat.h"
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <system_error>
 
-namespace plexus::mcu {
+namespace plexus::freertos {
 
 // Tick-backed timer the executor fires from inside pump(). The timer self-registers
 // on the executor at construction; expires_after arms it relative to the current

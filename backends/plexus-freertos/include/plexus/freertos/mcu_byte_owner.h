@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_MCU_MCU_BYTE_OWNER_H
-#define HPP_GUARD_PLEXUS_MCU_MCU_BYTE_OWNER_H
+#ifndef HPP_GUARD_PLEXUS_FREERTOS_MCU_BYTE_OWNER_H
+#define HPP_GUARD_PLEXUS_FREERTOS_MCU_BYTE_OWNER_H
 
-namespace plexus::mcu {
+namespace plexus::freertos {
 
 // The constrained-target byte_owner: the lifetime handle the receive seam binds a
 // wire_bytes view to. Every other substrate selects std::shared_ptr<const void> — a

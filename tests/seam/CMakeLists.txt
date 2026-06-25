@@ -17,7 +17,7 @@ add_executable(test_freertos_seam test_freertos_seam.cpp)
 target_link_libraries(test_freertos_seam PRIVATE
     plexus::core
     plexus::wire
-    plexus::mcu
+    plexus::freertos
     Catch2::Catch2WithMain)
 catch_discover_tests(test_freertos_seam TEST_PREFIX "seam.")
 
@@ -32,7 +32,7 @@ target_include_directories(test_uart_channel_seam PRIVATE ${CMAKE_CURRENT_SOURCE
 target_link_libraries(test_uart_channel_seam PRIVATE
     plexus::core
     plexus::wire
-    plexus::mcu
+    plexus::freertos
     Catch2::Catch2WithMain)
 catch_discover_tests(test_uart_channel_seam TEST_PREFIX "seam.")
 

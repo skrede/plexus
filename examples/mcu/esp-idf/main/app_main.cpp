@@ -26,8 +26,8 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/reconnect_config.h"
 
-#include "plexus/mcu/freertos_timer.h"
-#include "plexus/mcu/freertos_executor.h"
+#include "plexus/freertos/freertos_timer.h"
+#include "plexus/freertos/freertos_executor.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -81,7 +81,7 @@ std::array<std::byte, 1> sample_reading()
 // the move-only-function-safe analog of the host steady_timer publish loop).
 struct sample_loop
 {
-    plexus::mcu::freertos_timer &timer;
+    plexus::freertos::freertos_timer &timer;
     plexus::publisher<void> &topic;
 
     void arm()
@@ -105,7 +105,7 @@ void plexus_task(void *)
 {
     using namespace std::chrono_literals;
 
-    plexus::mcu::freertos_executor ex;
+    plexus::freertos::freertos_executor ex;
     example::uart_transport transport; // opens UART0 and delivers the one uart_channel
 
     // Point-at-port discovery: the serial link is the only peer, so the table is empty (no
@@ -126,7 +126,7 @@ void plexus_task(void *)
     plexus::publisher<void> telemetry{*node, "telemetry"};
 
     // The cooperative timer samples the pin and publishes, then re-arms itself.
-    plexus::mcu::freertos_timer timer(ex);
+    plexus::freertos::freertos_timer timer(ex);
     sample_loop loop{timer, telemetry};
     configure_sample_pin();
     loop.arm();

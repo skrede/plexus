@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_MCU_FREERTOS_EXECUTOR_H
-#define HPP_GUARD_PLEXUS_MCU_FREERTOS_EXECUTOR_H
+#ifndef HPP_GUARD_PLEXUS_FREERTOS_FREERTOS_EXECUTOR_H
+#define HPP_GUARD_PLEXUS_FREERTOS_FREERTOS_EXECUTOR_H
 
-#include "plexus/mcu/detail/freertos_host_shim.h"
+#include "plexus/freertos/detail/freertos_host_shim.h"
 
 #include "plexus/detail/compat.h"
 
@@ -11,7 +11,7 @@
 #include <utility>
 #include <algorithm>
 
-namespace plexus::mcu {
+namespace plexus::freertos {
 
 class freertos_timer;
 

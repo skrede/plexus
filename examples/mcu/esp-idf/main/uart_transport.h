@@ -8,10 +8,10 @@
 // leaf stays the uart_channel; the binding + transport keep the engine-edit blast radius
 // minimal. Both mirror the host serial_transport's no-acceptor point-to-point shape.
 
-#include "plexus/mcu/freertos_timer.h"
-#include "plexus/mcu/freertos_executor.h"
-#include "plexus/mcu/mcu_byte_owner.h"
-#include "plexus/mcu/uart_channel.h"
+#include "plexus/freertos/freertos_timer.h"
+#include "plexus/freertos/freertos_executor.h"
+#include "plexus/freertos/mcu_byte_owner.h"
+#include "plexus/freertos/uart_channel.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -32,15 +32,15 @@
 namespace example {
 
 // The Policy triple mirroring freertos_policy exactly, EXCEPT byte_channel_type binds to
-// the real plexus::mcu::uart_channel (the stub is swapped out for the live serial leaf).
+// the real plexus::freertos::uart_channel (the stub is swapped out for the live serial leaf).
 // Fully-qualify plexus::detail:: below: an io/host-shim detail namespace is in scope and
 // would shadow the bare detail:: lookup (the move_only_function shadowing pitfall).
 struct uart_policy
 {
-    using executor_type     = plexus::mcu::freertos_executor &;
-    using byte_channel_type = plexus::mcu::uart_channel;
-    using timer_type        = plexus::mcu::freertos_timer;
-    using byte_owner        = plexus::mcu::mcu_byte_owner;
+    using executor_type     = plexus::freertos::freertos_executor &;
+    using byte_channel_type = plexus::freertos::uart_channel;
+    using timer_type        = plexus::freertos::freertos_timer;
+    using byte_owner        = plexus::freertos::mcu_byte_owner;
 
     static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
     {
@@ -79,12 +79,12 @@ public:
     uart_transport(const uart_transport &)            = delete;
     uart_transport &operator=(const uart_transport &) = delete;
 
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>)> cb)
+    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>)> cb)
     {
         m_on_accepted = std::move(cb);
     }
 
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>, const plexus::io::endpoint &)> cb)
+    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>, const plexus::io::endpoint &)> cb)
     {
         m_on_dialed = std::move(cb);
     }
@@ -146,9 +146,9 @@ public:
 private:
     // Construct the one channel, record a non-owning handle for poll(), then hand ownership to
     // the caller (the engine moves it into a session). The raw handle never owns.
-    std::unique_ptr<plexus::mcu::uart_channel> mint_channel()
+    std::unique_ptr<plexus::freertos::uart_channel> mint_channel()
     {
-        auto ch   = std::make_unique<plexus::mcu::uart_channel>(m_port, k_max_payload_bytes, k_rx_ring_bytes);
+        auto ch   = std::make_unique<plexus::freertos::uart_channel>(m_port, k_max_payload_bytes, k_rx_ring_bytes);
         m_channel = ch.get();
         return ch;
     }
@@ -178,9 +178,9 @@ private:
 
     uart_port_t m_port;
     bool m_installed{false};
-    plexus::mcu::uart_channel *m_channel{nullptr}; // non-owning poll handle; engine owns it
-    plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<plexus::mcu::uart_channel>, const plexus::io::endpoint &)> m_on_dialed;
+    plexus::freertos::uart_channel *m_channel{nullptr}; // non-owning poll handle; engine owns it
+    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>)> m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>, const plexus::io::endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> m_on_dial_failed;
     plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
 };

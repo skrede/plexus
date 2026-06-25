@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_MCU_DETAIL_FREERTOS_HOST_SHIM_H
-#define HPP_GUARD_PLEXUS_MCU_DETAIL_FREERTOS_HOST_SHIM_H
+#ifndef HPP_GUARD_PLEXUS_FREERTOS_DETAIL_FREERTOS_HOST_SHIM_H
+#define HPP_GUARD_PLEXUS_FREERTOS_DETAIL_FREERTOS_HOST_SHIM_H
 
 // The executor and timer call a handful of FreeRTOS primitives unqualified, the
 // way device code does. ESP_PLATFORM is defined by the ESP-IDF build, so on-target
@@ -29,7 +29,7 @@ constexpr TickType_t pdMS_TO_TICKS(std::uint32_t ms) noexcept
     return ms;
 }
 
-namespace plexus::mcu::detail {
+namespace plexus::freertos::detail {
 
 struct host_queue
 {
@@ -38,7 +38,7 @@ struct host_queue
 
 }
 
-using QueueHandle_t = plexus::mcu::detail::host_queue *;
+using QueueHandle_t = plexus::freertos::detail::host_queue *;
 
 inline TickType_t xTaskGetTickCount() noexcept
 {
@@ -51,7 +51,7 @@ inline TickType_t xTaskGetTickCount() noexcept
 
 inline QueueHandle_t xQueueCreate(std::uint32_t /*length*/, std::uint32_t /*item_size*/)
 {
-    return new plexus::mcu::detail::host_queue;
+    return new plexus::freertos::detail::host_queue;
 }
 
 // Non-blocking host semantics: receive returns pdFALSE when the queue is empty,

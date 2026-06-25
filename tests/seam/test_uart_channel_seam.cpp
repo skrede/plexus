@@ -7,7 +7,7 @@
 
 #include "host_uart_shim.h" // MUST precede uart_channel.h: declares the host UART symbols
 
-#include "plexus/mcu/uart_channel.h"
+#include "plexus/freertos/uart_channel.h"
 
 #include "plexus/stream/crc_serial.h"
 #include "plexus/wire/frame_codec.h"
@@ -22,7 +22,7 @@
 #include <initializer_list>
 
 // The explicit witness at the test site (mirrors the gate in the header).
-static_assert(plexus::io::byte_channel<plexus::mcu::uart_channel>, "uart_channel must satisfy byte_channel at the seam-test site");
+static_assert(plexus::io::byte_channel<plexus::freertos::uart_channel>, "uart_channel must satisfy byte_channel at the seam-test site");
 
 namespace {
 
@@ -59,7 +59,7 @@ TEST_CASE("uart_channel delivers a verified frame synchronously, no owning per-f
     const auto payload              = bytes_of({0xDE, 0xAD, 0xBE, 0xEF});
     plexus::test::uart_fixture().rx = on_wire(payload);
 
-    plexus::mcu::uart_channel ch{0, k_max_payload, k_ring};
+    plexus::freertos::uart_channel ch{0, k_max_payload, k_ring};
 
     std::vector<std::byte> received;
     bool protocol_closed = false;
@@ -92,7 +92,7 @@ TEST_CASE("uart_channel drops+resyncs a garbled stream and never wedges", "[seam
     rx.insert(rx.end(), bad.begin(), bad.end());
     rx.insert(rx.end(), good.begin(), good.end());
 
-    plexus::mcu::uart_channel ch{0, k_max_payload, k_ring};
+    plexus::freertos::uart_channel ch{0, k_max_payload, k_ring};
 
     int deliveries       = 0;
     bool protocol_closed = false;
@@ -110,7 +110,7 @@ TEST_CASE("uart_channel egress appends the reused CRC trailer", "[seam]")
 {
     plexus::test::reset_uart_fixture();
 
-    plexus::mcu::uart_channel ch{0, k_max_payload, k_ring};
+    plexus::freertos::uart_channel ch{0, k_max_payload, k_ring};
 
     const auto payload = bytes_of({0x11, 0x22});
     const auto frame   = plexus::wire::encode_frame(
@@ -133,7 +133,7 @@ TEST_CASE("uart_channel surfaces a driver-ring overrun, never swallows it", "[se
     plexus::test::reset_uart_fixture();
     plexus::test::uart_fixture().buffered = k_ring; // ring at the ceiling => overrun proxy
 
-    plexus::mcu::uart_channel ch{0, k_max_payload, k_ring};
+    plexus::freertos::uart_channel ch{0, k_max_payload, k_ring};
 
     int errors = 0;
     ch.on_error([&](plexus::io::io_error) { ++errors; });

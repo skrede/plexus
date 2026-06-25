@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_MCU_UART_CHANNEL_H
-#define HPP_GUARD_PLEXUS_MCU_UART_CHANNEL_H
+#ifndef HPP_GUARD_PLEXUS_FREERTOS_UART_CHANNEL_H
+#define HPP_GUARD_PLEXUS_FREERTOS_UART_CHANNEL_H
 
-#include "plexus/mcu/detail/uart_io.h"
+#include "plexus/freertos/detail/uart_io.h"
 
 #include "plexus/io/byte_channel.h"
 #include "plexus/stream/crc_serial.h"
@@ -13,7 +13,7 @@
 #include <utility>
 #include <cstddef>
 
-namespace plexus::mcu {
+namespace plexus::freertos {
 
 // The constrained-target UART byte_channel: the one new transport leaf of the serial
 // path. It collapses the host serial_channel + serial_channel_io + serial_bootstrap
@@ -23,7 +23,7 @@ namespace plexus::mcu {
 // swap is new (the byte-identical claim lives at the wire/CRC byte level, not this class).
 //
 // Fully-qualify plexus::detail::move_only_function below: an io/host-shim detail namespace
-// is in scope inside plexus::mcu and would shadow the bare detail:: lookup (the documented
+// is in scope inside plexus::freertos and would shadow the bare detail:: lookup (the documented
 // move_only_function shadowing pitfall, see freertos_policy.h:31-34).
 class uart_channel
 {
@@ -152,7 +152,7 @@ private:
     plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
 
-static_assert(plexus::io::byte_channel<plexus::mcu::uart_channel>, "uart_channel must satisfy byte_channel — check the seven verbs");
+static_assert(plexus::io::byte_channel<plexus::freertos::uart_channel>, "uart_channel must satisfy byte_channel — check the seven verbs");
 
 }
 

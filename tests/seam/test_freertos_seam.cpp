@@ -8,7 +8,7 @@
 // site; the runtime TEST_CASEs prove the generic core instantiates against the
 // substrate with no I/O and no background thread.
 
-#include "plexus/mcu/freertos_policy.h"
+#include "plexus/freertos/freertos_policy.h"
 
 #include "plexus/io/peer_context.h"
 #include "plexus/wire_bytes.h"
@@ -17,7 +17,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 // The explicit witness at the test site (mirrors the gate in the header).
-static_assert(plexus::Policy<plexus::mcu::freertos_policy>, "freertos_policy must satisfy Policy at the seam-test site");
+static_assert(plexus::Policy<plexus::freertos::freertos_policy>, "freertos_policy must satisfy Policy at the seam-test site");
 
 TEST_CASE("the generic core binds against the constrained-target Policy unchanged", "[seam]")
 {
@@ -27,14 +27,14 @@ TEST_CASE("the generic core binds against the constrained-target Policy unchange
     // It is default-constructible and needs no live channel (it holds a null
     // unique_ptr<channel_type>), so binding it proves the core compiles against the
     // substrate with no transport and no background thread.
-    plexus::io::peer_context<plexus::mcu::freertos_policy> ctx;
+    plexus::io::peer_context<plexus::freertos::freertos_policy> ctx;
 
     REQUIRE(ctx.channel == nullptr);       // no live connection — transport-free
     REQUIRE_FALSE(ctx.has_ever_connected); // fresh record default
     REQUIRE_FALSE(ctx.same_host);          // fail-closed default
 
     // The channel_type alias the core derived from the Policy is the stub channel.
-    static_assert(std::is_same_v<plexus::io::peer_context<plexus::mcu::freertos_policy>::channel_type, plexus::mcu::freertos_stub_channel>,
+    static_assert(std::is_same_v<plexus::io::peer_context<plexus::freertos::freertos_policy>::channel_type, plexus::freertos::freertos_stub_channel>,
                   "the generic core derives the channel type straight from the Policy");
 }
 
@@ -44,10 +44,10 @@ TEST_CASE("wire_bytes instantiates against the fixed in-place byte_owner", "[sea
     // bytes), so there is no liveness contract to assert — only that the receive
     // seam's carrier instantiates against it: a default-constructed empty view whose
     // owner type is the Policy's byte_owner.
-    plexus::wire_bytes<plexus::mcu::freertos_policy::byte_owner> wb;
+    plexus::wire_bytes<plexus::freertos::freertos_policy::byte_owner> wb;
 
     REQUIRE(wb.empty());
     REQUIRE(wb.size() == 0);
 
-    static_assert(std::is_same_v<decltype(wb)::owner_type, plexus::mcu::mcu_byte_owner>, "the carrier binds the Policy-selected in-place owner");
+    static_assert(std::is_same_v<decltype(wb)::owner_type, plexus::freertos::mcu_byte_owner>, "the carrier binds the Policy-selected in-place owner");
 }

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_MCU_FREERTOS_STUB_CHANNEL_H
-#define HPP_GUARD_PLEXUS_MCU_FREERTOS_STUB_CHANNEL_H
+#ifndef HPP_GUARD_PLEXUS_FREERTOS_FREERTOS_STUB_CHANNEL_H
+#define HPP_GUARD_PLEXUS_FREERTOS_FREERTOS_STUB_CHANNEL_H
 
 #include "plexus/io/byte_channel.h"
 
@@ -8,7 +8,7 @@
 #include <span>
 #include <cstddef>
 
-namespace plexus::mcu {
+namespace plexus::freertos {
 
 // A no-op byte_channel for the constrained-target substrate: every member the
 // byte_channel concept names, all doing nothing. The substrate is deliberately
