@@ -7,9 +7,9 @@
 // A serial endpoint (/dev/ttyXXX@baud) is not an IP host:port, so it is not discovery-dialable; the
 // node's general dial verb opens the port and drives the handshake the device (the listening
 // responder) answers. The lost-boot-handshake race is absorbed by the bounded handshake_retry on the
-// node options (Task of the dial milestone) — a re-send, not a busy re-knock loop. The board
-// auto-reset RTS/DTR pulse is a host-link concern and stays here (the comms library never touches a
-// HAL): it is driven on a raw fd of the same device before the dial, pulsing the board into RUN.
+// node options — a re-send, not a busy re-knock loop. The board auto-reset RTS/DTR pulse is a
+// host-link concern and stays here (the comms library never touches a HAL): it is driven on a raw fd
+// of the same device before the dial, pulsing the board into RUN.
 
 #include "plexus/node.h"
 #include "plexus/subscriber.h"
@@ -95,11 +95,11 @@ int main()
     reset_board_into_run(device_of(k_device_endpoint));
 
     plexus::node_options opts;
-    opts.name             = "serial-gate-host";
+    opts.name              = "serial-gate-host";
     opts.handshake_timeout = k_handshake_window;
-    opts.handshake_retry  = k_handshake_retry;
-    opts.reconnect        = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
-    opts.redial_seed      = 0x6A7E5;
+    opts.handshake_retry   = k_handshake_retry;
+    opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.redial_seed       = 0x6A7E5;
 
     plexus::node<pasio::serial_policy, pasio::serial_transport> node{io, disc, "serial-gate-host", transport, opts};
 
@@ -115,7 +115,8 @@ int main()
     node.dial({"serial", k_device_endpoint});
 
     ::asio::steady_timer deadline{io, k_timeout};
-    deadline.async_wait([&](std::error_code) { io.stop(); });
+    deadline.async_wait([&](std::error_code)
+                        { io.stop(); });
 
     io.run();
 
