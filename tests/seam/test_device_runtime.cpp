@@ -5,12 +5,14 @@
 // and the non-zero park floor are all asserted without hardware.
 
 #include "plexus/freertos/device_runtime.h"
+#include "plexus/freertos/run_task.h"
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <type_traits>
 
 namespace {
 
@@ -66,3 +68,11 @@ TEST_CASE("device run_options park of zero is clamped up to the non-zero floor",
     const plexus::freertos::run_options ten{std::chrono::milliseconds{10}};
     REQUIRE(plexus::freertos::effective_park(ten) == std::chrono::milliseconds{10});
 }
+
+// run_task forces the caller to name a measured stack: task_options has no default
+// constructor, so a stack-less spawn cannot compile. The spawn itself is not exercised
+// on the host — the trampoline runs the [[noreturn]] loop, validated on hardware.
+static_assert(!std::is_default_constructible_v<plexus::freertos::task_options>,
+              "task_options must require an explicit stack size");
+static_assert(std::is_constructible_v<plexus::freertos::task_options, std::uint32_t>,
+              "task_options is constructed from an explicit stack size");

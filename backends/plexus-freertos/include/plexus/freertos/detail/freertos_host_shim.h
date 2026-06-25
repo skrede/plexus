@@ -15,8 +15,12 @@
     #include <chrono>
     #include <cstdint>
 
-using TickType_t = std::uint32_t;
-using BaseType_t = int;
+using TickType_t             = std::uint32_t;
+using BaseType_t             = int;
+using UBaseType_t            = unsigned int;
+using TaskHandle_t           = void *;
+using TaskFunction_t         = void (*)(void *);
+using configSTACK_DEPTH_TYPE = std::uint32_t;
 
 inline constexpr BaseType_t pdTRUE  = 1;
 inline constexpr BaseType_t pdFALSE = 0;
@@ -88,6 +92,13 @@ inline BaseType_t xQueueSendFromISR(QueueHandle_t q, const void *item, BaseType_
 
 inline void vTaskDelay(TickType_t /*ticks*/) noexcept
 {
+}
+
+// The host suite never schedules a real task; this stand-in lets the run_task spawn
+// path compile and link off-target. It reports success without running the trampoline.
+inline BaseType_t xTaskCreate(TaskFunction_t /*code*/, const char * /*name*/, configSTACK_DEPTH_TYPE /*stack*/, void * /*params*/, UBaseType_t /*prio*/, TaskHandle_t * /*out*/)
+{
+    return pdTRUE;
 }
 
 inline std::uint32_t ulTaskNotifyTake(BaseType_t /*clear*/, TickType_t /*wait*/) noexcept
