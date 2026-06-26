@@ -37,6 +37,7 @@ public:
     explicit lwip_transport(freertos_executor &ex, std::size_t read_buffer = lwip_channel_limits::read_buffer_bytes, std::size_t max_message = lwip_channel_limits::max_message_bytes,
                             std::size_t reassembly_budget = lwip_channel_limits::reassembly_bytes, std::size_t egress_cap = lwip_channel_limits::egress_cap_bytes)
             : m_executor(ex)
+            , m_channel(nullptr)
             , m_read_buffer(read_buffer)
             , m_max_message(max_message)
             , m_reassembly_budget(reassembly_budget)
@@ -81,14 +82,31 @@ public:
             m_on_dialed_cb(adopt(std::move(socket), ep), ep);
     }
 
+    // The cooperative RX step the super-loop drives once per iteration. The engine owns the
+    // delivered channel (it moved the unique_ptr into a session), but the channel's poll —
+    // socket.recv -> stream_inbound.feed -> on_data -> engine — is a same-task step the generic
+    // engine does not arm (the host channels self-arm async reads). So the transport keeps a
+    // NON-OWNING handle to the single channel it minted and forwards the poll; the handle stays
+    // valid for the whole run (node, transport, and super-loop never return). The single handle is
+    // the dial-only/single-connection shape; the accept generalization is a later phase.
+    void poll()
+    {
+        if(m_channel)
+            m_channel->poll();
+    }
+
     void close()
     {
     }
 
 private:
+    // Mint the channel, record a non-owning handle for poll(), then hand ownership to the engine
+    // through on_dialed. The raw handle never owns; capture it BEFORE the unique_ptr is moved out.
     std::unique_ptr<channel_type> adopt(Socket socket, const plexus::io::endpoint &ep)
     {
-        return std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap);
+        auto ch   = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap);
+        m_channel = ch.get();
+        return ch;
     }
 
     static plexus::io::io_error map_error(std::error_code ec)
@@ -109,6 +127,7 @@ private:
     }
 
     freertos_executor &m_executor;
+    channel_type      *m_channel; // non-owning poll handle; the engine owns the channel
     std::size_t        m_read_buffer;
     std::size_t        m_max_message;
     std::size_t        m_reassembly_budget;
