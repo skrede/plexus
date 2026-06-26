@@ -15,6 +15,17 @@ namespace plexus::freertos {
 
 class freertos_timer;
 
+// A unit of cross-context work carried by value through the executor queue: a
+// trivially-copyable 16-byte POD, the task-context analog of the bare pointer the
+// queue carried before. The producer owns the storage `ctx` points at; `invoke(ctx)`
+// runs the work on the executor task AND releases that storage back to the producer's
+// pool — the executor never owns or frees the bytes, so the post path allocates nothing.
+struct posted_work
+{
+    void (*invoke)(void *) noexcept;
+    void *ctx;
+};
+
 // Cooperative single-task pump-executor for the constrained-target super-loop.
 // pump() advances the system by one unit of work with a fixed priority — posted
 // callbacks, then a single queue drain, then expired timers — and returns false
@@ -28,7 +39,7 @@ class freertos_executor
 {
 public:
     freertos_executor()
-            : m_queue(xQueueCreate(k_queue_depth, sizeof(void *)))
+            : m_queue(xQueueCreate(k_queue_depth, sizeof(posted_work)))
     {
     }
 
@@ -47,13 +58,16 @@ public:
         m_posted.push_back(std::move(fn));
     }
 
-    // Reserved ISR seam: an interrupt hands work to the cooperative loop via the
-    // FreeRTOS queue, the one cross-context edge in the design. The minimal demo
-    // uses only same-context post(); this exists so the seam is in place on-target.
-    void post_from_isr(void *work) noexcept
+    // The one cross-context-safe ingress: a second task hands work to the cooperative
+    // loop through the FreeRTOS queue (never the non-thread-safe m_posted deque),
+    // carrying a caller-owned POD by value — no executor-side allocation. A zero wait
+    // means a producing transport task never parks on a full queue; a full queue
+    // returns errQUEUE_FULL (the work was NOT enqueued) and the producer keeps and
+    // releases its own slot — a bounded, measurable drop, not corruption. An ISR
+    // producer, if one ever lands, gets its own re-introduced ISR verb at that time.
+    void post_from_task(posted_work w) noexcept
     {
-        BaseType_t woken = pdFALSE;
-        xQueueSendFromISR(m_queue, &work, &woken);
+        xQueueSend(m_queue, &w, 0);
     }
 
     bool pump()
@@ -66,9 +80,12 @@ public:
             return true;
         }
 
-        void *work = nullptr;
-        if(xQueueReceive(m_queue, &work, 0) == pdTRUE)
+        posted_work w{};
+        if(xQueueReceive(m_queue, &w, 0) == pdTRUE)
+        {
+            w.invoke(w.ctx);
             return true;
+        }
 
         return fire_due_timer();
     }

@@ -78,6 +78,20 @@ target_link_libraries(test_lwip_channel_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_channel_seam TEST_PREFIX "seam.")
 
+# Host-shim proof for the constrained-target executor's task-safe cross-context post:
+# enqueues caller-owned posted_work PODs through the FreeRTOS host queue (widened to
+# carry the whole item by value) and proves pump() invokes them in FIFO order, with
+# m_posted serviced first and no per-post allocation (the asan tree is the witness).
+# Links the constrained-target substrate alongside the core and wire layers; registered
+# under the same `seam.` prefix.
+add_executable(test_freertos_executor_post test_freertos_executor_post.cpp)
+target_link_libraries(test_freertos_executor_post PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_freertos_executor_post TEST_PREFIX "seam.")
+
 # The permissive/strict reliability enforcement gate on the routing_engine subscribe
 # demand path — a deterministic inproc seam test (no backend socket). Links the inproc
 # Policy substrate for the engine harness. Registered under the `udp.` prefix so
