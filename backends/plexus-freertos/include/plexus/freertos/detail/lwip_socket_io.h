@@ -123,7 +123,7 @@ public:
 private:
     std::error_code open_and_dial(const lwip_address &parsed)
     {
-        m_fd = lwip_socket(AF_INET, SOCK_STREAM, 0);
+        m_fd = ::lwip_socket(AF_INET, SOCK_STREAM, 0); // the BSD opener; the class name shadows it unqualified here
         if(m_fd < 0)
             return std::make_error_code(std::errc::too_many_files_open);
         sockaddr_in addr{};
