@@ -44,8 +44,9 @@ constexpr const char *k_topic = "telemetry";
 constexpr const char *k_default_port = "7447";
 
 // The device must join the AP, take a DHCP lease, then dial — seconds, not the serial gate's
-// sub-second boot. The deadline is generous so a slow association does not false-fail the gate.
-constexpr std::chrono::seconds k_timeout{30};
+// sub-second boot. Association can retry on a missed first attempt (each cycle adds several
+// seconds), so the deadline is generous enough that a slow join never false-fails the gate.
+constexpr std::chrono::seconds k_timeout{60};
 
 std::string listen_address(int argc, char **argv)
 {

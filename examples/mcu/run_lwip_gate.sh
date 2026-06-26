@@ -50,20 +50,29 @@ if [[ ! -f "${CREDENTIALS}" ]]; then
     exit 1
 fi
 
-# The ESP32 dev-board auto-reset circuit ties EN/IO0 to the adapter's RTS/DTR; leaving those lines
-# asserted holds the board reset-looping. Drive the classic auto-reset-into-RUN pulse on the flash
-# port: IO0 high (run, not the download ROM), then pulse EN low->high. A host-link concern only.
-reset_into_run() {
-    python3 - "${PORT}" <<'PY'
-import sys, termios, fcntl, time
-fd = open(sys.argv[1], "rb+", buffering=0).fileno()
-DTR, RTS = termios.TIOCM_DTR, termios.TIOCM_RTS
-def clear(bit): fcntl.ioctl(fd, termios.TIOCMBIC, bit.to_bytes(4, "little"))
-def set_(bit):  fcntl.ioctl(fd, termios.TIOCMBIS, bit.to_bytes(4, "little"))
-clear(DTR)   # IO0 high -> boot the application, not the download ROM
-set_(RTS)    # EN low   -> assert reset
+# Reset the board into RUN via the dev-board auto-reset circuit (EN/IO0 tied to the adapter's
+# RTS/DTR): IO0 high (run, not the download ROM), then pulse EN low->high. The SAME open then
+# captures the device console (115200) to a per-run log for the capture window, so a missed
+# receipt is diagnosable (join / DHCP lease / dial) — one open means one controlled reset, no
+# second port-open re-resetting the board mid-run. Run in the background; kill after the receipt.
+reset_and_capture() {   # $1=port  $2=device-log  $3=capture-seconds
+    # exec so the backgrounded job IS the python process (not a wrapping subshell), otherwise
+    # killing the subshell orphans python and it keeps the serial port for its full window.
+    exec python3 - "$1" "$2" "$3" <<'PY'
+import sys, time, serial
+port, devlog, dur = sys.argv[1], sys.argv[2], float(sys.argv[3])
+s = serial.Serial(port, 115200, timeout=0.2)
+s.dtr = False   # IO0 high -> run the app
+s.rts = True    # EN low   -> assert reset
 time.sleep(0.1)
-clear(RTS)   # EN high  -> release -> the board boots and runs the app
+s.rts = False   # EN high  -> release -> boot + run
+end = time.time() + dur
+with open(devlog, "wb") as out:
+    while time.time() < end:
+        d = s.read(4096)
+        if d:
+            out.write(d); out.flush()
+s.close()
 PY
 }
 
@@ -82,21 +91,34 @@ passes=0
 for ((run = 1; run <= RUNS; ++run)); do
     log="${LOG_DIR}/run_${run}.log"
 
-    # The device is the dialer, so the host server must already be listening when the board finishes
-    # booting + associating. Start it FIRST in the background, then flash + reset the board.
+    # Flash + reset FIRST, then start the host server. The device is the dialer, but its boot +
+    # Wi-Fi association + DHCP after reset takes several seconds, whereas the server listens within
+    # ~1s of launch — so starting it here still wins the race, AND the gate's receive deadline now
+    # covers only the device's boot+join+dial, not the ~20s flash (which would otherwise consume the
+    # window and time the gate out before the board ever dials).
+    echo "=== run ${run}/${RUNS}: flashing ${PORT} ==="
+    idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" -p "${PORT}" flash >>"${log}" 2>&1
+
+    devlog="${LOG_DIR}/run_${run}_device.log"
+    reset_and_capture "${PORT}" "${devlog}" 75 &
+    cap_pid=$!
+
     echo "=== run ${run}/${RUNS}: starting host server on tcp 0.0.0.0:${HOST_PORT} ==="
     "${HOST_GATE}" "${HOST_PORT}" >"${log}" 2>&1 &
     gate_pid=$!
 
-    echo "=== run ${run}/${RUNS}: flashing ${PORT} ==="
-    idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" -p "${PORT}" flash >>"${log}" 2>&1
-    reset_into_run
-
     echo "=== run ${run}/${RUNS}: awaiting receipt (device dials, host accepts) ==="
     if wait "${gate_pid}"; then
         passes=$((passes + 1))
+        kill "${cap_pid}" 2>/dev/null || true
+        wait "${cap_pid}" 2>/dev/null || true
+        # The capture held the serial port; let the USB tty fully release before the next flash,
+        # else esptool races it and fails with "multiple access on port".
+        sleep 3
     else
-        echo "GATE: run ${run}/${RUNS} did NOT receive the message (see ${log})"
+        kill "${cap_pid}" 2>/dev/null || true
+        wait "${cap_pid}" 2>/dev/null || true
+        echo "GATE: run ${run}/${RUNS} did NOT receive the message (host: ${log}; device serial: ${devlog})"
         echo "GATE: ${passes}/${RUNS} runs received the message — FAIL"
         exit 1
     fi
