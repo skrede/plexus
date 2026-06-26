@@ -55,6 +55,67 @@ link claim) and fails if any iteration misses the message:
 ./examples/mcu/run_serial_gate.sh [RUNS] [PORT]   # defaults: 3 runs, /dev/ttyUSB0
 ```
 
+# MCU example — plexus on an ESP32 over TCP/IP
+
+Two firmware variants run the same node over a real IP transport instead of the UART:
+
+- [`esp-idf-lwip/`](esp-idf-lwip/) — **Wi-Fi STA**. The board joins your access point, takes a
+  DHCP lease, and dials a fixed host endpoint over TCP, publishing the `telemetry` topic each
+  second. This is the on-hardware gate: the host [`lwip_gate_host.cpp`](lwip_gate_host.cpp)
+  listens, accepts the device's inbound dial, and asserts one real message arrives.
+- [`esp-idf-eth/`](esp-idf-eth/) — **Ethernet**. The same node over a wired PHY. It cross-builds
+  for `esp32`, but no on-hardware run is claimed until a PHY board is available — treat it as a
+  compile-only target for now.
+
+Unlike the serial example the device is the **dialer** here: it brings up the netif, then dials
+the host. The host gate is therefore a TCP **server** (`node.listen`), not a dialer.
+
+## Wi-Fi credentials (operator-supplied, never committed)
+
+The SSID and password live in `esp-idf-lwip/main/wifi_credentials.h`, which is gitignored. Create
+it from the template and fill in the real values:
+
+```sh
+cp examples/mcu/esp-idf-lwip/main/wifi_credentials.h.example \
+   examples/mcu/esp-idf-lwip/main/wifi_credentials.h
+# edit it: set WIFI_SSID and WIFI_PASSWORD to your network's values
+```
+
+Never commit this file. No tooling reads or echoes its contents.
+
+## The host endpoint
+
+The firmware dials `192.168.1.69:7447` by default (`PLEXUS_HOST_ENDPOINT`) — a private LAN
+address, not a secret. Override it at build time if your host has a different address, and keep
+the port aligned with the host server's listen port (default `7447`).
+
+## Flash the Wi-Fi firmware manually
+
+```sh
+. /opt/esp-idf/export.sh
+cd examples/mcu/esp-idf-lwip
+
+idf.py set-target esp32
+idf.py build
+idf.py -p /dev/ttyUSB0 flash        # adjust the port to your board
+```
+
+## The on-hardware gate
+
+Build the host server, then run the reproducible gate from the repo root:
+
+```sh
+cmake --build build -j4 --target lwip_gate_host
+./examples/mcu/run_lwip_gate.sh [RUNS] [PORT] [HOST_PORT]   # defaults: 3, /dev/ttyUSB0, 7447
+```
+
+The runner cross-builds the Wi-Fi firmware (a green cross-compile is **not** a hardware proof on
+its own), then per run starts the host server, flashes the board, drives the auto-reset lines into
+RUN, captures the device serial log under `build/examples/mcu/lwip_gate_logs/`, and asserts the
+host received a real message over TCP. It requires at least three reproducible passes — any miss
+fails the whole gate. The on-hardware run needs the operator-supplied credentials above; it cannot
+run without them.
+
 ## Editors and IDEs
 
 - **VS Code** — the [Espressif ESP-IDF extension](https://github.com/espressif/vscode-esp-idf-extension)

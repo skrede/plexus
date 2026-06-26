@@ -7,4 +7,7 @@
 if(TARGET plexus::asio)
     add_executable(serial_gate_host serial_gate_host.cpp)
     target_link_libraries(serial_gate_host PRIVATE plexus::plexus plexus::asio)
+
+    add_executable(lwip_gate_host lwip_gate_host.cpp)
+    target_link_libraries(lwip_gate_host PRIVATE plexus::plexus plexus::asio)
 endif()
