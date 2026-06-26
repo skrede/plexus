@@ -1,0 +1,18 @@
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# lwIP dialed down for one TCP connection on the constrained target — the SAME small window as the
+# Wi-Fi example. The bench measures this MCU-appropriate config; the window is NOT raised for
+# throughput (a tuned-up window would inflate the numbers).
+CONFIG_LWIP_TCP_WND_DEFAULT=5760
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=5760
+CONFIG_LWIP_MAX_SOCKETS=4
+CONFIG_LWIP_IPV6=n
+
+# The console stays on UART0 so the bench emits its machine-parseable sample lines there; the
+# serial cell's plexus link rides UART1 instead, so the two never share a port.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# The RX task is looked up by name (xTaskGetHandle) to read its stack high-water — that lookup needs
+# the trace facility. The runtime-stats clock stays off; only the name registry is required.
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y

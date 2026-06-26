@@ -116,6 +116,56 @@ host received a real message over TCP. It requires at least three reproducible p
 fails the whole gate. The on-hardware run needs the operator-supplied credentials above; it cannot
 run without them.
 
+# MCU bench — request/echo round trip over serial, lwIP-P1, and lwIP-P2
+
+[`esp-idf-lwip-bench/`](esp-idf-lwip-bench/) is the on-device bench firmware. It reuses the Wi-Fi
+bring-up and dial path of the Wi-Fi example, but swaps the publish loop for a **request/echo
+round-trip** workload: for each payload tier the device publishes a tier-sized request on the
+`request` topic, the host echoes it verbatim on `reply`, and the device times the round trip with
+the microsecond `esp_timer` clock. It samples the round trip across the tiers and reports the
+RX-task stack high-water plus the free heap, emitting one machine-parseable line per sample on the
+console (UART0) for the runner to parse.
+
+The same firmware runs over three transports, selected at build time (`BENCH_TRANSPORT`):
+
+- **serial** — the plexus link rides UART1 (GPIO17 TX / GPIO16 RX) so the console stays on UART0
+  for the sample lines. This is the serial path's first MCU bench. It is opt-in (it needs a second
+  USB-serial adapter on the UART1 pads and the echo peer wired to it).
+- **lwIP-P1** — the poll-drive receive policy (thread-free; the super-loop drains a non-blocking
+  recv).
+- **lwIP-P2** — the RX-task receive policy (a dedicated task blocking-recvs and posts the feed to
+  the executor task).
+
+The bench measures the **MCU-appropriate** lwIP config: the small 5760 B window is kept (it is NOT
+raised for throughput — a tuned-up window would inflate the numbers). The payload tiers are
+**16 / 256 / 4096 B**, bounded by the per-message ceiling; the large tier stays under one advertised
+window.
+
+## What the bench substantiates
+
+The P1 (thread-free) versus P2 (lower-latency) receive policy is a **consumer-sovereign tradeoff**.
+The bench produces the side-by-side p50/p99 round-trip table plus P2's incremental RAM/stack cost so
+the choice is made on evidence. It does **not** pre-pick a winner: both policies are run and
+reported, and neither is removed.
+
+## Run the bench
+
+The bench reuses the Wi-Fi credentials step and the host-endpoint repoint above. Build the host echo
+peer, then run the reproducible runner from the repo root:
+
+```sh
+cmake --build build -j4 --target lwip_bench_host
+PLEXUS_HOST_ENDPOINT=<host-ip:port> ./examples/mcu/run_lwip_bench.sh [RUNS] [PORT] [HOST_PORT]
+# defaults: 3 runs/cell, /dev/ttyUSB0, 7447 ; add BENCH_SERIAL=1 for the serial cell
+```
+
+For each `{lwIP-P1, lwIP-P2}` cell (and `serial` when opted in) it cross-builds the firmware for
+`esp32`, flashes, drives the auto-reset lines into RUN, captures the device console under
+`build/examples/mcu/lwip_bench_logs/`, and parses the sample lines. It requires **at least three
+valid runs per cell** — a single lucky pass never substantiates a number — and fails the whole bench
+if any cell falls short. It prints the standing suite-format table: a transport x payload latency
+table, then a per-transport p50/p99 + RX-task RAM/stack breakdown.
+
 ## Editors and IDEs
 
 - **VS Code** — the [Espressif ESP-IDF extension](https://github.com/espressif/vscode-esp-idf-extension)
