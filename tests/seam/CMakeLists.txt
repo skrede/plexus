@@ -62,6 +62,22 @@ target_link_libraries(test_lwip_channel_compile PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_channel_compile TEST_PREFIX "seam.")
 
+# Host slice for the constrained-target lwIP byte_channel + dial transport: fires
+# static_assert(byte_channel<lwip_channel<host_tcp_socket>>) and
+# static_assert(transport_backend<lwip_transport, lwip_policy>) at compile time, then round-trips a
+# framed message over a REAL localhost-TCP loopback pair (a genuine POSIX stream_socket declared
+# test-side, no hardware and no mock) exercising real partial reads / EWOULDBLOCK + the P1 poll-drive
+# + the dial path. The current source dir is on the include path so the host socket header resolves.
+# Registered under the same `seam.` prefix.
+add_executable(test_lwip_channel_seam test_lwip_channel_seam.cpp)
+target_include_directories(test_lwip_channel_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_lwip_channel_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_channel_seam TEST_PREFIX "seam.")
+
 # The permissive/strict reliability enforcement gate on the routing_engine subscribe
 # demand path — a deterministic inproc seam test (no backend socket). Links the inproc
 # Policy substrate for the engine harness. Registered under the `udp.` prefix so
