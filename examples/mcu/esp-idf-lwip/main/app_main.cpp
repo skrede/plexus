@@ -16,6 +16,7 @@
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/detail/lwip_socket_io.h"
+#include "plexus/freertos/detail/lwip_acceptor_io.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -32,8 +33,25 @@
 namespace {
 
 using lwip_socket = plexus::freertos::detail::lwip_socket;
+using lwip_acceptor = plexus::freertos::detail::lwip_acceptor;
 using lwip_policy = plexus::freertos::lwip_policy<lwip_socket>;
 using lwip_transport = plexus::freertos::lwip_transport<lwip_socket>;
+
+// This dialing example uses the dial-only transport (the default null_acceptor); naming the server
+// transport AND driving its listen/poll forces the ESP-gated acceptor leaf (bind/listen/accept) and
+// the bounded-view machinery through the cross-compiler so the server path is link-proven on-target,
+// not only host-green. The function below is never called — it exists for the instantiation only.
+using lwip_server_transport = plexus::freertos::lwip_transport<lwip_socket, lwip_acceptor>;
+static_assert(plexus::io::transport_backend<lwip_server_transport, lwip_policy>,
+              "the lwIP listen/accept transport must satisfy transport_backend on-target");
+
+[[maybe_unused]] void instantiate_lwip_server_path(plexus::freertos::freertos_executor &ex)
+{
+    lwip_server_transport server{ex};
+    server.listen({"tcp", "0.0.0.0:7447"});
+    server.poll();
+    server.close();
+}
 
 #ifndef PLEXUS_HOST_ENDPOINT
     #define PLEXUS_HOST_ENDPOINT "192.168.1.69:7447"

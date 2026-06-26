@@ -55,6 +55,15 @@ public:
     {
     }
 
+    // Adopt an accepted fd (the acceptor leaf's accept() result); set non-blocking so the channel's
+    // poll() drains recv() cooperatively, mirroring the dialed socket's set_nonblocking().
+    explicit lwip_socket(int fd)
+            : m_fd(fd)
+            , m_closed(false)
+    {
+        set_nonblocking();
+    }
+
     ~lwip_socket()
     {
         close();

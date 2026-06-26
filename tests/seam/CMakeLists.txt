@@ -93,6 +93,22 @@ target_link_libraries(test_lwip_rx_task_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_rx_task_seam TEST_PREFIX "seam.")
 
+# Host slice for the constrained-target lwIP listen/accept transport: fires
+# static_assert(transport_backend<lwip_transport<host_tcp_socket, host_tcp_listener>>) at compile
+# time, then over a REAL localhost-TCP loopback (a genuine POSIX listener test-side, no hardware and
+# no mock) proves accept -> on_accepted -> a poll-able channel, the compile-time accept cap bound
+# (default 1 refuses the second client; cap 2 accepts both), and view invalidation on channel close
+# (poll-all never touches the freed view; the asan tree is the witness). The current source dir is on
+# the include path so the host listener/socket headers resolve. Registered under the `seam.` prefix.
+add_executable(test_lwip_accept_seam test_lwip_accept_seam.cpp)
+target_include_directories(test_lwip_accept_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_lwip_accept_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_accept_seam TEST_PREFIX "seam.")
+
 # Host-shim proof for the constrained-target executor's task-safe cross-context post:
 # enqueues caller-owned posted_work PODs through the FreeRTOS host queue (widened to
 # carry the whole item by value) and proves pump() invokes them in FIFO order, with
