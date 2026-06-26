@@ -73,3 +73,6 @@ tests/fuzz/corpus/
 # Recording/logging example output (the capture/transcode artifacts the host examples write)
 *.plxr
 *.mcap
+
+# Local Wi-Fi credentials for the on-device examples; only the .example placeholder is tracked
+examples/mcu/**/wifi_credentials.h

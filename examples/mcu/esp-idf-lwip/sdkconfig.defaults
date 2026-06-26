@@ -1,0 +1,9 @@
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# lwIP dialed down for one TCP connection on the constrained target. The TCP window and
+# send buffer track the single-connection telemetry shape; IPv6 is a later milestone.
+CONFIG_LWIP_TCP_WND_DEFAULT=5760
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=5760
+CONFIG_LWIP_MAX_SOCKETS=4
+CONFIG_LWIP_IPV6=n
