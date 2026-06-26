@@ -109,6 +109,22 @@ target_link_libraries(test_lwip_accept_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_accept_seam TEST_PREFIX "seam.")
 
+# Host slice for the constrained-target lwIP egress backpressure / error-class split: over a REAL
+# localhost-TCP loopback pair (a genuine POSIX stream_socket, no hardware and no mock) it proves a full
+# egress queue drives the congestion QoS (block backpressures via would_block, drop_newest sheds +
+# counts) and NEVER fires on_error / re-dials, a transient short send re-arms with the unsent tail left
+# queued (no success-of-zero-bytes) and flushes once cleared, and a hard send drop fires
+# on_error(connection_reset) DISTINCT from on_protocol_close. The current source dir is on the include
+# path so the host socket header resolves. Registered under the same `seam.` prefix.
+add_executable(test_lwip_backpressure_seam test_lwip_backpressure_seam.cpp)
+target_include_directories(test_lwip_backpressure_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_lwip_backpressure_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_backpressure_seam TEST_PREFIX "seam.")
+
 # Host-shim proof for the constrained-target executor's task-safe cross-context post:
 # enqueues caller-owned posted_work PODs through the FreeRTOS host queue (widened to
 # carry the whole item by value) and proves pump() invokes them in FIFO order, with

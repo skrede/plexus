@@ -160,14 +160,16 @@ private:
         lwip_fcntl(m_fd, F_SETFL, flags | O_NONBLOCK);
     }
 
-    // A negative return splits into two classes (research §5): a transient EWOULDBLOCK/EAGAIN/
-    // ENOMEM is local congestion (report 0, the channel re-arms, never tears down); a hard
-    // ECONNRESET/EPIPE is a connection drop (set closed so the channel fires on_error).
+    // A negative return splits into two classes kept textually distinct (research §5). SOFT/transient
+    // — EWOULDBLOCK/EAGAIN (send buffer full) or ENOMEM (lwIP ERR_MEM: a tcp_write/pbuf OOM) — is local
+    // congestion: report 0, the channel re-arms, it NEVER tears down. HARD — ECONNRESET/EPIPE — is a
+    // connection drop: set closed so the channel fires on_error and the engine re-dials.
     std::size_t classify_io(int n)
     {
         if(n > 0)
             return static_cast<std::size_t>(n);
-        if(n < 0 && (errno == ECONNRESET || errno == EPIPE))
+        const bool soft = errno == EWOULDBLOCK || errno == EAGAIN || errno == ENOMEM;
+        if(n < 0 && !soft && (errno == ECONNRESET || errno == EPIPE))
             m_closed = true;
         return 0;
     }

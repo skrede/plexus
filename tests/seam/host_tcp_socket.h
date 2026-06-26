@@ -71,6 +71,8 @@ public:
     host_tcp_socket(host_tcp_socket &&other) noexcept
             : m_fd(other.m_fd)
             , m_closed(other.m_closed)
+            , m_stall(other.m_stall)
+            , m_fault(other.m_fault)
     {
         other.m_fd     = -1;
         other.m_closed = true;
@@ -81,8 +83,10 @@ public:
         if(this != &other)
         {
             close();
-            m_fd           = other.m_fd;
-            m_closed       = other.m_closed;
+            m_fd       = other.m_fd;
+            m_closed   = other.m_closed;
+            m_stall    = other.m_stall;
+            m_fault    = other.m_fault;
             other.m_fd     = -1;
             other.m_closed = true;
         }
@@ -108,8 +112,28 @@ public:
 
     std::size_t send(std::span<const std::byte> bytes)
     {
+        if(m_fault && *m_fault) // a test-forced HARD send drop: classify_io's ECONNRESET/EPIPE branch
+        {
+            m_closed = true;
+            return 0;
+        }
+        if(m_stall && *m_stall) // a test-forced SOFT stall: the socket folded EWOULDBLOCK/ERR_MEM to 0
+            return 0;
         const auto n = ::send(m_fd, bytes.data(), bytes.size(), MSG_NOSIGNAL);
         return classify_io(static_cast<int>(n));
+    }
+
+    // Test scaffolding (host-only): borrow a test-owned flag to force a send class — SOFT stall (send
+    // reports 0, channel re-arms) or HARD drop (send sets closed, channel fires on_error) — even after
+    // the socket is moved into the channel (the pointer rides the move). The real loopback peer cannot
+    // guarantee these deterministically (a closed peer's RST is not reliably timely on the host).
+    void use_stall_flag(const bool &stall)
+    {
+        m_stall = &stall;
+    }
+    void use_fault_flag(const bool &fault)
+    {
+        m_fault = &fault;
     }
 
     std::size_t recv(std::span<std::byte> buf)
@@ -141,17 +165,22 @@ public:
     }
 
 private:
+    // Mirror the on-target lwip_socket::classify_io split: SOFT (EWOULDBLOCK/EAGAIN/ENOMEM) folds to 0
+    // and re-arms; HARD (ECONNRESET/EPIPE) sets closed so the channel fires on_error.
     std::size_t classify_io(int n)
     {
         if(n > 0)
             return static_cast<std::size_t>(n);
-        if(n < 0 && (errno == ECONNRESET || errno == EPIPE))
+        const bool soft = errno == EWOULDBLOCK || errno == EAGAIN || errno == ENOMEM;
+        if(n < 0 && !soft && (errno == ECONNRESET || errno == EPIPE))
             m_closed = true;
         return 0;
     }
 
-    int  m_fd;
-    bool m_closed;
+    int         m_fd;
+    bool        m_closed;
+    const bool *m_stall{nullptr};
+    const bool *m_fault{nullptr};
 };
 
 // A connected loopback pair: binds a transient listener on 127.0.0.1:0, dials it, and returns both
