@@ -49,6 +49,19 @@ target_link_libraries(test_device_runtime PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_device_runtime TEST_PREFIX "seam.")
 
+# Host compile-check for the constrained-target lwIP byte_channel: forces lwip_channel.h
+# through the host compiler so its in-header byte_channel proof and the stream_inbound /
+# send_queue reuse are validated by the PC build (the lwIP socket is ESP_PLATFORM-gated and
+# never reached). Links the constrained-target substrate alongside the core and wire layers;
+# registered under the same `seam.` prefix.
+add_executable(test_lwip_channel_compile test_lwip_channel_compile.cpp)
+target_link_libraries(test_lwip_channel_compile PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_channel_compile TEST_PREFIX "seam.")
+
 # The permissive/strict reliability enforcement gate on the routing_engine subscribe
 # demand path — a deterministic inproc seam test (no backend socket). Links the inproc
 # Policy substrate for the engine harness. Registered under the `udp.` prefix so
