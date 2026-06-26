@@ -6,6 +6,7 @@
 // are exercised end-to-end with no hardware. This TU is additive to the host suite baseline.
 
 #include "host_tcp_socket.h" // MUST precede lwip_transport.h: declares the host POSIX stream_socket
+#include "host_loopback_pair.h"
 
 #include "plexus/freertos/lwip_policy.h"
 #include "plexus/freertos/lwip_channel.h"

@@ -7,6 +7,7 @@
 // fires on_error(connection_reset), DISTINCT from on_protocol_close. Additive to the host suite.
 
 #include "host_tcp_socket.h" // MUST precede lwip_channel.h: declares the host POSIX stream_socket
+#include "host_loopback_pair.h"
 
 #include "plexus/freertos/lwip_channel.h"
 #include "plexus/freertos/freertos_executor.h"

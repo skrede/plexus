@@ -7,6 +7,7 @@
 // (the asan tree is the witness). Additive to the host suite baseline.
 
 #include "host_tcp_socket.h" // MUST precede the freertos headers: declares the host POSIX stream_socket
+#include "host_loopback_pair.h"
 
 #include "plexus/freertos/lwip_channel.h"
 #include "plexus/freertos/lwip_rx_task.h"
