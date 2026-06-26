@@ -57,7 +57,7 @@ public:
             : m_fd(fd)
             , m_closed(false)
     {
-        set_nonblocking();
+        set_blocking(false);
     }
 
     ~host_tcp_socket()
@@ -101,7 +101,7 @@ public:
         ::inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
         if(::connect(m_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
             return std::make_error_code(std::errc::connection_refused);
-        set_nonblocking();
+        set_blocking(false);
         m_closed = false;
         return {};
     }
@@ -133,13 +133,14 @@ public:
         m_closed = true;
     }
 
-private:
-    void set_nonblocking()
+    // The P2 RX-task receive policy parks in a blocking recv; P1 stays non-blocking for its drain.
+    void set_blocking(bool blocking)
     {
         const int flags = ::fcntl(m_fd, F_GETFL, 0);
-        ::fcntl(m_fd, F_SETFL, flags | O_NONBLOCK);
+        ::fcntl(m_fd, F_SETFL, blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK));
     }
 
+private:
     std::size_t classify_io(int n)
     {
         if(n > 0)

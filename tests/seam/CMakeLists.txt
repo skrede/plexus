@@ -78,6 +78,21 @@ target_link_libraries(test_lwip_channel_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_channel_seam TEST_PREFIX "seam.")
 
+# Host slice for the constrained-target lwIP P2 RX-task receive policy: drives the channel's
+# acquire-slot -> recv_into_slot -> post_from_task step inline as the RX context (the spawned task
+# is a no-op stub off-target), then ex.drain() as the executor, proving delivery is POSTED and
+# exactly-once with reassembly over a REAL localhost-TCP loopback pair, and a peer close surfaced as
+# on_error. The current source dir is on the include path so the host socket header resolves.
+# Registered under the same `seam.` prefix.
+add_executable(test_lwip_rx_task_seam test_lwip_rx_task_seam.cpp)
+target_include_directories(test_lwip_rx_task_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_lwip_rx_task_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_rx_task_seam TEST_PREFIX "seam.")
+
 # Host-shim proof for the constrained-target executor's task-safe cross-context post:
 # enqueues caller-owned posted_work PODs through the FreeRTOS host queue (widened to
 # carry the whole item by value) and proves pump() invokes them in FIFO order, with

@@ -1,6 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_LWIP_CHANNEL_H
 #define HPP_GUARD_PLEXUS_FREERTOS_LWIP_CHANNEL_H
 
+#include "plexus/freertos/detail/lwip_channel_egress.h"
+#include "plexus/freertos/detail/null_stream_socket.h"
+#include "plexus/freertos/detail/lwip_rx_slot_pool.h"
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
 
@@ -9,7 +12,6 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/stream/stream_socket.h"
 #include "plexus/stream/stream_inbound.h"
-#include "plexus/stream/detail/send_queue.h"
 
 #include "plexus/detail/compat.h"
 
@@ -17,7 +19,6 @@
 #include <vector>
 #include <cstddef>
 #include <utility>
-#include <system_error>
 
 namespace plexus::freertos {
 
@@ -47,6 +48,11 @@ template<plexus::stream::stream_socket S>
 class lwip_channel
 {
 public:
+    // The RX hand-off pool is sized to the executor queue depth so it can never hold more in-flight
+    // slots than the queue can carry a post for, and each slot's buffer matches P1's fixed read size.
+    static constexpr std::size_t k_rx_slots = freertos_executor::k_queue_depth;
+    using rx_slot                           = detail::rx_slot<lwip_channel, lwip_channel_limits::read_buffer_bytes>;
+
     lwip_channel(S socket, freertos_executor &ex, plexus::io::endpoint remote, std::size_t read_buffer = lwip_channel_limits::read_buffer_bytes,
                  std::size_t max_message = lwip_channel_limits::max_message_bytes, std::size_t reassembly_budget = lwip_channel_limits::reassembly_bytes,
                  std::size_t egress_cap = lwip_channel_limits::egress_cap_bytes)
@@ -54,20 +60,30 @@ public:
             , m_remote(std::move(remote))
             , m_read_buffer(read_buffer)
             , m_inbound(ex, plexus::stream::with_message_limits({}, max_message, reassembly_budget))
-            , m_send_queue([this](plexus::stream::detail::send_queue::buffer_sequence views, plexus::stream::detail::send_queue::completion done) { drain_views(views, std::move(done)); }, egress_cap)
+            , m_egress(m_socket, egress_cap)
+            , m_rx_pool(*this)
     {
         wire_inbound();
     }
 
+    rx_slot *acquire_rx_slot(TickType_t wait) noexcept
+    {
+        return m_rx_pool.acquire(wait);
+    }
+    void release_rx_slot(rx_slot &slot) noexcept
+    {
+        m_rx_pool.release(slot);
+    }
+
     void send(std::span<const std::byte> framed)
     {
-        m_send_queue.enqueue(framed);
+        m_egress.send(framed);
     }
 
     void close()
     {
         m_inbound.shutdown();
-        m_send_queue.close_and_drain();
+        m_egress.close();
         m_socket.close();
         if(m_on_closed)
             m_on_closed();
@@ -75,6 +91,10 @@ public:
     plexus::io::endpoint remote_endpoint() const
     {
         return m_remote;
+    }
+    bool closed() const noexcept
+    {
+        return m_socket.closed();
     }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
@@ -99,14 +119,46 @@ public:
     // on a seam DISTINCT from on_protocol_close (the framing-violation seam stream_inbound owns).
     void poll()
     {
-        const std::size_t n = m_socket.recv(m_read_buffer);
+        const std::size_t n = recv_step(m_read_buffer);
         if(n > 0)
             m_inbound.feed(std::span<const std::byte>{m_read_buffer.data(), n});
-        else if(m_socket.closed() && m_on_error)
-            m_on_error(plexus::io::io_error::connection_reset);
+    }
+
+    // P2 RX-task side: one recv into the slot's pooled buffer (blocking on-target), recording the
+    // count WITHOUT feeding — the RX task owns the post, the channel owns framing + the slot lifecycle.
+    std::size_t recv_into_slot(rx_slot &slot) noexcept
+    {
+        slot.len = recv_step(slot.buffer);
+        return slot.len;
+    }
+
+    // P2's posted-delivery contract: feed the pooled slot's bytes on the EXECUTOR task (so on_frame
+    // -> deliver -> on_data fire POSTED, the cross-context pair to P1's synchronous divergence), then
+    // release the slot back to the fixed pool. No per-recv heap — the bytes lived in pool storage.
+    void feed_from_slot(rx_slot &slot)
+    {
+        m_inbound.feed(std::span<const std::byte>{slot.buffer.data(), slot.len});
+        release_rx_slot(slot);
+    }
+
+    static void invoke_feed(void *ctx) noexcept
+    {
+        auto &slot = *static_cast<rx_slot *>(ctx);
+        slot.owner->feed_from_slot(slot);
     }
 
 private:
+    // The shared recv + hard-drop classification both receive paths run: a recv into the caller's
+    // buffer, returning the byte count; a closed socket fires on_error on the connection-reset seam.
+    template<typename Buffer>
+    std::size_t recv_step(Buffer &buffer)
+    {
+        const std::size_t n = m_socket.recv(buffer);
+        if(n == 0 && m_socket.closed() && m_on_error)
+            m_on_error(plexus::io::io_error::connection_reset);
+        return n;
+    }
+
     void wire_inbound()
     {
         m_inbound.on_frame([this](const plexus::wire::complete_frame &f) { deliver(static_cast<std::span<const std::byte>>(f.payload)); });
@@ -129,58 +181,17 @@ private:
             m_on_data(frame);
     }
 
-    // lwIP has no scatter writev, so the gathered views are sent one by one; a transient short
-    // send is local congestion the socket already folded to 0 (the queue re-arms), never a tear-
-    // down. Completion fires once the gather has been handed to the socket.
-    void drain_views(plexus::stream::detail::send_queue::buffer_sequence views, plexus::stream::detail::send_queue::completion done)
-    {
-        for(const auto &v : views)
-            m_socket.send(v);
-        done(true);
-    }
-
     S                                                                   m_socket;
     plexus::io::endpoint                                                m_remote;
     std::vector<std::byte>                                              m_read_buffer;
     plexus::stream::stream_inbound<freertos_timer, freertos_executor &> m_inbound;
-    plexus::stream::detail::send_queue                                  m_send_queue;
+    detail::lwip_channel_egress<S>                                      m_egress;
+    detail::lwip_rx_slot_pool<lwip_channel, k_rx_slots, lwip_channel_limits::read_buffer_bytes> m_rx_pool;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()>                           m_on_closed;
     plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
     plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };
-
-namespace detail {
-
-// The minimal conforming witness for the in-header byte_channel proof: a do-nothing stream_socket
-// so the static_assert below is self-contained (the real sockets are the lwIP one and the host's
-// POSIX one). It models the seam, nothing more.
-struct null_stream_socket
-{
-    using endpoint_type = plexus::io::endpoint;
-
-    std::error_code connect(endpoint_type)
-    {
-        return {};
-    }
-    std::size_t send(std::span<const std::byte>)
-    {
-        return 0;
-    }
-    std::size_t recv(std::span<std::byte>)
-    {
-        return 0;
-    }
-    bool closed() const
-    {
-        return false;
-    }
-    void close()
-    {
-    }
-};
-
-}
 
 static_assert(plexus::io::byte_channel<lwip_channel<detail::null_stream_socket>>, "lwip_channel must satisfy byte_channel — check the seven verbs");
 

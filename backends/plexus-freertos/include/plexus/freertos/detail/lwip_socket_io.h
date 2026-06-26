@@ -120,6 +120,14 @@ public:
         m_closed = true;
     }
 
+    // The RX-task receive policy parks in a blocking recv instead of spinning a non-blocking poll;
+    // toggling the socket blocking is the P2 opt-in (P1 stays non-blocking for its cooperative drain).
+    void set_blocking(bool blocking)
+    {
+        const int flags = lwip_fcntl(m_fd, F_GETFL, 0);
+        lwip_fcntl(m_fd, F_SETFL, blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK));
+    }
+
 private:
     std::error_code open_and_dial(const lwip_address &parsed)
     {

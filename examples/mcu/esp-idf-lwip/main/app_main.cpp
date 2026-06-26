@@ -10,6 +10,7 @@
 #include "plexus/io/reconnect_config.h"
 
 #include "plexus/freertos/lwip_policy.h"
+#include "plexus/freertos/lwip_rx_task.h"
 #include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/freertos_timer.h"
@@ -42,6 +43,7 @@ constexpr const char *k_host_endpoint = PLEXUS_HOST_ENDPOINT;
 constexpr std::size_t k_max_payload_bytes  = 256;
 constexpr std::uint32_t k_plexus_task_stack = 8192; // bytes (ESP-IDF xTaskCreate takes bytes)
 constexpr UBaseType_t k_plexus_task_prio    = 5;
+constexpr std::uint32_t k_rx_task_stack     = 4096; // bytes; the RX task parks in a blocking recv
 
 // A monotonic counter byte stands in for a real sensor reading — a deterministic payload for the
 // multi-run host gate, no GPIO needed.
@@ -90,6 +92,8 @@ void plexus_task(void *)
     opts.max_message_bytes = k_max_payload_bytes;
     opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x1F1C0DE;
+
+    transport.use_rx_task(plexus::freertos::task_options{k_rx_task_stack});
 
     auto node = std::make_unique<plexus::node<lwip_policy, lwip_transport>>(ex, disc, "esp32-lwip-telemetry", transport, opts);
     node->dial({"tcp", k_host_endpoint});

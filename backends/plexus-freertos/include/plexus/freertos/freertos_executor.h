@@ -38,6 +38,8 @@ struct posted_work
 class freertos_executor
 {
 public:
+    static constexpr std::uint32_t k_queue_depth = 16;
+
     freertos_executor()
             : m_queue(xQueueCreate(k_queue_depth, sizeof(posted_work)))
     {
@@ -117,8 +119,6 @@ private:
         return xTaskGetTickCount();
     }
     bool fire_due_timer();
-
-    static constexpr std::uint32_t k_queue_depth = 16;
 
     QueueHandle_t                                          m_queue;
     std::deque<plexus::detail::move_only_function<void()>> m_posted;
