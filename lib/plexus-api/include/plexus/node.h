@@ -36,6 +36,7 @@
 #include "plexus/detail/fail_closed.h"
 #include "plexus/detail/address_parse.h"
 #include "plexus/detail/node_self_route.h"
+#include "plexus/detail/node_self_carrier.h"
 #include "plexus/detail/node_upgrade_wiring.h"
 #include "plexus/detail/function_traits.h"
 #include "plexus/detail/node_internals.h"
@@ -43,6 +44,7 @@
 #include <span>
 #include <tuple>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
@@ -66,6 +68,19 @@ using node_engine_policy = std::conditional_t<sizeof...(Transports) == 1, Policy
 // match; only a pack with no intra-node member leaves the self-route idle.
 template<typename Policy, typename... Transports>
 constexpr bool pack_has_intra_node = (std::is_same_v<Transports, io::intra_node_transport<Policy>> || ...);
+
+// Keys on the name-free geometry surface (the same probe for_each_shm_member uses), so the predicate
+// names no shm type: a member that provisions per-topic rings matches; a plain leaf does not.
+template<typename M>
+constexpr bool member_has_shm_ring = requires(M &m) {
+    m.set_topic_geometry(std::string{}, std::size_t{}, m.default_geometry());
+    m.geometry_from(static_cast<const void *>(nullptr));
+};
+
+// True when the pack carries a member with the shm-ring surface — the fallback self-carrier (a
+// node-local shm self-ring) is available when no intra-node transport is present to serve self.
+template<typename... Transports>
+constexpr bool pack_has_shm_member = (member_has_shm_ring<Transports> || ...);
 
 // The variadic ctor lets the node's member-init use ONE in-place construction expression for
 // both glue kinds (this type ignores the leaves; the mux consumes them).
@@ -197,6 +212,12 @@ public:
     // Multi-transport: the engine's channel is the erased polymorphic_byte_channel, so the concrete
     // self-channel is reference-adapter wrapped to satisfy the registry's reference_wrapper.
     static constexpr bool k_self_route_erased = k_has_self_loopback && !std::is_same_v<engine_channel, io::process_loopback_channel<Policy>>;
+
+    // The fallback self-carrier: when no intra-node transport serves self but the pack has an shm
+    // member, a same-node publish self-delivers over a node-local shm self-ring (the framed bytes
+    // lane). Mutually exclusive with the intra-node self-route — at most one carrier per node.
+    static constexpr bool k_has_shm_self_carrier = !k_has_self_loopback && detail::pack_has_shm_member<Transports...>;
+    static_assert(!(k_has_self_loopback && k_has_shm_self_carrier), "a node installs at most one self-route carrier (intra-node OR shm self-ring), never both");
 
     // The node_id is taken verbatim: plexus compares the identity, never mints or interprets it.
     basic_node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id, Transports &...transports, const node_options &opts)
@@ -414,10 +435,12 @@ private:
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
         provision_same_host_ring(fqn, effective_bytes, geometry);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
+        note_local_publisher(fqn);
     }
 
     void retire_publisher_seam(std::string_view fqn)
     {
+        forget_local_publisher(fqn);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_dropped, wire::fqn_topic_hash(fqn), std::nullopt});
     }
 
@@ -629,16 +652,128 @@ private:
         }
     }
 
+    // Compile-time route selection: the intra-node self-channel when the pack carries one, else the
+    // shm self-ring fallback when an shm member is present. The two are mutually exclusive per node.
+    // The intra-node attach is a free registry entry, so it engages on every first-subscribe; the
+    // shm self-ring mints an OS region, so it engages only when a same-node pub+sub actually coexist.
     void self_attach(std::string_view fqn, const io::subscriber_qos &qos, std::optional<std::uint64_t> type_id)
     {
         if constexpr(k_has_self_loopback)
             m_engine.messages().attach_local(fqn, self_route(), m_service_name, qos, type_id);
+        else if constexpr(k_has_shm_self_carrier)
+            sync_shm_self_carrier(fqn);
     }
 
     void self_detach(std::string_view fqn)
     {
         if constexpr(k_has_self_loopback)
             m_engine.messages().detach_local(fqn, self_route());
+        else if constexpr(k_has_shm_self_carrier)
+            sync_shm_self_carrier(fqn);
+    }
+
+    void note_local_publisher(std::string_view fqn)
+    {
+        if constexpr(k_has_shm_self_carrier)
+        {
+            ++m_local_publishers[std::string{fqn}];
+            sync_shm_self_carrier(fqn);
+        }
+    }
+
+    void forget_local_publisher(std::string_view fqn)
+    {
+        if constexpr(k_has_shm_self_carrier)
+        {
+            auto it = m_local_publishers.find(std::string{fqn});
+            if(it != m_local_publishers.end() && --it->second == 0)
+                m_local_publishers.erase(it);
+            sync_shm_self_carrier(fqn);
+        }
+    }
+
+    // The shm self-ring mints/holds an OS region, so it engages ONLY when a same-node publisher AND
+    // subscriber coexist for the fqn (true self-traffic) — a node talking to a distinct-host peer
+    // creates no region. Idempotent: re-driven from all four pub/sub seams to converge on the state.
+    void sync_shm_self_carrier(std::string_view fqn)
+    {
+        const std::string key{fqn};
+        const bool want = m_local_publishers.contains(key) && any_subscriber_for(fqn);
+        const bool have = m_self_carriers.contains(key);
+        if(want && !have)
+            install_shm_self_carrier(key);
+        else if(!want && have)
+            teardown_shm_self_carrier(key);
+    }
+
+    // Mint the node-local shm self-ring for the fqn, record its write half as the self-route (a
+    // publish fans into the ring), and bind the read half to re-enter the node's own dispatch.
+    void install_shm_self_carrier(const std::string &fqn)
+    {
+        const io::subscriber_qos qos          = subscriber_qos_for(fqn);
+        const std::optional<std::uint64_t> tid = subscriber_type_id_for(fqn);
+        for_each_shm_member(
+                [&](auto &m)
+                {
+                    auto carrier = detail::install_self_carrier<engine_channel>(m, fqn, [this](std::span<const std::byte> framed) { self_carrier_bytes(framed); });
+                    if(!carrier.write)
+                        return;
+                    m_engine.messages().attach_local(fqn, *carrier.write, m_service_name, qos, tid);
+                    m_self_carriers.insert_or_assign(fqn, std::move(carrier));
+                });
+    }
+
+    void teardown_shm_self_carrier(const std::string &fqn)
+    {
+        auto it = m_self_carriers.find(fqn);
+        if(it == m_self_carriers.end())
+            return;
+        m_engine.messages().detach_local(fqn, *it->second.write);
+        m_self_carriers.erase(it);
+    }
+
+    io::subscriber_qos subscriber_qos_for(std::string_view fqn) const
+    {
+        for(const auto &[rid, sub] : m_subscriptions)
+            if(sub.fqn == fqn)
+                return sub.qos;
+        return {};
+    }
+
+    std::optional<std::uint64_t> subscriber_type_id_for(std::string_view fqn) const
+    {
+        for(const auto &[rid, sub] : m_subscriptions)
+            if(sub.fqn == fqn)
+                return sub.type_id;
+        return std::nullopt;
+    }
+
+    // The shm self-ring's read half: strip the frame header off the ring's framed bytes and route the
+    // inner through the forwarder's decode into the node's own dispatch — bypassing the session-keyed
+    // inject_upgrade_receive (a node has no session to itself). The frame's write-half channel is the
+    // (ignored) peer the deliver overload requires.
+    void self_carrier_bytes(std::span<const std::byte> framed)
+    {
+        if constexpr(k_has_shm_self_carrier)
+        {
+            const auto hdr = wire::decode_header(framed);
+            if(!hdr)
+                return;
+            const std::span<const std::byte> inner = framed.subspan(wire::header_size);
+            const bool has_source_identity         = (hdr->flags & wire::k_flag_source_identity) != 0;
+            io::message_info info{};
+            info.from_intra_process = true;
+            typename io::message_forwarder<engine_policy>::peer self{any_self_carrier_channel(), m_service_name};
+            m_engine.messages().deliver(self, inner, info, m_id, has_source_identity,
+                                        [this](std::string_view fqn, std::span<const std::byte> data, const io::message_info &mi) { dispatch_message(fqn, data, mi); });
+        }
+    }
+
+    // Any live carrier's write half supplies the channel reference the deliver peer needs (the peer is
+    // never dereferenced); the receive sink only fires while a carrier is live, so the map is non-empty.
+    engine_channel &any_self_carrier_channel() noexcept
+    {
+        return *m_self_carriers.begin()->second.write;
     }
 
     // Each verb is a captureless static lambda (a plain fn-ptr, zero alloc) recovering the node and
@@ -755,6 +890,15 @@ private:
     // m_self_channel). [[no_unique_address]] on the single-transport monostate keeps it zero-size.
     using self_route_holder = std::conditional_t<k_self_route_erased, io::polymorphic_byte_channel, detail::no_self_route_wrapper>;
     [[no_unique_address]] self_route_holder m_self_route{detail::make_self_route<self_route_holder>(m_self_channel)};
+
+    // Live local-publisher count per fqn: the shm self-ring mints only when a same-node publisher and
+    // subscriber coexist, so the carrier's OS region is never created for a node that only talks remote.
+    std::unordered_map<std::string, std::size_t> m_local_publishers;
+
+    // The per-fqn node-local shm self-ring carriers (the fallback self-route when no intra-node
+    // transport serves self). Each holds the write half recorded in the registry + the read half's
+    // RAII handle. Declared BEFORE m_engine so the registry's references outlive the engine teardown.
+    std::unordered_map<std::string, detail::self_carrier_handle<engine_channel>> m_self_carriers;
 
     engine_type m_engine;
 };

@@ -208,3 +208,22 @@ target_link_libraries(test_self_loopback_mixed PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback_mixed TEST_PREFIX "node.")
+
+# The shm self-carrier fallback: a node with NO intra-node transport but WITH an shm member
+# self-delivers a same-node publish→subscribe over a node-local shm self-ring. Built only when
+# the shm backend is on (plexus::asio::shm exists only under the gate); links the full shm node
+# surface (the asio reactor drives the ring's wake). Off-gate hosts skip the cell entirely.
+if(PLEXUS_ENABLE_SHM_BACKEND)
+    add_executable(test_shm_self_carrier test_shm_self_carrier.cpp)
+    target_include_directories(test_shm_self_carrier PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(test_shm_self_carrier PRIVATE
+        plexus::shm
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_shm_self_carrier TEST_PREFIX "node.")
+endif()
