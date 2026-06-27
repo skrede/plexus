@@ -96,7 +96,9 @@ public:
     void attach_local(std::string_view fqn, channel_type &channel, std::string_view self_name, const subscriber_qos &qos = subscriber_qos{},
                       std::optional<std::uint64_t> type_id = std::nullopt)
     {
-        m_endpoint.registry().add_subscriber(wire::fqn_topic_hash(fqn), fqn, channel, self_name, qos, type_id);
+        const auto hash = wire::fqn_topic_hash(fqn);
+        m_endpoint.registry().add_subscriber(hash, fqn, channel, self_name, qos, type_id);
+        replay_if_latched(peer{channel, std::string{self_name}}, hash);
     }
 
     void detach_local(std::string_view fqn, channel_type &channel)

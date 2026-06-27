@@ -209,6 +209,35 @@ target_link_libraries(test_self_loopback_mixed PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback_mixed TEST_PREFIX "node.")
 
+# A late-joining local subscriber that requests durability receives the latched value over the
+# self-route (replay_if_latched wired into attach_local); a default-qos subscriber gets no replay.
+add_executable(test_self_loopback_latch test_self_loopback_latch.cpp)
+target_link_libraries(test_self_loopback_latch PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_self_loopback_latch TEST_PREFIX "node.")
+
+# Recorder/capture taps observe self-delivery: a public-API recorder over a byte_sink captures the
+# bytes-lane self message (recovered sample's framed tail = the payload) and records the typed-lane
+# self-delivery as an event.
+add_executable(test_self_loopback_recorder test_self_loopback_recorder.cpp)
+target_link_libraries(test_self_loopback_recorder PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_self_loopback_recorder TEST_PREFIX "node.")
+
+# The self-route lifetime contract: retire-then-posted is a safe no-op (the re-entry re-scans
+# m_subscriptions) and drain-before-destroy holds with no per-callback liveness guard — asan/ubsan
+# is the load-bearing gate.
+add_executable(test_self_loopback_lifetime test_self_loopback_lifetime.cpp)
+target_link_libraries(test_self_loopback_lifetime PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_self_loopback_lifetime TEST_PREFIX "node.")
+
 # The shm self-carrier fallback: a node with NO intra-node transport but WITH an shm member
 # self-delivers a same-node publish→subscribe over a node-local shm self-ring. Built only when
 # the shm backend is on (plexus::asio::shm exists only under the gate); links the full shm node
