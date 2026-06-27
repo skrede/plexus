@@ -74,6 +74,46 @@ TEST_CASE("node_native_discovery: two nodes discover each other over the wired d
     REQUIRE(b.router().session_for(id_a) == nullptr);
 }
 
+// A goodbye flushes awareness immediately: after both nodes discover each other, node A's
+// discovery stop() emits a goodbye over the wired seam; node B evicts A from known() without
+// waiting out the ttl. B's own awareness/session for A is the only thing removed: a goodbye drops
+// the suggestion, never an active link — there is no live session here by construction.
+TEST_CASE("node_native_discovery: a goodbye flushes the leaver from a peer's awareness", "[node_native_discovery]")
+{
+    ::asio::io_context io;
+
+    wiring_datagram_socket sock_a{io, "127.0.1.1"};
+    wiring_datagram_socket sock_b{io, "127.0.1.2"};
+    sock_a.pair_with(sock_b);
+    sock_b.pair_with(sock_a);
+
+    plexus::native::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_a{io, sock_a};
+    plexus::native::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_b{io, sock_b};
+
+    pasio::asio_transport transport_a{io};
+    pasio::asio_transport transport_b{io};
+
+    const auto id_a = make_id(0xE5);
+    const auto id_b = make_id(0xF6);
+    asio_node a{io, disc_a, id_a, transport_a, make_opts()};
+    asio_node b{io, disc_b, id_b, transport_b, make_opts()};
+
+    a.listen({"tcp", "127.0.1.1:18821"});
+    b.listen({"tcp", "127.0.1.2:18822"});
+
+    pump_until(io, [&] { return b.router().known().contains(id_a); });
+    REQUIRE(b.router().known().contains(id_a));
+    REQUIRE(b.router().session_for(id_a) == nullptr);
+
+    disc_a.stop();
+
+    pump_until(io, [&] { return !b.router().known().contains(id_a); });
+    REQUIRE_FALSE(b.router().known().contains(id_a));
+    // B's own identity is untouched, and no session was ever torn down (none existed).
+    REQUIRE(b.router().known().contains(id_b) == false);
+    REQUIRE(b.router().session_for(id_a) == nullptr);
+}
+
 // The live slice over the real udp_multicast_socket. Hidden behind [.multicast]: same-host
 // multicast loopback is environment-sensitive (a sandbox may drop IGMP-joined delivery), so the
 // deterministic wired equivalent above carries the default-set proof. This is NEVER weakened to a

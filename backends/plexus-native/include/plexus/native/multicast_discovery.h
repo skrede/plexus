@@ -60,12 +60,20 @@ public:
         m_on_resolved_cb = on_resolved;
     }
 
+    void on_withdrawn(const ::plexus::discovery::discovery::withdrawn_callback &cb) override
+    {
+        m_on_withdrawn_cb = cb;
+    }
+
     void stop() override
     {
         m_timer.cancel();
+        if(m_advertising)
+            emit_goodbye();
         m_socket.close();
-        m_on_resolved_cb = nullptr;
-        m_advertising    = false;
+        m_on_resolved_cb  = nullptr;
+        m_on_withdrawn_cb = nullptr;
+        m_advertising     = false;
     }
 
 private:
@@ -79,15 +87,31 @@ private:
     void on_inbound(const typename Socket::endpoint_type &from, std::span<const std::byte> bytes)
     {
         const auto ann = wire::decode_announcement(bytes);
-        if(!ann || !m_on_resolved_cb)
+        if(!ann)
             return;
-        m_on_resolved_cb(detail::service_info_from_announcement(*ann, from.address().to_string()));
+        auto info = detail::service_info_from_announcement(*ann, from.address().to_string());
+        if((ann->flags & wire::k_announcement_goodbye_flag) != 0)
+        {
+            if(m_on_withdrawn_cb)
+                m_on_withdrawn_cb(info);
+        }
+        else if(m_on_resolved_cb)
+            m_on_resolved_cb(info);
     }
 
     // Re-announces of the same (id, ep) are idempotent at note_peer (a map put), so no dedup.
     void emit_announcement()
     {
         detail::encode_card_announcement(m_scratch, m_card, ttl_secs(), 0);
+        if(!m_scratch.empty())
+            m_socket.send_multicast(m_scratch);
+    }
+
+    // A best-effort single leave datagram: a browser evicts this node's awareness on receipt
+    // instead of waiting out the ttl.
+    void emit_goodbye()
+    {
+        detail::encode_card_announcement(m_scratch, m_card, ttl_secs(), wire::k_announcement_goodbye_flag);
         if(!m_scratch.empty())
             m_socket.send_multicast(m_scratch);
     }
@@ -117,6 +141,7 @@ private:
     ::plexus::discovery::service_info m_card;
     std::vector<std::byte> m_scratch;
     resolved_callback m_on_resolved_cb;
+    ::plexus::discovery::discovery::withdrawn_callback m_on_withdrawn_cb;
     bool m_advertising;
 };
 

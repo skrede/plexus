@@ -244,6 +244,7 @@ public:
         m_engine.add_observer(m_peer_watch);
         advertise_card();
         m_disc.browse([this](const discovery::service_info &peer) { note_from_card(peer); });
+        m_disc.on_withdrawn([this](const discovery::service_info &peer) { forget_from_card(peer); });
         install_upgrade_coordinator();
         install_self_loopback();
         m_engine.capture().set_default(opts.capture.to_rule());
@@ -850,6 +851,17 @@ private:
             note_known_peer(*peer_id);
             fan_demands_to(*peer_id);
         }
+    }
+
+    // A goodbye removes awareness only (engine forget + local mirror erase), mirroring
+    // note_from_card's id/self guards; an unknown or self id is a harmless no-op.
+    void forget_from_card(const discovery::service_info &peer)
+    {
+        const auto peer_id = plexus::detail::card_node_id(peer.metadata);
+        if(!peer_id || *peer_id == m_id)
+            return;
+        m_engine.forget(*peer_id);
+        std::erase(m_known_peers, *peer_id);
     }
 
     plexus::node_id m_id;

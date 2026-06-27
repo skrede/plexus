@@ -144,6 +144,13 @@ public:
             reach(id);
     }
 
+    // Removes a peer's awareness only (a goodbye drops the suggestion, never an active link):
+    // mirrors note_peer's awareness scope and never touches the session registry.
+    void forget(const node_id &id)
+    {
+        m_known_peers.forget(id);
+    }
+
     void reach(const node_id &id)
     {
         if(m_registry.is_connected(id))

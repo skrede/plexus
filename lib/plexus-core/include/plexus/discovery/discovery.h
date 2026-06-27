@@ -21,7 +21,8 @@ struct service_info
 class discovery
 {
 public:
-    using resolved_callback = std::function<void(const service_info &)>;
+    using resolved_callback  = std::function<void(const service_info &)>;
+    using withdrawn_callback = std::function<void(const service_info &)>;
 
     virtual ~discovery() = default;
 
@@ -30,6 +31,10 @@ public:
     virtual void browse(const resolved_callback &on_resolved) = 0;
 
     virtual void stop() = 0;
+
+    // A backend that can observe a peer leaving (a goodbye) calls this so the node removes
+    // awareness immediately; a backend with no leave signal does not override the no-op default.
+    virtual void on_withdrawn(const withdrawn_callback &) {}
 };
 
 }

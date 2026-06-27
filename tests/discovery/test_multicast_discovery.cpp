@@ -101,3 +101,94 @@ TEST_CASE("multicast_discovery: a valid datagram resolves with the datagram sour
     REQUIRE(got->endpoint.address == "172.16.0.4");
     REQUIRE(got->metadata == plexus::discovery::assemble_contact_card(id, sample_listens()));
 }
+
+TEST_CASE("multicast_discovery: stop while advertising emits one goodbye-flagged datagram before close", "[multicast_discovery]")
+{
+    int ex = 0;
+    fake_datagram_socket socket;
+    discovery_under_test disc{ex, socket};
+
+    const auto id   = make_id(0x66);
+    const auto card = plexus::discovery::assemble_contact_card(id, sample_listens());
+    disc.advertise({"node", plexus::io::endpoint{"", "host"}, card});
+    REQUIRE(socket.sent.size() == 1);
+
+    disc.stop();
+
+    REQUIRE(socket.sent.size() == 2);
+    REQUIRE(socket.closed);
+    const auto decoded = plexus::wire::decode_announcement(socket.sent.back());
+    REQUIRE(decoded.has_value());
+    REQUIRE((decoded->flags & plexus::wire::k_announcement_goodbye_flag) != 0);
+    REQUIRE(decoded->node_id == id);
+}
+
+TEST_CASE("multicast_discovery: stop while not advertising emits no goodbye", "[multicast_discovery]")
+{
+    int ex = 0;
+    fake_datagram_socket socket;
+    discovery_under_test disc{ex, socket};
+
+    disc.stop();
+
+    REQUIRE(socket.sent.empty());
+    REQUIRE(socket.closed);
+}
+
+TEST_CASE("multicast_discovery: a goodbye datagram fires on_withdrawn and not on_resolved", "[multicast_discovery]")
+{
+    int ex = 0;
+    fake_datagram_socket socket;
+    discovery_under_test disc{ex, socket};
+
+    int resolved = 0;
+    std::optional<plexus::discovery::service_info> withdrawn;
+    disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
+    disc.on_withdrawn([&](const plexus::discovery::service_info &s) { withdrawn = s; });
+
+    const auto id  = make_id(0x77);
+    const auto bye = plexus::wire::encode_announcement(
+            plexus::native::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
+    socket.inject("10.1.2.3", bye);
+
+    REQUIRE(resolved == 0);
+    REQUIRE(withdrawn.has_value());
+    REQUIRE(withdrawn->endpoint.address == "10.1.2.3");
+    REQUIRE(withdrawn->metadata == plexus::discovery::assemble_contact_card(id, sample_listens()));
+}
+
+TEST_CASE("multicast_discovery: a goodbye with no withdrawn callback is a safe no-op", "[multicast_discovery]")
+{
+    int ex = 0;
+    fake_datagram_socket socket;
+    discovery_under_test disc{ex, socket};
+
+    int resolved = 0;
+    disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
+
+    const auto id  = make_id(0x88);
+    const auto bye = plexus::wire::encode_announcement(
+            plexus::native::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
+    socket.inject("10.1.2.4", bye);
+
+    REQUIRE(resolved == 0);
+}
+
+TEST_CASE("multicast_discovery: a non-goodbye datagram still resolves and fires no withdrawal", "[multicast_discovery]")
+{
+    int ex = 0;
+    fake_datagram_socket socket;
+    discovery_under_test disc{ex, socket};
+
+    int resolved  = 0;
+    int withdrawn = 0;
+    disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
+    disc.on_withdrawn([&](const plexus::discovery::service_info &) { ++withdrawn; });
+
+    const auto id   = make_id(0x99);
+    const auto good = plexus::wire::encode_announcement(plexus::native::detail::announcement_from_card(id, sample_listens(), 30, 0));
+    socket.inject("10.1.2.5", good);
+
+    REQUIRE(resolved == 1);
+    REQUIRE(withdrawn == 0);
+}
