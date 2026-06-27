@@ -41,8 +41,8 @@ TEST_CASE("node_native_discovery: two nodes discover each other over the wired d
     sock_a.pair_with(sock_b);
     sock_b.pair_with(sock_a);
 
-    plexus::native::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_a{io, sock_a};
-    plexus::native::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_b{io, sock_b};
+    plexus::discovery::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_a{io, sock_a};
+    plexus::discovery::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_b{io, sock_b};
 
     pasio::asio_transport transport_a{io};
     pasio::asio_transport transport_b{io};
@@ -87,8 +87,8 @@ TEST_CASE("node_native_discovery: a goodbye flushes the leaver from a peer's awa
     sock_a.pair_with(sock_b);
     sock_b.pair_with(sock_a);
 
-    plexus::native::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_a{io, sock_a};
-    plexus::native::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_b{io, sock_b};
+    plexus::discovery::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_a{io, sock_a};
+    plexus::discovery::multicast_discovery<wiring_datagram_socket, pasio::asio_policy> disc_b{io, sock_b};
 
     pasio::asio_transport transport_a{io};
     pasio::asio_transport transport_b{io};
@@ -128,14 +128,14 @@ TEST_CASE("node_native_discovery: two nodes discover each other over real multic
     pasio::udp_multicast_socket sock_a{io, group, mc_port, mc_ttl};
     pasio::udp_multicast_socket sock_b{io, group, mc_port, mc_ttl};
 
-    plexus::native::discovery_options opts;
+    plexus::discovery::discovery_options opts;
     opts.group           = "239.255.0.73";
     opts.port            = mc_port;
     opts.ttl             = mc_ttl;
     opts.announce_period = std::chrono::milliseconds(100);
 
-    plexus::native::multicast_discovery<pasio::udp_multicast_socket, pasio::asio_policy> disc_a{io, sock_a, opts};
-    plexus::native::multicast_discovery<pasio::udp_multicast_socket, pasio::asio_policy> disc_b{io, sock_b, opts};
+    plexus::discovery::multicast_discovery<pasio::udp_multicast_socket, pasio::asio_policy> disc_a{io, sock_a, opts};
+    plexus::discovery::multicast_discovery<pasio::udp_multicast_socket, pasio::asio_policy> disc_b{io, sock_b, opts};
 
     pasio::asio_transport transport_a{io};
     pasio::asio_transport transport_b{io};

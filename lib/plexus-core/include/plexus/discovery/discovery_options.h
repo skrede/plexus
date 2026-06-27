@@ -1,12 +1,12 @@
-#ifndef HPP_GUARD_PLEXUS_NATIVE_DISCOVERY_OPTIONS_H
-#define HPP_GUARD_PLEXUS_NATIVE_DISCOVERY_OPTIONS_H
+#ifndef HPP_GUARD_PLEXUS_DISCOVERY_DISCOVERY_OPTIONS_H
+#define HPP_GUARD_PLEXUS_DISCOVERY_DISCOVERY_OPTIONS_H
 
 #include <chrono>
 #include <string>
 #include <cstddef>
 #include <cstdint>
 
-namespace plexus::native {
+namespace plexus::discovery {
 
 // The admission cap for the open (unauthenticated) multicast group. max_peers bounds the distinct
 // admitted-source set; 256 is far below the data-plane demux's 4096 default since a LAN-segment

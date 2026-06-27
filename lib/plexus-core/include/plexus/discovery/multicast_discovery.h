@@ -1,10 +1,10 @@
-#ifndef HPP_GUARD_PLEXUS_NATIVE_MULTICAST_DISCOVERY_H
-#define HPP_GUARD_PLEXUS_NATIVE_MULTICAST_DISCOVERY_H
+#ifndef HPP_GUARD_PLEXUS_DISCOVERY_MULTICAST_DISCOVERY_H
+#define HPP_GUARD_PLEXUS_DISCOVERY_MULTICAST_DISCOVERY_H
 
-#include "plexus/native/discovery_options.h"
-#include "plexus/native/detail/announcement_card.h"
-#include "plexus/native/detail/discovery_flood_cap.h"
-#include "plexus/native/detail/discovery_card_codec.h"
+#include "plexus/discovery/discovery_options.h"
+#include "plexus/discovery/detail/announcement_card.h"
+#include "plexus/discovery/detail/discovery_flood_cap.h"
+#include "plexus/discovery/detail/discovery_card_codec.h"
 
 #include "plexus/stream/datagram_socket.h"
 #include "plexus/wire/announcement.h"
@@ -20,7 +20,7 @@
 #include <utility>
 #include <system_error>
 
-namespace plexus::native {
+namespace plexus::discovery {
 
 // The first-party IPv4 multicast discovery leaf: it implements the abstract discovery::discovery
 // (advertise/browse/stop) over a borrowed datagram_socket, so basic_node consumes it unchanged.
@@ -31,7 +31,7 @@ namespace plexus::native {
 // downstream handshake gates identity — so it never dials.
 template<typename Socket, typename Policy, typename Clock = std::chrono::steady_clock>
     requires stream::datagram_socket<Socket>
-class multicast_discovery final : public discovery::discovery
+class multicast_discovery final : public discovery
 {
 public:
     using executor_type = typename Policy::executor_type;

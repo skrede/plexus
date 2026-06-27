@@ -4,7 +4,7 @@
 // same node->discovery->note_from_card path deterministically without real multicast.
 #pragma once
 
-#include "plexus/native/multicast_discovery.h"
+#include "plexus/discovery/multicast_discovery.h"
 
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_transport.h"

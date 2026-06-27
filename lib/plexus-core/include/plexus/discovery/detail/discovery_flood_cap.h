@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_NATIVE_DETAIL_DISCOVERY_FLOOD_CAP_H
-#define HPP_GUARD_PLEXUS_NATIVE_DETAIL_DISCOVERY_FLOOD_CAP_H
+#ifndef HPP_GUARD_PLEXUS_DISCOVERY_DETAIL_DISCOVERY_FLOOD_CAP_H
+#define HPP_GUARD_PLEXUS_DISCOVERY_DETAIL_DISCOVERY_FLOOD_CAP_H
 
-#include "plexus/native/discovery_options.h"
+#include "plexus/discovery/discovery_options.h"
 
 #include <chrono>
 #include <string>
@@ -9,7 +9,7 @@
 #include <utility>
 #include <unordered_map>
 
-namespace plexus::native::detail {
+namespace plexus::discovery::detail {
 
 // The admission gate for the open multicast group, keyed by the datagram's kernel source host
 // string. admit() bounds the distinct admitted-source set (max_peers) and one source's announce

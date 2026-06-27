@@ -1,6 +1,6 @@
 #include "test_multicast_discovery_common.h"
 
-#include "plexus/native/detail/announcement_card.h"
+#include "plexus/discovery/detail/announcement_card.h"
 
 #include "plexus/wire/announcement.h"
 
@@ -34,18 +34,18 @@ std::vector<plexus::discovery::listening_transport> sample_listens()
 
 std::vector<std::byte> announce_bytes(std::uint8_t seed)
 {
-    return plexus::wire::encode_announcement(plexus::native::detail::announcement_from_card(make_id(seed), sample_listens(), 30, 0));
+    return plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(make_id(seed), sample_listens(), 30, 0));
 }
 
 std::vector<std::byte> goodbye_bytes(std::uint8_t seed)
 {
     return plexus::wire::encode_announcement(
-            plexus::native::detail::announcement_from_card(make_id(seed), sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
+            plexus::discovery::detail::announcement_from_card(make_id(seed), sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
 }
 
-plexus::native::discovery_options capped_options(std::size_t max_peers, std::size_t per_source_max, bool evict_lru)
+plexus::discovery::discovery_options capped_options(std::size_t max_peers, std::size_t per_source_max, bool evict_lru)
 {
-    plexus::native::discovery_options opts;
+    plexus::discovery::discovery_options opts;
     opts.cap.max_peers      = max_peers;
     opts.cap.per_source_max = per_source_max;
     opts.cap.evict_lru      = evict_lru;

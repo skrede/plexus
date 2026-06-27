@@ -1,6 +1,6 @@
 #include "test_multicast_discovery_common.h"
 
-#include "plexus/native/detail/announcement_card.h"
+#include "plexus/discovery/detail/announcement_card.h"
 
 #include "plexus/wire/announcement.h"
 
@@ -40,8 +40,8 @@ TEST_CASE("multicast_discovery: service_info metadata is byte-identical to assem
     const auto id      = make_id(0x42);
     const auto listens = sample_listens();
 
-    plexus::wire::announcement ann = plexus::native::detail::announcement_from_card(id, listens, 30, 0);
-    const auto info                = plexus::native::detail::service_info_from_announcement(ann, "192.168.1.5");
+    plexus::wire::announcement ann = plexus::discovery::detail::announcement_from_card(id, listens, 30, 0);
+    const auto info                = plexus::discovery::detail::service_info_from_announcement(ann, "192.168.1.5");
 
     const auto reference = plexus::discovery::assemble_contact_card(id, listens);
     REQUIRE(info.metadata == reference);
@@ -77,7 +77,7 @@ TEST_CASE("multicast_discovery: a foreign or truncated datagram fires no on_reso
     socket.inject("10.0.0.9", bad_magic);
 
     const auto id    = make_id(0x33);
-    const auto good  = plexus::wire::encode_announcement(plexus::native::detail::announcement_from_card(id, sample_listens(), 30, 0));
+    const auto good  = plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, 0));
     const std::vector<std::byte> truncated{good.begin(), good.begin() + 5};
     socket.inject("10.0.0.9", truncated);
 
@@ -94,7 +94,7 @@ TEST_CASE("multicast_discovery: a valid datagram resolves with the datagram sour
     disc.browse([&](const plexus::discovery::service_info &s) { got = s; });
 
     const auto id   = make_id(0x55);
-    const auto good = plexus::wire::encode_announcement(plexus::native::detail::announcement_from_card(id, sample_listens(), 30, 0));
+    const auto good = plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, 0));
     socket.inject("172.16.0.4", good);
 
     REQUIRE(got.has_value());
@@ -148,7 +148,7 @@ TEST_CASE("multicast_discovery: a goodbye datagram fires on_withdrawn and not on
 
     const auto id  = make_id(0x77);
     const auto bye = plexus::wire::encode_announcement(
-            plexus::native::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
+            plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
     socket.inject("10.1.2.3", bye);
 
     REQUIRE(resolved == 0);
@@ -168,7 +168,7 @@ TEST_CASE("multicast_discovery: a goodbye with no withdrawn callback is a safe n
 
     const auto id  = make_id(0x88);
     const auto bye = plexus::wire::encode_announcement(
-            plexus::native::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
+            plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
     socket.inject("10.1.2.4", bye);
 
     REQUIRE(resolved == 0);
@@ -186,7 +186,7 @@ TEST_CASE("multicast_discovery: a non-goodbye datagram still resolves and fires 
     disc.on_withdrawn([&](const plexus::discovery::service_info &) { ++withdrawn; });
 
     const auto id   = make_id(0x99);
-    const auto good = plexus::wire::encode_announcement(plexus::native::detail::announcement_from_card(id, sample_listens(), 30, 0));
+    const auto good = plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, 0));
     socket.inject("10.1.2.5", good);
 
     REQUIRE(resolved == 1);
