@@ -1,3 +1,22 @@
+# MCU example — onboard intra-node self-delivery (zero link)
+
+[`esp-idf-onboard/`](esp-idf-onboard/) is the self-contained case: a single node whose **sole
+transport is the intra-node self-route**. It publishes a typed value to its **own** subscriber
+on-device — no UART, no Wi-Fi, no lwIP, no second node, no wire. The publication is posted onto
+the cooperative executor and delivered to the subscriber on the next drain, all on-chip. This is
+"MCU as a self-contained data-plane node": onboard plexus compute, the engine fanning a producer
+to a consumer inside one device. The payload is a plain in-process counter (no HAL, no pin), and
+the device console (UART0, left enabled) logs each self-delivered value with `ESP_LOGI`.
+
+It cross-builds for `esp32` (Xtensa). A green cross-compile is the deliverable here; the
+on-hardware run is deferred (a green cross-compile is not a runtime proof on its own).
+
+```sh
+. /opt/esp-idf/export.sh
+idf.py -C examples/mcu/esp-idf-onboard set-target esp32
+idf.py -C examples/mcu/esp-idf-onboard build
+```
+
 # MCU example — plexus on an ESP32 over a real UART
 
 A full plexus node running on a constrained target. The board ([`esp-idf/`](esp-idf/)) stands

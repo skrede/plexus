@@ -1,0 +1,9 @@
+# ESP-IDF build artifacts and generated config — only the source is tracked
+# (CMakeLists, main/, sdkconfig.defaults). build/ is also caught by the repo root
+# **/build/ rule; the rest are IDF-generated and must never be committed.
+/build/
+/build_*/
+/sdkconfig
+/sdkconfig.old
+/dependencies.lock
+/managed_components/

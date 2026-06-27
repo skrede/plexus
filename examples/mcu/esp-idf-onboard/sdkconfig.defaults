@@ -1,0 +1,8 @@
+# Match the component's -fno-exceptions -fno-rtti override: the substrate
+# is exception-free and RTTI-free on the constrained target.
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# The console stays on the default UART0: this onboard example owns no link, so it logs
+# each self-delivered value with ESP_LOGI. Nothing rides a wire here — the console is the
+# only output.
