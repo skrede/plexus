@@ -188,3 +188,13 @@ target_link_libraries(test_typed_fastpath PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_fastpath TEST_PREFIX "node.")
+
+# The single-node self-loopback slice: a node built with no caller transport delivers its own
+# publications to its own subscribers — the bytes lane (posted), the typed zero-copy lane (same
+# address, zero encodes), and the no-wire-subscribe witness for the self-route.
+add_executable(test_self_loopback test_self_loopback.cpp)
+target_link_libraries(test_self_loopback PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_self_loopback TEST_PREFIX "node.")

@@ -16,8 +16,10 @@
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
+#include "plexus/io/intra_node_transport.h"
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
+#include "plexus/io/process_loopback_channel.h"
 
 #include "plexus/log/logger.h"
 
@@ -177,6 +179,10 @@ public:
     using engine_channel   = typename engine_type::channel_type;
     using transport_tuple  = std::tuple<Transports...>;
 
+    // The self-route engages only when the engine binds the loopback channel as its channel_type —
+    // the pure intra-node (single-transport) node. Any other node leaves m_self_channel idle.
+    static constexpr bool k_has_self_loopback = std::is_same_v<engine_channel, io::process_loopback_channel<Policy>>;
+
     // The node_id is taken verbatim: plexus compares the identity, never mints or interprets it.
     basic_node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id, Transports &...transports, const node_options &opts)
             : m_id(id)
@@ -191,6 +197,7 @@ public:
             // ctor — that would invalidate the subsequent engine_leaf / resolve_hook reads.
             , m_glue(transports..., io::transport_selector{}, detail::resolve_hook(transports...))
             , m_leaf(engine_leaf(transports...))
+            , m_self_channel(executor, m_service_name)
             , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout, opts.reconnect, opts.redial_seed, resolve_logger(opts), opts.dial_eagerly,
                        opts.max_message_bytes)
     {
@@ -202,6 +209,7 @@ public:
         advertise_card();
         m_disc.browse([this](const discovery::service_info &peer) { note_from_card(peer); });
         install_upgrade_coordinator();
+        install_self_loopback();
         m_engine.capture().set_default(opts.capture.to_rule());
         m_engine.post_participant({io::participant_edge::created, m_id});
     }
@@ -348,8 +356,11 @@ private:
                                              plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb,
                                              std::optional<std::uint64_t> type_id = std::nullopt, object_entry obj = {}, std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
-        const registration_id rid = m_next_registration++;
+        const registration_id rid    = m_next_registration++;
+        const bool first_for_fqn     = !any_subscriber_for(fqn);
         m_subscriptions.push_back({rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
+        if(first_for_fqn)
+            self_attach(fqn, qos, type_id);
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
@@ -369,6 +380,7 @@ private:
         m_subscriptions.erase(it);
         if(!any_subscriber_for(fqn))
         {
+            self_detach(fqn);
             m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired, wire::fqn_topic_hash(fqn), std::nullopt});
             for(const auto &peer : m_known_peers)
                 m_engine.unsubscribe(peer, fqn);
@@ -554,6 +566,56 @@ private:
         return std::any_of(m_subscriptions.begin(), m_subscriptions.end(), [&](const auto &e) { return e.second.fqn == fqn; });
     }
 
+    void install_self_loopback()
+    {
+        if constexpr(k_has_self_loopback)
+        {
+            m_self_channel.on_object([this](const io::object_carrier &carrier) { loopback_object(carrier); });
+            m_self_channel.on_data([this](std::span<const std::byte> framed) { loopback_bytes(framed); });
+        }
+    }
+
+    // The object self-route: resolve the fqn from the carrier's topic_hash and re-enter the node's
+    // own dispatch (which re-scans m_subscriptions, so a retired sub is a safe no-op). The carrier
+    // arrives addref'd by the channel's posted send_object; the channel releases after this returns.
+    void loopback_object(const io::object_carrier &carrier)
+    {
+        const std::string_view fqn = m_engine.messages().fqn_for(carrier.topic_hash);
+        if(!fqn.empty())
+            dispatch_object(fqn, carrier);
+    }
+
+    // The bytes self-route: strip the frame header off the posted frame and route the inner through
+    // the forwarder's decode (fqn resolve + intra-process stamp) into the node's own dispatch.
+    void loopback_bytes(std::span<const std::byte> framed)
+    {
+        if constexpr(k_has_self_loopback)
+        {
+            const auto hdr = wire::decode_header(framed);
+            if(!hdr)
+                return;
+            const std::span<const std::byte> inner       = framed.subspan(wire::header_size);
+            const bool has_source_identity               = (hdr->flags & wire::k_flag_source_identity) != 0;
+            io::message_info info{};
+            info.from_intra_process = true;
+            typename io::message_forwarder<engine_policy>::peer self{m_self_channel, m_service_name};
+            m_engine.messages().deliver(self, inner, info, m_id, has_source_identity,
+                                        [this](std::string_view fqn, std::span<const std::byte> data, const io::message_info &mi) { dispatch_message(fqn, data, mi); });
+        }
+    }
+
+    void self_attach(std::string_view fqn, const io::subscriber_qos &qos, std::optional<std::uint64_t> type_id)
+    {
+        if constexpr(k_has_self_loopback)
+            m_engine.messages().attach_local(fqn, m_self_channel, m_service_name, qos, type_id);
+    }
+
+    void self_detach(std::string_view fqn)
+    {
+        if constexpr(k_has_self_loopback)
+            m_engine.messages().detach_local(fqn, m_self_channel);
+    }
+
     // Each verb is a captureless static lambda (a plain fn-ptr, zero alloc) recovering the node and
     // forwarding to the private *_seam, so the concrete Policy stays inside those bodies.
     // NOLINTNEXTLINE(readability-function-size)
@@ -657,6 +719,12 @@ private:
     std::vector<std::string> m_served_fqns;
     registration_id m_next_registration{1};
     std::size_t m_object_dispatch_mismatch{};
+
+    // The node-owned self-route, attached to its OWN forwarder so a publish reaches a same-node
+    // subscriber. Declared BEFORE m_engine so it outlives the registry references that hold it.
+    // It is only wired when the engine binds it as the channel_type (the pure intra-node node);
+    // on any other node it is an idle member.
+    io::process_loopback_channel<Policy> m_self_channel;
 
     engine_type m_engine;
 };

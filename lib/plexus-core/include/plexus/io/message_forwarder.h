@@ -90,6 +90,21 @@ public:
         return detail::attach_for_fanout(*this, p, fqn, subscriber_type_id, sub_qos);
     }
 
+    // Register a same-node self-route as a first-class subscriber: registry add only — no wire
+    // subscribe, no remembered demand, no demand transition (the self-channel never dials and a
+    // local subscription creates no wire demand). Idempotent via the registry's dedup by channel.
+    void attach_local(std::string_view fqn, channel_type &channel, std::string_view self_name, const subscriber_qos &qos = subscriber_qos{},
+                      std::optional<std::uint64_t> type_id = std::nullopt)
+    {
+        m_endpoint.registry().add_subscriber(wire::fqn_topic_hash(fqn), fqn, channel, self_name, qos, type_id);
+    }
+
+    void detach_local(std::string_view fqn, channel_type &channel)
+    {
+        m_endpoint.registry().remove_subscriber(wire::fqn_topic_hash(fqn), channel);
+        m_egress.remove(channel);
+    }
+
     void remember_demand(const std::string &node_name, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt)
     {
         record_remote_topic(node_name, fqn, qos, type_id);
