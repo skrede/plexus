@@ -3,3 +3,4 @@
 # is on, so the default tree never compiles it.
 
 add_subdirectory(scalability)
+add_subdirectory(loopback)
