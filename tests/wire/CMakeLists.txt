@@ -73,6 +73,16 @@ target_link_libraries(test_locality_qos PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_locality_qos TEST_PREFIX "wire.")
 
+# The discovery announcement codec oracle: the round-trip + malformed-reject set + the
+# reserved-universe forward-compat case. It includes node_id.h + contact_card.h (the
+# schema version), so it links plexus::core alongside the header-only plexus::wire.
+add_executable(test_announcement test_announcement.cpp)
+target_link_libraries(test_announcement PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_announcement TEST_PREFIX "wire.")
+
 # The stream_inbound detection oracle drives a virtual-clock inproc timer, so this
 # TU additionally links plexus::inproc (the other wire targets do not) — mirroring
 # how the integration inproc targets pull in the manual-clock executor/timer. The
