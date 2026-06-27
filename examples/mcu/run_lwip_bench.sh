@@ -104,7 +104,22 @@ for cell in "${CELLS[@]}"; do
         devlog="${LOG_DIR}/${cell}_run_${run}_device.log"
 
         echo "=== ${cell} run ${run}/${RUNS}: flashing ${PORT} ==="
-        idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" -p "${PORT}" flash >>"${log}" 2>&1
+        # The dev-board auto-reset-into-bootloader (esptool DTR/RTS) is intermittently flaky on this
+        # adapter ("chip stopped responding" ~1 in 3); retry the flash so one stuck reset does not abort
+        # the whole sweep. Mirrors the startup-race robustness the round-trip workload already carries.
+        flashed=0
+        for attempt in 1 2 3 4 5; do
+            if idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" -p "${PORT}" flash >>"${log}" 2>&1; then
+                flashed=1; break
+            fi
+            echo "=== ${cell} run ${run}/${RUNS}: flash attempt ${attempt} failed; settling then retrying ==="
+            sleep 3
+        done
+        if [[ "${flashed}" -ne 1 ]]; then
+            echo "=== ${cell} run ${run}/${RUNS}: flash failed after retries (board not entering download mode) ==="
+            sleep 3
+            continue
+        fi
 
         reset_and_capture "${PORT}" "${devlog}" 90 &
         cap_pid=$!
