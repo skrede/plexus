@@ -1,0 +1,7 @@
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# lwIP dialed down for the constrained target. IGMP multicast membership is on (the discovery leaf
+# joins 239.255.0.7); IPv6 is a later milestone.
+CONFIG_LWIP_MAX_SOCKETS=4
+CONFIG_LWIP_IPV6=n

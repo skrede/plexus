@@ -13,4 +13,7 @@ if(TARGET plexus::asio)
 
     add_executable(lwip_bench_host lwip_bench_host.cpp)
     target_link_libraries(lwip_bench_host PRIVATE plexus::plexus plexus::asio)
+
+    add_executable(multicast_gate_host multicast_gate_host.cpp)
+    target_link_libraries(multicast_gate_host PRIVATE plexus::plexus plexus::asio)
 endif()

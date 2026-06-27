@@ -23,7 +23,7 @@
 
 namespace plexus::freertos::detail {
 
-struct lwip_address
+struct host_port
 {
     std::string host;
     std::uint16_t port;
@@ -31,7 +31,7 @@ struct lwip_address
 
 // Split a "host:port" address (the io::endpoint::address form) into its two parts; an absent
 // or unparsable port yields port 0, which connect() then rejects.
-inline lwip_address parse_host_port(std::string_view address)
+inline host_port parse_host_port(std::string_view address)
 {
     const auto colon = address.rfind(':');
     if(colon == std::string_view::npos)
@@ -138,7 +138,7 @@ public:
     }
 
 private:
-    std::error_code open_and_dial(const lwip_address &parsed)
+    std::error_code open_and_dial(const host_port &parsed)
     {
         m_fd = ::lwip_socket(AF_INET, SOCK_STREAM, 0); // the BSD opener; the class name shadows it unqualified here
         if(m_fd < 0)
