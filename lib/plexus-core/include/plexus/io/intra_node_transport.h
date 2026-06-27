@@ -32,6 +32,11 @@ public:
     static constexpr std::span<const std::string_view> mux_schemes{k_schemes};
     static constexpr transport_kind mux_tier = transport_kind::local;
 
+    // Ranks the intra-node member first within the mux local tier (read by member_prefers_local_fast).
+    // "inproc" collides with no other member's scheme, so this flag plus the pack-order convention is
+    // the whole of the locality-priority ranking — no selector sub-ordering hook is required.
+    static constexpr bool mux_prefers_local_fast = true;
+
     void listen(const endpoint &)
     {
     }

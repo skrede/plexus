@@ -35,6 +35,7 @@
 #include "plexus/detail/compat.h"
 #include "plexus/detail/fail_closed.h"
 #include "plexus/detail/address_parse.h"
+#include "plexus/detail/node_self_route.h"
 #include "plexus/detail/node_upgrade_wiring.h"
 #include "plexus/detail/function_traits.h"
 #include "plexus/detail/node_internals.h"
@@ -59,6 +60,12 @@ namespace detail {
 
 template<typename Policy, typename... Transports>
 using node_engine_policy = std::conditional_t<sizeof...(Transports) == 1, Policy, muxify<Policy>>;
+
+// True when the transport pack carries an intra_node_transport<Policy> — the node then self-attaches
+// its loopback channel. The pure single-transport case AND a composed intra-node+network node both
+// match; only a pack with no intra-node member leaves the self-route idle.
+template<typename Policy, typename... Transports>
+constexpr bool pack_has_intra_node = (std::is_same_v<Transports, io::intra_node_transport<Policy>> || ...);
 
 // The variadic ctor lets the node's member-init use ONE in-place construction expression for
 // both glue kinds (this type ignores the leaves; the mux consumes them).
@@ -179,9 +186,17 @@ public:
     using engine_channel   = typename engine_type::channel_type;
     using transport_tuple  = std::tuple<Transports...>;
 
-    // The self-route engages only when the engine binds the loopback channel as its channel_type —
-    // the pure intra-node (single-transport) node. Any other node leaves m_self_channel idle.
-    static constexpr bool k_has_self_loopback = std::is_same_v<engine_channel, io::process_loopback_channel<Policy>>;
+    // The self-route engages whenever the pack carries an intra_node_transport: the pure
+    // single-transport node binds the loopback channel as channel_type (concrete, zero erasure,
+    // object fast path); a composed intra-node+network node binds polymorphic_byte_channel, so the
+    // self-channel is wrapped (erased, framed bytes lane only — no zero-copy self-lane there). Any
+    // pack with no intra-node member leaves the self-route idle.
+    static constexpr bool k_has_self_loopback = detail::pack_has_intra_node<Policy, Transports...>;
+
+    // Single-transport: the engine's channel IS the concrete loopback channel, attached directly.
+    // Multi-transport: the engine's channel is the erased polymorphic_byte_channel, so the concrete
+    // self-channel is reference-adapter wrapped to satisfy the registry's reference_wrapper.
+    static constexpr bool k_self_route_erased = k_has_self_loopback && !std::is_same_v<engine_channel, io::process_loopback_channel<Policy>>;
 
     // The node_id is taken verbatim: plexus compares the identity, never mints or interprets it.
     basic_node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id, Transports &...transports, const node_options &opts)
@@ -566,6 +581,16 @@ private:
         return std::any_of(m_subscriptions.begin(), m_subscriptions.end(), [&](const auto &e) { return e.second.fqn == fqn; });
     }
 
+    // The registry-facing self-route: the concrete loopback channel on a single-transport node, or
+    // the reference-adapter wrapper (the registry's polymorphic_byte_channel) on a multi-transport one.
+    engine_channel &self_route() noexcept
+    {
+        if constexpr(k_self_route_erased)
+            return m_self_route;
+        else
+            return m_self_channel;
+    }
+
     void install_self_loopback()
     {
         if constexpr(k_has_self_loopback)
@@ -598,7 +623,7 @@ private:
             const bool has_source_identity               = (hdr->flags & wire::k_flag_source_identity) != 0;
             io::message_info info{};
             info.from_intra_process = true;
-            typename io::message_forwarder<engine_policy>::peer self{m_self_channel, m_service_name};
+            typename io::message_forwarder<engine_policy>::peer self{self_route(), m_service_name};
             m_engine.messages().deliver(self, inner, info, m_id, has_source_identity,
                                         [this](std::string_view fqn, std::span<const std::byte> data, const io::message_info &mi) { dispatch_message(fqn, data, mi); });
         }
@@ -607,13 +632,13 @@ private:
     void self_attach(std::string_view fqn, const io::subscriber_qos &qos, std::optional<std::uint64_t> type_id)
     {
         if constexpr(k_has_self_loopback)
-            m_engine.messages().attach_local(fqn, m_self_channel, m_service_name, qos, type_id);
+            m_engine.messages().attach_local(fqn, self_route(), m_service_name, qos, type_id);
     }
 
     void self_detach(std::string_view fqn)
     {
         if constexpr(k_has_self_loopback)
-            m_engine.messages().detach_local(fqn, m_self_channel);
+            m_engine.messages().detach_local(fqn, self_route());
     }
 
     // Each verb is a captureless static lambda (a plain fn-ptr, zero alloc) recovering the node and
@@ -722,9 +747,14 @@ private:
 
     // The node-owned self-route, attached to its OWN forwarder so a publish reaches a same-node
     // subscriber. Declared BEFORE m_engine so it outlives the registry references that hold it.
-    // It is only wired when the engine binds it as the channel_type (the pure intra-node node);
-    // on any other node it is an idle member.
+    // It is only wired when the pack carries an intra-node transport; on any other node it is idle.
     io::process_loopback_channel<Policy> m_self_channel;
+
+    // On a multi-transport node the registry holds reference_wrapper<polymorphic_byte_channel>, so the
+    // concrete self-channel is erased through a non-owning reference adapter (the node keeps owning
+    // m_self_channel). [[no_unique_address]] on the single-transport monostate keeps it zero-size.
+    using self_route_holder = std::conditional_t<k_self_route_erased, io::polymorphic_byte_channel, detail::no_self_route_wrapper>;
+    [[no_unique_address]] self_route_holder m_self_route{detail::make_self_route<self_route_holder>(m_self_channel)};
 
     engine_type m_engine;
 };

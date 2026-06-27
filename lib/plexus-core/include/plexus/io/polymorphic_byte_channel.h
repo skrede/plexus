@@ -99,13 +99,21 @@ public:
     {
         m_c->on_protocol_close(std::move(cb));
     }
+    // A channel WITHOUT the optional occupancy verbs (inproc-family) reports no backpressure and
+    // keys on its address — the same fallbacks the egress scheduler applies through its if-constexpr.
     std::size_t backpressured() const override
     {
-        return m_c->backpressured();
+        if constexpr(requires(const C &c) { c.backpressured(); })
+            return m_c->backpressured();
+        else
+            return 0;
     }
     std::uint64_t scheduler_key() const override
     {
-        return m_c->scheduler_key();
+        if constexpr(requires(const C &c) { c.scheduler_key(); })
+            return m_c->scheduler_key();
+        else
+            return reinterpret_cast<std::uint64_t>(m_c.get());
     }
 
     // Forward the drop_sink install only to a concrete channel that has the edge; a channel

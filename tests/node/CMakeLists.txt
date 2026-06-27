@@ -198,3 +198,13 @@ target_link_libraries(test_self_loopback PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback TEST_PREFIX "node.")
+
+# The intra-node self-route composed with a network transport on one node: the multi-transport
+# framed-lane self-delivery (the erased channel has no zero-copy hop) and exactly-once delivery
+# across the self-publish and remote-receive entry points.
+add_executable(test_self_loopback_mixed test_self_loopback_mixed.cpp)
+target_link_libraries(test_self_loopback_mixed PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_self_loopback_mixed TEST_PREFIX "node.")
