@@ -1,0 +1,9 @@
+# Match the component's -fno-exceptions -fno-rtti override: the substrate
+# is exception-free and RTTI-free on the constrained target.
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# The console stays on the default UART0: this onboard bench owns no link, so it emits its
+# machine-parseable BENCH sample/witness/resource lines there with std::printf. Nothing rides a
+# wire here — the console is the only output.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
