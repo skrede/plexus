@@ -150,3 +150,14 @@ target_link_libraries(test_spin_run_loop PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
 catch_discover_tests(test_spin_run_loop TEST_PREFIX "asio.")
+
+# The asio IPv4 multicast datagram socket over a real same-host loopback pair: two
+# udp_multicast_sockets join one group+port; the default-set case proves bind + IGMP join run with
+# no error, and the hidden [.multicast] case proves a sent datagram is delivered to on_datagram with
+# the exact payload and a populated kernel source endpoint (enable_loopback makes it observable). The
+# `asio.` ctest prefix selects it.
+add_executable(test_udp_multicast_socket test_udp_multicast_socket.cpp)
+target_link_libraries(test_udp_multicast_socket PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_multicast_socket TEST_PREFIX "asio.")

@@ -152,3 +152,15 @@ target_link_libraries(test_reliability_enforcement PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_reliability_enforcement TEST_PREFIX "udp.")
+
+# Host seam proof for the datagram_socket concept: fires static_assert(datagram_socket<
+# udp_multicast_socket>) at compile time (forcing the asio multicast header through the compiler)
+# and runs the construct + bind + IGMP-join path once over an io_context. Needs plexus::asio, which
+# exists only under the asio backend gate; registered under the `seam.` prefix.
+if(PLEXUS_ENABLE_ASIO_BACKEND)
+    add_executable(test_datagram_socket_concept test_datagram_socket_concept.cpp)
+    target_link_libraries(test_datagram_socket_concept PRIVATE
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_datagram_socket_concept TEST_PREFIX "seam.")
+endif()
