@@ -68,6 +68,20 @@ target_link_libraries(test_node_discovery PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_node_discovery TEST_PREFIX "node.")
 
+# The discovery-aging proof: the recorded (announce_period, TTL) empirical sweep and the wired
+# engine-pair aging case, both on the manual virtual clock (the plexus::testing test_clock) — so it
+# links core/wire/inproc/testing rather than the facade.
+add_executable(test_node_discovery_aging
+    test_node_discovery_aging.cpp
+    test_node_discovery_aging_wired.cpp)
+target_link_libraries(test_node_discovery_aging PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    plexus::testing
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_node_discovery_aging TEST_PREFIX "node.")
+
 # The pub/sub endpoint handles: move-only RAII semantics + ctor-canonical registration,
 # and the end-to-end bytes family including the standing-demand fan.
 add_executable(test_handles test_handles.cpp test_handles_retire.cpp)

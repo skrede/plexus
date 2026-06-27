@@ -71,8 +71,10 @@ public:
     using registry_type = peer_session_registry<Policy, Transport, Clock>;
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
-                   std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes)
+                   std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
+                   std::uint64_t discovery_ttl_ns = io::default_discovery_ttl_ns)
             : m_dial_eagerly(dial_eagerly)
+            , m_discovery_ttl_ns(discovery_ttl_ns)
             , m_transport(transport)
             , m_executor(executor)
             , m_security_fanout{*this}
@@ -139,7 +141,12 @@ public:
 
     void note_peer(const node_id &id, const endpoint &ep)
     {
-        m_known_peers.note_peer(id, ep);
+        note_peer(id, ep, now_for_aging());
+    }
+
+    void note_peer(const node_id &id, const endpoint &ep, std::uint64_t now)
+    {
+        m_known_peers.note_peer(id, ep, now);
         if(m_dial_eagerly)
             reach(id);
     }
@@ -306,6 +313,7 @@ public:
 
 private:
     bool m_dial_eagerly;
+    std::uint64_t m_discovery_ttl_ns;
     Transport &m_transport;
     executor_type m_executor;
     capture_policy m_capture;
@@ -441,6 +449,21 @@ private:
     {
         if(m_on_liveness_cb)
             m_on_liveness_cb(ev);
+    }
+
+    std::uint64_t now_for_aging() const
+    {
+        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count());
+    }
+
+    // Awareness-only removal on the existing tick: forgets a peer that stopped re-announcing and was
+    // not refreshed by a heartbeat. NEVER touches m_registry — an active session outlives its
+    // awareness entry.
+    void sweep_aged_awareness()
+    {
+        const std::uint64_t now      = now_for_aging();
+        const std::uint64_t deadline = now > m_discovery_ttl_ns ? now - m_discovery_ttl_ns : 0;
+        m_known_peers.expire_older_than(deadline, [](const node_id &) {});
     }
 };
 

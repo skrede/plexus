@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 
 namespace plexus::io {
@@ -22,22 +23,35 @@ class fixed_peer_storage
 public:
     void put(const node_id &id, const endpoint &ep)
     {
+        put(id, ep, 0);
+    }
+
+    void put(const node_id &id, const endpoint &ep, std::uint64_t now)
+    {
         if(entry *slot = find(id))
         {
-            slot->ep = ep;
+            slot->ep             = ep;
+            slot->last_refreshed = now;
             return;
         }
         for(entry &e : m_slots)
         {
             if(!e.occupied)
             {
-                e.occupied = true;
-                e.id       = id;
-                e.ep       = ep;
+                e.occupied       = true;
+                e.id             = id;
+                e.ep             = ep;
+                e.last_refreshed = now;
                 return;
             }
         }
         plexus::detail::fail_closed("fixed_peer_storage: capacity exceeded");
+    }
+
+    void refresh(const node_id &id, std::uint64_t now)
+    {
+        if(entry *slot = find(id))
+            slot->last_refreshed = now;
     }
 
     std::optional<endpoint> get(const node_id &id) const
@@ -58,11 +72,23 @@ public:
             slot->occupied = false;
     }
 
+    template<typename Report>
+    void expire_older_than(std::uint64_t deadline, Report report)
+    {
+        for(entry &e : m_slots)
+            if(e.occupied && e.last_refreshed < deadline)
+            {
+                report(e.id);
+                e.occupied = false;
+            }
+    }
+
 private:
     struct entry
     {
         node_id id{};
         endpoint ep{};
+        std::uint64_t last_refreshed{0};
         bool occupied{false};
     };
 

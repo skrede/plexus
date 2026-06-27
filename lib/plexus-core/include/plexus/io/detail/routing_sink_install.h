@@ -49,11 +49,24 @@ void install_routing_sinks(Engine &e)
     e.m_procedures.on_rpc_serve(make_rpc_sink(e, &observer::on_rpc_serve));
     e.m_procedures.on_rpc_reply(make_rpc_sink(e, &observer::on_rpc_reply));
     e.m_messages.set_on_data_stamp([&e](const node_id &ep, std::uint64_t topic_hash) { e.m_monitor.stamp_data(ep, topic_hash); });
-    e.m_build.on_stamp_seen = [&e](const node_id &ep) { e.m_monitor.stamp_seen(ep); };
+    // A received heartbeat asserts session presence AND refreshes the peer's discovery TTL, so an
+    // actively-heartbeating peer never ages out of awareness even if its multicast announces lapse;
+    // refresh is a no-op for a peer that is not currently known, inventing no awareness.
+    e.m_build.on_stamp_seen = [&e](const node_id &ep)
+    {
+        e.m_monitor.stamp_seen(ep);
+        e.m_known_peers.refresh(ep, e.now_for_aging());
+    };
     e.m_monitor.on_liveness([&e](const liveness_event &ev) { policy_type::post(e.m_executor, [&e, ev] { e.fan_liveness(ev); }); });
-    // A per-tick action, not a second timer: emit a heartbeat to every connected peer so a
-    // silent-but-alive publisher still asserts presence.
-    e.m_monitor.on_tick_action([&e] { e.m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); }); });
+    // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer so a
+    // silent-but-alive publisher still asserts presence, AND sweep the awareness table for peers that
+    // stopped re-announcing past their discovery TTL.
+    e.m_monitor.on_tick_action(
+            [&e]
+            {
+                e.m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); });
+                e.sweep_aged_awareness();
+            });
     e.m_monitor.start();
 }
 

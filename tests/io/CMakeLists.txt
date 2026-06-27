@@ -69,6 +69,20 @@ target_link_libraries(test_routing_engine_dial PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_routing_engine_dial TEST_PREFIX "io.")
 
+# The TTL-driven awareness-aging oracle drives the routing_engine over the inproc backend on the
+# manual virtual clock (the plexus::testing test_clock), so it links the inproc backend, the wire
+# layer and the testing substrate alongside core.
+add_executable(test_known_peers_aging
+    test_known_peers_aging.cpp
+    test_known_peers_aging_session.cpp)
+target_link_libraries(test_known_peers_aging PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    plexus::testing
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_known_peers_aging TEST_PREFIX "io.")
+
 # The mtu_budget oracle pins the oversize-boundary arithmetic against the real
 # wire::udp_envelope_overhead constant, so it additionally links the header-only
 # plexus::wire interface target alongside the datagram family that homes mtu_budget
