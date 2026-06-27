@@ -11,6 +11,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <chrono>
 #include <vector>
 
 namespace {
@@ -68,4 +69,16 @@ TEST_CASE("the queue path runs the enqueued invokers without touching m_posted",
 
     REQUIRE(ran == std::vector<int>{7, 9});
     REQUIRE_FALSE(exec.pump());
+}
+
+TEST_CASE("park runs a posted work item (the wakeable-park drain)", "[seam]")
+{
+    plexus::freertos::freertos_executor exec;
+    std::vector<int>                    ran;
+    sentinel_ctx                        queued{5, &ran};
+
+    exec.post_from_task({&append_sentinel, &queued});
+    exec.park(std::chrono::milliseconds{1});
+
+    REQUIRE(ran == std::vector<int>{5});
 }

@@ -6,6 +6,7 @@
 #include "plexus/detail/compat.h"
 
 #include <deque>
+#include <chrono>
 #include <vector>
 #include <cstdint>
 #include <utility>
@@ -70,6 +71,19 @@ public:
     void post_from_task(posted_work w) noexcept
     {
         xQueueSend(m_queue, &w, 0);
+    }
+
+    // The watchdog-safe idle: yield the core until a cross-context post arrives OR the interval
+    // elapses, running a post that wakes it. Blocking on the queue (not an unconditional delay) is
+    // what lets an RX-task delivery reach the engine immediately instead of waiting out the park —
+    // the receive-latency lever for the posted (P2) policy. A poll-only (P1) drive posts nothing, so
+    // it parks the full interval exactly as a plain delay would. The queue is depth-bounded, so even
+    // under a sustained post burst the loop drains and re-parks rather than spinning the idle out.
+    void park(std::chrono::milliseconds interval) noexcept
+    {
+        posted_work w{};
+        if(xQueueReceive(m_queue, &w, pdMS_TO_TICKS(static_cast<std::uint32_t>(interval.count()))) == pdTRUE)
+            w.invoke(w.ctx);
     }
 
     bool pump()

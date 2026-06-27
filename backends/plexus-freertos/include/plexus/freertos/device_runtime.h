@@ -45,7 +45,7 @@ void tick(freertos_executor &ex, std::span<P *const> ps, run_options opts)
     for(P *p : ps)
         p->poll();
     ex.drain();
-    vTaskDelay(pdMS_TO_TICKS(static_cast<std::uint32_t>(effective_park(opts).count())));
+    ex.park(effective_park(opts));
 }
 
 template<pollable P>
