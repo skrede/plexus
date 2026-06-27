@@ -1,0 +1,125 @@
+#ifndef HPP_GUARD_PLEXUS_NATIVE_MULTICAST_DISCOVERY_H
+#define HPP_GUARD_PLEXUS_NATIVE_MULTICAST_DISCOVERY_H
+
+#include "plexus/native/discovery_options.h"
+#include "plexus/native/detail/announcement_card.h"
+#include "plexus/native/detail/discovery_card_codec.h"
+
+#include "plexus/stream/datagram_socket.h"
+#include "plexus/wire/announcement.h"
+#include "plexus/discovery/discovery.h"
+#include "plexus/detail/compat.h"
+
+#include <span>
+#include <string>
+#include <vector>
+#include <cstddef>
+#include <cstdint>
+#include <utility>
+#include <system_error>
+
+namespace plexus::native {
+
+// The first-party IPv4 multicast discovery leaf: it implements the abstract discovery::discovery
+// (advertise/browse/stop) over a borrowed datagram_socket, so basic_node consumes it unchanged.
+// advertise emits the node's card as a wire announcement immediately AND on a re-announce timer;
+// browse decodes each inbound datagram, drops a foreign/malformed one (decode nullopt), and on a
+// valid one fires on_resolved with metadata byte-identical to assemble_contact_card and the
+// endpoint taken from the datagram's unspoofable kernel source. It posts awareness ONLY — the
+// downstream handshake gates identity — so it never dials.
+template<typename Socket, typename Policy>
+    requires stream::datagram_socket<Socket>
+class multicast_discovery final : public discovery::discovery
+{
+public:
+    using executor_type = typename Policy::executor_type;
+
+    multicast_discovery(executor_type executor, Socket &socket, discovery_options options = {})
+            : m_executor(executor)
+            , m_socket(socket)
+            , m_timer(executor)
+            , m_options(std::move(options))
+            , m_advertising(false)
+    {
+        m_socket.bind(bind_endpoint());
+        m_socket.on_datagram([this](const typename Socket::endpoint_type &from, std::span<const std::byte> bytes) { on_inbound(from, bytes); });
+    }
+
+    void advertise(const ::plexus::discovery::service_info &service) override
+    {
+        m_card = service;
+        const bool was_advertising = m_advertising;
+        m_advertising              = true;
+        emit_announcement();
+        if(!was_advertising)
+            arm_timer();
+    }
+
+    void browse(const resolved_callback &on_resolved) override
+    {
+        m_on_resolved_cb = on_resolved;
+    }
+
+    void stop() override
+    {
+        m_timer.cancel();
+        m_socket.close();
+        m_on_resolved_cb = nullptr;
+        m_advertising    = false;
+    }
+
+private:
+    typename Socket::endpoint_type bind_endpoint() const
+    {
+        typename Socket::endpoint_type ep{};
+        ep.port(m_options.port);
+        return ep;
+    }
+
+    void on_inbound(const typename Socket::endpoint_type &from, std::span<const std::byte> bytes)
+    {
+        const auto ann = wire::decode_announcement(bytes);
+        if(!ann || !m_on_resolved_cb)
+            return;
+        m_on_resolved_cb(detail::service_info_from_announcement(*ann, from.address().to_string()));
+    }
+
+    // Re-announces of the same (id, ep) are idempotent at note_peer (a map put), so no dedup.
+    void emit_announcement()
+    {
+        detail::encode_card_announcement(m_scratch, m_card, ttl_secs(), 0);
+        if(!m_scratch.empty())
+            m_socket.send_multicast(m_scratch);
+    }
+
+    void arm_timer()
+    {
+        m_timer.expires_after(m_options.announce_period);
+        m_timer.async_wait(
+                [this](std::error_code ec)
+                {
+                    if(ec || !m_advertising)
+                        return;
+                    emit_announcement();
+                    arm_timer();
+                });
+    }
+
+    std::uint64_t ttl_secs() const
+    {
+        return static_cast<std::uint64_t>(m_options.ttl);
+    }
+
+    executor_type m_executor;
+    Socket &m_socket;
+    typename Policy::timer_type m_timer;
+    discovery_options m_options;
+    ::plexus::discovery::service_info m_card;
+    std::vector<std::byte> m_scratch;
+    resolved_callback m_on_resolved_cb;
+    bool m_advertising;
+};
+
+}
+
+#endif

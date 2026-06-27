@@ -256,3 +256,23 @@ if(PLEXUS_ENABLE_SHM_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_shm_self_carrier TEST_PREFIX "node.")
 endif()
+
+# The two-node native multicast-discovery host slice: two real basic_node instances, each with a
+# multicast_discovery over a datagram_socket, discover each other with NO static table and NO
+# mdnspp. The deterministic wired-pair case runs in the default set; the live udp_multicast_socket
+# case is hidden behind [.multicast] (real multicast loopback is environment-sensitive). Built only
+# when the asio backend is on (the real socket + transport live there); links plexus::native (the
+# discovery) and plexus::stream (the datagram_socket concept).
+if(PLEXUS_ENABLE_ASIO_BACKEND)
+    add_executable(test_node_native_discovery test_node_native_discovery.cpp)
+    target_include_directories(test_node_native_discovery PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(test_node_native_discovery PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::stream
+        plexus::asio
+        plexus::native
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_node_native_discovery TEST_PREFIX "node.")
+endif()

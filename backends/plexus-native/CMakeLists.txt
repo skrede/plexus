@@ -37,7 +37,8 @@ target_include_directories(plexus-native PUBLIC
 target_link_libraries(plexus-native PUBLIC
     plexus::core
     plexus::shm
-    plexus::wire)
+    plexus::wire
+    plexus::stream)
 
 target_compile_features(plexus-native PUBLIC cxx_std_20)
 
