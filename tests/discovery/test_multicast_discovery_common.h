@@ -118,6 +118,32 @@ struct fake_policy
 
 static_assert(plexus::stream::datagram_socket<fake_datagram_socket>);
 
+// A virtual clock the cap tests advance by hand so the per-source rate window is exercised with no
+// wall-clock sleep. The cap calls now() once per inbound, so a test sets g_now before each inject.
+struct fake_clock
+{
+    using duration   = std::chrono::milliseconds;
+    using time_point = std::chrono::time_point<fake_clock, duration>;
+
+    static inline time_point g_now{};
+
+    static time_point now()
+    {
+        return g_now;
+    }
+
+    static void advance(std::chrono::milliseconds by)
+    {
+        g_now += by;
+    }
+
+    static void reset()
+    {
+        g_now = time_point{};
+    }
+};
+
 using discovery_under_test = plexus::native::multicast_discovery<fake_datagram_socket, fake_policy>;
+using discovery_capped     = plexus::native::multicast_discovery<fake_datagram_socket, fake_policy, fake_clock>;
 
 } // namespace multicast_discovery_fixture

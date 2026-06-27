@@ -25,3 +25,15 @@ target_link_libraries(test_multicast_discovery PRIVATE
     plexus::native
     Catch2::Catch2WithMain)
 catch_discover_tests(test_multicast_discovery TEST_PREFIX "discovery.")
+
+# The consumer-tunable anti-flood admission cap over the same fake socket, with a virtual clock the
+# cases advance by hand: the max-peers bound, established-peer protection, LRU eviction, the
+# per-source rate window, the disabled mode, and the ungated goodbye path.
+add_executable(test_multicast_discovery_flood_cap test_multicast_discovery_flood_cap.cpp)
+target_link_libraries(test_multicast_discovery_flood_cap PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::stream
+    plexus::native
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_multicast_discovery_flood_cap TEST_PREFIX "discovery.")

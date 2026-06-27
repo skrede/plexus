@@ -3,6 +3,7 @@
 
 #include "plexus/native/discovery_options.h"
 #include "plexus/native/detail/announcement_card.h"
+#include "plexus/native/detail/discovery_flood_cap.h"
 #include "plexus/native/detail/discovery_card_codec.h"
 
 #include "plexus/stream/datagram_socket.h"
@@ -11,6 +12,7 @@
 #include "plexus/detail/compat.h"
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <vector>
 #include <cstddef>
@@ -27,7 +29,7 @@ namespace plexus::native {
 // valid one fires on_resolved with metadata byte-identical to assemble_contact_card and the
 // endpoint taken from the datagram's unspoofable kernel source. It posts awareness ONLY — the
 // downstream handshake gates identity — so it never dials.
-template<typename Socket, typename Policy>
+template<typename Socket, typename Policy, typename Clock = std::chrono::steady_clock>
     requires stream::datagram_socket<Socket>
 class multicast_discovery final : public discovery::discovery
 {
@@ -39,6 +41,7 @@ public:
             , m_socket(socket)
             , m_timer(executor)
             , m_options(std::move(options))
+            , m_flood_cap(m_options.cap)
             , m_advertising(false)
     {
         m_socket.bind(bind_endpoint());
@@ -89,13 +92,16 @@ private:
         const auto ann = wire::decode_announcement(bytes);
         if(!ann)
             return;
-        auto info = detail::service_info_from_announcement(*ann, from.address().to_string());
+        const auto source = from.address().to_string();
+        auto info         = detail::service_info_from_announcement(*ann, source);
         if((ann->flags & wire::k_announcement_goodbye_flag) != 0)
         {
+            // A goodbye is a removal: never rate-limit or cap it, a leaver must always be able to leave.
             if(m_on_withdrawn_cb)
                 m_on_withdrawn_cb(info);
+            return;
         }
-        else if(m_on_resolved_cb)
+        if(m_on_resolved_cb && m_flood_cap.admit(source, Clock::now()))
             m_on_resolved_cb(info);
     }
 
@@ -138,6 +144,7 @@ private:
     Socket &m_socket;
     typename Policy::timer_type m_timer;
     discovery_options m_options;
+    detail::discovery_flood_cap<Clock> m_flood_cap;
     ::plexus::discovery::service_info m_card;
     std::vector<std::byte> m_scratch;
     resolved_callback m_on_resolved_cb;
