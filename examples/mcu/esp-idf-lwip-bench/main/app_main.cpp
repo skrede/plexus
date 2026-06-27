@@ -24,6 +24,7 @@
 #include "plexus/freertos/lwip_policy.h"
 #include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/device_runtime.h"
+#include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/detail/lwip_socket_io.h"
 
@@ -112,6 +113,30 @@ struct bench_runner
     }
 };
 
+// The first request races the async dial/handshake/subscription-propagation and the single-in-flight
+// chain has no resend; re-issue a request stalled past a threshold well above any real round trip.
+struct resend_pump
+{
+    plexus::freertos::freertos_timer &timer;
+    example::echo_probe              &probe;
+    static constexpr std::int64_t     k_stall_us = 250000;
+
+    void arm()
+    {
+        timer.expires_after(std::chrono::milliseconds{250});
+        timer.async_wait([this](std::error_code ec) { on_tick(ec); });
+    }
+
+    void on_tick(std::error_code ec)
+    {
+        if(ec)
+            return;
+        if(probe.awaiting && esp_timer_get_time() - probe.sent_us > k_stall_us)
+            probe.issue();
+        arm();
+    }
+};
+
 // One workload over a constructed transport: the executor, transport, and node all live on this
 // task's stack and the node borrows the first two by reference, so they outlive it; run() never
 // returns. dial uses the transport's own scheme so the serial and lwIP cells share this body.
@@ -135,7 +160,11 @@ template<typename Policy, typename Transport>
 
     plexus::subscriber<void> reply{*node, "reply", [&](std::span<const std::byte> bytes, const plexus::io::message_info &) { runner.on_reply(bytes); }};
 
+    plexus::freertos::freertos_timer kick{ex};
+    resend_pump                      pump{kick, probe};
+
     runner.start();
+    pump.arm();
     plexus::freertos::run(ex, transport);
 }
 
