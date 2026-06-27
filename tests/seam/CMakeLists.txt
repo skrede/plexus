@@ -153,6 +153,19 @@ target_link_libraries(test_reliability_enforcement PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_reliability_enforcement TEST_PREFIX "udp.")
 
+# Host proof for the constrained-target lwIP datagram leaf's endpoint_type: forces the
+# lwip_endpoint wrapper through the host compiler and asserts the .port(uint16) setter and the
+# .address().to_string() bare-host reader the discovery template depends on but the datagram_socket
+# concept does not check (the false-green endpoint-shape trap). The wrapper reaches no lwIP header so
+# it builds off-target; the socket leaf itself is ESP_PLATFORM-gated. Links the constrained-target
+# substrate alongside the core layer; registered under the `seam.` prefix.
+add_executable(test_lwip_multicast_endpoint test_lwip_multicast_endpoint.cpp)
+target_link_libraries(test_lwip_multicast_endpoint PRIVATE
+    plexus::core
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_multicast_endpoint TEST_PREFIX "seam.")
+
 # Host seam proof for the datagram_socket concept: fires static_assert(datagram_socket<
 # udp_multicast_socket>) at compile time (forcing the asio multicast header through the compiler)
 # and runs the construct + bind + IGMP-join path once over an io_context. Needs plexus::asio, which
