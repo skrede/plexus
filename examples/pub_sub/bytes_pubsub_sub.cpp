@@ -1,6 +1,6 @@
-// Bytes pub/sub — the subscriber half. Discovers the publisher over mDNS and prints
-// every line of bytes that arrives on "demo", plus the source node when the producer
-// emits its identity. Run alongside bytes_pubsub_pub in a second shell.
+// Bytes pub/sub — the subscriber half. Discovers the publisher over native multicast
+// discovery and prints every line of bytes that arrives on "demo", plus the source node
+// when the producer emits its identity. Run alongside bytes_pubsub_pub in a second shell.
 
 #include "plexus/node.h"
 #include "plexus/subscriber.h"
@@ -9,12 +9,14 @@
 #include "plexus/io/node_name.h"
 #include "plexus/io/message_info.h"
 
+#include "plexus/discovery/multicast_discovery.h"
+
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_transport.h"
-
-#include "plexus/mdnspp/mdnspp_discovery.h"
+#include "plexus/asio/udp_multicast_socket.h"
 
 #include <asio/io_context.hpp>
+#include <asio/ip/address_v4.hpp>
 
 #include <span>
 #include <string>
@@ -28,7 +30,9 @@ int main()
 {
     asio::io_context io;
     plexus::asio::asio_transport transport{io};
-    plexus::mdnspp::mdnspp_discovery disc{io, "_plexus._tcp.local."};
+    plexus::asio::udp_multicast_socket mc_socket{io, asio::ip::make_address_v4("239.255.0.7"), 7447, 4};
+    plexus::discovery::multicast_discovery<plexus::asio::udp_multicast_socket, plexus::asio::asio_policy>
+        disc{io, mc_socket};
 
     plexus::node_options opts;
     opts.name         = "demo-subscriber";

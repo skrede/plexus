@@ -7,12 +7,14 @@
 
 #include "plexus/wire/rpc_status.h"
 
+#include "plexus/discovery/multicast_discovery.h"
+
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_transport.h"
-
-#include "plexus/mdnspp/mdnspp_discovery.h"
+#include "plexus/asio/udp_multicast_socket.h"
 
 #include <asio/io_context.hpp>
+#include <asio/ip/address_v4.hpp>
 
 #include <span>
 #include <vector>
@@ -26,7 +28,9 @@ int main()
 {
     asio::io_context io;
     plexus::asio::asio_transport transport{io};
-    plexus::mdnspp::mdnspp_discovery disc{io, "_plexus._tcp.local."};
+    plexus::asio::udp_multicast_socket mc_socket{io, asio::ip::make_address_v4("239.255.0.7"), 7447, 4};
+    plexus::discovery::multicast_discovery<plexus::asio::udp_multicast_socket, plexus::asio::asio_policy>
+        disc{io, mc_socket};
 
     plexus::node_options opts;
     opts.name      = "uppercase-server";
