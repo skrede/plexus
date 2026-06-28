@@ -17,3 +17,10 @@ add_subdirectory(recording)
 add_subdirectory(same_host)
 add_subdirectory(qos)
 add_subdirectory(mcu)
+
+# The mDNS interop example is opt-in: it FetchContents mdnspp and bumps to C++23, so
+# it stays off the default examples build (which is mdnspp-free and C++20).
+option(PLEXUS_BUILD_MDNS_EXAMPLE "Build the opt-in real-mDNS interop example" OFF)
+if(PLEXUS_BUILD_MDNS_EXAMPLE)
+    add_subdirectory(mdns_interop)
+endif()

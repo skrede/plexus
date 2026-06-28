@@ -24,9 +24,9 @@ endmacro()
 
 # Includes a backend component's targets file when present, running its find_dependency wiring
 # first. crypto's targets file references plexus::asio and plexus::plexus_asio_dep, so the asio
-# component's targets file is loaded ahead of it. mdnspp ships no targets file (it links
-# FetchContent build-tree targets that install(EXPORT) cannot carry), so its component reports
-# FOUND FALSE without erroring; check_required_components turns a REQUIRED miss into a hard error.
+# component's targets file is loaded ahead of it. A component with no installed targets file (e.g.
+# one that links FetchContent build-tree targets install(EXPORT) cannot carry) reports FOUND FALSE
+# without erroring; check_required_components turns a REQUIRED miss into a hard error.
 macro(_plexus_load_component comp)
     if(NOT plexus_${comp}_FOUND)
         set(_plexus_comp_file "${CMAKE_CURRENT_LIST_DIR}/plexus-${comp}-targets.cmake")

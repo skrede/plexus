@@ -1342,24 +1342,17 @@ if(PLEXUS_BUILD_PCAP_TRANSCODE)
         DEPENDS "integration.pcap transcode round-trips a captured session through a parsed pcapng")
 endif()
 
-# The shared-executor proof needs both the asio backend and the mdnspp adapter.
-if(PLEXUS_ENABLE_ASIO_BACKEND AND PLEXUS_ENABLE_MDNSPP_DISCOVERY)
-    add_executable(test_shared_executor
-        test_shared_executor.cpp
-        test_shared_executor_readvertise.cpp)
-    target_link_libraries(test_shared_executor PRIVATE
+# The user-owned-shared-executor proof: a native multicast_discovery and an asio
+# transport co-progress on ONE io_context. It reuses the wired datagram seam from
+# the node tests, so it runs deterministically in the default set (no real
+# multicast). RUN_SERIAL + the loopback lock keep it off the other real-TCP legs.
+if(PLEXUS_ENABLE_ASIO_BACKEND)
+    add_executable(test_native_shared_executor test_native_shared_executor.cpp)
+    target_link_libraries(test_native_shared_executor PRIVATE
         plexus::core
         plexus::wire
         plexus::asio
-        plexus::mdnspp
         Catch2::Catch2WithMain)
-    # The mdnspp adapter surface (and the io_context it shares) compiles at C++23.
-    set_target_properties(test_shared_executor PROPERTIES
-        CXX_STANDARD 23
-        CXX_STANDARD_REQUIRED ON
-        CXX_EXTENSIONS OFF)
-    # The live-mDNS tests share the host's real multicast medium -- parallel ctest
-    # workers contend on advertise/browse convergence and squeeze the pump deadlines.
-    catch_discover_tests(test_shared_executor TEST_PREFIX "integration."
-        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK live-mdns)
+    catch_discover_tests(test_native_shared_executor TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 endif()

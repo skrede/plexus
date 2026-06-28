@@ -39,7 +39,7 @@ endif()
 # auto-discovered here. The dependency arrow is one-way: backends/ depends on
 # lib/, never the reverse. The glob is target-kind-agnostic — INTERFACE cores
 # (plexus, plexus-wire, plexus-inproc) and gated compiled backends (plexus-asio,
-# plexus-mdnspp) are discovered the same way; each fragment self-gates (an
+# plexus-crypto) are discovered the same way; each fragment self-gates (an
 # INTERFACE target is unconditional, a compiled backend defines its target only
 # when its option is ON). New targets register by adding their fragment, never by
 # editing this file.

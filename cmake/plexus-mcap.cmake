@@ -5,7 +5,7 @@
 # when the transcode tool is enabled and is carried on a dedicated INTERFACE
 # target so it never reaches the header-only core or any MCU-bound target.
 #
-# Resolving order mirrors the asio/mdnspp fragments so an installed copy wins:
+# Resolving order mirrors the asio fragment so an installed copy wins:
 #   1. find_package(mcap CONFIG)  — an installed/vcpkg mcap target.
 #   2. FetchContent at a pinned releases/cpp tag — the header-only source tree
 #      has no CMake package of its own, so the include dir is added directly.

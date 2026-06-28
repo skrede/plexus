@@ -1,7 +1,7 @@
-# Standalone (non-Boost) asio resolution shared with mdnspp.
+# Standalone (non-Boost) asio resolution, also shared by the opt-in mDNS interop example.
 #
 # Resolving order mirrors mdnspp's so a single asio copy is shared on this host
-# (no two include trees => no ODR clash across the plexus and mdnspp adapters):
+# (no two include trees => no ODR clash across plexus and the mDNS interop example):
 #   1. find_package(asio CONFIG)  — an installed/vcpkg asio::asio target.
 #   2. pkg-config asio            — a system/pkg-config install.
 #   3. FetchContent asio-1-36-0   — the exact tag mdnspp pins, as a last resort.
