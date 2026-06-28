@@ -19,6 +19,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "esp_system.h"
+
 #include <string>
 #include <chrono>
 #include <cstdio>
@@ -105,12 +107,19 @@ void plexus_task(void *)
     plexus::node<lwip_policy, lwip_transport> node{ex, disc, "esp32-lwip-discovery", transport, opts};
     node.listen({"tcp", "0.0.0.0:7447"});
 
+    std::uint32_t tick = 0;
     for(;;)
     {
         disc_sock.poll();
         transport.poll();
         ex.drain();
         ex.park(10ms);
+        // Steady-state heap watch: at ~10ms/iteration, every 500 ticks is ~5s. The settled
+        // free-heap reading must not drift over a sustained RX + discovery window (a zero delta
+        // proves the lwIP RX + announce/expiry path holds no per-message allocation).
+        if(++tick % 500 == 0)
+            std::printf("HEAP tick=%lu free=%lu\n", static_cast<unsigned long>(tick),
+                        static_cast<unsigned long>(esp_get_free_heap_size()));
     }
 }
 
