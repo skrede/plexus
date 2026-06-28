@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <optional>
 #include <system_error>
 
 namespace plexus::discovery {
@@ -50,7 +51,7 @@ public:
 
     void advertise(const ::plexus::discovery::service_info &service) override
     {
-        m_card = service;
+        m_announcement             = detail::announcement_from_service_info(service, ttl_secs());
         const bool was_advertising = m_advertising;
         m_advertising              = true;
         emit_announcement();
@@ -105,21 +106,27 @@ private:
             m_on_resolved_cb(info);
     }
 
-    // Re-announces of the same (id, ep) are idempotent at note_peer (a map put), so no dedup.
+    // Re-encode the cached announcement into the reused scratch (no per-emit alloc once warm) and
+    // send. Re-announces of the same (id, ep) are idempotent at note_peer (a map put), so no dedup.
+    void emit_with_flags(std::uint8_t flags)
+    {
+        if(!m_announcement)
+            return;
+        m_announcement->flags = flags;
+        wire::encode_announcement_into(m_scratch, *m_announcement);
+        m_socket.send_multicast(m_scratch);
+    }
+
     void emit_announcement()
     {
-        detail::encode_card_announcement(m_scratch, m_card, ttl_secs(), 0);
-        if(!m_scratch.empty())
-            m_socket.send_multicast(m_scratch);
+        emit_with_flags(0);
     }
 
     // A best-effort single leave datagram: a browser evicts this node's awareness on receipt
     // instead of waiting out the ttl.
     void emit_goodbye()
     {
-        detail::encode_card_announcement(m_scratch, m_card, ttl_secs(), wire::k_announcement_goodbye_flag);
-        if(!m_scratch.empty())
-            m_socket.send_multicast(m_scratch);
+        emit_with_flags(wire::k_announcement_goodbye_flag);
     }
 
     void arm_timer()
@@ -145,7 +152,7 @@ private:
     typename Policy::timer_type m_timer;
     discovery_options m_options;
     detail::discovery_flood_cap<Clock> m_flood_cap;
-    ::plexus::discovery::service_info m_card;
+    std::optional<wire::announcement> m_announcement;
     std::vector<std::byte> m_scratch;
     resolved_callback m_on_resolved_cb;
     ::plexus::discovery::discovery::withdrawn_callback m_on_withdrawn_cb;

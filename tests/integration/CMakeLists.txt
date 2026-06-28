@@ -1356,3 +1356,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_native_shared_executor TEST_PREFIX "integration."
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 endif()
+
+# The discovery re-announce/expiry alloc gate: a warmed multicast_discovery over a sink Policy and
+# a non-allocating sink datagram socket re-announces and re-resolves the same card and asserts the
+# re-announce path churns zero and the inbound resolve build is a bounded per-call constant. The
+# generic discovery template is pure-core (no backend), so this is always built; tests/ is on the
+# include path for support/alloc_counter.h.
+add_executable(test_discovery_noalloc test_discovery_noalloc.cpp)
+target_link_libraries(test_discovery_noalloc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::stream
+    Catch2::Catch2WithMain)
+target_include_directories(test_discovery_noalloc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_discovery_noalloc TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)

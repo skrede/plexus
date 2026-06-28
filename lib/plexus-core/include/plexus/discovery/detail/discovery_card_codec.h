@@ -11,7 +11,7 @@
 
 #include <string>
 #include <vector>
-#include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 
@@ -39,15 +39,15 @@ inline std::vector<::plexus::discovery::listening_transport> listens_from_card(c
     return listens;
 }
 
-// Encode the cached card into the reused scratch buffer (no per-emit alloc). A card with an
-// unparsable node_id key yields nothing to send (the buffer is cleared).
-inline void encode_card_announcement(std::vector<std::byte> &scratch, const ::plexus::discovery::service_info &card, std::uint64_t ttl_secs, std::uint8_t flags)
+// Build the wire announcement for a card once (at advertise time), so the per-emit path only
+// re-encodes it into the reused scratch and never rebuilds the listens. nullopt for a card with
+// an unparsable node_id key (nothing to advertise).
+inline std::optional<wire::announcement> announcement_from_service_info(const ::plexus::discovery::service_info &card, std::uint64_t ttl_secs)
 {
-    scratch.clear();
     const auto id = ::plexus::discovery::detail::hex_decode(card.metadata.empty() ? std::string_view{} : std::string_view{card.metadata.front().second});
     if(!id)
-        return;
-    wire::encode_announcement_into(scratch, announcement_from_card(*id, listens_from_card(card.metadata), ttl_secs, flags));
+        return std::nullopt;
+    return announcement_from_card(*id, listens_from_card(card.metadata), ttl_secs, 0);
 }
 
 }
