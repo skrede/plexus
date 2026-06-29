@@ -16,4 +16,7 @@ if(TARGET plexus::asio)
 
     add_executable(multicast_gate_host multicast_gate_host.cpp)
     target_link_libraries(multicast_gate_host PRIVATE plexus::plexus plexus::asio)
+
+    add_executable(lwip_discovery_dial_host lwip_discovery_dial_host.cpp)
+    target_link_libraries(lwip_discovery_dial_host PRIVATE plexus::plexus plexus::asio)
 endif()
