@@ -420,3 +420,27 @@ TEST_CASE("udp reliable_arq: the bounded send window admits up to W then reports
     io.poll();
     SUCCEED();
 }
+
+TEST_CASE("udp reliable_arq: an ack cumulative ahead of the highest-sent seq must not wedge the send window", "[udp][reliable_arq]")
+{
+    // A pure engine unit (no socket). With nothing submitted (m_next == m_base == 0), an ack
+    // whose cumulative is ahead of the highest-sent seq once slid the base PAST next-to-send,
+    // underflowing in_flight() to ~65535 and wedging submit() at window_full forever.
+    ::asio::io_context io;
+    using engine = plexus::datagram::detail::udp_reliable_arq<::asio::io_context &, pasio::asio_timer>;
+    engine arq{io, plexus::datagram::detail::udp_arq_config{.window = 4}};
+
+    wire::udp_ack ack{};
+    ack.cumulative = 0; // on_ack -> slide_to(1), one past m_next with nothing sent
+
+    arq.on_ack(ack);
+    REQUIRE(arq.in_flight() == 0); // pre-fix this wrapped to ~65535
+
+    auto one = bytes_of("x");
+    REQUIRE(arq.submit(one) == engine::submit_result::admitted); // pre-fix: window_full
+    REQUIRE(arq.in_flight() == 1);
+
+    arq.cancel();
+    io.poll();
+    SUCCEED();
+}

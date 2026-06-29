@@ -217,7 +217,9 @@ private:
     void slide_to(std::uint16_t new_base)
     {
         const std::uint16_t before = m_base;
-        while(static_cast<std::uint16_t>(new_base - m_base) != 0 && static_cast<std::uint16_t>(new_base - m_base) < udp_reorder_buffer::half_space)
+        // Never slide the base past next-to-send: an ack ahead of the highest-sent seq would
+        // otherwise underflow in_flight() and wedge the window at window_full.
+        while(static_cast<std::uint16_t>(new_base - m_base) != 0 && static_cast<std::uint16_t>(new_base - m_base) < udp_reorder_buffer::half_space && m_base != m_next)
         {
             free_segment(m_base, /*sample_rtt=*/true);
             ++m_base;
