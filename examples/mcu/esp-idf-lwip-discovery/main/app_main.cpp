@@ -10,6 +10,7 @@
 #include "plexus/io/reconnect_config.h"
 
 #include "plexus/freertos/lwip_policy.h"
+#include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
@@ -85,6 +86,21 @@ private:
     plexus::discovery::discovery &m_inner;
 };
 
+// Steady-state heap watch as a pollable: at ~10ms/park, every 500 polls is ~5s. The
+// settled free-heap reading must not drift over a sustained RX + discovery window (a zero
+// delta proves the lwIP RX + announce/expiry path holds no per-message allocation).
+struct heap_watch
+{
+    std::uint32_t ticks{0};
+
+    void poll()
+    {
+        if(++ticks % 500 == 0)
+            std::printf("HEAP tick=%lu free=%lu\n", static_cast<unsigned long>(ticks),
+                        static_cast<unsigned long>(esp_get_free_heap_size()));
+    }
+};
+
 void plexus_task(void *)
 {
     using namespace std::chrono_literals;
@@ -107,20 +123,8 @@ void plexus_task(void *)
     plexus::node<lwip_policy, lwip_transport> node{ex, disc, "esp32-lwip-discovery", transport, opts};
     node.listen({"tcp", "0.0.0.0:7447"});
 
-    std::uint32_t tick = 0;
-    for(;;)
-    {
-        disc_sock.poll();
-        transport.poll();
-        ex.drain();
-        ex.park(10ms);
-        // Steady-state heap watch: at ~10ms/iteration, every 500 ticks is ~5s. The settled
-        // free-heap reading must not drift over a sustained RX + discovery window (a zero delta
-        // proves the lwIP RX + announce/expiry path holds no per-message allocation).
-        if(++tick % 500 == 0)
-            std::printf("HEAP tick=%lu free=%lu\n", static_cast<unsigned long>(tick),
-                        static_cast<unsigned long>(esp_get_free_heap_size()));
-    }
+    heap_watch watch;
+    plexus::freertos::run(ex, disc_sock, transport, watch);
 }
 
 }

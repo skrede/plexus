@@ -32,6 +32,22 @@ struct fake_pollable
     }
 };
 
+// A second, DISTINCT pollable type: a homogeneous pointer array could not hold both, so
+// driving tick over a fake_pollable and a fake_pollable_b together proves the fold is
+// genuinely heterogeneous rather than a same-type pack.
+struct fake_pollable_b
+{
+    plexus::freertos::freertos_executor &ex;
+    int                                  polls{0};
+    int                                  drained_after_poll{0};
+
+    void poll()
+    {
+        ++polls;
+        ex.post([this] { ++drained_after_poll; });
+    }
+};
+
 }
 
 TEST_CASE("device tick polls a single handle once, then drains, then parks", "[seam]")
@@ -39,10 +55,24 @@ TEST_CASE("device tick polls a single handle once, then drains, then parks", "[s
     plexus::freertos::freertos_executor ex;
     fake_pollable                       p{ex};
 
-    plexus::freertos::tick(ex, p, plexus::freertos::run_options{});
+    plexus::freertos::tick(ex, plexus::freertos::run_options{}, p);
 
     REQUIRE(p.polls == 1);
     REQUIRE(p.drained_after_poll == 1); // the poll-posted sentinel ran in this tick
+}
+
+TEST_CASE("device tick folds over two distinct pollable types in one tick", "[seam]")
+{
+    plexus::freertos::freertos_executor ex;
+    fake_pollable                       a{ex};
+    fake_pollable_b                     b{ex};
+
+    plexus::freertos::tick(ex, a, b);
+
+    REQUIRE(a.polls == 1);
+    REQUIRE(b.polls == 1);
+    REQUIRE(a.drained_after_poll == 1);
+    REQUIRE(b.drained_after_poll == 1);
 }
 
 TEST_CASE("device tick over a span polls each once with a single drain", "[seam]")

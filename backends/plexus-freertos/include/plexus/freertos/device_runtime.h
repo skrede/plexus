@@ -36,9 +36,8 @@ std::chrono::milliseconds effective_park(run_options opts) noexcept
 }
 
 // The one loop body: drain every poll handle into ready work, run the executor to
-// quiescence, then yield the core for a watchdog-safe interval. The single-ref and
-// variadic forms below build a local pollable*[] and forward here, so there is one
-// loop and no per-type-combination expansion.
+// quiescence, then yield the core for a watchdog-safe interval. run_task spawns a task
+// that owns a homogeneous handle array, so this span form is retained for it.
 template<pollable P>
 void tick(freertos_executor &ex, std::span<P *const> ps, run_options opts)
 {
@@ -48,19 +47,21 @@ void tick(freertos_executor &ex, std::span<P *const> ps, run_options opts)
     ex.park(effective_park(opts));
 }
 
-template<pollable P>
-void tick(freertos_executor &ex, P &p, run_options opts = {})
+// The fold is the heterogeneous analog of the span loop: each poll() is a direct,
+// statically-dispatched call, so the pollables need not share a type.
+template<pollable... Ps>
+void tick(freertos_executor &ex, run_options opts, Ps &...ps)
 {
-    P *one[] = {&p};
-    tick(ex, std::span<P *const>{one}, opts);
+    (ps.poll(), ...);
+    ex.drain();
+    ex.park(effective_park(opts));
 }
 
-template<pollable P, pollable... Rest>
-    requires(sizeof...(Rest) >= 1)
-void tick(freertos_executor &ex, P &p, Rest &...rest)
+template<pollable... Ps>
+    requires(sizeof...(Ps) >= 1)
+void tick(freertos_executor &ex, Ps &...ps)
 {
-    P *all[] = {&p, &rest...};
-    tick(ex, std::span<P *const>{all}, run_options{});
+    tick(ex, run_options{}, ps...);
 }
 
 template<pollable P>
@@ -70,19 +71,18 @@ template<pollable P>
         tick(ex, ps, opts);
 }
 
-template<pollable P>
-[[noreturn]] void run(freertos_executor &ex, P &p, run_options opts = {})
+template<pollable... Ps>
+[[noreturn]] void run(freertos_executor &ex, run_options opts, Ps &...ps)
 {
-    P *one[] = {&p};
-    run(ex, std::span<P *const>{one}, opts);
+    for(;;)
+        tick(ex, opts, ps...);
 }
 
-template<pollable P, pollable... Rest>
-    requires(sizeof...(Rest) >= 1)
-[[noreturn]] void run(freertos_executor &ex, P &p, Rest &...rest)
+template<pollable... Ps>
+    requires(sizeof...(Ps) >= 1)
+[[noreturn]] void run(freertos_executor &ex, Ps &...ps)
 {
-    P *all[] = {&p, &rest...};
-    run(ex, std::span<P *const>{all}, run_options{});
+    run(ex, run_options{}, ps...);
 }
 
 }
