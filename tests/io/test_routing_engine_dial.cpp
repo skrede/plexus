@@ -111,6 +111,28 @@ TEST_CASE("routing_engine_dial: dialing an endpoint builds exactly one completed
     REQUIRE(p.connected_count() == 1);
 }
 
+TEST_CASE("routing_engine_dial: reaching a peer whose endpoint another slot already claims does not crash", "[io][dial]")
+{
+    dial_pair p;
+    const endpoint ep{"inproc", "svc"};
+
+    // A provisional dial slot claims the endpoint.
+    p.a.dial(ep);
+    p.ex.drain();
+    REQUIRE(p.a.is_connected(endpoint_id(ep)));
+
+    // A discovered peer with a DIFFERENT id advertises the SAME endpoint. ensure_slot must decline
+    // (the endpoint is already claimed) and reach must not touch the absent driver — before the slot
+    // guard, driver_for's map::at threw std::out_of_range and crashed the node here.
+    plexus::node_id other{};
+    other[0] = std::byte{0xCC};
+    REQUIRE_NOTHROW([&] { p.a.note_peer(other, ep); p.a.reach(other); }());
+    p.ex.drain();
+
+    // The claim holds: the colliding endpoint mints no second connected slot.
+    REQUIRE(p.connected_count() == 1);
+}
+
 TEST_CASE("routing_engine_dial: redialing the same endpoint mints no second slot", "[io][dial]")
 {
     dial_pair p;

@@ -46,16 +46,22 @@ public:
     {
     }
 
-    void ensure_slot(const node_id &id, const endpoint &ep, const std::string &node_name)
+    // Returns whether a slot for id exists after the call: false when the endpoint is already claimed
+    // by another peer (no slot is created), so callers must not reach for the driver in that case.
+    bool ensure_slot(const node_id &id, const endpoint &ep, const std::string &node_name)
     {
         if(m_slots.find(id) != m_slots.end())
-            return;
+            return true;
         if(endpoint_claimed(id, ep))
-            return m_build.logger.warn("plexus: dial endpoint already claimed by another peer — slot not created");
+        {
+            m_build.logger.warn("plexus: dial endpoint already claimed by another peer — slot not created");
+            return false;
+        }
         auto slot = std::make_unique<slot_block>(m_transport, m_build, id, ep, node_name);
         detail::wire_redial(*this, *slot, id);
         detail::wire_dead(*this, *slot, id);
         m_slots.emplace(id, std::move(slot));
+        return true;
     }
 
     void build_session_for_endpoint(const endpoint &ep, std::unique_ptr<channel_type> channel)

@@ -135,7 +135,8 @@ public:
         const auto id = endpoint_id(ep);
         if(m_registry.is_connected(id))
             return;
-        m_registry.ensure_slot(id, ep, node_name_of(id));
+        if(!m_registry.ensure_slot(id, ep, node_name_of(id)))
+            return;
         m_registry.driver_for(id).start();
     }
 
@@ -165,7 +166,8 @@ public:
         auto ep = m_known_peers.lookup(id);
         if(!ep)
             return;
-        m_registry.ensure_slot(id, *ep, node_name_of(id));
+        if(!m_registry.ensure_slot(id, *ep, node_name_of(id)))
+            return;
         m_registry.driver_for(id).start();
     }
 
