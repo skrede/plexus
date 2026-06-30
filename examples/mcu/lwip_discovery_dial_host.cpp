@@ -14,6 +14,7 @@
 #include "plexus/node_options.h"
 
 #include "plexus/discovery/discovery.h"
+#include "plexus/discovery/contact_card.h"
 #include "plexus/discovery/multicast_discovery.h"
 
 #include "plexus/asio/asio_policy.h"
@@ -126,16 +127,20 @@ int main()
                                        io.stop();
                                    }};
 
+    // A discovered peer's service_info.name is the hex node_id; our own announcement loops back over
+    // multicast, so compare against this node's own id to skip self and dial only the device.
+    const std::string self_id = plexus::discovery::detail::hex_encode(node.id());
     bool dialed = false;
     disc.set_on_peer(
             [&](const plexus::discovery::service_info &peer)
             {
-                if(dialed)
+                if(dialed || peer.name == self_id)
                     return;
                 dialed = true;
-                const std::string endpoint = peer.endpoint.address + ":" + std::to_string(k_port);
+                // The node's own card handling dials the advertised endpoint under the peer's real id,
+                // which the telemetry demand then binds to; an explicit dial here would mint a second
+                // provisional-id slot that claims the endpoint and never carries the subscription.
                 std::cout << "GATE_DIAL device=" << peer.endpoint.address << '\n' << std::flush;
-                node.dial({"tcp", endpoint});
             });
 
     ::asio::steady_timer deadline{io, k_timeout};
