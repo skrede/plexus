@@ -46,7 +46,9 @@ using mcast_discovery = plexus::discovery::multicast_discovery<lwip_mcast, lwip_
 constexpr const char *k_group    = "239.255.0.7";
 constexpr std::uint16_t k_port    = 7447;
 constexpr std::uint8_t  k_ttl     = 4;
-constexpr std::uint32_t k_plexus_task_stack = 12288; // bytes
+// The accept -> session -> handshake path on the P1 single-task policy peaks ~12.6 KB (measured
+// stack high-water); 20 KB holds it with margin. 12 KB overflowed the task and panicked on connect.
+constexpr std::uint32_t k_plexus_task_stack = 20480; // bytes
 constexpr UBaseType_t   k_plexus_task_prio  = 5;
 
 // A discovery decorator the node consumes: it forwards the abstract surface to the borrowed native
@@ -58,6 +60,7 @@ class gate_discovery final : public plexus::discovery::discovery
 public:
     explicit gate_discovery(plexus::discovery::discovery &inner)
             : m_inner(inner)
+            , m_marked(false)
     {
     }
 
@@ -69,9 +72,15 @@ public:
     void browse(const resolved_callback &on_resolved) override
     {
         m_inner.browse(
-                [on_resolved](const plexus::discovery::service_info &peer)
+                [this, on_resolved](const plexus::discovery::service_info &peer)
                 {
-                    std::printf("GATE_PASS_HOST_TO_ESP host=%s name=%s\n", peer.endpoint.address.c_str(), peer.name.c_str());
+                    // Latch the marker to the first resolution: the announce repeats on the group, and
+                    // an unthrottled printf per announce floods the console and the task stack.
+                    if(!m_marked)
+                    {
+                        m_marked = true;
+                        std::printf("GATE_PASS_HOST_TO_ESP host=%s name=%s\n", peer.endpoint.address.c_str(), peer.name.c_str());
+                    }
                     if(on_resolved)
                         on_resolved(peer);
                 });
@@ -89,6 +98,7 @@ public:
 
 private:
     plexus::discovery::discovery &m_inner;
+    bool                          m_marked;
 };
 
 // A 1-byte counter published on the served topic so a dialing-and-subscribing host observes the
@@ -120,8 +130,9 @@ struct heap_watch
     void poll()
     {
         if(++ticks % 500 == 0)
-            std::printf("HEAP tick=%lu free=%lu\n", static_cast<unsigned long>(ticks),
-                        static_cast<unsigned long>(esp_get_free_heap_size()));
+            std::printf("HEAP tick=%lu free=%lu stack_hwm=%u\n", static_cast<unsigned long>(ticks),
+                        static_cast<unsigned long>(esp_get_free_heap_size()),
+                        static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
 };
 
