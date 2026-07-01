@@ -45,10 +45,14 @@ bool lwip_rx_step(lwip_rx_ctx<S> &ctx)
 template<plexus::stream::stream_socket S>
 void lwip_rx_trampoline(void *arg)
 {
-    auto &ctx = *static_cast<lwip_rx_ctx<S> *>(arg);
-    while(lwip_rx_step(ctx))
+    auto *ctx = static_cast<lwip_rx_ctx<S> *>(arg);
+    while(lwip_rx_step(*ctx))
     {
     }
+    // The loop exits when the channel closes; FreeRTOS aborts a task that returns, so free the owned
+    // context and delete the task rather than falling off the end (the engine re-dials on its own timer).
+    delete ctx;
+    vTaskDelete(nullptr);
 }
 
 }

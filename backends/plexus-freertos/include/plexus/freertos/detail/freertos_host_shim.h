@@ -104,6 +104,20 @@ inline void vTaskDelay(TickType_t /*ticks*/) noexcept
 {
 }
 
+namespace plexus::freertos::detail {
+// A host spy for the RX-task self-delete: on-target a task that returns aborts, so the trampoline calls
+// vTaskDelete(nullptr) at loop exit. Off-target it is a no-op the seam test reads to prove the trampoline
+// self-deletes rather than falling off the end.
+inline int          host_vtask_delete_calls = 0;
+inline TaskHandle_t host_vtask_delete_last  = nullptr;
+}
+
+inline void vTaskDelete(TaskHandle_t task) noexcept
+{
+    ++plexus::freertos::detail::host_vtask_delete_calls;
+    plexus::freertos::detail::host_vtask_delete_last = task;
+}
+
 // The host suite never schedules a real task; this stand-in lets the run_task spawn
 // path compile and link off-target. It reports success without running the trampoline.
 inline BaseType_t xTaskCreate(TaskFunction_t /*code*/, const char * /*name*/, configSTACK_DEPTH_TYPE /*stack*/, void * /*params*/, UBaseType_t /*prio*/, TaskHandle_t * /*out*/)

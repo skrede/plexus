@@ -138,3 +138,27 @@ TEST_CASE("lwip rx task surfaces a peer close as on_error, never on_protocol_clo
     REQUIRE(errors == 1);          // the hard-drop seam fired on the RX context
     REQUIRE_FALSE(protocol_close); // DISTINCT from the framing-violation seam
 }
+
+TEST_CASE("lwip rx trampoline self-deletes on channel close instead of returning off the task", "[seam]")
+{
+    auto pair = plexus::test::make_loopback_pair();
+    REQUIRE(pair.has_value());
+
+    plexus::freertos::freertos_executor ex;
+    host_tcp_socket sender = std::move(pair->dialed);
+    auto receiver          = make_channel(std::move(pair->accepted), ex);
+
+    // The spawn path heap-allocates the ctx and hands ownership to the task; the trampoline frees it.
+    auto *ctx = new plexus::freertos::detail::lwip_rx_ctx<host_tcp_socket>{receiver, ex};
+
+    sender.close(); // an orderly peer FIN mid-stream
+    for(int turn = 0; turn < 100 && !receiver.closed(); ++turn)
+        plexus::freertos::detail::lwip_rx_step(*ctx);
+    REQUIRE(receiver.closed()); // the close surfaced, so the trampoline's first step exits the loop
+
+    const int before = plexus::freertos::detail::host_vtask_delete_calls;
+    plexus::freertos::detail::lwip_rx_trampoline<host_tcp_socket>(ctx);        // must not fall off the end
+    REQUIRE(plexus::freertos::detail::host_vtask_delete_calls == before + 1);  // self-deleted, did not return
+    REQUIRE(plexus::freertos::detail::host_vtask_delete_last == nullptr);      // vTaskDelete(nullptr): itself
+    // the trampoline freed ctx on exit; the asan tree is the no-leak witness
+}
