@@ -53,8 +53,9 @@ inline constexpr int         k_link_tx_gpio = 17;
 inline constexpr int         k_link_rx_gpio = 16;
 
 // The on-device serial connector for the bench cell: a point-to-point UART implements
-// transport_backend directly, both verbs collapsing to install-driver-and-deliver-ONE-channel. By
-// convention the dialing peer (the host) drives the handshake; this device listens.
+// transport_backend directly, both verbs collapsing to install-driver-and-deliver-ONE-channel. The
+// device is the handshake initiator (its bench drive() dials "serial:uart1"); the host echo peer is
+// the responder (it listens on the second adapter).
 class bench_uart_transport
 {
 public:

@@ -8,28 +8,34 @@
 # single lucky pass never substantiates a number. It does NOT pre-pick a winner; both policies are
 # run and reported side by side.
 #
-# The serial cell is opt-in (BENCH_SERIAL=1): it needs a second USB-serial adapter wired to UART1
-# (GPIO17 TX / GPIO16 RX) and the serial echo peer, beyond the Wi-Fi setup the lwIP cells use.
+# The serial cell is opt-in: BENCH_SERIAL=1 adds it alongside the lwIP cells; BENCH_SERIAL_ONLY=1
+# runs it alone (no Wi-Fi, no TCP peer). It needs a second USB-serial adapter wired to UART1 (GPIO17
+# TX / GPIO16 RX) and the host serial echo peer serial_bench_host on the adapter's port (LINK_PORT).
+# Each guard is required only for the cells actually scheduled.
 #
 # The real SSID/password live in esp-idf-lwip-bench/main/wifi_credentials.h (gitignored,
 # operator-supplied); this script never reads, hardcodes, or echoes them. Create it from the
 # .example before running. Repoint PLEXUS_HOST_ENDPOINT at the host's shared-subnet IP at run time;
 # the committed firmware default stays a placeholder, never the test IP.
 #
-# Usage: run_lwip_bench.sh [RUNS] [PORT] [HOST_PORT]
+# Usage: run_lwip_bench.sh [RUNS] [PORT] [HOST_PORT] [LINK_PORT]
 #   RUNS       flash+capture iterations per cell (default 3, clamped to a minimum of 3)
 #   PORT       the flash serial device the board enumerates as (default /dev/ttyUSB0)
 #   HOST_PORT  the TCP port the host echo peer listens on (default 7447, must match the firmware)
+#   LINK_PORT  the second adapter for the serial cell's UART1 link (default /dev/ttyUSB1)
 #
 # Environment:
-#   PLEXUS_HOST_ENDPOINT  the host's shared-subnet IP:port the firmware dials (required for a run)
+#   PLEXUS_HOST_ENDPOINT  the host's shared-subnet IP:port the firmware dials (lwIP cells only)
 #   BENCH_SERIAL=1        also run the serial cell (needs the UART1 adapter + serial peer)
+#   BENCH_SERIAL_ONLY=1   run ONLY the serial cell (no Wi-Fi / no TCP peer needed)
+#   LINK_PORT             override the serial adapter port (else arg 4, else /dev/ttyUSB1)
 
 set -euo pipefail
 
 RUNS="${1:-3}"
 PORT="${2:-/dev/ttyUSB0}"
 HOST_PORT="${3:-7447}"
+LINK_PORT="${4:-${LINK_PORT:-/dev/ttyUSB1}}"
 
 if [[ "${RUNS}" -lt 3 ]]; then
     echo "run count ${RUNS} is below the minimum of 3 reproducible runs; clamping to 3"
@@ -40,22 +46,37 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 IDF_PROJECT="${REPO_ROOT}/examples/mcu/esp-idf-lwip-bench"
 HOST_PEER="${REPO_ROOT}/build/examples/mcu/lwip_bench_host"
+SERIAL_PEER="${REPO_ROOT}/build/examples/mcu/serial_bench_host"
 CREDENTIALS="${IDF_PROJECT}/main/wifi_credentials.h"
 LOG_DIR="${REPO_ROOT}/build/examples/mcu/lwip_bench_logs"
 SAMPLES="${LOG_DIR}/samples.txt"
 
 CELLS=(lwip-p1 lwip-p2)
-if [[ "${BENCH_SERIAL:-0}" == "1" ]]; then
+if [[ "${BENCH_SERIAL_ONLY:-0}" == "1" ]]; then
+    CELLS=(serial)
+elif [[ "${BENCH_SERIAL:-0}" == "1" ]]; then
     CELLS=(serial lwip-p1 lwip-p2)
 fi
 
-if [[ ! -x "${HOST_PEER}" ]]; then
+has_cell() { local c; for c in "${CELLS[@]}"; do [[ "${c}" == "$1" ]] && return 0; done; return 1; }
+need_lwip=0
+if has_cell lwip-p1 || has_cell lwip-p2; then need_lwip=1; fi
+need_serial=0
+if has_cell serial; then need_serial=1; fi
+
+if [[ "${need_lwip}" == "1" && ! -x "${HOST_PEER}" ]]; then
     echo "host bench peer not found at ${HOST_PEER}"
     echo "build it first: cmake --build build -j4 --target lwip_bench_host"
     exit 1
 fi
 
-if [[ ! -f "${CREDENTIALS}" ]]; then
+if [[ "${need_serial}" == "1" && ! -x "${SERIAL_PEER}" ]]; then
+    echo "serial bench peer not found at ${SERIAL_PEER}"
+    echo "build it first: cmake --build build -j4 --target serial_bench_host"
+    exit 1
+fi
+
+if [[ "${need_lwip}" == "1" && ! -f "${CREDENTIALS}" ]]; then
     echo "Wi-Fi credentials not found at ${CREDENTIALS}"
     echo "create it from the template (it is gitignored and never committed):"
     echo "  cp ${CREDENTIALS}.example ${CREDENTIALS}   # then fill in SSID/password"
@@ -121,11 +142,19 @@ for cell in "${CELLS[@]}"; do
             continue
         fi
 
-        reset_and_capture "${PORT}" "${devlog}" 90 &
+        cap_secs=90
+        # The serial cell's 4096 B tier round-trips in ~0.8 s at 115200, so its full sweep needs ~120 s.
+        [[ "${cell}" == "serial" ]] && cap_secs=180
+        reset_and_capture "${PORT}" "${devlog}" "${cap_secs}" &
         cap_pid=$!
 
-        echo "=== ${cell} run ${run}/${RUNS}: starting host echo peer on tcp 0.0.0.0:${HOST_PORT} ==="
-        "${HOST_PEER}" "${HOST_PORT}" >"${log}" 2>&1 &
+        if [[ "${cell}" == "serial" ]]; then
+            echo "=== ${cell} run ${run}/${RUNS}: starting host serial echo peer on ${LINK_PORT} ==="
+            "${SERIAL_PEER}" "${LINK_PORT}" >"${log}" 2>&1 &
+        else
+            echo "=== ${cell} run ${run}/${RUNS}: starting host echo peer on tcp 0.0.0.0:${HOST_PORT} ==="
+            "${HOST_PEER}" "${HOST_PORT}" >"${log}" 2>&1 &
+        fi
         peer_pid=$!
 
         # Hold the capture window, then tear the peer down. The device emits a BENCH resource line
