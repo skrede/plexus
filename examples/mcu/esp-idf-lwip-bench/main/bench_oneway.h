@@ -6,6 +6,7 @@
 #include "plexus/publisher.h"
 
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 
 #include <span>
 #include <array>
@@ -23,9 +24,15 @@ namespace example {
 // caps' worth per tick fills the 8 KiB cap and sheds the overflow at every tier without flooding.
 // After each window a settle interval lets the publish->shed pipeline drain, so a tier's in-flight sheds
 // do not leak into the next tier's count (which would drive accepted = offered - dropped negative).
-inline constexpr std::size_t  k_oneway_cap_bytes = 8192;
-inline constexpr std::int64_t k_oneway_window_us = 3000000;
-inline constexpr std::int64_t k_oneway_settle_us = 500000;
+// The offer is sized to the DEFAULT cap and held constant across the cap variants — the egress cap is
+// the sole variable under test, so scaling the offer to a deep cap would confound the cap's effect with
+// the batch's (a bigger batch starves the drain). At this fixed offer a deep cap simply buffers more
+// in-flight before it sheds; the delivered rate is drain-limited either way. The count is bounded so the
+// smallest payload cannot explode into a pathological per-tick publish burst.
+inline constexpr std::size_t   k_oneway_cap_bytes = 8192;
+inline constexpr std::uint32_t k_oneway_max_batch = 1024;
+inline constexpr std::int64_t  k_oneway_window_us = 3000000;
+inline constexpr std::int64_t  k_oneway_settle_us = 500000;
 
 // Emit the machine-parseable throughput line the runner parses (accepted count/bytes over the window,
 // plus the shed witness). Stable space-separated key=value pairs under a BENCH tag, no localized format.
@@ -48,7 +55,9 @@ struct oneway_driver
     std::uint32_t batch() const
     {
         const std::uint32_t n = static_cast<std::uint32_t>(2 * k_oneway_cap_bytes / tier);
-        return n < 1 ? 1 : n;
+        if(n < 1)
+            return 1;
+        return n > k_oneway_max_batch ? k_oneway_max_batch : n;
     }
 
     void offer_batch()
@@ -103,6 +112,9 @@ struct oneway_runner
         if(++tier_index >= k_payload_tiers.size())
         {
             running = false;
+            // The free-heap witness at sweep end proves the (possibly deep) egress cap fit alongside the
+            // Wi-Fi stack; rx_stack is 0 on the poll-drive one-way path (no RX task).
+            emit_resource(policy, 0, esp_get_free_heap_size());
             return;
         }
         offered_base = driver.offered;

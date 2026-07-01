@@ -62,6 +62,10 @@ constexpr std::uint32_t k_plexus_task_stack = 12288; // bytes (xTaskCreate takes
 constexpr UBaseType_t   k_plexus_task_prio  = 5;
 constexpr std::uint32_t k_rx_task_stack     = 4096;  // bytes; the RX task parks in a blocking recv
 
+// The deep egress cap for the widen-cost variant. Empirical, heap-bounded: the sweep emits free heap so
+// the value is confirmed to fit alongside the Wi-Fi stack, not guessed. The 8 KiB default is the headline.
+constexpr std::size_t k_deep_egress_bytes = 64 * 1024;
+
 // One workload over a constructed transport: the executor, transport, and node all live on this
 // task's stack and the node borrows the first two by reference, so they outlive it; run() never
 // returns. dial uses the transport's own scheme so the serial and lwIP cells share this body.
@@ -136,8 +140,15 @@ void plexus_task(void *)
     // The one-way stream is device->host only: no ingress, so the poll-drive (P1) receive policy fits and
     // avoids an idle RX task; transport.poll() drains egress each run-loop tick, completing large frames.
     using lim = plexus::freertos::lwip_channel_limits;
-    lwip_transport transport{ex, lim::read_buffer_bytes, lim::max_message_bytes, lim::reassembly_bytes, lim::egress_cap_bytes, plexus::io::congestion::drop_newest};
-    drive_oneway<lwip_policy>("lwip-p1", transport, ex, "tcp", k_host_endpoint);
+    #if defined(BENCH_DEEP_EGRESS)
+    constexpr std::size_t oneway_egress_cap = k_deep_egress_bytes;
+    constexpr const char *oneway_policy     = "lwip-p1-deep";
+    #else
+    constexpr std::size_t oneway_egress_cap = lim::egress_cap_bytes;
+    constexpr const char *oneway_policy     = "lwip-p1";
+    #endif
+    lwip_transport transport{ex, lim::read_buffer_bytes, lim::max_message_bytes, lim::reassembly_bytes, oneway_egress_cap, plexus::io::congestion::drop_newest};
+    drive_oneway<lwip_policy>(oneway_policy, transport, ex, "tcp", k_host_endpoint);
     #else
     lwip_transport transport{ex};
     #if defined(BENCH_LWIP_P2)

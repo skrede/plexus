@@ -30,6 +30,11 @@ if(DEFINED BENCH_WORKLOAD AND BENCH_WORKLOAD STREQUAL "oneway")
     target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_WORKLOAD_ONEWAY)
 endif()
 
+# The one-way widen-cost variant: raise the egress cap to the deep value to measure its throughput cost.
+if(DEFINED BENCH_DEEP_EGRESS)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_DEEP_EGRESS)
+endif()
+
 if(DEFINED PLEXUS_HOST_ENDPOINT)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE PLEXUS_HOST_ENDPOINT="${PLEXUS_HOST_ENDPOINT}")
 endif()
