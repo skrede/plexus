@@ -50,12 +50,24 @@ SERIAL_PEER="${REPO_ROOT}/build/examples/mcu/serial_bench_host"
 CREDENTIALS="${IDF_PROJECT}/main/wifi_credentials.h"
 LOG_DIR="${REPO_ROOT}/build/examples/mcu/lwip_bench_logs"
 SAMPLES="${LOG_DIR}/samples.txt"
+THRU_SAMPLES="${LOG_DIR}/throughput.txt"
+HOST_SAMPLES="${LOG_DIR}/host_throughput.txt"
+
+# latency = request/echo round trips (the default); oneway = a saturating device->host stream measured
+# by the host-delivered rate with the device shed count as the saturation witness.
+WORKLOAD="${BENCH_WORKLOAD:-latency}"
 
 CELLS=(lwip-p1 lwip-p2)
 if [[ "${BENCH_SERIAL_ONLY:-0}" == "1" ]]; then
     CELLS=(serial)
 elif [[ "${BENCH_SERIAL:-0}" == "1" ]]; then
     CELLS=(serial lwip-p1 lwip-p2)
+fi
+
+# The one-way stream is device->host only (no ingress), so it uses the poll-drive P1 policy — no RX task
+# to idle or crash; restrict the stream slice to the single lwip-p1 cell.
+if [[ "${WORKLOAD}" == "oneway" && "${BENCH_SERIAL_ONLY:-0}" != "1" ]]; then
+    CELLS=(lwip-p1)
 fi
 
 has_cell() { local c; for c in "${CELLS[@]}"; do [[ "${c}" == "$1" ]] && return 0; done; return 1; }
@@ -112,12 +124,14 @@ PY
 
 mkdir -p "${LOG_DIR}"
 : >"${SAMPLES}"
+: >"${THRU_SAMPLES}"
+: >"${HOST_SAMPLES}"
 
 for cell in "${CELLS[@]}"; do
     echo "=== cross-building bench firmware for esp32 (cell ${cell}) ==="
     idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" set-target esp32
     idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" \
-        -DBENCH_TRANSPORT="${cell}" -DPLEXUS_HOST_ENDPOINT="${PLEXUS_HOST_ENDPOINT:-}" build
+        -DBENCH_TRANSPORT="${cell}" -DBENCH_WORKLOAD="${WORKLOAD}" -DPLEXUS_HOST_ENDPOINT="${PLEXUS_HOST_ENDPOINT:-}" build
 
     valid_runs=0
     for ((run = 1; run <= RUNS; ++run)); do
@@ -145,6 +159,8 @@ for cell in "${CELLS[@]}"; do
         cap_secs=90
         # The serial cell's 4096 B tier round-trips in ~0.8 s at 115200, so its full sweep needs ~120 s.
         [[ "${cell}" == "serial" ]] && cap_secs=180
+        # One-way sweeps three fixed time windows (~9 s) plus dial/subscription propagation.
+        [[ "${WORKLOAD}" == "oneway" ]] && cap_secs=45
         reset_and_capture "${PORT}" "${devlog}" "${cap_secs}" &
         cap_pid=$!
 
@@ -163,7 +179,18 @@ for cell in "${CELLS[@]}"; do
         kill "${peer_pid}" 2>/dev/null || true
         wait "${peer_pid}" 2>/dev/null || true
 
-        if grep -q "BENCH resource policy=${cell}" "${devlog}"; then
+        if [[ "${WORKLOAD}" == "oneway" ]]; then
+            # A valid one-way run needs the device throughput lines WITH a nonzero shed witness (the
+            # link was saturated, not under-offered) AND host-delivered lines (the headline cross-check).
+            if grep -aqE "^BENCH throughput policy=${cell} .* dropped=[1-9]" "${devlog}" && grep -q "^HOST throughput " "${log}"; then
+                grep -aE "^BENCH throughput policy=${cell} " "${devlog}" >>"${THRU_SAMPLES}" || true
+                grep -E "^HOST throughput " "${log}" >>"${HOST_SAMPLES}" || true
+                valid_runs=$((valid_runs + 1))
+                echo "=== ${cell} run ${run}/${RUNS}: one-way stream captured (device throughput + host delivered) ==="
+            else
+                echo "=== ${cell} run ${run}/${RUNS}: NO valid one-way capture (need BENCH throughput dropped>0 + HOST throughput; device serial: ${devlog}) ==="
+            fi
+        elif grep -q "BENCH resource policy=${cell}" "${devlog}"; then
             grep -E "^BENCH sample policy=${cell} " "${devlog}" >>"${SAMPLES}" || true
             valid_runs=$((valid_runs + 1))
             echo "=== ${cell} run ${run}/${RUNS}: complete sweep captured ==="
@@ -179,6 +206,66 @@ for cell in "${CELLS[@]}"; do
     fi
     echo "BENCH: cell ${cell} produced ${valid_runs}/${RUNS} valid runs"
 done
+
+# One-way aggregation. The HOST-delivered rate is the throughput headline (the design's authoritative
+# number); the device accepted rate is the cross-check and the mean shed count the saturation witness.
+# Host windows are attributed to a tier by their payload signature (bytes/msgs), so device and host are
+# compared per tier over the same fixed window — no wall-clock sync needed.
+if [[ "${WORKLOAD}" == "oneway" ]]; then
+    python3 - "${THRU_SAMPLES}" "${HOST_SAMPLES}" <<'PY'
+import sys, re
+
+thru_path, host_path = sys.argv[1], sys.argv[2]
+WIN = 3.0  # the per-tier offering window in seconds (k_oneway_window_us)
+
+dev = {}   # tier -> [(msgs, bytes, dropped)...] across runs
+cell = "lwip"
+with open(thru_path) as f:
+    for line in f:
+        m = re.match(r"BENCH throughput policy=(\S+) tier=(\d+) msgs=(\d+) bytes=(\d+) elapsed_us=(\d+) dropped=(\d+)", line)
+        if m:
+            cell = m.group(1)
+            dev.setdefault(int(m.group(2)), []).append((int(m.group(3)), int(m.group(4)), int(m.group(6))))
+
+tiers = sorted(dev)
+host = {t: [0, 0] for t in tiers}   # tier -> [msgs, bytes] delivered, classified by payload signature
+with open(host_path) as f:
+    for line in f:
+        m = re.match(r"HOST throughput msgs=(\d+) bytes=(\d+) ", line)
+        if m and int(m.group(1)) > 0 and tiers:
+            msgs, byts = int(m.group(1)), int(m.group(2))
+            t = min(tiers, key=lambda x: abs(x - byts / msgs))
+            host[t][0] += msgs
+            host[t][1] += byts
+
+mean = lambda xs: sum(xs) / len(xs) if xs else 0.0
+
+def host_rate(t):
+    n = len(dev[t]) or 1
+    return host[t][0] / (n * WIN), host[t][1] / 1e6 / (n * WIN)
+
+def headline(title, sel, prec):
+    print("\n" + title + "\n")
+    print("| transport | " + " | ".join(f"{t} B" for t in tiers) + " |")
+    print("| " + " | ".join(["---"] * (len(tiers) + 1)) + " |")
+    print(f"| {cell} | " + " | ".join(f"**{sel(t):.{prec}f}**" for t in tiers) + " |")
+
+headline("## One-way stream throughput — host-delivered msg/s (transport x payload)", lambda t: host_rate(t)[0], 0)
+headline("## One-way stream throughput — host-delivered MB/s (transport x payload)", lambda t: host_rate(t)[1], 2)
+
+print(f"\n## {cell} — host-delivered headline + device-accepted cross-check + shed witness\n")
+print("| payload | host msg/s | host MB/s | device msg/s | agreement | dropped (mean) | runs |")
+print("| --- | --- | --- | --- | --- | --- | --- |")
+for t in tiers:
+    hr, hb = host_rate(t)
+    dr = mean([r[0] for r in dev[t]]) / WIN
+    dd = mean([r[2] for r in dev[t]])
+    agree = 100 * abs(dr - hr) / dr if dr else 0
+    print(f"| {t} B | {hr:.0f} | {hb:.2f} | {dr:.0f} | {agree:.1f}% | {dd:.0f} | {len(dev[t])} |")
+PY
+    echo "BENCH: all cells produced >=3 valid runs"
+    exit 0
+fi
 
 # Aggregate p50/p99 per (cell x tier) and emit the standing suite table format: a plexus-only
 # transport x payload table, then one table per transport type. p50/p99 are nearest-rank order

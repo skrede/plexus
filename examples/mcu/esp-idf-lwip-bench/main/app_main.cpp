@@ -11,6 +11,7 @@
 
 #include "bench_uart.h"
 #include "wifi_netif.h"
+#include "bench_oneway.h"
 #include "bench_runner.h"
 #include "bench_workload.h"
 
@@ -92,6 +93,32 @@ template<typename Policy, typename Transport>
     plexus::freertos::run(ex, transport);
 }
 
+// The one-way streaming workload: the device saturates the "stream" topic under drop_newest and the
+// host measures the delivered rate; the device reports accepted = offered - dropped() per tier. The
+// paced timer re-arms so the run loop drains egress between offers (never a tight publish loop).
+template<typename Policy, typename Transport>
+[[noreturn]] void drive_oneway(const char *policy_name, Transport &transport, plexus::freertos::freertos_executor &ex, const char *scheme, const char *endpoint)
+{
+    plexus::discovery::static_discovery disc{{}};
+
+    plexus::node_options opts;
+    opts.name              = "esp32-lwip-bench";
+    opts.max_message_bytes = example::k_max_tier_bytes;
+    opts.reconnect         = plexus::io::reconnect_config{std::chrono::milliseconds{200}, std::chrono::seconds{5}, std::nullopt, std::nullopt};
+    opts.redial_seed       = 0x1F1C0DE;
+
+    auto node = std::make_unique<plexus::node<Policy, Transport>>(ex, disc, opts.name, transport, opts);
+    node->dial({scheme, endpoint});
+
+    plexus::publisher<void> stream{*node, "stream"};
+    example::oneway_driver  driver{stream, example::k_payload_tiers[0]};
+    example::oneway_runner  runner{policy_name, driver};
+    example::oneway_source<Transport> source{runner, transport};
+
+    runner.start();
+    plexus::freertos::run(ex, transport, source);
+}
+
 #if defined(BENCH_SERIAL)
 void plexus_task(void *)
 {
@@ -105,12 +132,20 @@ void plexus_task(void *)
     if(!example::wifi_connect_sta())
         return;
     plexus::freertos::freertos_executor ex;
+    #if defined(BENCH_WORKLOAD_ONEWAY)
+    // The one-way stream is device->host only: no ingress, so the poll-drive (P1) receive policy fits and
+    // avoids an idle RX task; transport.poll() drains egress each run-loop tick, completing large frames.
+    using lim = plexus::freertos::lwip_channel_limits;
+    lwip_transport transport{ex, lim::read_buffer_bytes, lim::max_message_bytes, lim::reassembly_bytes, lim::egress_cap_bytes, plexus::io::congestion::drop_newest};
+    drive_oneway<lwip_policy>("lwip-p1", transport, ex, "tcp", k_host_endpoint);
+    #else
     lwip_transport transport{ex};
     #if defined(BENCH_LWIP_P2)
     transport.use_rx_task(plexus::freertos::task_options{k_rx_task_stack});
     drive<lwip_policy>("lwip-p2", transport, ex, "tcp", k_host_endpoint);
     #else
     drive<lwip_policy>("lwip-p1", transport, ex, "tcp", k_host_endpoint);
+    #endif
     #endif
 }
 #endif

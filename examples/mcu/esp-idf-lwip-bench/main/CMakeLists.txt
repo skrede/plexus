@@ -24,6 +24,12 @@ if(DEFINED BENCH_TRANSPORT)
     endif()
 endif()
 
+# The bench workload is selected at build time: BENCH_WORKLOAD picks latency (request/echo round trips,
+# the default when unset) or oneway (a saturating device->host stream). The runner sets it per cell.
+if(DEFINED BENCH_WORKLOAD AND BENCH_WORKLOAD STREQUAL "oneway")
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_WORKLOAD_ONEWAY)
+endif()
+
 if(DEFINED PLEXUS_HOST_ENDPOINT)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE PLEXUS_HOST_ENDPOINT="${PLEXUS_HOST_ENDPOINT}")
 endif()
