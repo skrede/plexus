@@ -87,6 +87,13 @@ if [[ "${WORKLOAD}" == "oneway" && "${BENCH_SERIAL_ONLY:-0}" == "1" ]]; then
     for b in 115200 460800 921600; do CELLS+=("serial-b${b}"); done
 fi
 
+# The pipeline workload only schedules and aggregates lwip-p2-k cells; there is no serial-k path, so a
+# serial pipeline request would build a mislabeled cell whose samples the aggregator silently drops.
+if [[ "${WORKLOAD}" == "pipeline" && "${BENCH_SERIAL_ONLY:-0}" == "1" ]]; then
+    echo "serial pipeline is not supported by this runner; run the pipeline workload over Wi-Fi (lwip)."
+    exit 2
+fi
+
 has_cell() { local c; for c in "${CELLS[@]}"; do [[ "${c}" == "$1" ]] && return 0; done; return 1; }
 need_lwip=0
 for c in "${CELLS[@]}"; do [[ "${c}" == lwip-* ]] && need_lwip=1; done
