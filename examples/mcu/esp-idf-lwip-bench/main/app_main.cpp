@@ -10,18 +10,14 @@
 // the serial cell's plexus link rides UART1 (bench_uart.h) so the two never share a port.
 
 #include "bench_uart.h"
+#include "bench_node.h"
 #include "wifi_netif.h"
 #include "bench_oneway.h"
 #include "bench_runner.h"
+#include "bench_pipeline.h"
 #include "bench_workload.h"
 
-#include "plexus/node.h"
-#include "plexus/node_options.h"
-
-#include "plexus/discovery/static_discovery.h"
-
 #include "plexus/io/endpoint.h"
-#include "plexus/io/reconnect_config.h"
 
 #include "plexus/freertos/lwip_policy.h"
 #include "plexus/freertos/lwip_transport.h"
@@ -70,18 +66,10 @@ constexpr std::size_t k_deep_egress_bytes = 64 * 1024;
 // task's stack and the node borrows the first two by reference, so they outlive it; run() never
 // returns. dial uses the transport's own scheme so the serial and lwIP cells share this body.
 template<typename Policy, typename Transport>
-[[noreturn]] void drive(const char *policy_name, Transport &transport, plexus::freertos::freertos_executor &ex, const char *scheme, const char *endpoint)
+void drive(const char *policy_name, Transport &transport, plexus::freertos::freertos_executor &ex, const char *scheme, const char *endpoint)
 {
     plexus::discovery::static_discovery disc{{}};
-
-    plexus::node_options opts;
-    opts.name              = "esp32-lwip-bench";
-    opts.max_message_bytes = example::k_max_tier_bytes;
-    opts.reconnect         = plexus::io::reconnect_config{std::chrono::milliseconds{200}, std::chrono::seconds{5}, std::nullopt, std::nullopt};
-    opts.redial_seed       = 0x1F1C0DE;
-
-    auto node = std::make_unique<plexus::node<Policy, Transport>>(ex, disc, opts.name, transport, opts);
-    node->dial({scheme, endpoint});
+    auto node = example::dial_bench_node<Policy, Transport>(disc, transport, ex, scheme, endpoint);
 
     plexus::publisher<void> request{*node, "request"};
     example::echo_probe probe{request, example::k_payload_tiers[0]};
@@ -101,18 +89,10 @@ template<typename Policy, typename Transport>
 // host measures the delivered rate; the device reports accepted = offered - dropped() per tier. The
 // paced timer re-arms so the run loop drains egress between offers (never a tight publish loop).
 template<typename Policy, typename Transport>
-[[noreturn]] void drive_oneway(const char *policy_name, Transport &transport, plexus::freertos::freertos_executor &ex, const char *scheme, const char *endpoint)
+void drive_oneway(const char *policy_name, Transport &transport, plexus::freertos::freertos_executor &ex, const char *scheme, const char *endpoint)
 {
     plexus::discovery::static_discovery disc{{}};
-
-    plexus::node_options opts;
-    opts.name              = "esp32-lwip-bench";
-    opts.max_message_bytes = example::k_max_tier_bytes;
-    opts.reconnect         = plexus::io::reconnect_config{std::chrono::milliseconds{200}, std::chrono::seconds{5}, std::nullopt, std::nullopt};
-    opts.redial_seed       = 0x1F1C0DE;
-
-    auto node = std::make_unique<plexus::node<Policy, Transport>>(ex, disc, opts.name, transport, opts);
-    node->dial({scheme, endpoint});
+    auto node = example::dial_bench_node<Policy, Transport>(disc, transport, ex, scheme, endpoint);
 
     plexus::publisher<void> stream{*node, "stream"};
     example::oneway_driver  driver{stream, example::k_payload_tiers[0]};
