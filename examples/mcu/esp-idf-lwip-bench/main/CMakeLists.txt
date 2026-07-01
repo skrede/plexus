@@ -39,6 +39,12 @@ if(DEFINED BENCH_WINDOW_K)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_WINDOW_K=${BENCH_WINDOW_K})
 endif()
 
+# The serial link baud (default 115200 in bench_uart.h). The runner sweeps it and launches the host serial
+# peer at the matched baud; device and host must agree or the framing desyncs.
+if(DEFINED BENCH_BAUD)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_BAUD=${BENCH_BAUD})
+endif()
+
 # The one-way widen-cost variant: raise the egress cap to the deep value to measure its throughput cost.
 if(DEFINED BENCH_DEEP_EGRESS)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_DEEP_EGRESS)

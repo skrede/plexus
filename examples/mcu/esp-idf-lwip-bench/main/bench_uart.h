@@ -20,6 +20,7 @@
 #include <memory>
 #include <utility>
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 
 namespace example {
@@ -44,6 +45,12 @@ static_assert(plexus::Policy<bench_uart_policy>, "bench_uart_policy must satisfy
 
 inline constexpr std::size_t k_uart_max_payload = 8 * 1024;
 inline constexpr std::size_t k_uart_rx_ring     = 8 * 1024;
+
+// The serial link baud is a build define (default 115200) so the runner can sweep the line rate; the host
+// serial_bench_host must be launched at the SAME baud (its @baud endpoint), or the framing desyncs.
+#ifndef BENCH_BAUD
+    #define BENCH_BAUD 115200
+#endif
 
 // The plexus serial link rides UART1 so the console stays on UART0: the bench emits its
 // machine-parseable sample lines on the console while the framed plexus bytes flow over a separate
@@ -101,6 +108,13 @@ public:
             m_channel->poll();
     }
 
+    // The CRC-mismatch RX drop count, not a congestion shed: the serial one-way headline is the
+    // host-delivered rate, and this is the diagnostic counter the drive reports as offered - dropped().
+    std::uint32_t dropped() const noexcept
+    {
+        return m_channel ? static_cast<std::uint32_t>(m_channel->dropped_count()) : 0;
+    }
+
     void close()
     {
         if(m_installed)
@@ -126,7 +140,7 @@ private:
         if(m_installed)
             return;
         const uart_config_t cfg{
-            .baud_rate           = 115200,
+            .baud_rate           = BENCH_BAUD,
             .data_bits           = UART_DATA_8_BITS,
             .parity              = UART_PARITY_DISABLE,
             .stop_bits           = UART_STOP_BITS_1,

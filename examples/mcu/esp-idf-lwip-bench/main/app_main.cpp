@@ -144,7 +144,14 @@ void plexus_task(void *)
 {
     plexus::freertos::freertos_executor ex;
     example::bench_uart_transport transport;
+    #if defined(BENCH_WORKLOAD_ONEWAY)
+    drive_oneway<example::bench_uart_policy>("serial-b" PP_STR(BENCH_BAUD), transport, ex, "serial", "uart1");
+    #elif defined(BENCH_WORKLOAD_PIPELINE)
+    constexpr const char *serial_pipeline_policy = "serial-k" PP_STR(BENCH_WINDOW_K);
+    drive_pipeline<example::bench_uart_policy>(serial_pipeline_policy, transport, ex, "serial", "uart1");
+    #else
     drive<example::bench_uart_policy>("serial", transport, ex, "serial", "uart1");
+    #endif
 }
 #else
 void plexus_task(void *)

@@ -9,6 +9,8 @@
 // runner already resets the board on the CP2102 flash port. The run loop never returns; the runner
 // kills it once the per-run capture window closes.
 
+#include "stream_meter.h"
+
 #include "plexus/node.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
@@ -23,6 +25,7 @@
 #include "plexus/io/reconnect_config.h"
 
 #include <asio/io_context.hpp>
+#include <asio/steady_timer.hpp>
 
 #include <span>
 #include <string>
@@ -40,12 +43,13 @@ using namespace std::chrono_literals;
 
 constexpr const char *k_request_topic = "request";
 constexpr const char *k_reply_topic   = "reply";
+constexpr const char *k_stream_topic  = "stream";
 constexpr const char *k_default_link  = "/dev/ttyUSB1";
 constexpr const char *k_baud          = "115200";
 
 // The serial endpoint the host listens on: the second adapter's device path with the @baud suffix the
-// serial_transport parser expects. Overridable by argv[1] or LINK_PORT, since FTDI-vs-CP2102
-// enumeration order can swap across reboots.
+// serial_transport parser expects. Device is argv[1] or LINK_PORT (FTDI-vs-CP2102 enumeration order can
+// swap across reboots); baud is argv[2] (default 115200) and MUST match the device's compiled BENCH_BAUD.
 std::string link_endpoint(int argc, char **argv)
 {
     std::string_view device = k_default_link;
@@ -53,7 +57,8 @@ std::string link_endpoint(int argc, char **argv)
         device = argv[1];
     else if(const char *env = std::getenv("LINK_PORT"))
         device = env;
-    return std::string{device} + "@" + k_baud;
+    const std::string_view baud = (argc > 2) ? argv[2] : k_baud;
+    return std::string{device} + "@" + std::string{baud};
 }
 
 }
@@ -75,6 +80,14 @@ int main(int argc, char **argv)
     plexus::subscriber<void> request{node, k_request_topic,
                                      [&](std::span<const std::byte> bytes, const plexus::io::message_info &)
                                      { reply.publish(bytes); }};
+
+    example::stream_meter meter;
+    plexus::subscriber<void> stream{node, k_stream_topic,
+                                    [&](std::span<const std::byte> bytes, const plexus::io::message_info &)
+                                    { ++meter.msgs; meter.bytes += bytes.size(); }};
+
+    ::asio::steady_timer report{io};
+    example::schedule_report(report, meter);
 
     const std::string endpoint = link_endpoint(argc, argv);
     node.listen({"serial", endpoint});

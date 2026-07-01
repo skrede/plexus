@@ -79,6 +79,14 @@ if [[ "${WORKLOAD}" == "pipeline" && "${BENCH_SERIAL_ONLY:-0}" != "1" ]]; then
     for k in 1 2 4 8 16; do CELLS+=("lwip-p2-k${k}"); done
 fi
 
+# The serial one-way workload sweeps the link baud: one cell per rate (a rebuild with BENCH_BAUD, the host
+# peer launched at the matched baud). The baud rides the cell name so the per-transport table is a
+# baud x payload map, and the high FTDI rates settle whether the no-flow-control link holds without RTS/CTS.
+if [[ "${WORKLOAD}" == "oneway" && "${BENCH_SERIAL_ONLY:-0}" == "1" ]]; then
+    CELLS=()
+    for b in 115200 460800 921600; do CELLS+=("serial-b${b}"); done
+fi
+
 has_cell() { local c; for c in "${CELLS[@]}"; do [[ "${c}" == "$1" ]] && return 0; done; return 1; }
 need_lwip=0
 for c in "${CELLS[@]}"; do [[ "${c}" == lwip-* ]] && need_lwip=1; done
@@ -144,16 +152,20 @@ for cell in "${CELLS[@]}"; do
     build_transport="${cell}"
     deep_def=""
     window_def=""
+    baud_def=""
     if [[ "${cell}" == "lwip-p1-deep" ]]; then
         build_transport="lwip-p1"
         deep_def="-DBENCH_DEEP_EGRESS=1"
     elif [[ "${cell}" =~ ^lwip-p2-k([0-9]+)$ ]]; then
         build_transport="lwip-p2"
         window_def="-DBENCH_WINDOW_K=${BASH_REMATCH[1]}"
+    elif [[ "${cell}" =~ ^serial-b([0-9]+)$ ]]; then
+        build_transport="serial"
+        baud_def="-DBENCH_BAUD=${BASH_REMATCH[1]}"
     fi
     idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" set-target esp32
     idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" \
-        -DBENCH_TRANSPORT="${build_transport}" -DBENCH_WORKLOAD="${WORKLOAD}" ${deep_def} ${window_def} -DPLEXUS_HOST_ENDPOINT="${PLEXUS_HOST_ENDPOINT:-}" build
+        -DBENCH_TRANSPORT="${build_transport}" -DBENCH_WORKLOAD="${WORKLOAD}" ${deep_def} ${window_def} ${baud_def} -DPLEXUS_HOST_ENDPOINT="${PLEXUS_HOST_ENDPOINT:-}" build
 
     : >"${LOG_DIR}/host_${cell}.txt"
     valid_runs=0
@@ -181,15 +193,17 @@ for cell in "${CELLS[@]}"; do
 
         cap_secs=90
         # The serial cell's 4096 B tier round-trips in ~0.8 s at 115200, so its full sweep needs ~120 s.
-        [[ "${cell}" == "serial" ]] && cap_secs=180
+        [[ "${cell}" == serial* ]] && cap_secs=180
         # One-way sweeps three fixed time windows (~9 s) plus dial/subscription propagation.
         [[ "${WORKLOAD}" == "oneway" ]] && cap_secs=45
         reset_and_capture "${PORT}" "${devlog}" "${cap_secs}" &
         cap_pid=$!
 
-        if [[ "${cell}" == "serial" ]]; then
-            echo "=== ${cell} run ${run}/${RUNS}: starting host serial echo peer on ${LINK_PORT} ==="
-            "${SERIAL_PEER}" "${LINK_PORT}" >"${log}" 2>&1 &
+        if [[ "${cell}" == serial* ]]; then
+            cell_baud=115200
+            if [[ "${cell}" =~ ^serial-b([0-9]+)$ ]]; then cell_baud="${BASH_REMATCH[1]}"; fi
+            echo "=== ${cell} run ${run}/${RUNS}: starting host serial echo peer on ${LINK_PORT} @ ${cell_baud} ==="
+            "${SERIAL_PEER}" "${LINK_PORT}" "${cell_baud}" >"${log}" 2>&1 &
         else
             echo "=== ${cell} run ${run}/${RUNS}: starting host echo peer on tcp 0.0.0.0:${HOST_PORT} ==="
             "${HOST_PEER}" "${HOST_PORT}" >"${log}" 2>&1 &
@@ -203,15 +217,24 @@ for cell in "${CELLS[@]}"; do
         wait "${peer_pid}" 2>/dev/null || true
 
         if [[ "${WORKLOAD}" == "oneway" ]]; then
-            # A valid one-way run needs the device throughput lines WITH a nonzero shed witness (the
-            # link was saturated, not under-offered) AND host-delivered lines (the headline cross-check).
-            if grep -aqE "^BENCH throughput policy=${cell} .* dropped=[1-9]" "${devlog}" && grep -q "^HOST throughput " "${log}"; then
+            # A valid one-way run needs device throughput lines AND host-delivered lines. lwIP additionally
+            # requires a nonzero shed (dropped>0) as the saturation witness; serial has no congestion shed
+            # (its dropped is CRC-RX), so the host-delivered rate is the headline, cross-checked by device
+            # offered ≈ host delivered.
+            host_hit=0; if grep -q "^HOST throughput " "${log}"; then host_hit=1; fi
+            dev_hit=0
+            if [[ "${cell}" == serial* ]]; then
+                if grep -aqE "^BENCH throughput policy=${cell} " "${devlog}"; then dev_hit=1; fi
+            else
+                if grep -aqE "^BENCH throughput policy=${cell} .* dropped=[1-9]" "${devlog}"; then dev_hit=1; fi
+            fi
+            if [[ "${dev_hit}" == 1 && "${host_hit}" == 1 ]]; then
                 grep -aE "^BENCH throughput policy=${cell} " "${devlog}" >>"${THRU_SAMPLES}" || true
                 grep -E "^HOST throughput " "${log}" >>"${LOG_DIR}/host_${cell}.txt" || true
                 valid_runs=$((valid_runs + 1))
                 echo "=== ${cell} run ${run}/${RUNS}: one-way stream captured (device throughput + host delivered) ==="
             else
-                echo "=== ${cell} run ${run}/${RUNS}: NO valid one-way capture (need BENCH throughput dropped>0 + HOST throughput; device serial: ${devlog}) ==="
+                echo "=== ${cell} run ${run}/${RUNS}: NO valid one-way capture (need device BENCH throughput + HOST throughput; device serial: ${devlog}) ==="
             fi
         elif grep -aq "BENCH resource policy=${cell}" "${devlog}"; then
             grep -aE "^BENCH sample policy=${cell} " "${devlog}" >>"${SAMPLES}" || true
@@ -235,15 +258,17 @@ done
 
 # One-way aggregation. The HOST-delivered rate is the throughput headline (the design's authoritative
 # number); the device accepted rate is the cross-check and the mean shed count the saturation witness.
-# Host windows are attributed to a tier by their payload signature (bytes/msgs), so device and host are
-# compared per tier over the same fixed window — no wall-clock sync needed.
+# Host windows are attributed to a tier by their payload signature (bytes/msgs). Each HOST line is already a
+# per-1s delivered rate, so the sustained rate is the MEDIAN over a tier's non-zero windows — this is
+# immune to delivery draining past the fixed offer window (which would otherwise inflate a slow link's rate
+# above its physical line rate, e.g. serial: summing over a ~7 s drain but dividing by the 3 s offer).
 if [[ "${WORKLOAD}" == "oneway" ]]; then
     python3 - "${THRU_SAMPLES}" "${LOG_DIR}" "${CELLS[@]}" <<'PY'
-import sys, re, os, glob
+import sys, re, os, glob, statistics
 
 thru_path, log_dir = sys.argv[1], sys.argv[2]
 cells = sys.argv[3:]
-WIN = 3.0  # the per-tier offering window in seconds (k_oneway_window_us)
+WIN = 3.0  # the per-tier offering window in seconds (k_oneway_window_us); the device cross-check divides by it
 
 dev = {}   # (cell, tier) -> [(msgs, bytes, dropped)...]
 with open(thru_path) as f:
@@ -255,19 +280,17 @@ with open(thru_path) as f:
 tiers = sorted({t for (_, t) in dev})
 present = [c for c in cells if any((c, t) in dev for t in tiers)]
 
-host = {}   # (cell, tier) -> [msgs, bytes], attributed by payload signature from the per-cell host file
+host = {}   # (cell, tier) -> [(msgs, bytes) per non-zero 1s window], attributed by payload signature
 for c in present:
     hp = os.path.join(log_dir, f"host_{c}.txt")
     if not os.path.exists(hp):
         continue
-    for line in open(hp):
+    for line in open(hp, errors="ignore"):
         m = re.match(r"HOST throughput msgs=(\d+) bytes=(\d+) ", line)
         if m and int(m.group(1)) > 0 and tiers:
             msgs, byts = int(m.group(1)), int(m.group(2))
             t = min(tiers, key=lambda x: abs(x - byts / msgs))
-            host.setdefault((c, t), [0, 0])
-            host[(c, t)][0] += msgs
-            host[(c, t)][1] += byts
+            host.setdefault((c, t), []).append((msgs, byts))
 
 heap = {}   # cell -> min free heap over its runs (the tightest headroom)
 for c in present:
@@ -283,9 +306,10 @@ for c in present:
 mean = lambda xs: sum(xs) / len(xs) if xs else 0.0
 
 def hrate(c, t):
-    n = len(dev.get((c, t), [])) or 1
-    h = host.get((c, t), [0, 0])
-    return h[0] / (n * WIN), h[1] / 1e6 / (n * WIN)
+    ws = host.get((c, t), [])
+    if not ws:
+        return 0.0, 0.0
+    return statistics.median(m for m, _ in ws), statistics.median(b for _, b in ws) / 1e6
 
 def headline(title, idx, prec):
     print("\n" + title + "\n")
