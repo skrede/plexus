@@ -72,9 +72,16 @@ if [[ "${WORKLOAD}" == "oneway" && "${BENCH_SERIAL_ONLY:-0}" != "1" ]]; then
     [[ "${BENCH_DEEP_EGRESS:-0}" == "1" ]] && CELLS=(lwip-p1 lwip-p1-deep)
 fi
 
+# The pipeline workload sweeps the window depth K over lwIP-P2 (request/reply has ingress, so it needs the
+# RX task): one cell per K, each a full rebuild so BENCH_WINDOW_K is compiled in. K=1 reduces to latency.
+if [[ "${WORKLOAD}" == "pipeline" && "${BENCH_SERIAL_ONLY:-0}" != "1" ]]; then
+    CELLS=()
+    for k in 1 2 4 8 16; do CELLS+=("lwip-p2-k${k}"); done
+fi
+
 has_cell() { local c; for c in "${CELLS[@]}"; do [[ "${c}" == "$1" ]] && return 0; done; return 1; }
 need_lwip=0
-if has_cell lwip-p1 || has_cell lwip-p2; then need_lwip=1; fi
+for c in "${CELLS[@]}"; do [[ "${c}" == lwip-* ]] && need_lwip=1; done
 need_serial=0
 if has_cell serial; then need_serial=1; fi
 
@@ -131,17 +138,22 @@ mkdir -p "${LOG_DIR}"
 
 for cell in "${CELLS[@]}"; do
     echo "=== cross-building bench firmware for esp32 (cell ${cell}) ==="
-    # The deep-egress cell is the lwip-p1 one-way build plus the deep-cap define; set-target fullcleans
-    # each iteration so the define never leaks into the default-cap cell.
+    # The deep-egress cell is the lwip-p1 one-way build plus the deep-cap define; a pipeline cell
+    # (lwip-p2-k<N>) is the lwip-p2 build plus its window define. set-target fullcleans each iteration so
+    # neither define leaks into the next cell.
     build_transport="${cell}"
     deep_def=""
+    window_def=""
     if [[ "${cell}" == "lwip-p1-deep" ]]; then
         build_transport="lwip-p1"
         deep_def="-DBENCH_DEEP_EGRESS=1"
+    elif [[ "${cell}" =~ ^lwip-p2-k([0-9]+)$ ]]; then
+        build_transport="lwip-p2"
+        window_def="-DBENCH_WINDOW_K=${BASH_REMATCH[1]}"
     fi
     idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" set-target esp32
     idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" \
-        -DBENCH_TRANSPORT="${build_transport}" -DBENCH_WORKLOAD="${WORKLOAD}" ${deep_def} -DPLEXUS_HOST_ENDPOINT="${PLEXUS_HOST_ENDPOINT:-}" build
+        -DBENCH_TRANSPORT="${build_transport}" -DBENCH_WORKLOAD="${WORKLOAD}" ${deep_def} ${window_def} -DPLEXUS_HOST_ENDPOINT="${PLEXUS_HOST_ENDPOINT:-}" build
 
     : >"${LOG_DIR}/host_${cell}.txt"
     valid_runs=0
@@ -201,8 +213,11 @@ for cell in "${CELLS[@]}"; do
             else
                 echo "=== ${cell} run ${run}/${RUNS}: NO valid one-way capture (need BENCH throughput dropped>0 + HOST throughput; device serial: ${devlog}) ==="
             fi
-        elif grep -q "BENCH resource policy=${cell}" "${devlog}"; then
-            grep -E "^BENCH sample policy=${cell} " "${devlog}" >>"${SAMPLES}" || true
+        elif grep -aq "BENCH resource policy=${cell}" "${devlog}"; then
+            grep -aE "^BENCH sample policy=${cell} " "${devlog}" >>"${SAMPLES}" || true
+            if [[ "${WORKLOAD}" == "pipeline" ]]; then
+                grep -aE "^BENCH throughput policy=${cell} " "${devlog}" >>"${THRU_SAMPLES}" || true
+            fi
             valid_runs=$((valid_runs + 1))
             echo "=== ${cell} run ${run}/${RUNS}: complete sweep captured ==="
         else
@@ -319,6 +334,98 @@ PY
     exit 0
 fi
 
+# Pipeline aggregation. The device throughput lines give completed round trips over the sampling window at
+# each depth K (round-trips/s); the per-completion sample lines give p50/p99 latency-at-depth. K=1 is
+# sanity-checked against the shipped single-in-flight lwIP-P2 latency p50 — a >30% gap flags a drift.
+if [[ "${WORKLOAD}" == "pipeline" ]]; then
+    python3 - "${THRU_SAMPLES}" "${SAMPLES}" "${LOG_DIR}" <<'PY'
+import sys, re
+
+thru_path, samples_path, log_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+
+k_sampled = 128   # a healthy tier completes this many sampled round trips; fewer marks a stall-limited tier
+rate = {}   # (K, tier) -> [round-trips/s ...] over the cell's valid runs
+comp = {}   # (K, tier) -> [completed ...]; mean < k_sampled => the tier is buffer-bound at this depth
+with open(thru_path, errors="ignore") as f:   # -a grep can splice device-log binary into a matched line
+    for line in f:
+        m = re.match(r"BENCH throughput policy=lwip-p2-k(\d+) tier=(\d+) window=(\d+) completed=(\d+) elapsed_us=(\d+)", line)
+        if m:
+            K, tier, completed, elapsed = int(m.group(1)), int(m.group(2)), int(m.group(4)), int(m.group(5))
+            if elapsed > 0:
+                rate.setdefault((K, tier), []).append(completed / (elapsed / 1e6))
+                comp.setdefault((K, tier), []).append(completed)
+
+rtt = {}    # (K, tier) -> [rtt_us ...]
+with open(samples_path, errors="ignore") as f:
+    for line in f:
+        m = re.match(r"BENCH sample policy=lwip-p2-k(\d+) tier=(\d+) index=\d+ rtt_us=(-?\d+)", line)
+        if m:
+            rtt.setdefault((int(m.group(1)), int(m.group(2))), []).append(int(m.group(3)))
+
+Ks    = sorted({k for (k, _) in rate} | {k for (k, _) in rtt})
+tiers = sorted({t for (_, t) in rate} | {t for (_, t) in rtt})
+mean  = lambda xs: sum(xs) / len(xs) if xs else 0.0
+
+def pct(vals, q):
+    s = sorted(vals)
+    if not s:
+        return None
+    return s[max(0, min(len(s) - 1, int(round(q * (len(s) - 1)))))]
+
+def stall_limited(k, t):
+    cs = comp.get((k, t), [])
+    return bool(cs) and mean(cs) < k_sampled
+
+print("\n## Pipelined round-trips/s (window K x payload)\n")
+print("| K | " + " | ".join(f"{t} B" for t in tiers) + " |")
+print("| " + " | ".join(["---"] * (len(tiers) + 1)) + " |")
+best = {t: max((mean(rate.get((k, t), [])) for k in Ks if not stall_limited(k, t)), default=0.0) for t in tiers}
+for k in Ks:
+    row = [str(k)]
+    for t in tiers:
+        vals = rate.get((k, t), [])
+        if not vals:
+            row.append("-")
+        elif stall_limited(k, t):
+            row.append(f"{mean(vals):.1f}†")
+        else:
+            v = mean(vals)
+            row.append(f"**{v:.0f}**" if abs(v - best[t]) < 0.5 else f"{v:.0f}")
+    print("| " + " | ".join(row) + " |")
+print("\n† stall-limited: the tier did not complete its 128-sample window (completed < 128). The fixed RX slot pool cannot hold a deep window of this payload, so the figure is the stall-reissue floor, not a sustained pipeline rate.")
+
+print("\n## Pipelined p50 round-trip latency-at-depth (us) (window K x payload)\n")
+print("| K | " + " | ".join(f"{t} B" for t in tiers) + " |")
+print("| " + " | ".join(["---"] * (len(tiers) + 1)) + " |")
+for k in Ks:
+    row = [str(k)]
+    for t in tiers:
+        v = pct(rtt.get((k, t), []), 0.50)
+        row.append("-" if v is None else f"{v}")
+    print("| " + " | ".join(row) + " |")
+
+ref = {16: 7100, 256: 7900, 4096: 17800}   # shipped single-in-flight lwIP-P2 latency p50 (us)
+print("\n## K=1 sanity — pipeline single-in-flight p50 vs the latency-bench p50\n")
+print("| payload | K=1 pipeline p50 us | latency-bench p50 us | delta | verdict |")
+print("| --- | --- | --- | --- | --- |")
+diverged = False
+for t in tiers:
+    v = pct(rtt.get((1, t), []), 0.50)
+    r = ref.get(t)
+    if v is None or r is None:
+        print(f"| {t} B | {'-' if v is None else v} | {r if r else '-'} | - | NO DATA |")
+        continue
+    d = 100.0 * (v - r) / r
+    ok = abs(d) <= 30.0
+    diverged = diverged or not ok
+    print(f"| {t} B | {v} | {r} | {d:+.1f}% | {'SANITY OK' if ok else 'SANITY DIVERGENCE'} |")
+if diverged:
+    sys.stderr.write("BENCH: K=1 pipeline p50 DIVERGES >30% from the latency-bench p50 — the pipeline path may have drifted from the single-in-flight baseline\n")
+PY
+    echo "BENCH: all cells produced >=3 valid runs"
+    exit 0
+fi
+
 # Aggregate p50/p99 per (cell x tier) and emit the standing suite table format: a plexus-only
 # transport x payload table, then one table per transport type. p50/p99 are nearest-rank order
 # statistics over every sampled round trip across all valid runs of the cell.
@@ -328,7 +435,7 @@ import sys, glob, os, re, statistics
 samples_path, log_dir = sys.argv[1], sys.argv[2]
 
 rtt = {}    # (cell, tier) -> [rtt_us...]
-with open(samples_path) as f:
+with open(samples_path, errors="ignore") as f:
     for line in f:
         m = re.match(r"BENCH sample policy=(\S+) tier=(\d+) index=\d+ rtt_us=(-?\d+)", line)
         if m:

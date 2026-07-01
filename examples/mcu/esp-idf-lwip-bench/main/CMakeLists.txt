@@ -25,9 +25,18 @@ if(DEFINED BENCH_TRANSPORT)
 endif()
 
 # The bench workload is selected at build time: BENCH_WORKLOAD picks latency (request/echo round trips,
-# the default when unset) or oneway (a saturating device->host stream). The runner sets it per cell.
-if(DEFINED BENCH_WORKLOAD AND BENCH_WORKLOAD STREQUAL "oneway")
-    target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_WORKLOAD_ONEWAY)
+# the default when unset), oneway (a saturating device->host stream), or pipeline (K round trips in flight).
+# The runner sets it per cell; BENCH_WINDOW_K sizes the pipeline window (default 1 in the firmware).
+if(DEFINED BENCH_WORKLOAD)
+    if(BENCH_WORKLOAD STREQUAL "oneway")
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_WORKLOAD_ONEWAY)
+    elseif(BENCH_WORKLOAD STREQUAL "pipeline")
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_WORKLOAD_PIPELINE)
+    endif()
+endif()
+
+if(DEFINED BENCH_WINDOW_K)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE BENCH_WINDOW_K=${BENCH_WINDOW_K})
 endif()
 
 # The one-way widen-cost variant: raise the egress cap to the deep value to measure its throughput cost.
