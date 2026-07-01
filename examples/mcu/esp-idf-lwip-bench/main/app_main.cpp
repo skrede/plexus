@@ -11,6 +11,7 @@
 
 #include "bench_uart.h"
 #include "wifi_netif.h"
+#include "bench_runner.h"
 #include "bench_workload.h"
 
 #include "plexus/node.h"
@@ -30,8 +31,6 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
-#include "esp_heap_caps.h"
 
 #include <span>
 #include <memory>
@@ -62,85 +61,6 @@ constexpr std::uint32_t k_plexus_task_stack = 12288; // bytes (xTaskCreate takes
 constexpr UBaseType_t   k_plexus_task_prio  = 5;
 constexpr std::uint32_t k_rx_task_stack     = 4096;  // bytes; the RX task parks in a blocking recv
 
-// The cell sweep: it walks the tiers, issuing requests on each and recording round trips, then
-// advances to the next tier; once all tiers drain it emits the RX-task resource line and stops. The
-// reply callback drives the advance — one request in flight at a time, the next issued on receipt.
-struct bench_runner
-{
-    const char          *policy;
-    example::echo_probe &probe;
-    std::size_t          tier_index{0};
-    std::uint32_t        count{0};
-
-    void start()
-    {
-        probe.tier = example::k_payload_tiers[tier_index];
-        probe.issue();
-    }
-
-    void on_reply(std::span<const std::byte> echo)
-    {
-        if(!probe.matches(echo))
-            return;
-        const std::int64_t rtt = esp_timer_get_time() - probe.sent_us;
-        record(rtt);
-        advance();
-    }
-
-    void record(std::int64_t rtt_us)
-    {
-        if(count >= example::k_warmup_requests)
-            example::emit_sample(policy, probe.tier, count - example::k_warmup_requests, rtt_us);
-        ++count;
-    }
-
-    void advance()
-    {
-        if(count < example::k_warmup_requests + example::k_sampled_requests)
-            return probe.issue();
-        count = 0;
-        if(++tier_index < example::k_payload_tiers.size())
-            return start();
-        probe.awaiting = false;
-        report_resource();
-    }
-
-    void report_resource()
-    {
-        const TaskHandle_t  rx       = xTaskGetHandle("plexus-rx");
-        const std::uint32_t rx_high  = rx ? uxTaskGetStackHighWaterMark(rx) : 0;
-        example::emit_resource(policy, rx_high, esp_get_free_heap_size());
-    }
-};
-
-// The first request races the async dial/handshake/subscription-propagation and the single-in-flight
-// chain has no resend; re-issue a request stalled past a threshold above the SLOWEST real round trip.
-// The binding case is the serial cell's 4096 B tier: each 4096 B leg is ~356 ms at 115200 8N1, so a
-// round trip is ~0.8 s. Below that, issue() (which bumps the seq) re-fires before the real echo
-// returns, and on_reply then rejects the echo as stale (matches() wants the current seq) — wedging
-// that tier forever. The threshold sits well above it; the 250 ms timer is only the poll granularity.
-struct resend_pump
-{
-    plexus::freertos::freertos_timer &timer;
-    example::echo_probe              &probe;
-    static constexpr std::int64_t     k_stall_us = 2000000;
-
-    void arm()
-    {
-        timer.expires_after(std::chrono::milliseconds{250});
-        timer.async_wait([this](std::error_code ec) { on_tick(ec); });
-    }
-
-    void on_tick(std::error_code ec)
-    {
-        if(ec)
-            return;
-        if(probe.awaiting && esp_timer_get_time() - probe.sent_us > k_stall_us)
-            probe.issue();
-        arm();
-    }
-};
-
 // One workload over a constructed transport: the executor, transport, and node all live on this
 // task's stack and the node borrows the first two by reference, so they outlive it; run() never
 // returns. dial uses the transport's own scheme so the serial and lwIP cells share this body.
@@ -160,12 +80,12 @@ template<typename Policy, typename Transport>
 
     plexus::publisher<void> request{*node, "request"};
     example::echo_probe probe{request, example::k_payload_tiers[0]};
-    bench_runner runner{policy_name, probe};
+    example::bench_runner runner{policy_name, probe};
 
     plexus::subscriber<void> reply{*node, "reply", [&](std::span<const std::byte> bytes, const plexus::io::message_info &) { runner.on_reply(bytes); }};
 
     plexus::freertos::freertos_timer kick{ex};
-    resend_pump                      pump{kick, probe};
+    example::resend_pump             pump{kick, probe};
 
     runner.start();
     pump.arm();
