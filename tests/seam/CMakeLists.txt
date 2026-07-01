@@ -125,6 +125,20 @@ target_link_libraries(test_lwip_backpressure_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_backpressure_seam TEST_PREFIX "seam.")
 
+# Host slice for the constrained-target lwIP transport's congestion plumbing: over a REAL localhost-TCP
+# connection it proves the transport-level congestion policy reaches the channels it mints (drop_newest
+# sheds + counts, block backpressures via would_block) and that transport.dropped() folds the shed total
+# across its live views. The current source dir is on the include path so the host socket header
+# resolves. Registered under the same `seam.` prefix.
+add_executable(test_lwip_transport_congestion_seam test_lwip_transport_congestion_seam.cpp)
+target_include_directories(test_lwip_transport_congestion_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_lwip_transport_congestion_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_transport_congestion_seam TEST_PREFIX "seam.")
+
 # Host-shim proof for the constrained-target executor's task-safe cross-context post:
 # enqueues caller-owned posted_work PODs through the FreeRTOS host queue (widened to
 # carry the whole item by value) and proves pump() invokes them in FIFO order, with

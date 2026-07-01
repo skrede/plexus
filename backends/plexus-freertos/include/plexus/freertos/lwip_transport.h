@@ -11,6 +11,7 @@
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
+#include "plexus/io/congestion.h"
 #include "plexus/io/transport_backend.h"
 
 #include "plexus/detail/compat.h"
@@ -40,7 +41,8 @@ public:
     using channel_type = lwip_channel<Socket>;
 
     explicit lwip_transport(freertos_executor &ex, std::size_t read_buffer = lwip_channel_limits::read_buffer_bytes, std::size_t max_message = lwip_channel_limits::max_message_bytes,
-                            std::size_t reassembly_budget = lwip_channel_limits::reassembly_bytes, std::size_t egress_cap = lwip_channel_limits::egress_cap_bytes)
+                            std::size_t reassembly_budget = lwip_channel_limits::reassembly_bytes, std::size_t egress_cap = lwip_channel_limits::egress_cap_bytes,
+                            plexus::io::congestion congestion = plexus::io::congestion::block)
             : m_executor(ex)
             , m_acceptor()
             , m_views()
@@ -50,6 +52,7 @@ public:
             , m_max_message(max_message)
             , m_reassembly_budget(reassembly_budget)
             , m_egress_cap(egress_cap)
+            , m_congestion(congestion)
     {
     }
 
@@ -111,6 +114,14 @@ public:
             m_views.poll_each([](channel_type &ch) { ch.poll(); });
     }
 
+    // The shed total folded over the LIVE views only (a closed channel drops out of the set).
+    std::size_t dropped()
+    {
+        std::size_t total = 0;
+        m_views.poll_each([&total](channel_type &ch) { total += ch.dropped(); });
+        return total;
+    }
+
     void close()
     {
         m_acceptor.close();
@@ -139,7 +150,7 @@ private:
     // first if the channel closes the instant after hand-off.
     std::unique_ptr<channel_type> adopt(Socket socket, const plexus::io::endpoint &ep)
     {
-        auto ch          = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap);
+        auto ch          = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap, m_congestion);
         channel_type *view = ch.get();
         m_views.add(view);
         ch->on_closed([this, view] { m_views.remove(view); });
@@ -174,6 +185,7 @@ private:
     std::size_t                                           m_max_message;
     std::size_t                                           m_reassembly_budget;
     std::size_t                                           m_egress_cap;
+    plexus::io::congestion                                m_congestion;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)>                               m_on_accepted_cb;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const plexus::io::endpoint &)> m_on_dialed_cb;
     plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)>          m_on_dial_failed_cb;
