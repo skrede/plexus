@@ -114,12 +114,16 @@ struct bench_runner
 };
 
 // The first request races the async dial/handshake/subscription-propagation and the single-in-flight
-// chain has no resend; re-issue a request stalled past a threshold well above any real round trip.
+// chain has no resend; re-issue a request stalled past a threshold above the SLOWEST real round trip.
+// The binding case is the serial cell's 4096 B tier: each 4096 B leg is ~356 ms at 115200 8N1, so a
+// round trip is ~0.8 s. Below that, issue() (which bumps the seq) re-fires before the real echo
+// returns, and on_reply then rejects the echo as stale (matches() wants the current seq) — wedging
+// that tier forever. The threshold sits well above it; the 250 ms timer is only the poll granularity.
 struct resend_pump
 {
     plexus::freertos::freertos_timer &timer;
     example::echo_probe              &probe;
-    static constexpr std::int64_t     k_stall_us = 250000;
+    static constexpr std::int64_t     k_stall_us = 2000000;
 
     void arm()
     {
