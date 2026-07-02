@@ -7,7 +7,9 @@
 #if defined(_WIN32)
     #include <windows.h>
 #else
-    #include <fstream>
+    #if !defined(__APPLE__)
+        #include <fstream>
+    #endif
 
     #include <unistd.h>
 #endif
@@ -38,6 +40,25 @@ std::string read_host_name()
     if(::GetComputerNameA(buf, &length) == 0)
         return {};
     return std::string(buf, length);
+}
+
+#elif defined(__APPLE__)
+
+// macOS exposes no /etc/machine-id; a hostname-only seed is the minimum viable
+// fingerprint. The FNV-1a path tolerates an empty machine-id, and an IOKit
+// IOPlatformUUID enrichment is an on-host follow-up.
+std::string read_machine_id()
+{
+    return {};
+}
+
+// The host name (gethostname), empty on failure.
+std::string read_host_name()
+{
+    char buf[256] = {};
+    if(::gethostname(buf, sizeof(buf) - 1) != 0)
+        return {};
+    return std::string(buf);
 }
 
 #else

@@ -14,10 +14,11 @@ namespace plexus::native {
 
 namespace {
 
-// POSIX NAME_MAX on Linux /dev/shm is 255 chars (the name after the leading
-// slash). A compile-time constant rather than a system header pull; the bound is
-// stable across the supported targets.
-constexpr std::string::size_type k_name_max = 255;
+#if defined(__APPLE__)
+constexpr std::string::size_type k_name_max = 30; // PSHMNAMLEN 31 minus the leading slash
+#else
+constexpr std::string::size_type k_name_max = 255; // POSIX NAME_MAX on Linux /dev/shm
+#endif
 
 // Namespacing prefix prepended to every caller name (after the leading slash).
 // Avoids accidental collisions with other applications in the single global
