@@ -26,6 +26,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 
@@ -47,11 +48,11 @@ public:
     // A notifier that wakes on a cross-process futex is NOT default-constructible (it binds to
     // the word + the user's executor), so the binder injects that construction without coupling
     // the registry to a concrete notifier ctor.
-    using notifier_binder = plexus::detail::move_only_function<void(std::optional<Notifier> &, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &)>;
+    using notifier_binder = plexus::detail::move_only_function<void(std::optional<Notifier> &, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &, std::string_view)>;
 
     static notifier_binder default_notifier_binder() noexcept
     {
-        return [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &) { slot.emplace(); };
+        return [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &, std::string_view) { slot.emplace(); };
     }
 
     // max_ring_slab_bytes defaults to the shipped k_max_ring_slab_bytes; the acquire fails
@@ -98,7 +99,7 @@ public:
 
         // The channel must be built AFTER the ring is bound (its subscriber registers a cursor
         // over the live ring).
-        m_bind_notifier(e->notify, e->ring.notify_generation(), e->ring.park_state());
+        m_bind_notifier(e->notify, e->ring.notify_generation(), e->ring.park_state(), region_name_for(fqn, direction, m_region_ns));
         e->channel.emplace(e->ring, *e->notify, m_reliability, m_congestion);
         e->verdict  = verdict;
         e->refcount = 1;

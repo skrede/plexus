@@ -15,6 +15,7 @@
 #include <string>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <type_traits>
 
 namespace plexus::asio::shm {
@@ -26,7 +27,7 @@ using shm_member = ::plexus::shm::shm_mux_member<::plexus::native::posix_shm_reg
 // Emplaces a ring_notifier over (executor, word) once the registry binds each ring.
 inline ::plexus::shm::shm_topic_registry<::plexus::native::posix_shm_region_broker, ring_notifier<muxify<asio_policy>>>::notifier_binder make_bridge_binder(::asio::io_context &io)
 {
-    return [&io](std::optional<ring_notifier<muxify<asio_policy>>> &slot, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park) { slot.emplace(io, word, park); };
+    return [&io](std::optional<ring_notifier<muxify<asio_policy>>> &slot, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park, std::string_view) { slot.emplace(io, word, park); };
 }
 
 // The broker is borrowed (it must outlive the member); the binder captures `io` so each ring's

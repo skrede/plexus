@@ -138,6 +138,19 @@ target_link_libraries(test_shm_same_host PRIVATE
 
 catch_discover_tests(test_shm_same_host TEST_PREFIX "shm.")
 
+# The naming-budget invariant: the region name is a fixed 16 hex chars for any fqn/direction/
+# namespace, and the composed macOS canonical/slab/notifier names all fit the Darwin 31-char
+# limit. Platform-neutral naming math (no Darwin symbol needed); links plexus::wire for the fqn
+# hash the naming routes through.
+add_executable(test_region_naming_length test_region_naming_length.cpp)
+
+target_link_libraries(test_region_naming_length PRIVATE
+    plexus::shm
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_region_naming_length TEST_PREFIX "shm.")
+
 # The shared-memory selection decision (locality x hint, bilateral) + the
 # per-forwarder acquired-ring refcount set (no singleton).
 add_executable(test_shm_selection test_shm_selection.cpp)

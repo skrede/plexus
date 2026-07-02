@@ -4,21 +4,12 @@
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/unix_transport.h"
+#include "plexus/asio/detail/same_host_shm_config.h"
 
 #include "plexus/node.h"
 
-// PLEXUS_SAME_HOST_NO_SHM forces the portable AF_UNIX + TCP branch on any host (it lets the
-// non-shm composition be exercised off a Linux build host).
-#if defined(__linux__) && !defined(PLEXUS_SAME_HOST_NO_SHM)
-    #define PLEXUS_SAME_HOST_SHM 1
-#else
-    #define PLEXUS_SAME_HOST_SHM 0
-#endif
-
 #if PLEXUS_SAME_HOST_SHM
     #include "plexus/publisher.h"
-
-    #include "plexus/asio/shm/linux/shm_member.h"
 
     #include "plexus/shm/ring_geometry_mode.h"
 

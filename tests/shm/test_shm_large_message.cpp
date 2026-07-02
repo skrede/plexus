@@ -28,6 +28,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <type_traits>
 
@@ -203,7 +204,7 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes, pio::
     posix_shm_region_broker broker;
     // The binder constructs each ring's notifier over the in-region generation word, so a
     // futex variant's signal() wakes across address spaces (the spin variant ignores it).
-    typename member_t::notifier_binder binder = [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &gen, std::atomic<std::uint32_t> &)
+    typename member_t::notifier_binder binder = [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &gen, std::atomic<std::uint32_t> &, std::string_view)
     {
         if constexpr(std::is_constructible_v<Notifier, std::atomic<std::uint32_t> *>)
             slot.emplace(&gen);

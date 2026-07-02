@@ -5,6 +5,7 @@
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/unix_transport.h"
+#include "plexus/asio/detail/same_host_shm_config.h"
 
 #include "plexus/node.h"
 #include "plexus/node_id.h"
@@ -12,17 +13,7 @@
 
 #include "plexus/discovery/discovery.h"
 
-// PLEXUS_SAME_HOST_NO_SHM forces the portable AF_UNIX + TCP branch on any host (it lets the
-// non-shm composition be exercised off a Linux build host).
-#if defined(__linux__) && !defined(PLEXUS_SAME_HOST_NO_SHM)
-    #define PLEXUS_SAME_HOST_SHM 1
-#else
-    #define PLEXUS_SAME_HOST_SHM 0
-#endif
-
 #if PLEXUS_SAME_HOST_SHM
-    #include "plexus/asio/shm/linux/shm_member.h"
-
     #include "plexus/native/machine_fingerprint.h"
     #include "plexus/native/posix_shm_region_broker.h"
 #endif
@@ -49,7 +40,8 @@ class same_host_transports
 {
 public:
 #if PLEXUS_SAME_HOST_SHM
-    using set_type = transport_set<shm::shm_member, unix_transport, asio_transport>;
+    using set_type       = transport_set<shm::shm_member, unix_transport, asio_transport>;
+    using region_broker_t = typename shm::shm_member::registry_type::broker_type;
 
     explicit same_host_transports(::asio::io_context &io, std::string_view region = "")
             : m_broker()
@@ -88,7 +80,7 @@ public:
 
 private:
 #if PLEXUS_SAME_HOST_SHM
-    ::plexus::native::posix_shm_region_broker m_broker;
+    region_broker_t m_broker;
 #endif
     set_type m_set;
 };
