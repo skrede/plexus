@@ -40,8 +40,12 @@ else()
     endif()
 endif()
 
-# Standalone, non-Boost asio. _WIN32_WINNT is set on Windows so asio selects a
-# supported IOCP feature level (matches mdnspp).
+# Standalone, non-Boost asio. On Windows: _WIN32_WINNT pins a modern IOCP/AF_UNIX
+# feature level; NOMINMAX drops the min/max function-like macros that clash with the
+# standard library; WIN32_LEAN_AND_MEAN trims windows.h so it does not pull an older
+# winsock.h in ahead of winsock2.h.
 target_compile_definitions(plexus_asio_dep INTERFACE
     ASIO_STANDALONE
-    $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=0x0601>)
+    $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=0x0A00>
+    $<$<PLATFORM_ID:Windows>:NOMINMAX>
+    $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>)

@@ -29,6 +29,11 @@
 set(FUNC_GATE_SCOPE "/(lib|backends)/plexus")
 
 if(NOT FUNC_GATE_SCAN)
+    # run-clang-tidy drives this gate and runs on the Linux leg only, so the gate is
+    # inert off Linux rather than a configure-time FATAL where run-clang-tidy is absent.
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        return()
+    endif()
     add_custom_target(function_size_gate ALL
         COMMAND ${CMAKE_COMMAND}
                 -DFUNC_GATE_SCAN=ON

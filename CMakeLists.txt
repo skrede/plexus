@@ -20,17 +20,25 @@ option(PLEXUS_WARNINGS_AS_ERRORS "Promote warnings to errors (the enforced gate)
 
 # Warn broadly on every compiled translation unit the build owns (the gated backends
 # and the test suite; the INTERFACE cores carry no TUs of their own). Applied before
-# the fragment glob so each discovered target inherits it. -Werror promotes those
-# warnings to the enforced gate: the build is clean under it today, so any newly
-# introduced warning fails the build going forward. -Werror is opt-OUTable (default
-# ON, so every ordinary tree enforces it) because a ThreadSanitizer tree emits an
-# inherent, uninstrumentable -Wtsan diagnostic on asio's atomic_thread_fence (a
-# property of running asio under tsan, not a plexus defect — see the tsan tree notes);
-# that one tree configures with the gate OFF so the race-detection run is not blocked
-# by a diagnostic the authoritative GCC tree never sees.
-add_compile_options(-Wall -Wextra)
-if(PLEXUS_WARNINGS_AS_ERRORS)
-    add_compile_options(-Werror)
+# the fragment glob so each discovered target inherits it. The warning-flag syntax is
+# per compiler: MSVC takes /W4, GCC/Clang take -Wall -Wextra.
+if(MSVC)
+    add_compile_options(/W4 /permissive- /Zc:__cplusplus)
+    # Enable warnings-as-errors for MSVC once the build is warning-clean under /W4.
+    # add_compile_options(/WX)
+else()
+    add_compile_options(-Wall -Wextra)
+    # -Werror promotes those warnings to the enforced gate: the build is clean under it
+    # today, so any newly introduced warning fails the build going forward. -Werror is
+    # opt-OUTable (default ON, so every ordinary tree enforces it) because a
+    # ThreadSanitizer tree emits an inherent, uninstrumentable -Wtsan diagnostic on
+    # asio's atomic_thread_fence (a property of running asio under tsan, not a plexus
+    # defect — see the tsan tree notes); that one tree configures with the gate OFF so
+    # the race-detection run is not blocked by a diagnostic the authoritative GCC tree
+    # never sees.
+    if(PLEXUS_WARNINGS_AS_ERRORS)
+        add_compile_options(-Werror)
+    endif()
 endif()
 
 # Project-wide library registration contract: every lib/<target>/ (Tier-1 core +
