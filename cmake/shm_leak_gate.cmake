@@ -39,7 +39,8 @@ endif()
 # defensive record of the legitimate homes rather than load-bearing filters.
 set(LEAK_ALLOWLIST
     "${LEAK_GATE_BACKENDS_DIR}/plexus-native/"
-    "${LEAK_GATE_BACKENDS_DIR}/plexus-asio/shm-include/plexus/asio/shm/linux/")
+    "${LEAK_GATE_BACKENDS_DIR}/plexus-asio/shm-include/plexus/asio/shm/linux/"
+    "${LEAK_GATE_BACKENDS_DIR}/plexus-asio/shm-include/plexus/asio/shm/windows/")
 
 file(GLOB_RECURSE _scan_files
     "${LEAK_GATE_LIB_DIR}/*.h"

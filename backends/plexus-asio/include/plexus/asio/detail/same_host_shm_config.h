@@ -3,14 +3,18 @@
 
 // PLEXUS_SAME_HOST_NO_SHM forces the portable AF_UNIX + TCP branch on any host (it lets the
 // non-shm composition be exercised off a Linux build host).
-#if defined(__linux__) && !defined(PLEXUS_SAME_HOST_NO_SHM)
+#if !defined(PLEXUS_SAME_HOST_NO_SHM) && (defined(__linux__) || defined(_WIN32))
     #define PLEXUS_SAME_HOST_SHM 1
 #else
     #define PLEXUS_SAME_HOST_SHM 0
 #endif
 
 #if PLEXUS_SAME_HOST_SHM
-    #include "plexus/asio/shm/linux/shm_member.h"
+    #if defined(__linux__)
+        #include "plexus/asio/shm/linux/shm_member.h"
+    #elif defined(_WIN32)
+        #include "plexus/asio/shm/windows/shm_member.h"
+    #endif
 #endif
 
 #endif

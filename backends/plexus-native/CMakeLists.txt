@@ -22,13 +22,28 @@ endif()
 # second STATIC archive cannot fold against the asio backend's copy, so a plain
 # archive is the honest shape. Link deps are PUBLIC plexus::core + plexus::wire
 # + plexus::shm (the family concept headers it satisfies) — explicitly NOT asio.
+# The version stamp and the host fingerprint are platform-neutral; the region
+# broker + handle are POSIX on Linux/macOS and Win32 on Windows, and the futex
+# notifier primitive is Linux-only (Windows and macOS carry their wake in the
+# asio reactor bridge instead).
 add_library(plexus-native STATIC
     src/shm_backend_version.cpp
-    src/region_handle.cpp
-    src/posix_shm_region_broker.cpp
-    src/futex_notifier_primitive.cpp
     src/machine_fingerprint.cpp)
 add_library(plexus::native ALIAS plexus-native)
+
+if(WIN32)
+    target_sources(plexus-native PRIVATE
+        src/win_region_handle.cpp
+        src/win_shm_region_broker.cpp)
+else()
+    target_sources(plexus-native PRIVATE
+        src/region_handle.cpp
+        src/posix_shm_region_broker.cpp)
+    if(LINUX)
+        target_sources(plexus-native PRIVATE
+            src/futex_notifier_primitive.cpp)
+    endif()
+endif()
 
 target_include_directories(plexus-native PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

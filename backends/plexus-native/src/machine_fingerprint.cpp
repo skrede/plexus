@@ -2,14 +2,45 @@
 
 #include "plexus/wire/topic_hash.h"
 
-#include <fstream>
 #include <string>
 
-#include <unistd.h>
+#if defined(_WIN32)
+    #include <windows.h>
+#else
+    #include <fstream>
+
+    #include <unistd.h>
+#endif
 
 namespace plexus::native {
 
 namespace {
+
+#if defined(_WIN32)
+
+// The per-install machine GUID under HKLM\SOFTWARE\Microsoft\Cryptography — the
+// Windows analog of /etc/machine-id. Empty when unreadable.
+std::string read_machine_id()
+{
+    char buf[128] = {};
+    DWORD length  = sizeof(buf);
+    if(::RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Cryptography", "MachineGuid", RRF_RT_REG_SZ, nullptr, buf, &length) != ERROR_SUCCESS)
+        return {};
+    return std::string(buf);
+}
+
+// GetComputerNameA (not gethostname, which needs a prior WSAStartup) — WSAStartup-free
+// and sufficient here, since the machine GUID already carries the stable host identity.
+std::string read_host_name()
+{
+    char buf[MAX_COMPUTERNAME_LENGTH + 1] = {};
+    DWORD length                          = sizeof(buf);
+    if(::GetComputerNameA(buf, &length) == 0)
+        return {};
+    return std::string(buf, length);
+}
+
+#else
 
 // The kernel host id, e.g. /etc/machine-id on Linux. Empty when unreadable.
 std::string read_machine_id()
@@ -30,6 +61,8 @@ std::string read_host_name()
         return {};
     return std::string(buf);
 }
+
+#endif
 
 }
 
