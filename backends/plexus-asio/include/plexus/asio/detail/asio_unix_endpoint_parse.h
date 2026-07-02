@@ -3,7 +3,11 @@
 
 #include <asio/local/stream_protocol.hpp>
 
-#include <sys/un.h>
+#if defined(_WIN32)
+    #include <afunix.h>
+#else
+    #include <sys/un.h>
+#endif
 
 #include <string>
 #include <system_error>

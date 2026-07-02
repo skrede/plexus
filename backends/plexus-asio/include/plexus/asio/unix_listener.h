@@ -14,21 +14,13 @@
 #include "plexus/io/egress_capacity.h"
 #include "plexus/io/security/peer_cred_policy.h"
 #include "plexus/detail/compat.h"
+#include "plexus/detail/socket_compat.h"
 
 #include <asio/io_context.hpp>
 #include <asio/local/stream_protocol.hpp>
 
-#include <sys/stat.h>
-#include <unistd.h>
-#if defined(__linux__)
-    #include <sys/socket.h>
-#elif defined(__APPLE__) || defined(__FreeBSD__)
-    #include <unistd.h>
-#endif
-
 #include <string>
 #include <memory>
-#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -51,9 +43,9 @@ class unix_listener
 public:
     // The fail-closed boundary. The knob widens deliberately (e.g. 0770) — loosening is an
     // informed choice, never a default.
-    static constexpr ::mode_t default_socket_mode = S_IRWXU;
+    static constexpr auto default_socket_mode = plexus::detail::default_socket_mode;
 
-    explicit unix_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {}, ::mode_t mode = default_socket_mode,
+    explicit unix_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {}, plexus::detail::socket_mode mode = default_socket_mode,
                            const io::security::peer_cred_policy &policy = io::security::shared_accept_any_peer_cred(), io::congestion congestion = io::congestion::block,
                            io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {})
             : m_io(io)
@@ -91,29 +83,27 @@ public:
         auto ep = detail::parse_unix(bind_ep.address, ec);
         if(ec)
             return detail::report(*this, ec);
-#if !defined(__linux__) && !defined(__APPLE__) && !defined(__FreeBSD__)
         // Windows AF_UNIX exposes no peer credentials. A non-accept_any policy cannot be
         // honored, so refuse at listen (fail-closed) rather than silently admit every peer.
-        if(!m_peer_policy->accepts_without_credentials())
-            return detail::report(*this, std::make_error_code(std::errc::operation_not_supported));
-#endif
+        if constexpr(!plexus::detail::peer_cred_supported)
+        {
+            if(!m_peer_policy->accepts_without_credentials())
+                return detail::report(*this, std::make_error_code(std::errc::operation_not_supported));
+        }
         const auto &path = bind_ep.address;
-        detail::unlink_path(path); // clear a stale socket file before bind
+        plexus::detail::remove_socket_path(path); // clear a stale socket file before bind
         m_acceptor.open(ep.protocol(), ec);
         if(ec)
             return detail::report(*this, ec);
-        // Bind under a restrictive umask so the socket inode is created with NO access for
-        // group/other from the outset — this closes the TOCTOU window between bind (which
-        // would otherwise create a world-accessible inode) and the mode application. The
-        // umask is restored immediately after bind.
-        const ::mode_t prev_umask = ::umask(0077);
-        m_acceptor.bind(ep, ec); // NO reuse_address for AF_UNIX
-        (void)::umask(prev_umask);
+        {
+            plexus::detail::scoped_bind_umask umask_guard;
+            m_acceptor.bind(ep, ec); // NO reuse_address for AF_UNIX
+        }
         if(ec)
             return detail::abort_start(*this, ec); // close the opened acceptor
         m_bound_path = path;                       // bind created the inode — own it so any later failure unlinks it
-        if(::chmod(path.c_str(), m_mode) != 0)     // apply the configured mode (0700 default, or a widened knob)
-            return detail::abort_start(*this, std::error_code(errno, std::generic_category()));
+        if(!plexus::detail::apply_socket_mode(path, m_mode, ec)) // 0700 default, or a widened knob
+            return detail::abort_start(*this, ec);
         m_acceptor.listen(::asio::socket_base::max_listen_connections, ec);
         if(ec)
             return detail::abort_start(*this, ec);
@@ -129,7 +119,7 @@ public:
         (void)m_acceptor.close(ec);
         if(!m_bound_path.empty()) // only unlink a path THIS listener bound
         {
-            detail::unlink_path(m_bound_path);
+            plexus::detail::remove_socket_path(m_bound_path);
             m_bound_path.clear();
         }
     }
@@ -149,7 +139,7 @@ private:
     ::asio::io_context &m_io;
     ::asio::local::stream_protocol::acceptor m_acceptor;
     stream::stream_inbound_config m_cfg;
-    ::mode_t m_mode;
+    plexus::detail::socket_mode m_mode;
     const io::security::peer_cred_policy *m_peer_policy; // borrowed; never owned
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;

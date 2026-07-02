@@ -71,7 +71,7 @@ struct tcp_traits
     }
 
 private:
-    static void apply_keepalive_intervals(int fd, const stream_socket_options &opts) noexcept
+    static void apply_keepalive_intervals(::asio::basic_socket<::asio::ip::tcp>::native_handle_type fd, const stream_socket_options &opts) noexcept
     {
 #if defined(__linux__)
         set_keepalive_secs(fd, IPPROTO_TCP, TCP_KEEPIDLE, opts.keepalive_idle_secs);
@@ -89,7 +89,7 @@ private:
         vals.keepalivetime     = opts.keepalive_idle_secs * 1000u;
         vals.keepaliveinterval = opts.keepalive_interval_secs * 1000u; // SIO_KEEPALIVE_VALS carries no count
         DWORD written          = 0;
-        (void)::WSAIoctl(static_cast<SOCKET>(fd), SIO_KEEPALIVE_VALS, &vals, sizeof(vals), nullptr, 0, &written, nullptr, nullptr);
+        (void)::WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), nullptr, 0, &written, nullptr, nullptr);
 #else
         (void)fd;
         (void)opts;
@@ -97,7 +97,7 @@ private:
     }
 
 #if defined(__linux__) || defined(__APPLE__)
-    static void set_keepalive_secs(int fd, int level, int name, std::uint32_t secs) noexcept
+    static void set_keepalive_secs(::asio::basic_socket<::asio::ip::tcp>::native_handle_type fd, int level, int name, std::uint32_t secs) noexcept
     {
         if(secs == 0)
             return;
