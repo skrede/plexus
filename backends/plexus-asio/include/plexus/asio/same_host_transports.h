@@ -15,7 +15,6 @@
 
 #if PLEXUS_SAME_HOST_SHM
     #include "plexus/native/machine_fingerprint.h"
-    #include "plexus/native/posix_shm_region_broker.h"
 #endif
 
 #include <asio/io_context.hpp>
