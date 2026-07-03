@@ -82,7 +82,7 @@ TEST_CASE("udp envelope: seq round-trips across the full uint16 range, big-endia
     {
         const auto wire = wrap_udp(udp_envelope_kind::best_effort, seq, frame);
         // Big-endian: seq high byte at offset 1, low byte at offset 2.
-        REQUIRE(static_cast<unsigned>(wire[1]) == (seq >> 8));
+        REQUIRE(static_cast<unsigned>(wire[1]) == static_cast<unsigned>(seq >> 8));
         REQUIRE(static_cast<unsigned>(wire[2]) == (seq & 0xFFu));
 
         auto dec = unwrap_udp(wire);

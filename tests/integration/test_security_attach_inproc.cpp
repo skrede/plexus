@@ -140,7 +140,7 @@ hmac_fn real_keyed_hmac()
 // collide by construction.
 rand_fn counter_rand(std::uint8_t seed)
 {
-    auto counter = std::make_shared<std::uint8_t>(0);
+    auto counter = std::make_shared<std::uint8_t>(std::uint8_t{0});
     return [seed, counter](std::span<std::byte> out)
     {
         for(auto &b : out)

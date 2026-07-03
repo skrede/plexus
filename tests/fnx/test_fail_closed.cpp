@@ -25,7 +25,10 @@ using plexus::detail::fail_closed;
 
 TEST_CASE("fail_closed throws runtime_error under exceptions", "[fnx][fail_closed]")
 {
-    REQUIRE_THROWS_AS(fail_closed("x"), std::runtime_error);
+    // Call through a non-[[noreturn]] lambda so Catch2's post-expression bookkeeping is not
+    // provably unreachable under MSVC (C4702); the throw still propagates identically.
+    const auto call = [] { fail_closed("x"); };
+    REQUIRE_THROWS_AS(call(), std::runtime_error);
 }
 
 TEST_CASE("fail_closed propagates the contract message", "[fnx][fail_closed]")
@@ -33,7 +36,12 @@ TEST_CASE("fail_closed propagates the contract message", "[fnx][fail_closed]")
     try
     {
         fail_closed("degraded RNG");
+#if !defined(_MSC_VER)
+        // Unreachable given fail_closed is [[noreturn]] — a guard against it silently returning
+        // if that contract were lost. MSVC proves it dead (C4702); the catch below carries the
+        // real assertion on every compiler.
         FAIL("fail_closed must not return under exceptions");
+#endif
     }
     catch(const std::runtime_error &e)
     {

@@ -86,11 +86,11 @@ TEST_CASE("Handshake response: status cutoff rejects 0x00 and every byte 0x06..0
 TEST_CASE("Handshake response: each defined status byte 0x01..0x05 decodes to its enumerator", "[wire][handshake]")
 {
     auto encoded                                              = encode_handshake_response(make_response(id_distinct(), handshake_status::accepted));
-    const std::pair<std::uint8_t, handshake_status> defined[] = {{0x01, handshake_status::accepted},
-                                                                 {0x02, handshake_status::version_incompatible},
-                                                                 {0x03, handshake_status::identity_conflict},
-                                                                 {0x04, handshake_status::rejected_unknown},
-                                                                 {0x05, handshake_status::unauthorized}};
+    const std::pair<std::uint8_t, handshake_status> defined[] = {{std::uint8_t{0x01}, handshake_status::accepted},
+                                                                 {std::uint8_t{0x02}, handshake_status::version_incompatible},
+                                                                 {std::uint8_t{0x03}, handshake_status::identity_conflict},
+                                                                 {std::uint8_t{0x04}, handshake_status::rejected_unknown},
+                                                                 {std::uint8_t{0x05}, handshake_status::unauthorized}};
 
     for(auto [byte, status] : defined)
     {

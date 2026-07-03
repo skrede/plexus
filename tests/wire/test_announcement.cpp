@@ -42,7 +42,7 @@ announcement make_sample()
     ann.ttl_secs = 30;
     ann.flags    = 0;
     ann.universe = 0;
-    ann.listens  = {{"tcp", 5000}, {"udp", 5001}};
+    ann.listens  = {{"tcp", std::uint16_t{5000}}, {"udp", std::uint16_t{5001}}};
     return ann;
 }
 
