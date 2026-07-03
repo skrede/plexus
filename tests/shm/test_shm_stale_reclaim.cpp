@@ -134,5 +134,5 @@ int main(int argc, char **argv)
 {
     plexus::testing::xproc_capture_argv(argc, argv);
     plexus::testing::xproc_child_main(argc, argv); // _Exits when re-exec'd as the child role
-    return Catch2::Session().run(argc, argv);
+    return Catch::Session().run(argc, argv);
 }
