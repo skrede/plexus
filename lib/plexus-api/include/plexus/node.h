@@ -905,7 +905,7 @@ private:
     }
 
     // The one borrowed transport, or the node-owned mux glue when composing several.
-    engine_transport &engine_leaf(Transports &...transports) noexcept
+    engine_transport &engine_leaf([[maybe_unused]] Transports &...transports) noexcept
     {
         if constexpr(sizeof...(Transports) == 1)
             return std::get<0>(std::tie(transports...));

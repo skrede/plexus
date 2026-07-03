@@ -15,7 +15,7 @@ TEST_CASE("ring_sizing: ring_geometry_for trades depth for width under a ceiling
     // ceiling and strictly above the declared capacity. (The deepest band's depth is
     // capacity-derived and is exercised below, where a large declaration can exceed
     // the ceiling on purpose -- that over-ceiling case is the caller's to detect.)
-    constexpr std::uint64_t k_max_ring_slab_bytes = 16ull * 1024 * 1024;
+    constexpr std::uint64_t k_slab_ceiling_bytes = 16ull * 1024 * 1024;
     for(std::uint32_t payload : {64u, 4096u, 40000u, 70000u, 131072u})
     {
         const ring_geometry g = ring_geometry_for(payload);
@@ -23,7 +23,7 @@ TEST_CASE("ring_sizing: ring_geometry_for trades depth for width under a ceiling
         REQUIRE(g.slot_capacity % 8 == 0);
         REQUIRE((g.cell_count & (g.cell_count - 1)) == 0); // power of two
         REQUIRE(g.cell_count > k_max_consumers);
-        REQUIRE(g.cell_count * g.slot_capacity <= k_max_ring_slab_bytes);
+        REQUIRE(g.cell_count * g.slot_capacity <= k_slab_ceiling_bytes);
     }
 }
 

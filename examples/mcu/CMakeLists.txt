@@ -26,4 +26,11 @@ if(TARGET plexus::asio)
 
     add_executable(lwip_discovery_dial_host lwip_discovery_dial_host.cpp)
     target_link_libraries(lwip_discovery_dial_host PRIVATE plexus::plexus plexus::asio)
+
+    # These host examples read env config through the portable std::getenv, which MSVC's CRT
+    # deprecates (C4996). Silence the deprecation for just these example targets — never globally.
+    if(MSVC)
+        set_property(TARGET lwip_gate_host lwip_bench_host serial_bench_host multicast_gate_host
+            APPEND PROPERTY COMPILE_DEFINITIONS _CRT_SECURE_NO_WARNINGS)
+    endif()
 endif()

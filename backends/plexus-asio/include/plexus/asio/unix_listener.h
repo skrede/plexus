@@ -96,7 +96,7 @@ public:
         if(ec)
             return detail::report(*this, ec);
         {
-            plexus::detail::scoped_bind_umask umask_guard;
+            [[maybe_unused]] plexus::detail::scoped_bind_umask umask_guard; // inert on Windows (AF_UNIX carries no mode bits)
             m_acceptor.bind(ep, ec); // NO reuse_address for AF_UNIX
         }
         if(ec)
