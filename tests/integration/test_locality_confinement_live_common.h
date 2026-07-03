@@ -3,6 +3,8 @@
 
 #include "test_locality_confinement_common.h"
 
+#include "plexus/testing/platform.h"
+
 #ifdef PLEXUS_HAVE_ASIO_MUX
 
 namespace locality_confinement_fixture {
@@ -18,18 +20,16 @@ struct temp_sock
 
     temp_sock()
     {
-        char tmpl[]      = "/tmp/pxl-XXXXXX";
-        const char *made = ::mkdtemp(tmpl);
-        dir              = made ? made : "";
-        path             = dir + "/s";
+        dir  = plexus::testing::make_temp_dir("pxl-").string();
+        path = dir + "/s";
     }
 
     ~temp_sock()
     {
         if(!path.empty())
-            ::unlink(path.c_str());
+            plexus::testing::remove_socket_path(path);
         if(!dir.empty())
-            ::rmdir(dir.c_str());
+            std::filesystem::remove(dir);
     }
 };
 

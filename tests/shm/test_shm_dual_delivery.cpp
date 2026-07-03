@@ -23,6 +23,8 @@
 #include <asio/write.hpp>
 #include <asio/ip/tcp.hpp>
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -131,7 +133,7 @@ std::uint32_t wire_roundtrip_loopback(std::uint32_t payload)
 
 TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic coexist on one topic", "[shm][dual_delivery]")
 {
-    const std::string fqn         = "topic.dual." + std::to_string(::getpid());
+    const std::string fqn         = "topic.dual." + std::to_string(plexus::testing::process_id());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 3; ++iter)

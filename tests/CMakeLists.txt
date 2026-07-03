@@ -25,6 +25,13 @@ if(PLEXUS_BUILD_TESTS)
     include(Catch)
     message(STATUS "plexus tests: Catch2 ${Catch2_VERSION} resolved")
 
+    # The portable test-support helper (process id, temp dir, socket-path removal)
+    # every area routes its formerly-POSIX call sites through. Attaching it here as
+    # a directory-scoped usage requirement makes the header includable in every
+    # unit-test fragment without each target restating the dependency; it is an
+    # INTERFACE target, so this adds only include paths, never a compiled artifact.
+    link_libraries(plexus::testing)
+
     # The leak gate runs as an ALL target in every configured tree (ON or OFF):
     # the allowlisted backend dirs are excluded either way, so its result does
     # not depend on PLEXUS_ENABLE_SHM_BACKEND.

@@ -1,5 +1,7 @@
 #include "test_outofbox_message_ceiling_common.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 using namespace outofbox_ceiling_fixture;
@@ -51,10 +53,7 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over AF_UNIX at shipped defaul
     int proven               = 0;
     for(int iter = 0; iter < iterations; ++iter)
     {
-        char tmpl[]      = "/tmp/pxo-XXXXXX";
-        const char *made = ::mkdtemp(tmpl);
-        REQUIRE(made != nullptr);
-        const std::string path = std::string{made} + "/s";
+        const std::string path = plexus::testing::make_temp_dir("pxo-").string() + "/s";
 
         ::asio::io_context io;
         pasio::unix_transport server{io}; // full defaults

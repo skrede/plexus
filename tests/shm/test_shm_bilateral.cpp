@@ -11,6 +11,8 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -203,7 +205,7 @@ TEST_CASE("shm.bilateral a publisher-sized ring lets a wide value cross over sha
 {
     // The publisher declares max_payload; the ring is sized to it; a value at that
     // width fits and crosses to the converged subscriber. Looped + reproduced.
-    const std::string fqn             = "topic.bilateral.sized." + std::to_string(::getpid());
+    const std::string fqn             = "topic.bilateral.sized." + std::to_string(plexus::testing::process_id());
     constexpr std::uint32_t k_payload = 0xBADC0FFEu;
     for(int iter = 0; iter < 3; ++iter)
         REQUIRE(run_shm_roundtrip(fqn + "." + std::to_string(iter), /*max_payload=*/8192u, k_payload));
@@ -215,7 +217,7 @@ TEST_CASE("shm.bilateral a subscriber-only upgrade with no max_payload uses the 
 {
     // No publisher max_payload (0) -> the default ring geometry. The value still
     // crosses: the consumer-sovereign upgrade does not need the publisher to size.
-    const std::string fqn             = "topic.bilateral.default." + std::to_string(::getpid());
+    const std::string fqn             = "topic.bilateral.default." + std::to_string(plexus::testing::process_id());
     constexpr std::uint32_t k_payload = 0x5AFE5A1Du;
     for(int iter = 0; iter < 3; ++iter)
         REQUIRE(run_shm_roundtrip(fqn + "." + std::to_string(iter), /*max_payload=*/0u, k_payload));

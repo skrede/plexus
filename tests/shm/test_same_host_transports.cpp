@@ -12,6 +12,8 @@
 
 #include "plexus/discovery/static_discovery.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -81,7 +83,7 @@ TEST_CASE("shm.same_host_transports the portable composition stands up a live no
     id[0]     = std::byte{0x2A};
     auto node = ts.make_node(disc, id, plexus::node_options{});
 
-    const std::string sock = "/tmp/plexus-same-host-" + std::to_string(::getpid()) + ".sock";
+    const std::string sock = "/tmp/plexus-same-host-" + std::to_string(plexus::testing::process_id()) + ".sock";
     node.listen({"unix", sock});
     io.poll();
 
@@ -90,7 +92,7 @@ TEST_CASE("shm.same_host_transports the portable composition stands up a live no
 
 TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by name", "[shm][same_host_transports][roundtrip]")
 {
-    const std::string fqn         = "topic.same_host_transports." + std::to_string(::getpid());
+    const std::string fqn         = "topic.same_host_transports." + std::to_string(plexus::testing::process_id());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)

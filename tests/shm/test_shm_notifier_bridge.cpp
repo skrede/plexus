@@ -18,6 +18,8 @@
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -140,7 +142,7 @@ bool produce_gated(const std::string &fqn)
 
 TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor and drains", "[shm][notifier_bridge]")
 {
-    const std::string fqn         = "topic.bridge." + std::to_string(::getpid());
+    const std::string fqn         = "topic.bridge." + std::to_string(plexus::testing::process_id());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)
@@ -228,7 +230,7 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
     // producer could read a stale non-PARKED state, skip the wake, and the consumer
     // would never drain — surfacing as the deadline timeout below, never a silent hang.
     // Looped N>=100; the parked consumer drives the REAL submit_futex_wait path.
-    const std::string fqn         = "topic.bridgegate." + std::to_string(::getpid());
+    const std::string fqn         = "topic.bridgegate." + std::to_string(plexus::testing::process_id());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)

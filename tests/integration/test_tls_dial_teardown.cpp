@@ -20,6 +20,8 @@
 
 #include "plexus/wire/close_cause.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -55,7 +57,7 @@ struct identity_fixture
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path() / ("plexus_tlsdt_" + tag + "_" + std::to_string(::getpid()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() / ("plexus_tlsdt_" + tag + "_" + std::to_string(plexus::testing::process_id()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
         key_path  = dir / "key.pem";

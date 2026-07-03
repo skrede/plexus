@@ -22,6 +22,8 @@
 #include "plexus/topic_qos.h"
 #include "plexus/detail/compat.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -374,7 +376,7 @@ TEST_CASE("shm.wire_fallback small rides the SHM ring, large rides the wire — 
     // slot stride (4096), so the cap is 4096. A 1 KiB message fits the cap (SHM); a 64
     // KiB message exceeds it (wire). The over-cap (wire-routed) cell repeats twice in one
     // ctest invocation — the no-success-from-a-single-run discipline.
-    const std::string base = "topic.wfb." + std::to_string(::getpid());
+    const std::string base = "topic.wfb." + std::to_string(plexus::testing::process_id());
 
     for(int run = 0; run < 2; ++run)
     {
@@ -398,7 +400,7 @@ TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over 
     // channel — the ring is the small-message fast path, never a correctness dependency.
     // No SHM region is minted here; the route helper still runs (against the resolved
     // geometry) but the hook withholds the companion, so both messages take the wire.
-    const std::string fqn = "topic.wfb.rescue." + std::to_string(::getpid());
+    const std::string fqn = "topic.wfb.rescue." + std::to_string(plexus::testing::process_id());
 
     std::vector<std::byte> small(1 * k_kib, std::byte{0xAB});
     std::vector<std::byte> large(64 * k_kib, std::byte{0xCD});
@@ -431,7 +433,7 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
     // payload equal to the slot (4096) frames to slot+prefix > slot. A bare-size gate routed it
     // to the companion ring only, where the oversize send was rejected and dropped while the
     // wire was bypassed — a both-lanes loss. The framed-size gate keeps it on the wire.
-    const std::string fqn = "topic.wfb.frameover." + std::to_string(::getpid());
+    const std::string fqn = "topic.wfb.frameover." + std::to_string(plexus::testing::process_id());
 
     posix_shm_region_broker broker;
     member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};

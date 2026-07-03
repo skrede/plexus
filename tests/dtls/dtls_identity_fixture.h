@@ -6,6 +6,8 @@
 
 #include "plexus/io/security/verify_policy.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <openssl/evp.h>
@@ -19,7 +21,6 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstddef>
-#include <unistd.h>
 #include <filesystem>
 #include <system_error>
 
@@ -48,7 +49,7 @@ struct identity_fixture
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path() / ("plexus_dtls_" + tag + "_" + std::to_string(::getpid()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() / ("plexus_dtls_" + tag + "_" + std::to_string(plexus::testing::process_id()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
         key_path  = dir / "key.pem";

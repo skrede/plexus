@@ -20,6 +20,8 @@
 #include "plexus/io/reconnect_config.h"
 #include "plexus/topic_qos.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -256,12 +258,12 @@ struct medium_result
 // co-host vs forced-distinct variant.
 medium_result one_run(const std::string &fqn, const std::string &small, const std::string &large, bool same_host)
 {
-    const std::uint16_t sub_port = static_cast<std::uint16_t>(41000 + 2 * (::getpid() % 9000));
+    const std::uint16_t sub_port = static_cast<std::uint16_t>(41000 + 2 * (plexus::testing::process_id() % 9000));
     const std::uint16_t pub_port = sub_port + 1;
     const plexus::node_id sub_id = make_id(0x51);
     const plexus::node_id pub_id = make_id(0x52);
-    const std::string sub_name   = "node.sub." + std::to_string(::getpid());
-    const std::string pub_name   = "node.pub." + std::to_string(::getpid());
+    const std::string sub_name   = "node.sub." + std::to_string(plexus::testing::process_id());
+    const std::string pub_name   = "node.pub." + std::to_string(plexus::testing::process_id());
 
     coord *c = map_coord();
     if(c == nullptr)
@@ -421,8 +423,8 @@ TEST_CASE("node_xproc_shm the subscriber callback receives the fitting message o
     // transited the ring.
     for(int run = 0; run < 2; ++run)
     {
-        const std::string fqn   = "topic.xproc." + std::to_string(::getpid()) + "." + std::to_string(run);
-        const std::string small = "xproc-shm-fit-" + std::to_string(run) + "-" + std::to_string(::getpid());
+        const std::string fqn   = "topic.xproc." + std::to_string(plexus::testing::process_id()) + "." + std::to_string(run);
+        const std::string small = "xproc-shm-fit-" + std::to_string(run) + "-" + std::to_string(plexus::testing::process_id());
         const std::string large = std::string(64 * k_kib, 'L') + std::to_string(run);
 
         const medium_result r = one_run(fqn, small, large, /*same_host=*/true);
@@ -442,8 +444,8 @@ TEST_CASE("node_xproc_shm a forced-distinct-fingerprint pair delivers over the w
     // The cross-host fail-closed fallback: distinct fingerprints -> is_same_host false -> no
     // upgrade -> NO /dev/shm region, and EVERY message (fitting and over-cap) crosses the TCP
     // wire byte-exact. The wire is the always-present path, never suppressed.
-    const std::string fqn   = "topic.xproc.distinct." + std::to_string(::getpid());
-    const std::string small = "xproc-distinct-fit-" + std::to_string(::getpid());
+    const std::string fqn   = "topic.xproc.distinct." + std::to_string(plexus::testing::process_id());
+    const std::string small = "xproc-distinct-fit-" + std::to_string(plexus::testing::process_id());
     const std::string large = std::string(64 * k_kib, 'L');
 
     const medium_result r = one_run(fqn, small, large, /*same_host=*/false);

@@ -21,13 +21,13 @@
 
 #include "plexus/stream/stream_inbound.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/local/stream_protocol.hpp>
-
-#include <unistd.h>
 
 #include <span>
 #include <vector>
@@ -72,18 +72,16 @@ struct unix_pair
 
     unix_pair()
     {
-        char tmpl[]      = "/tmp/pxsat-XXXXXX";
-        const char *made = ::mkdtemp(tmpl);
-        dir              = made ? made : "";
-        path             = dir + "/s";
+        dir  = plexus::testing::make_temp_dir("pxsat-").string();
+        path = dir + "/s";
     }
 
     ~unix_pair()
     {
         if(!path.empty())
-            ::unlink(path.c_str());
+            plexus::testing::remove_socket_path(path);
         if(!dir.empty())
-            ::rmdir(dir.c_str());
+            std::filesystem::remove(dir);
     }
 };
 

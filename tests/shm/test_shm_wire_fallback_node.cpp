@@ -17,6 +17,8 @@
 
 #include "plexus/detail/compat.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
@@ -281,7 +283,7 @@ TEST_CASE("shm.wire_fallback_node a wire_fallback topic's same-host channel is t
     // node installs over a shm-bearing pack, the SAME set_topic_geometry the node declare
     // path calls. A wire_fallback topic declines the ring (the hook falls back to the wire
     // member); the two reliable-ring modes prefer the ring — byte-identical to today.
-    const std::string base = "topic.wfbn." + std::to_string(::getpid());
+    const std::string base = "topic.wfbn." + std::to_string(plexus::testing::process_id());
 
     REQUIRE(route_for_mode(base + ".wfb", pio::ring_geometry_mode::wire_fallback) == "stream");
     REQUIRE(route_for_mode(base + ".rel", pio::ring_geometry_mode::reliable_preserving) == "shm");
@@ -294,7 +296,7 @@ TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without hol
     // acquires the ring, so it holds NO bump to abandon (the probe/abandon discipline
     // can_acquire documents). A reliable_preserving probe DOES acquire + hold the bump
     // (the immediately-following dial reuses it), so its companion channel mints the ring.
-    const std::string fqn = "topic.wfbn.refcount." + std::to_string(::getpid());
+    const std::string fqn = "topic.wfbn.refcount." + std::to_string(plexus::testing::process_id());
 
     posix_shm_region_broker broker;
     member_t member{broker, pcore::reliability::reliable, pcore::congestion::block};
@@ -306,7 +308,7 @@ TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without hol
     // declining for the wire_fallback mode without any reuse of a held ring.
     REQUIRE_FALSE(member.can_acquire(endpoint{"shm", fqn}));
 
-    const std::string rel_fqn = "topic.wfbn.refcount.rel." + std::to_string(::getpid());
+    const std::string rel_fqn = "topic.wfbn.refcount.rel." + std::to_string(plexus::testing::process_id());
     member.set_topic_geometry(rel_fqn, 4 * k_kib, pio::shm_geometry{2u, pio::ring_geometry_mode::reliable_preserving});
     REQUIRE(member.can_acquire(endpoint{"shm", rel_fqn}));
     member.abandon(endpoint{"shm", rel_fqn}); // drop the held probe bump (the hook chose otherwise)

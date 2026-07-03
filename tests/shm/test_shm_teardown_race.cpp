@@ -18,6 +18,8 @@
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -122,7 +124,7 @@ bool flood(const std::string &fqn, coord *c)
 
 TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state", "[shm][teardown_race]")
 {
-    const std::string fqn         = "topic.teardown." + std::to_string(::getpid());
+    const std::string fqn         = "topic.teardown." + std::to_string(plexus::testing::process_id());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)

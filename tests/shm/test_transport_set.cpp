@@ -10,6 +10,8 @@
 
 #include "plexus/discovery/static_discovery.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -36,7 +38,7 @@ TEST_CASE("shm.transport_set an shm-bearing set mints a node from {io, broker}",
     id[0]     = std::byte{0x2A};
     auto node = ts.make_node<pasio::asio_policy>(disc, id, plexus::node_options{});
 
-    const std::string sock = "/tmp/plexus-tset-shm-" + std::to_string(::getpid()) + ".sock";
+    const std::string sock = "/tmp/plexus-tset-shm-" + std::to_string(plexus::testing::process_id()) + ".sock";
     node.listen({"unix", sock});
     io.poll();
 
@@ -54,7 +56,7 @@ TEST_CASE("shm.transport_set a no-shm set mints a node from {io}", "[mux][node][
     id[0]     = std::byte{0x3B};
     auto node = ts.make_node<pasio::asio_policy>(disc, id, plexus::node_options{});
 
-    const std::string sock = "/tmp/plexus-tset-noshm-" + std::to_string(::getpid()) + ".sock";
+    const std::string sock = "/tmp/plexus-tset-noshm-" + std::to_string(plexus::testing::process_id()) + ".sock";
     node.listen({"unix", sock});
     io.poll();
 

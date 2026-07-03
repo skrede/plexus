@@ -15,6 +15,8 @@
 
 #include "plexus/io/transport_backend.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -72,7 +74,7 @@ TEST_CASE("shm.node_composition the shm-bearing node brings up a same-host liste
     id[0] = std::byte{0x3B};
     shm_node node{io, disc, id, shm, local, remote, plexus::node_options{}};
 
-    const std::string sock = "/tmp/plexus-shm-node-comp-" + std::to_string(::getpid()) + ".sock";
+    const std::string sock = "/tmp/plexus-shm-node-comp-" + std::to_string(plexus::testing::process_id()) + ".sock";
     node.listen({"unix", sock});
     io.poll();
 

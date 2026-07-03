@@ -6,6 +6,8 @@
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/region_naming.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -111,7 +113,7 @@ void run_consumer(coord *c, const std::string &fqn, std::string_view ns)
 
 TEST_CASE("shm.region_namespace same namespace converges and a different one is isolated", "[shm][same_host][namespace][roundtrip]")
 {
-    const std::string fqn         = "topic.region_namespace." + std::to_string(::getpid());
+    const std::string fqn         = "topic.region_namespace." + std::to_string(plexus::testing::process_id());
     const std::string producer_ns = "alpha";
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 

@@ -17,6 +17,8 @@
 
 #include "plexus/detail/compat.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -286,7 +288,7 @@ TEMPLATE_TEST_CASE("shm.large_message a >1 MiB and the 16 MiB payload round-trip
     // The large cells run twice in one ctest invocation: the timing/transport
     // reproducibility discipline (no success declared from a single run). A typical
     // (small) fan-out holds depth > capacity under reliable_preserving.
-    const std::string base = "topic.large." + std::to_string(::getpid());
+    const std::string base = "topic.large." + std::to_string(plexus::testing::process_id());
 
     for(int run = 0; run < 2; ++run)
     {
@@ -310,7 +312,7 @@ TEMPLATE_TEST_CASE("shm.large_message probe-higher: reliable fails closed above 
     // reliable_preserving MUST fail closed naming the CEILING bound — never a silent
     // best-effort. The SAME 17 MiB under EXPLICIT best_effort_large is a depth-16 ring
     // (depth == capacity: 17 MiB * 16 = 272 MiB < 512 MiB) and round-trips.
-    const std::string base = "topic.probe." + std::to_string(::getpid());
+    const std::string base = "topic.probe." + std::to_string(plexus::testing::process_id());
 
     const acquire_probe<TestType> reliable = probe_acquire<TestType>(base + ".reliable", 17 * k_mib, pio::ring_geometry_mode::reliable_preserving, /*capacity=*/16u);
     REQUIRE_FALSE(reliable.channel_minted);                      // fail-closed, no ring

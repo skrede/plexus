@@ -12,6 +12,8 @@
 
 #include "plexus/discovery/static_discovery.h"
 
+#include "plexus/testing/platform.h"
+
 #include <asio/io_context.hpp>
 
 #include <atomic>
@@ -19,8 +21,6 @@
 #include <string>
 #include <cstddef>
 #include <functional>
-
-#include <unistd.h>
 
 namespace plexus_test {
 
@@ -45,7 +45,7 @@ inline plexus::node_id make_id(std::byte first) noexcept
 inline std::string unique_region_ns()
 {
     static std::atomic<unsigned> seq{0};
-    return "self-carrier-" + std::to_string(::getpid()) + "-" + std::to_string(seq.fetch_add(1));
+    return "self-carrier-" + std::to_string(plexus::testing::process_id()) + "-" + std::to_string(seq.fetch_add(1));
 }
 
 // Owns the io substrate, broker, and the borrowed leaves so the node outlives nothing it borrows.

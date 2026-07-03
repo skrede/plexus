@@ -7,6 +7,8 @@
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/region_naming.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -69,7 +71,7 @@ constexpr std::uint32_t k_payload = 0xC0FFEEu;
 TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named ring", "[shm][same_host_roundtrip]")
 {
     // The fqn unique to this process so concurrent ctest shards never collide.
-    const std::string fqn         = "topic.roundtrip." + std::to_string(::getpid());
+    const std::string fqn         = "topic.roundtrip." + std::to_string(plexus::testing::process_id());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
     for(int iter = 0; iter < 100; ++iter)

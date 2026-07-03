@@ -3,6 +3,8 @@
 
 #include "plexus/shm/region_broker_concept.h"
 
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
@@ -33,7 +35,7 @@ namespace {
 // canonical /dev/shm path is /dev/shm/plexus.<name>.
 std::string unique_name(const char *tag)
 {
-    return std::string("regbroker.") + tag + "." + std::to_string(::getpid());
+    return std::string("regbroker.") + tag + "." + std::to_string(plexus::testing::process_id());
 }
 
 std::string dev_shm_path(const std::string &bare)
