@@ -53,7 +53,8 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over AF_UNIX at shipped defaul
     int proven               = 0;
     for(int iter = 0; iter < iterations; ++iter)
     {
-        const std::string path = plexus::testing::make_temp_dir("pxo-").string() + "/s";
+        const std::filesystem::path dir  = plexus::testing::make_temp_dir("pxo-");
+        const std::string           path = (dir / "s").string();
 
         ::asio::io_context io;
         pasio::unix_transport server{io}; // full defaults
@@ -81,8 +82,8 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over AF_UNIX at shipped defaul
         REQUIRE(equal_bytes(got, frame));
         ++proven;
 
-        ::unlink(path.c_str());
-        ::rmdir(made);
+        plexus::testing::remove_socket_path(path);
+        std::filesystem::remove(dir);
     }
     REQUIRE(proven == iterations);
 }
