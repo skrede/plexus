@@ -14,7 +14,7 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
         // 4 MiB ceiling — the publisher can emit larger than the subscriber accepts, the
         // incompatible direction. Strict refuses with the size bit named.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
@@ -30,7 +30,7 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
         }
         // The SAME pair under permissive connects, data flows, and the size bit surfaces.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.max_message_bytes = 16u * 1024u * 1024u});
@@ -48,7 +48,7 @@ TEST_CASE("rxo compatibility: a pub max-message-bytes over the sub-requested cei
         }
         // A subscriber requesting a ceiling AT/ABOVE the producer's max is admitted clean.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.max_message_bytes = 4u * 1024u * 1024u});
@@ -70,7 +70,7 @@ TEST_CASE("rxo compatibility: a requires source identity subscriber is refused a
     {
         for(auto mode : {rxo_mode::permissive, rxo_mode::strict})
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             // The producer declares WITHOUT emit_source_identity (the 4th arg defaults false).
@@ -85,7 +85,7 @@ TEST_CASE("rxo compatibility: a requires source identity subscriber is refused a
         }
         // An offering producer admits the same requiring subscriber.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{}, std::nullopt,
@@ -109,7 +109,7 @@ TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under st
         // The producer offers a SLOWER deadline than the subscriber requests
         // (offered 200 > requested 100) — an incompatible offer.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.offered_deadline_ns = 200});
@@ -119,7 +119,7 @@ TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under st
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
         }
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.offered_deadline_ns = 200});
@@ -131,7 +131,7 @@ TEST_CASE("rxo compatibility: a deadline or lease soft mismatch refuses under st
         }
         // An unset offered deadline (0) is always compatible — no fire in either mode.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.offered_deadline_ns = 0});

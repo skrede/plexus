@@ -177,7 +177,7 @@ TEST_CASE("inproc peer_session: completing before the deadline cancels the timer
 
 TEST_CASE("inproc peer_session: teardown drains the forwarders and resets the epoch latch", "[integration][peer_session][inproc]")
 {
-    link l;
+    session_link l;
     l.drive();
     REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "topic"));
     l.drive();

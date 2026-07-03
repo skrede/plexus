@@ -136,7 +136,7 @@ int count_rejected(const std::vector<lifecycle_event> &evs)
 
 // A directional secured link: each side carries its own policy + seam; the test reads
 // the per-side security/lifecycle events to assert a refusal in EITHER direction.
-struct link
+struct session_link
 {
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
@@ -157,7 +157,7 @@ struct link
     std::vector<lifecycle_event> req_lifecycle;
     std::vector<lifecycle_event> resp_lifecycle;
 
-    link(const attach_policy *req_policy, const attach_policy *resp_policy, security_seam rseam, security_seam pseam)
+    session_link(const attach_policy *req_policy, const attach_policy *resp_policy, security_seam rseam, security_seam pseam)
             : req_seam(std::move(rseam))
             , resp_seam(std::move(pseam))
     {
@@ -205,7 +205,7 @@ TEST_CASE("downgrade: a forced cipher/version downgrade is refused with downgrad
 {
     transcript_policy req_pol; // the dialer refuses the tampered transcript
     admit_policy resp_pol;
-    link l{&req_pol, &resp_pol, tampered_seam(), honest_seam()};
+    session_link l{&req_pol, &resp_pol, tampered_seam(), honest_seam()};
     l.drive();
 
     REQUIRE(count_kind(l.req_security, security_kind::downgrade_refused) == 1);
@@ -219,7 +219,7 @@ TEST_CASE("downgrade: a forced cipher/version downgrade is refused with downgrad
 {
     admit_policy req_pol;
     transcript_policy resp_pol; // the accepter refuses the tampered transcript
-    link l{&req_pol, &resp_pol, honest_seam(), tampered_seam()};
+    session_link l{&req_pol, &resp_pol, honest_seam(), tampered_seam()};
     l.drive();
 
     REQUIRE(count_kind(l.resp_security, security_kind::downgrade_refused) == 1);
@@ -231,7 +231,7 @@ TEST_CASE("downgrade: an honest secured-vs-secured pair completes with NO postur
 {
     admit_policy req_pol;
     admit_policy resp_pol;
-    link l{&req_pol, &resp_pol, honest_seam(), honest_seam()};
+    session_link l{&req_pol, &resp_pol, honest_seam(), honest_seam()};
     l.drive();
 
     REQUIRE(l.requester->is_complete());
@@ -252,7 +252,7 @@ TEST_CASE("downgrade: a secured-vs-plain posture mismatch is refused with postur
     // event, never a silent plaintext fallback.
     SECTION("a secured dialer meets a plain accepter")
     {
-        link l{&req_pol, nullptr, honest_seam(), security_seam{}};
+        session_link l{&req_pol, nullptr, honest_seam(), security_seam{}};
         l.drive();
         REQUIRE(count_kind(l.resp_security, security_kind::posture_mismatch) == 1);
         REQUIRE_FALSE(l.responder->is_complete());
@@ -261,7 +261,7 @@ TEST_CASE("downgrade: a secured-vs-plain posture mismatch is refused with postur
 
     SECTION("a plain dialer meets a secured accepter")
     {
-        link l{nullptr, &resp_pol, security_seam{}, honest_seam()};
+        session_link l{nullptr, &resp_pol, security_seam{}, honest_seam()};
         l.drive();
         REQUIRE(count_kind(l.resp_security, security_kind::posture_mismatch) == 1);
         REQUIRE_FALSE(l.responder->is_complete());

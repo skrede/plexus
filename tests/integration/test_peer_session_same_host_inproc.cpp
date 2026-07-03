@@ -61,7 +61,7 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, std::uint64_t fingerprint)
 // A two-node inproc link whose two ends advertise the given fingerprints. The
 // requester (dialer) advertises req_fp; the responder (accepted bootstrap) advertises
 // resp_fp. After drive() both have completed and recorded their same-host verdict.
-struct link
+struct session_link
 {
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
@@ -75,7 +75,7 @@ struct link
     plexus::io::peer_context<inproc_policy> req_ctx, resp_ctx;
     std::optional<session> requester, responder;
 
-    link(std::uint64_t req_fp, std::uint64_t resp_fp)
+    session_link(std::uint64_t req_fp, std::uint64_t resp_fp)
     {
         transport.on_accepted(
                 [this, resp_fp](std::unique_ptr<inproc_channel<>> ch)
@@ -112,7 +112,7 @@ TEST_CASE("inproc peer_session: equal non-null fingerprints record same-host on 
 {
     for(int iter = 0; iter < 50; ++iter)
     {
-        link l{k_host_a, k_host_a};
+        session_link l{k_host_a, k_host_a};
         l.drive();
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
@@ -125,7 +125,7 @@ TEST_CASE("inproc peer_session: distinct fingerprints record NOT same-host (cros
 {
     for(int iter = 0; iter < 50; ++iter)
     {
-        link l{k_host_a, k_host_b};
+        session_link l{k_host_a, k_host_b};
         l.drive();
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
@@ -143,7 +143,7 @@ TEST_CASE("inproc peer_session: a peer advertising a null fingerprint is NOT sam
         // The responder advertises a null (zero) fingerprint; the requester carries a
         // real one. The requester must NOT claim co-location off a null advertisement,
         // and a node that itself has no fingerprint (the responder) is never same-host.
-        link l{k_host_a, 0};
+        session_link l{k_host_a, 0};
         l.drive();
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
@@ -160,7 +160,7 @@ TEST_CASE("the same-host verdict gates shared-memory eligibility: a non-same-hos
     using plexus::shm::same_host_medium;
     using plexus::io::dispatch_hint;
 
-    link l{k_host_a, k_host_b}; // distinct hosts
+    session_link l{k_host_a, k_host_b}; // distinct hosts
     l.drive();
     REQUIRE_FALSE(l.req_ctx.same_host);
 

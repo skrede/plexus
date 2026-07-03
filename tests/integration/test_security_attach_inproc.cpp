@@ -166,7 +166,7 @@ std::vector<std::byte> psk_material(std::uint8_t seed, std::size_t len = 16)
 
 // A two-node inproc link with selectable per-node attach policy + seam + the security
 // observer wiring. Mirrors the peer_session inproc rig.
-struct link
+struct session_link
 {
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
@@ -195,7 +195,7 @@ struct link
 
     // wire_install gates whether the AEAD install hook is set: a secured posture with NO
     // install hook is the auth-only configuration (admission without AEAD).
-    link(const attach_policy *req_policy, const attach_policy *resp_policy, bool secured, bool wire_install = true, std::chrono::nanoseconds timeout = k_long_timeout)
+    session_link(const attach_policy *req_policy, const attach_policy *resp_policy, bool secured, bool wire_install = true, std::chrono::nanoseconds timeout = k_long_timeout)
     {
         if(secured)
         {
@@ -352,7 +352,7 @@ int count_rejected(const std::vector<lifecycle_event> &evs, handshake_outcome re
 
 TEST_CASE("io.security_attach a null policy proceeds with no security event (accept-any unchanged)", "[io][security_attach]")
 {
-    link l{nullptr, nullptr, /*secured=*/false};
+    session_link l{nullptr, nullptr, /*secured=*/false};
     l.drive();
 
     REQUIRE(l.requester->is_complete());
@@ -371,7 +371,7 @@ TEST_CASE("io.security_attach an unauthorized attach fires security_event(unauth
     reject.admit = false;
     // The responder refuses the dialer's request → the dialer's session is the one that
     // attached; the responder is the verifier that fires the refusal.
-    link l{nullptr, &reject, /*secured=*/false};
+    session_link l{nullptr, &reject, /*secured=*/false};
     l.drive();
 
     REQUIRE(count_kind(l.resp_security, security_kind::unauthorized_attach) == 1);
@@ -385,7 +385,7 @@ TEST_CASE("io.security_attach an authorized secured attach installs the AEAD dec
 {
     verdict_policy admit;
     admit.admit = true;
-    link l{&admit, &admit, /*secured=*/true};
+    session_link l{&admit, &admit, /*secured=*/true};
     l.drive();
 
     REQUIRE(l.requester->is_complete());
@@ -411,7 +411,7 @@ TEST_CASE("io.security_attach a secured STREAM with no install hook is refused f
     // wired — the production gap where the registry never threaded on_install_security.
     // The accept must be refused fail-closed (posture_mismatch + reject_unauthorized),
     // NOT proceed undecorated in cleartext while reporting a secured posture.
-    link l{&admit, &admit, /*secured=*/true, /*wire_install=*/false};
+    session_link l{&admit, &admit, /*secured=*/true, /*wire_install=*/false};
     l.drive();
 
     REQUIRE_FALSE(l.requester->is_complete());
@@ -430,7 +430,7 @@ TEST_CASE("io.security_attach a stream tamper (the channel's on_protocol_close o
 {
     verdict_policy admit;
     admit.admit = true;
-    link l{&admit, &admit, /*secured=*/true};
+    session_link l{&admit, &admit, /*secured=*/true};
     l.drive();
     REQUIRE(l.requester->is_complete());
 

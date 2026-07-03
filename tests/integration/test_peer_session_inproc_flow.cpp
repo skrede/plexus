@@ -13,7 +13,7 @@ TEST_CASE("inproc peer_session: the opt-in 3-arg callback delivers a message_inf
     int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l;
+        session_link l;
         l.drive();
 
         // The 3-arg callback takes precedence over the 2-arg one set by the link ctor:
@@ -64,7 +64,7 @@ TEST_CASE("inproc peer_session: a source-identity publish populates message_info
     int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l;
+        session_link l;
         l.drive();
 
         plexus::io::message_info got{};
@@ -107,7 +107,7 @@ TEST_CASE("inproc peer_session: a real RPC round-trips post-handshake matched by
     int answered               = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l;
+        session_link l;
         l.drive();
 
         l.resp_procedures.serve("svc",

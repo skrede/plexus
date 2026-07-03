@@ -75,7 +75,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // ends — and declared AFTER the bus/executor/transport so destruction unwinds the
 // channels before the bus they registered on. Real messages and RPC ride the SAME
 // live channels.
-struct link
+struct session_link
 {
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
@@ -95,7 +95,7 @@ struct link
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;
 
-    explicit link(std::chrono::nanoseconds timeout = k_long_timeout)
+    explicit session_link(std::chrono::nanoseconds timeout = k_long_timeout)
     {
         transport.on_accepted(
                 [this, timeout](std::unique_ptr<inproc_channel<>> ch)

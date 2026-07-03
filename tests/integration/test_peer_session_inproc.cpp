@@ -10,7 +10,7 @@ TEST_CASE("inproc peer_session pair completes the handshake, mints epochs, insta
     int completed              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l;
+        session_link l;
         l.drive();
 
         REQUIRE(l.requester->is_complete());
@@ -38,7 +38,7 @@ TEST_CASE("inproc peer_session: a dialed (one-directional) connection completes 
     int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l; // the dial rendezvous: only the dialer dials, the accepted end bootstraps
+        session_link l; // the dial rendezvous: only the dialer dials, the accepted end bootstraps
         l.drive();
 
         // Both complete WITHOUT a simultaneous connect: the accepted bootstrap responder
@@ -82,7 +82,7 @@ TEST_CASE("inproc peer_session: a real published message flows post-handshake an
     int delivered              = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l;
+        session_link l;
         l.drive();
 
         // The responder subscribes (so its forwarder resolves the topic_hash on the

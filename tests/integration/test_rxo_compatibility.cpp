@@ -13,7 +13,7 @@ TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused,
         // The incompatible leg: the producer offers best_effort, the strict subscriber
         // requests reliable -> refused with incompatible_qos, NO data delivered.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.reliability = reliability::best_effort});
@@ -30,7 +30,7 @@ TEST_CASE("rxo compatibility: a strict incompatible reliability pair is refused,
         // The compatible leg: the producer offers reliable, the same strict subscriber
         // is admitted and a publish DELIVERS, with no refusal/degraded fire.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.reliability = reliability::reliable});
@@ -55,7 +55,7 @@ TEST_CASE("rxo compatibility: the same incompatible reliability pair connects un
     int proven = 0;
     for(int iter = 0; iter < k_loops; ++iter)
     {
-        link l;
+        session_link l;
         l.drive();
         REQUIRE(l.complete());
         l.prod_messages.declare("topic", plexus::topic_qos{.reliability = reliability::best_effort});
@@ -84,7 +84,7 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
     {
         // A non-latching producer offers `none`; a durability::all request is incompatible.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = false});
@@ -94,7 +94,7 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
             REQUIRE(l.refusals[0] == subscribe_status::incompatible_qos);
         }
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = false});
@@ -106,7 +106,7 @@ TEST_CASE("rxo compatibility: a strict incompatible durability pair is refused a
         }
         // A latching producer + the same request is admitted with no degraded fire.
         {
-            link l;
+            session_link l;
             l.drive();
             REQUIRE(l.complete());
             l.prod_messages.declare("topic", plexus::topic_qos{.latch = true});

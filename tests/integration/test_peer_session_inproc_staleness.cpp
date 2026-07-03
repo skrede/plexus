@@ -40,7 +40,7 @@ TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatc
     int proven                 = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l;
+        session_link l;
         l.drive();
         REQUIRE(l.resp_messages.attach(l.responder->msg_peer(), "topic"));
         REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "topic"));
@@ -86,7 +86,7 @@ TEST_CASE("inproc peer_session: the staleness gate distinguishes epochs beyond t
     int proven                             = 0;
     for(int iter = 0; iter < k_iterations; ++iter)
     {
-        link l;
+        session_link l;
         l.drive();
         REQUIRE(l.resp_messages.attach(l.responder->msg_peer(), "topic"));
         REQUIRE(l.req_messages.attach_for_fanout(l.requester->msg_peer(), "topic"));

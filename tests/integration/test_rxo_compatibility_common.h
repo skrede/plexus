@@ -90,7 +90,7 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 // declares its topic before the subscriber demands it. Mirrors the settled peer_session
 // bridge harness (channels deferred in unique_ptr, sessions in optional, declared after
 // the bus so destruction unwinds the channels first).
-struct link
+struct session_link
 {
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
@@ -111,7 +111,7 @@ struct link
     std::vector<subscribe_status> refusals; // on_subscribe_refused statuses
     std::vector<std::uint8_t> degraded;     // on_subscribe_degraded bitmasks
 
-    explicit link()
+    explicit session_link()
     {
         transport.on_accepted(
                 [this](std::unique_ptr<inproc_channel<>> ch)
