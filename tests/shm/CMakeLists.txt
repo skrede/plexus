@@ -11,8 +11,9 @@ endif()
 # policy header path) and NO manual liburing, then drives ring_notifier's io_uring calls. A
 # green link proves plexus::asio::shm carries liburing transitively — the symptom a real
 # consumer hit (undefined reference to io_uring_*). Built only when the shm backend exposes
-# its bridge target.
-if(TARGET plexus::asio::shm)
+# its bridge target. The proof drives io_uring (ring_notifier), so it is Linux-only; Windows
+# carries its same-host wake in the reactor bridge, not liburing.
+if(TARGET plexus::asio::shm AND NOT WIN32)
     add_executable(test_shm_liburing_link test_shm_liburing_link.cpp)
 
     target_link_libraries(test_shm_liburing_link PRIVATE
@@ -179,48 +180,57 @@ catch_discover_tests(test_shm_seams TEST_PREFIX "shm.")
 # unlink), attach maps an existing one, unlink_stale_on_create reclaims an orphan,
 # and an oversize create fast-fails before any syscall. Links plexus::native for the
 # compiled broker bodies (shm_open/mmap/ftruncate/shm_unlink).
-add_executable(test_shm_region_broker test_shm_region_broker.cpp)
+# Drives fork() + the POSIX broker directly (unistd.h), so it is excluded from the Windows build.
+if(NOT WIN32)
+    add_executable(test_shm_region_broker test_shm_region_broker.cpp)
 
-target_include_directories(test_shm_region_broker PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(test_shm_region_broker PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(test_shm_region_broker PRIVATE
-    plexus::shm
-    plexus::native
-    Catch2::Catch2WithMain)
+    target_link_libraries(test_shm_region_broker PRIVATE
+        plexus::shm
+        plexus::native
+        Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_region_broker TEST_PREFIX "shm.")
+    catch_discover_tests(test_shm_region_broker TEST_PREFIX "shm.")
+endif()
 
 # The cross-process futex notifier: the wake crosses address spaces (the
 # no-PRIVATE-flag proof, a forked producer waking a forked consumer on a shared
 # MAP_SHARED word) and the drain-before-wait protocol delivers an interleaved
 # publish (lost-wakeup-safe). Links plexus::native for the raw SYS_futex bodies.
-add_executable(test_shm_notifier_lostwakeup test_shm_notifier_lostwakeup.cpp)
+# Drives fork() + the Linux futex notifier primitive directly, so it is excluded from Windows.
+if(NOT WIN32)
+    add_executable(test_shm_notifier_lostwakeup test_shm_notifier_lostwakeup.cpp)
 
-target_include_directories(test_shm_notifier_lostwakeup PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(test_shm_notifier_lostwakeup PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(test_shm_notifier_lostwakeup PRIVATE
-    plexus::native
-    Catch2::Catch2WithMain)
+    target_link_libraries(test_shm_notifier_lostwakeup PRIVATE
+        plexus::native
+        Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_notifier_lostwakeup TEST_PREFIX "shm.")
+    catch_discover_tests(test_shm_notifier_lostwakeup TEST_PREFIX "shm.")
+endif()
 
 # The parked-flag-gated wake: the wake decision is gated off the prior park-state (a
 # pure predicate, so zero-wake-when-spinning is asserted off the syscall), a spinning
 # consumer leaves the gated signal NOTIFIED parking nobody, and a forked parked
 # consumer is still woken across address spaces by the two-arg gated signal (the
 # lost-wakeup guard on the gated path). Links plexus::native for the raw SYS_futex bodies.
-add_executable(test_shm_wake_gating test_shm_wake_gating.cpp)
+# Drives fork() + the Linux futex notifier primitive directly, so it is excluded from Windows.
+if(NOT WIN32)
+    add_executable(test_shm_wake_gating test_shm_wake_gating.cpp)
 
-target_include_directories(test_shm_wake_gating PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(test_shm_wake_gating PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(test_shm_wake_gating PRIVATE
-    plexus::native
-    Catch2::Catch2WithMain)
+    target_link_libraries(test_shm_wake_gating PRIVATE
+        plexus::native
+        Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_wake_gating TEST_PREFIX "shm.")
+    catch_discover_tests(test_shm_wake_gating TEST_PREFIX "shm.")
+endif()
 
 # The first whole-stack cross-process proof: two processes converge on the same
 # deterministically-named regions with no exchange (the machine fingerprint + the
@@ -228,36 +238,42 @@ catch_discover_tests(test_shm_wake_gating TEST_PREFIX "shm.")
 # attaches + consumes, and a real value round-trips byte-equal over the MAP_SHARED
 # broadcast ring. Links plexus::native (broker + fingerprint) + plexus::wire (the fqn
 # hash the region naming routes through).
-add_executable(test_shm_same_host_roundtrip test_shm_same_host_roundtrip.cpp
-    test_shm_same_host_fingerprint.cpp)
+# Drives fork() + the POSIX broker directly (unistd.h), so it is excluded from the Windows build.
+if(NOT WIN32)
+    add_executable(test_shm_same_host_roundtrip test_shm_same_host_roundtrip.cpp
+        test_shm_same_host_fingerprint.cpp)
 
-target_include_directories(test_shm_same_host_roundtrip PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(test_shm_same_host_roundtrip PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(test_shm_same_host_roundtrip PRIVATE
-    plexus::shm
-    plexus::native
-    plexus::wire
-    Catch2::Catch2WithMain)
+    target_link_libraries(test_shm_same_host_roundtrip PRIVATE
+        plexus::shm
+        plexus::native
+        plexus::wire
+        Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_same_host_roundtrip TEST_PREFIX "shm.")
+    catch_discover_tests(test_shm_same_host_roundtrip TEST_PREFIX "shm.")
+endif()
 
 # The shm-region namespace cross-process proof: a producer mints regions under one
 # namespace; a consumer with the SAME namespace receives the value (convergence), a
 # consumer with a DIFFERENT namespace cannot attach the producer's region and sees
 # nothing (isolation — two unrelated co-host apps never collide on a shared region).
-add_executable(test_shm_region_namespace test_shm_region_namespace.cpp)
+# Drives fork() + the POSIX broker directly (unistd.h), so it is excluded from the Windows build.
+if(NOT WIN32)
+    add_executable(test_shm_region_namespace test_shm_region_namespace.cpp)
 
-target_include_directories(test_shm_region_namespace PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(test_shm_region_namespace PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(test_shm_region_namespace PRIVATE
-    plexus::shm
-    plexus::native
-    plexus::wire
-    Catch2::Catch2WithMain)
+    target_link_libraries(test_shm_region_namespace PRIVATE
+        plexus::shm
+        plexus::native
+        plexus::wire
+        Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_region_namespace TEST_PREFIX "shm.")
+    catch_discover_tests(test_shm_region_namespace TEST_PREFIX "shm.")
+endif()
 
 # The core pub/sub endpoints (header-only, asio/POSIX-free): the shm_channel
 # send -> drain round-trip over an anonymous mapped span (loan -> one memcpy ->
@@ -612,18 +628,21 @@ catch_discover_tests(test_medium_coordinator TEST_PREFIX "shm.")
 # the ring via max_payload, a no-max_payload upgrade falls back to the default
 # geometry. Links plexus::native (the POSIX broker + the ring) + plexus::wire (the fqn
 # hash the region naming routes through).
-add_executable(test_shm_bilateral test_shm_bilateral.cpp)
+# Drives fork() + the POSIX broker directly (unistd.h), so it is excluded from the Windows build.
+if(NOT WIN32)
+    add_executable(test_shm_bilateral test_shm_bilateral.cpp)
 
-target_include_directories(test_shm_bilateral PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(test_shm_bilateral PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(test_shm_bilateral PRIVATE
-    plexus::shm
-    plexus::native
-    plexus::wire
-    Catch2::Catch2WithMain)
+    target_link_libraries(test_shm_bilateral PRIVATE
+        plexus::shm
+        plexus::native
+        plexus::wire
+        Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_bilateral TEST_PREFIX "shm.")
+    catch_discover_tests(test_shm_bilateral TEST_PREFIX "shm.")
+endif()
 
 # The large-message live-mux round-trip (xproc): a publisher declares a sizing
 # shm_geometry and mints the ring through shm_mux_member's ACQUIRE path (not the unit
@@ -633,18 +652,21 @@ catch_discover_tests(test_shm_bilateral TEST_PREFIX "shm.")
 # probe-higher cell proves reliable_preserving fails closed above the ceiling while
 # explicit best_effort_large round-trips. Links plexus::native (the POSIX broker + the
 # futex primitive) + plexus::wire (the fqn-hash region naming).
-add_executable(test_shm_large_message test_shm_large_message.cpp)
+# Drives fork() + the POSIX broker directly (unistd.h), so it is excluded from the Windows build.
+if(NOT WIN32)
+    add_executable(test_shm_large_message test_shm_large_message.cpp)
 
-target_include_directories(test_shm_large_message PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(test_shm_large_message PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(test_shm_large_message PRIVATE
-    plexus::shm
-    plexus::native
-    plexus::wire
-    Catch2::Catch2WithMain)
+    target_link_libraries(test_shm_large_message PRIVATE
+        plexus::shm
+        plexus::native
+        plexus::wire
+        Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_large_message TEST_PREFIX "shm.")
+    catch_discover_tests(test_shm_large_message TEST_PREFIX "shm.")
+endif()
 
 # The crashed-creator orphan-reclaim proof (xproc): a child creates a region,
 # stamps a sentinel, and _exits WITHOUT unlinking (the create-owns-unlink dtor
@@ -678,20 +700,23 @@ catch_discover_tests(test_shm_stale_reclaim TEST_PREFIX "shm.")
 # both over the wire (the dual-delivery rescue). Links plexus::native (the POSIX broker + the
 # futex primitive the live ring acquires) + plexus::wire (the fqn-hash region naming + the
 # forwarder framing) + plexus::inproc (the test Policy's executor/timer substrate).
-add_executable(test_shm_wire_fallback test_shm_wire_fallback.cpp)
+# Drives fork() + the POSIX broker directly (unistd.h), so it is excluded from the Windows build.
+if(NOT WIN32)
+    add_executable(test_shm_wire_fallback test_shm_wire_fallback.cpp)
 
-target_include_directories(test_shm_wire_fallback PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(test_shm_wire_fallback PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(test_shm_wire_fallback PRIVATE
-    plexus::shm
-    plexus::core
-    plexus::native
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
+    target_link_libraries(test_shm_wire_fallback PRIVATE
+        plexus::shm
+        plexus::core
+        plexus::native
+        plexus::wire
+        plexus::inproc
+        Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_wire_fallback TEST_PREFIX "shm.")
+    catch_discover_tests(test_shm_wire_fallback TEST_PREFIX "shm.")
+endif()
 
 # The wire_fallback PRODUCTION-SEAM proof: the same-host medium decision a node reaches
 # through node.advertise(...) is the multiplexer's prefer_upgradeable_hook over the shm-bearing
@@ -701,16 +726,19 @@ catch_discover_tests(test_shm_wire_fallback TEST_PREFIX "shm.")
 # prefer SHM unchanged. The declined probe holds no refcount, and an over-cap message
 # crosses a real process boundary byte-exact (repeated). Links plexus::native (the POSIX
 # broker) + plexus::wire (the fqn-hash region naming).
-add_executable(test_shm_wire_fallback_node test_shm_wire_fallback_node.cpp)
+# Drives fork() + the POSIX broker directly (unistd.h), so it is excluded from the Windows build.
+if(NOT WIN32)
+    add_executable(test_shm_wire_fallback_node test_shm_wire_fallback_node.cpp)
 
-target_include_directories(test_shm_wire_fallback_node PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(test_shm_wire_fallback_node PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(test_shm_wire_fallback_node PRIVATE
-    plexus::shm
-    plexus::core
-    plexus::native
-    plexus::wire
-    Catch2::Catch2WithMain)
+    target_link_libraries(test_shm_wire_fallback_node PRIVATE
+        plexus::shm
+        plexus::core
+        plexus::native
+        plexus::wire
+        Catch2::Catch2WithMain)
 
-catch_discover_tests(test_shm_wire_fallback_node TEST_PREFIX "shm.")
+    catch_discover_tests(test_shm_wire_fallback_node TEST_PREFIX "shm.")
+endif()

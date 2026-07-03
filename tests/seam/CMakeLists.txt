@@ -69,6 +69,9 @@ catch_discover_tests(test_lwip_channel_compile TEST_PREFIX "seam.")
 # test-side, no hardware and no mock) exercising real partial reads / EWOULDBLOCK + the P1 poll-drive
 # + the dial path. The current source dir is on the include path so the host socket header resolves.
 # Registered under the same `seam.` prefix.
+# The host loopback pair is a genuine POSIX stream_socket (host_tcp_socket.h pulls netinet/in.h),
+# so the five host-socket lwIP seam slices below are excluded from the Windows build.
+if(NOT WIN32)
 add_executable(test_lwip_channel_seam test_lwip_channel_seam.cpp)
 target_include_directories(test_lwip_channel_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(test_lwip_channel_seam PRIVATE
@@ -138,6 +141,7 @@ target_link_libraries(test_lwip_transport_congestion_seam PRIVATE
     plexus::freertos
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_transport_congestion_seam TEST_PREFIX "seam.")
+endif()
 
 # Host-shim proof for the constrained-target executor's task-safe cross-context post:
 # enqueues caller-owned posted_work PODs through the FreeRTOS host queue (widened to

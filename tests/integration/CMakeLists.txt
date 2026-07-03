@@ -421,6 +421,9 @@ catch_discover_tests(test_read_buffer_partial_read TEST_PREFIX "integration.")
 # AF_UNIX/TCP confinement legs compile in only when the asio backend is on (guarded by
 # PLEXUS_HAVE_ASIO_MUX, wired below inside the asio gate). tests/ is on the include path
 # for support headers and the shared make_cfg helpers.
+# The live AF_UNIX confinement leg reaches raw POSIX (unistd.h under PLEXUS_HAVE_ASIO_MUX),
+# so the whole target is excluded from the Windows build.
+if(NOT WIN32)
 add_executable(test_locality_confinement
     test_locality_confinement.cpp
     test_locality_confinement_wire.cpp
@@ -433,6 +436,7 @@ target_link_libraries(test_locality_confinement PRIVATE
 target_include_directories(test_locality_confinement PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_locality_confinement TEST_PREFIX "integration.")
+endif()
 
 # The selection-hook substitutability proof: dummy members composed over the header-only
 # core multiplexer (no backend) prove the DEFAULT hook routes to the first candidate and an
@@ -1009,6 +1013,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # back-pressure caps can never silently strangle the shipped ceiling. The TLS leg is added
     # inside the crypto gate below (it needs the secure backend + OpenSSL). Looped in-body;
     # re-run >=3 process runs. tests/ is on the include path for shared headers.
+    # The shared fixture reaches raw POSIX (unistd.h), so the target is excluded from Windows.
+    if(NOT WIN32)
     add_executable(test_outofbox_message_ceiling
         test_outofbox_message_ceiling.cpp
         test_outofbox_message_ceiling_udp.cpp
@@ -1022,6 +1028,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         ${CMAKE_CURRENT_SOURCE_DIR}/..)
     catch_discover_tests(test_outofbox_message_ceiling TEST_PREFIX "integration."
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+    endif()
 
     # The DIALED AF_UNIX transport oracle over a real local socket: the transport's
     # listen + async-connect dial stand up two peer_sessions (no hand-dial) that
@@ -1060,6 +1067,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # channel's on_protocol_close fires with the matching close_cause (invalid_magic;
     # no_progress_timeout) — the byte-stream slowloris/garbage defense proven over a
     # real local socket. Loops each path in-body; re-run >=3 process runs.
+    # The raw hostile-client socket writes reach unistd.h directly, so this is Windows-excluded.
+    if(NOT WIN32)
     add_executable(test_stream_channel_unix
         test_stream_channel_unix.cpp
         test_stream_channel_unix_largeframe.cpp)
@@ -1070,12 +1079,15 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::inproc
         Catch2::Catch2WithMain)
     catch_discover_tests(test_stream_channel_unix TEST_PREFIX "integration.")
+    endif()
 
     # The hardware-free host serial loopback oracle over an openpty pair: two serial_channels,
     # one adopting each pty fd on one io_context, prove a production-framed message round-trips
     # host<->host and a peer_session pair completes the point-at-port bring-up handshake
     # over the framed serial link, reusing the handshake_fsm unchanged. Loops each path
     # in-body; the ctest invocation is re-run >=3 process runs. Links util for openpty(3).
+    # openpty(3) + pty.h — POSIX-only, so this is excluded from the Windows build.
+    if(NOT WIN32)
     add_executable(test_serial_pty_roundtrip test_serial_pty_roundtrip.cpp)
     target_link_libraries(test_serial_pty_roundtrip PRIVATE
         plexus::core
@@ -1085,6 +1097,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain
         util)
     catch_discover_tests(test_serial_pty_roundtrip TEST_PREFIX "integration.")
+    endif()
 
     # The corruption->resync recovery oracle over the same openpty pair: corrupt bytes
     # (a flipped byte AND a dropped byte) are written RAW onto the master fd, and the slave-end
@@ -1092,6 +1105,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # magic-resync, and still deliver the following valid frame — with on_protocol_close /
     # on_closed NEVER fired. Each leg loops in-body; the ctest invocation is re-run >=3 process
     # runs. Links util for openpty(3).
+    # openpty(3) + pty.h — POSIX-only, so this is excluded from the Windows build.
+    if(NOT WIN32)
     add_executable(test_serial_resync test_serial_resync.cpp)
     target_link_libraries(test_serial_resync PRIVATE
         plexus::core
@@ -1101,6 +1116,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain
         util)
     catch_discover_tests(test_serial_resync TEST_PREFIX "integration.")
+    endif()
 
     # The saturating-publisher memory-bound gate: a producer outrunning a never-reading
     # peer drives each stream channel's bounded write queue to its cap and no further — the
@@ -1118,6 +1134,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # temp dir, stat the on-disk socket inode for the configured mode (0700 default + a
     # widened knob), and exercise the accept-time peer-credential gate (admit/refuse fail-
     # closed) plus the closed unlink-before-bind TOCTOU window.
+    # The AF_UNIX filesystem permissions model (chmod/stat via unistd.h) is POSIX-only, so
+    # this is excluded from the Windows build (Windows AF_UNIX carries no mode bits).
+    if(NOT WIN32)
     add_executable(test_unix_permissions test_unix_permissions.cpp)
     target_link_libraries(test_unix_permissions PRIVATE
         plexus::core
@@ -1125,6 +1144,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         Catch2::Catch2WithMain)
     catch_discover_tests(test_unix_permissions TEST_PREFIX "integration.")
+    endif()
 
     # The multiplexing transport now composes a secure (TLS) member alongside the local
     # and remote ones, so its header pulls in plexus::crypto and these mux oracles link it
@@ -1237,9 +1257,12 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         # the same 8 MiB shipped-ceiling round-trip over a live mutual-TLS loopback pair at full
         # defaults. Linking crypto + the crypto objects and defining PLEXUS_HAVE_TLS_OUTOFBOX
         # compiles in the guarded TLS test case (the cert fixture needs OpenSSL).
-        target_sources(test_outofbox_message_ceiling PRIVATE $<TARGET_OBJECTS:plexus-crypto>)
-        target_link_libraries(test_outofbox_message_ceiling PRIVATE plexus::crypto)
-        target_compile_definitions(test_outofbox_message_ceiling PRIVATE PLEXUS_HAVE_TLS_OUTOFBOX)
+        # The target is Windows-excluded above (its fixture reaches raw POSIX).
+        if(NOT WIN32)
+            target_sources(test_outofbox_message_ceiling PRIVATE $<TARGET_OBJECTS:plexus-crypto>)
+            target_link_libraries(test_outofbox_message_ceiling PRIVATE plexus::crypto)
+            target_compile_definitions(test_outofbox_message_ceiling PRIVATE PLEXUS_HAVE_TLS_OUTOFBOX)
+        endif()
     endif()
 
     # The minimal-composition proof: the core multiplexer instantiated DIRECTLY over a
@@ -1285,8 +1308,11 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
 
     # The locality confinement test gains its LIVE AF_UNIX/TCP legs when the asio backend
     # is on: real local + remote channels prove the same fan-out confinement over the wire.
-    target_link_libraries(test_locality_confinement PRIVATE plexus::asio)
-    target_compile_definitions(test_locality_confinement PRIVATE PLEXUS_HAVE_ASIO_MUX)
+    # (The target itself is Windows-excluded above — its live leg reaches raw POSIX.)
+    if(NOT WIN32)
+        target_link_libraries(test_locality_confinement PRIVATE plexus::asio)
+        target_compile_definitions(test_locality_confinement PRIVATE PLEXUS_HAVE_ASIO_MUX)
+    endif()
 
     # The whole-stack co-host shared-memory proof through the public facade: two forked
     # same_host_transports nodes rendezvous over static_discovery and auto-engage a /dev/shm
@@ -1294,7 +1320,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # delivery over >=2 runs and the forced-distinct-fingerprint wire fallback. Gated to the
     # Linux shared-memory node composition (the /dev/shm region naming + the shm member are
     # Linux-only); the broker + the region naming come from plexus::native/plexus::asio::shm.
-    if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::asio::shm)
+    if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::asio::shm AND NOT WIN32)
         add_executable(test_node_xproc_shm test_node_xproc_shm.cpp)
         target_link_libraries(test_node_xproc_shm PRIVATE
             plexus::plexus

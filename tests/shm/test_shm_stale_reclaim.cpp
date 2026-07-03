@@ -1,5 +1,4 @@
-#include "plexus/native/posix_shm_region_broker.h"
-#include "plexus/native/region_handle.h"
+#include "plexus/native/shm_region_broker.h"
 
 #include "plexus/shm/region_broker_concept.h"
 
@@ -30,8 +29,8 @@
 // is NOT designed here.
 
 namespace pio = plexus::shm;
-using plexus::native::posix_shm_region_broker;
-using plexus::native::region_handle;
+using plexus::native::shm_region_broker;
+using plexus::native::shm_region_handle;
 
 namespace {
 
@@ -41,14 +40,14 @@ constexpr std::byte k_stale_byte{0xABu};
 constexpr std::size_t k_region_bytes = 4096;
 
 // Stamp the whole mapped region with the stale sentinel.
-void stamp_stale(const region_handle &h)
+void stamp_stale(const shm_region_handle &h)
 {
     const auto bytes = h.bytes();
     std::memset(bytes.data(), static_cast<int>(k_stale_byte), bytes.size());
 }
 
 // True iff every byte of the mapped region is zero (a fresh ftruncate'd region).
-bool all_zero(const region_handle &h)
+bool all_zero(const shm_region_handle &h)
 {
     const auto bytes = h.bytes();
     for(const std::byte b : bytes)
@@ -66,8 +65,8 @@ bool stale_reclaim_creator(const std::vector<std::string> &args)
     if(args.empty())
         return false;
 
-    posix_shm_region_broker broker;
-    region_handle orphan;
+    shm_region_broker broker;
+    shm_region_handle orphan;
     if(broker.create(args.front(), k_region_bytes, pio::create_options{}, orphan) != pio::region_status::ok)
         return false;
     stamp_stale(orphan);
@@ -99,19 +98,19 @@ TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_s
                 {name},
                 [&]() -> bool
                 {
-                    posix_shm_region_broker broker;
+                    shm_region_broker broker;
 
                     // The orphan must be present: a plain create (no reclaim flag) finds
                     // the child's live region and returns already_exists, never ok.
                     {
-                        region_handle probe;
+                        shm_region_handle probe;
                         if(broker.create(name, k_region_bytes, pio::create_options{}, probe) != pio::region_status::already_exists)
                             return false;
                     }
 
                     // Reclaim: create WITH unlink_stale_on_create unlinks the orphan and
                     // mints a fresh region under the same name.
-                    region_handle fresh;
+                    shm_region_handle fresh;
                     if(broker.create(name, k_region_bytes, pio::create_options{.unlink_stale_on_create = true}, fresh) != pio::region_status::ok)
                         return false;
 

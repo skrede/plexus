@@ -112,6 +112,14 @@ inline bool read_peer_cred(int native_handle, io::security::peer_cred &out)
     return true;
     #endif
 }
+#else
+// unix_accept's admit_peer names read_peer_cred inside `if constexpr(peer_cred_supported)`;
+// two-phase lookup still parses that discarded branch on a platform without peer creds, so the
+// name must be declared. A false return is fail-closed by the same contract as a read failure.
+inline bool read_peer_cred(int, io::security::peer_cred &)
+{
+    return false;
+}
 #endif
 
 }

@@ -104,6 +104,13 @@ inline constexpr std::uint32_t k_skip_len = 0xFFFF'FFFFu;
 // sequence then checks take_refcount; the reader announces its pin on take_refcount
 // then re-checks sequence. Both announce-stores and both check-loads are seq_cst,
 // so store-buffering cannot let both sides proceed past a live pin.
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    // The alignas on these cross-process control structs is deliberate cache-line isolation;
+    // the padding MSVC warns about under /W4 is the intended layout, not an accident.
+    #pragma warning(disable : 4324)
+#endif
+
 struct alignas(k_cache_line) cell_t
 {
     std::atomic<std::uint64_t> sequence;
@@ -185,6 +192,10 @@ struct control_header_t
         return static_cast<std::size_t>(consumer_capacity);
     }
 };
+
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 
 // Cross-process validity gates. A non-lock-free atomic on the target would
 // silently route through a process-local lock table -- two processes mapping the

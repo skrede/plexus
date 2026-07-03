@@ -295,8 +295,9 @@ catch_discover_tests(test_dispatch_reentrancy TEST_PREFIX "node.")
 # The shm self-carrier fallback: a node with NO intra-node transport but WITH an shm member
 # self-delivers a same-node publish→subscribe over a node-local shm self-ring. Built only when
 # the shm backend is on (plexus::asio::shm exists only under the gate); links the full shm node
-# surface (the asio reactor drives the ring's wake). Off-gate hosts skip the cell entirely.
-if(PLEXUS_ENABLE_SHM_BACKEND)
+# surface (the asio reactor drives the ring's wake). Off-gate hosts skip the cell entirely. The
+# self-ring wake rides the Linux io_uring/futex reactor bridge, so it is excluded from Windows.
+if(PLEXUS_ENABLE_SHM_BACKEND AND NOT WIN32)
     add_executable(test_shm_self_carrier test_shm_self_carrier.cpp)
     target_include_directories(test_shm_self_carrier PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(test_shm_self_carrier PRIVATE

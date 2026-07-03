@@ -8,16 +8,25 @@
 
 namespace plexus::detail {
 
-// Deducible only when &F::operator() names a single concrete member function:
-// a generic or overloaded operator() fails this and is rejected upstream.
-template<typename F>
-concept deducible_handler = requires { static_cast<void>(&F::operator()); };
-
 // The Boost.CallableTraits technique (not a dependency): one specialization per
 // member-pointer qualifier form. The primary is left undefined so a non-deducible
 // callable names no member and fails rather than mis-deducing.
 template<typename F>
 struct callable_traits;
+
+// Deducible only when &F::operator() names a single concrete member function:
+// a generic or overloaded operator() fails this and is rejected upstream.
+#if defined(_WIN32)
+// MSVC admits `&F::operator()` for a generic lambda inside a requires-expression (it should
+// be ill-formed), so the bare address probe wrongly reports the callable as deducible;
+// requiring callable_traits::result_type — undefined for the member pointer of a generic or
+// overloaded operator() — restores the intended rejection while still admitting a concrete one.
+template<typename F>
+concept deducible_handler = requires { typename callable_traits<decltype(&F::operator())>::result_type; };
+#else
+template<typename F>
+concept deducible_handler = requires { static_cast<void>(&F::operator()); };
+#endif
 
 #define PLEXUS_CALLABLE_TRAITS(QUALIFIERS)                                                                                                                                              \
     template<typename R, typename C, typename A>                                                                                                                                        \

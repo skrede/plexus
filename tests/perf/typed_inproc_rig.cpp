@@ -285,7 +285,14 @@ result run_stamped(std::size_t pool_depth, std::uint64_t iterations, std::uint64
                                 ++delivered;
                                 info_sink += info.reception_timestamp;
                                              });
+#if defined(_MSC_VER)
+    // MSVC rejects the GNU inline-asm barrier; a volatile read forces info_sink to be
+    // materialized so the accumulation is not dead-code-eliminated.
+    volatile std::uint64_t info_sink_keep = info_sink;
+    (void)info_sink_keep;
+#else
     asm volatile("" : : "r,m"(info_sink) : "memory");
+#endif
     return r;
 }
 

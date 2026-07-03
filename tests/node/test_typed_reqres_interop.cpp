@@ -1,5 +1,7 @@
 #include "test_typed_reqres_common.h"
 
+#include <type_traits>
+
 using namespace typed_reqres_fixture;
 
 TEST_CASE("typed reqres: a typed caller against a bytes procedure replying error falls back to error", "[node][typed][call]")
@@ -61,8 +63,8 @@ TEST_CASE("typed reqres: a second local serve on one fqn throws on the typed for
 // codec family to the per-half codecs Family<Req> / Family<Res> over a Res(Req) signature;
 // u32_codec is exactly such a family. The symmetric form must name the SAME endpoint type as
 // the explicit per-half expansion (the response family defaults to the request family).
-static_assert(__is_same(plexus::procedure<response_t(request_t), u32_codec>, plexus::procedure<response_t(request_t), u32_codec, u32_codec>));
-static_assert(__is_same(plexus::caller<response_t(request_t), u32_codec>, plexus::caller<response_t(request_t), u32_codec, u32_codec>));
+static_assert(std::is_same_v<plexus::procedure<response_t(request_t), u32_codec>, plexus::procedure<response_t(request_t), u32_codec, u32_codec>>);
+static_assert(std::is_same_v<plexus::caller<response_t(request_t), u32_codec>, plexus::caller<response_t(request_t), u32_codec, u32_codec>>);
 
 TEST_CASE("typed reqres: the family-form spelling round-trips the typed reqres", "[node][typed][call][family]")
 {

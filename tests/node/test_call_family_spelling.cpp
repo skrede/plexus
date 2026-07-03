@@ -1,5 +1,7 @@
 #include "test_call_family_common.h"
 
+#include <type_traits>
+
 using namespace call_family_fixture;
 
 #ifdef PLEXUS_HAS_FAMILY_SPELLING
@@ -42,8 +44,8 @@ struct echo_codec
 
 // The symmetric form defaults the response family to the request family: one spelled family
 // names the same endpoint as the explicit two-family form over a single family.
-static_assert(__is_same(plexus::procedure<u32_value(u32_value), echo_codec>, plexus::procedure<u32_value(u32_value), echo_codec, echo_codec>));
-static_assert(__is_same(plexus::caller<u32_value(u32_value), echo_codec>, plexus::caller<u32_value(u32_value), echo_codec, echo_codec>));
+static_assert(std::is_same_v<plexus::procedure<u32_value(u32_value), echo_codec>, plexus::procedure<u32_value(u32_value), echo_codec, echo_codec>>);
+static_assert(std::is_same_v<plexus::caller<u32_value(u32_value), echo_codec>, plexus::caller<u32_value(u32_value), echo_codec, echo_codec>>);
 
 // The asymmetric form binds two DIFFERENT families for request and response, request-first:
 // the response half is alt_codec while the request half stays echo_codec, so the endpoint
@@ -64,15 +66,15 @@ struct alt_codec
 };
 
 using asymmetric_procedure = plexus::procedure<u32_value(u32_value), echo_codec, alt_codec>;
-static_assert(__is_same(asymmetric_procedure, plexus::procedure<u32_value(u32_value), echo_codec, alt_codec>));
-static_assert(!__is_same(asymmetric_procedure, plexus::procedure<u32_value(u32_value), echo_codec>));
+static_assert(std::is_same_v<asymmetric_procedure, plexus::procedure<u32_value(u32_value), echo_codec, alt_codec>>);
+static_assert(!std::is_same_v<asymmetric_procedure, plexus::procedure<u32_value(u32_value), echo_codec>>);
 
 // The one-off concrete-codec lift idiom: an alias template lifts a finished codec into the
 // family slot (the P0522 template-template-argument path). It must bind and name the same
 // endpoint as the direct family spelling.
 template<typename>
 using lifted_echo = echo_codec<u32_value>;
-static_assert(__is_same(plexus::procedure<u32_value(u32_value), lifted_echo>, plexus::procedure<u32_value(u32_value), lifted_echo, lifted_echo>));
+static_assert(std::is_same_v<plexus::procedure<u32_value(u32_value), lifted_echo>, plexus::procedure<u32_value(u32_value), lifted_echo, lifted_echo>>);
 static_assert(plexus::typed_codec<echo_codec<u32_value>>);
 static_assert(plexus::typed_codec<alt_codec<u32_value>>);
 

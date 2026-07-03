@@ -56,7 +56,7 @@ io::selection_hook shm_preference_hook(Transports &...transports)
 // multi-candidate local tier resolves by runtime acquire, not positional order. can_acquire is
 // mode-aware: a wire_fallback topic declines the ring, its same-host channel staying the wire.
 template<typename... Transports>
-io::selection_hook resolve_hook(Transports &...transports)
+io::selection_hook resolve_hook([[maybe_unused]] Transports &...transports)
 {
     if constexpr((node_has_can_acquire<Transports> || ...))
         return shm_preference_hook(transports...);
