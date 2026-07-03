@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(plexus VERSION 0.2.0 LANGUAGES CXX)
+project(plexus VERSION 0.2.8 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,7 +23,9 @@ option(PLEXUS_WARNINGS_AS_ERRORS "Promote warnings to errors (the enforced gate)
 # the fragment glob so each discovered target inherits it. The warning-flag syntax is
 # per compiler: MSVC takes /W4, GCC/Clang take -Wall -Wextra.
 if(MSVC)
-    add_compile_options(/W4 /permissive- /Zc:__cplusplus)
+    # /Zc:preprocessor selects the conformant preprocessor so the deliberate
+    # empty-argument trait-macro expansions do not trip the legacy preprocessor's C4003.
+    add_compile_options(/W4 /permissive- /Zc:__cplusplus /Zc:preprocessor)
     # Enable warnings-as-errors for MSVC once the build is warning-clean under /W4.
     # add_compile_options(/WX)
 else()

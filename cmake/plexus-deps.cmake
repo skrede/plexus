@@ -49,3 +49,9 @@ target_compile_definitions(plexus_asio_dep INTERFACE
     $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=0x0A00>
     $<$<PLATFORM_ID:Windows>:NOMINMAX>
     $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>)
+
+# Winsock link inputs so every asio-linking Windows target resolves the WSA/socket
+# externals: ws2_32 is Winsock2, mswsock carries the overlapped/extended entry points.
+target_link_libraries(plexus_asio_dep INTERFACE
+    $<$<PLATFORM_ID:Windows>:ws2_32>
+    $<$<PLATFORM_ID:Windows>:mswsock>)
