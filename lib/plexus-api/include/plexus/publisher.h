@@ -69,18 +69,9 @@ public:
     {
     }
 
-    publisher &operator=(publisher &&other) noexcept
-    {
-        if(this != &other)
-        {
-            m_seam = std::exchange(other.m_seam, io::endpoint_seam{});
-            m_fqn  = std::move(other.m_fqn);
-        }
-        return *this;
-    }
-
     publisher(const publisher &)            = delete;
     publisher &operator=(const publisher &) = delete;
+    publisher &operator=(publisher &&)      = delete;
 
     ~publisher() noexcept
     {

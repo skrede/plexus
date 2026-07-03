@@ -66,11 +66,11 @@ public:
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
-    subscriber(subscriber &&) noexcept            = default;
-    subscriber &operator=(subscriber &&) noexcept = default;
+    subscriber(subscriber &&) noexcept        = default;
 
     subscriber(const subscriber &)            = delete;
     subscriber &operator=(const subscriber &) = delete;
+    subscriber &operator=(subscriber &&)      = delete;
 
     ~subscriber()
     {

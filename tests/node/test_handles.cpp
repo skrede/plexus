@@ -7,7 +7,7 @@ TEST_CASE("handles: a publisher is move-only", "[node][handles]")
     static_assert(!std::is_copy_constructible_v<inproc_publisher>);
     static_assert(!std::is_copy_assignable_v<inproc_publisher>);
     static_assert(std::is_nothrow_move_constructible_v<inproc_publisher>);
-    static_assert(std::is_nothrow_move_assignable_v<inproc_publisher>);
+    static_assert(!std::is_move_assignable_v<inproc_publisher>);
 }
 
 TEST_CASE("handles: a subscriber is move-only", "[node][handles]")
@@ -15,7 +15,7 @@ TEST_CASE("handles: a subscriber is move-only", "[node][handles]")
     static_assert(!std::is_copy_constructible_v<inproc_subscriber>);
     static_assert(!std::is_copy_assignable_v<inproc_subscriber>);
     static_assert(std::is_nothrow_move_constructible_v<inproc_subscriber>);
-    static_assert(std::is_nothrow_move_assignable_v<inproc_subscriber>);
+    static_assert(!std::is_move_assignable_v<inproc_subscriber>);
 }
 
 TEST_CASE("handles: moving a subscriber transfers the demand; the moved-from dtor is a no-op", "[node][handles]")
