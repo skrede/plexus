@@ -132,11 +132,11 @@ public:
         return m_state->decode_failed;
     }
 
-    subscriber(subscriber &&) noexcept            = default;
-    subscriber &operator=(subscriber &&) noexcept = default;
+    subscriber(subscriber &&) noexcept        = default;
 
     subscriber(const subscriber &)            = delete;
     subscriber &operator=(const subscriber &) = delete;
+    subscriber &operator=(subscriber &&)      = delete;
 
     ~subscriber()
     {

@@ -91,6 +91,16 @@ target_link_libraries(test_handles PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_handles TEST_PREFIX "node.")
 
+# The typed endpoint handles reject move-assignment (a compile-time gate against the
+# free-decode-state-while-adapters-registered use-after-free) yet still deliver after a
+# move-construction into a local.
+add_executable(test_handle_move_assign test_handle_move_assign.cpp)
+target_link_libraries(test_handle_move_assign PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_handle_move_assign TEST_PREFIX "node.")
+
 add_executable(test_bytes_pubsub test_bytes_pubsub.cpp test_bytes_pubsub_fan.cpp)
 target_link_libraries(test_bytes_pubsub PRIVATE
     plexus::plexus
@@ -241,6 +251,16 @@ target_link_libraries(test_self_loopback_recorder PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback_recorder TEST_PREFIX "node.")
+
+# The recorder move-construction lifetime: the shared drain block's rearm closure owns its executor,
+# so a handle relocated by a container reallocation still drains to a live executor rather than a
+# freed member of the moved-from source.
+add_executable(test_recorder_move test_recorder_move.cpp)
+target_link_libraries(test_recorder_move PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_recorder_move TEST_PREFIX "node.")
 
 # The self-route lifetime contract: retire-then-posted is a safe no-op (the re-entry re-scans
 # m_subscriptions) and drain-before-destroy holds with no per-callback liveness guard — asan/ubsan

@@ -29,6 +29,8 @@
 #include <optional>
 #include <utility>
 #include <algorithm>
+#include <functional>
+#include <type_traits>
 
 namespace plexus {
 
@@ -67,7 +69,7 @@ public:
             flat().open(id, m_engine->capture().default_rule(), rows, static_cast<io::recording::capture_crypto_position>(crypto));
         }
         m_block->draining = true;
-        m_block->rearm    = [blk = std::weak_ptr<block>(m_block), exec = &m_executor]
+        m_block->rearm    = [blk = std::weak_ptr<block>(m_block), exec = held_executor(m_executor)]
         {
             if(auto live = blk.lock())
                 post_drain(live, exec);
@@ -192,15 +194,17 @@ private:
         return std::max(k_default_scratch, need);
     }
 
-    // The closure holds a weak handle, so once the recorder is gone the lock fails and the task
-    // exits without reading a freed ring. The executor is captured as a plain pointer so the
-    // closure stays trivially copyable.
-    using executor_ptr = std::remove_reference_t<typename Engine::executor_type> *;
+    // The block-held rearm closure OWNS the executor, so a move of the recorder cannot leave it
+    // aliasing a destroyed member: a reference executor_type (every in-tree Policy) is held as a
+    // reference_wrapper bound to the long-lived executor; a by-value executor_type is held as its
+    // own copy. Either form is copyable, so the re-posted drain task carries it forward.
+    using held_executor = std::conditional_t<std::is_reference_v<typename Engine::executor_type>,
+                                             std::reference_wrapper<std::remove_reference_t<typename Engine::executor_type>>, typename Engine::executor_type>;
 
-    static void post_drain(const std::shared_ptr<block> &blk, executor_ptr exec)
+    static void post_drain(const std::shared_ptr<block> &blk, held_executor exec)
     {
         std::weak_ptr<block> weak = blk;
-        Policy::post(*exec,
+        Policy::post(exec,
                      [weak = std::move(weak), exec]() mutable
                      {
                          auto live = weak.lock();

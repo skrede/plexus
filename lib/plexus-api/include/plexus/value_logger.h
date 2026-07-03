@@ -81,11 +81,11 @@ public:
         return m_state->decode_failed;
     }
 
-    value_logger(value_logger &&) noexcept            = default;
-    value_logger &operator=(value_logger &&) noexcept = default;
+    value_logger(value_logger &&) noexcept        = default;
 
     value_logger(const value_logger &)            = delete;
     value_logger &operator=(const value_logger &) = delete;
+    value_logger &operator=(value_logger &&)      = delete;
 
     ~value_logger()
     {
