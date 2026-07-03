@@ -184,6 +184,16 @@ target_link_libraries(test_loan_pool PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_loan_pool TEST_PREFIX "node.")
 
+# Defer-free: a slot whose release obligation rides an in-flight carrier past the pool's own
+# destruction still releases safely, because the slab storage lives in a heap control block freed
+# only when the last outstanding slot returns — not when the pool handle dies. asan is the gate.
+add_executable(test_loan_pool_defer_free test_loan_pool_defer_free.cpp)
+target_link_libraries(test_loan_pool_defer_free PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_loan_pool_defer_free TEST_PREFIX "node.")
+
 # The typed pub/sub family end to end: the zero-serialization fast path (address witness,
 # zero encodes), the byte fallback, the decode-failure knobs, and the strict posture.
 add_executable(test_typed_pubsub test_typed_pubsub.cpp test_typed_pubsub_posture.cpp)
