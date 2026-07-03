@@ -1046,6 +1046,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_transport_dial_unix TEST_PREFIX "integration.")
 
+    # The AF_UNIX capability gate — the ONE unix leg that builds on Windows too (NOT
+    # NOT-WIN32-excluded): an in-process listener+client round-trip over a real local
+    # stream socket proves AF_UNIX delivers bytes both ways, and the platform-divergent
+    # fail-closed leg proves a non-accept-any peer policy is refused at listen where peer
+    # credentials are unavailable. Reaches no raw POSIX (temp dir/pid via plexus::testing),
+    # so it compiles + runs on MSVC and both Linux toolchains.
+    add_executable(test_af_unix_capability test_af_unix_capability.cpp)
+    target_link_libraries(test_af_unix_capability PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_af_unix_capability TEST_PREFIX "integration.")
+
     # The gated real-AF_UNIX reconnect oracle: an established session whose channel
     # drops re-dials + re-handshakes over a real local socket; the cold-start
     # missing-socket path re-dials until a listener appears (the same-host demand
