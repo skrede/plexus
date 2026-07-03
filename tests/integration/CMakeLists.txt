@@ -926,6 +926,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_stream_channel_asio TEST_PREFIX "integration.")
 
+    # The stream-channel teardown-quiescence leg: a stalled write in flight when a read-EOF
+    # stream_fail runs, then the channel destroyed (the redial replacement) with the aborted
+    # completion still queued — pre-fix the send_queue completion reads m_open on the freed
+    # egress (ASan use-after-free); post-fix the fail closes the socket and the completion
+    # no-ops. Also pins on_closed posted-exactly-once on both the close() and fail paths,
+    # including the owner-destroyed-between-fail-and-poll case. The load-bearing signal is the
+    # ASan-clean run over the live loopback.
+    add_executable(test_stream_channel_asio_teardown test_stream_channel_asio_teardown.cpp)
+    target_link_libraries(test_stream_channel_asio_teardown PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_stream_channel_asio_teardown TEST_PREFIX "integration.")
+
     # The serial egress atomic-admission gate: a sans-IO drive of serial_bootstrap::submit against
     # a mock channel forwarding to a real stream send_queue with a tiny byte cap. Pins the
     # all-or-nothing payload+trailer admission (no torn frame under backpressure) and the

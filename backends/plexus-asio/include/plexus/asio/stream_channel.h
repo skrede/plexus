@@ -85,6 +85,7 @@ public:
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_dropped(0)
             , m_egress(detail::stream_make_send_sink(*this), egress.bytes)
+            , m_life(std::make_shared<detail::channel_liveness>())
             , m_open(false)
     {
         bind_bootstrap();
@@ -106,6 +107,7 @@ public:
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_dropped(0)
             , m_egress(detail::stream_make_send_sink(*this), egress.bytes)
+            , m_life(std::make_shared<detail::channel_liveness>())
             , m_open(false)
     {
         bind_bootstrap();
@@ -114,9 +116,12 @@ public:
         apply_socket_options();
     }
 
-    // Never posts on_closed (a this-capturing post could outlive the channel); close() does.
     ~stream_channel()
     {
+        // Disarm before the socket teardown that aborts in-flight ops: a completion (or a posted
+        // on_closed) that runs after this reads the shared liveness block, sees !alive, and
+        // no-ops instead of touching this freed channel.
+        m_life->alive = false;
         m_inbound.shutdown();
         shutdown_socket();
         m_bootstrap.reset();
@@ -153,13 +158,7 @@ public:
         m_dropped += m_egress.close_and_drain();
         // An aborted in-flight write must not chain onto the closed socket.
         shutdown_socket();
-        // Posted, never synchronous: a this-capturing on_closed could otherwise run inline.
-        ::asio::post(m_io,
-                     [this]
-                     {
-                         if(m_on_closed_cb)
-                             m_on_closed_cb();
-                     });
+        post_on_closed();
     }
 
     io::endpoint remote_endpoint() const
@@ -221,6 +220,10 @@ public:
     std::size_t write_queue_capacity() const noexcept
     {
         return m_egress.capacity();
+    }
+    std::size_t outstanding_ops() const noexcept
+    {
+        return m_life->outstanding;
     }
 
     void enqueue_egress(std::span<const std::byte> bytes)
@@ -293,6 +296,25 @@ private:
         Traits::apply_socket_options(socket(), m_socket_options, ec);
     }
 
+    // on_closed on ONE discipline: posted, exactly once. The closed_fired latch collapses the
+    // close()/stream_fail double-edge to a single delivery; the closure captures the shared
+    // liveness block and checks alive, so a post still queued at destruction no-ops rather than
+    // dangling on this.
+    void post_on_closed()
+    {
+        if(m_life->closed_fired)
+            return;
+        m_life->closed_fired = true;
+        ::asio::post(m_io,
+                     [this, life = m_life]
+                     {
+                         if(!life->alive)
+                             return;
+                         if(m_on_closed_cb)
+                             m_on_closed_cb();
+                     });
+    }
+
     void shutdown_socket()
     {
         auto &sock = socket();
@@ -315,6 +337,7 @@ private:
     std::uint64_t m_scheduler_key;
     std::size_t m_dropped;
     stream::detail::send_queue m_egress;
+    std::shared_ptr<detail::channel_liveness> m_life;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
     plexus::detail::move_only_function<void()> m_on_closed_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
