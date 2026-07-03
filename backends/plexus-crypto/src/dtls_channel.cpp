@@ -85,8 +85,8 @@ dtls_channel::~dtls_channel()
     m_retransmit.cancel(); // cancel the timer FIRST (no use-after-free on teardown)
     if(m_reassembler)
         m_reassembler->cancel(); // cancel the reassembly timeout(s) before teardown
-    if(m_on_teardown)
-        m_on_teardown(); // erase the transport demux ref BEFORE this object dies
+    if(m_on_teardown_cb)
+        m_on_teardown_cb(); // erase the transport demux ref BEFORE this object dies
     if(m_ssl)
     {
         ::SSL_set_ex_data(m_ssl, dtls_peer_addr_ex_index(), nullptr);
@@ -152,8 +152,8 @@ void dtls_channel::send_large(std::span<const std::byte> bytes)
 {
     if(bytes.size() > m_max_message_bytes)
     {
-        if(m_on_error)
-            m_on_error(io::io_error::message_too_large);
+        if(m_on_error_cb)
+            m_on_error_cb(io::io_error::message_too_large);
         return;
     }
     const std::uint16_t msg_id = m_out_msg_id++;
@@ -237,13 +237,13 @@ void dtls_channel::drain_inbound()
                 // destroys the channel in its on_closed handler (the natural reaction
                 // to a peer close) would otherwise free `this` mid-drain_inbound,
                 // then the loop / try_complete() touches freed members (a UAF). The
-                // synchronous m_on_error in fail() is only safe because the transport's
+                // synchronous m_on_error_cb in fail() is only safe because the transport's
                 // error handlers defer destruction; the close path has no such deferral.
                 ::asio::post(m_io,
                              [this]
                              {
-                                 if(m_on_closed)
-                                     m_on_closed();
+                                 if(m_on_closed_cb)
+                                     m_on_closed_cb();
                              });
                 break;
             }
@@ -288,8 +288,8 @@ void dtls_channel::try_complete()
         m_gate.mark_ready(); // the ready edge: send() now passes through
         if(peer)
             ::X509_free(peer);
-        if(m_on_external_complete)
-            m_on_external_complete();
+        if(m_on_external_complete_cb)
+            m_on_external_complete_cb();
         return;
     }
     if(peer)
@@ -346,8 +346,8 @@ void dtls_channel::close()
     ::asio::post(m_io,
                  [this]
                  {
-                     if(m_on_closed)
-                         m_on_closed();
+                     if(m_on_closed_cb)
+                         m_on_closed_cb();
                  }); // posted, never synchronous
 }
 
@@ -357,8 +357,8 @@ void dtls_channel::fail(io::io_error e)
         return;
     m_open = false;
     m_retransmit.cancel();
-    if(m_on_error)
-        m_on_error(e);
+    if(m_on_error_cb)
+        m_on_error_cb(e);
 }
 
 void dtls_channel::post_on_data(std::span<const std::byte> frame)
@@ -367,8 +367,8 @@ void dtls_channel::post_on_data(std::span<const std::byte> frame)
     ::asio::post(m_io,
                  [this, owned]
                  {
-                     if(m_on_data)
-                         m_on_data(std::span<const std::byte>{*owned});
+                     if(m_on_data_cb)
+                         m_on_data_cb(std::span<const std::byte>{*owned});
                  });
 }
 
