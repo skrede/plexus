@@ -152,6 +152,11 @@ typename Ch::submit_result submit_reliable_fragment(Ch &c, std::uint16_t msg_id,
     return on_window_full(c, c.m_frag_scratch, /*fragmented=*/true);
 }
 
+// Defined below, but the lazy-init send path above its definition calls it; two-phase lookup needs
+// the declaration visible at the point of the call.
+template<typename Ch>
+void ensure_arq(Ch &c);
+
 // Each fragment is a send_reliable segment above the ARQ (selectively retransmitted on loss); the
 // FRAGMENTED envelope bit routes the peer's in-order payload to the reassembler.
 template<typename Ch>
