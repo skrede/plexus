@@ -1,6 +1,6 @@
-# Shared-memory backend tests: the cross-process (fork) xproc harness, the
-# MAP_SHARED round-trip behavioral-oracle placeholder, and the io_uring
-# FUTEX_WAIT ⇄ reactor de-risking spike. Only built when PLEXUS_ENABLE_SHM_BACKEND
+# Shared-memory backend tests: the cross-process (re-exec, open-by-name) xproc
+# harness, the MAP_SHARED round-trip behavioral-oracle placeholder, and the
+# io_uring FUTEX_WAIT ⇄ reactor de-risking spike. Only built when PLEXUS_ENABLE_SHM_BACKEND
 # is ON (plexus::native exists only under the gate); the `shm.` ctest prefix lets
 # `ctest -R shm` select it. Auto-discovered by the tests glob.
 if(NOT PLEXUS_ENABLE_SHM_BACKEND)
@@ -653,6 +653,9 @@ catch_discover_tests(test_shm_large_message TEST_PREFIX "shm.")
 # region, proving the orphan's stale bytes do not leak through. The bounded
 # crash-orphan mitigation; looped N>=100, the binary re-run >=3 times. Links
 # plexus::native for the compiled broker (shm_open/ftruncate/shm_unlink).
+# A custom main() runs the re-exec child dispatcher BEFORE the Catch2 session, so
+# it links the main-less Catch2 target and pulls plexus::testing for the portable
+# process-id / shared-object-name helper the re-exec harness routes through.
 add_executable(test_shm_stale_reclaim test_shm_stale_reclaim.cpp)
 
 target_include_directories(test_shm_stale_reclaim PRIVATE
@@ -661,7 +664,8 @@ target_include_directories(test_shm_stale_reclaim PRIVATE
 target_link_libraries(test_shm_stale_reclaim PRIVATE
     plexus::shm
     plexus::native
-    Catch2::Catch2WithMain)
+    plexus::testing
+    Catch2::Catch2)
 
 catch_discover_tests(test_shm_stale_reclaim TEST_PREFIX "shm.")
 

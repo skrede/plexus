@@ -1,5 +1,3 @@
-#include "support/xproc_harness.h"
-
 #include <asio/io_context.hpp>
 #include <asio/posix/stream_descriptor.hpp>
 

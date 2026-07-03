@@ -3,8 +3,6 @@
 // spans and drives claim/commit/consume with no POSIX broker.
 #pragma once
 
-#include "support/xproc_harness.h"
-
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"

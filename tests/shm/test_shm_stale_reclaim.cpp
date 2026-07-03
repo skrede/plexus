@@ -3,28 +3,31 @@
 
 #include "plexus/shm/region_broker_concept.h"
 
-#include "support/xproc_harness.h"
+#include "support/xproc_child_main.h"
 
+#include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
-#include <string>
-
-#include <unistd.h>
 
 // The crashed-creator orphan-reclaim proof (the bounded crash-orphan mitigation):
 // a child CREATES a named region, stamps a sentinel byte pattern into it, and
-// _exits WITHOUT releasing -- simulating a creator that crashed before its
+// _Exits WITHOUT releasing -- simulating a creator that crashed before its
 // create-owns-unlink destructor could run, leaving an orphan live in /dev/shm.
 // The parent then proves the orphan is real (a plain create returns
 // already_exists) and that a create with unlink_stale_on_create RECLAIMS the
 // orphan and mints a FRESH region: the new region is the parent's (ftruncate
 // zero-fills it, so the orphan's stale sentinel does not leak through). Looped
-// N>=100; the ctest binary is re-run >=3 times for reproducibility. This is the
-// bounded mitigation that ships now; robust dead-peer arbitration is a locked
-// deferral and is NOT designed here.
+// N>=100; the ctest binary is re-run >=3 times for reproducibility. The child is
+// a RE-EXEC'd process that re-opens the region BY NAME (the name arrives by argv),
+// not a fork inheriting the parent's address space. This is the bounded
+// mitigation that ships now; robust dead-peer arbitration is a locked deferral and
+// is NOT designed here.
 
 namespace pio = plexus::shm;
 using plexus::native::posix_shm_region_broker;
@@ -54,21 +57,46 @@ bool all_zero(const region_handle &h)
     return true;
 }
 
+// The crashed-creator child routine, dispatched in the re-exec'd process by key.
+// It re-opens (creates) the named region, stamps the sentinel, then _Exits WITHOUT
+// releasing the handle -- the create-owns-unlink destructor never runs, so the
+// region is orphaned live in /dev/shm (the crashed-creator simulation).
+bool stale_reclaim_creator(const std::vector<std::string> &args)
+{
+    if(args.empty())
+        return false;
+
+    posix_shm_region_broker broker;
+    region_handle orphan;
+    if(broker.create(args.front(), k_region_bytes, pio::create_options{}, orphan) != pio::region_status::ok)
+        return false;
+    stamp_stale(orphan);
+
+    // _Exit HERE, with `orphan` still in scope, is the load-bearing crash
+    // simulation: it skips orphan's create-owns-unlink destructor, so the named
+    // region stays live in /dev/shm with the sentinel committed (letting the
+    // handle destruct at return would unlink it, defeating the orphan).
+    std::_Exit(0);
+}
+
+[[maybe_unused]] const bool s_stale_reclaim_registered = plexus::testing::register_xproc_child("shm.stale_reclaim.creator", &stale_reclaim_creator);
+
 }
 
 TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_stale_on_create", "[shm][stale_reclaim]")
 {
     // A region name unique to this process so concurrent ctest shards never
     // collide. The bare logical name; the broker prepends its canonical prefix.
-    const std::string name = "stale.reclaim." + std::to_string(::getpid());
+    const std::string name = "stale.reclaim." + std::to_string(plexus::testing::process_id());
 
     for(int iter = 0; iter < 100; ++iter)
     {
-        // CHILD: create the region, stamp the stale sentinel, then _exit WITHOUT
-        // releasing the handle -- the create-owns-unlink destructor never runs, so
-        // the region is orphaned live in /dev/shm (the crashed-creator simulation).
-        // PARENT: after the child has exited, reclaim the orphan and prove freshness.
-        const auto outcome = plexus::testing::run_forked(
+        // CHILD (re-exec'd, re-opens by name): create + stamp + orphan. PARENT
+        // (after the child exits): prove the orphan is real, then reclaim a fresh
+        // zero-filled region under the same name.
+        const auto outcome = plexus::testing::run_xproc(
+                "shm.stale_reclaim.creator",
+                {name},
                 [&]() -> bool
                 {
                     posix_shm_region_broker broker;
@@ -95,24 +123,16 @@ TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_s
                     // The parent owns this region and unlinks it on `fresh`'s release
                     // (create-owns-unlink), so no /dev/shm region leaks after the case.
                     return true;
-                },
-                [&]() -> bool
-                {
-                    posix_shm_region_broker broker;
-                    region_handle orphan;
-                    if(broker.create(name, k_region_bytes, pio::create_options{}, orphan) != pio::region_status::ok)
-                        ::_exit(1);
-                    stamp_stale(orphan);
-                    // _exit HERE -- inside the child, with `orphan` still in scope -- is
-                    // the load-bearing crash simulation: it skips orphan's create-owns-
-                    // unlink destructor, so the named region stays live in /dev/shm with
-                    // the sentinel committed (letting the handle destruct at lambda return
-                    // would unlink it, defeating the orphan). The exit status (0) is the
-                    // child_succeeded signal the parent predicate reads.
-                    ::_exit(0);
                 });
 
         REQUIRE(outcome.child_succeeded);  // the crashed-creator child stamped + orphaned
         REQUIRE(outcome.parent_succeeded); // the parent reclaimed a fresh, zero-filled region
     }
+}
+
+int main(int argc, char **argv)
+{
+    plexus::testing::xproc_capture_argv(argc, argv);
+    plexus::testing::xproc_child_main(argc, argv); // _Exits when re-exec'd as the child role
+    return Catch2::Session().run(argc, argv);
 }
