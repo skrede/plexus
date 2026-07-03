@@ -69,7 +69,8 @@ private:
         const auto header  = framed.first(plexus::wire::header_size);
         const auto payload = framed.subspan(plexus::wire::header_size);
         auto owner         = std::make_shared<std::array<std::byte, plexus::stream::crc_trailer_size>>(plexus::stream::crc_trailer(header, payload));
-        return plexus::wire_bytes<>{std::span<const std::byte>{*owner}, std::move(owner)};
+        const std::span<const std::byte> view{*owner};
+        return plexus::wire_bytes<>{view, std::move(owner)};
     }
 };
 

@@ -61,7 +61,8 @@ struct reading_codec
             (*owner)[i]     = static_cast<std::byte>((r.sensor >> (8 * i)) & 0xff);
             (*owner)[4 + i] = static_cast<std::byte>((r.value >> (8 * i)) & 0xff);
         }
-        return {std::span<const std::byte>{owner->data(), owner->size()}, std::move(owner)};
+        const std::span<const std::byte> view{owner->data(), owner->size()};
+        return {view, std::move(owner)};
     }
 
     plexus::expected<void, std::error_code> decode(std::span<const std::byte> b, reading &out) const

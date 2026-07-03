@@ -27,7 +27,8 @@ struct echo_codec
         auto owner = std::make_shared<std::vector<std::byte>>(4);
         for(int i = 0; i < 4; ++i)
             (*owner)[i] = static_cast<std::byte>((v.value >> (8 * i)) & 0xff);
-        return plexus::wire_bytes<>{std::span<const std::byte>{owner->data(), owner->size()}, std::move(owner)};
+        const std::span<const std::byte> view{owner->data(), owner->size()};
+        return plexus::wire_bytes<>{view, std::move(owner)};
     }
 
     plexus::expected<void, std::error_code> decode(std::span<const std::byte> b, T &out) const

@@ -103,7 +103,8 @@ TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is
         {
             ++*encodes;
             auto owner = std::make_shared<std::vector<std::byte>>(4, std::byte{0});
-            return plexus::wire_bytes<>{{owner->data(), owner->size()}, std::move(owner)};
+            const std::span<const std::byte> view{owner->data(), owner->size()};
+            return plexus::wire_bytes<>{view, std::move(owner)};
         }
         plexus::expected<void, std::error_code> decode(std::span<const std::byte>, other &) const
         {

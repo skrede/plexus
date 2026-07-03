@@ -50,7 +50,8 @@ struct pair_codec
     {
         auto owner = std::make_shared<std::vector<std::byte>>(sizeof(T));
         std::memcpy(owner->data(), &v, sizeof(T));
-        return {std::span<const std::byte>{owner->data(), owner->size()}, std::move(owner)};
+        const std::span<const std::byte> view{owner->data(), owner->size()};
+        return {view, std::move(owner)};
     }
 
     plexus::expected<void, std::error_code> decode(std::span<const std::byte> b, T &out) const

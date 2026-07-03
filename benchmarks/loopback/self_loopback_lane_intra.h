@@ -64,7 +64,8 @@ struct stamped_codec
         ++*encodes;
         auto owner = std::make_shared<std::vector<std::byte>>(sizeof v.at);
         write_stamp(*owner, v.at);
-        return {std::span<const std::byte>{owner->data(), owner->size()}, std::move(owner)};
+        const std::span<const std::byte> view{owner->data(), owner->size()};
+        return {view, std::move(owner)};
     }
 
     plexus::expected<void, std::error_code> decode(std::span<const std::byte> b, stamped &out) const
