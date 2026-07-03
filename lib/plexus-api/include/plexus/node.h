@@ -395,7 +395,11 @@ private:
     {
         const registration_id rid    = m_next_registration++;
         const bool first_for_fqn     = !any_subscriber_for(fqn);
-        m_subscriptions.push_back({rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}});
+        std::pair<registration_id, subscription> entry{rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}};
+        if(m_dispatch_depth > 0)
+            m_deferred_subscription_adds.push_back(std::move(entry));
+        else
+            m_subscriptions.push_back(std::move(entry));
         if(first_for_fqn)
             self_attach(fqn, qos, type_id);
         if(capture)
@@ -410,18 +414,34 @@ private:
 
     void retire_subscriber_seam(registration_id rid)
     {
+        if(m_dispatch_depth > 0)
+        {
+            // A retire from inside a dispatch fan: record a logical removal and defer the physical
+            // erase, so the in-flight callback loop never relocates m_subscriptions under itself.
+            const std::optional<std::string> fqn = subscription_fqn(rid);
+            if(!fqn || subscription_pending_removed(rid))
+                return;
+            m_deferred_subscription_removes.push_back(rid);
+            if(!any_subscriber_for(*fqn))
+                retire_fqn_demand(*fqn);
+            return;
+        }
+
         auto it = std::find_if(m_subscriptions.begin(), m_subscriptions.end(), [&](const auto &e) { return e.first == rid; });
         if(it == m_subscriptions.end())
             return;
         const std::string fqn = it->second.fqn;
         m_subscriptions.erase(it);
         if(!any_subscriber_for(fqn))
-        {
-            self_detach(fqn);
-            m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired, wire::fqn_topic_hash(fqn), std::nullopt});
-            for(const auto &peer : m_known_peers)
-                m_engine.unsubscribe(peer, fqn);
-        }
+            retire_fqn_demand(fqn);
+    }
+
+    void retire_fqn_demand(std::string_view fqn)
+    {
+        self_detach(fqn);
+        m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired, wire::fqn_topic_hash(fqn), std::nullopt});
+        for(const auto &peer : m_known_peers)
+            m_engine.unsubscribe(peer, fqn);
     }
 
     // The declaration persists for the node's life (stable identity for subscriber correlation);
@@ -550,10 +570,72 @@ private:
             m_engine.subscribe(id, sub.fqn, sub.qos, io::locality::any, io::reliability_requirement::any, sub.type_id);
     }
 
+    // While a dispatch fan is live (m_dispatch_depth > 0) the (un)subscribe seams cannot touch
+    // m_subscriptions directly: a push_back could reallocate it while the callback loop iterates it,
+    // and an erase would relocate the very callable being invoked. Edits are staged and applied by the
+    // outermost fan on exit; a logically-removed entry is skipped for the remainder of the fan.
+    struct dispatch_guard
+    {
+        basic_node &owner;
+        explicit dispatch_guard(basic_node &node) noexcept
+                : owner(node)
+        {
+            ++owner.m_dispatch_depth;
+        }
+        dispatch_guard(const dispatch_guard &)            = delete;
+        dispatch_guard &operator=(const dispatch_guard &) = delete;
+        ~dispatch_guard()
+        {
+            if(--owner.m_dispatch_depth != 0)
+                return;
+#if defined(__cpp_exceptions)
+            try
+            {
+                owner.apply_deferred_subscription_edits();
+            }
+            catch(...)
+            {
+            }
+#else
+            owner.apply_deferred_subscription_edits();
+#endif
+        }
+    };
+
+    bool subscription_pending_removed(registration_id rid) const
+    {
+        return std::find(m_deferred_subscription_removes.begin(), m_deferred_subscription_removes.end(), rid) != m_deferred_subscription_removes.end();
+    }
+
+    std::optional<std::string> subscription_fqn(registration_id rid) const
+    {
+        for(const auto &e : m_subscriptions)
+            if(e.first == rid)
+                return e.second.fqn;
+        for(const auto &e : m_deferred_subscription_adds)
+            if(e.first == rid)
+                return e.second.fqn;
+        return std::nullopt;
+    }
+
+    void apply_deferred_subscription_edits()
+    {
+        if(!m_deferred_subscription_removes.empty())
+        {
+            std::erase_if(m_subscriptions, [&](const auto &e) { return subscription_pending_removed(e.first); });
+            std::erase_if(m_deferred_subscription_adds, [&](const auto &e) { return subscription_pending_removed(e.first); });
+            m_deferred_subscription_removes.clear();
+        }
+        for(auto &e : m_deferred_subscription_adds)
+            m_subscriptions.push_back(std::move(e));
+        m_deferred_subscription_adds.clear();
+    }
+
     void dispatch_message(std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info)
     {
+        dispatch_guard guard{*this};
         for(auto &[rid, sub] : m_subscriptions)
-            if(sub.fqn == fqn)
+            if(sub.fqn == fqn && !subscription_pending_removed(rid))
                 sub.cb(bytes, info);
     }
 
@@ -561,6 +643,8 @@ private:
     // releases the slot right after); a MISMATCH is counted and warn-and-dropped, never a cast.
     void dispatch_object(std::string_view fqn, const io::object_carrier &carrier)
     {
+        dispatch_guard guard{*this};
+
         // The receive clock is read at most once, and only if a matching subscriber wants
         // message_info.
         std::uint64_t reception = 0;
@@ -568,7 +652,7 @@ private:
 
         for(auto &[rid, sub] : m_subscriptions)
         {
-            if(sub.fqn != fqn || sub.obj.native_key == nullptr)
+            if(sub.fqn != fqn || sub.obj.native_key == nullptr || subscription_pending_removed(rid))
                 continue;
             if(sub.obj.native_key != carrier.native_key)
             {
@@ -602,7 +686,8 @@ private:
 
     bool any_subscriber_for(std::string_view fqn) const
     {
-        return std::any_of(m_subscriptions.begin(), m_subscriptions.end(), [&](const auto &e) { return e.second.fqn == fqn; });
+        const auto live = [&](const auto &e) { return e.second.fqn == fqn && !subscription_pending_removed(e.first); };
+        return std::any_of(m_subscriptions.begin(), m_subscriptions.end(), live) || std::any_of(m_deferred_subscription_adds.begin(), m_deferred_subscription_adds.end(), live);
     }
 
     // The registry-facing self-route: the concrete loopback channel on a single-transport node, or
@@ -888,6 +973,13 @@ private:
     peer_watch m_peer_watch{*this};
     std::vector<plexus::node_id> m_known_peers;
     std::vector<std::pair<registration_id, subscription>> m_subscriptions;
+
+    // Dispatch-fan re-entrancy guard: a (un)subscribe from inside a callback stages its edit here
+    // rather than mutating m_subscriptions under the live callback loop (see dispatch_guard).
+    int m_dispatch_depth{0};
+    std::vector<std::pair<registration_id, subscription>> m_deferred_subscription_adds;
+    std::vector<registration_id> m_deferred_subscription_removes;
+
     std::vector<std::string> m_served_fqns;
     registration_id m_next_registration{1};
     std::size_t m_object_dispatch_mismatch{};

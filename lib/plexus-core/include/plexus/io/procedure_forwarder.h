@@ -168,12 +168,19 @@ public:
         auto peer_it = m_outstanding.find(p.node_name);
         if(peer_it == m_outstanding.end())
             return;
-        for(auto &[corr_id, pending] : peer_it->second)
+
+        // Move the peer's pending table out and drop the map entry BEFORE firing any callback: an
+        // on_response may re-issue a call that inserts into m_outstanding — rehashing the outer map
+        // (invalidating peer_it) or mutating this peer's inner map under the iterator. Firing from the
+        // detached copy leaves no live iterator into a container the callback can reach, mirroring
+        // deliver_response / fire_timeout.
+        auto detached = std::move(peer_it->second);
+        m_outstanding.erase(peer_it);
+        for(auto &[corr_id, pending] : detached)
         {
             pending.timer->cancel();
             pending.on_response(wire::rpc_status::peer_disconnected, {});
         }
-        m_outstanding.erase(peer_it);
     }
 
     // Resolve a local provider by topic_hash and dispatch to it over the opaque param bytes. An

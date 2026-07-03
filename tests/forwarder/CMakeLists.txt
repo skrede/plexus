@@ -56,6 +56,21 @@ target_link_libraries(test_procedure_forwarder PRIVATE
 
 catch_discover_tests(test_procedure_forwarder TEST_PREFIX "forwarder.")
 
+# The detach_all re-entrancy oracle: a peer-death resolution whose reply callbacks each re-issue a
+# call — to the dying peer and to a fresh one — fires every original reply exactly once with
+# peer_disconnected and tracks the retries in the rebuilt table, with no iterator invalidation when
+# the retry insert rehashes the outstanding map. asan/ubsan is the load-bearing gate. Links the core,
+# wire, and inproc layers; selected by the `forwarder.` ctest prefix.
+add_executable(test_procedure_forwarder_detach_reentry test_procedure_forwarder_detach_reentry.cpp)
+
+target_link_libraries(test_procedure_forwarder_detach_reentry PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_procedure_forwarder_detach_reentry TEST_PREFIX "forwarder.")
+
 # The latch behavioral oracle: the registry-seam qos assertion, replay of a value
 # published with ZERO subscribers, the non-latched no-replay negative, empty
 # retention, depth=1 last-value-only, replay-targets-only-the-new-peer, retention

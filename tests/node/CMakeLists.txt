@@ -272,6 +272,16 @@ target_link_libraries(test_self_loopback_lifetime PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback_lifetime TEST_PREFIX "node.")
 
+# The dispatch re-entrancy contract: a callback that subscribes a new endpoint (forcing the
+# subscription table to grow) or drops its own handle mid-fan is safe — delivery fans from a frozen
+# view and defers the edit to the outermost fan's exit. asan/ubsan is the load-bearing gate.
+add_executable(test_dispatch_reentrancy test_dispatch_reentrancy.cpp)
+target_link_libraries(test_dispatch_reentrancy PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_dispatch_reentrancy TEST_PREFIX "node.")
+
 # The shm self-carrier fallback: a node with NO intra-node transport but WITH an shm member
 # self-delivers a same-node publish→subscribe over a node-local shm self-ring. Built only when
 # the shm backend is on (plexus::asio::shm exists only under the gate); links the full shm node
