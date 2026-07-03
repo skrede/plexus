@@ -57,8 +57,8 @@ TEST_CASE("announcement codec: encode then decode round-trips every field in ord
     REQUIRE(decoded.has_value());
     REQUIRE(*decoded == ann);
     REQUIRE(decoded->listens.size() == 2);
-    REQUIRE(decoded->listens[0] == std::pair<std::string, std::uint16_t>{"tcp", 5000});
-    REQUIRE(decoded->listens[1] == std::pair<std::string, std::uint16_t>{"udp", 5001});
+    REQUIRE(decoded->listens[0] == std::pair<std::string, std::uint16_t>{"tcp", std::uint16_t{5000}});
+    REQUIRE(decoded->listens[1] == std::pair<std::string, std::uint16_t>{"udp", std::uint16_t{5001}});
 }
 
 TEST_CASE("announcement codec: the goodbye flag round-trips set", "[wire][announcement][discovery]")
