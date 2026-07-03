@@ -233,6 +233,11 @@ public:
         if(!m_egress.enqueue(std::move(bytes)))
             detail::stream_on_write_queue_full(*this);
     }
+    void enqueue_egress_pair(wire_bytes<> first, wire_bytes<> second)
+    {
+        if(!m_egress.enqueue_both(std::move(first), std::move(second)))
+            detail::stream_on_write_queue_full(*this);
+    }
     void start_read_loop()
     {
         detail::stream_do_read(*this);

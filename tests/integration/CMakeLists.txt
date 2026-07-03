@@ -926,6 +926,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_stream_channel_asio TEST_PREFIX "integration.")
 
+    # The serial egress atomic-admission gate: a sans-IO drive of serial_bootstrap::submit against
+    # a mock channel forwarding to a real stream send_queue with a tiny byte cap. Pins the
+    # all-or-nothing payload+trailer admission (no torn frame under backpressure) and the
+    # no-read-after-move owner path on a full queue (the dangling-view UAF, ASan). No socket, no
+    # pty — links the asio headers for serial_bootstrap plus stream/core/wire.
+    add_executable(test_serial_atomic_admission test_serial_atomic_admission.cpp)
+    target_link_libraries(test_serial_atomic_admission PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::stream
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_serial_atomic_admission TEST_PREFIX "integration.")
+
     # The phase-close cross-class UDP reproducibility gate: a best_effort clean-path flow
     # AND a reliable-datagram-over-loss flow, each looped 100x in-body; the ctest
     # invocation is re-run across >=3 process runs (a timing/transport claim is never made

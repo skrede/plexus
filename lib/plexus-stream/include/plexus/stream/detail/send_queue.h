@@ -60,6 +60,22 @@ public:
         return admit(std::move(frame));
     }
 
+    // Admit a payload and its trailer as ONE atomic unit: both nodes are stored only if their
+    // combined size fits the remaining budget (an empty queue admits the pair whole), otherwise
+    // neither is stored and the caller sees the full signal — the wire never carries one without
+    // the other. The two stored nodes are ordinary queued frames drained by the existing single
+    // completion; no additional completion is introduced for the pair.
+    bool enqueue_both(wire_bytes<> payload, wire_bytes<> trailer)
+    {
+        if(!admits(payload.size() + trailer.size()))
+            return false;
+        stash(std::move(payload));
+        stash(std::move(trailer));
+        if(!m_sending)
+            drive();
+        return true;
+    }
+
     bool full() const noexcept
     {
         return m_bytes >= m_byte_cap;
@@ -114,10 +130,15 @@ private:
         return m_bytes == 0 || (m_bytes < m_byte_cap && size <= m_byte_cap - m_bytes);
     }
 
-    bool admit(wire_bytes<> frame)
+    void stash(wire_bytes<> frame)
     {
         m_bytes += frame.size();
         m_queue.push_back(std::move(frame));
+    }
+
+    bool admit(wire_bytes<> frame)
+    {
+        stash(std::move(frame));
         if(!m_sending)
             drive();
         return true;
