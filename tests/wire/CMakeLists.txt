@@ -89,7 +89,8 @@ catch_discover_tests(test_announcement TEST_PREFIX "wire.")
 # detection layer is stream-family discipline, so it links plexus::stream.
 add_executable(test_stream_inbound
     test_stream_inbound.cpp
-    test_stream_inbound_feed_error.cpp)
+    test_stream_inbound_feed_error.cpp
+    test_stream_inbound_timer_race.cpp)
 target_link_libraries(test_stream_inbound PRIVATE
     plexus::wire
     plexus::stream

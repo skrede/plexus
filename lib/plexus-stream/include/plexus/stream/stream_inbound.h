@@ -71,7 +71,7 @@ public:
 
         if(result.error != wire::feed_error::none)
         {
-            m_timer.cancel();
+            cancel_timer();
             if(m_on_protocol_close)
                 m_on_protocol_close(wire::to_close_cause(result.error));
             return;
@@ -82,7 +82,7 @@ public:
 
     void shutdown()
     {
-        m_timer.cancel();
+        cancel_timer();
     }
 
 private:
@@ -93,7 +93,7 @@ private:
     {
         if(!m_reassembler.frame_in_progress())
         {
-            m_timer.cancel();
+            cancel_timer();
             m_armed_deadline = std::chrono::nanoseconds{0};
             return;
         }
@@ -123,21 +123,36 @@ private:
 
     void arm(std::chrono::nanoseconds d)
     {
+        const std::uint64_t gen = ++m_timer_generation;
         m_timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(d));
         m_timer.async_wait(
-                [this](std::error_code ec)
+                [this, gen](std::error_code ec)
                 {
                     if(ec)
                         return; // cancelled by a new frame, completion, or shutdown
+                    // An already-expired timer's completion is queued with ec==success and cannot be
+                    // recalled by cancel(); a generation bumped by any re-arm or cancel since this wait
+                    // armed marks the completion stale, so it must not close a channel that moved on.
+                    if(gen != m_timer_generation || !m_reassembler.frame_in_progress())
+                        return;
                     if(m_on_protocol_close)
                         m_on_protocol_close(wire::close_cause::no_progress_timeout);
                 });
         m_armed_deadline = d;
     }
 
+    // Bumping the generation defeats a stale queued expiry even across an equal-deadline re-arm,
+    // which m_timer.cancel() alone cannot do (it cannot recall an already-expired completion).
+    void cancel_timer()
+    {
+        ++m_timer_generation;
+        m_timer.cancel();
+    }
+
     wire::frame_reassembler m_reassembler;
     Timer m_timer;
     stream_inbound_config m_cfg;
+    std::uint64_t m_timer_generation{0};
     std::chrono::nanoseconds m_armed_deadline{0};
     plexus::detail::move_only_function<void(const wire::complete_frame &)> m_on_frame;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
