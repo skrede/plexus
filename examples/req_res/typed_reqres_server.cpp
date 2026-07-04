@@ -77,7 +77,7 @@ int main()
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
         io, disc, "divide-server", transport, opts};
-    node.listen({"tcp", "127.0.0.1:5576"});
+    node.listen({"tcp", "0.0.0.0:5576"});
 
     using divide_procedure = plexus::procedure<div_response(div_request), pair_codec>;
     divide_procedure divide{

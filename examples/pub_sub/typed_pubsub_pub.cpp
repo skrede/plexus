@@ -87,7 +87,7 @@ int main()
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
         io, disc, "telemetry-publisher", transport, opts};
-    node.listen({"tcp", "127.0.0.1:5574"});
+    node.listen({"tcp", "0.0.0.0:5574"});
 
     plexus::publisher<reading_codec> topic{node, "telemetry"};
 

@@ -40,7 +40,7 @@ int main()
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
         io, disc, "demo-publisher", transport, opts};
-    node.listen({"tcp", "127.0.0.1:5570"});
+    node.listen({"tcp", "0.0.0.0:5570"});
 
     plexus::publisher<> topic{node, "demo", plexus::topic_qos{}, /*emit_source_identity=*/true};
 

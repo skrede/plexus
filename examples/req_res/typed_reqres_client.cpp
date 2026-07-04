@@ -66,6 +66,8 @@ struct pair_codec
 
 int main()
 {
+    // Flush each line as it is written so a live viewer sees replies immediately.
+    std::cout.setf(std::ios::unitbuf);
     asio::io_context io;
     plexus::asio::asio_transport transport{io};
     plexus::asio::udp_multicast_socket mc_socket{io, asio::ip::make_address_v4("239.255.0.7"), 7447, 4};
@@ -81,7 +83,7 @@ int main()
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
         io, disc, "divide-client", transport, opts};
-    node.listen({"tcp", "127.0.0.1:5577"});
+    node.listen({"tcp", "0.0.0.0:5577"});
 
     using divide_caller = plexus::caller<div_response(div_request), pair_codec>;
     divide_caller divide{node, "divide"};

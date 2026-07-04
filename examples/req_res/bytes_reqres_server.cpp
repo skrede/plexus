@@ -40,7 +40,7 @@ int main()
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
         io, disc, "uppercase-server", transport, opts};
-    node.listen({"tcp", "127.0.0.1:5572"});
+    node.listen({"tcp", "0.0.0.0:5572"});
 
     using bytes_procedure = plexus::procedure<>;
     bytes_procedure uppercase{node, "uppercase",

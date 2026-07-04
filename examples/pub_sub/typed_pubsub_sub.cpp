@@ -70,6 +70,8 @@ struct reading_codec
 
 int main()
 {
+    // Flush each line as it is written so a live viewer sees arrivals immediately.
+    std::cout.setf(std::ios::unitbuf);
     asio::io_context io;
     plexus::asio::asio_transport transport{io};
     plexus::asio::udp_multicast_socket mc_socket{io, asio::ip::make_address_v4("239.255.0.7"), 7447, 4};
@@ -85,7 +87,7 @@ int main()
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
         io, disc, "telemetry-subscriber", transport, opts};
-    node.listen({"tcp", "127.0.0.1:5575"});
+    node.listen({"tcp", "0.0.0.0:5575"});
 
     plexus::subscriber<reading_codec> topic{
         node, "telemetry", [](const reading &r)

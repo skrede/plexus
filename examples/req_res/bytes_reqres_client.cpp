@@ -29,6 +29,8 @@
 
 int main()
 {
+    // Flush each line as it is written so a live viewer sees replies immediately.
+    std::cout.setf(std::ios::unitbuf);
     asio::io_context io;
     plexus::asio::asio_transport transport{io};
     plexus::asio::udp_multicast_socket mc_socket{io, asio::ip::make_address_v4("239.255.0.7"), 7447, 4};
@@ -44,7 +46,7 @@ int main()
 
     plexus::node<plexus::asio::asio_policy, plexus::asio::asio_transport> node{
         io, disc, "uppercase-client", transport, opts};
-    node.listen({"tcp", "127.0.0.1:5573"});
+    node.listen({"tcp", "0.0.0.0:5573"});
 
     plexus::caller<> uppercase{node, "uppercase"};
 
