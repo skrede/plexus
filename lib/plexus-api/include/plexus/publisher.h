@@ -13,6 +13,7 @@
 #include "plexus/topic_qos.h"
 #include "plexus/wire_bytes.h"
 #include "plexus/recording_qos.h"
+#include "plexus/typed_publisher_options.h"
 
 #include "plexus/detail/compat.h"
 
@@ -28,21 +29,6 @@ namespace plexus {
 
 template<typename Codec>
 class publisher;
-
-// An explicit type_id overrides the codec's own. capture is optional because absence is meaningful:
-// unset falls back to the node-level default, present overrides per topic. geometry is an OPAQUE
-// per-topic same-host provisioning override (null = the node-level default): a producer-side local
-// value the backend front-door fills with its concrete geometry type; the generic api stays
-// transport-name-free.
-struct typed_publisher_options
-{
-    topic_qos qos{};
-    bool emit_source_identity = false;
-    std::size_t pool_depth    = 8;
-    std::optional<type_identity> type_id{};
-    const void *geometry = nullptr;
-    std::optional<recording_qos> capture{};
-};
 
 // LIFETIME: a publisher must NOT outlive its node (member-init aggregation, node ref first, so
 // reverse destruction retires the handle before the node). A moved-from handle is inert.

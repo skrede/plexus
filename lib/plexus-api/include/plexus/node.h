@@ -3,6 +3,7 @@
 
 #include "plexus/recorder.h"
 #include "plexus/node_options.h"
+#include "plexus/typed_publisher_options.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/node_name.h"
@@ -148,7 +149,6 @@ inline node_id node_id_from_name(std::string_view name) noexcept
     return detail::hash_node_id(name);
 }
 
-struct typed_publisher_options;
 struct value_logger_options;
 struct no_projection;
 
