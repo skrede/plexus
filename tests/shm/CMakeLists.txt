@@ -177,11 +177,12 @@ target_link_libraries(test_shm_seams PRIVATE
 
 catch_discover_tests(test_shm_seams TEST_PREFIX "shm.")
 
-# The POSIX region broker: create mints a 0600 /dev/shm region (creator owns the
-# unlink), attach maps an existing one, unlink_stale_on_create reclaims an orphan,
-# and an oversize create fast-fails before any syscall. Links plexus::native for the
-# compiled broker bodies (shm_open/mmap/ftruncate/shm_unlink).
-# Drives fork() + the POSIX broker directly (unistd.h), so it is excluded from the Windows build.
+# The POSIX region broker, portable negative-path behaviors: an oversize create fast-fails
+# (too_large) with no region minted, an attach of a never-created name returns not_found, and a
+# sliced/empty name is rejected. These read only the broker's status and handle validity (no
+# /dev/shm path inspection), so they run on every POSIX host. Links plexus::native for the
+# compiled broker bodies (shm_open/mmap/ftruncate/shm_unlink). Drives the POSIX broker directly
+# (sys/mman.h), so it is excluded from the Windows build.
 if(NOT WIN32)
     add_executable(test_shm_region_broker test_shm_region_broker.cpp)
 
@@ -194,6 +195,25 @@ if(NOT WIN32)
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_region_broker TEST_PREFIX "shm.")
+endif()
+
+# The POSIX region broker, Linux-only /dev/shm-view behaviors: the 0600 owner-only mode, the
+# create-owns-unlink contract, and unlink_stale_on_create reclaiming an orphan -- each verified
+# by stat()/access()-ing the object under /dev/shm, the tmpfs view of POSIX shm that exists only
+# on Linux. macOS shm_open objects are not path-visible, so those broker guarantees are proven
+# there by the cross-process shm proofs instead; the target is excluded on macOS and Windows.
+if(NOT WIN32 AND NOT APPLE)
+    add_executable(linux_test_shm_region_broker linux_test_shm_region_broker.cpp)
+
+    target_include_directories(linux_test_shm_region_broker PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(linux_test_shm_region_broker PRIVATE
+        plexus::shm
+        plexus::native
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(linux_test_shm_region_broker TEST_PREFIX "shm.")
 endif()
 
 # The cross-process futex notifier: the wake crosses address spaces (the
