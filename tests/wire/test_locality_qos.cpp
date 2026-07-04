@@ -115,7 +115,7 @@ TEST_CASE("locality: a non-default reach survives the declare -> qos_for round-t
     REQUIRE(registry.qos_for(hash).reach != locality::any);
 }
 
-TEST_CASE("subscriber_registry: record_drop for an undeclared topic mints no entry — fqn_for stays "
+TEST_CASE("subscriber_registry: record_drop for an undeclared topic mints no entry - fqn_for stays "
           "empty (no cached empty-fqn)",
           "[wire][locality]")
 {

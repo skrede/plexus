@@ -30,7 +30,7 @@ std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t
 
 }
 
-TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatched epoch is "
+TEST_CASE("inproc peer_session: the data-path staleness gate FIRES - a mismatched epoch is "
           "dropped, the latched epoch delivered, looped",
           "[integration][peer_session][inproc]")
 {
@@ -72,7 +72,7 @@ TEST_CASE("inproc peer_session: the data-path staleness gate FIRES — a mismatc
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("inproc peer_session: the staleness gate distinguishes epochs beyond the u8 range — the "
+TEST_CASE("inproc peer_session: the staleness gate distinguishes epochs beyond the u8 range - the "
           "255-wrap collision is gone, looped",
           "[integration][peer_session][inproc]")
 {

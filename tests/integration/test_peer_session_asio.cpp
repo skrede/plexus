@@ -23,7 +23,7 @@ TEST_CASE("asio peer_session pair completes the handshake over real TCP and mint
 }
 
 TEST_CASE("asio peer_session: a dialed (one-directional) connection completes BOTH sides over real "
-          "TCP — the accepted bootstrap responder answers, the dialer mints off the response, "
+          "TCP - the accepted bootstrap responder answers, the dialer mints off the response, "
           "gated data flows both ways, looped",
           "[integration][peer_session][asio]")
 {

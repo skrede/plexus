@@ -81,7 +81,7 @@ TEST_CASE("observer over asio: ready fires EXACTLY once per cycle across a real 
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("observer over asio: premature-ready window — ready stays 1 across the reconnect-complete "
+TEST_CASE("observer over asio: premature-ready window - ready stays 1 across the reconnect-complete "
           "predicate before the resurrected acks drain, becomes 2 only after over real TCP",
           "[integration][observer][asio]")
 {

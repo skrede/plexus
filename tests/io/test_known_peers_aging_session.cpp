@@ -2,7 +2,7 @@
 
 using namespace known_peers_aging_fixture;
 
-TEST_CASE("known_peers_aging: aging removes AWARENESS only — an active session survives", "[io][known_peers_aging]")
+TEST_CASE("known_peers_aging: aging removes AWARENESS only - an active session survives", "[io][known_peers_aging]")
 {
     test_clock::reset();
     aging_pair p;

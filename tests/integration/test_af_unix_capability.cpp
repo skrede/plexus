@@ -37,7 +37,7 @@
 // A hard floor: asio must expose AF_UNIX (Windows carries it at _WIN32_WINNT >= 0x0A00), so a
 // toolchain that silently loses the capability fails here rather than at an obscure link error.
 #if !defined(ASIO_HAS_LOCAL_SOCKETS)
-    #error "ASIO_HAS_LOCAL_SOCKETS must be defined — AF_UNIX is required (expected at _WIN32_WINNT >= 0x0A00)."
+    #error "ASIO_HAS_LOCAL_SOCKETS must be defined - AF_UNIX is required (expected at _WIN32_WINNT >= 0x0A00)."
 #endif
 
 namespace pasio = plexus::asio;

@@ -71,8 +71,8 @@ using wire_node = plexus::node<wire_policy, wire_transport>;
 // Structural-absence witness (compile-time): a default node's channel type is a bare inproc
 // channel, NOT a recording_channel; only the wire-capturing node's channel type is the
 // decorator. The decorated-vs-bare TYPE is fixed at the node's construction.
-static_assert(!plexus::io::is_recording_channel_v<inproc_policy::byte_channel_type>, "a default node's channel must NOT be a recording_channel — structurally absent");
-static_assert(plexus::io::is_recording_channel_v<wire_policy::byte_channel_type>, "the wire-capturing node's channel must be a recording_channel — structurally present");
+static_assert(!plexus::io::is_recording_channel_v<inproc_policy::byte_channel_type>, "a default node's channel must NOT be a recording_channel - structurally absent");
+static_assert(plexus::io::is_recording_channel_v<wire_policy::byte_channel_type>, "the wire-capturing node's channel must be a recording_channel - structurally present");
 
 struct reading
 {

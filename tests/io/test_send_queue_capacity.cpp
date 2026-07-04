@@ -2,7 +2,7 @@
 
 using namespace send_queue_fixture;
 
-TEST_CASE("send_queue default capacity is unbounded — the at-capacity signal is inert", "[io][send_queue]")
+TEST_CASE("send_queue default capacity is unbounded - the at-capacity signal is inert", "[io][send_queue]")
 {
     recorder rec;
     send_queue q{rec.sink()}; // default capacity
@@ -36,7 +36,7 @@ TEST_CASE("send_queue bounded capacity fires the at-capacity signal and refuses 
     REQUIRE(q.size() == 2);
 }
 
-TEST_CASE("send_queue caps on summed BYTES, not entry count — one large frame trips a byte budget", "[io][send_queue]")
+TEST_CASE("send_queue caps on summed BYTES, not entry count - one large frame trips a byte budget", "[io][send_queue]")
 {
     recorder rec;
     send_queue q{rec.sink(), 8}; // an 8-byte budget

@@ -27,7 +27,7 @@ TEST_CASE("inproc peer_session pair completes the handshake, mints epochs, insta
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("inproc peer_session: a dialed (one-directional) connection completes BOTH sides — the "
+TEST_CASE("inproc peer_session: a dialed (one-directional) connection completes BOTH sides - the "
           "accepted bootstrap responder answers, the dialer mints off the response, and gated data "
           "flows both ways, looped",
           "[integration][peer_session][inproc]")

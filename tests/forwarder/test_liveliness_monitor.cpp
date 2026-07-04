@@ -100,7 +100,7 @@ TEST_CASE("liveliness monitor: a presence gap beyond the lease fires exactly one
     REQUIRE(proven == k_loops);
 }
 
-TEST_CASE("liveliness monitor: the two stamps are distinct — a heartbeat refreshes the lease but "
+TEST_CASE("liveliness monitor: the two stamps are distinct - a heartbeat refreshes the lease but "
           "NOT the deadline")
 {
     int proven = 0;

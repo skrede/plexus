@@ -163,12 +163,12 @@ static_assert(notifier<stub_notifier>, "stub_notifier must satisfy the notifier 
 
 using shm_member = shm_mux_member<stub_broker, stub_notifier>;
 
-static_assert(pio::byte_channel<shm_byte_channel<stub_broker, stub_notifier>>, "shm_byte_channel must satisfy byte_channel — the seven erased verbs");
-static_assert(pio::mux_member<shm_member>, "shm_mux_member must satisfy mux_member — channel_type + mux_schemes + mux_tier");
+static_assert(pio::byte_channel<shm_byte_channel<stub_broker, stub_notifier>>, "shm_byte_channel must satisfy byte_channel - the seven erased verbs");
+static_assert(pio::mux_member<shm_member>, "shm_mux_member must satisfy mux_member - channel_type + mux_schemes + mux_tier");
 static_assert(shm_member::mux_tier == pio::transport_kind::local, "the shm member rides the local (same-host) tier");
 static_assert(shm_member::mux_prefers_local_fast, "the shm member opts into the per-candidate same-host fast-path flag");
 static_assert(pio::upgradeable<shm_member>,
-              "shm member must satisfy the generic upgrade capability — it is the reference "
+              "shm member must satisfy the generic upgrade capability - it is the reference "
               "plug-in for the same-medium upgrade probe");
 
 // A dummy local-tier stream member (the AF_UNIX stand-in): it serves "shm" too so the two

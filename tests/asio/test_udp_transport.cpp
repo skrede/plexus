@@ -81,7 +81,7 @@ TEST_CASE("udp best_effort: a dialed channel sends a frame the accepting channel
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("udp dedup_live: a replayed datagram is dropped — on_data fires once", "[udp][transport]")
+TEST_CASE("udp dedup_live: a replayed datagram is dropped - on_data fires once", "[udp][transport]")
 {
     loopback h;
     REQUIRE(h.dialed != nullptr);

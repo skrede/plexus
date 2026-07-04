@@ -147,6 +147,6 @@ TEST_CASE("dtls.fragment: the lifted message ceiling fragments a message above t
     }
     REQUIRE(proven == k_iterations);
     WARN("dtls best-effort lossless ceiling on this host ~= 3 MiB (rmem_max-bounded); full 16 MB "
-         "best-effort delivery is transport-capped — the lifted ceiling fragments it, the kernel "
+         "best-effort delivery is transport-capped - the lifted ceiling fragments it, the kernel "
          "buffers drop the un-retransmitted overflow (the reliable large-datagram path is udpr)");
 }

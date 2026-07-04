@@ -61,7 +61,7 @@ TEST_CASE("shm_self_carrier: a late durability-requesting subscriber gets the la
     REQUIRE(seen.front() == std::vector<std::byte>(payload.begin(), payload.end()));
 }
 
-TEST_CASE("shm_self_carrier: exactly one callback per publish — no double-delivery", "[node][shm][loopback]")
+TEST_CASE("shm_self_carrier: exactly one callback per publish - no double-delivery", "[node][shm][loopback]")
 {
     shm_fixture f;
 

@@ -48,7 +48,7 @@ TEST_CASE("asio peer_session: the 3-arg callback reports NON-intra-process local
     REQUIRE(delivered == k_iterations);
 }
 
-TEST_CASE("asio peer_session: the data-path staleness gate FIRES over TCP — a mismatched epoch is "
+TEST_CASE("asio peer_session: the data-path staleness gate FIRES over TCP - a mismatched epoch is "
           "dropped, looped",
           "[integration][peer_session][asio]")
 {

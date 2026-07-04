@@ -4,7 +4,7 @@
 
 using namespace dtls_mux_fixture;
 
-TEST_CASE("dtls.mux: a tcp dial on the same mux still routes to the plain-TCP member — no "
+TEST_CASE("dtls.mux: a tcp dial on the same mux still routes to the plain-TCP member - no "
           "cross-talk, looped",
           "[dtls][mux][route]")
 {
@@ -32,7 +32,7 @@ TEST_CASE("dtls.mux: a tcp dial on the same mux still routes to the plain-TCP me
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("dtls.mux: a tls dial on the same mux still routes to the secure-stream member — "
+TEST_CASE("dtls.mux: a tls dial on the same mux still routes to the secure-stream member - "
           "coexists with dtls, looped",
           "[dtls][mux][route]")
 {

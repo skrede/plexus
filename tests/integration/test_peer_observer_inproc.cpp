@@ -427,7 +427,7 @@ TEST_CASE("inproc observer: ready fires EXACTLY once per cycle across a reconnec
     REQUIRE(proven == k_iterations);
 }
 
-TEST_CASE("inproc observer: premature-ready window — ready stays 1 while the resurrected "
+TEST_CASE("inproc observer: premature-ready window - ready stays 1 while the resurrected "
           "subscribes are outstanding, becomes 2 only after the acks drain",
           "[integration][observer][inproc]")
 {

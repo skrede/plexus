@@ -45,7 +45,7 @@ TEST_CASE("self_loopback: bytes lane: a node delivers its own publish to its own
     REQUIRE(seen.front() == std::vector<std::byte>(payload.begin(), payload.end()));
 }
 
-TEST_CASE("self_loopback: typed lane: same-node typed publish is zero-copy — same address, zero encodes", "[node][loopback]")
+TEST_CASE("self_loopback: typed lane: same-node typed publish is zero-copy - same address, zero encodes", "[node][loopback]")
 {
     fixture f;
 

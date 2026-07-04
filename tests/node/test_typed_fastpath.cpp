@@ -136,7 +136,7 @@ struct net
 
 }
 
-TEST_CASE("typed fast path cell 6: the identity witness — same address, zero encodes, intra-process", "[node][typed][fastpath]")
+TEST_CASE("typed fast path cell 6: the identity witness - same address, zero encodes, intra-process", "[node][typed][fastpath]")
 {
     net n;
     n.connect();

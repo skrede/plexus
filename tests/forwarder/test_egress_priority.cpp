@@ -377,7 +377,7 @@ TEST_CASE("egress_priority: a flooded background band never delays a high frame 
     }
 }
 
-TEST_CASE("egress_priority: a multi-band backlog drains in strict band-descending order — the "
+TEST_CASE("egress_priority: a multi-band backlog drains in strict band-descending order - the "
           "gather never coalesces across bands, looped",
           "[egress_priority][forwarder]")
 {
@@ -438,7 +438,7 @@ TEST_CASE("egress_priority: a multi-band backlog drains in strict band-descendin
     }
 }
 
-TEST_CASE("egress_priority: inproc is unaffected — mixed priorities deliver in publish order, "
+TEST_CASE("egress_priority: inproc is unaffected - mixed priorities deliver in publish order, "
           "synchronously",
           "[egress_priority][forwarder]")
 {
@@ -482,7 +482,7 @@ TEST_CASE("egress_priority: inproc is unaffected — mixed priorities deliver in
     }
 }
 
-TEST_CASE("egress_priority: the MUX/ERASED path bands — realtime leaves before a background flood "
+TEST_CASE("egress_priority: the MUX/ERASED path bands - realtime leaves before a background flood "
           "over a polymorphic_byte_channel, looped",
           "[egress_priority][forwarder]")
 {
@@ -782,7 +782,7 @@ TEST_CASE("egress_priority: drop_newest refuses the new frame at a saturated ban
     }
 }
 
-TEST_CASE("egress_priority: the drain leaves a frame the channel cap cannot admit banded — never "
+TEST_CASE("egress_priority: the drain leaves a frame the channel cap cannot admit banded - never "
           "popped-and-lost, and the channel never refuses a scheduler hand-off",
           "[egress_priority][forwarder]")
 {
@@ -823,7 +823,7 @@ TEST_CASE("egress_priority: the drain leaves a frame the channel cap cannot admi
 }
 
 TEST_CASE("egress_priority: the low-water gate tracks the channel's OWN write-queue cap, not a "
-          "fixed constant — a shallow channel is never over-fed",
+          "fixed constant - a shallow channel is never over-fed",
           "[egress_priority][forwarder]")
 {
     // Lockstep: the scheduler's low-water gate derives from the channel's write_queue_capacity(),

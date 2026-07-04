@@ -370,7 +370,7 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
 
 }
 
-TEST_CASE("shm.wire_fallback small rides the SHM ring, large rides the wire — medium asserted", "[shm][wire_fallback]")
+TEST_CASE("shm.wire_fallback small rides the SHM ring, large rides the wire - medium asserted", "[shm][wire_fallback]")
 {
     // A capped ring at a small declared payload: ring_geometry_for keeps the small-tier
     // slot stride (4096), so the cap is 4096. A 1 KiB message fits the cap (SHM); a 64

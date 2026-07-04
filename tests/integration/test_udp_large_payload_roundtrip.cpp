@@ -94,7 +94,7 @@ TEST_CASE("udp_large_payload: a fragmented udpr message whose fragment count exc
                             /*iterations=*/4) == 4);
 }
 
-TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured — UDP drops the "
+TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured - UDP drops the "
           "whole message, udpr reassembles",
           "[udp_large_payload]")
 {

@@ -236,7 +236,7 @@ TEST_CASE("tls trust: mutual cross-pinning lands both ends live and delivers byt
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("tls trust: the accepter not pinning the dialer fails closed — no accepted channel, no "
+TEST_CASE("tls trust: the accepter not pinning the dialer fails closed - no accepted channel, no "
           "data, looped",
           "[tls][trust][failclosed]")
 {
@@ -271,7 +271,7 @@ TEST_CASE("tls trust: the accepter not pinning the dialer fails closed — no ac
     REQUIRE(rejected == k_iterations);
 }
 
-TEST_CASE("tls trust: the dialer not pinning the accepter fails closed — on_dialed never fires, "
+TEST_CASE("tls trust: the dialer not pinning the accepter fails closed - on_dialed never fires, "
           "looped",
           "[tls][trust][failclosed]")
 {
@@ -295,7 +295,7 @@ TEST_CASE("tls trust: the dialer not pinning the accepter fails closed — on_di
     REQUIRE(rejected == k_iterations);
 }
 
-TEST_CASE("tls trust: a mismatched (wrong-digest) pin rejects — no channel, looped", "[tls][trust][failclosed]")
+TEST_CASE("tls trust: a mismatched (wrong-digest) pin rejects - no channel, looped", "[tls][trust][failclosed]")
 {
     identity_fixture acc("acc");
     identity_fixture dia("dia");

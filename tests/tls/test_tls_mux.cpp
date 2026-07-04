@@ -234,7 +234,7 @@ TEST_CASE("tls mux: a tls dial routes to the secure member and the scheme surviv
     REQUIRE(completed == k_iterations);
 }
 
-TEST_CASE("tls mux: a tcp dial still routes to the plain-TCP member — tls and tcp coexist, looped", "[tls][mux][route]")
+TEST_CASE("tls mux: a tcp dial still routes to the plain-TCP member - tls and tcp coexist, looped", "[tls][mux][route]")
 {
     identity_fixture server_id("srv");
     identity_fixture client_id("cli");

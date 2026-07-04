@@ -60,7 +60,7 @@ TEST_CASE("crc_serial: a flipped HEADER byte is caught by the CRC and resyncs on
     REQUIRE(s.emitted.back() == header_on("after"));
 }
 
-TEST_CASE("crc_serial: a lying oversized payload_len stays bounded — no over-read, no over-alloc", "[wire][crc_serial]")
+TEST_CASE("crc_serial: a lying oversized payload_len stays bounded - no over-read, no over-alloc", "[wire][crc_serial]")
 {
     // A tiny payload cap so a crafted header that claims more than the cap exercises the
     // lying-length branch deterministically (independent of the 16 MiB default).

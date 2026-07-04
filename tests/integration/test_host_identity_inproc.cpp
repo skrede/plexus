@@ -29,7 +29,7 @@ TEST_CASE("host_identity: the TLS-path accessor returns the SPKI-derived id", "[
         REQUIRE(id[i] == static_cast<std::byte>(i + 1));
 }
 
-TEST_CASE("host_identity: a spoofed external claim is ignored — the accessor binds to the "
+TEST_CASE("host_identity: a spoofed external claim is ignored - the accessor binds to the "
           "authenticated peer",
           "[integration][host_identity]")
 {

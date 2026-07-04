@@ -346,7 +346,7 @@ int main(int argc, char **argv)
     const std::size_t rings[]    = {64u * 1024u, 128u * 1024u, 256u * 1024u, 512u * 1024u, 1u << 20, 2u << 20, 4u << 20, 16u << 20};
     const std::size_t payloads[] = {64, 256, 1024, 4096};
 
-    std::printf("  Sweep 1 — recall (median of %d) vs ring_bytes:\n", runs);
+    std::printf("  Sweep 1 - recall (median of %d) vs ring_bytes:\n", runs);
     std::printf("    %10s", "ring");
     for(std::size_t p : payloads)
         std::printf("  %10zuB", p);
@@ -365,7 +365,7 @@ int main(int argc, char **argv)
     std::printf("\n");
 
     // ---- Sweep 2a: count_n decimation keep-ratio ---------------------------------------
-    std::printf("  Sweep 2a — count_n keep-ratio (median of %d), payload=256B, burst=%d:\n", runs, burst);
+    std::printf("  Sweep 2a - count_n keep-ratio (median of %d), payload=256B, burst=%d:\n", runs, burst);
     std::printf("    %8s  %14s  %16s\n", "N", "keep(measured)", "expected(1/N)");
     const std::uint32_t ns[] = {1, 2, 4, 8, 16, 32, 64};
     for(std::uint32_t nn : ns)
@@ -382,7 +382,7 @@ int main(int argc, char **argv)
     // ---- Sweep 2b: time_window decimation keep-ratio -----------------------------------
     // The source clock is wire::now_timestamp_ns (wall ns); each publish is driven to
     // quiescence so the window gate sees real elapsed time between records.
-    std::printf("  Sweep 2b — time_window keep-ratio (median of %d), payload=256B, burst=%d:\n", runs, burst);
+    std::printf("  Sweep 2b - time_window keep-ratio (median of %d), payload=256B, burst=%d:\n", runs, burst);
     std::printf("    %12s  %16s\n", "window", "keep(measured)");
     const std::uint64_t windows_ns[] = {0, 1000, 10000, 100000, 1000000, 10000000};
     for(std::uint64_t w : windows_ns)

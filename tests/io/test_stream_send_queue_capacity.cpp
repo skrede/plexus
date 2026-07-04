@@ -2,7 +2,7 @@
 
 using namespace stream_send_queue_fixture;
 
-TEST_CASE("stream_send_queue default capacity is unbounded — the at-capacity signal is inert", "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue default capacity is unbounded - the at-capacity signal is inert", "[io][stream_send_queue]")
 {
     recorder rec;
     stream_send_queue q{rec.sink()};

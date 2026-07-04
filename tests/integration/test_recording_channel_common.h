@@ -116,7 +116,7 @@ static_assert(plexus::io::byte_channel<recording_channel<test_lower>>, "recordin
 static_assert(!plexus::io::is_recording_channel_v<test_lower>, "a bare channel must not be a recording_channel");
 static_assert(!plexus::io::is_recording_channel_v<plexus::io::polymorphic_byte_channel>, "the erased channel must not be a recording_channel");
 static_assert(!plexus::io::is_recording_channel_v<plexus::inproc::inproc_policy::byte_channel_type>,
-              "the default inproc channel_type must not be a recording_channel — structurally absent");
+              "the default inproc channel_type must not be a recording_channel - structurally absent");
 static_assert(plexus::io::is_recording_channel_v<recording_channel<test_lower>>, "an explicit recording_channel specialization must witness presence");
 
 inline node_id make_node(std::uint8_t tag)

@@ -152,7 +152,7 @@ struct manual_link
 
 }
 
-TEST_CASE("inproc peer_session: completing before the deadline cancels the timer — no later abort, "
+TEST_CASE("inproc peer_session: completing before the deadline cancels the timer - no later abort, "
           "looped",
           "[integration][peer_session][inproc]")
 {

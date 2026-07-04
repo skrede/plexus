@@ -38,7 +38,7 @@ TEST_CASE("udp selector: the scheme classifies its reliability class from the en
     REQUIRE(sel.reliability_of_scheme("ws") == pio::reliability_hint::unspecified);
 }
 
-TEST_CASE("udp selector: the selector is a pure value object — no state across calls or instances", "[udp][selector][value-object]")
+TEST_CASE("udp selector: the selector is a pure value object - no state across calls or instances", "[udp][selector][value-object]")
 {
     pio::transport_selector a;
     pio::transport_selector b;
