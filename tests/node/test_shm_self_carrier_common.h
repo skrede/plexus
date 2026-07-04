@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_TESTS_NODE_TEST_SHM_SELF_CARRIER_COMMON_H
 #define HPP_GUARD_TESTS_NODE_TEST_SHM_SELF_CARRIER_COMMON_H
 
-#include "plexus/asio/shm/linux/shm_member.h"
+#include "plexus/asio/detail/same_host_shm_config.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
 

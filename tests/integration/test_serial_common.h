@@ -36,7 +36,11 @@
 #include <asio/io_context.hpp>
 #include <asio/serial_port.hpp>
 
+#if defined(__APPLE__)
+#include <util.h>
+#else
 #include <pty.h>
+#endif
 #include <termios.h>
 #include <unistd.h>
 

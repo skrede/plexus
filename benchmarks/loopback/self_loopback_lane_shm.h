@@ -12,7 +12,7 @@
 
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
-#include "plexus/asio/shm/linux/shm_member.h"
+#include "plexus/asio/detail/same_host_shm_config.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
 
