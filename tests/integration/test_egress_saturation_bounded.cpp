@@ -167,7 +167,13 @@ TEST_CASE("egress_saturation_bounded unix: a saturating publisher stays memory-b
     {
         unix_pair sock;
         ::asio::io_context io;
-        ::asio::local::stream_protocol::acceptor acc{io, ::asio::local::stream_protocol::endpoint(sock.path)};
+        // Open+bind+listen by hand rather than the endpoint ctor: that ctor sets SO_REUSEADDR
+        // before bind, which the Windows AF_UNIX provider rejects (WSAEOPNOTSUPP). AF_UNIX has
+        // no reuse semantics, so this is the portable construction (mirrors unix_listener).
+        ::asio::local::stream_protocol::acceptor acc{io};
+        acc.open(::asio::local::stream_protocol());
+        acc.bind(::asio::local::stream_protocol::endpoint(sock.path));
+        acc.listen();
         ::asio::local::stream_protocol::socket peer{io};
         ::asio::local::stream_protocol::socket client{io};
         client.connect(::asio::local::stream_protocol::endpoint(sock.path));

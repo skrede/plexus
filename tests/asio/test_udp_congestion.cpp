@@ -92,7 +92,15 @@ struct relay
     ::asio::ip::udp::socket back;
     ::asio::ip::udp::endpoint server_ep;
     ::asio::ip::udp::endpoint client_ep;
-    ::asio::ip::udp::endpoint from;
+    // SEPARATE sender-endpoints per outstanding receive: both async_receive_from ops are in
+    // flight at once, and each fills its endpoint at I/O-COMPLETION time. On Windows (IOCP
+    // proactor) the OS writes the endpoint when the operation completes, before the handler
+    // runs -- so a single shared endpoint gets clobbered by whichever op completes last, and
+    // client_ep = from would capture the SERVER's address instead of the client's, misrouting
+    // acks. On Linux (reactor) the endpoint is filled synchronously per handler, hiding the
+    // bug; a distinct endpoint per receive is correct on both.
+    ::asio::ip::udp::endpoint from_front;
+    ::asio::ip::udp::endpoint from_back;
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
     std::deque<action> data_script;
@@ -100,8 +108,8 @@ struct relay
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
             : io(ctx)
-            , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
-            , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
+            , front(io, ::asio::ip::udp::endpoint(::asio::ip::make_address_v4("127.0.0.1"), 0))
+            , back(io, ::asio::ip::udp::endpoint(::asio::ip::make_address_v4("127.0.0.1"), 0))
             , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
     {
         recv_front();
@@ -127,12 +135,19 @@ struct relay
 
     void recv_front()
     {
-        front.async_receive_from(::asio::buffer(front_buf), from,
+        front.async_receive_from(::asio::buffer(front_buf), from_front,
                                  [this](std::error_code ec, std::size_t n)
                                  {
                                      if(ec)
+                                     {
+                                         // Windows reports a prior send's ICMP port-unreachable as
+                                         // connection_reset on the next recv; skip that spurious
+                                         // completion and keep relaying rather than tearing down.
+                                         if(front.is_open())
+                                             recv_front();
                                          return;
-                                     client_ep = from;
+                                     }
+                                     client_ep = from_front;
                                      std::span<const std::byte> dg{front_buf.data(), n};
                                      if(is_data(dg))
                                      {
@@ -154,11 +169,15 @@ struct relay
 
     void recv_back()
     {
-        back.async_receive_from(::asio::buffer(back_buf), from,
+        back.async_receive_from(::asio::buffer(back_buf), from_back,
                                 [this](std::error_code ec, std::size_t n)
                                 {
                                     if(ec)
+                                    {
+                                        if(back.is_open())
+                                            recv_back();
                                         return;
+                                    }
                                     if(client_ep.port() != 0)
                                         front.send_to(::asio::buffer(back_buf.data(), n), client_ep);
                                     recv_back();

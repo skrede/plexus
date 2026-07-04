@@ -36,12 +36,20 @@ endif()
 if(PLEXUS_ENABLE_SHM_BACKEND)
     list(APPEND _consume_components native)
 endif()
+# Forward the parent's exact toolchain (generator, make program, compilers) so the nested
+# consumer configures with the SAME toolchain rather than cmake's platform default -- on
+# Windows the default is a multi-config Visual Studio generator, which does not match this
+# Ninja + cl build and would not inherit the vcvars environment.
 add_test(NAME node.install_consume
     COMMAND ${CMAKE_COMMAND}
         -DPLEXUS_BUILD_DIR=${CMAKE_BINARY_DIR}
         -DPLEXUS_CONSUME_DIR=${CMAKE_CURRENT_SOURCE_DIR}/install_consume
         "-DPLEXUS_CONSUME_COMPONENTS=${_consume_components}"
         "-DPLEXUS_CONSUME_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
+        "-DPLEXUS_CONSUME_GENERATOR=${CMAKE_GENERATOR}"
+        "-DPLEXUS_CONSUME_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DPLEXUS_CONSUME_C_COMPILER=${CMAKE_C_COMPILER}"
+        "-DPLEXUS_CONSUME_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/install_consume.cmake)
 
 # The facade vocabulary unit test — the one place that links plexus::plexus (the facade

@@ -21,12 +21,30 @@ if(NOT _rc EQUAL 0)
     message(FATAL_ERROR "install failed (${_rc}):\n${_out}")
 endif()
 
+# Forward the parent's exact toolchain so the nested configure matches this build rather
+# than cmake's platform default (a multi-config Visual Studio generator on Windows, which
+# neither matches this single-config Ninja + cl build nor inherits the vcvars environment).
+set(_toolchain_args "")
+if(PLEXUS_CONSUME_GENERATOR)
+    list(APPEND _toolchain_args -G "${PLEXUS_CONSUME_GENERATOR}")
+endif()
+if(PLEXUS_CONSUME_MAKE_PROGRAM)
+    list(APPEND _toolchain_args "-DCMAKE_MAKE_PROGRAM=${PLEXUS_CONSUME_MAKE_PROGRAM}")
+endif()
+if(PLEXUS_CONSUME_C_COMPILER)
+    list(APPEND _toolchain_args "-DCMAKE_C_COMPILER=${PLEXUS_CONSUME_C_COMPILER}")
+endif()
+if(PLEXUS_CONSUME_CXX_COMPILER)
+    list(APPEND _toolchain_args "-DCMAKE_CXX_COMPILER=${PLEXUS_CONSUME_CXX_COMPILER}")
+endif()
+
 # Forward the build's CXX flags to the consumer. When plexus is built with sanitizers,
 # the installed crypto OBJECT files carry __asan_/__ubsan_ references that only resolve
 # when the consumer link pulls in the matching sanitizer runtime — so the out-of-tree
 # consumer must compile with the same instrumentation, not a bare default.
 execute_process(
     COMMAND ${CMAKE_COMMAND} -S "${PLEXUS_CONSUME_DIR}" -B "${_consume_build}"
+            ${_toolchain_args}
             "-DCMAKE_PREFIX_PATH=${_prefix}"
             "-DPLEXUS_CONSUME_COMPONENTS=${PLEXUS_CONSUME_COMPONENTS}"
             "-DCMAKE_CXX_FLAGS=${PLEXUS_CONSUME_CXX_FLAGS}"

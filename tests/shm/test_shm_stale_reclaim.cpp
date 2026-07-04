@@ -100,6 +100,23 @@ TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_s
                 {
                     shm_region_broker broker;
 
+#if defined(_WIN32)
+                    // Windows named file-mappings are reference-counted and freed on
+                    // last-handle-close: when the child _Exits, its mapping vanishes, so NO
+                    // orphan persists for the parent to find. A plain create therefore mints a
+                    // FRESH region (ok, not already_exists) -- there is no crash-orphan to
+                    // reclaim, which is the safer last-handle-close model, not a defect.
+                    shm_region_handle fresh;
+                    if(broker.create(name, k_region_bytes, pio::create_options{}, fresh) != pio::region_status::ok)
+                        return false;
+
+                    // The fresh region is zero-filled: the child's stale sentinel did not
+                    // survive its exit (the backing mapping was torn down with the handle).
+                    if(!all_zero(fresh))
+                        return false;
+
+                    return true;
+#else
                     // The orphan must be present: a plain create (no reclaim flag) finds
                     // the child's live region and returns already_exists, never ok.
                     {
@@ -122,6 +139,7 @@ TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_s
                     // The parent owns this region and unlinks it on `fresh`'s release
                     // (create-owns-unlink), so no /dev/shm region leaks after the case.
                     return true;
+#endif
                 });
 
         REQUIRE(outcome.child_succeeded);  // the crashed-creator child stamped + orphaned
