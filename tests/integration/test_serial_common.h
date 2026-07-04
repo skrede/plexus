@@ -11,6 +11,8 @@
 // hand-stripped. Each behavioral path loops in-body and the ctest invocation is re-run >=3
 // process runs — a serial round-trip claim is never made from a single run.
 
+#include "openpty_compat.h"
+
 #include "plexus/asio/serial_policy.h"
 #include "plexus/asio/serial_channel.h"
 
@@ -36,11 +38,6 @@
 #include <asio/io_context.hpp>
 #include <asio/serial_port.hpp>
 
-#if defined(__APPLE__)
-#include <util.h>
-#else
-#include <pty.h>
-#endif
 #include <termios.h>
 #include <unistd.h>
 
