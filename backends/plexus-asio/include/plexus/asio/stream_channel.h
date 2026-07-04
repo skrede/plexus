@@ -191,10 +191,17 @@ public:
     {
         return Traits::lowest_layer(m_stream);
     }
+    // Idempotent: the accept path arms the read loop once (arm_on_accept -> start_read_loop); a
+    // later transport/session start_read() must re-run mark_open + the socket-option apply but NOT
+    // issue a SECOND async_read_some into the shared read buffer (two concurrent reads into one
+    // buffer is a data race, and coalesced frames are lost).
     void start_read()
     {
         m_open = true;
         apply_socket_options();
+        if(m_reading)
+            return;
+        m_reading = true;
         detail::stream_do_read(*this);
     }
 
@@ -243,6 +250,9 @@ public:
     }
     void start_read_loop()
     {
+        if(m_reading)
+            return;
+        m_reading = true;
         detail::stream_do_read(*this);
     }
     void mark_open() noexcept
@@ -323,7 +333,8 @@ private:
         std::error_code ec;
         Traits::shutdown(sock, ec);
         (void)sock.close(ec);
-        m_open = false;
+        m_open    = false;
+        m_reading = false;
     }
 
     ::asio::io_context &m_io;
@@ -338,6 +349,7 @@ private:
     std::size_t m_dropped;
     stream::detail::send_queue m_egress;
     std::shared_ptr<detail::channel_liveness> m_life;
+    bool m_reading{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
     plexus::detail::move_only_function<void()> m_on_closed_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
