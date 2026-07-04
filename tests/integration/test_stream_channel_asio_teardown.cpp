@@ -12,7 +12,7 @@ namespace {
 struct stalled_pair
 {
     ::asio::io_context io;
-    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
     ::asio::ip::tcp::socket peer{io};
     ::asio::ip::tcp::socket client{io};
 
@@ -81,7 +81,7 @@ TEST_CASE("asio stream channel: on_closed is posted (never inline) and fires exa
           "[integration][asio][hardening][teardown]")
 {
     ::asio::io_context io;
-    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
     ::asio::ip::tcp::socket peer{io};
     ::asio::ip::tcp::socket client{io};
     client.connect(acc.local_endpoint());
@@ -116,7 +116,7 @@ TEST_CASE("asio stream channel: on_closed is posted (never inline) and fires exa
           "[integration][asio][hardening][teardown]")
 {
     ::asio::io_context io;
-    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
     ::asio::ip::tcp::socket peer{io};
     ::asio::ip::tcp::socket client{io};
     client.connect(acc.local_endpoint());
@@ -150,7 +150,7 @@ TEST_CASE("asio stream channel: destroying the channel between a stream_fail and
           "[integration][asio][hardening][teardown]")
 {
     ::asio::io_context io;
-    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
     ::asio::ip::tcp::socket peer{io};
     ::asio::ip::tcp::socket client{io};
     client.connect(acc.local_endpoint());

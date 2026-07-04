@@ -25,7 +25,7 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
     auto run = [](pio::congestion mode)
     {
         ::asio::io_context io;
-        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
         ::asio::ip::tcp::socket peer{io};
         ::asio::ip::tcp::socket client{io};
         client.connect(acc.local_endpoint());
@@ -95,7 +95,7 @@ TEST_CASE("asio stream channel: a sustained multi-frame burst gathers into coale
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
-        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
         ::asio::ip::tcp::socket raw_server{io};
         ::asio::ip::tcp::socket raw_client{io};
         raw_client.connect(acc.local_endpoint());

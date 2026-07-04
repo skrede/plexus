@@ -13,7 +13,7 @@ TEST_CASE("asio stream channel: a TCP channel applies the socket-option override
     // default (the kernel may double or clamp, so the assertion is "moved", not "equals"),
     // while a default-constructed channel leaves the buffers untouched and keepalive off.
     ::asio::io_context io;
-    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
 
     auto connected_pair = [&]
     {

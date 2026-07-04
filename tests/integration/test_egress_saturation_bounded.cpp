@@ -99,7 +99,7 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
     for(int loop = 0; loop < k_loops; ++loop)
     {
         ::asio::io_context io;
-        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
         ::asio::ip::tcp::socket peer{io};
         ::asio::ip::tcp::socket client{io};
         client.connect(acc.local_endpoint());
@@ -148,7 +148,7 @@ TEST_CASE("egress_saturation_bounded tcp: a saturating publisher stays memory-bo
     for(int loop = 0; loop < k_loops; ++loop)
     {
         ::asio::io_context io;
-        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
         ::asio::ip::tcp::socket peer{io};
         ::asio::ip::tcp::socket client{io};
         client.connect(acc.local_endpoint());

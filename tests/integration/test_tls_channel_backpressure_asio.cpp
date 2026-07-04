@@ -147,7 +147,7 @@ TEST_CASE("tls channel: the bounded outbox sheds under congestion=drop and stall
         ::asio::io_context client_io;
         ::asio::io_context server_io;
 
-        ::asio::ip::tcp::acceptor acc{server_io, ::asio::ip::tcp::endpoint{::asio::ip::tcp::v4(), 0}};
+        ::asio::ip::tcp::acceptor acc{server_io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
         ::asio::ip::tcp::socket raw_server{server_io};
         ::asio::ip::tcp::socket raw_client{client_io};
         raw_client.connect(acc.local_endpoint());
