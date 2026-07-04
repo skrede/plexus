@@ -148,7 +148,6 @@ private:
 
     stream::crc_serial_inbound m_decorator;
     std::vector<std::byte> m_read_buf;
-    bool m_reading{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_frame_dropped_cb;
 };

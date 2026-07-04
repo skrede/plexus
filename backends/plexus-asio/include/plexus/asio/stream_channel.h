@@ -274,6 +274,10 @@ protected:
         return m_bootstrap;
     }
 
+    // The single read-arm latch for this channel's lifetime. serial_channel reuses it (its own
+    // start_read arms serial_do_read), so shutdown_socket()'s reset clears the guard for both.
+    bool m_reading{false};
+
 private:
     template<typename Ch>
     friend void detail::stream_on_write_queue_full(Ch &);
@@ -349,7 +353,6 @@ private:
     std::size_t m_dropped;
     stream::detail::send_queue m_egress;
     std::shared_ptr<detail::channel_liveness> m_life;
-    bool m_reading{false};
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
     plexus::detail::move_only_function<void()> m_on_closed_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
