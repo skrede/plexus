@@ -140,7 +140,7 @@ void on_complete(Session &s)
     s.maybe_fire_ready();
 }
 
-static bool is_refusal(wire::subscribe_status status)
+inline bool is_refusal(wire::subscribe_status status)
 {
     return status == wire::subscribe_status::type_mismatch || status == wire::subscribe_status::incompatible_qos || status == wire::subscribe_status::source_identity_incompatible;
 }

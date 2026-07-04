@@ -10,7 +10,7 @@
 
 namespace plexus::io::detail {
 
-static wire::handshake_status status_for(handshake_outcome outcome) noexcept
+inline wire::handshake_status status_for(handshake_outcome outcome) noexcept
 {
     switch(outcome)
     {
