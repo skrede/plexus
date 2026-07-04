@@ -200,8 +200,9 @@ endif()
 # no-PRIVATE-flag proof, a forked producer waking a forked consumer on a shared
 # MAP_SHARED word) and the drain-before-wait protocol delivers an interleaved
 # publish (lost-wakeup-safe). Links plexus::native for the raw SYS_futex bodies.
-# Drives fork() + the Linux futex notifier primitive directly, so it is excluded from Windows.
-if(NOT WIN32)
+# Drives the Linux futex notifier primitive directly (SYS_futex, <linux/futex.h>), so it is
+# Linux-only and excluded on Windows AND macOS (neither carries the futex notifier body).
+if(NOT WIN32 AND NOT APPLE)
     add_executable(test_shm_notifier_lostwakeup test_shm_notifier_lostwakeup.cpp)
 
     target_include_directories(test_shm_notifier_lostwakeup PRIVATE
@@ -219,8 +220,9 @@ endif()
 # consumer leaves the gated signal NOTIFIED parking nobody, and a forked parked
 # consumer is still woken across address spaces by the two-arg gated signal (the
 # lost-wakeup guard on the gated path). Links plexus::native for the raw SYS_futex bodies.
-# Drives fork() + the Linux futex notifier primitive directly, so it is excluded from Windows.
-if(NOT WIN32)
+# Drives the Linux futex notifier primitive directly (SYS_futex, <linux/futex.h>), so it is
+# Linux-only and excluded on Windows AND macOS (neither carries the futex notifier body).
+if(NOT WIN32 AND NOT APPLE)
     add_executable(test_shm_wake_gating test_shm_wake_gating.cpp)
 
     target_include_directories(test_shm_wake_gating PRIVATE
@@ -653,8 +655,9 @@ endif()
 # probe-higher cell proves reliable_preserving fails closed above the ceiling while
 # explicit best_effort_large round-trips. Links plexus::native (the POSIX broker + the
 # futex primitive) + plexus::wire (the fqn-hash region naming).
-# Drives fork() + the POSIX broker directly (unistd.h), so it is excluded from the Windows build.
-if(NOT WIN32)
+# Drives the Linux futex notifier primitive directly (SYS_futex, <linux/futex.h>), so it is
+# Linux-only and excluded on Windows AND macOS (neither carries the futex notifier body).
+if(NOT WIN32 AND NOT APPLE)
     add_executable(test_shm_large_message test_shm_large_message.cpp)
 
     target_include_directories(test_shm_large_message PRIVATE
