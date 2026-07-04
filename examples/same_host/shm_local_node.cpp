@@ -43,7 +43,7 @@
 // (constructs + listens) to rc=0. The same-host SHM delivery data path (two processes
 // converging on a named ring and round-tripping a value byte-exact) is proven by the shm
 // test suite — see tests/shm/test_shm_same_host_roundtrip.cpp and the live-mux xproc proofs
-// in tests/shm/test_shm_large_message.cpp / test_shm_dual_delivery.cpp.
+// in tests/shm/test_shm_large_message.cpp / posix_test_shm_dual_delivery.cpp.
 
 #include "plexus/asio/shm/linux/shm_member.h"
 #include "plexus/asio/transport_set.h"

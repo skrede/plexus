@@ -461,12 +461,12 @@ if(LIBURING_FOUND)
     # delivers the same bytes — the SHM upgrade ADDS the fast path, it does not suppress
     # the wire attach. Same link set as the bridge proof (the bridge + the posix broker +
     # the futex primitive + the fqn-hash region naming + the io_uring the bridge drives).
-    add_executable(test_shm_dual_delivery test_shm_dual_delivery.cpp)
+    add_executable(posix_test_shm_dual_delivery posix_test_shm_dual_delivery.cpp)
 
-    target_include_directories(test_shm_dual_delivery PRIVATE
+    target_include_directories(posix_test_shm_dual_delivery PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR})
 
-    target_link_libraries(test_shm_dual_delivery PRIVATE
+    target_link_libraries(posix_test_shm_dual_delivery PRIVATE
     plexus::shm
         plexus::asio
         plexus::asio::shm
@@ -474,7 +474,7 @@ if(LIBURING_FOUND)
         plexus::wire
         Catch2::Catch2WithMain)
 
-    catch_discover_tests(test_shm_dual_delivery TEST_PREFIX "shm.")
+    catch_discover_tests(posix_test_shm_dual_delivery TEST_PREFIX "shm.")
 
     # The composition compile-gate: the shm-bearing all-backends multiplexer (shm as the
     # second local member alongside AF_UNIX) satisfies transport_backend AND the existing
@@ -690,6 +690,31 @@ target_link_libraries(test_shm_stale_reclaim PRIVATE
     Catch2::Catch2)
 
 catch_discover_tests(test_shm_stale_reclaim TEST_PREFIX "shm.")
+
+# The Windows two-process / two-subscriber cross-process wake + delivery proof (xproc): a parent
+# creates the named regions + ring, registers TWO subscriber cursors, and arms one named-event
+# doorbell; a re-exec'd child re-opens the regions BY NAME, publishes one value, and rings the
+# doorbell; both subscribers take the value across the process boundary. The named-event bridge is
+# the Windows same-host wake (no shared-page futex), so this is the Windows analog of the
+# io_uring-futex POSIX dual-delivery leaf. It has a custom main() for the re-exec child dispatcher,
+# so it links the main-less Catch2 target and plexus::testing for the process-id / harness helper.
+if(WIN32)
+    add_executable(windows_test_shm_dual_delivery windows_test_shm_dual_delivery.cpp)
+
+    target_include_directories(windows_test_shm_dual_delivery PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(windows_test_shm_dual_delivery PRIVATE
+        plexus::shm
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        plexus::wire
+        plexus::testing
+        Catch2::Catch2)
+
+    catch_discover_tests(windows_test_shm_dual_delivery TEST_PREFIX "shm.")
+endif()
 
 # The wire_fallback per-message routing proof (xproc): a topic in wire_fallback mode
 # mints a CAPPED ring through shm_mux_member's acquire path AND routes per message at the
