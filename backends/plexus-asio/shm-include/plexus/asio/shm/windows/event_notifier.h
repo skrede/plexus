@@ -84,10 +84,12 @@ public:
         watch_doorbell();
     }
 
-    // Mandated teardown order: clear the alive token, cancel the asio wait, detach the HANDLE
-    // from asio (we own it), then close the event. The asio cancel does NOT un-post a drain a
-    // prior on_signaled already handed to Policy::post; the alive token (checked by value in
-    // that closure) makes the trailing post a no-op without dereferencing freed `this`.
+    // Mandated teardown order: clear the alive token, cancel the asio wait, then close the
+    // event through the object_handle that owns it (assign() transferred ownership; this asio's
+    // object_handle has no release(), so the handle is asio-owned and must not be CloseHandle'd a
+    // second time). The asio cancel does NOT un-post a drain a prior on_signaled already handed to
+    // Policy::post; the alive token (checked by value in that closure) makes the trailing post a
+    // no-op without dereferencing freed `this`.
     void disarm() noexcept
     {
         m_alive->store(false, std::memory_order_release);
@@ -95,14 +97,10 @@ public:
         {
             std::error_code ignore;
             m_doorbell->cancel(ignore);
-            m_doorbell->release();
+            m_doorbell->close(ignore); // closes the asio-owned event handle exactly once
             m_doorbell.reset();
         }
-        if(m_event != nullptr)
-        {
-            ::CloseHandle(static_cast<HANDLE>(m_event));
-            m_event = nullptr;
-        }
+        m_event = nullptr; // asio owned and closed it above; never double-close
     }
 
 private:
