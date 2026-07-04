@@ -12,8 +12,9 @@ endif()
 # green link proves plexus::asio::shm carries liburing transitively — the symptom a real
 # consumer hit (undefined reference to io_uring_*). Built only when the shm backend exposes
 # its bridge target. The proof drives io_uring (ring_notifier), so it is Linux-only; Windows
-# carries its same-host wake in the reactor bridge, not liburing.
-if(TARGET plexus::asio::shm AND NOT WIN32)
+# carries its same-host wake in the reactor bridge, not liburing. macOS likewise carries no
+# liburing (the shm target links it only if(LINUX)), so the proof is excluded there too.
+if(TARGET plexus::asio::shm AND NOT WIN32 AND NOT APPLE)
     add_executable(test_shm_liburing_link test_shm_liburing_link.cpp)
 
     target_link_libraries(test_shm_liburing_link PRIVATE
