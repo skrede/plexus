@@ -26,6 +26,13 @@
     #include <string_view>
     #include <system_error>
 
+// macOS/BSD have no per-send MSG_NOSIGNAL; there SIGPIPE is suppressed per-socket via SO_NOSIGPIPE
+// (set below). On Linux MSG_NOSIGNAL is defined, so this fallback is a no-op and the send path is
+// byte-for-byte unchanged.
+    #if !defined(MSG_NOSIGNAL)
+        #define MSG_NOSIGNAL 0
+    #endif
+
 namespace plexus::test {
 
 inline std::pair<std::string, std::uint16_t> split_host_port(std::string_view address)
@@ -56,6 +63,7 @@ public:
             : m_fd(fd)
             , m_closed(false)
     {
+        set_nosigpipe();
         set_blocking(false);
     }
 
@@ -98,6 +106,7 @@ public:
         m_fd                    = ::socket(AF_INET, SOCK_STREAM, 0);
         if(m_fd < 0)
             return std::make_error_code(std::errc::too_many_files_open);
+        set_nosigpipe();
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port   = htons(port);
@@ -164,6 +173,16 @@ public:
     }
 
 private:
+    // Apple has no send-time MSG_NOSIGNAL; a raw send to a closed peer would raise SIGPIPE and kill the
+    // process. asio scopes this per-fd on its own sockets; this raw test seam sets it explicitly.
+    void set_nosigpipe()
+    {
+#if defined(__APPLE__)
+        const int on = 1;
+        ::setsockopt(m_fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#endif
+    }
+
     // Mirror the on-target lwip_socket::classify_io split: SOFT (EWOULDBLOCK/EAGAIN/ENOMEM) folds to 0
     // and re-arms; HARD (ECONNRESET/EPIPE) sets closed so the channel fires on_error.
     std::size_t classify_io(int n)
