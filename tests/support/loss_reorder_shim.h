@@ -81,7 +81,7 @@ private:
                                   });
     }
 
-    ::asio::io_context &m_io;
+    [[maybe_unused]] ::asio::io_context &m_io;
     ::asio::ip::udp::socket m_front;
     ::asio::ip::udp::socket m_back;
     ::asio::ip::udp::endpoint m_server_ep;

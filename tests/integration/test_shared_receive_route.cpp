@@ -56,7 +56,7 @@ struct manual_clock
     using rep                       = duration::rep;
     using period                    = duration::period;
     using time_point                = std::chrono::time_point<manual_clock>;
-    static constexpr bool is_steady = false;
+    [[maybe_unused]] static constexpr bool is_steady = false;
 
     static inline time_point current{};
     static time_point now() noexcept
