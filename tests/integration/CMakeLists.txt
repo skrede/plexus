@@ -1160,6 +1160,23 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_unix_permissions TEST_PREFIX "integration.")
     endif()
 
+    # The macOS send-to-closed-peer proof: a real plexus asio TCP-loopback and AF_UNIX stream
+    # channel sends into a peer that has abortively closed, and the write surfaces as a hard error
+    # on on_error with the process still alive — the proof that asio's per-fd SO_NOSIGPIPE on Apple
+    # keeps the real transports off the SIGPIPE-on-send process kill. Each socket family loops
+    # in-body; the ctest invocation is re-run >=3 process runs. AF_UNIX + SO_NOSIGPIPE are Apple
+    # platform-isms, so the whole target is macOS-only.
+    if(APPLE)
+    add_executable(macos_test_sigpipe_send_to_closed_peer macos_test_sigpipe_send_to_closed_peer.cpp)
+    target_link_libraries(macos_test_sigpipe_send_to_closed_peer PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(macos_test_sigpipe_send_to_closed_peer TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+    endif()
+
     # The multiplexing transport now composes a secure (TLS) member alongside the local
     # and remote ones, so its header pulls in plexus::crypto and these mux oracles link it
     # (and only build when the secure backend is ON). The secure member stays inert on
