@@ -720,6 +720,31 @@ if(WIN32)
     catch_discover_tests(windows_test_shm_dual_delivery TEST_PREFIX "shm.")
 endif()
 
+# The macOS two-process / two-subscriber cross-process wake + delivery proof (xproc): a parent
+# creates the named regions + ring, registers TWO subscriber cursors, and arms one named-semaphore
+# doorbell; a re-exec'd child re-opens the regions BY NAME, publishes one value, and rings the
+# doorbell; both subscribers take the value across the process boundary. The named POSIX semaphore
+# bridge is the macOS same-host wake (no shared-page futex), so this is the macOS analog of the
+# io_uring-futex POSIX dual-delivery leaf. It has a custom main() for the re-exec child dispatcher,
+# so it links the main-less Catch2 target and plexus::testing for the process-id / harness helper.
+if(APPLE)
+    add_executable(macos_test_shm_dual_delivery macos_test_shm_dual_delivery.cpp)
+
+    target_include_directories(macos_test_shm_dual_delivery PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(macos_test_shm_dual_delivery PRIVATE
+        plexus::shm
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        plexus::wire
+        plexus::testing
+        Catch2::Catch2)
+
+    catch_discover_tests(macos_test_shm_dual_delivery TEST_PREFIX "shm.")
+endif()
+
 # The wire_fallback per-message routing proof (xproc): a topic in wire_fallback mode
 # mints a CAPPED ring through shm_mux_member's acquire path AND routes per message at the
 # message_forwarder publish fan-out — a message that fits the cap rides the SHM ring
