@@ -1,5 +1,7 @@
 # plexus
 
+[![CI](https://github.com/skrede/plexus/actions/workflows/cross-compiler.yml/badge.svg)](https://github.com/skrede/plexus/actions/workflows/cross-compiler.yml)
+
 A standalone, header-only-core, policy-based C++20 middleware — pub/sub and request/response
 over a swappable executor + networking backend, with `mdnspp` for discovery.
 
