@@ -13,7 +13,16 @@
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
 
-#include <liburing.h>
+// Set at configure time (backends/plexus-asio/CMakeLists.txt) from a probe for
+// io_uring_prep_futex_wait, which liburing only exposes at >= 2.6. Defaulted here so the header
+// stays self-contained for tooling that does not see the target definition.
+#ifndef PLEXUS_HAS_IO_URING_FUTEX
+    #define PLEXUS_HAS_IO_URING_FUTEX 1
+#endif
+
+#if PLEXUS_HAS_IO_URING_FUTEX
+    #include <liburing.h>
+#endif
 
 #include <unistd.h>
 #include <linux/futex.h>
@@ -28,21 +37,23 @@
 
 namespace plexus::asio::shm {
 
+#if PLEXUS_HAS_IO_URING_FUTEX
 // The wakeup -> reactor bridge: lands a cross-process futex wake in the user's asio reactor turn
 // without plexus owning a hidden loop. A private io_uring submits IORING_OP_FUTEX_WAIT on the
 // ring's in-region notify-generation word; a registered eventfd is the completion doorbell, watched
 // on the user's io_context. Each wake reaps the futex completion, POSTS the drain onto the user's
 // executor (Policy::post, never a serialized wrapper), and re-submits the wait. No plexus-spawned
-// thread. ring_notifier_threaded (below) carries the same seam where the kernel lacks io_uring
-// futex-wait. Non-copy/non-move: the io_uring, the eventfd, and the asio descriptor hold stable
-// addresses and the in-flight handler captures `this`.
+// thread. ring_notifier_threaded (below) carries the same seam where liburing lacks io_uring
+// futex-wait; ring_notifier aliases whichever the configure probe selected. Non-copy/non-move: the
+// io_uring, the eventfd, and the asio descriptor hold stable addresses and the in-flight handler
+// captures `this`.
 template<typename Policy>
-class ring_notifier
+class ring_notifier_uring
 {
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
-    ring_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park) noexcept
+    ring_notifier_uring(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park) noexcept
             : m_executor(executor)
             , m_word(word)
             , m_park(park)
@@ -51,22 +62,22 @@ public:
 
     // A single-process harness whose producer drives the always-wake one-arg signal never reads
     // this consumer's park word, so it binds an owned fallback atom rather than an in-region word.
-    ring_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word) noexcept
+    ring_notifier_uring(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word) noexcept
             : m_executor(executor)
             , m_word(word)
             , m_park(m_park_fallback)
     {
     }
 
-    ~ring_notifier()
+    ~ring_notifier_uring()
     {
         disarm();
     }
 
-    ring_notifier(const ring_notifier &)            = delete;
-    ring_notifier &operator=(const ring_notifier &) = delete;
-    ring_notifier(ring_notifier &&)                 = delete;
-    ring_notifier &operator=(ring_notifier &&)      = delete;
+    ring_notifier_uring(const ring_notifier_uring &)            = delete;
+    ring_notifier_uring &operator=(const ring_notifier_uring &) = delete;
+    ring_notifier_uring(ring_notifier_uring &&)                 = delete;
+    ring_notifier_uring &operator=(ring_notifier_uring &&)      = delete;
 
     // The gated primitive skips the FUTEX_WAKE syscall when no waiter is parked (a spinning
     // consumer costs the producer zero wakes).
@@ -197,6 +208,7 @@ private:
     int m_evfd       = -1;
     std::optional<::asio::posix::stream_descriptor> m_doorbell;
 };
+#endif
 
 // The portable floor for kernels without io_uring futex-wait: ONE lifetime-bounded thread, OFF the
 // executor, notifier_wait()s on the in-region word and writes a process-local eventfd an asio read
@@ -343,6 +355,17 @@ private:
     int m_evfd = -1;
     std::optional<::asio::posix::stream_descriptor> m_doorbell;
 };
+
+// The shm notifier the build uses: the io_uring futex-wait bridge where liburing exposes it
+// (PLEXUS_HAS_IO_URING_FUTEX), else the portable threaded floor. Both carry the identical seam, so
+// every consumer names only this.
+#if PLEXUS_HAS_IO_URING_FUTEX
+template<typename Policy>
+using ring_notifier = ring_notifier_uring<Policy>;
+#else
+template<typename Policy>
+using ring_notifier = ring_notifier_threaded<Policy>;
+#endif
 
 }
 

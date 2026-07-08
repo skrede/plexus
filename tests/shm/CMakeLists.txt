@@ -421,20 +421,35 @@ if(PkgConfig_FOUND)
     pkg_check_modules(LIBURING QUIET IMPORTED_TARGET liburing)
 endif()
 
+# io_uring_prep_futex_wait is liburing >= 2.6; the spike below calls it directly, so it needs the
+# capability, not merely liburing's presence. The reactor-bridge tests route through ring_notifier,
+# which falls back to its threaded floor when the helper is absent, so they stay under LIBURING_FOUND.
 if(LIBURING_FOUND)
-    add_executable(spike_iouring_futex spike_iouring_futex.cpp)
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_INCLUDES ${LIBURING_INCLUDE_DIRS})
+    check_cxx_source_compiles([[
+        #include <liburing.h>
+        int main() { io_uring_prep_futex_wait(static_cast<io_uring_sqe *>(nullptr), static_cast<unsigned *>(nullptr), 0, 0, 0, 0); }
+    ]] PLEXUS_SHM_TESTS_HAVE_FUTEX)
+    unset(CMAKE_REQUIRED_INCLUDES)
+endif()
 
-    # The spike links plexus::asio for the asio include path ONLY — it probes
-    # whether an io_uring CQE can be reaped THROUGH the user's asio reactor (the
-    # spike question). The backend target plexus-native itself stays asio-free;
-    # this asio dependency lives in the spike test executable, never in the lib.
-    target_link_libraries(spike_iouring_futex PRIVATE
-        plexus::native
-        plexus::asio
-        PkgConfig::LIBURING
-        Catch2::Catch2WithMain)
+if(LIBURING_FOUND)
+    if(PLEXUS_SHM_TESTS_HAVE_FUTEX)
+        add_executable(spike_iouring_futex spike_iouring_futex.cpp)
 
-    catch_discover_tests(spike_iouring_futex TEST_PREFIX "shm.")
+        # The spike links plexus::asio for the asio include path ONLY — it probes
+        # whether an io_uring CQE can be reaped THROUGH the user's asio reactor (the
+        # spike question). The backend target plexus-native itself stays asio-free;
+        # this asio dependency lives in the spike test executable, never in the lib.
+        target_link_libraries(spike_iouring_futex PRIVATE
+            plexus::native
+            plexus::asio
+            PkgConfig::LIBURING
+            Catch2::Catch2WithMain)
+
+        catch_discover_tests(spike_iouring_futex TEST_PREFIX "shm.")
+    endif()
 
     # The wakeup -> reactor bridge functional proof: a forked producer publishes +
     # signals the in-region notify word; the parent's io_uring-futex bridge, armed on
@@ -605,7 +620,11 @@ if(LIBURING_FOUND)
 
     catch_discover_tests(test_same_host_fingerprint_node TEST_PREFIX "shm.")
 
-    message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found — io_uring futex spike + reactor bridge enabled")
+    if(PLEXUS_SHM_TESTS_HAVE_FUTEX)
+        message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found with futex-wait — io_uring spike + reactor bridge enabled")
+    else()
+        message(STATUS "plexus shm tests: liburing ${LIBURING_VERSION} found without futex-wait (< 2.6) — reactor bridge on the threaded floor, io_uring spike skipped")
+    endif()
 else()
     message(STATUS "plexus shm tests: liburing absent — io_uring futex spike + reactor bridge skipped (non-gating)")
 endif()

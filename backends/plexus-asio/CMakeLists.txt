@@ -71,6 +71,19 @@ if(PLEXUS_ENABLE_SHM_BACKEND)
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
         target_link_libraries(plexus-asio-shm INTERFACE PkgConfig::LIBURING)
+
+        # io_uring_prep_futex_wait landed in liburing 2.6; older distros (e.g. Ubuntu 24.04 ships
+        # 2.5) lack it. Probe rather than version-gate, then let ring_notifier.h select the io_uring
+        # bridge or its portable threaded floor. A distro backport that adds the helper is picked up.
+        include(CheckCXXSourceCompiles)
+        set(CMAKE_REQUIRED_INCLUDES ${LIBURING_INCLUDE_DIRS})
+        check_cxx_source_compiles([[
+            #include <liburing.h>
+            int main() { io_uring_prep_futex_wait(static_cast<io_uring_sqe *>(nullptr), static_cast<unsigned *>(nullptr), 0, 0, 0, 0); }
+        ]] PLEXUS_LIBURING_HAS_FUTEX)
+        unset(CMAKE_REQUIRED_INCLUDES)
+        target_compile_definitions(plexus-asio-shm INTERFACE
+            PLEXUS_HAS_IO_URING_FUTEX=$<BOOL:${PLEXUS_LIBURING_HAS_FUTEX}>)
     endif()
 
     target_compile_features(plexus-asio-shm INTERFACE cxx_std_20)

@@ -28,6 +28,9 @@ jobs:
             os: ubuntu-24.04
             cc: clang-18
             cxx: clang++-18
+          - id: linux-gcc-uring
+            os: ubuntu-24.04
+            liburing_from_source: liburing-2.6
           - id: mac-appleclang
             os: macos-15
           - id: mac-brewclang
@@ -50,6 +53,20 @@ jobs:
       - name: install linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y liburing-dev ccache clang-tidy
+
+      # Ubuntu 24.04 ships liburing 2.5, which lacks io_uring_prep_futex_wait (added in 2.6). The
+      # stock legs above exercise ring_notifier's threaded floor; this leg builds a newer liburing
+      # into /usr/local (taking pkg-config precedence) so its configure probe selects the io_uring
+      # futex-wait bridge. Pinned to a tag for reproducibility.
+      - name: build liburing from source (futex-wait path)
+        if: matrix.liburing_from_source
+        run: |
+          git clone --depth 1 --branch "${{ matrix.liburing_from_source }}" https://github.com/axboe/liburing.git /tmp/liburing
+          cd /tmp/liburing
+          ./configure --prefix=/usr/local
+          make -j"$(nproc)"
+          sudo make install
+          sudo ldconfig
 
       - name: install macos dependencies
         if: runner.os == 'macOS'
@@ -78,6 +95,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           if [ -n "${{ matrix.cc }}" ]; then export CC="${{ matrix.cc }}" CXX="${{ matrix.cxx }}"; fi
+          if [ -n "${{ matrix.liburing_from_source }}" ]; then export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH}"; fi
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \

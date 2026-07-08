@@ -1,10 +1,9 @@
-# plexus coding conventions
+# coding conventions
 
-How we write code in plexus. The goal is a codebase that is **lean and mean** — small,
-readable, fast — with no loss of features, capability, or speed. These conventions are
-written for people; they apply to everyone, including the agents that write much of the
-code. This file is authoritative for code style. When something here conflicts with habit,
-this wins.
+The goal is a codebase that is lean — small, readable, fast — with no loss of features, 
+capability, or speed. These conventions are written for people; they apply to everyone, 
+including the agents that write much of the code. This file is authoritative for code 
+style. When something here conflicts with habit, this wins.
 
 ## No planning artifacts
 
