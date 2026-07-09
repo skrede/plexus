@@ -3,8 +3,10 @@ name: cross-compiler
 on:
   push:
     branches: [master, develop, 'milestone/**']
+    paths-ignore: ['**/*.md', 'docs/**']
   pull_request:
     branches: [master, develop]
+    paths-ignore: ['**/*.md', 'docs/**']
   workflow_dispatch:
 
 permissions:
@@ -15,34 +17,53 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Tier the matrix by trigger to spend the private-repo minute budget where it earns signal:
+  # milestone pushes get the modern-liburing (io_uring futex) Linux leg only; develop gets the full
+  # Linux set; the macOS (10x-billed) and Windows (2x-billed) legs ride only a PR into master (plus
+  # a manual dispatch). A doc-only change trips paths-ignore and never reaches here.
+  select:
+    name: select matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.tier.outputs.matrix }}
+    steps:
+      - id: tier
+        shell: bash
+        run: |
+          linux_uring='{"id":"linux-gcc-uring","os":"ubuntu-24.04","liburing_from_source":"liburing-2.6"}'
+          linux_gcc='{"id":"linux-gcc","os":"ubuntu-24.04"}'
+          linux_clang='{"id":"linux-clang","os":"ubuntu-24.04","cc":"clang-18","cxx":"clang++-18"}'
+          linux_all="$linux_gcc,$linux_clang,$linux_uring"
+          cross='{"id":"mac-appleclang","os":"macos-15"},{"id":"mac-brewclang","os":"macos-15"},{"id":"win-msvc","os":"windows-2022","cc":"cl","cxx":"cl"},{"id":"win-clangcl","os":"windows-2022","cc":"clang-cl","cxx":"clang-cl"}'
+
+          event='${{ github.event_name }}'
+          ref='${{ github.ref }}'
+          base='${{ github.base_ref }}'
+
+          if [ "$event" = "workflow_dispatch" ]; then
+            legs="$linux_all,$cross"
+          elif [ "$event" = "pull_request" ] && [ "$base" = "master" ]; then
+            legs="$linux_all,$cross"
+          elif [ "$event" = "pull_request" ] && [ "$base" = "develop" ]; then
+            legs="$linux_all"
+          elif [ "$event" = "push" ] && [ "$ref" = "refs/heads/develop" ]; then
+            legs="$linux_all"
+          elif [ "$event" = "push" ] && [ "$ref" = "refs/heads/master" ]; then
+            legs="$linux_all"
+          elif [ "$event" = "push" ] && [ "${ref#refs/heads/milestone/}" != "$ref" ]; then
+            legs="$linux_uring"
+          else
+            legs="$linux_uring"
+          fi
+          echo "matrix={\"include\":[$legs]}" >> "$GITHUB_OUTPUT"
+
   build-and-test:
+    needs: select
     name: ${{ matrix.id }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - id: linux-gcc
-            os: ubuntu-24.04
-          - id: linux-clang
-            os: ubuntu-24.04
-            cc: clang-18
-            cxx: clang++-18
-          - id: linux-gcc-uring
-            os: ubuntu-24.04
-            liburing_from_source: liburing-2.6
-          - id: mac-appleclang
-            os: macos-15
-          - id: mac-brewclang
-            os: macos-15
-          - id: win-msvc
-            os: windows-2022
-            cc: cl
-            cxx: cl
-          - id: win-clangcl
-            os: windows-2022
-            cc: clang-cl
-            cxx: clang-cl
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
     env:
       FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.deps
       CCACHE_DIR: ${{ github.workspace }}/.ccache
