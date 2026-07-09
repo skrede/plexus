@@ -112,7 +112,7 @@ TEST_CASE("serial resync: a byte-FLIPPED frame is dropped and the link recovers 
     REQUIRE(recovered == k_iterations);
 }
 
-TEST_CASE("serial resync: a byte-DROPPED (truncated) frame desyncs but the next frame resyncs, "
+TEST_CASE("serial resync: a byte-DROPPED (mid-frame) frame desyncs but the next frame resyncs, "
           "looped",
           "[integration][serial][resync]")
 {
@@ -128,12 +128,15 @@ TEST_CASE("serial resync: a byte-DROPPED (truncated) frame desyncs but the next 
         rx_probe probe;
         probe.wire(*rx);
 
-        // Drop one byte mid-frame: the trailer no longer sits where the (now-shifted) length
-        // implies, so the CRC check fails and the boundary desyncs. The decorator must resync
-        // on the next magic anchor rather than wedge.
+        // Drop one PAYLOAD byte: the trailer no longer sits where the (now-shifted) length implies,
+        // so the CRC check fails and the boundary desyncs. The decorator must resync on the next
+        // magic anchor rather than wedge. Dropping the FINAL byte instead would be fragile — the
+        // next frame's leading magic (0x56) then completes the corrupt frame's trailer, which passes
+        // CRC whenever the lost high CRC byte happened to be 0x56 (~1/256 of frames).
         auto full = wire_frame("corrupt-drop");
-        std::vector<std::byte> truncated{full.begin(), full.end() - 1};
-        write_raw(master, truncated);
+        std::vector<std::byte> dropped{full};
+        dropped.erase(dropped.begin() + wire::header_size + 1);
+        write_raw(master, dropped);
         write_raw(master, wire_frame("recovered-after-drop"));
 
         pump_until(io, [&] { return probe.received.has_value(); });
@@ -180,3 +183,4 @@ TEST_CASE("serial resync: corruption is non-fatal - neither on_protocol_close no
         ::close(master);
     }
 }
+
