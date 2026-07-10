@@ -8,7 +8,7 @@ if(TARGET mcap_transcode_lib)
     target_compile_definitions(recording_example PRIVATE PLEXUS_WITH_MCAP_TRANSCODE)
 
     plexus_example(mcap_basic_foxglove plexus::plexus plexus::inproc plexus::discovery)
-    target_link_libraries(mcap_basic_foxglove PRIVATE mcap_transcode_lib)
+    target_link_libraries(mcap_basic_foxglove PRIVATE mcap_transcode_lib plexus::hints-robotics plexus::recording-host)
     plexus_example(mcap_opaque_supplied_schema plexus::plexus plexus::inproc plexus::discovery)
     target_link_libraries(mcap_opaque_supplied_schema PRIVATE mcap_transcode_lib)
 endif()

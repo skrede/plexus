@@ -39,6 +39,9 @@
 
 #include "plexus/hints/robotics.h"
 
+#include "plexus/recording/host/file_sink.h"
+#include "plexus/recording/host/rotating_sink.h"
+
 #include <mcap/reader.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -271,6 +274,15 @@ bool has_prefix(const std::unordered_set<std::string> &topics, std::string_view 
     return false;
 }
 
+std::vector<std::byte> slurp(const std::filesystem::path &path)
+{
+    std::ifstream in{path, std::ios::binary};
+    const std::vector<char> raw{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+    std::vector<std::byte> out(raw.size());
+    std::transform(raw.begin(), raw.end(), out.begin(), [](char c) { return static_cast<std::byte>(static_cast<unsigned char>(c)); });
+    return out;
+}
+
 }
 
 TEST_CASE("mcap transcode round-trips a captured session through the mcap reader", "[mcap_transcode][mcap]")
@@ -393,12 +405,7 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
     bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
 
     in_memory_byte_sink sink;
-
-    plexus::recorder_options ropts;
-    const auto schema_bytes = std::as_bytes(std::span{k_reading_jsonschema.data(), k_reading_jsonschema.size()});
-    ropts.schemas.push_back(
-            plexus::type_schema{.type_id = 0x70110001u, .message_encoding = "json", .schema_name = "json_reading", .schema_encoding = "jsonschema", .schema_data = schema_bytes});
-    auto recorder = producer.make_recorder(sink, std::move(ropts));
+    auto recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
@@ -444,7 +451,7 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
 
 }
 
-TEST_CASE("mcap transcode labels a declared data channel from the preamble; undeclared stays opaque", "[mcap_transcode][mcap]")
+TEST_CASE("mcap transcode labels a declared data channel from a codec-keyed provider; undeclared stays opaque", "[mcap_transcode][mcap]")
 {
     const int count = 4;
     const auto flat = capture_declared_and_opaque(count);
@@ -453,17 +460,22 @@ TEST_CASE("mcap transcode labels a declared data channel from the preamble; unde
     const auto out = std::filesystem::temp_directory_path() / std::filesystem::path{"plexus_transcode_declared.mcap"};
     std::filesystem::remove(out);
 
-    const auto result = plexus::tools::flat_to_mcap(flat, out);
+    // Bind the declared type's schema through the escape-hatch provider keyed on the codec's own
+    // type_info().type_id — the id is stated once in type_info() and read here, never restated.
+    std::unordered_map<std::uint64_t, plexus::tools::mcap_schema> declared_schemas;
+    declared_schemas.emplace(json_reading_codec{}.type_info().type_id, plexus::tools::mcap_schema{"json", "json_reading", "jsonschema", std::string{k_reading_jsonschema}});
+    const auto result = plexus::tools::flat_to_mcap(flat, out, plexus::tools::provider_from_map(std::move(declared_schemas)));
     REQUIRE(result.ok);
 
     const auto rb = read_mcap(out);
     REQUIRE(rb.topics.count("declared.telemetry") == 1);
     REQUIRE(rb.topics.count("opaque.telemetry") == 1);
 
-    // The declared topic's channel carries the preamble's message_encoding + jsonschema.
+    // The declared topic's channel carries the provider's message_encoding + jsonschema.
     const auto declared = rb.channel_encodings.at("declared.telemetry");
     REQUIRE(declared.first == "json");
     REQUIRE(declared.second == "jsonschema");
+    REQUIRE(rb.channel_schema_name.at("declared.telemetry") == "json_reading");
 
     // The undeclared topic resolves no preamble entry and stays opaque (schemaId 0).
     const auto opaque = rb.channel_encodings.at("opaque.telemetry");
@@ -525,11 +537,18 @@ using scan_codec = hinted_codec<k_scan_type_id, robotics::kind::laser_scan>;
 static_assert(plexus::typed_codec<pose_codec>);
 static_assert(plexus::typed_codec<scan_codec>);
 
+plexus::typed_publisher_options payload_capture_opts()
+{
+    plexus::typed_publisher_options popts;
+    popts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
+    return popts;
+}
+
 // Drive a producer that publishes a pose-hinted topic (a concept the backend maps), a
 // laser_scan-hinted topic (a concept the backend does NOT map), and a hint-less topic, all at
-// payload fidelity, and return the flat capture. No preamble schema is declared — the pose
+// payload fidelity, draining through the given sink. No preamble schema is declared — the pose
 // channel's decoration comes solely from the hint carried on the endpoint record.
-std::vector<std::byte> capture_hinted(int count)
+void run_pose_session(plexus::io::recording::byte_sink &sink, int count)
 {
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
@@ -541,7 +560,6 @@ std::vector<std::byte> capture_hinted(int count)
     bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, base_opts()};
     bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
 
-    in_memory_byte_sink sink;
     auto recorder = producer.make_recorder(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
@@ -552,9 +570,7 @@ std::vector<std::byte> capture_hinted(int count)
     plexus::subscriber<scan_codec> scan_sub{consumer, "robotics.scan", [](const scan_codec::value_type &) {}};
     plexus::subscriber<reading_codec> plain_sub{consumer, "robotics.plain", [](const reading &) {}};
 
-    plexus::typed_publisher_options popts;
-    popts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
-
+    const auto popts = payload_capture_opts();
     plexus::publisher<pose_codec> pose_pub{producer, "robotics.pose", popts, pose_codec{}};
     plexus::publisher<scan_codec> scan_pub{producer, "robotics.scan", popts, scan_codec{}};
     plexus::publisher<reading_codec> plain_pub{producer, "robotics.plain", popts, reading_codec{}};
@@ -576,9 +592,66 @@ std::vector<std::byte> capture_hinted(int count)
     while(recorder.pump())
         ;
     recorder.flush();
+}
 
+std::vector<std::byte> capture_hinted(int count)
+{
+    in_memory_byte_sink sink;
+    run_pose_session(sink, count);
     const auto span = sink.bytes();
     return std::vector<std::byte>(span.begin(), span.end());
+}
+
+// Drain a pose capture through the bundled rotating_sink across two segments (a caller-forced
+// rotation between the batches). Each new segment is primed with the recorder's head+defs
+// preamble, so it decodes standalone. Returns the segment file paths in order.
+std::vector<std::filesystem::path> capture_pose_rotating(const std::filesystem::path &dir, int count)
+{
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    static_discovery disc{{}};
+
+    inproc_transport<> consumer_tp{ex, bus};
+    inproc_transport<> producer_tp{ex, bus};
+
+    bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, base_opts()};
+    bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
+
+    plexus::recording::host::rotating_sink::options ropts;
+    ropts.directory = dir;
+    ropts.basename  = "pose";
+    plexus::recording::host::rotating_sink rot{ropts};
+
+    auto recorder = producer.make_recorder(rot);
+    rot.prime_preamble(recorder.preamble());
+
+    consumer.listen({"inproc", "host-a:5000"});
+    producer.listen({"inproc", "host-b:6000"});
+    ex.drain();
+
+    plexus::subscriber<pose_codec> pose_sub{consumer, "robotics.pose", [](const pose_codec::value_type &) {}};
+    plexus::publisher<pose_codec> pose_pub{producer, "robotics.pose", payload_capture_opts(), pose_codec{}};
+    ex.drain();
+
+    for(int seg = 0; seg < 2; ++seg)
+    {
+        for(int i = 0; i < count; ++i)
+        {
+            auto p = pose_pub.borrow();
+            REQUIRE(p);
+            pose_pub.publish(std::move(p));
+            ex.drain();
+        }
+        while(recorder.pump())
+            ;
+        recorder.flush();
+        if(seg == 0)
+            rot.rotate();
+    }
+    rot.flush();
+
+    const auto segs = rot.segments();
+    return std::vector<std::filesystem::path>(segs.begin(), segs.end());
 }
 
 }
@@ -594,8 +667,7 @@ TEST_CASE("mcap transcode joins a robotics hint to a well-known jsonschema chann
 
     // The backend hint-translator is the only vocabulary-aware seam; the consumer provider is
     // empty here so the hint path is exercised on its own.
-    const auto result = plexus::tools::flat_to_mcap(flat, out, plexus::tools::schema_provider{},
-                                                    plexus::tools::well_known_schema_translator());
+    const auto result = plexus::tools::flat_to_mcap(flat, out, plexus::tools::schema_provider{}, plexus::tools::well_known_schema_translator());
     REQUIRE(result.ok);
 
     const auto rb = read_mcap(out);
@@ -636,13 +708,9 @@ TEST_CASE("mcap transcode: the consumer type_id provider wins over the hint tran
     // The escape hatch: a consumer provider maps the pose type_id to a different schema. It must
     // win over the backend hint-translator (resolution order: provider > hint > preamble > opaque).
     std::unordered_map<std::uint64_t, plexus::tools::mcap_schema> overrides;
-    overrides.emplace(k_pose_type_id,
-                      plexus::tools::mcap_schema{"json", "consumer.Override", "jsonschema",
-                                                 R"({"type":"object","title":"consumer.Override"})"});
+    overrides.emplace(k_pose_type_id, plexus::tools::mcap_schema{"json", "consumer.Override", "jsonschema", R"({"type":"object","title":"consumer.Override"})"});
 
-    const auto result = plexus::tools::flat_to_mcap(flat, out,
-                                                    plexus::tools::provider_from_map(std::move(overrides)),
-                                                    plexus::tools::well_known_schema_translator());
+    const auto result = plexus::tools::flat_to_mcap(flat, out, plexus::tools::provider_from_map(std::move(overrides)), plexus::tools::well_known_schema_translator());
     REQUIRE(result.ok);
 
     const auto rb = read_mcap(out);
@@ -650,6 +718,81 @@ TEST_CASE("mcap transcode: the consumer type_id provider wins over the hint tran
     REQUIRE(rb.channel_schema_name.at("robotics.pose") == "consumer.Override");
 
     std::filesystem::remove(out);
+}
+
+// The DECODE-level acceptance floor: a pose-hinted capture drained through the BUNDLED host
+// file_sink and, separately, a two-segment rotating_sink both transcode to an MCAP whose Summary
+// decodes standalone (NoFallbackScan: indexed Summary + chunk index + statistics), every json
+// channel references only a jsonschema (the Foxglove doctor rule), and the file_sink capture
+// joins the well-known foxglove.Pose schema from the codec-carried hint alone. This proves the
+// capture DECODES; it CANNOT and does NOT establish "plots in Foxglove" — that is the manual
+// human-gated GUI spot-check (83-FOXGLOVE-PLOT-CHECK.md) that headless execution cannot fake.
+TEST_CASE("mcap decode-level acceptance: bundled file_sink + rotation decode standalone (never asserts a plot)", "[mcap_transcode][mcap]")
+{
+    const int count = 4;
+
+    const auto bundled_dir = std::filesystem::temp_directory_path() / std::filesystem::path{"plexus_transcode_bundled"};
+    std::filesystem::remove_all(bundled_dir);
+    std::filesystem::create_directories(bundled_dir);
+
+    // (1) The bundled host file_sink: drain a live capture straight to a file, read it back, and
+    // transcode. The pose channel's foxglove.Pose decoration is derived from the codec hint alone.
+    const auto plxr = bundled_dir / "pose.plxr";
+    {
+        plexus::recording::host::file_sink fs{plxr};
+        run_pose_session(fs, count);
+    }
+    const auto flat = slurp(plxr);
+    REQUIRE(!flat.empty());
+
+    const auto mcap   = bundled_dir / "pose.mcap";
+    const auto result = plexus::tools::flat_to_mcap(flat, mcap, plexus::tools::schema_provider{}, plexus::tools::well_known_schema_translator());
+    REQUIRE(result.ok);
+
+    const auto rb = read_mcap(mcap);
+    REQUIRE(rb.channel_encodings.at("robotics.pose").first == "json");
+    REQUIRE(rb.channel_encodings.at("robotics.pose").second == "jsonschema");
+    REQUIRE(rb.channel_schema_name.at("robotics.pose") == "foxglove.Pose");
+    for(const auto &[topic, enc] : rb.channel_encodings)
+        if(enc.first == "json")
+            REQUIRE((enc.second.empty() || enc.second == "jsonschema"));
+
+    const auto sc = read_summary(mcap);
+    REQUIRE(sc.summary_ok);
+    REQUIRE(sc.chunk_indexes > 0);
+    REQUIRE(sc.message_count > 0);
+
+    // (2) The bundled rotating_sink: each rotated segment must transcode and decode standalone via
+    // its own Summary (the primed preamble makes every segment self-contained).
+    const auto rot_dir = std::filesystem::temp_directory_path() / std::filesystem::path{"plexus_transcode_rot"};
+    std::filesystem::remove_all(rot_dir);
+    std::filesystem::create_directories(rot_dir);
+
+    const auto segments = capture_pose_rotating(rot_dir, count);
+    REQUIRE(segments.size() == 2);
+
+    for(std::size_t i = 0; i < segments.size(); ++i)
+    {
+        const auto seg_flat = slurp(segments[i]);
+        REQUIRE(!seg_flat.empty());
+
+        const auto seg_mcap   = rot_dir / std::filesystem::path{"seg_" + std::to_string(i) + ".mcap"};
+        const auto seg_result = plexus::tools::flat_to_mcap(seg_flat, seg_mcap, plexus::tools::schema_provider{}, plexus::tools::well_known_schema_translator());
+        REQUIRE(seg_result.ok);
+
+        const auto seg_sc = read_summary(seg_mcap);
+        REQUIRE(seg_sc.summary_ok);
+        REQUIRE(seg_sc.chunk_indexes > 0);
+        REQUIRE(seg_sc.message_count > 0);
+
+        const auto seg_rb = read_mcap(seg_mcap);
+        for(const auto &[topic, enc] : seg_rb.channel_encodings)
+            if(enc.first == "json")
+                REQUIRE((enc.second.empty() || enc.second == "jsonschema"));
+    }
+
+    std::filesystem::remove_all(bundled_dir);
+    std::filesystem::remove_all(rot_dir);
 }
 
 namespace {
@@ -663,8 +806,7 @@ bool file_names_a_vendor(const std::filesystem::path &file)
 {
     std::ifstream in{file, std::ios::binary};
     std::string body{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
-    std::transform(body.begin(), body.end(), body.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(body.begin(), body.end(), body.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     for(std::string_view needle : {"foxglove", "pointcloud", "sceneupdate", "mcap/"})
         if(body.find(needle) != std::string::npos)
             return true;
@@ -695,18 +837,25 @@ TEST_CASE("no vendor identifier reaches core, api, hints, recording-host, or the
 {
     const std::filesystem::path src{PLEXUS_SOURCE_DIR};
     const std::filesystem::path roots[] = {
-        src / "lib/plexus-core/include",
-        src / "lib/plexus-api/include",
-        src / "lib/plexus-hints-robotics/include",
-        src / "lib/plexus-recording-host/include",
-        src / "tools/mcap_transcode/include/plexus/tools/mcap_schema.h",
-        src / "tools/mcap_transcode/include/plexus/tools/flat_to_mcap.h",
+            src / "lib/plexus-core/include",
+            src / "lib/plexus-api/include",
+            src / "lib/plexus-hints-robotics/include",
+            src / "lib/plexus-recording-host/include",
+            src / "tools/mcap_transcode/include/plexus/tools/mcap_schema.h",
+            src / "tools/mcap_transcode/include/plexus/tools/flat_to_mcap.h",
     };
 
     std::vector<std::string> hits;
     for(const auto &r : roots)
         scan_for_vendor(r, hits);
 
-    INFO("vendor-named files: " << [&] { std::string s; for(const auto &h : hits) s += h + "\n"; return s; }());
+    INFO("vendor-named files: " <<
+         [&]
+         {
+             std::string s;
+             for(const auto &h : hits)
+                 s += h + "\n";
+             return s;
+         }());
     REQUIRE(hits.empty());
 }

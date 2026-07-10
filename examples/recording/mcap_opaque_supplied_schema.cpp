@@ -21,11 +21,9 @@
 #include "plexus/recorder.h"
 #include "plexus/wire_bytes.h"
 #include "plexus/subscriber.h"
-#include "plexus/type_schema.h"
 #include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 #include "plexus/recording_qos.h"
-#include "plexus/recorder_options.h"
 #include "plexus/tools/flat_to_mcap.h"
 
 #include "plexus/io/recording/byte_sink.h"
@@ -47,6 +45,7 @@
 #include <iostream>
 #include <filesystem>
 #include <string_view>
+#include <unordered_map>
 
 using plexus::inproc::inproc_policy;
 using transport_t = plexus::inproc::inproc_transport<>;
@@ -137,17 +136,7 @@ int main()
         pub_node.listen({"inproc", "host-a:5000"});
         ex.drain();
 
-        // Supply the encoding + schema the opaque bytes satisfy (copied verbatim into the
-        // preamble).
-        plexus::recorder_options ropts;
-        const auto schema_bytes =
-            std::as_bytes(std::span{k_blob_jsonschema.data(), k_blob_jsonschema.size()});
-        ropts.schemas.push_back(plexus::type_schema{.type_id          = 0x0BACED01u,
-                                                    .message_encoding = "json",
-                                                    .schema_name      = "opaque_blob",
-                                                    .schema_encoding  = "jsonschema",
-                                                    .schema_data      = schema_bytes});
-        auto rec = pub_node.make_recorder(sink, std::move(ropts));
+        auto rec = pub_node.make_recorder(sink);
 
         plexus::typed_publisher_options pub_opts;
         pub_opts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
@@ -181,8 +170,16 @@ int main()
     }
     std::cout << "captured " << sink.bytes().size() << " bytes -> " << flat_path.string() << '\n';
 
+    // Hand the SUPPLIED schema to the transcode through the escape-hatch provider, keyed on the
+    // codec's own type id (read from type_info(), never restated) — the opaque contrast to the
+    // basic example's hint-derived decoration, with the id still stated exactly once.
+    std::unordered_map<std::uint64_t, plexus::tools::mcap_schema> supplied;
+    supplied.emplace(blob_codec{}.type_info().type_id,
+                     plexus::tools::mcap_schema{"json", "opaque_blob", "jsonschema", std::string{k_blob_jsonschema}});
+
     const std::filesystem::path mcap_path = "mcap_opaque_supplied_schema.mcap";
-    const auto result                     = plexus::tools::flat_to_mcap(sink.bytes(), mcap_path);
+    const auto result =
+        plexus::tools::flat_to_mcap(sink.bytes(), mcap_path, plexus::tools::provider_from_map(std::move(supplied)));
     if(!result.ok)
     {
         std::cout << "transcode failed: " << result.error << '\n';

@@ -1461,6 +1461,7 @@ if(PLEXUS_BUILD_MCAP_TRANSCODE)
         plexus::inproc
         plexus::discovery
         plexus::hints-robotics
+        plexus::recording-host
         mcap_transcode_lib
         plexus_mcap_dep
         Catch2::Catch2WithMain)
