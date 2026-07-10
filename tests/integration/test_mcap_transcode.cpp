@@ -681,7 +681,7 @@ TEST_CASE("mcap transcode joins a robotics hint to a well-known jsonschema chann
     const auto pose = rb.channel_encodings.at("robotics.pose");
     REQUIRE(pose.first == "json");
     REQUIRE(pose.second == "jsonschema");
-    REQUIRE(rb.channel_schema_name.at("robotics.pose") == "foxglove.Pose");
+    REQUIRE(rb.channel_schema_name.at("robotics.pose") == "foxglove.PoseInFrame");
 
     // laser_scan is a real concept the backend does not map -> nullopt -> opaque schemaId 0.
     const auto scan = rb.channel_encodings.at("robotics.scan");
@@ -724,7 +724,7 @@ TEST_CASE("mcap transcode: the consumer type_id provider wins over the hint tran
 // file_sink and, separately, a two-segment rotating_sink both transcode to an MCAP whose Summary
 // decodes standalone (NoFallbackScan: indexed Summary + chunk index + statistics), every json
 // channel references only a jsonschema (the Foxglove doctor rule), and the file_sink capture
-// joins the well-known foxglove.Pose schema from the codec-carried hint alone. This proves the
+// joins the well-known foxglove.PoseInFrame schema from the codec-carried hint alone. This proves the
 // capture DECODES; it CANNOT and does NOT establish "plots in Foxglove" — that is the manual
 // human-gated GUI spot-check (examples/recording/foxglove-plot-check.md) that headless execution
 // cannot fake.
@@ -737,7 +737,7 @@ TEST_CASE("mcap decode-level acceptance: bundled file_sink + rotation decode sta
     std::filesystem::create_directories(bundled_dir);
 
     // (1) The bundled host file_sink: drain a live capture straight to a file, read it back, and
-    // transcode. The pose channel's foxglove.Pose decoration is derived from the codec hint alone.
+    // transcode. The pose channel's foxglove.PoseInFrame decoration is derived from the codec hint alone.
     const auto plxr = bundled_dir / "pose.plxr";
     {
         plexus::recording::host::file_sink fs{plxr};
@@ -753,7 +753,7 @@ TEST_CASE("mcap decode-level acceptance: bundled file_sink + rotation decode sta
     const auto rb = read_mcap(mcap);
     REQUIRE(rb.channel_encodings.at("robotics.pose").first == "json");
     REQUIRE(rb.channel_encodings.at("robotics.pose").second == "jsonschema");
-    REQUIRE(rb.channel_schema_name.at("robotics.pose") == "foxglove.Pose");
+    REQUIRE(rb.channel_schema_name.at("robotics.pose") == "foxglove.PoseInFrame");
     for(const auto &[topic, enc] : rb.channel_encodings)
         if(enc.first == "json")
             REQUIRE((enc.second.empty() || enc.second == "jsonschema"));

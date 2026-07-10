@@ -2,8 +2,8 @@
 // Foxglove out of the box, with the drop-in recorder ergonomics: the codec states its type id
 // ONCE in type_info() and stamps a neutral robotics concept (pose) as its schema_hint; the
 // capture drains through the bundled host file_sink; and the host transcode joins the hint to
-// the Foxglove well-known foxglove.Pose schema. Nothing restates the type id and no schema row
-// is hand-filled — the channel decoration is derived from the codec alone.
+// the Foxglove well-known foxglove.PoseInFrame schema. Nothing restates the type id and no schema
+// row is hand-filled — the channel decoration is derived from the codec alone.
 // Single process, public API only, self-terminating (no backends, no mDNS).
 //
 // Build (the `mcap` transcode is a host-side optional dep, not in the core / not on the MCU):
@@ -53,13 +53,14 @@ using node_t       = plexus::node<inproc_policy, transport_t>;
 
 struct pose_sample
 {
-    double x{};
-    double y{};
-    double z{};
+    double        x{};
+    double        y{};
+    double        z{};
+    std::uint32_t sec{};
 };
 
-// Emits a foxglove.Pose-shaped JSON object and stamps the pose concept as its schema_hint, so
-// the transcode decorates the channel with the well-known schema from the hint alone.
+// Emits a foxglove.PoseInFrame-shaped JSON object and stamps the pose concept as its schema_hint,
+// so the transcode decorates the channel with the well-known schema from the hint alone.
 struct pose_codec
 {
     using value_type = pose_sample;
@@ -67,8 +68,9 @@ struct pose_codec
     plexus::wire_bytes<> encode(const pose_sample &p) const
     {
         auto owner = std::make_shared<std::string>(
-            "{\"position\":{\"x\":" + std::to_string(p.x) + ",\"y\":" + std::to_string(p.y) +
-            ",\"z\":" + std::to_string(p.z) + "},\"orientation\":{\"x\":0,\"y\":0,\"z\":0,\"w\":1}}");
+            "{\"timestamp\":{\"sec\":" + std::to_string(p.sec) + ",\"nsec\":0},\"frame_id\":\"world\","
+            "\"pose\":{\"position\":{\"x\":" + std::to_string(p.x) + ",\"y\":" + std::to_string(p.y) +
+            ",\"z\":" + std::to_string(p.z) + "},\"orientation\":{\"x\":0,\"y\":0,\"z\":0,\"w\":1}}}");
         std::span<const std::byte> view = std::as_bytes(std::span{owner->data(), owner->size()});
         return {view, std::move(owner)};
     }
@@ -142,7 +144,7 @@ int main()
 
             for(std::uint32_t i = 0; i < 8; ++i)
             {
-                odom.publish(pose_sample{static_cast<double>(i), 2.0 * i, 0.0});
+                odom.publish(pose_sample{static_cast<double>(i), 2.0 * i, 0.0, i});
                 ex.drain();
             }
             ex.drain();
@@ -158,7 +160,8 @@ int main()
     std::cout << "captured " << flat.size() << " bytes -> " << flat_path.string() << '\n';
 
     // Decorate the pose channel from the hint the codec carried: the well-known translator maps
-    // the neutral concept to the Foxglove foxglove.Pose schema (an empty provider — no override).
+    // the neutral concept to the Foxglove foxglove.PoseInFrame schema (an empty provider — no
+    // override).
     const std::filesystem::path mcap_path = "mcap_basic_foxglove.mcap";
     const auto result                     = plexus::tools::flat_to_mcap(flat, mcap_path, plexus::tools::schema_provider{},
                                                                         plexus::tools::well_known_schema_translator());
