@@ -27,6 +27,14 @@ set(PLEXUS_IO_TESTS
     test_liveness_storage
     test_peer_liveliness_types)
 
+# The peer-liveliness arbiter oracle: its fusion-matrix and precedence/hysteresis scenario
+# clusters compile into the one target so catch_discover_tests enumerates the identical set.
+add_executable(test_peer_liveliness
+    test_peer_liveliness.cpp
+    test_peer_liveliness_arbitration.cpp)
+target_link_libraries(test_peer_liveliness PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_peer_liveliness TEST_PREFIX "io.")
+
 foreach(test ${PLEXUS_IO_TESTS})
     add_executable(${test} ${test}.cpp)
     target_link_libraries(${test} PRIVATE plexus::core Catch2::Catch2WithMain)
