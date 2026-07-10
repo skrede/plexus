@@ -13,6 +13,12 @@ add_executable(test_contact_card
 target_link_libraries(test_contact_card PRIVATE plexus::core plexus::discovery Catch2::Catch2WithMain)
 catch_discover_tests(test_contact_card TEST_PREFIX "discovery.")
 
+# The universe vocabulary: the label hash goldens, the fmix32 group derivation range/avoidance
+# sweep, and the effective_group scoping selection. Pure header-only core, no socket.
+add_executable(test_universe test_universe.cpp)
+target_link_libraries(test_universe PRIVATE plexus::core plexus::discovery Catch2::Catch2WithMain)
+catch_discover_tests(test_universe TEST_PREFIX "discovery.")
+
 # The multicast discovery over a fake datagram_socket: the byte-identical-metadata
 # reuse, the immediate on-join announce, and the malformed-reject short-circuit. The
 # header-only template is instantiated against the fake socket, so no asio is needed; it

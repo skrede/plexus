@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_DISCOVERY_DISCOVERY_OPTIONS_H
 #define HPP_GUARD_PLEXUS_DISCOVERY_DISCOVERY_OPTIONS_H
 
+#include "plexus/discovery/universe.h"
+
 #include "plexus/io/network_interface.h"
 
 #include <chrono>
@@ -38,6 +40,10 @@ struct flood_cap_options
 // admin-scoped, distinct from the DDS SPDP 239.255.0.1 so a co-resident DDS deployment never
 // collides, and 7447 is clear of mDNS 5353, SSDP 1900, and the DDS 7400 range. TTL>1 is routable
 // across a few LAN segments. Every field is overridable down to link-local (224.0.0.x / TTL 1).
+// universe partitions the discovery plane: under soft scoping all universes share the group and the
+// inbound compare filters; under hard scoping each universe derives its own group. scoping is a
+// fleet-wide setting — a hard node and a soft node in the same universe sit on different groups and
+// never rendezvous.
 struct discovery_options
 {
     discovery_options()
@@ -46,6 +52,8 @@ struct discovery_options
             , cap()
             , egress_interface(io::network_interface::any())
             , jitter_fraction(0.2)
+            , universe(k_default_universe)
+            , scoping(universe_scoping::soft)
             , port(7447)
             , ttl(4)
     {
@@ -60,9 +68,18 @@ struct discovery_options
     // cross-source collisions collapse to the observation baseline, and a larger fraction buys no
     // further decorrelation while shortening the mean interval (more announce traffic).
     double jitter_fraction;
+    std::uint32_t universe;
+    universe_scoping scoping;
     std::uint16_t port;
     unsigned ttl;
 };
+
+// Hard derivation wins unconditionally — a custom group and the default universe both derive under
+// hard, so the selection stays one predictable branch.
+inline std::string effective_group(const discovery_options &opts)
+{
+    return opts.scoping == universe_scoping::hard ? universe_group(opts.universe) : opts.group;
+}
 
 }
 
