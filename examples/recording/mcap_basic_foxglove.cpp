@@ -4,6 +4,8 @@
 // capture drains through the bundled host file_sink; and the host transcode joins the hint to
 // the Foxglove well-known foxglove.PoseInFrame schema. Nothing restates the type id and no schema
 // row is hand-filled — the channel decoration is derived from the codec alone.
+// The eight poses walk a ramp and are published 100 ms apart in wall-clock, so their mcap log
+// times are ~100 ms apart and the pose visibly animates along the ramp over ~0.8 s in Foxglove.
 // Single process, public API only, self-terminating (no backends, no mDNS).
 //
 // Build (the `mcap` transcode is a host-side optional dep, not in the core / not on the MCU):
@@ -39,6 +41,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <chrono>
+#include <thread>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -142,10 +146,14 @@ int main()
             plexus::subscriber<pose_codec> odom_sub{sub_node, "robot.pose", [](const pose_sample &) {}};
             ex.drain();
 
+            // Space the publishes ~100 ms apart in wall-clock so each capture's mcap log time lands
+            // ~100 ms after the last: Foxglove plays back on log time, so the pose then travels the
+            // ramp over ~0.8 s instead of flickering past at t=0.
             for(std::uint32_t i = 0; i < 8; ++i)
             {
                 odom.publish(pose_sample{static_cast<double>(i), 2.0 * i, 0.0, i});
                 ex.drain();
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             ex.drain();
         }
