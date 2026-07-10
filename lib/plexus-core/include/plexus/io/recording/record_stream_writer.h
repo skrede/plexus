@@ -149,6 +149,8 @@ public:
         w.varint(e.type_id ? *e.type_id : 0u);
         w.varint(fqn.size());
         w.bytes(detail::as_bytes(fqn));
+        detail::blob(w, detail::as_bytes(e.type_name));
+        w.varint(e.schema_hint);
         return seal(w.offset());
     }
 

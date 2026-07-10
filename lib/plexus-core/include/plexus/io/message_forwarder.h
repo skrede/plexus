@@ -117,9 +117,10 @@ public:
         forget_remote_topic(node_name, fqn);
     }
 
-    void declare(std::string_view fqn, topic_qos qos, std::optional<std::uint64_t> producer_type_id = std::nullopt, bool emit_source_identity = false)
+    void declare(std::string_view fqn, topic_qos qos, std::optional<std::uint64_t> producer_type_id = std::nullopt, bool emit_source_identity = false,
+                 std::string_view producer_type_name = {}, std::uint64_t schema_hint = 0)
     {
-        m_endpoint.registry().declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id, emit_source_identity);
+        m_endpoint.registry().declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id, emit_source_identity, producer_type_name, schema_hint);
     }
 
     void latch(std::string_view fqn)

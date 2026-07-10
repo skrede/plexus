@@ -30,8 +30,10 @@ struct decoded_record
     std::uint8_t edge{};
     std::uint8_t verdict{};
     std::uint64_t count{};
+    std::uint64_t schema_hint{};
     node_id peer{};
     std::string fqn;
+    std::string type_name;
     std::span<const std::byte> payload{};
     wire_direction wire_dir{wire_direction::out};
     std::uint64_t wire_seq{};
@@ -97,6 +99,10 @@ inline void decode_endpoint(wire::reader &r, decoded_record &rec)
     const std::uint64_t flen = r.varint().value_or(0);
     const auto name          = r.bytes(static_cast<std::size_t>(flen));
     rec.fqn.assign(reinterpret_cast<const char *>(name.data()), name.size());
+    const std::uint64_t tlen = r.varint().value_or(0);
+    const auto type_bytes    = r.bytes(static_cast<std::size_t>(tlen));
+    rec.type_name.assign(reinterpret_cast<const char *>(type_bytes.data()), type_bytes.size());
+    rec.schema_hint          = r.varint().value_or(0);
 }
 
 inline void decode_security(wire::reader &r, decoded_record &rec)

@@ -447,12 +447,12 @@ private:
     // The declaration persists for the node's life (stable identity for subscriber correlation);
     // the handle's lifetime is distinct, so retire_publisher_seam only posts the drop edge.
     void declare_publisher_seam(std::string_view fqn, const topic_qos &qos, bool emit_source_identity, std::optional<std::uint64_t> type_id = std::nullopt,
-                                const void *geometry = nullptr, std::optional<io::topic_capture_rule> capture = std::nullopt)
+                                std::string_view type_name = {}, std::uint64_t schema_hint = 0, const void *geometry = nullptr, std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
-        m_engine.messages().declare(fqn, qos, type_id, emit_source_identity);
+        m_engine.messages().declare(fqn, qos, type_id, emit_source_identity, type_name, schema_hint);
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
-        m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_declared, wire::fqn_topic_hash(fqn), type_id});
+        m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_declared, wire::fqn_topic_hash(fqn), type_id, type_name, schema_hint});
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
         provision_same_host_ring(fqn, effective_bytes, geometry);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
@@ -869,9 +869,9 @@ private:
     {
         io::endpoint_seam s{};
         s.ctx               = this;
-        s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos, bool emit, std::optional<std::uint64_t> type_id, const void *geometry,
-                                 std::optional<io::topic_capture_rule> capture)
-        { static_cast<basic_node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, geometry, capture); };
+        s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos, bool emit, std::optional<std::uint64_t> type_id, std::string_view type_name,
+                                 std::uint64_t schema_hint, const void *geometry, std::optional<io::topic_capture_rule> capture)
+        { static_cast<basic_node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, type_name, schema_hint, geometry, capture); };
         s.publish        = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes) { static_cast<basic_node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
         s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier, io::encode_thunk encode)
         { static_cast<basic_node *>(ctx)->m_engine.messages().publish_object(fqn, carrier, [&] { return io::invoke(encode); }); };

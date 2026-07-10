@@ -19,7 +19,7 @@ TEST_CASE("record stream populates the wire variant with no ordinal reorder", "[
     // an ordinal reorder. The format version reflects the self-describing preamble layout, not
     // the wire-record category, which the reserved slot folded in without a bump.
     STATIC_REQUIRE(static_cast<std::uint8_t>(record_category::wire_frame) == 11);
-    STATIC_REQUIRE(plexus::io::recording::k_format_version == 2u);
+    STATIC_REQUIRE(plexus::io::recording::k_format_version == 3u);
 }
 
 TEST_CASE("record stream round-trips a wire frame byte-identically offline", "[record_stream][wire]")

@@ -16,11 +16,13 @@
 
 namespace plexus {
 
-// type_id is the matching authority; type_name is diagnostics only.
+// type_id is the matching authority; type_name is diagnostics; schema_hint is an opaque
+// render/schema selector the carry path forwards to the backend but never interprets.
 struct type_identity
 {
     std::uint64_t type_id{};
     std::string_view type_name{};
+    std::uint64_t schema_hint{};
 };
 
 // A serializer-agnostic codec for a single value type. encode's returned wire_bytes backing

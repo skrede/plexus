@@ -41,7 +41,7 @@ public:
             : m_seam(n.endpoint_seam_for())
             , m_fqn(fqn)
     {
-        m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt, geometry, std::nullopt);
+        m_seam.declare_publisher(m_seam.ctx, fqn, qos, emit_source_identity, std::nullopt, {}, 0, geometry, std::nullopt);
     }
 
     void publish(std::span<const std::byte> bytes)
@@ -90,7 +90,7 @@ public:
                       "plexus: a typed publisher needs a codec satisfying typed_codec "
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
-        m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity, m_identity.type_id, opts.geometry,
+        m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity, m_identity.type_id, m_identity.type_name, m_identity.schema_hint, opts.geometry,
                                  opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
     }
 

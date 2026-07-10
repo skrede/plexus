@@ -14,6 +14,7 @@
 #include <vector>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <algorithm>
 #include <functional>
 
@@ -44,6 +45,8 @@ struct registry_topic_entry
     bool emit_source_identity{false};
     bool any_subscriber_wants_info{true};
     std::optional<std::uint64_t> producer_type_id;
+    std::string_view producer_type_name;
+    std::uint64_t producer_schema_hint{};
     std::optional<std::uint64_t> endpoint_counter;
     std::vector<registry_subscriber<Channel>> subscribers;
     std::array<band_drop_counters, detail::k_egress_bands> drops{};

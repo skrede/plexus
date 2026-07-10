@@ -72,13 +72,16 @@ public:
     // same hash leaves this qos intact (it only fills an empty fqn). An optional
     // producer type_id (std::nullopt = undeclared) is recorded alongside the qos —
     // the subscribe-time match authority.
-    void declare(std::uint64_t topic_hash, std::string_view fqn, topic_qos qos, std::optional<std::uint64_t> producer_type_id = std::nullopt, bool emit_source_identity = false)
+    void declare(std::uint64_t topic_hash, std::string_view fqn, topic_qos qos, std::optional<std::uint64_t> producer_type_id = std::nullopt, bool emit_source_identity = false,
+                 std::string_view producer_type_name = {}, std::uint64_t schema_hint = 0)
     {
         auto &entry = m_topics[topic_hash];
         if(entry.fqn.empty())
             entry.fqn = std::string{fqn};
         entry.qos                  = qos;
         entry.producer_type_id     = producer_type_id;
+        entry.producer_type_name   = producer_type_name;
+        entry.producer_schema_hint = schema_hint;
         entry.emit_source_identity = emit_source_identity;
         // Mint the endpoint counter ONCE; a re-declare keeps it so the endpoint's gid is stable.
         // The monotonic allocator is a registry member — no static singleton, no hot-path RNG.

@@ -116,7 +116,7 @@ TEST_CASE("record stream rejects a preamble written at the prior format version"
     // reader must reject it — there is no cross-version compatibility shim.
     std::vector<std::byte> stream{sink.bytes().begin(), sink.bytes().end()};
     stream[sizeof(std::uint32_t)]     = std::byte{0x00};
-    stream[sizeof(std::uint32_t) + 1] = std::byte{0x01};
+    stream[sizeof(std::uint32_t) + 1] = std::byte{0x02};
 
     record_stream_reader r{stream};
     stream_definitions defs;

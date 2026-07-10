@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string_view>
 
 namespace plexus::io {
 
@@ -71,11 +72,15 @@ enum class endpoint_edge : std::uint8_t
     subscriber_retired    = 3,
 };
 
+// type_name and schema_hint ride the publisher_declared edge; schema_hint is an opaque integer
+// this layer carries but never interprets. Both stay empty on the other edges.
 struct endpoint_event
 {
     endpoint_edge edge{endpoint_edge::publisher_declared};
     std::uint64_t topic_hash{};
     std::optional<std::uint64_t> type_id{};
+    std::string_view type_name{};
+    std::uint64_t schema_hint{};
 };
 
 }

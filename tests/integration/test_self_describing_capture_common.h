@@ -4,7 +4,7 @@
 // The self-describing capture oracle: a single-process inproc session whose producer
 // declares a topic with a known producer type_id and attaches a recorder carrying a public
 // type_schema, then captures, drains, and reads the flat stream back. It proves the public
-// surface populates the version-2 preamble end to end: the four opaque schema fields survive
+// surface populates the version-3 preamble end to end: the four opaque schema fields survive
 // byte-identically keyed by type_id, the per-capture crypto position equals the node's
 // declared wire position, and a recovered sample carries the real producer type_id (not the
 // hard-coded 0/false). A second case proves a recorder that declares nothing still writes a

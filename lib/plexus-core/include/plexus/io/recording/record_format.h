@@ -8,7 +8,7 @@ namespace plexus::io::recording {
 // k_format_version is bumped only on an incompatible layout change. A sync marker is emitted on the
 // first record and then every k_sync_interval records.
 inline constexpr std::uint32_t k_stream_magic   = 0x504C5852u; // "PLXR"
-inline constexpr std::uint16_t k_format_version = 2u;
+inline constexpr std::uint16_t k_format_version = 3u;
 inline constexpr std::uint32_t k_sync_marker    = 0x9E37C5A1u;
 inline constexpr std::uint32_t k_sync_interval  = 64u;
 
