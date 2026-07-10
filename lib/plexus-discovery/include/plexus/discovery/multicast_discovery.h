@@ -113,20 +113,22 @@ private:
         const auto ann = wire::decode_announcement(bytes);
         if(!ann)
             return;
-        // Fail-closed ahead of self-echo, goodbye, the source to_string, and the flood cap: a foreign
-        // universe is dropped whole, so a foreign fleet evicts no peer and pays no admission or alloc.
+        // Fail-closed ahead of self-echo, goodbye, and admission: a foreign universe is dropped whole, evicting no peer and paying no admission or alloc.
         if(ann->universe != m_options.universe)
             return;
-        // A node never notes itself: its own echo (same node_id) is recorded for the self-probe and
-        // dropped before admission, so awareness stays strictly cross-node.
+        // A node never notes itself: its own echo (same node_id) is recorded for the self-probe then dropped, keeping awareness cross-node.
         if(m_announcement && ann->node_id == m_announcement->node_id)
         {
             m_self_seen = true;
             return;
         }
-        const auto source = from.address().to_string();
-        auto info         = detail::service_info_from_announcement(*ann, source);
-        if((ann->flags & wire::k_announcement_goodbye_flag) != 0)
+        dispatch(*ann, from.address().to_string());
+    }
+
+    void dispatch(const wire::announcement &ann, const std::string &source)
+    {
+        auto info = detail::service_info_from_announcement(ann, source);
+        if((ann.flags & wire::k_announcement_goodbye_flag) != 0)
         {
             // A goodbye is a removal: never rate-limit or cap it, a leaver must always be able to leave.
             if(m_on_withdrawn_cb)
