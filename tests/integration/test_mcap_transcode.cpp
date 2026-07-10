@@ -726,7 +726,8 @@ TEST_CASE("mcap transcode: the consumer type_id provider wins over the hint tran
 // channel references only a jsonschema (the Foxglove doctor rule), and the file_sink capture
 // joins the well-known foxglove.Pose schema from the codec-carried hint alone. This proves the
 // capture DECODES; it CANNOT and does NOT establish "plots in Foxglove" — that is the manual
-// human-gated GUI spot-check (83-FOXGLOVE-PLOT-CHECK.md) that headless execution cannot fake.
+// human-gated GUI spot-check (examples/recording/foxglove-plot-check.md) that headless execution
+// cannot fake.
 TEST_CASE("mcap decode-level acceptance: bundled file_sink + rotation decode standalone (never asserts a plot)", "[mcap_transcode][mcap]")
 {
     const int count = 4;
