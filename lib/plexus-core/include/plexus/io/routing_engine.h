@@ -16,6 +16,7 @@
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/peer_liveliness.h"
 #include "plexus/io/liveliness_monitor.h"
 #include "plexus/io/liveliness_options.h"
 #include "plexus/io/procedure_forwarder.h"
@@ -45,7 +46,16 @@
 
 namespace plexus::io {
 
-template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock, typename PeerStorage = std_map_peer_storage>
+// The default liveliness storage selector: the monitor and arbiter tables both take the heap-backed
+// std::map backends. A constrained-target build passes a selector aliasing the fixed-capacity twins.
+struct default_liveliness_storage
+{
+    using monitor = std_map_liveness_storage;
+    using arbiter = std_map_liveliness_peer_storage;
+};
+
+template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock, typename PeerStorage = std_map_peer_storage,
+         typename LivelinessStorage = default_liveliness_storage>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
 {
@@ -84,6 +94,7 @@ public:
             , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures, redial, redial_seed, logger, {}, {}, {}, {}, m_security_fanout, {}, {}}
             , m_registry(transport, m_build)
             , m_monitor(m_executor)
+            , m_peer_liveliness(m_liveliness)
             , m_coordinator(m_registry)
     {
         detail::install_routing_sinks(*this);
@@ -94,6 +105,8 @@ public:
         m_observers.emplace_back(o);
         if(o.observes_data_path())
             m_capture.add_observer();
+        if(o.observes_liveliness())
+            m_peer_liveliness.add_subscriber();
     }
 
     void remove_observer(observer &o)
@@ -101,6 +114,8 @@ public:
         const auto erased = std::erase_if(m_observers, [&](const std::reference_wrapper<observer> &w) { return &w.get() == &o; });
         if(erased != 0 && o.observes_data_path())
             m_capture.remove_observer();
+        if(erased != 0 && o.observes_liveliness())
+            m_peer_liveliness.remove_subscriber();
     }
 
     auto drop_sink()
@@ -149,6 +164,7 @@ public:
     void note_peer(const node_id &id, const endpoint &ep, std::uint64_t now)
     {
         m_known_peers.note_peer(id, ep, now);
+        m_peer_liveliness.note_awareness(id, now);
         if(m_dial_eagerly)
             reach(id);
     }
@@ -158,6 +174,7 @@ public:
     void forget(const node_id &id)
     {
         m_known_peers.forget(id);
+        m_peer_liveliness.note_awareness_lost(id);
     }
 
     void reach(const node_id &id)
@@ -326,7 +343,8 @@ private:
     session_build_context<Policy> m_build;
     registry_type m_registry;
     basic_known_peers<PeerStorage> m_known_peers;
-    liveliness_monitor<Policy, Clock> m_monitor;
+    liveliness_monitor<Policy, Clock, typename LivelinessStorage::monitor> m_monitor;
+    peer_liveliness<typename LivelinessStorage::arbiter> m_peer_liveliness;
     std::vector<std::reference_wrapper<observer>> m_observers;
     upgrade_coordinator<registry_type, channel_type> m_coordinator;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness_cb;
@@ -366,6 +384,9 @@ private:
 
     template<typename E>
     friend void detail::post_security(E &, const security_event &);
+
+    template<typename E>
+    friend void detail::post_liveliness(E &, const peer_liveliness_event &);
 
     template<typename E>
     friend void detail::post_wire(E &, recording::wire_direction, std::uint64_t, const node_id &, std::span<const std::byte>);
@@ -415,16 +436,32 @@ private:
             channel.on_wire(detail::make_wire_sink(*this, peer));
     }
 
+    // A rejected handshake is an un-established session: tear_down's prior-complete guard suppresses
+    // the disconnected edge, so a dead/disconnected feed is NOT guaranteed to follow. Mapping rejected
+    // to session-down settles the peer as not-alive rather than leaving a stuck session state.
+    void feed_liveliness_session(const lifecycle_event &ev)
+    {
+        switch(ev.edge)
+        {
+            case lifecycle_edge::ready:
+                register_endpoint(ev.id, ev.node_name);
+                return m_peer_liveliness.note_session_up(ev.id);
+            case lifecycle_edge::connected:
+            case lifecycle_edge::reconnected:
+                return m_peer_liveliness.note_session_up(ev.id);
+            case lifecycle_edge::disconnected:
+            case lifecycle_edge::dead:
+                m_monitor.deregister_endpoint(ev.id);
+                m_coordinator.on_peer_dead(ev.node_name);
+                return m_peer_liveliness.note_session_down(ev.id, now_for_aging());
+            case lifecycle_edge::rejected:
+                return m_peer_liveliness.note_session_down(ev.id, now_for_aging());
+        }
+    }
+
     void dispatch_lifecycle(const lifecycle_event &ev)
     {
-        if(ev.edge == lifecycle_edge::ready)
-            register_endpoint(ev.id, ev.node_name);
-        else if(ev.edge == lifecycle_edge::disconnected || ev.edge == lifecycle_edge::dead)
-        {
-            m_monitor.deregister_endpoint(ev.id);
-            m_coordinator.on_peer_dead(ev.node_name);
-        }
-
+        feed_liveliness_session(ev);
         switch(ev.edge)
         {
             case lifecycle_edge::connected:
@@ -467,7 +504,7 @@ private:
         const std::uint64_t now      = now_for_aging();
         const std::uint64_t ttl      = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(m_liveliness.awareness_ttl).count());
         const std::uint64_t deadline = now > ttl ? now - ttl : 0;
-        m_known_peers.expire_older_than(deadline, [](const node_id &) {});
+        m_known_peers.expire_older_than(deadline, [this](const node_id &id) { m_peer_liveliness.note_awareness_lost(id); });
     }
 };
 

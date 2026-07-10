@@ -504,6 +504,39 @@ target_include_directories(test_deadline_liveliness PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_deadline_liveliness TEST_PREFIX "integration.")
 
+# The fused peer-liveliness verdict edge end-to-end through the inproc engine: a subscribed observer
+# sees one alive/lost truth from the awareness/heartbeat/session feeds, and an unsubscribed node emits
+# zero verdicts while aging identically (the byte-identical floor). Always built (inproc Policy, no
+# backend needed); the `integration.` ctest prefix plus the "liveliness.verdict" case tokens let
+# `ctest -R liveliness.verdict` match. The shared liveliness_inproc_common.h resolves via the current dir.
+add_executable(test_liveliness_verdict_inproc test_liveliness_verdict_inproc.cpp)
+target_link_libraries(test_liveliness_verdict_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_liveliness_verdict_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_liveliness_verdict_inproc TEST_PREFIX "integration.")
+
+# The fused peer-liveliness precedence + hysteresis oracle: a real transport drop dominates a fresh
+# heartbeat (lost within one tick), an awareness loss under a live session does not flap, post-drop
+# silence stays lost with no stale-heartbeat resurrection, and a rejected handshake settles lost under
+# session_authoritative. Always built (inproc Policy, no backend needed); the `integration.` ctest
+# prefix plus the "liveliness.arbitration" case tokens let `ctest -R liveliness.arbitration` match. The
+# shared liveliness_inproc_common.h resolves via the current dir.
+add_executable(test_liveliness_arbitration_inproc test_liveliness_arbitration_inproc.cpp)
+target_link_libraries(test_liveliness_arbitration_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_liveliness_arbitration_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_liveliness_arbitration_inproc TEST_PREFIX "integration.")
+
 # The end-to-end request-vs-offered compatibility gate over the inproc rendezvous: a
 # subscriber demands a producer's topic carrying its requested QoS + chosen rxo_mode;
 # the producer runs the compatibility check at the fan-out gate and the outcome is

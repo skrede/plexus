@@ -4,8 +4,9 @@
 #include "plexus/io/observer.h"
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/liveness_event.h"
-#include "plexus/io/lifecycle_event.h"
 #include "plexus/io/security_event.h"
+#include "plexus/io/lifecycle_event.h"
+#include "plexus/io/peer_liveliness_event.h"
 #include "plexus/io/recording/wire_record.h"
 #include "plexus/io/detail/drop_event.h"
 
@@ -65,6 +66,15 @@ void post_security(Engine &e, const security_event &ev)
 {
     using policy_type = typename Engine::policy_type;
     policy_type::post(e.m_executor, [&e, ev] { fan_out(e, [&](observer &o) { o.on_security(ev); }); });
+}
+
+// The fused verdict edge: posted on the borrowed executor over the observer snapshot, never inline —
+// the same drop-flood guard as every other edge, since a teardown frame can settle the verdict.
+template<typename Engine>
+void post_liveliness(Engine &e, const peer_liveliness_event &ev)
+{
+    using policy_type = typename Engine::policy_type;
+    policy_type::post(e.m_executor, [&e, ev] { fan_out(e, [&](observer &o) { o.on_peer_liveliness(ev); }); });
 }
 
 // Keeps the single-writer ring discipline (push only on the executor turn, never the io thread).

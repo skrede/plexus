@@ -6,8 +6,10 @@
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/demand_transition.h"
+#include "plexus/io/peer_liveliness_event.h"
 
 #include "plexus/io/detail/routing_sinks.h"
+#include "plexus/io/detail/routing_dispatch.h"
 
 #include "plexus/wire/topic_hash.h"
 
@@ -15,6 +17,7 @@
 #include "plexus/policy.h"
 
 #include <span>
+#include <chrono>
 #include <memory>
 #include <cstddef>
 #include <cstdint>
@@ -56,16 +59,27 @@ void install_routing_sinks(Engine &e)
     {
         e.m_monitor.stamp_seen(ep);
         e.m_known_peers.refresh(ep, e.now_for_aging());
+        e.m_peer_liveliness.note_heartbeat(ep, e.now_for_aging());
     };
     e.m_monitor.on_liveness([&e](const liveness_event &ev) { policy_type::post(e.m_executor, [&e, ev] { e.fan_liveness(ev); }); });
-    // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer so a
-    // silent-but-alive publisher still asserts presence, AND sweep the awareness table for peers that
-    // stopped re-announcing past their discovery TTL.
+    e.m_peer_liveliness.on_verdict([&e](const peer_liveliness_event &ev) { detail::post_liveliness(e, ev); });
+    // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer when
+    // the configured interval has elapsed (the default equals the tick cadence, so emission is
+    // per-tick and wire-identical), sweep the awareness table for peers past their discovery TTL, then
+    // settle the fused verdicts so a TTL expiry lands in the same tick's evaluation.
     e.m_monitor.on_tick_action(
-            [&e]
+            [&e, last_emit_ns = std::uint64_t{0}]() mutable
             {
-                e.m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); });
+                const std::uint64_t now      = e.now_for_aging();
+                const std::uint64_t interval = static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(e.m_liveliness.heartbeat_interval).count());
+                if(now - last_emit_ns >= interval)
+                {
+                    e.m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); });
+                    last_emit_ns = now;
+                }
                 e.sweep_aged_awareness();
+                e.m_peer_liveliness.evaluate(now);
             });
     e.m_monitor.start();
 }
