@@ -2,8 +2,9 @@
 // multicast group. It proves the round-trip identity (every field + the listens in order),
 // the goodbye-flag carry, the malformed-reject set (bad magic, mid-node_id and mid-listens
 // truncation, an overrun transport length-prefix, an empty span — each nullopt with no
-// partial struct), and the reserved-universe forward-compat (a non-zero universe still
-// decodes, read + ignore). These cases double as the codec's fuzz oracle.
+// partial struct), and the universe carry (any value round-trips; the codec stays
+// value-agnostic — the discovery leaf, not the codec, gates on it). These cases double
+// as the codec's fuzz oracle.
 
 #include "plexus/wire/announcement.h"
 #include "plexus/wire/byte_order.h"
