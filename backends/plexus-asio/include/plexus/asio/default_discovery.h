@@ -106,7 +106,9 @@ private:
     }
 
     static constexpr std::size_t k_send_queue_bytes = 65536;
-    // an interim window (a small multiple of the announce period) pending an empirical sweep.
+    // A conservative self-echo window: several announce periods, far above the sub-millisecond
+    // loopback echo latency, so a node that is genuinely pumping its loop is never falsely read
+    // no_self_echo on a slow or loaded host.
     static constexpr int k_probe_window_periods = 5;
 
     options_type m_options;

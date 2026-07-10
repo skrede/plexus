@@ -8,7 +8,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
+#include <vector>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <algorithm>
 
 using namespace discovery_noalloc_fixture;
 
@@ -96,4 +100,56 @@ TEST_CASE("discovery re-announce is allocation-free; the inbound resolve build i
     const std::size_t per_call = allocs_k / static_cast<std::size_t>(K);
     REQUIRE(per_call >= 1);  // building a fresh service_info is not free
     REQUIRE(per_call <= 12); // but it is a small bounded constant, not a growth with K
+}
+
+TEST_CASE("discovery re-announce stays allocation-free with announce jitter engaged, and the "
+          "jittered interval genuinely varies",
+          "[integration][discovery]")
+{
+    // The re-announce cadence is now decorrelated: arm_timer draws next = period - U(0, fraction *
+    // period) from a member-owned mt19937 (seeded from the node id at advertise). This gate proves
+    // the jittered arm churns ZERO at steady state AND that the interval is genuinely jittered — not
+    // a constant masquerading as jitter — so a regression that either allocates in the draw or
+    // silently disables the jitter fails here.
+    sink_executor ex;
+    sink_datagram_socket sock;
+
+    plexus::discovery::discovery_options opts;
+    opts.cap.per_source_max = 0;
+    REQUIRE(opts.jitter_fraction > 0.0); // the default arm is jittered, not phase-locked
+
+    plexus::discovery::multicast_discovery<sink_datagram_socket, sink_policy> disco{ex, sock, opts};
+    disco.browse([](const plexus::discovery::service_info &) {});
+    disco.advertise(make_card()); // seeds the per-node RNG and arms the jittered timer
+    REQUIRE(ex.armed != nullptr);
+
+    constexpr int K              = 1000;
+    const std::int64_t period    = opts.announce_period.count();
+    const std::int64_t max_span  = static_cast<std::int64_t>(opts.jitter_fraction * static_cast<double>(period));
+
+    // Warm one tick so the reused callback slot and the send scratch are at steady state.
+    ex.armed->fire();
+
+    std::vector<std::int64_t> delays;
+    delays.reserve(K); // grown ONCE before the measured window so the loop's push_back never allocs
+
+    plexus::testing::reset_alloc_count();
+    const auto before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+    {
+        ex.armed->fire();
+        delays.push_back(ex.armed->last_delay.count());
+    }
+    const auto after = plexus::testing::alloc_count();
+
+    REQUIRE(after - before == 0); // encode + send + jittered re-arm: ZERO steady-state alloc
+
+    for(const std::int64_t d : delays)
+    {
+        REQUIRE(d >= period - max_span); // never below the floor
+        REQUIRE(d <= period);            // never above the nominal period
+        REQUIRE(d >= 1);                 // clamped strictly positive
+    }
+    // The sequence is not constant: at least one pair of successive intervals differs.
+    REQUIRE(std::adjacent_find(delays.begin(), delays.end(), std::not_equal_to<>{}) != delays.end());
 }

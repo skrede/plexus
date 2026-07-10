@@ -1373,6 +1373,41 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
             Catch2::Catch2WithMain)
         catch_discover_tests(test_node_xproc_shm TEST_PREFIX "integration.")
     endif()
+
+    # The out-of-box discovery acceptance proof: two configless nodes (default_discovery + node, no
+    # hand-wired socket or leaf) reach mutual awareness over REAL multicast with loopback engaged,
+    # reproduced over several runs with medians. A same-host loopback PROXY for the discovery
+    # MECHANISM only — NOT the two-host same-LAN claim (that stays a hardware-gated manual step). The
+    # hidden [.sweep] case in the same TU is the on-demand announce period/jitter measurement rig.
+    # RUN_SERIAL + the loopback lock keep the real-multicast leg off the other socket legs.
+    add_executable(test_default_discovery_lan test_default_discovery_lan.cpp)
+    target_link_libraries(test_default_discovery_lan PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::discovery
+        plexus::asio
+        plexus::testing
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_default_discovery_lan TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+
+    # The two-PROCESS out-of-box discovery proof: two configless nodes in separate forked processes
+    # discover each other over same-host multicast loopback (DISC-02), reproduced over several runs.
+    # Fork is POSIX, so the target is Windows-excluded. RUN_SERIAL + the loopback lock as above.
+    if(NOT WIN32)
+        add_executable(test_default_discovery_xproc test_default_discovery_xproc.cpp)
+        target_link_libraries(test_default_discovery_xproc PRIVATE
+            plexus::plexus
+            plexus::core
+            plexus::wire
+            plexus::discovery
+            plexus::asio
+            plexus::testing
+            Catch2::Catch2WithMain)
+        catch_discover_tests(test_default_discovery_xproc TEST_PREFIX "integration."
+            PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+    endif()
 endif()
 
 # The host-side flat-stream to MCAP transcode round-trip: a live wire-capturing inproc

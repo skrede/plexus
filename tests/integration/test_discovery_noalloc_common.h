@@ -42,8 +42,10 @@ struct sink_timer
     {
         ex.armed = this;
     }
-    void expires_after(std::chrono::milliseconds)
+    void expires_after(std::chrono::milliseconds delay)
     {
+        last_delay = delay;
+        ++arms;
     }
     void async_wait(plexus::detail::move_only_function<void(std::error_code)> cb)
     {
@@ -59,6 +61,8 @@ struct sink_timer
             m_cb(std::error_code{});
     }
 
+    std::chrono::milliseconds last_delay{0}; // the interval the jittered re-arm requested
+    int arms{0};
     plexus::detail::move_only_function<void(std::error_code)> m_cb;
 };
 

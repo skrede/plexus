@@ -19,8 +19,7 @@ inline std::uint32_t jitter_seed_from(const node_id &id)
 }
 
 // Decorrelated announce interval: next = period - uniform(0, fraction * period), clamped positive.
-// A member-owned mt19937 keeps the draw allocation-free; fraction is an interim value pending an
-// empirical sweep, not a tuned constant.
+// A member-owned mt19937 keeps the draw allocation-free.
 template<typename Duration>
 class announce_jitter
 {

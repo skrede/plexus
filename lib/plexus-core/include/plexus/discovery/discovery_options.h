@@ -55,8 +55,10 @@ struct discovery_options
     std::chrono::milliseconds announce_period; // a conservative starting value, tuned empirically later
     flood_cap_options cap;
     io::network_interface egress_interface;
-    // fraction of announce_period subtracted at random to decorrelate co-host announce bursts; an
-    // interim value pending an empirical sweep, not a tuned constant.
+    // fraction of announce_period subtracted at random to decorrelate co-host announce bursts. 0.2
+    // reaches the decorrelation floor on-host: a co-host announce storm's near-simultaneous
+    // cross-source collisions collapse to the observation baseline, and a larger fraction buys no
+    // further decorrelation while shortening the mean interval (more announce traffic).
     double jitter_fraction;
     std::uint16_t port;
     unsigned ttl;
