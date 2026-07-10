@@ -45,7 +45,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    const auto result = plexus::tools::flat_to_mcap(flat, argv[2]);
+    const auto result = plexus::tools::flat_to_mcap(flat, argv[2], plexus::tools::schema_provider{},
+                                                    plexus::tools::well_known_schema_translator());
     if(!result.ok)
     {
         std::cerr << "error: " << result.error << '\n';
