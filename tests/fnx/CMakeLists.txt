@@ -24,10 +24,10 @@ target_link_libraries(audit_mcu_floor PRIVATE plexus::core plexus::stream plexus
 # The api-facade audit TU: node.h + publisher.h over the inproc backend, exercising the
 # converted serve_procedure_seam throw and the guarded catch(...) cleanup sites.
 add_executable(audit_api_facade audit_api_facade.cpp)
-target_link_libraries(audit_api_facade PRIVATE plexus::plexus plexus::inproc)
+target_link_libraries(audit_api_facade PRIVATE plexus::plexus plexus::inproc plexus::discovery)
 
 # The shm-free node-surface audit TU: node.h over the inproc backend, proving a non-shm
 # node instantiates with no member header that reaches the 32-bit ring_layout static_assert.
 # A compile-gate (no catch_discover_tests) — its value is that it BUILDS shm-free.
 add_executable(audit_node_shm_free audit_node_shm_free.cpp)
-target_link_libraries(audit_node_shm_free PRIVATE plexus::plexus plexus::inproc)
+target_link_libraries(audit_node_shm_free PRIVATE plexus::plexus plexus::inproc plexus::discovery)

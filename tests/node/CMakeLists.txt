@@ -18,7 +18,7 @@ add_test(NAME node.core_standalone COMMAND core_standalone)
 # pack — would fail header-not-found. The proof is that it BUILDS and LINKS shm-free; it runs
 # as an ordinary ctest entry so the gate is tracked.
 add_executable(core_only_node_compile test_core_only_node_compile.cpp)
-target_link_libraries(core_only_node_compile PRIVATE plexus::plexus plexus::core)
+target_link_libraries(core_only_node_compile PRIVATE plexus::plexus plexus::core plexus::discovery)
 add_test(NAME node.core_only_node_compile COMMAND core_only_node_compile)
 
 # The install + out-of-tree consume check: a real install to a throwaway prefix, then a
@@ -66,6 +66,7 @@ add_executable(test_node_construction test_node_construction.cpp)
 target_link_libraries(test_node_construction PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_node_construction TEST_PREFIX "node.")
 
@@ -73,6 +74,7 @@ add_executable(test_node_discovery test_node_discovery.cpp test_node_discovery_a
 target_link_libraries(test_node_discovery PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_node_discovery TEST_PREFIX "node.")
 
@@ -96,6 +98,7 @@ add_executable(test_handles test_handles.cpp test_handles_retire.cpp)
 target_link_libraries(test_handles PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_handles TEST_PREFIX "node.")
 
@@ -106,6 +109,7 @@ add_executable(test_handle_move_assign test_handle_move_assign.cpp)
 target_link_libraries(test_handle_move_assign PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_handle_move_assign TEST_PREFIX "node.")
 
@@ -113,6 +117,7 @@ add_executable(test_bytes_pubsub test_bytes_pubsub.cpp test_bytes_pubsub_fan.cpp
 target_link_libraries(test_bytes_pubsub PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_bytes_pubsub TEST_PREFIX "node.")
 
@@ -124,6 +129,7 @@ target_compile_definitions(test_call_family PRIVATE PLEXUS_HAS_FAMILY_SPELLING)
 target_link_libraries(test_call_family PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_call_family TEST_PREFIX "node.")
 
@@ -131,6 +137,7 @@ add_executable(test_caller_errc test_caller_errc.cpp)
 target_link_libraries(test_caller_errc PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_caller_errc TEST_PREFIX "node.")
 
@@ -142,6 +149,7 @@ target_compile_definitions(test_typed_reqres PRIVATE PLEXUS_HAS_FAMILY_SPELLING)
 target_link_libraries(test_typed_reqres PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_reqres TEST_PREFIX "node.")
 
@@ -153,6 +161,7 @@ add_executable(test_serve_deduction test_serve_deduction.cpp)
 target_link_libraries(test_serve_deduction PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_serve_deduction TEST_PREFIX "node.")
 
@@ -170,6 +179,7 @@ add_executable(test_late_join test_late_join.cpp)
 target_link_libraries(test_late_join PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_late_join TEST_PREFIX "node.")
 
@@ -180,6 +190,7 @@ add_executable(test_borrowed_executor_bridge test_borrowed_executor_bridge.cpp)
 target_link_libraries(test_borrowed_executor_bridge PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_borrowed_executor_bridge TEST_PREFIX "node.")
 
@@ -208,6 +219,7 @@ add_executable(test_typed_pubsub test_typed_pubsub.cpp test_typed_pubsub_posture
 target_link_libraries(test_typed_pubsub PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_pubsub TEST_PREFIX "node.")
 
@@ -218,6 +230,7 @@ add_executable(test_typed_interop_matrix test_typed_interop_matrix.cpp
 target_link_libraries(test_typed_interop_matrix PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_interop_matrix TEST_PREFIX "node.")
 
@@ -228,6 +241,7 @@ add_executable(test_typed_fastpath test_typed_fastpath.cpp)
 target_link_libraries(test_typed_fastpath PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_fastpath TEST_PREFIX "node.")
 
@@ -238,6 +252,7 @@ add_executable(test_self_loopback test_self_loopback.cpp)
 target_link_libraries(test_self_loopback PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback TEST_PREFIX "node.")
 
@@ -248,6 +263,7 @@ add_executable(test_self_loopback_mixed test_self_loopback_mixed.cpp)
 target_link_libraries(test_self_loopback_mixed PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback_mixed TEST_PREFIX "node.")
 
@@ -257,6 +273,7 @@ add_executable(test_self_loopback_latch test_self_loopback_latch.cpp)
 target_link_libraries(test_self_loopback_latch PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback_latch TEST_PREFIX "node.")
 
@@ -267,6 +284,7 @@ add_executable(test_self_loopback_recorder test_self_loopback_recorder.cpp)
 target_link_libraries(test_self_loopback_recorder PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback_recorder TEST_PREFIX "node.")
 
@@ -277,6 +295,7 @@ add_executable(test_recorder_move test_recorder_move.cpp)
 target_link_libraries(test_recorder_move PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_recorder_move TEST_PREFIX "node.")
 
@@ -287,6 +306,7 @@ add_executable(test_self_loopback_lifetime test_self_loopback_lifetime.cpp)
 target_link_libraries(test_self_loopback_lifetime PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback_lifetime TEST_PREFIX "node.")
 
@@ -297,6 +317,7 @@ add_executable(test_dispatch_reentrancy test_dispatch_reentrancy.cpp)
 target_link_libraries(test_dispatch_reentrancy PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_dispatch_reentrancy TEST_PREFIX "node.")
 

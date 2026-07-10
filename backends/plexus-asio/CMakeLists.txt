@@ -22,6 +22,7 @@ target_link_libraries(plexus-asio INTERFACE
     plexus::wire
     plexus::stream
     plexus::datagram
+    plexus::discovery
     plexus_asio_dep)
 
 target_compile_features(plexus-asio INTERFACE cxx_std_20)

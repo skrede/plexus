@@ -30,6 +30,7 @@ add_executable(test_typed_inproc_alloc test_typed_inproc_alloc.cpp)
 target_link_libraries(test_typed_inproc_alloc PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_typed_inproc_alloc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -45,6 +46,7 @@ add_executable(test_value_logger test_value_logger.cpp)
 target_link_libraries(test_value_logger PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_value_logger PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -62,6 +64,7 @@ add_executable(test_recorder_defaults_sweep test_recorder_defaults_sweep.cpp)
 target_link_libraries(test_recorder_defaults_sweep PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_recorder_defaults_sweep PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -77,6 +80,7 @@ add_executable(test_recording_qos_api
 target_link_libraries(test_recording_qos_api PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_recording_qos_api PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -90,6 +94,7 @@ add_executable(test_payload_fidelity_capture test_payload_fidelity_capture.cpp)
 target_link_libraries(test_payload_fidelity_capture PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_payload_fidelity_capture PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -106,6 +111,7 @@ add_executable(test_self_describing_capture
 target_link_libraries(test_self_describing_capture PRIVATE
     plexus::plexus
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_self_describing_capture PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -122,6 +128,7 @@ target_link_libraries(test_inproc_stamp_demand PRIVATE
     plexus::plexus
     plexus::wire
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_inproc_stamp_demand PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -382,6 +389,7 @@ target_link_libraries(test_spine_lifecycle_inproc PRIVATE
     plexus::plexus
     plexus::wire
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_spine_lifecycle_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -651,6 +659,7 @@ target_link_libraries(test_wire_public_api PRIVATE
     plexus::core
     plexus::wire
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_wire_public_api PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -682,6 +691,7 @@ target_link_libraries(test_recorder_capture PRIVATE
     plexus::core
     plexus::wire
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 target_include_directories(test_recorder_capture PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -1379,6 +1389,7 @@ if(PLEXUS_BUILD_MCAP_TRANSCODE)
         plexus::core
         plexus::wire
         plexus::inproc
+        plexus::discovery
         mcap_transcode_lib
         plexus_mcap_dep
         Catch2::Catch2WithMain)
@@ -1403,6 +1414,7 @@ if(PLEXUS_BUILD_PCAP_TRANSCODE)
         plexus::core
         plexus::wire
         plexus::inproc
+        plexus::discovery
         pcap_transcode_lib
         Catch2::Catch2WithMain)
     target_include_directories(test_pcap_transcode PRIVATE
@@ -1452,6 +1464,7 @@ endif()
 add_executable(test_discovery_noalloc test_discovery_noalloc.cpp)
 target_link_libraries(test_discovery_noalloc PRIVATE
     plexus::core
+    plexus::discovery
     plexus::wire
     plexus::stream
     Catch2::Catch2WithMain)

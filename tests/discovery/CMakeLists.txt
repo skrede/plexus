@@ -10,19 +10,20 @@ endif()
 add_executable(test_contact_card
     test_contact_card.cpp
     test_contact_card_static_discovery.cpp)
-target_link_libraries(test_contact_card PRIVATE plexus::core Catch2::Catch2WithMain)
+target_link_libraries(test_contact_card PRIVATE plexus::core plexus::discovery Catch2::Catch2WithMain)
 catch_discover_tests(test_contact_card TEST_PREFIX "discovery.")
 
 # The multicast discovery over a fake datagram_socket: the byte-identical-metadata
 # reuse, the immediate on-join announce, and the malformed-reject short-circuit. The
 # header-only template is instantiated against the fake socket, so no asio is needed; it
-# links plexus::core (the discovery), plexus::stream (the datagram_socket concept), and
+# links plexus::discovery (the leaf), plexus::stream (the datagram_socket concept), and
 # plexus::wire (the contact-card codec).
 add_executable(test_multicast_discovery test_multicast_discovery.cpp)
 target_link_libraries(test_multicast_discovery PRIVATE
     plexus::core
     plexus::wire
     plexus::stream
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_multicast_discovery TEST_PREFIX "discovery.")
 
@@ -34,5 +35,6 @@ target_link_libraries(test_multicast_discovery_flood_cap PRIVATE
     plexus::core
     plexus::wire
     plexus::stream
+    plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_multicast_discovery_flood_cap TEST_PREFIX "discovery.")

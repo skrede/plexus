@@ -6,7 +6,7 @@
 add_executable(typed_inproc_rig typed_inproc_rig.cpp)
 target_link_libraries(typed_inproc_rig PRIVATE
     plexus::plexus
-    plexus::inproc)
+    plexus::inproc plexus::discovery)
 target_include_directories(typed_inproc_rig PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
@@ -21,6 +21,6 @@ target_include_directories(inproc_upper_layer_rig PRIVATE
 add_executable(recorder_sweep recorder_sweep.cpp)
 target_link_libraries(recorder_sweep PRIVATE
     plexus::plexus
-    plexus::inproc)
+    plexus::inproc plexus::discovery)
 target_include_directories(recorder_sweep PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)

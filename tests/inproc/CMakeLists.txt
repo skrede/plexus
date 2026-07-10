@@ -13,6 +13,7 @@ target_link_libraries(test_inproc_policy PRIVATE
     plexus::core
     plexus::wire
     plexus::inproc
+    plexus::discovery
     Catch2::Catch2WithMain)
 
 # RUN_SERIAL: the alloc-counter harness reads the single-TU global operator-new counter;

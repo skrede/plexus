@@ -12,8 +12,11 @@
 
 namespace plexus::discovery {
 
-// Fixed-table discovery. browse() retains its callback so a later advertise()
-// notifies every live browser; advertise() replaces a same-name entry in place.
+// The always-works, socket-free discovery fallback: a fixed table of manually
+// seeded peers with no multicast or NIC dependency, the path a consumer falls
+// back to when network discovery is unavailable. browse() retains its callback so
+// a later advertise() notifies every live browser; advertise() replaces a
+// same-name entry in place.
 class static_discovery final : public discovery
 {
 public:
