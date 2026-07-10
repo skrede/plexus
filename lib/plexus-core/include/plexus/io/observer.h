@@ -8,6 +8,7 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/observation_events.h"
+#include "plexus/io/peer_liveliness_event.h"
 
 #include "plexus/io/detail/drop_event.h"
 
@@ -41,6 +42,9 @@ public:
     {
     }
     virtual void on_peer_rejected(const node_id &, std::string_view, handshake_outcome)
+    {
+    }
+    virtual void on_peer_liveliness(const peer_liveliness_event &)
     {
     }
     virtual void on_drop(const io::detail::drop_event &)
@@ -85,6 +89,14 @@ public:
     // The data-path opt-in: the engine fans the message/rpc/qos taps only while at least one
     // registered observer declares interest here, so a lifecycle-only observer pays nothing.
     virtual bool observes_data_path() const
+    {
+        return false;
+    }
+
+    // The fused-verdict opt-in: the arbiter emits the peer-liveliness edge only while a registered
+    // observer declares interest here, so the goodbye + TTL floor path stays byte-identical when
+    // unsubscribed.
+    virtual bool observes_liveliness() const
     {
         return false;
     }
