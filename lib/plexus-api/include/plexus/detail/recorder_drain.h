@@ -9,12 +9,14 @@
 #include "plexus/io/message_info.h"
 
 #include "plexus/io/recording/flat_recorder.h"
+#include "plexus/io/recording/record_rate_gate.h"
 #include "plexus/io/recording/pre_buffer_controller.h"
 
 #include "plexus/wire/topic_hash.h"
 
 #include <span>
 #include <string>
+#include <vector>
 #include <variant>
 #include <cstddef>
 #include <cstdint>
@@ -88,6 +90,18 @@ public:
         return true;
     }
 
+    // The per-topic record-rate rules gated before the ring push (grown once here, the cold path).
+    void set_record_rates(const std::vector<std::pair<std::uint64_t, io::recording::record_rate_rule>> &rules)
+    {
+        m_rate_gate.set_rules(rules);
+    }
+
+    // The timestamp source a max_hz rule throttles against; unset disables max_hz throttling.
+    void set_clock(plexus::detail::move_only_function<std::uint64_t()> clock)
+    {
+        m_clock = std::move(clock);
+    }
+
     void on_message_published(std::string_view fqn, const io::message_view &v) override
     {
         sample(fqn, m_empty_info, v);
@@ -132,6 +146,8 @@ private:
     void sample(std::string_view fqn, const io::message_info &info, const io::message_view &v)
     {
         const std::uint64_t hash               = wire::fqn_topic_hash(fqn);
+        if(!m_rate_gate.admit(hash, m_rate_gate.needs_clock() && m_clock ? m_clock() : 0u))
+            return;
         const std::span<const std::byte> bytes = v;
         const io::capture_fidelity fidelity    = m_fidelity_resolver ? m_fidelity_resolver(hash) : io::capture_fidelity::payload;
         const std::optional<std::uint64_t> id  = m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
@@ -147,6 +163,8 @@ private:
 
     recorder_block &m_block;
     const io::message_info m_empty_info;
+    io::recording::record_rate_gate m_rate_gate;
+    plexus::detail::move_only_function<std::uint64_t()> m_clock;
     plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> m_fidelity_resolver;
     type_id_resolver m_type_id_resolver;
 };

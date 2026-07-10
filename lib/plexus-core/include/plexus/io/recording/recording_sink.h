@@ -7,12 +7,14 @@
 #include "plexus/io/observation_events.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/recording/flat_recorder.h"
+#include "plexus/io/recording/record_rate_gate.h"
 
 #include "plexus/wire/topic_hash.h"
 
 #include "plexus/detail/compat.h"
 
 #include <span>
+#include <vector>
 #include <cstddef>
 #include <utility>
 #include <cstdint>
@@ -48,6 +50,19 @@ public:
     void set_type_id_resolver(plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)> resolver)
     {
         m_type_id_resolver = std::move(resolver);
+    }
+
+    // The per-topic record-rate rules, keyed by topic_hash. Grown once here (the cold path); the
+    // sample path only reads them.
+    void set_record_rates(const std::vector<std::pair<std::uint64_t, record_rate_rule>> &rules)
+    {
+        m_rate_gate.set_rules(rules);
+    }
+
+    // The timestamp source a max_hz rule throttles against; unset disables max_hz throttling.
+    void set_clock(plexus::detail::move_only_function<std::uint64_t()> clock)
+    {
+        m_clock = std::move(clock);
     }
 
     void on_message_published(std::string_view fqn, const message_view &v) override
@@ -90,6 +105,8 @@ private:
     void record_message(std::string_view fqn, const message_info &info, const message_view &v)
     {
         const std::uint64_t hash               = wire::fqn_topic_hash(fqn);
+        if(!m_rate_gate.admit(hash, m_rate_gate.needs_clock() && m_clock ? m_clock() : 0u))
+            return;
         const std::span<const std::byte> bytes = v;
         const capture_fidelity fidelity        = m_fidelity_resolver ? m_fidelity_resolver(hash) : capture_fidelity::payload;
         const std::optional<std::uint64_t> id  = m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
@@ -98,6 +115,8 @@ private:
 
     Recorder &m_recorder;
     const message_info m_empty_info;
+    record_rate_gate m_rate_gate;
+    plexus::detail::move_only_function<std::uint64_t()> m_clock;
     plexus::detail::move_only_function<capture_fidelity(std::uint64_t)> m_fidelity_resolver;
     plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)> m_type_id_resolver;
 };

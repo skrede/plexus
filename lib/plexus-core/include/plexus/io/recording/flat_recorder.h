@@ -45,7 +45,15 @@ public:
     void open(const node_id &node, topic_capture_rule rule, std::span<const type_schema_entry> schema = {}, capture_crypto_position crypto = capture_crypto_position::cleartext)
     {
         const auto head = m_writer.begin_stream(m_clock(), node, rule, schema, crypto);
+        m_preamble.assign(head.begin(), head.end());
         m_sink.write(head);
+    }
+
+    // The head+defs bytes written at open(), cached so a rotating sink can re-emit them at the head
+    // of each new segment (every segment then decodes standalone). Empty until open() runs.
+    std::span<const std::byte> preamble() const noexcept
+    {
+        return m_preamble;
     }
 
     void record_sample(std::uint64_t topic_hash, const message_info &info, std::uint64_t type_id, bool type_id_present, capture_fidelity fidelity, std::span<const std::byte> payload)
@@ -123,6 +131,7 @@ private:
 
     byte_sink &m_sink;
     record_stream_writer m_writer;
+    std::vector<std::byte> m_preamble;
     byte_ring m_ring;
     dropout_run m_dropouts;
     clock_fn m_clock;

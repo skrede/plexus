@@ -57,7 +57,7 @@ public:
             : m_engine(&engine)
             , m_executor(executor)
             , m_block(std::make_shared<block>(sink, opts, io::recording::flat_recorder::clock_fn{[] { return wire::now_timestamp_ns(); }}, preamble_scratch_bytes(opts.schemas)))
-            , m_sink(make_sink())
+            , m_sink(make_sink(opts))
     {
         if(opts.mode == recording_mode::pre_buffer && opts.on_anomaly)
             pre().on_anomaly(std::move(*opts.on_anomaly));
@@ -138,6 +138,15 @@ public:
         std::visit([](auto &m) { m.flush(); }, m_block->machinery);
     }
 
+    // The cached head+defs preamble the recorder wrote at open(), for a rotating sink to re-emit per
+    // segment. Empty in pre_buffer mode (no once-at-open preamble).
+    std::span<const std::byte> preamble() const
+    {
+        if(const auto *f = std::get_if<io::recording::flat_recorder>(&m_block->machinery))
+            return f->preamble();
+        return {};
+    }
+
 private:
     // Deregister the sink FIRST, then drain the ring out to it and flush.
     void drain_to_sink()
@@ -163,12 +172,16 @@ private:
     }
 
     // The sink stamps each sample with topic-hash -> fidelity and -> producer-type_id resolvers so
-    // an offline projector keys it to the declared schema.
-    std::unique_ptr<io::observer> make_sink()
+    // an offline projector keys it to the declared schema, and carries the per-topic record-rate
+    // rules gated before the ring push.
+    std::unique_ptr<io::observer> make_sink(const recorder_options &opts)
     {
-        return std::make_unique<detail::recorder_variant_sink>(
+        auto sink = std::make_unique<detail::recorder_variant_sink>(
                 *m_block, [engine = m_engine](std::uint64_t hash) { return engine->capture().rule_for(hash).fidelity; },
                 [engine = m_engine](std::uint64_t hash) { return engine->messages().producer_type_id(hash); });
+        sink->set_record_rates(opts.record_rates);
+        sink->set_clock([] { return wire::now_timestamp_ns(); });
+        return sink;
     }
 
     // open() copies the bytes into the stream synchronously, so the views may alias opts.schemas.

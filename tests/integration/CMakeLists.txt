@@ -611,6 +611,25 @@ target_include_directories(test_record_projection PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_record_projection TEST_PREFIX "integration.")
 
+# The host recording-sink oracle: the bundled std::filesystem file_sink writes a stream
+# byte-identical to the in-memory sink; the rotating_sink honors keep-N retention and re-emits the
+# recorder's cached head+defs preamble per segment so each rotated segment decodes standalone; and
+# the per-topic record-rate QoS (every-Nth / disable / max-Hz) drops before the ring push. Links
+# the host lib (plexus::core only, ungated) — no mcap, no serializer. tests/ + the current dir on
+# the include path for in_memory_byte_sink.h.
+add_executable(test_recording_host_sink
+    test_recording_host_sink.cpp
+    test_recording_host_sink_qos.cpp)
+target_link_libraries(test_recording_host_sink PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::recording-host
+    Catch2::Catch2WithMain)
+target_include_directories(test_recording_host_sink PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_recording_host_sink TEST_PREFIX "integration.")
+
 # The lossless recording_channel decorator oracle: send/recv byte-fidelity (forwarded ==
 # input on both directions), the OUT/IN taps fire once each with verbatim bytes, the inert
 # (no-tap) edge, and a captured frame reaching the recorder as a wire_frame record through
