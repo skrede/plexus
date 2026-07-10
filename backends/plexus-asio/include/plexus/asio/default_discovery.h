@@ -73,7 +73,7 @@ private:
     default_discovery(::asio::io_context &io, options_type options, log::logger *log)
             : m_options(std::move(options))
             , m_default_logger()
-            , m_socket(io, parse_group(m_options.group), m_options.port, m_options.ttl, io::congestion::block, k_send_queue_bytes, m_options.egress_interface)
+            , m_socket(io, parse_group(discovery::effective_group(m_options)), m_options.port, m_options.ttl, io::congestion::block, k_send_queue_bytes, m_options.egress_interface)
             , m_leaf(io, m_socket, m_options)
             , m_log(log != nullptr ? *log : m_default_logger)
             , m_resolve_ec(detail::resolve_interface(m_options.egress_interface).ec)

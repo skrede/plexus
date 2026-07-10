@@ -1427,6 +1427,26 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_default_discovery_lan TEST_PREFIX "integration."
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
+    # The universe-partition acceptance proof over REAL multicast: (1) a cross-universe pair stays
+    # mutually unaware on the shared group while a same-run same-universe control rendezvous (the
+    # inbound compare partitions, gated by the positive control so a dead network cannot false-pass),
+    # and (2) two hard-scoped same-universe nodes rendezvous on the universe-derived group even with a
+    # deliberately unparsable base group — the failable proof that the factory joins the effective
+    # group. RUN_SERIAL + the loopback lock keep the real-multicast leg off the other socket legs.
+    add_executable(test_default_discovery_universe test_default_discovery_universe.cpp)
+    target_link_libraries(test_default_discovery_universe PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::discovery
+        plexus::asio
+        plexus::testing
+        Catch2::Catch2WithMain)
+    target_include_directories(test_default_discovery_universe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    catch_discover_tests(test_default_discovery_universe TEST_PREFIX "integration."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+
     # The two-PROCESS out-of-box discovery proof: two configless nodes in separate forked processes
     # discover each other over same-host multicast loopback (DISC-02), reproduced over several runs.
     # Fork is POSIX, so the target is Windows-excluded. RUN_SERIAL + the loopback lock as above.
