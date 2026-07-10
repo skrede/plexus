@@ -4,14 +4,18 @@
 
 include(${PROJECT_SOURCE_DIR}/cmake/plexus-mcap.cmake)
 
-add_library(mcap_transcode_lib STATIC src/flat_to_mcap.cpp)
+add_library(mcap_transcode_lib STATIC
+    src/flat_to_mcap.cpp
+    src/foxglove_backend.cpp)
 
 target_include_directories(mcap_transcode_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+# plexus-hints-robotics is linked PRIVATE: the vendor backend TU reads the neutral concept
+# vocabulary to translate a hint, but the concept enum never leaks to a consumer of this lib.
 target_link_libraries(mcap_transcode_lib
     PUBLIC plexus::core
-    PRIVATE plexus_mcap_dep)
+    PRIVATE plexus_mcap_dep plexus::hints-robotics)
 
 # The TU compiles at the project C++20 (it includes the C++20 header-only core);
 # mcap requires only C++17, so C++20 satisfies both.

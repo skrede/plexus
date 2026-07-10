@@ -37,6 +37,8 @@
 
 #include "plexus/discovery/static_discovery.h"
 
+#include "plexus/hints/robotics.h"
+
 #include <mcap/reader.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -45,9 +47,13 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <cctype>
 #include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
+#include <iterator>
+#include <algorithm>
 #include <filesystem>
 #include <string_view>
 #include <unordered_map>
@@ -188,6 +194,9 @@ struct read_back
     // The mcap-doctor rule Foxglove enforces: a "json" message channel may only reference a
     // schema encoded "jsonschema" (or none) — never one whose own encoding is "json".
     std::unordered_map<std::string, std::pair<std::string, std::string>> channel_encodings;
+    // topic -> referenced schema name ("" for schemaId 0), so a well-known-schema decoration
+    // can be asserted by the exact schema a channel points at.
+    std::unordered_map<std::string, std::string> channel_schema_name;
 };
 
 read_back read_mcap(const std::filesystem::path &path)
@@ -203,7 +212,10 @@ read_back read_mcap(const std::filesystem::path &path)
         const std::string topic = view.channel->topic;
         rb.topics.insert(topic);
         if(rb.channel_encodings.find(topic) == rb.channel_encodings.end())
+        {
             rb.channel_encodings.emplace(topic, std::pair{view.channel->messageEncoding, view.schema ? view.schema->encoding : std::string{}});
+            rb.channel_schema_name.emplace(topic, view.schema ? view.schema->name : std::string{});
+        }
         if(topic == "plexus/wire/meta")
             ++rb.wire_meta_messages;
         else if(topic == "plexus/wire")
@@ -468,4 +480,233 @@ TEST_CASE("mcap transcode labels a declared data channel from the preamble; unde
     }
 
     std::filesystem::remove(out);
+}
+
+namespace {
+
+namespace robotics = plexus::hints::robotics;
+
+constexpr std::uint64_t k_pose_type_id = 0x503E0001u;
+constexpr std::uint64_t k_scan_type_id = 0x5CA10001u;
+
+// A codec that stamps a robotics concept into its schema_hint; the concept rides the endpoint
+// record and the backend translator joins it to a well-known schema at transcode. The encoded
+// bytes are irrelevant to the schema decoration (the transcode decodes nothing), so a minimal
+// placeholder object is emitted.
+template<std::uint64_t TypeId, robotics::kind Concept>
+struct hinted_codec
+{
+    struct value_type
+    {
+        std::uint32_t value{};
+    };
+
+    plexus::wire_bytes<> encode(const value_type &) const
+    {
+        auto owner                      = std::make_shared<std::string>("{}");
+        std::span<const std::byte> view = std::as_bytes(std::span{owner->data(), owner->size()});
+        return plexus::wire_bytes<>{view, std::move(owner)};
+    }
+
+    plexus::expected<void, std::error_code> decode(std::span<const std::byte>, value_type &) const
+    {
+        return {};
+    }
+
+    plexus::type_identity type_info() const
+    {
+        return {TypeId, "hinted", robotics::to_hint(Concept)};
+    }
+};
+
+using pose_codec = hinted_codec<k_pose_type_id, robotics::kind::pose>;
+using scan_codec = hinted_codec<k_scan_type_id, robotics::kind::laser_scan>;
+
+static_assert(plexus::typed_codec<pose_codec>);
+static_assert(plexus::typed_codec<scan_codec>);
+
+// Drive a producer that publishes a pose-hinted topic (a concept the backend maps), a
+// laser_scan-hinted topic (a concept the backend does NOT map), and a hint-less topic, all at
+// payload fidelity, and return the flat capture. No preamble schema is declared — the pose
+// channel's decoration comes solely from the hint carried on the endpoint record.
+std::vector<std::byte> capture_hinted(int count)
+{
+    inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    static_discovery disc{{}};
+
+    inproc_transport<> consumer_tp{ex, bus};
+    inproc_transport<> producer_tp{ex, bus};
+
+    bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, base_opts()};
+    bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
+
+    in_memory_byte_sink sink;
+    auto recorder = producer.make_recorder(sink);
+
+    consumer.listen({"inproc", "host-a:5000"});
+    producer.listen({"inproc", "host-b:6000"});
+    ex.drain();
+
+    plexus::subscriber<pose_codec> pose_sub{consumer, "robotics.pose", [](const pose_codec::value_type &) {}};
+    plexus::subscriber<scan_codec> scan_sub{consumer, "robotics.scan", [](const scan_codec::value_type &) {}};
+    plexus::subscriber<reading_codec> plain_sub{consumer, "robotics.plain", [](const reading &) {}};
+
+    plexus::typed_publisher_options popts;
+    popts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};
+
+    plexus::publisher<pose_codec> pose_pub{producer, "robotics.pose", popts, pose_codec{}};
+    plexus::publisher<scan_codec> scan_pub{producer, "robotics.scan", popts, scan_codec{}};
+    plexus::publisher<reading_codec> plain_pub{producer, "robotics.plain", popts, reading_codec{}};
+    ex.drain();
+
+    for(int i = 0; i < count; ++i)
+    {
+        auto p = pose_pub.borrow();
+        REQUIRE(p);
+        pose_pub.publish(std::move(p));
+        auto s = scan_pub.borrow();
+        REQUIRE(s);
+        scan_pub.publish(std::move(s));
+        auto pl = plain_pub.borrow();
+        REQUIRE(pl);
+        plain_pub.publish(std::move(pl));
+        ex.drain();
+    }
+    while(recorder.pump())
+        ;
+    recorder.flush();
+
+    const auto span = sink.bytes();
+    return std::vector<std::byte>(span.begin(), span.end());
+}
+
+}
+
+TEST_CASE("mcap transcode joins a robotics hint to a well-known jsonschema channel; unknown/0 stays opaque", "[mcap_transcode][mcap]")
+{
+    const int count = 4;
+    const auto flat = capture_hinted(count);
+    REQUIRE(!flat.empty());
+
+    const auto out = std::filesystem::temp_directory_path() / std::filesystem::path{"plexus_transcode_hinted.mcap"};
+    std::filesystem::remove(out);
+
+    // The backend hint-translator is the only vocabulary-aware seam; the consumer provider is
+    // empty here so the hint path is exercised on its own.
+    const auto result = plexus::tools::flat_to_mcap(flat, out, plexus::tools::schema_provider{},
+                                                    plexus::tools::well_known_schema_translator());
+    REQUIRE(result.ok);
+
+    const auto rb = read_mcap(out);
+    REQUIRE(rb.topics.count("robotics.pose") == 1);
+    REQUIRE(rb.topics.count("robotics.scan") == 1);
+    REQUIRE(rb.topics.count("robotics.plain") == 1);
+
+    // pose is the chosen well-known concept (documented jsonschema-plottable); its channel is a
+    // json message channel referencing the well-known jsonschema. The actual GUI plot is the
+    // manual verification step and is not asserted here.
+    const auto pose = rb.channel_encodings.at("robotics.pose");
+    REQUIRE(pose.first == "json");
+    REQUIRE(pose.second == "jsonschema");
+    REQUIRE(rb.channel_schema_name.at("robotics.pose") == "foxglove.Pose");
+
+    // laser_scan is a real concept the backend does not map -> nullopt -> opaque schemaId 0.
+    const auto scan = rb.channel_encodings.at("robotics.scan");
+    REQUIRE(scan.first == "plexus/opaque");
+    REQUIRE(scan.second.empty());
+
+    // A hint-less codec (schema_hint 0) also falls back to opaque.
+    const auto plain = rb.channel_encodings.at("robotics.plain");
+    REQUIRE(plain.first == "plexus/opaque");
+    REQUIRE(plain.second.empty());
+
+    std::filesystem::remove(out);
+}
+
+TEST_CASE("mcap transcode: the consumer type_id provider wins over the hint translator", "[mcap_transcode][mcap]")
+{
+    const int count = 2;
+    const auto flat = capture_hinted(count);
+    REQUIRE(!flat.empty());
+
+    const auto out = std::filesystem::temp_directory_path() / std::filesystem::path{"plexus_transcode_override.mcap"};
+    std::filesystem::remove(out);
+
+    // The escape hatch: a consumer provider maps the pose type_id to a different schema. It must
+    // win over the backend hint-translator (resolution order: provider > hint > preamble > opaque).
+    std::unordered_map<std::uint64_t, plexus::tools::mcap_schema> overrides;
+    overrides.emplace(k_pose_type_id,
+                      plexus::tools::mcap_schema{"json", "consumer.Override", "jsonschema",
+                                                 R"({"type":"object","title":"consumer.Override"})"});
+
+    const auto result = plexus::tools::flat_to_mcap(flat, out,
+                                                    plexus::tools::provider_from_map(std::move(overrides)),
+                                                    plexus::tools::well_known_schema_translator());
+    REQUIRE(result.ok);
+
+    const auto rb = read_mcap(out);
+    REQUIRE(rb.channel_encodings.at("robotics.pose").second == "jsonschema");
+    REQUIRE(rb.channel_schema_name.at("robotics.pose") == "consumer.Override");
+
+    std::filesystem::remove(out);
+}
+
+namespace {
+
+// The generality gate: no vendor identifier may reach the neutral tiers. The scan set mirrors
+// the four-tier boundary — the header-only core + api, the neutral hints module, the host
+// recording lib, and the two generic transcode headers. The generic transcode IMPL is not
+// scanned: it is the TU that legitimately includes <mcap/…>. "pointcloud" (no underscore)
+// targets the vendor concatenation, so the neutral concept "point_cloud" does not trip it.
+bool file_names_a_vendor(const std::filesystem::path &file)
+{
+    std::ifstream in{file, std::ios::binary};
+    std::string body{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+    std::transform(body.begin(), body.end(), body.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    for(std::string_view needle : {"foxglove", "pointcloud", "sceneupdate", "mcap/"})
+        if(body.find(needle) != std::string::npos)
+            return true;
+    return false;
+}
+
+void scan_for_vendor(const std::filesystem::path &root, std::vector<std::string> &hits)
+{
+    if(std::filesystem::is_regular_file(root))
+    {
+        if(file_names_a_vendor(root))
+            hits.push_back(root.string());
+        return;
+    }
+    if(!std::filesystem::is_directory(root))
+        return;
+    for(const auto &e : std::filesystem::recursive_directory_iterator{root})
+    {
+        const auto ext = e.path().extension();
+        if(e.is_regular_file() && (ext == ".h" || ext == ".hpp" || ext == ".cpp") && file_names_a_vendor(e.path()))
+            hits.push_back(e.path().string());
+    }
+}
+
+}
+
+TEST_CASE("no vendor identifier reaches core, api, hints, recording-host, or the generic transcode headers", "[mcap_transcode]")
+{
+    const std::filesystem::path src{PLEXUS_SOURCE_DIR};
+    const std::filesystem::path roots[] = {
+        src / "lib/plexus-core/include",
+        src / "lib/plexus-api/include",
+        src / "lib/plexus-hints-robotics/include",
+        src / "lib/plexus-recording-host/include",
+        src / "tools/mcap_transcode/include/plexus/tools/mcap_schema.h",
+        src / "tools/mcap_transcode/include/plexus/tools/flat_to_mcap.h",
+    };
+
+    std::vector<std::string> hits;
+    for(const auto &r : roots)
+        scan_for_vendor(r, hits);
+
+    INFO("vendor-named files: " << [&] { std::string s; for(const auto &h : hits) s += h + "\n"; return s; }());
+    REQUIRE(hits.empty());
 }

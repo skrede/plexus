@@ -17,6 +17,7 @@
 #include <vector>
 #include <cstdint>
 #include <utility>
+#include <optional>
 #include <unordered_map>
 
 namespace plexus::tools {
@@ -32,10 +33,10 @@ constexpr const char *k_payload_encoding = "plexus/opaque";
 constexpr const char *k_events_encoding  = "json";
 constexpr const char *k_wire_encoding    = "plexus/wire-frame";
 
-// MCAP rule (the one Foxglove enforces): a "json" message channel must reference a
-// schema encoded as "jsonschema" (a JSON Schema document) or no schema at all — never
-// a schema whose own encoding is "json". The two synthesized-JSON channels below carry
-// a real jsonschema describing the fixed object shapes events_json()/wire_json() emit.
+// The mcap-doctor rule a compliant viewer enforces: a "json" message channel must
+// reference a schema encoded as "jsonschema" (a JSON Schema document) or no schema at
+// all — never a schema whose own encoding is "json". The two synthesized-JSON channels
+// below carry a real jsonschema describing the fixed object shapes events_json()/wire_json() emit.
 constexpr const char *k_jsonschema_encoding = "jsonschema";
 
 constexpr const char *k_event_schema_name = "plexus.event";
@@ -165,7 +166,7 @@ std::span<const std::byte> as_bytes(const std::string &s)
 }
 
 // The schema to attach to a channel, or an empty encoding to attach none (schemaId 0 —
-// the serializer-agnostic opaque path Foxglove leaves undecoded).
+// the serializer-agnostic opaque path a viewer leaves undecoded).
 struct channel_schema
 {
     std::string_view name;
@@ -202,6 +203,18 @@ build_declared_labels(const rec::stream_definitions &defs)
     return by_type_id;
 }
 
+// The type_id -> schema_hint join the endpoint records carry (schema_hint rides the
+// per-publisher endpoint record). A zero hint is the no-hint sentinel and never recorded.
+std::unordered_map<std::uint64_t, std::uint64_t>
+build_schema_hints(const std::vector<rec::decoded_record> &records)
+{
+    std::unordered_map<std::uint64_t, std::uint64_t> by_type_id;
+    for(const auto &r : records)
+        if(r.category == rec::record_category::endpoint && r.type_id && r.schema_hint)
+            by_type_id[*r.type_id] = r.schema_hint;
+    return by_type_id;
+}
+
 // Lazily creates one channel per sample topic, one per control-plane category, and the
 // wire/wire-meta pair, then writes each decoded record onto its channel. Every payload is
 // copied out of the reader-aliasing span before write (the span borrows the flat stream).
@@ -210,8 +223,11 @@ class mcap_emitter
 public:
     mcap_emitter(mcap::McapWriter &writer, transcode_result &result,
                  const std::unordered_map<std::uint64_t, std::string>        &names,
-                 const std::unordered_map<std::uint64_t, declared_label>     &labels)
-        : m_writer(writer), m_result(result), m_names(names), m_labels(labels) {}
+                 const std::unordered_map<std::uint64_t, declared_label>     &labels,
+                 const std::unordered_map<std::uint64_t, std::uint64_t>      &hints,
+                 schema_provider &provider, hint_translator &translate)
+        : m_writer(writer), m_result(result), m_names(names), m_labels(labels),
+          m_hints(hints), m_provider(provider), m_translate(translate) {}
 
     void emit_sample(const rec::decoded_record &r)
     {
@@ -261,22 +277,40 @@ public:
     }
 
 private:
-    // Resolve the sample's type_id against the preamble labels: a declared type opens its
-    // channel with the declared message_encoding + schema; an undeclared (or schema-less)
-    // type falls back to the opaque path (plexus/opaque, schemaId 0).
+    // Resolve the sample's type_id to a schema; a resolved schema opens its channel with that
+    // message_encoding + schema, an unresolved type falls back to the opaque path
+    // (plexus/opaque, schemaId 0).
     mcap::ChannelId open_sample_channel(std::string_view topic, const rec::decoded_record &r)
     {
         if(r.type_id)
-        {
-            const auto it = m_labels.find(*r.type_id);
-            if(it != m_labels.end())
-            {
-                const declared_label &d = it->second;
-                return open_channel(topic, d.message_encoding,
-                                    {d.schema_name, d.schema_encoding, d.schema_data});
-            }
-        }
+            if(const auto s = resolve_schema(*r.type_id))
+                return open_channel(topic, s->message_encoding,
+                                    {s->schema_name, s->schema_encoding, s->schema_data});
         return open_channel(topic, k_payload_encoding, {});
+    }
+
+    // Resolution order: the consumer provider (keyed on type_id, wins on conflict), then the
+    // hint-translator applied to the type's recorded schema_hint, then the preamble-declared
+    // label. Any source returning nullopt defers to the next; all three empty => opaque.
+    std::optional<mcap_schema> resolve_schema(std::uint64_t type_id)
+    {
+        if(m_provider)
+            if(auto s = m_provider(type_id))
+                return s;
+        if(m_translate)
+        {
+            const auto h = m_hints.find(type_id);
+            if(h != m_hints.end() && h->second)
+                if(auto s = m_translate(h->second))
+                    return s;
+        }
+        const auto it = m_labels.find(type_id);
+        if(it != m_labels.end())
+        {
+            const declared_label &d = it->second;
+            return mcap_schema{d.message_encoding, d.schema_name, d.schema_encoding, d.schema_data};
+        }
+        return std::nullopt;
     }
 
     mcap::ChannelId open_channel(std::string_view topic, std::string_view encoding,
@@ -315,6 +349,9 @@ private:
     transcode_result &m_result;
     const std::unordered_map<std::uint64_t, std::string>    &m_names;
     const std::unordered_map<std::uint64_t, declared_label> &m_labels;
+    const std::unordered_map<std::uint64_t, std::uint64_t>  &m_hints;
+    schema_provider &m_provider;
+    hint_translator &m_translate;
 
     std::unordered_map<std::uint64_t, mcap::ChannelId> m_sample_channels;
     std::map<rec::record_category, mcap::ChannelId>    m_event_channels;
@@ -345,6 +382,14 @@ void emit_record(mcap_emitter &emitter, const rec::decoded_record &r)
 transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
                               const std::filesystem::path &out_mcap)
 {
+    return flat_to_mcap(flat_stream, out_mcap, schema_provider{}, hint_translator{});
+}
+
+transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
+                              const std::filesystem::path &out_mcap,
+                              schema_provider              provider,
+                              hint_translator              translate_hint)
+{
     transcode_result out;
 
     auto input = rec::read_projection_input(flat_stream);
@@ -357,9 +402,9 @@ transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
     out.trailing_partial_dropped = input->recovery.trailing_partial_dropped;
     out.corruption_skipped       = input->recovery.corruption_skipped;
 
-    // Chunked output (the mcap default) builds the Summary section + indexes that Foxglove
-    // needs to avoid an "unindexed file" warning; compression stays None so the chunked
-    // writer pulls in no compression-library dependency.
+    // Chunked output (the mcap default) builds the Summary section + indexes a viewer needs
+    // to avoid an "unindexed file" warning; compression stays None so the chunked writer
+    // pulls in no compression-library dependency.
     mcap::McapWriterOptions wopts{"plexus"};
     wopts.compression = mcap::Compression::None;
 
@@ -372,7 +417,8 @@ transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
 
     const auto   topic_names     = build_topic_names(input->defs, input->records);
     const auto   declared_labels = build_declared_labels(input->defs);
-    mcap_emitter emitter{writer, out, topic_names, declared_labels};
+    const auto   schema_hints    = build_schema_hints(input->records);
+    mcap_emitter emitter{writer, out, topic_names, declared_labels, schema_hints, provider, translate_hint};
     for(const auto &r : input->records)
         emit_record(emitter, r);
 

@@ -1460,12 +1460,15 @@ if(PLEXUS_BUILD_MCAP_TRANSCODE)
         plexus::wire
         plexus::inproc
         plexus::discovery
+        plexus::hints-robotics
         mcap_transcode_lib
         plexus_mcap_dep
         Catch2::Catch2WithMain)
     target_include_directories(test_mcap_transcode PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/..
         ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(test_mcap_transcode PRIVATE
+        PLEXUS_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
     catch_discover_tests(test_mcap_transcode TEST_PREFIX "integration.")
 endif()
 
