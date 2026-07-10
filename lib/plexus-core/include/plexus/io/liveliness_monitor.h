@@ -7,21 +7,20 @@
 #include "plexus/detail/compat.h"
 
 #include "plexus/io/liveness_event.h"
+#include "plexus/io/liveness_storage.h"
 
 #include "plexus/io/detail/liveliness_scan.h"
 #include "plexus/io/detail/endpoint_liveness.h"
 
-#include <map>
 #include <chrono>
 #include <cstdint>
 #include <utility>
-#include <optional>
 
 namespace plexus::io {
 
 constexpr std::chrono::milliseconds k_tick_granularity{100};
 
-template<typename Policy, typename Clock = std::chrono::steady_clock>
+template<typename Policy, typename Clock = std::chrono::steady_clock, typename Storage = std_map_liveness_storage>
     requires plexus::Policy<Policy>
 class liveliness_monitor
 {
@@ -46,31 +45,23 @@ public:
     void register_endpoint(const node_id &id, std::uint64_t topic_hash, std::uint64_t deadline_period_ns, std::uint64_t lease_ns)
     {
         const std::uint64_t now = now_ns();
-        auto &d                 = m_deadlines[deadline_key{id, topic_hash}];
-        d.deadline_period_ns    = deadline_period_ns;
-        d.last_data_seen_ns     = now;
-        d.deadline_violated     = false;
-        auto &l                 = m_leases[id];
-        l.lease_ns              = lease_ns;
-        l.last_seen_ns          = now;
-        l.lease_expired         = false;
+        m_storage.upsert_deadline(deadline_key{id, topic_hash}, deadline_period_ns, now);
+        m_storage.upsert_lease(id, lease_ns, now);
     }
 
     void deregister_endpoint(const node_id &id)
     {
-        for(auto it = m_deadlines.begin(); it != m_deadlines.end();)
-            it = (it->first.first == id) ? m_deadlines.erase(it) : std::next(it);
-        m_leases.erase(id);
+        m_storage.erase_endpoint(id);
     }
 
     // A data frame asserts both deadline-progress (per-topic) and presence (per-endpoint).
     void stamp_data(const node_id &id, std::uint64_t topic_hash)
     {
         const std::uint64_t now = now_ns();
-        if(auto it = m_deadlines.find(deadline_key{id, topic_hash}); it != m_deadlines.end())
+        if(detail::endpoint_liveness *d = m_storage.find_deadline(deadline_key{id, topic_hash}))
         {
-            it->second.last_data_seen_ns = now;
-            it->second.deadline_violated = false;
+            d->last_data_seen_ns = now;
+            d->deadline_violated = false;
         }
         stamp_seen(id);
     }
@@ -79,10 +70,10 @@ public:
     // so a heartbeat never masks a genuine missed deadline.
     void stamp_seen(const node_id &id)
     {
-        if(auto it = m_leases.find(id); it != m_leases.end())
+        if(detail::endpoint_liveness *l = m_storage.find_lease(id))
         {
-            it->second.last_seen_ns  = now_ns();
-            it->second.lease_expired = false;
+            l->last_seen_ns  = now_ns();
+            l->lease_expired = false;
         }
     }
 
@@ -116,7 +107,7 @@ private:
 
     void on_tick()
     {
-        detail::scan_liveness(m_deadlines, m_leases, now_ns(), [this](const liveness_event &ev) { fire(ev); });
+        detail::scan_liveness(m_storage, now_ns(), [this](const liveness_event &ev) { fire(ev); });
         if(m_on_tick_action)
             m_on_tick_action();
         arm_tick();
@@ -131,8 +122,7 @@ private:
     executor_type m_executor;
     timer_type m_tick;
     std::chrono::nanoseconds m_granularity;
-    std::map<deadline_key, detail::endpoint_liveness> m_deadlines;
-    std::map<node_id, detail::endpoint_liveness> m_leases;
+    Storage m_storage;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
     plexus::detail::move_only_function<void()> m_on_tick_action;
 };

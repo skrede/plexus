@@ -24,6 +24,7 @@ set(PLEXUS_IO_TESTS
     test_identity_types
     test_epoch_source
     test_known_peers_storage
+    test_liveness_storage
     test_peer_liveliness_types)
 
 foreach(test ${PLEXUS_IO_TESTS})
@@ -31,6 +32,11 @@ foreach(test ${PLEXUS_IO_TESTS})
     target_link_libraries(${test} PRIVATE plexus::core Catch2::Catch2WithMain)
     catch_discover_tests(${test} TEST_PREFIX "io.")
 endforeach()
+
+# The liveness_storage oracle's alloc gate overrides global operator new via
+# support/alloc_counter.h, so it needs tests/ on the include path (one operator-new
+# override per program — it already lives in its own single-file executable).
+target_include_directories(test_liveness_storage PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # The scenario-split block oracles: each split file's siblings compile into the one
 # existing target so catch_discover_tests enumerates the identical set.

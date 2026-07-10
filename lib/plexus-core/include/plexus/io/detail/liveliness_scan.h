@@ -7,7 +7,6 @@
 
 #include "plexus/node_id.h"
 
-#include <map>
 #include <cstdint>
 #include <utility>
 #include <optional>
@@ -46,15 +45,21 @@ inline std::optional<liveness_event> check_lease(const node_id &id, endpoint_liv
     return std::nullopt;
 }
 
-template<typename Fire>
-void scan_liveness(std::map<deadline_key, endpoint_liveness> &deadlines, std::map<node_id, endpoint_liveness> &leases, std::uint64_t now, Fire &&fire)
+template<typename Storage, typename Fire>
+void scan_liveness(Storage &storage, std::uint64_t now, Fire &&fire)
 {
-    for(auto &[key, state] : deadlines)
-        if(auto ev = check_deadline(key, state, now))
-            fire(*ev);
-    for(auto &[id, state] : leases)
-        if(auto ev = check_lease(id, state, now))
-            fire(*ev);
+    storage.for_each_deadline(
+            [&](const deadline_key &key, endpoint_liveness &state)
+            {
+                if(auto ev = check_deadline(key, state, now))
+                    fire(*ev);
+            });
+    storage.for_each_lease(
+            [&](const node_id &id, endpoint_liveness &state)
+            {
+                if(auto ev = check_lease(id, state, now))
+                    fire(*ev);
+            });
 }
 
 }
