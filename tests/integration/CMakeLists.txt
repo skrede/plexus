@@ -1399,7 +1399,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # MECHANISM only — NOT the two-host same-LAN claim (that stays a hardware-gated manual step). The
     # hidden [.sweep] case in the same TU is the on-demand announce period/jitter measurement rig.
     # RUN_SERIAL + the loopback lock keep the real-multicast leg off the other socket legs.
-    add_executable(test_default_discovery_lan test_default_discovery_lan.cpp)
+    add_executable(test_default_discovery_lan
+        test_default_discovery_lan.cpp
+        test_default_discovery_lan_sweep.cpp)
     target_link_libraries(test_default_discovery_lan PRIVATE
         plexus::plexus
         plexus::core
