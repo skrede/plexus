@@ -2,8 +2,10 @@
 #define HPP_GUARD_PLEXUS_ASIO_UDP_MULTICAST_SOCKET_H
 
 #include "plexus/asio/detail/multicast_join.h"
+#include "plexus/asio/detail/interface_resolve.h"
 #include "plexus/asio/detail/udp_server_dispatch.h"
 
+#include "plexus/io/network_interface.h"
 #include "plexus/stream/datagram_socket.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
@@ -17,6 +19,7 @@
 
 #include <span>
 #include <array>
+#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -35,7 +38,7 @@ public:
     using endpoint_type = ::asio::ip::udp::endpoint;
 
     explicit udp_multicast_socket(::asio::io_context &io, ::asio::ip::address_v4 group, std::uint16_t port, unsigned ttl, io::congestion congestion = io::congestion::block,
-                                  std::size_t send_queue_bytes = 65536)
+                                  std::size_t send_queue_bytes = 65536, io::network_interface egress = io::network_interface::any())
             : m_socket(io)
             , m_sender{}
             , m_recv_buf{}
@@ -47,6 +50,7 @@ public:
             , m_recv_resets(0)
             , m_send_queue(detail::make_send_sink(*this), send_queue_bytes)
             , m_group(group)
+            , m_egress(std::move(egress))
             , m_port(port)
             , m_ttl(ttl)
             , m_open(false)
@@ -61,8 +65,9 @@ public:
         close();
     }
 
-    // Fail-closed: an open/join error is reported through on_error and the recv loop is never armed.
-    // The bind_ep protocol selects the family; the join helper does the address-level bind to ANY.
+    // Fail-closed: an open/join/resolve error is reported through on_error and the recv loop is never
+    // armed. The bind_ep protocol selects the family; the join helper does the address-level bind to
+    // ANY. The egress selector resolves here, eagerly, and a bad interface is a fail-closed value.
     std::error_code bind(const endpoint_type &bind_ep)
     {
         std::error_code ec;
@@ -70,12 +75,21 @@ public:
         if(ec)
             return detail::server_report(*this, ec), ec;
         (void)m_socket.non_blocking(true, ec);
-        detail::join_multicast_group(m_socket, m_group, m_port, m_ttl, ec);
+        const auto resolved = detail::resolve_interface(m_egress);
+        if(resolved.ec)
+            return detail::server_report(*this, resolved.ec), resolved.ec;
+        m_effective_interface = resolved.effective_name;
+        detail::join_multicast_group(m_socket, m_group, m_port, m_ttl, resolved.egress, resolved.set_outbound, ec);
         if(ec)
             return detail::server_report(*this, ec), ec;
         m_open = true;
         detail::do_receive(*this);
         return ec;
+    }
+
+    const std::string &effective_interface() const
+    {
+        return m_effective_interface;
     }
 
     void send_multicast(std::span<const std::byte> bytes)
@@ -133,6 +147,8 @@ private:
     std::size_t m_recv_resets;
     datagram::detail::send_queue<endpoint_type> m_send_queue;
     ::asio::ip::address_v4 m_group;
+    io::network_interface m_egress;
+    std::string m_effective_interface;
     std::uint16_t m_port;
     unsigned m_ttl;
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram_cb;

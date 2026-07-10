@@ -128,3 +128,16 @@ target_include_directories(test_move_only_function PRIVATE ${CMAKE_CURRENT_SOURC
 # around the wrap; serializing keeps the count immune to concurrent-process contention.
 catch_discover_tests(test_move_only_function TEST_PREFIX "io."
     PROPERTIES RUN_SERIAL TRUE)
+
+# The lone asio-backed unit here: the plexus::io::network_interface selector is a core value type,
+# but its resolver lives at the asio leaf (getifaddrs/GetAdaptersAddresses -> IP_MULTICAST_IF egress),
+# so this target links plexus::asio and is gated on the backend. It proves the four selector forms,
+# the any() effective-interface hint, and the fail-closed bad-interface value on this host.
+if(PLEXUS_ENABLE_ASIO_BACKEND)
+    add_executable(test_network_interface test_network_interface.cpp)
+    target_link_libraries(test_network_interface PRIVATE
+        plexus::asio
+        plexus::core
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_network_interface TEST_PREFIX "io.")
+endif()

@@ -25,6 +25,10 @@ target_link_libraries(plexus-asio INTERFACE
     plexus::discovery
     plexus_asio_dep)
 
+# The multicast egress resolver (detail/interface_resolve.h) calls GetAdaptersAddresses on Windows,
+# which lives in iphlpapi; getifaddrs is in libc on Linux/macOS and needs no extra link.
+target_link_libraries(plexus-asio INTERFACE $<$<PLATFORM_ID:Windows>:iphlpapi>)
+
 target_compile_features(plexus-asio INTERFACE cxx_std_20)
 
 set_target_properties(plexus-asio PROPERTIES EXPORT_NAME asio)

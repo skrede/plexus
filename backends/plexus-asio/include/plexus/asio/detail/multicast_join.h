@@ -13,8 +13,11 @@ namespace plexus::asio::detail {
 // The one new mechanism over udp_server: bind to ANY:port (so every interface's inbound on the
 // group is delivered), issue the IPv4 IGMP join, scope the egress by TTL, and enable loopback so a
 // co-resident two-node delivery is observable. reuse_address lets co-resident joiners share the
-// port. Fail-closed: the first error short-circuits via ec and the caller never arms the recv loop.
-inline void join_multicast_group(::asio::ip::udp::socket &socket, const ::asio::ip::address_v4 &group, std::uint16_t port, unsigned ttl, std::error_code &ec)
+// port. When set_egress is true the egress interface is pinned via IP_MULTICAST_IF (asio's
+// outbound_interface); any()/unset leaves the OS to choose. Fail-closed: the first error
+// short-circuits via ec and the caller never arms the recv loop.
+inline void join_multicast_group(::asio::ip::udp::socket &socket, const ::asio::ip::address_v4 &group, std::uint16_t port, unsigned ttl, const ::asio::ip::address_v4 &egress,
+                                 bool set_egress, std::error_code &ec)
 {
     socket.set_option(::asio::socket_base::reuse_address(true), ec);
     if(ec)
@@ -22,6 +25,12 @@ inline void join_multicast_group(::asio::ip::udp::socket &socket, const ::asio::
     socket.bind({::asio::ip::udp::endpoint{::asio::ip::address_v4::any(), port}}, ec);
     if(ec)
         return;
+    if(set_egress)
+    {
+        socket.set_option(::asio::ip::multicast::outbound_interface(egress), ec);
+        if(ec)
+            return;
+    }
     socket.set_option(::asio::ip::multicast::join_group(group), ec);
     if(ec)
         return;

@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_DISCOVERY_DISCOVERY_OPTIONS_H
 #define HPP_GUARD_PLEXUS_DISCOVERY_DISCOVERY_OPTIONS_H
 
+#include "plexus/io/network_interface.h"
+
 #include <chrono>
 #include <string>
 #include <cstddef>
@@ -42,6 +44,7 @@ struct discovery_options
             : group("239.255.0.7")
             , announce_period(1000)
             , cap()
+            , egress_interface(io::network_interface::any())
             , port(7447)
             , ttl(4)
     {
@@ -50,6 +53,7 @@ struct discovery_options
     std::string group;
     std::chrono::milliseconds announce_period; // a conservative starting value, tuned empirically later
     flood_cap_options cap;
+    io::network_interface egress_interface;
     std::uint16_t port;
     unsigned ttl;
 };
