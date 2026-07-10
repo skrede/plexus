@@ -235,7 +235,7 @@ public:
             , m_leaf(engine_leaf(transports...))
             , m_self_channel(executor, m_service_name)
             , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout, opts.reconnect, opts.redial_seed, resolve_logger(opts), opts.dial_eagerly,
-                       opts.max_message_bytes, opts.discovery_ttl_ns)
+                       opts.max_message_bytes, opts.liveliness)
     {
         // The routes are installed and the card advertised synchronously in the ctor turn, before
         // any session is built (the set-before-listen contract).

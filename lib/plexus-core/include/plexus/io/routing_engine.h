@@ -17,6 +17,7 @@
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/liveliness_monitor.h"
+#include "plexus/io/liveliness_options.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/upgrade_coordinator.h"
 #include "plexus/io/peer_session_registry.h"
@@ -72,9 +73,9 @@ public:
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
-                   std::uint64_t discovery_ttl_ns = io::default_discovery_ttl_ns)
+                   io::liveliness_options live = {})
             : m_dial_eagerly(dial_eagerly)
-            , m_discovery_ttl_ns(discovery_ttl_ns)
+            , m_liveliness(live)
             , m_transport(transport)
             , m_executor(executor)
             , m_security_fanout{*this}
@@ -315,7 +316,7 @@ public:
 
 private:
     bool m_dial_eagerly;
-    std::uint64_t m_discovery_ttl_ns;
+    io::liveliness_options m_liveliness;
     Transport &m_transport;
     executor_type m_executor;
     capture_policy m_capture;
@@ -464,7 +465,8 @@ private:
     void sweep_aged_awareness()
     {
         const std::uint64_t now      = now_for_aging();
-        const std::uint64_t deadline = now > m_discovery_ttl_ns ? now - m_discovery_ttl_ns : 0;
+        const std::uint64_t ttl      = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(m_liveliness.awareness_ttl).count());
+        const std::uint64_t deadline = now > ttl ? now - ttl : 0;
         m_known_peers.expire_older_than(deadline, [](const node_id &) {});
     }
 };

@@ -11,6 +11,7 @@
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/reconnect_config.h"
+#include "plexus/io/liveliness_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_timer.h"
@@ -74,6 +75,13 @@ inline std::uint64_t clock_now_ns()
     return static_cast<std::uint64_t>(test_clock::now().time_since_epoch().count());
 }
 
+inline plexus::io::liveliness_options live_opts()
+{
+    plexus::io::liveliness_options live{};
+    live.awareness_ttl = std::chrono::nanoseconds(ttl_ns());
+    return live;
+}
+
 inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 {
     plexus::node_id id{};
@@ -105,8 +113,8 @@ struct aging_pair
     engine b;
 
     aging_pair()
-            : a(a_transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, ttl_ns())
-            , b(b_transport, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed + 1, sink, false, plexus::io::global_default_max_message_bytes, ttl_ns())
+            : a(a_transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, live_opts())
+            , b(b_transport, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed + 1, sink, false, plexus::io::global_default_max_message_bytes, live_opts())
     {
         b.listen({"inproc", "svc"});
     }

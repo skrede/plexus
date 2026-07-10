@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_NODE_OPTIONS_H
 #define HPP_GUARD_PLEXUS_NODE_OPTIONS_H
 
-#include "plexus/io/known_peers.h"
 #include "plexus/io/fragmentation.h"
-#include "plexus/io/reconnect_config.h"
-#include "plexus/io/security/attach_policy.h"
 #include "plexus/io/host_fingerprint.h"
+#include "plexus/io/reconnect_config.h"
+#include "plexus/io/liveliness_options.h"
+#include "plexus/io/security/attach_policy.h"
 
 #include "plexus/log/logger.h"
 
@@ -65,10 +65,10 @@ struct node_options
     // The node-level per-message size default a topic with no override negotiates against.
     std::size_t max_message_bytes{io::global_default_max_message_bytes};
 
-    // How long a discovered peer stays in known() without a re-announce or a heartbeat refresh
-    // before it is aged out of awareness (awareness only — an active session is never torn down).
-    // Consumer-tunable; the default is the recorded-sweep-justified conservative value.
-    std::uint64_t discovery_ttl_ns{io::default_discovery_ttl_ns};
+    // The node-scoped liveliness policy group: awareness-aging deadline, heartbeat interval,
+    // heartbeat miss limit, and the fusion policy. Consumer-tunable; the defaults are the
+    // recorded-sweep-justified conservative values.
+    io::liveliness_options liveliness{};
 
     // fidelity off selects nothing, so a node that declares no recording QoS ships zero capture.
     recording_qos capture{};
