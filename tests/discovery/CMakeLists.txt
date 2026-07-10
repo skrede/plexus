@@ -38,3 +38,19 @@ target_link_libraries(test_multicast_discovery_flood_cap PRIVATE
     plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_multicast_discovery_flood_cap TEST_PREFIX "discovery.")
+
+# The self-exclusion invariant, the self-echo health probe, and the default_discovery factory's
+# combined health surface + one-shot warning. The leaf cases run over the fake socket (a fake clock
+# drives the no-self-echo window); the factory cases drive the real asio socket, so this executable
+# needs the asio backend and is skipped when it is off.
+if(PLEXUS_ENABLE_ASIO_BACKEND)
+    add_executable(test_discovery_self_probe test_discovery_self_probe.cpp)
+    target_link_libraries(test_discovery_self_probe PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::stream
+        plexus::discovery
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_discovery_self_probe TEST_PREFIX "discovery.")
+endif()

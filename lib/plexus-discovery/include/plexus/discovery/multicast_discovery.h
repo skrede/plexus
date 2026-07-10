@@ -1,7 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_DISCOVERY_MULTICAST_DISCOVERY_H
 #define HPP_GUARD_PLEXUS_DISCOVERY_MULTICAST_DISCOVERY_H
 
+#include "plexus/discovery/discovery_health.h"
 #include "plexus/discovery/discovery_options.h"
+#include "plexus/discovery/detail/announce_jitter.h"
 #include "plexus/discovery/detail/announcement_card.h"
 #include "plexus/discovery/detail/discovery_flood_cap.h"
 #include "plexus/discovery/detail/discovery_card_codec.h"
@@ -43,10 +45,25 @@ public:
             , m_timer(executor)
             , m_options(std::move(options))
             , m_flood_cap(m_options.cap)
+            , m_jitter(m_options.jitter_fraction)
+            , m_bind_time(Clock::now())
             , m_advertising(false)
+            , m_self_seen(false)
     {
         m_socket.bind(bind_endpoint());
         m_socket.on_datagram([this](const typename Socket::endpoint_type &from, std::span<const std::byte> bytes) { on_inbound(from, bytes); });
+    }
+
+    // The self-probe verdict: healthy once the node has seen its own multicast echo, no_self_echo
+    // once the window has elapsed without it (loopback disabled), else not_yet. bad_interface is a
+    // resolve-time verdict the factory folds in, so it is never returned here.
+    discovery_health probe(typename Clock::time_point now, std::chrono::milliseconds window) const
+    {
+        if(m_self_seen)
+            return discovery_health::healthy;
+        if(now - m_bind_time >= window)
+            return discovery_health::no_self_echo;
+        return discovery_health::not_yet;
     }
 
     void advertise(const ::plexus::discovery::service_info &service) override
@@ -56,7 +73,10 @@ public:
         m_advertising              = true;
         emit_announcement();
         if(!was_advertising)
+        {
+            m_jitter.seed(detail::jitter_seed_from(m_announcement->node_id));
             arm_timer();
+        }
     }
 
     void browse(const resolved_callback &on_resolved) override
@@ -93,6 +113,13 @@ private:
         const auto ann = wire::decode_announcement(bytes);
         if(!ann)
             return;
+        // A node never notes itself: its own echo (same node_id) is recorded for the self-probe and
+        // dropped before admission, so awareness stays strictly cross-node.
+        if(m_announcement && ann->node_id == m_announcement->node_id)
+        {
+            m_self_seen = true;
+            return;
+        }
         const auto source = from.address().to_string();
         auto info         = detail::service_info_from_announcement(*ann, source);
         if((ann->flags & wire::k_announcement_goodbye_flag) != 0)
@@ -131,7 +158,7 @@ private:
 
     void arm_timer()
     {
-        m_timer.expires_after(m_options.announce_period);
+        m_timer.expires_after(m_jitter.next(m_options.announce_period));
         m_timer.async_wait(
                 [this](std::error_code ec)
                 {
@@ -152,11 +179,14 @@ private:
     typename Policy::timer_type m_timer;
     discovery_options m_options;
     detail::discovery_flood_cap<Clock> m_flood_cap;
+    detail::announce_jitter<std::chrono::milliseconds> m_jitter;
+    typename Clock::time_point m_bind_time;
     std::optional<wire::announcement> m_announcement;
     std::vector<std::byte> m_scratch;
     resolved_callback m_on_resolved_cb;
     ::plexus::discovery::discovery::withdrawn_callback m_on_withdrawn_cb;
     bool m_advertising;
+    bool m_self_seen;
 };
 
 }

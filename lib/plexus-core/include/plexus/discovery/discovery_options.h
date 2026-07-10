@@ -45,6 +45,7 @@ struct discovery_options
             , announce_period(1000)
             , cap()
             , egress_interface(io::network_interface::any())
+            , jitter_fraction(0.2)
             , port(7447)
             , ttl(4)
     {
@@ -54,6 +55,9 @@ struct discovery_options
     std::chrono::milliseconds announce_period; // a conservative starting value, tuned empirically later
     flood_cap_options cap;
     io::network_interface egress_interface;
+    // fraction of announce_period subtracted at random to decorrelate co-host announce bursts; an
+    // interim value pending an empirical sweep, not a tuned constant.
+    double jitter_fraction;
     std::uint16_t port;
     unsigned ttl;
 };

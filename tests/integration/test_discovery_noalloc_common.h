@@ -1,9 +1,13 @@
 #ifndef HPP_GUARD_TESTS_INTEGRATION_DISCOVERY_NOALLOC_COMMON_H
 #define HPP_GUARD_TESTS_INTEGRATION_DISCOVERY_NOALLOC_COMMON_H
 
-#include "plexus/node_id.h"
+#include "plexus/discovery/detail/announcement_card.h"
 #include "plexus/discovery/contact_card.h"
 #include "plexus/discovery/discovery.h"
+
+#include "plexus/wire/announcement.h"
+
+#include "plexus/node_id.h"
 #include "plexus/stream/datagram_socket.h"
 
 #include "plexus/detail/compat.h"
@@ -123,6 +127,12 @@ public:
             m_on_datagram(endpoint_type{source_host}, last);
     }
 
+    void replay_bytes(const std::string &source_host, std::span<const std::byte> bytes)
+    {
+        if(m_on_datagram)
+            m_on_datagram(endpoint_type{source_host}, bytes);
+    }
+
     std::vector<std::byte> last;
     int sends{0};
 
@@ -139,6 +149,17 @@ inline plexus::discovery::service_info make_card()
     id[15] = std::byte{0xb4};
     const auto hex = plexus::discovery::detail::hex_encode(id);
     return {hex, {}, plexus::discovery::assemble_contact_card(id, {{"tcp", 5555}})};
+}
+
+// A distinct-id announcement standing in for a real peer: its node_id differs from make_card's, so
+// the self-exclusion guard admits it and the inbound resolve path is exercised (the node's own echo
+// is excluded, never a peer's).
+inline std::vector<std::byte> make_peer_datagram()
+{
+    plexus::node_id id{};
+    id[0]  = std::byte{0x22};
+    id[15] = std::byte{0xc5};
+    return plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(id, {{"tcp", 5555}}, 30, 0));
 }
 
 }

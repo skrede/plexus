@@ -41,6 +41,7 @@ TEST_CASE("discovery re-announce is allocation-free; the inbound resolve build i
     plexus::discovery::multicast_discovery<sink_datagram_socket, sink_policy> disco{ex, sock, opts};
 
     const auto card          = make_card();
+    const auto peer          = make_peer_datagram();
     const std::string source = "127.0.1.7";
 
     int resolved = 0;
@@ -53,7 +54,7 @@ TEST_CASE("discovery re-announce is allocation-free; the inbound resolve build i
     REQUIRE(!sock.last.empty());
     REQUIRE(ex.armed != nullptr);
     ex.armed->fire();
-    sock.replay(source);
+    sock.replay_bytes(source, peer);
     REQUIRE(resolved == 1);
 
     constexpr int K = 1000;
@@ -81,7 +82,7 @@ TEST_CASE("discovery re-announce is allocation-free; the inbound resolve build i
         plexus::testing::reset_alloc_count();
         const auto before = plexus::testing::alloc_count();
         for(int i = 0; i < n; ++i)
-            sock.replay(source);
+            sock.replay_bytes(source, peer);
         return plexus::testing::alloc_count() - before;
     };
 
