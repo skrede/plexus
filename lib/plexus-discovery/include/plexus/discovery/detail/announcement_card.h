@@ -5,6 +5,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/node_id.h"
+#include "plexus/discovery/universe.h"
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/contact_card.h"
 
@@ -14,10 +15,11 @@
 
 namespace plexus::discovery::detail {
 
-inline wire::announcement announcement_from_card(const node_id &id, const std::vector<::plexus::discovery::listening_transport> &listens, std::uint64_t ttl_secs, std::uint8_t flags)
+inline wire::announcement announcement_from_card(const node_id &id, const std::vector<::plexus::discovery::listening_transport> &listens, std::uint64_t ttl_secs, std::uint8_t flags, std::uint32_t universe = k_default_universe)
 {
     wire::announcement ann;
     ann.flags    = flags;
+    ann.universe = universe;
     ann.node_id  = id;
     ann.ttl_secs = ttl_secs;
     ann.listens.reserve(listens.size());

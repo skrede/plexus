@@ -120,10 +120,10 @@ TEST_CASE("announcement codec: a struct-level universe round-trips", "[wire][ann
     REQUIRE(rt->universe == 0);
 }
 
-TEST_CASE("announcement codec: a non-zero reserved universe still decodes (read + ignore)", "[wire][announcement][discovery]")
+TEST_CASE("announcement codec: a non-zero universe still decodes (wire carries it, decode never value-rejects)", "[wire][announcement][discovery]")
 {
-    // Hand-build a buffer with a non-zero universe u32 to prove the field is forward-reserved,
-    // not a gate: it must decode the struct and retain the value, never reject on it.
+    // Hand-build a buffer with a non-zero universe u32: the wire carries any value losslessly and
+    // decode never value-rejects — the gating on the value is the discovery leaf's, tested there.
     auto bytes = encode_announcement(make_sample());
     // universe u32 sits at offset magic(4)+version(1)+flags(1) = 6.
     plexus::wire::detail::write_u32(bytes.data() + 6, 0xDEADBEEFu);

@@ -68,7 +68,7 @@ public:
 
     void advertise(const ::plexus::discovery::service_info &service) override
     {
-        m_announcement             = detail::announcement_from_service_info(service, ttl_secs());
+        m_announcement             = detail::announcement_from_service_info(service, ttl_secs(), m_options.universe);
         const bool was_advertising = m_advertising;
         m_advertising              = true;
         emit_announcement();
@@ -112,6 +112,10 @@ private:
     {
         const auto ann = wire::decode_announcement(bytes);
         if(!ann)
+            return;
+        // Fail-closed ahead of self-echo, goodbye, the source to_string, and the flood cap: a foreign
+        // universe is dropped whole, so a foreign fleet evicts no peer and pays no admission or alloc.
+        if(ann->universe != m_options.universe)
             return;
         // A node never notes itself: its own echo (same node_id) is recorded for the self-probe and
         // dropped before admission, so awareness stays strictly cross-node.

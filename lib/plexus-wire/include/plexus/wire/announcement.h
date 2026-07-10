@@ -21,10 +21,10 @@ namespace plexus::wire {
 
 // The discovery announcement: a node's contact card on an open multicast group. It carries
 // the same fields as contact_card (node_id + one port per listening transport + schema) plus
-// a goodbye flag and a reserved universe id, and NOTHING else — a node advertising topic or
-// key-realm state would leak it on the unauthenticated link. Decoded straight off an untrusted
-// datagram, so decode_announcement is hardened (magic prefix + reader latch, nullopt on any
-// malformation, never a partial struct).
+// a goodbye flag and a universe id the discovery leaf filters on, and NOTHING else — a node
+// advertising topic or key-realm state would leak it on the unauthenticated link. Decoded straight
+// off an untrusted datagram, so decode_announcement is hardened (magic prefix + reader latch,
+// nullopt on any malformation, never a partial struct).
 struct announcement
 {
     std::uint8_t version  = static_cast<std::uint8_t>(discovery::k_contact_card_schema_version);
@@ -107,9 +107,9 @@ inline std::vector<std::byte> encode_announcement(const announcement &ann)
 
 // Decode an announcement off an untrusted multicast datagram. The magic and an unknown major
 // version short-circuit to nullopt before any later field is trusted; the universe is read and
-// retained (never rejected on value — it is reserved for a future minor, not a gate). The whole
-// field list is read against the latching reader, then ok() is tested once: a truncated or
-// overlong-prefixed buffer yields nullopt with no partial struct.
+// retained value-agnostically — decode never rejects on it, the discovery leaf is what filters on
+// the value. The whole field list is read against the latching reader, then ok() is tested once: a
+// truncated or overlong-prefixed buffer yields nullopt with no partial struct.
 inline std::optional<announcement> decode_announcement(std::span<const std::byte> payload)
 {
     reader r{payload};

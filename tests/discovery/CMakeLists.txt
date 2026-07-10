@@ -33,6 +33,18 @@ target_link_libraries(test_multicast_discovery PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_multicast_discovery TEST_PREFIX "discovery.")
 
+# The universe partition over the same fake socket: foreign-universe isolation (announce and
+# goodbye), browse-only filtering, same-universe resolve, configless default-universe rendezvous,
+# and the self-echo latching the self-probe under a custom universe.
+add_executable(test_multicast_discovery_universe test_multicast_discovery_universe.cpp)
+target_link_libraries(test_multicast_discovery_universe PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::stream
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_multicast_discovery_universe TEST_PREFIX "discovery.")
+
 # The consumer-tunable anti-flood admission cap over the same fake socket, with a virtual clock the
 # cases advance by hand: the max-peers bound, established-peer protection, LRU eviction, the
 # per-source rate window, the disabled mode, and the ungated goodbye path.

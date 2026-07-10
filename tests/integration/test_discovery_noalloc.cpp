@@ -102,6 +102,45 @@ TEST_CASE("discovery re-announce is allocation-free; the inbound resolve build i
     REQUIRE(per_call <= 12); // but it is a small bounded constant, not a growth with K
 }
 
+TEST_CASE("discovery drops a foreign universe allocation-free before the resolve build",
+          "[integration][discovery]")
+{
+    // The inbound universe compare returns before service_info_from_announcement's bounded build,
+    // before from.address().to_string(), and before flood_cap.admit — so a foreign-universe
+    // datagram pays nothing. The injected announcement carries ZERO listens, so decode_announcement
+    // itself reserves nothing (it grows the listens vector only when listens are present): the drop
+    // is then the u32 compare alone and the measured delta is a literal 0.
+    sink_executor ex;
+    sink_datagram_socket sock;
+
+    plexus::discovery::discovery_options opts;
+    plexus::discovery::multicast_discovery<sink_datagram_socket, sink_policy> disco{ex, sock, opts};
+
+    int resolved = 0;
+    disco.browse([&](const plexus::discovery::service_info &) { ++resolved; });
+
+    plexus::node_id fid{};
+    fid[0]  = std::byte{0x91};
+    fid[15] = std::byte{0x6e};
+    const std::uint32_t foreign = opts.universe ^ 0xFFFFFFFFu;
+    const auto bytes            = plexus::wire::encode_announcement(
+            plexus::discovery::detail::announcement_from_card(fid, {}, 30, 0, foreign));
+
+    const std::string source = "127.0.2.9";
+    sock.replay_bytes(source, bytes); // warm the handler path once
+    REQUIRE(resolved == 0);
+
+    constexpr int K = 1000;
+    plexus::testing::reset_alloc_count();
+    const auto before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+        sock.replay_bytes(source, bytes);
+    const auto after = plexus::testing::alloc_count();
+
+    REQUIRE(resolved == 0);       // never admitted
+    REQUIRE(after - before == 0); // the compare returns before every allocating step
+}
+
 TEST_CASE("discovery re-announce stays allocation-free with announce jitter engaged, and the "
           "jittered interval genuinely varies",
           "[integration][discovery]")
