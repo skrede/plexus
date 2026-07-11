@@ -66,8 +66,9 @@ struct node_options
     std::size_t max_message_bytes{io::global_default_max_message_bytes};
 
     // The node-scoped liveliness policy group: awareness-aging deadline, heartbeat interval,
-    // heartbeat miss limit, and the fusion policy. Consumer-tunable; the defaults are the
-    // recorded-sweep-justified conservative values.
+    // heartbeat miss limit, and the fusion policy. Consumer-tunable; each default's provenance
+    // (the carried aging deadline vs the interim heartbeat values) is documented at the
+    // liveliness_options definition.
     io::liveliness_options liveliness{};
 
     // fidelity off selects nothing, so a node that declares no recording QoS ships zero capture.
