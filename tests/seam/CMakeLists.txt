@@ -195,3 +195,12 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_datagram_socket_concept TEST_PREFIX "seam.")
 endif()
+
+# Structural regression for the discovery module seam: a CMake script test
+# (no C++ needed) asserting from the source tree that core/api link no
+# plexus::discovery, plexus-discovery links only core+wire, the api names only
+# the discovery contract, and the platform-enumeration primitives stay
+# leaf-only. Registered under the `seam.` prefix.
+add_test(NAME seam.discovery_layering
+    COMMAND ${CMAKE_COMMAND} -DPLEXUS_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/discovery_layering_check.cmake)
