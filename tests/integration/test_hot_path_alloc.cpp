@@ -4,6 +4,7 @@
 #include "plexus/policy.h"
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/peer_liveliness.h"
 #include "plexus/detail/compat.h"
 
 #include "plexus/wire/data_frame.h"
@@ -431,6 +432,50 @@ TEST_CASE("steady-state publish through the egress scheduler bands stays frame-o
     // fanning to 2 or to 8 — the band slots hold the single shared owner by addref, NOT
     // one buffer per destination.
     REQUIRE(allocs_per_publish(2) == allocs_per_publish(8));
+}
+
+// The fused peer-liveliness arbiter tick + verdict path is zero-alloc at steady state: once a peer
+// has latched alive, a fresh heartbeat stamp followed by evaluate holds the verdict (no transition),
+// so settle short-circuits at the latch and never re-enters emit. The default heap-backed storage
+// grows only for the first-seen peer (the warm-up); every steady tick reuses the resident node, so
+// the per-tick heap delta is zero — the invariant the constrained fixed-capacity path relies on.
+TEST_CASE("steady-state fused liveliness tick and verdict path is zero-alloc", "[integration]")
+{
+    io::liveliness_options opts;
+    io::peer_liveliness<> arbiter{opts};
+
+    std::size_t verdicts = 0;
+    io::liveliness_verdict latched{io::liveliness_verdict::lost};
+    arbiter.add_subscriber();
+    arbiter.on_verdict([&](const io::peer_liveliness_event &ev) { latched = ev.verdict; ++verdicts; });
+
+    node_id peer{};
+    peer[15] = std::byte{0x5A};
+
+    const std::uint64_t interval_ns = 100'000'000; // one interim heartbeat cadence
+    std::uint64_t now               = interval_ns;
+
+    // Warm-up: bring the peer up and latch the first (alive) verdict. This is the sole heap growth —
+    // the storage inserts the resident node here, outside the measured window.
+    arbiter.note_session_up(peer);
+    arbiter.note_heartbeat(peer, now);
+    arbiter.evaluate(now);
+    REQUIRE(verdicts == 1);
+    REQUIRE(latched == io::liveliness_verdict::alive);
+
+    constexpr int K = 1024;
+    plexus::testing::reset_alloc_count();
+    const auto before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+    {
+        now += interval_ns;
+        arbiter.note_heartbeat(peer, now); // fresh stamp: the peer stays alive
+        arbiter.evaluate(now);             // no transition -> settle short-circuits at the latch
+    }
+    const auto after = plexus::testing::alloc_count();
+
+    REQUIRE(verdicts == 1);       // the verdict never re-fired: no transition across the loop
+    REQUIRE(after - before == 0); // the arbiter tick/verdict path allocates nothing at steady state
 }
 
 #ifdef PLEXUS_HAVE_ASIO_MUX

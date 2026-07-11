@@ -18,6 +18,8 @@
 #include "plexus/io/fixed_peer_storage.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/liveliness_monitor.h"
+#include "plexus/io/peer_liveliness.h"
 
 #include "plexus/io/security/cookie_secret.h"
 #include "plexus/io/security/attach_policy.h"
@@ -77,6 +79,25 @@ int main()
     (void)bounded.lookup(self);
     (void)bounded.contains(self);
     bounded.forget(self);
+
+    // The constrained-target fused-liveliness path: instantiate the monitor over the fixed-capacity
+    // liveness tables (leases x deadlines) and the arbiter over the fixed-capacity peer table, then
+    // drive the ingest verbs WITHIN capacity so their member bodies compile on the -fno-exceptions
+    // floor. The over-capacity fail-closed refusal is NOT exercised here — fail_closed aborts under
+    // -fno-exceptions, so a directed over-capacity call would abort; that refusal is proved by the
+    // exceptions-enabled unit tests instead.
+    plexus::io::liveliness_monitor<policy, std::chrono::steady_clock, plexus::io::fixed_liveness_storage<8, 32>> monitor{executor};
+    monitor.register_endpoint(self, 0xC0DEu, 1'000'000, 2'000'000);
+    monitor.stamp_data(self, 0xC0DEu);
+    monitor.stamp_seen(self);
+    monitor.deregister_endpoint(self);
+
+    plexus::io::peer_liveliness<plexus::io::fixed_liveliness_peer_storage<8>> arbiter{plexus::io::liveliness_options{}};
+    arbiter.note_session_up(self);
+    arbiter.note_awareness(self, 0);
+    arbiter.note_heartbeat(self, 1'000);
+    arbiter.evaluate(2'000);
+    arbiter.note_session_down(self, 3'000);
 
     // Drive the serial CRC decorator's inbound scan/verify path so its member bodies are
     // instantiated and compiled on the -fno-exceptions floor (the MCU build reuses it).
