@@ -60,7 +60,7 @@ TEST_CASE("peer_liveliness types verdict names exactly alive and lost", "[io][pe
     REQUIRE(static_cast<std::uint8_t>(liveliness_verdict::lost) == 1);
 }
 
-TEST_CASE("peer_liveliness types options default to the carried and interim values", "[io][peer_liveliness]")
+TEST_CASE("peer_liveliness types options default to the carried and swept values", "[io][peer_liveliness]")
 {
     const liveliness_options opts;
     REQUIRE(opts.awareness_ttl == std::chrono::seconds(15));

@@ -18,8 +18,8 @@ enum class combine : std::uint8_t
 // The node-scoped fused-liveliness knobs. awareness_ttl carries the already-swept discovery
 // awareness TTL (a liveliness threshold, kept distinct from the multicast hop-limit knob).
 // heartbeat_interval matches the monitor tick cadence so a heartbeat emission rides the existing
-// tick without a second timer. heartbeat_interval and heartbeat_miss_limit are interim, pending
-// the on-target sweep that locks the numerics.
+// tick without a second timer. heartbeat_interval and heartbeat_miss_limit are validated against an
+// on-target detection-latency sweep.
 struct liveliness_options
 {
     liveliness_options()

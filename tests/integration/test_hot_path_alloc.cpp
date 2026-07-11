@@ -452,7 +452,7 @@ TEST_CASE("steady-state fused liveliness tick and verdict path is zero-alloc", "
     node_id peer{};
     peer[15] = std::byte{0x5A};
 
-    const std::uint64_t interval_ns = 100'000'000; // one interim heartbeat cadence
+    const std::uint64_t interval_ns = 100'000'000; // the default heartbeat cadence
     std::uint64_t now               = interval_ns;
 
     // Warm-up: bring the peer up and latch the first (alive) verdict. This is the sole heap growth —

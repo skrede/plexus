@@ -67,7 +67,7 @@ struct node_options
 
     // The node-scoped liveliness policy group: awareness-aging deadline, heartbeat interval,
     // heartbeat miss limit, and the fusion policy. Consumer-tunable; each default's provenance
-    // (the carried aging deadline vs the interim heartbeat values) is documented at the
+    // (the carried aging deadline vs the swept heartbeat values) is documented at the
     // liveliness_options definition.
     io::liveliness_options liveliness{};
 
