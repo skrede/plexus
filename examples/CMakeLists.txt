@@ -8,6 +8,7 @@ function(plexus_example name)
     target_link_libraries(${name} PRIVATE ${ARGN})
 endfunction()
 
+add_subdirectory(discovery)
 add_subdirectory(pub_sub)
 add_subdirectory(req_res)
 add_subdirectory(inproc)

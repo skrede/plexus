@@ -5,6 +5,7 @@ demonstrates:
 
 | Folder                       | What it shows                                                        |
 | ---------------------------- | -------------------------------------------------------------------- |
+| [`discovery/`](discovery)    | Zero-config discovery out of the box, plus universes + liveliness    |
 | [`pub_sub/`](pub_sub)        | Publish/subscribe, in typed and raw-bytes flavors (asio + mDNS)      |
 | [`req_res/`](req_res)        | Request/response, in typed and raw-bytes flavors (asio + mDNS)       |
 | [`inproc/`](inproc)          | The in-process zero-serialization fast path                          |
@@ -22,7 +23,7 @@ cmake --build build -j4
 ```
 
 The in-process examples (`inproc/`, `logging/`, `recording/`) need only the default
-configuration; the networked examples (`pub_sub/`, `req_res/`, `qos/`) need the asio backend
+configuration; the networked examples (`discovery/`, `pub_sub/`, `req_res/`, `qos/`) need the asio backend
 (and mDNS for `pub_sub`/`req_res`). Binaries land in `build/examples/<folder>/<name>`.
 
 ## Single-binary examples
@@ -120,6 +121,26 @@ recipe, the lean crypto-free `local_shm_mux` alias).
 
 Each runs the first binary in one shell and the second in another. Discovery over mDNS takes a
 few seconds to converge.
+
+Zero-config discovery — one binary run twice (pass `second` to the second instance). Each node
+composes `plexus::asio::default_discovery` with no group, port, or interface configuration and
+prints when it has noted its peer; the same-host case works over multicast loopback out of the
+box:
+
+```sh
+./build/examples/discovery/discovery_hello           # shell 1
+./build/examples/discovery/discovery_hello second    # shell 2
+```
+
+The two knobs on top of the same composition: a universe assignment via `discovery_options`
+(nodes in another universe never rendezvous with these) and a liveliness observer printing the
+fused peer-alive / peer-lost verdicts. Start both, then kill one — the survivor prints the lost
+verdict once the peer's awareness ages out:
+
+```sh
+./build/examples/discovery/discovery_fleet           # shell 1
+./build/examples/discovery/discovery_fleet second    # shell 2
+```
 
 Pub/sub (bytes, then typed):
 
