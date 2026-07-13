@@ -47,10 +47,34 @@ asserts — it is not the plot proof.
 2. Add a **3D** panel. The `robot.pose` topic should appear as a `foxglove.PoseInFrame`; enable it.
    Set the panel's **Display frame to "world"** (the frame the pose is published in) so the 3D
    panel has a reference frame to render against, and confirm the pose axis renders in the scene.
-3. Add a **Plot** panel and plot `robot.pose.pose.position.x` (and `.y`) over time. Confirm the
-   series draws the ramp the example publishes (x = 0..7, y = 0..14).
+3. Add a **Plot** panel. Foxglove message paths take the `"<topic>".<field>` form — the topic
+   segment is quoted because plexus topic names contain dots. Add both series (paths verbatim):
+
+   ```
+   "robot.pose".pose.position.x
+   "robot.pose".pose.position.y
+   ```
+
+   Confirm each series draws the ramp the example publishes (x = 0..7, y = 0..14) over time.
 4. "Opens" is not sufficient. The capture PLOTS only if the pose axis renders in the 3D panel AND
    the position series draws in the Plot panel.
+
+## Supplied-schema capture
+
+The consumer-supplied-schema path gets the same check:
+
+```
+cmake --build build -j4 --target mcap_opaque_supplied_schema
+./build/examples/recording/mcap_opaque_supplied_schema
+```
+
+Load `mcap_opaque_supplied_schema.mcap` and plot (path verbatim):
+
+```
+"telemetry.sensor".reading
+```
+
+Confirm the reading series draws the ramp the example publishes (reading = 200..207).
 
 ## Encoding-support validation
 
@@ -66,10 +90,15 @@ sufficient for the intended visualization:
 
 ## Recorded verdict
 
-- **Status:** UNRUN — plot UNPROVEN until an operator performs the steps above.
-- **Result (PASS / FAIL):** _pending_
-- **Date:** _pending_
-- **Operator:** _pending_
-- **Foxglove version:** _pending_
-- **Encoding finding (jsonschema plots / protobuf needed):** _pending_
-- **Notes:** _pending_
+- **Status:** RUN
+- **Result (PASS / FAIL):** PASS
+- **Date:** 2026-07-13
+- **Operator:** skrede
+- **Foxglove version:** not recorded (screenshot evidence on file, GMT+2 session 2026-07-13)
+- **Encoding finding (jsonschema plots / protobuf needed):** jsonschema suffices — no protobuf provider needed.
+- **Notes:** Both position series drew in the Plot panel via the quoted message path
+  (`"robot.pose".pose.position.x` / `.y`) — the unquoted path in the original step 3 was wrong and
+  is corrected above; the topic segment must be quoted because the topic name contains a dot. The
+  supplied-schema capture (`mcap_opaque_supplied_schema.mcap`) was exercised the same session: its
+  `"telemetry.sensor".reading` series drew the published ramp in the Plot panel. The 3D
+  `foxglove.PoseInFrame` render was established when the schema was fixed (renders + animates).
