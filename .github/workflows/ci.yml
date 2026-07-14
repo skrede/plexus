@@ -158,8 +158,17 @@ jobs:
       - name: build
         run: cmake --build build --parallel 4
 
+      # GitHub macOS 15 runners block multicast for the unprivileged runner process (Local Network
+      # Privacy; actions/runner-images#10924), and loopback multicast is broken on Darwin 24+, so the
+      # real-multicast-loopback discovery tests cannot run there. They stay in the suite on Linux and on
+      # capable local machines; only the macOS runner drops the live-multicast label.
       - name: test
+        if: runner.os != 'macOS'
         run: ctest --test-dir build --output-on-failure
+
+      - name: test (macOS excludes live-multicast)
+        if: runner.os == 'macOS'
+        run: ctest --test-dir build --output-on-failure --label-exclude live-multicast
 
   # Coverage is informational (see codecov.yml) — a single gcc leg is enough signal. Skipped on
   # milestone pushes to keep WIP feedback fast; runs on develop, master, PRs, and dispatch.
