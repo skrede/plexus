@@ -1,0 +1,43 @@
+name: fuzz
+
+on:
+  push:
+    branches: [master, develop, 'milestone/**']
+    paths-ignore: ['**/*.md', 'docs/**']
+  pull_request:
+    branches: [master, develop]
+    paths-ignore: ['**/*.md', 'docs/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Compile-gate only: build the libFuzzer harnesses so they cannot bit-rot against the wire types
+  # they target. Execution with a time budget and corpus accumulation is a separate, later step.
+  compile-gate:
+    name: fuzz compile-gate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: install dependencies
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev clang-18
+
+      - name: configure
+        env:
+          CC: clang-18
+          CXX: clang++-18
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \
+            -DPLEXUS_BUILD_FUZZ_TESTS=ON
+
+      - name: build fuzz harnesses
+        run: cmake --build build --parallel 4

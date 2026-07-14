@@ -1,0 +1,48 @@
+name: clang-tidy
+
+on:
+  push:
+    branches: [master, develop, 'milestone/**']
+    paths-ignore: ['**/*.md', 'docs/**']
+  pull_request:
+    branches: [master, develop]
+    paths-ignore: ['**/*.md', 'docs/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Advisory only (continue-on-error): findings surface in the job log but never fail CI.
+  clang-tidy:
+    name: clang-tidy (advisory)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - name: checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: install dependencies
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev clang-tidy-18 clang-18
+
+      - name: configure (export compile commands)
+        env:
+          CC: clang-18
+          CXX: clang++-18
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \
+            -DPLEXUS_ENABLE_CRYPTO_BACKEND=ON \
+            -DPLEXUS_BUILD_TESTS=ON
+
+      - name: run clang-tidy
+        run: |
+          run-clang-tidy-18 -p build -quiet \
+            -header-filter='(lib|backends)/plexus' \
+            'backends/.*\.cpp' 'lib/.*\.cpp'
