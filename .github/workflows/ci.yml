@@ -1,4 +1,4 @@
-name: cross-compiler
+name: CI
 
 on:
   push:
@@ -17,10 +17,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Tier the matrix by trigger to spend the private-repo minute budget where it earns signal:
-  # milestone pushes get the modern-liburing (io_uring futex) Linux leg only; develop gets the full
-  # Linux set; the macOS (10x-billed) and Windows (2x-billed) legs ride only a PR into master (plus
-  # a manual dispatch). A doc-only change trips paths-ignore and never reaches here.
+  # Tier the matrix by trigger to keep feedback fast where it matters — public CI minutes are free,
+  # so this is a latency/signal choice, not a cost one. Milestone pushes (frequent WIP) get the
+  # io_uring Linux leg only for quick signal; develop and develop PRs get the full Linux set; the
+  # slower-to-schedule macOS and Windows legs ride the release path — a PR into master, a push to
+  # master, or a manual dispatch. A doc-only change trips paths-ignore and never reaches here.
   select:
     name: select matrix
     runs-on: ubuntu-latest
@@ -49,7 +50,7 @@ jobs:
           elif [ "$event" = "push" ] && [ "$ref" = "refs/heads/develop" ]; then
             legs="$linux_all"
           elif [ "$event" = "push" ] && [ "$ref" = "refs/heads/master" ]; then
-            legs="$linux_all"
+            legs="$linux_all,$cross"
           elif [ "$event" = "push" ] && [ "${ref#refs/heads/milestone/}" != "$ref" ]; then
             legs="$linux_uring"
           else
@@ -157,5 +158,66 @@ jobs:
       - name: build
         run: cmake --build build --parallel 4
 
+      # The real-multicast-loopback discovery tests cannot run on the GitHub macOS or Windows runners:
+      # macOS 15 blocks multicast for the unprivileged runner process (Local Network Privacy;
+      # actions/runner-images#10924) and loopback multicast is broken on Darwin 24+, and the Windows
+      # loopback adapter does not carry multicast traffic. Linux runs the full suite; the non-Linux
+      # runners drop the live-multicast label. The tests stay available on capable local machines.
+      - name: test
+        if: runner.os == 'Linux'
+        run: ctest --test-dir build --output-on-failure
+
+      - name: test (macOS/Windows exclude live-multicast)
+        if: runner.os != 'Linux'
+        run: ctest --test-dir build --output-on-failure --label-exclude live-multicast
+
+  # Coverage is informational (see codecov.yml) — a single gcc leg is enough signal. Skipped on
+  # milestone pushes to keep WIP feedback fast; runs on develop, master, PRs, and dispatch.
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/milestone/')
+    steps:
+      - name: checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y liburing-dev gcc-14 g++-14
+          pip install gcovr
+
+      - name: configure
+        env:
+          CC: gcc-14
+          CXX: g++-14
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="--coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+            -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \
+            -DPLEXUS_ENABLE_CRYPTO_BACKEND=ON \
+            -DPLEXUS_BUILD_TESTS=ON
+
+      - name: build
+        run: cmake --build build --parallel 4
+
       - name: test
         run: ctest --test-dir build --output-on-failure
+
+      - name: generate coverage report
+        run: |
+          gcovr build --root . \
+            --gcov-executable gcov-14 \
+            --filter 'lib/plexus-.*/include/' \
+            --filter 'backends/plexus-.*/(include|src)/' \
+            --exclude 'lib/plexus-testing/' \
+            --gcov-ignore-errors=source_not_found \
+            --xml coverage.xml
+
+      - name: upload coverage to codecov
+        uses: codecov/codecov-action@fdcc8476540edceab3de004e990f80d881c6cc00 # v5.5.0
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

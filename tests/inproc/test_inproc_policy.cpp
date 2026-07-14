@@ -113,8 +113,10 @@ TEST_CASE("alloc_counter snapshots a global new/delete delta", "[inproc]")
 {
     plexus::testing::reset_alloc_count();
     const auto before      = plexus::testing::alloc_count();
-    volatile auto *p       = new int(7);
+    // A new-expression's allocation is elidable under optimization ([expr.new]/10); the positive
+    // control calls the allocation function directly so it is always counted.
+    void *raw              = ::operator new(sizeof(int));
     const auto after_alloc = plexus::testing::alloc_count();
-    delete p;
+    ::operator delete(raw);
     REQUIRE(after_alloc > before); // the override counted the allocation
 }

@@ -30,17 +30,22 @@ TEST_CASE("recording_host_sink rotating_sink keep_n retention keeps the newest s
     opts.basename  = "cap";
     opts.keep      = 2;
 
-    rotating_sink rs{opts};
-    const std::array<std::byte, 4> blob{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
-    rs.write(blob);
-    for(int i = 0; i < 4; ++i)
+    // The sink holds its active segment file open for its lifetime, and Windows cannot delete an
+    // open file (POSIX unlinks it); scope the sink so it closes before the on-disk checks and cleanup.
+    std::vector<std::filesystem::path> kept;
     {
-        rs.rotate();
+        rotating_sink rs{opts};
+        const std::array<std::byte, 4> blob{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
         rs.write(blob);
+        for(int i = 0; i < 4; ++i)
+        {
+            rs.rotate();
+            rs.write(blob);
+        }
+        rs.flush();
+        REQUIRE(rs.segments().size() == 2);
+        kept.assign(rs.segments().begin(), rs.segments().end());
     }
-    rs.flush();
-
-    REQUIRE(rs.segments().size() == 2);
 
     std::size_t files = 0;
     for(const auto &entry : std::filesystem::directory_iterator(dir))
@@ -48,7 +53,7 @@ TEST_CASE("recording_host_sink rotating_sink keep_n retention keeps the newest s
             ++files;
     REQUIRE(files == 2);
 
-    for(const std::filesystem::path &seg : rs.segments())
+    for(const std::filesystem::path &seg : kept)
         REQUIRE(std::filesystem::exists(seg));
 
     std::filesystem::remove_all(dir);

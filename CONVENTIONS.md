@@ -9,7 +9,7 @@ style. When something here conflicts with habit, this wins.
 
 Planning lives in the planning tools, never in the code. Never reference an ID, key, or label
 produced by a planning or issue-tracking tool — phase numbers, milestone names, plan or task
-numbers, requirement IDs, invariant labels (`INV-2`, `SER-01`, …), or any `.planning`/GSD
+numbers, requirement IDs, invariant labels (`INV-2`, `SER-01`, …), or any planning-tool or issue-tracker
 artifact — anywhere in the codebase: identifiers, comments, documentation, examples, and commit
 messages.
 

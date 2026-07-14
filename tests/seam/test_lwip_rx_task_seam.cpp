@@ -77,9 +77,8 @@ TEST_CASE("lwip rx task delivers a framed message POSTED, exactly once", "[seam]
     const auto payload = bytes_of({0xDE, 0xAD, 0xBE, 0xEF});
     sender.send(on_wire(payload));
 
-    for(int turn = 0; turn < 100; ++turn)
-        if(rx_turn(receiver, ex))
-            break;
+    bool got = false;
+    plexus::test::poll_until([&] { got = got || rx_turn(receiver, ex); }, [&] { return got; });
     REQUIRE(deliveries == 0); // POSTED: nothing delivered until the executor task drains
 
     ex.drain();
@@ -109,9 +108,8 @@ TEST_CASE("lwip rx task reassembles a split frame into one posted delivery", "[s
     REQUIRE(deliveries == 0); // the header alone is a partial frame — nothing delivered yet
 
     sender.send(tail);
-    for(int turn = 0; turn < 100; ++turn)
-        if(rx_turn(receiver, ex))
-            break;
+    bool got = false;
+    plexus::test::poll_until([&] { got = got || rx_turn(receiver, ex); }, [&] { return got; });
     ex.drain();
     REQUIRE(deliveries == 1); // the split frame reassembled into exactly one posted delivery
 }
@@ -132,8 +130,7 @@ TEST_CASE("lwip rx task surfaces a peer close as on_error, never on_protocol_clo
 
     sender.close(); // an orderly peer FIN mid-stream
 
-    for(int turn = 0; turn < 100 && errors == 0; ++turn)
-        rx_turn(receiver, ex);
+    plexus::test::poll_until([&] { rx_turn(receiver, ex); }, [&] { return !(errors == 0); });
 
     REQUIRE(errors == 1);          // the hard-drop seam fired on the RX context
     REQUIRE_FALSE(protocol_close); // DISTINCT from the framing-violation seam
@@ -152,8 +149,7 @@ TEST_CASE("lwip rx trampoline self-deletes on channel close instead of returning
     auto *ctx = new plexus::freertos::detail::lwip_rx_ctx<host_tcp_socket>{receiver, ex};
 
     sender.close(); // an orderly peer FIN mid-stream
-    for(int turn = 0; turn < 100 && !receiver.closed(); ++turn)
-        plexus::freertos::detail::lwip_rx_step(*ctx);
+    plexus::test::poll_until([&] { plexus::freertos::detail::lwip_rx_step(*ctx); }, [&] { return !(!receiver.closed()); });
     REQUIRE(receiver.closed()); // the close surfaced, so the trampoline's first step exits the loop
 
     const int before = plexus::freertos::detail::host_vtask_delete_calls;

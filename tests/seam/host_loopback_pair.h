@@ -5,7 +5,9 @@
 
 #if !defined(ESP_PLATFORM)
 
+    #include <chrono>
     #include <string>
+    #include <thread>
     #include <utility>
     #include <optional>
 
@@ -48,6 +50,23 @@ inline std::optional<loopback_pair> make_loopback_pair()
     if(accepted_fd < 0)
         return std::nullopt;
     return loopback_pair{std::move(dialed), host_tcp_socket{accepted_fd}, address};
+}
+
+// Drive a pollable until a predicate holds or a wall-clock budget expires, yielding briefly between
+// polls. Real localhost-TCP delivery is not instantaneous, so a fixed poll count races the OS under
+// CI load; a time budget keeps the seam round-trips robust without changing what they assert.
+template <typename Poll, typename Ready>
+bool poll_until(Poll poll, Ready ready, std::chrono::milliseconds budget = std::chrono::seconds{2})
+{
+    const auto deadline = std::chrono::steady_clock::now() + budget;
+    while(!ready() && std::chrono::steady_clock::now() < deadline)
+    {
+        poll();
+        if(ready())
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
+    return ready();
 }
 
 }
