@@ -77,9 +77,8 @@ TEST_CASE("lwip rx task delivers a framed message POSTED, exactly once", "[seam]
     const auto payload = bytes_of({0xDE, 0xAD, 0xBE, 0xEF});
     sender.send(on_wire(payload));
 
-    for(int turn = 0; turn < 100; ++turn)
-        if(rx_turn(receiver, ex))
-            break;
+    bool got = false;
+    plexus::test::poll_until([&] { got = got || rx_turn(receiver, ex); }, [&] { return got; });
     REQUIRE(deliveries == 0); // POSTED: nothing delivered until the executor task drains
 
     ex.drain();
@@ -109,9 +108,8 @@ TEST_CASE("lwip rx task reassembles a split frame into one posted delivery", "[s
     REQUIRE(deliveries == 0); // the header alone is a partial frame — nothing delivered yet
 
     sender.send(tail);
-    for(int turn = 0; turn < 100; ++turn)
-        if(rx_turn(receiver, ex))
-            break;
+    bool got = false;
+    plexus::test::poll_until([&] { got = got || rx_turn(receiver, ex); }, [&] { return got; });
     ex.drain();
     REQUIRE(deliveries == 1); // the split frame reassembled into exactly one posted delivery
 }

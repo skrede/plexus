@@ -110,8 +110,9 @@ TEST_CASE("lwip_transport accepts two clients under cap 2 and refuses a third un
 
     host_tcp_socket c = dial_loopback(address1);
     host_tcp_socket d = dial_loopback(address1);
-    for(int turn = 0; turn < 200; ++turn)
-        one.poll();
+    plexus::test::poll_until([&] { one.poll(); }, [&] { return accepts1 >= 1; });
+    for(int turn = 0; turn < 50; ++turn)
+        one.poll(); // drain so the capped second connection is attempted and refused, never accepted
     REQUIRE(accepts1 == 1); // the bound holds: the second connection is refused, the set never grows
 }
 
