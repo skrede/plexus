@@ -70,8 +70,7 @@ TEST_CASE("lwip_channel round-trips a framed message over a real loopback TCP pa
     const auto payload = bytes_of({0xDE, 0xAD, 0xBE, 0xEF});
     sender.send(on_wire(payload));
 
-    for(int turn = 0; turn < 100 && received.empty(); ++turn)
-        receiver.poll();
+    plexus::test::poll_until([&] { receiver.poll(); }, [&] { return !(received.empty()); });
 
     REQUIRE(received.size() == plexus::wire::header_size + payload.size());
     const auto inner = std::span<const std::byte>{received}.subspan(plexus::wire::header_size);
@@ -101,8 +100,7 @@ TEST_CASE("lwip_channel reassembles a frame split across two real recv turns", "
     REQUIRE(deliveries == 0); // header alone is a partial frame — nothing delivered yet
 
     raw_sender.send(tail);
-    for(int turn = 0; turn < 100 && deliveries == 0; ++turn)
-        receiver.poll();
+    plexus::test::poll_until([&] { receiver.poll(); }, [&] { return !(deliveries == 0); });
 
     REQUIRE(deliveries == 1); // the split frame reassembled into exactly one clean delivery
 }
@@ -123,8 +121,7 @@ TEST_CASE("lwip_channel surfaces a peer close as on_error, never on_protocol_clo
 
     sender.close(); // an orderly peer FIN mid-stream
 
-    for(int turn = 0; turn < 100 && errors == 0; ++turn)
-        receiver.poll();
+    plexus::test::poll_until([&] { receiver.poll(); }, [&] { return !(errors == 0); });
 
     REQUIRE(errors == 1);             // the hard-drop seam fired
     REQUIRE_FALSE(protocol_close);    // DISTINCT from the framing-violation seam

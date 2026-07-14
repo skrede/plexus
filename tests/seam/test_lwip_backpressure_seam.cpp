@@ -130,11 +130,12 @@ TEST_CASE("lwip_channel re-arms a transient short send and flushes once cleared,
     REQUIRE_FALSE(sender.closed());
 
     stall = false; // the socket can flush now
-    for(int turn = 0; turn < 100 && deliveries == 0; ++turn)
-    {
-        sender.poll();
-        receiver.poll();
-    }
+    plexus::test::poll_until([&]
+                             {
+                                 sender.poll();
+                                 receiver.poll();
+                             },
+                             [&] { return !(deliveries == 0); });
 
     REQUIRE(deliveries == 1); // the unsent tail flushed exactly once after the re-arm
     REQUIRE(received.size() == plexus::wire::header_size + payload.size());

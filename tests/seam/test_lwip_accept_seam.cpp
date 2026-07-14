@@ -7,6 +7,7 @@
 
 #include "host_tcp_listener.h" // MUST precede lwip_transport.h: declares the host POSIX listener
 #include "host_tcp_socket.h"
+#include "host_loopback_pair.h"
 
 #include "plexus/freertos/lwip_policy.h"
 #include "plexus/freertos/lwip_channel.h"
@@ -63,16 +64,14 @@ TEST_CASE("lwip_transport accepts a loopback client and delivers one poll-able c
     transport.on_accepted([&](std::unique_ptr<lwip_channel> ch) { accepted = std::move(ch); });
 
     host_tcp_socket client = dial_loopback(address);
-    for(int turn = 0; turn < 100 && !accepted; ++turn)
-        transport.poll();
+    plexus::test::poll_until([&] { transport.poll(); }, [&] { return !(!accepted); });
     REQUIRE(accepted != nullptr);
 
     std::vector<std::byte> received;
     accepted->on_data([&](std::span<const std::byte> frame) { received.assign(frame.begin(), frame.end()); });
     const std::byte payload[] = {std::byte{0xA5}, std::byte{0x5A}};
     client.send(on_wire(payload));
-    for(int turn = 0; turn < 100 && received.empty(); ++turn)
-        transport.poll();
+    plexus::test::poll_until([&] { transport.poll(); }, [&] { return !(received.empty()); });
 
     const auto inner = std::span<const std::byte>{received}.subspan(plexus::wire::header_size);
     REQUIRE(std::vector<std::byte>(inner.begin(), inner.end()) == std::vector<std::byte>(std::begin(payload), std::end(payload)));
@@ -94,8 +93,7 @@ TEST_CASE("lwip_transport accepts two clients under cap 2 and refuses a third un
 
     host_tcp_socket a = dial_loopback(address);
     host_tcp_socket b = dial_loopback(address);
-    for(int turn = 0; turn < 200 && accepts < 2; ++turn)
-        two.poll();
+    plexus::test::poll_until([&] { two.poll(); }, [&] { return !(accepts < 2); });
     REQUIRE(accepts == 2); // both clients delivered under cap 2
 
     plexus::freertos::freertos_executor ex1;
@@ -131,8 +129,7 @@ TEST_CASE("lwip_transport clears an accepted channel's view on close so poll nev
     transport.on_accepted([&](std::unique_ptr<lwip_channel> ch) { accepted = std::move(ch); });
 
     host_tcp_socket client = dial_loopback(address);
-    for(int turn = 0; turn < 100 && !accepted; ++turn)
-        transport.poll();
+    plexus::test::poll_until([&] { transport.poll(); }, [&] { return !(!accepted); });
     REQUIRE(accepted != nullptr);
 
     accepted->close(); // the on_closed wired in adopt() clears the view before the channel is destroyed
