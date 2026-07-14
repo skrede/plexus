@@ -9,6 +9,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 #include <cstddef>
 #include <utility>
@@ -123,13 +124,28 @@ private:
             return;
         while(m_segments.size() > *m_opts.keep)
         {
-            std::error_code ec;
-            std::filesystem::remove(m_segments.front(), ec);
+            remove_retained_segment(m_segments.front());
             m_segments.erase(m_segments.begin());
         }
     }
 
+    // A just-closed segment can stay briefly locked on Windows (search indexer / antivirus), so a
+    // single remove can transiently fail; retry within a bounded budget before dropping the oldest.
+    void remove_retained_segment(const std::filesystem::path &path)
+    {
+        for(int attempt = 0; attempt < k_retention_remove_attempts; ++attempt)
+        {
+            std::error_code ec;
+            std::filesystem::remove(path, ec);
+            if(!ec)
+                return;
+            std::this_thread::sleep_for(k_retention_remove_backoff);
+        }
+    }
+
     static constexpr std::size_t k_index_width = 6;
+    static constexpr int k_retention_remove_attempts = 10;
+    static constexpr std::chrono::milliseconds k_retention_remove_backoff{25};
 
     options m_opts;
     std::vector<std::filesystem::path> m_segments;
