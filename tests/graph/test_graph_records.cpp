@@ -9,11 +9,14 @@
 
 #include <optional>
 
+using plexus::node_id;
 using plexus::graph::observation;
 using plexus::graph::participant_record;
 using plexus::graph::provenance;
 using plexus::graph::route;
 using plexus::graph::topic_record;
+using plexus::graph::topic_role;
+using plexus::graph::type_name_list;
 
 TEST_CASE("records keep observation values mutually distinct", "[graph][records]")
 {
@@ -49,6 +52,30 @@ TEST_CASE("records separate identity, reachability, and provenance", "[graph][re
 
 TEST_CASE("records leave an undeclared topic type absent", "[graph][records]")
 {
-    const topic_record topic{"sensor/imu", std::nullopt};
-    REQUIRE(topic.type == std::nullopt);
+    const topic_record topic{node_id{}, "sensor/imu", type_name_list{}, topic_role::publisher, false};
+    REQUIRE(topic.types.count == 0);
+    REQUIRE_FALSE(topic.truncated);
+}
+
+TEST_CASE("records keep a declared-empty topic type distinct from an undeclared one", "[graph][records]")
+{
+    const topic_record declared_empty{node_id{}, "sensor/imu", type_name_list{{""}, 1}, topic_role::publisher, false};
+    REQUIRE(declared_empty.types.count == 1);
+    REQUIRE(declared_empty.types.names[0].empty());
+}
+
+TEST_CASE("records carry a declared topic type by name", "[graph][records]")
+{
+    const topic_record topic{node_id{}, "sensor/imu", type_name_list{{"sensor_msgs/Imu"}, 1}, topic_role::subscriber, false};
+    REQUIRE(topic.types.count == 1);
+    REQUIRE(topic.types.names[0] == "sensor_msgs/Imu");
+    REQUIRE(topic.role == topic_role::subscriber);
+}
+
+TEST_CASE("records surface a polytype topic as more than one distinct name", "[graph][records]")
+{
+    const topic_record topic{node_id{}, "sensor/imu", type_name_list{{"sensor_msgs/Imu", "custom/Imu"}, 2}, topic_role::publisher, false};
+    REQUIRE(topic.types.count == 2);
+    REQUIRE(topic.types.count > 1);
+    REQUIRE(topic.types.names[1] == "custom/Imu");
 }
