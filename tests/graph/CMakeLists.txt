@@ -34,6 +34,10 @@ catch_discover_tests(test_graph_truncate TEST_PREFIX "graph.")
 # The foreign-thread post-and-wait race gate (the SC#3 TSan proof). It needs a thread-safe executor
 # post — asio's post() is thread-safe, the cooperative inproc step-executor's is not — so the gate
 # runs over the asio node and links plexus::asio (available only under the backend gate).
+#
+# The universe-scope-by-construction exclusion proof (D-07) rides the multicast_discovery on_inbound
+# universe drop, which lives on the asio multicast path — it links plexus::asio + default_discovery
+# for real loopback multicast, not the inproc static-discovery path (which has no universe compare).
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_graph_foreign_thread test_graph_foreign_thread.cpp)
     target_link_libraries(test_graph_foreign_thread PRIVATE
@@ -42,4 +46,12 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::discovery
         Catch2::Catch2WithMain)
     catch_discover_tests(test_graph_foreign_thread TEST_PREFIX "graph.")
+
+    add_executable(test_graph_two_universe test_graph_two_universe.cpp)
+    target_link_libraries(test_graph_two_universe PRIVATE
+        plexus::plexus
+        plexus::asio
+        plexus::discovery
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_graph_two_universe TEST_PREFIX "graph.")
 endif()

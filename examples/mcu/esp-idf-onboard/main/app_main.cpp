@@ -20,6 +20,8 @@
 #include "plexus/loopback_node.h"
 #include "plexus/node_options.h"
 
+#include "plexus/graph/participant_record.h"
+
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/io/reconnect_config.h"
@@ -161,6 +163,12 @@ void plexus_task(void *)
 
     auto host = std::make_unique<plexus::loopback_host<example::onboard_policy>>(ex, disc, plexus::node_id_from_name("esp32-onboard"), opts);
     auto &node = host->node();
+
+    // The same public enumeration surface on-target (INV-1): the peerless onboard node yields an
+    // empty snapshot, but the identical header-only participants() path runs byte-identically on xtensa.
+    std::array<plexus::graph::participant_record, 4> peers{};
+    const auto snapshot = node.participants(std::span<plexus::graph::participant_record>{peers});
+    ESP_LOGI(k_tag, "onboard participants snapshot: count=%u truncated=%d", static_cast<unsigned>(snapshot.count), static_cast<int>(snapshot.truncated));
 
     plexus::subscriber<reading_codec> sub{
         node, "telemetry",
