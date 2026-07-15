@@ -27,6 +27,8 @@
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/contact_card.h"
 
+#include "plexus/graph/participant_record.h"
+
 #include "plexus/muxify.h"
 #include "plexus/node_id.h"
 #include "plexus/topic_qos.h"
@@ -194,6 +196,7 @@ class basic_node
     friend class procedure;
 
 public:
+    using policy_type      = Policy;
     using executor_type    = typename Policy::executor_type;
     using engine_policy    = detail::node_engine_policy<Policy, Transports...>;
     using engine_transport = detail::node_engine_transport<Transports...>;
@@ -323,6 +326,25 @@ public:
     executor_type executor() const noexcept
     {
         return m_executor;
+    }
+
+    // Executor-affine: call only on the owning executor. Sweeps the awareness table with no lock
+    // and no allocation, filling out to capacity and reporting overflow as a count plus a flag —
+    // never abort, never evict (reject-and-count at the span boundary).
+    graph::snapshot_result participants(std::span<graph::participant_record> out) const
+    {
+        std::size_t filled = 0;
+        bool        truncated = false;
+        m_engine.known().for_each([&](const plexus::node_id &id, const io::endpoint &ep) {
+            if(filled == out.size())
+            {
+                truncated = true;
+                return;
+            }
+            out[filled++] = graph::participant_record{id, graph::route{ep, std::nullopt},
+                                                      graph::provenance{graph::observation::directly_observed, std::nullopt}};
+        });
+        return graph::snapshot_result{filled, truncated};
     }
 
     // Object-lane deliveries dropped at the demux on a type-witness mismatch.
