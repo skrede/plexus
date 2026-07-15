@@ -35,7 +35,8 @@ enum class msg_type : uint8_t
     rpc_request        = 0x09,
     rpc_response       = 0x0A,
     subscribe_response = 0x0B,
-    heartbeat          = 0x0C
+    heartbeat          = 0x0C,
+    declare            = 0x0D
 };
 
 enum class endpoint_source_type : uint8_t
