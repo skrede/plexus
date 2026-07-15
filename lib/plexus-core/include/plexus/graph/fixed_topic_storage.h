@@ -10,6 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <algorithm>
 #include <string_view>
 
@@ -88,10 +89,20 @@ public:
     {
         for(entry &e : m_slots)
         {
-            drop_edges(e, node);
+            drop_edges(e, node, std::nullopt);
             if(e.edge_count == 0)
                 e = entry{};
         }
+    }
+
+    void remove_edge(const plexus::node_id &node, std::string_view topic, topic_role role)
+    {
+        entry *slot = find(topic);
+        if(slot == nullptr)
+            return;
+        drop_edges(*slot, node, role);
+        if(slot->edge_count == 0)
+            *slot = entry{};
     }
 
 private:
@@ -132,11 +143,12 @@ private:
         return nullptr;
     }
 
-    static void drop_edges(entry &e, const plexus::node_id &node)
+    // An absent role means every role — the whole participant leaves.
+    static void drop_edges(entry &e, const plexus::node_id &node, std::optional<topic_role> role)
     {
         std::size_t kept = 0;
         for(std::size_t i = 0; i < e.edge_count; ++i)
-            if(e.edges[i].node != node)
+            if(e.edges[i].node != node || (role && e.edges[i].role != *role))
                 e.edges[kept++] = e.edges[i];
         e.edge_count = kept;
     }
