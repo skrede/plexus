@@ -27,7 +27,10 @@
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/contact_card.h"
 
+#include "plexus/graph/topic_record.h"
 #include "plexus/graph/participant_record.h"
+
+#include "plexus/match/key_pattern.h"
 
 #include "plexus/muxify.h"
 #include "plexus/node_id.h"
@@ -37,6 +40,7 @@
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/fail_closed.h"
+#include "plexus/detail/topic_sweep.h"
 #include "plexus/detail/address_parse.h"
 #include "plexus/detail/node_self_route.h"
 #include "plexus/detail/node_self_carrier.h"
@@ -347,6 +351,52 @@ public:
         return graph::snapshot_result{filled, truncated};
     }
 
+    // Executor-affine: call only on the owning executor. One record per (participant, topic, role)
+    // edge, so a topic with both a publisher and a subscriber yields both — these edges are the
+    // substrate the counts and by-node views reduce over, which is why neither keeps an index of
+    // its own. A filter admits only the topics its keyset intersects.
+    graph::snapshot_result topics(std::span<graph::topic_record> out,
+                                  const std::optional<match::key_pattern> &filter = std::nullopt) const
+    {
+        return detail::sweep_topics(m_engine.topic_table(), out,
+                                    [&](const graph::topic_record &rec) { return detail::topic_in(rec.name, filter); });
+    }
+
+    // Executor-affine. Counted over the same edges topics() enumerates: a maintained counter would
+    // be a second truth to keep coherent with the table.
+    std::size_t count_publishers(std::string_view topic) const
+    {
+        return detail::count_topic_role(m_engine.topic_table(), topic, graph::topic_role::publisher);
+    }
+
+    std::size_t count_subscribers(std::string_view topic) const
+    {
+        return detail::count_topic_role(m_engine.topic_table(), topic, graph::topic_role::subscriber);
+    }
+
+    // Executor-affine. The same edges keyed by participant rather than by topic.
+    graph::snapshot_result topics_published_by(const plexus::node_id &node, std::span<graph::topic_record> out) const
+    {
+        return topics_of(node, graph::topic_role::publisher, out);
+    }
+
+    graph::snapshot_result topics_subscribed_by(const plexus::node_id &node, std::span<graph::topic_record> out) const
+    {
+        return topics_of(node, graph::topic_role::subscriber, out);
+    }
+
+    // Topics whose type list is not the whole truth: a name clipped to its bound, or a distinct
+    // type past the per-topic cap. Edges refused outright for want of room.
+    std::size_t topic_truncations() const noexcept
+    {
+        return m_engine.topic_table().truncations();
+    }
+
+    std::size_t topics_dropped() const noexcept
+    {
+        return m_engine.topic_table().dropped();
+    }
+
     // Object-lane deliveries dropped at the demux on a type-witness mismatch.
     std::size_t object_dispatch_mismatch() const noexcept
     {
@@ -410,6 +460,12 @@ private:
     using peer_watch   = detail::peer_watch<basic_node>;
 
     using registration_id = std::uint64_t;
+
+    graph::snapshot_result topics_of(const plexus::node_id &node, graph::topic_role role, std::span<graph::topic_record> out) const
+    {
+        return detail::sweep_topics(m_engine.topic_table(), out,
+                                    [&](const graph::topic_record &rec) { return rec.node == node && rec.role == role; });
+    }
 
     registration_id register_subscriber_seam(std::string_view fqn, const io::subscriber_qos &qos,
                                              plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb,
