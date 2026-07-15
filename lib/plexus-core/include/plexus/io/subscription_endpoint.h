@@ -6,6 +6,7 @@
 #include "plexus/wire/frame.h"
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/frame_codec.h"
+#include "plexus/wire/topic_declaration.h"
 
 #include <span>
 #include <string>
@@ -63,6 +64,12 @@ public:
     {
         auto bytes = wire::encode_subscribe_request(req);
         send_control(channel, wire::msg_type::subscribe, bytes);
+    }
+
+    void send_declare(channel_type &channel, const wire::topic_declaration &td)
+    {
+        auto bytes = wire::encode_topic_declaration(td);
+        send_control(channel, wire::msg_type::declare, bytes);
     }
 
     // session_id = 0 on every control frame. Reuses a member scratch to stay allocation-light.
