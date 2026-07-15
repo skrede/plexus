@@ -38,6 +38,7 @@
 #include "plexus/wire/heartbeat.h"
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/close_cause.h"
+#include "plexus/wire/topic_declaration.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/fetch_latched.h"
 
@@ -250,15 +251,20 @@ public:
         tear_down();
     }
 
-    void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt)
+    void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {})
     {
-        if(m_messages.attach(m_msg_peer, fqn, qos, type_id))
+        if(m_messages.attach(m_msg_peer, fqn, qos, type_id, type_name))
             ++m_outstanding_subscribes;
     }
 
     void unsubscribe(std::string_view fqn)
     {
         m_messages.detach(m_msg_peer, fqn);
+    }
+
+    void declare(const wire::topic_declaration &td)
+    {
+        m_messages.send_declare(m_channel, td);
     }
 
     void emit_heartbeat()
@@ -362,6 +368,8 @@ private:
     friend void detail::on_complete(S &);
     template<typename S>
     friend void detail::resubscribe_all(S &);
+    template<typename S>
+    friend void detail::redeclare_all(S &);
     template<typename S>
     friend void detail::record_same_host(S &) noexcept;
     template<typename S>

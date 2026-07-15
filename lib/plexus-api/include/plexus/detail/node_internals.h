@@ -35,6 +35,8 @@ struct subscription
     // std::nullopt = undeclared type, stored so a late-discovered peer gets the typed demand fanned
     // with the gate intact.
     std::optional<std::uint64_t> type_id;
+    // Owned: the demand fanned to a late-discovered peer outlives whatever named the type.
+    std::string type_name;
     plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb;
     object_entry obj{};
 };

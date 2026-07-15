@@ -85,12 +85,12 @@ struct subscriber_state
 // bound to the heap-stable state, so retire is atomic. The state outlives the adapters: the handle
 // retires them before freeing the block.
 template<typename State>
-std::uint64_t register_typed(const io::endpoint_seam &seam, std::string_view fqn, const io::subscriber_qos &qos, State *st, std::optional<std::uint64_t> type_id, const void *native_key,
+std::uint64_t register_typed(const io::endpoint_seam &seam, std::string_view fqn, const io::subscriber_qos &qos, State *st, const type_identity &identity, const void *native_key,
                              std::optional<io::topic_capture_rule> capture)
 {
     auto bytes_adapter           = [st](std::span<const std::byte> bytes, const io::message_info &info) { st->on_bytes(bytes, info); };
     io::object_dispatch dispatch = [st](const io::object_carrier &carrier, const io::message_info &info) { st->on_object(carrier, info); };
-    return seam.register_subscriber(seam.ctx, fqn, qos, std::move(bytes_adapter), type_id, native_key, std::move(dispatch), capture);
+    return seam.register_subscriber(seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id, identity.type_name, native_key, std::move(dispatch), capture);
 }
 
 }

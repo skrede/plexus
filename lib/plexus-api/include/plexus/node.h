@@ -413,11 +413,12 @@ private:
 
     registration_id register_subscriber_seam(std::string_view fqn, const io::subscriber_qos &qos,
                                              plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb,
-                                             std::optional<std::uint64_t> type_id = std::nullopt, object_entry obj = {}, std::optional<io::topic_capture_rule> capture = std::nullopt)
+                                             std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {}, object_entry obj = {},
+                                             std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
         const registration_id rid    = m_next_registration++;
         const bool first_for_fqn     = !any_subscriber_for(fqn);
-        std::pair<registration_id, subscription> entry{rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}};
+        std::pair<registration_id, subscription> entry{rid, subscription{std::string{fqn}, qos, type_id, std::string{type_name}, std::move(cb), std::move(obj)}};
         if(m_dispatch_depth > 0)
             m_deferred_subscription_adds.push_back(std::move(entry));
         else
@@ -430,7 +431,7 @@ private:
         provision_same_host_ring(fqn, subscriber_effective_bytes(qos), nullptr);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
-            m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any, type_id);
+            m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any, type_id, type_name);
         return rid;
     }
 
@@ -589,7 +590,7 @@ private:
     void fan_demands_to(const plexus::node_id &id)
     {
         for(const auto &[rid, sub] : m_subscriptions)
-            m_engine.subscribe(id, sub.fqn, sub.qos, io::locality::any, io::reliability_requirement::any, sub.type_id);
+            m_engine.subscribe(id, sub.fqn, sub.qos, io::locality::any, io::reliability_requirement::any, sub.type_id, sub.type_name);
     }
 
     // While a dispatch fan is live (m_dispatch_depth > 0) the (un)subscribe seams cannot touch
@@ -897,9 +898,9 @@ private:
         s.publish        = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes) { static_cast<basic_node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
         s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier, io::encode_thunk encode)
         { static_cast<basic_node *>(ctx)->m_engine.messages().publish_object(fqn, carrier, [&] { return io::invoke(encode); }); };
-        s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos, io::bytes_cb cb, std::optional<std::uint64_t> type_id, const void *native_key,
-                                   io::object_dispatch dispatch, std::optional<io::topic_capture_rule> capture) -> registration_id
-        { return static_cast<basic_node *>(ctx)->register_subscriber_seam(fqn, qos, std::move(cb), type_id, object_entry{native_key, std::move(dispatch)}, capture); };
+        s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos, io::bytes_cb cb, std::optional<std::uint64_t> type_id, std::string_view type_name,
+                                   const void *native_key, io::object_dispatch dispatch, std::optional<io::topic_capture_rule> capture) -> registration_id
+        { return static_cast<basic_node *>(ctx)->register_subscriber_seam(fqn, qos, std::move(cb), type_id, type_name, object_entry{native_key, std::move(dispatch)}, capture); };
         s.retire_subscriber = [](void *ctx, registration_id rid) { static_cast<basic_node *>(ctx)->retire_subscriber_seam(rid); };
         s.retire_publisher  = [](void *ctx, std::string_view fqn) { static_cast<basic_node *>(ctx)->retire_publisher_seam(fqn); };
         s.serve_procedure   = [](void *ctx, std::string_view fqn, io::handler_fn handler) { static_cast<basic_node *>(ctx)->serve_procedure_seam(fqn, std::move(handler)); };

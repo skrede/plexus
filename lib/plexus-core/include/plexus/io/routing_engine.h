@@ -197,7 +197,7 @@ public:
     }
 
     void subscribe(const node_id &id, std::string_view fqn, const subscriber_qos &qos, locality reach_mask = locality::any,
-                   reliability_requirement require = reliability_requirement::any, std::optional<std::uint64_t> type_id = std::nullopt)
+                   reliability_requirement require = reliability_requirement::any, std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {})
     {
         if(!demand_in_scope(id, reach_mask))
             return;
@@ -205,10 +205,10 @@ public:
             return;
         reach(id);
 
-        m_messages.remember_demand(node_name_of(id), fqn, qos, type_id);
+        m_messages.remember_demand(node_name_of(id), fqn, qos, type_id, type_name);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
-            session->subscribe(fqn, qos, type_id);
+            session->subscribe(fqn, qos, type_id, type_name);
     }
 
     void call(const node_id &id, std::string_view fqn, std::span<const std::byte> param, typename procedure_forwarder<Policy>::on_response_fn on_response)

@@ -14,6 +14,7 @@
 #include "plexus/graph/topic_record.h"
 
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/topic_declaration.h"
 
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
@@ -53,6 +54,10 @@ void install_routing_sinks(Engine &e)
     // The table copies the borrowed names in and reject-and-counts on overflow, so a peer flooding
     // topics costs a counter, never an eviction and never an abort.
     e.m_messages.on_topic_edge([&e](const graph::topic_edge &edge) { e.m_topics.upsert(edge); });
+    // A local declaration reaches every peer already listening; an incomplete session would lose
+    // the frame, so the ones still handshaking are caught by the replay their completion runs.
+    e.m_messages.on_declaration([&e](const wire::topic_declaration &td)
+                                { e.m_registry.for_each_connected([&td](const node_id &, session_type &s) { s.declare(td); }); });
     e.m_procedures.on_rpc_call(make_rpc_sink(e, &observer::on_rpc_call));
     e.m_procedures.on_rpc_serve(make_rpc_sink(e, &observer::on_rpc_serve));
     e.m_procedures.on_rpc_reply(make_rpc_sink(e, &observer::on_rpc_reply));
