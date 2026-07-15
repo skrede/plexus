@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace plexus::graph
@@ -47,6 +48,27 @@ struct topic_record
     // The type list is not the whole truth for this topic: a name was clipped to its bound, or a
     // distinct type past k_topic_type_list_cap was refused.
     bool truncated;
+};
+
+// What one participant declared about one topic — the unit a fold hands the table. A nullopt type
+// id is the reserved undeclared state, distinct from a declared zero id. The name is the
+// enumeration identity; the id only tells two declarations apart.
+struct topic_edge
+{
+    plexus::node_id node;
+    std::string_view topic;
+    std::string_view type_name;
+    std::optional<std::uint64_t> type_id;
+    topic_role role;
+};
+
+enum class upsert_outcome : std::uint8_t
+{
+    stored,
+    // The edge is recorded, but its topic's type list is not the whole truth.
+    truncated,
+    // No room for the edge: nothing was recorded, and nothing was evicted to make room.
+    dropped
 };
 
 }
