@@ -43,6 +43,7 @@ add_executable(test_wire_codec
     test_wire_codec.cpp
     test_wire_codec_data.cpp
     test_wire_codec_subscribe.cpp
+    test_wire_codec_subscribe_type.cpp
     test_wire_codec_rpc.cpp
     test_wire_codec_handshake.cpp)
 target_link_libraries(test_wire_codec PRIVATE plexus::wire Catch2::Catch2WithMain)

@@ -174,5 +174,6 @@ constexpr std::uint8_t k_type_declared_flag = 0x01;
 }
 
 #include "plexus/wire/detail/subscribe_codec.h"
+#include "plexus/wire/detail/unsubscribe_codec.h"
 
 #endif
