@@ -40,3 +40,31 @@ TEST_CASE("key_pattern construction allocates nothing", "[match][key_pattern][al
     REQUIRE_FALSE(e.has_value());
     REQUIRE(after - before == 0);
 }
+
+TEST_CASE("key_pattern intersects allocates nothing", "[match][key_pattern][alloc]")
+{
+    // The greedy hot path (concrete vs pattern), the rolling-DP path (wildcard
+    // pair), and an adversarial deep single-star run must all be alloc-free — the
+    // DP row and segment tables are stack-resident std::array.
+    const auto concrete   = key_pattern::make("a/b/c/d");
+    const auto wildcard   = key_pattern::make("a/**/d");
+    const auto other      = key_pattern::make("**/c/d");
+    const auto adv_pat    = key_pattern::make("a/*/a/*/a/*/a/*/a");
+    const auto adv_key    = key_pattern::make("a/a/a/a/a/a/a/a/a");
+    REQUIRE(concrete.has_value());
+    REQUIRE(wildcard.has_value());
+    REQUIRE(other.has_value());
+    REQUIRE(adv_pat.has_value());
+    REQUIRE(adv_key.has_value());
+
+    const std::size_t before = plexus::testing::alloc_count();
+    const bool        r1     = wildcard->intersects(*concrete);
+    const bool        r2     = wildcard->intersects(*other);
+    const bool        r3     = adv_pat->intersects(*adv_key);
+    const std::size_t after  = plexus::testing::alloc_count();
+
+    REQUIRE(r1);
+    REQUIRE(r2);
+    REQUIRE(r3);
+    REQUIRE(after - before == 0);
+}

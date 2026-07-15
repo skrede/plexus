@@ -17,6 +17,13 @@ add_executable(test_key_pattern_canonical test_key_pattern_canonical.cpp)
 target_link_libraries(test_key_pattern_canonical PRIVATE plexus::core Catch2::Catch2WithMain)
 catch_discover_tests(test_key_pattern_canonical TEST_PREFIX "match.")
 
+# The intersects set-relation: the MATCH + INTERSECTS truth table (incl. the
+# empty-** rows) as constexpr static_asserts AND runtime cases, plus symmetry
+# and reflexivity. Header-only core, so it links plexus::core and Catch2's main.
+add_executable(test_key_pattern_relations test_key_pattern_relations.cpp)
+target_link_libraries(test_key_pattern_relations PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_key_pattern_relations TEST_PREFIX "match.")
+
 # The zero-alloc construction proof owns the single replaceable operator new
 # (support/alloc_counter.h), so it must be its own executable and needs tests/ on
 # the include path.

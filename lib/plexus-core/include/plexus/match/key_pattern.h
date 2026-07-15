@@ -5,6 +5,7 @@
 #include "plexus/match/key_pattern_bounds.h"
 
 #include "plexus/match/detail/canonical.h"
+#include "plexus/match/detail/match_engine.h"
 #include "plexus/match/detail/segment_cursor.h"
 
 #include "plexus/detail/expected.h"
@@ -50,6 +51,18 @@ public:
         return detail::segment_view{
                 std::string_view(m_bytes.data() + descriptor.offset, descriptor.length),
                 descriptor.kind};
+    }
+
+    // Point-in-time set relation: do these two keysets share any concrete key?
+    // A concrete operand takes the greedy O(depth) kernel, a wildcard pair the
+    // rolling DP — both non-recursive. This is not a subscription verb.
+    constexpr bool intersects(const basic_key_pattern &other) const noexcept
+    {
+        if(detail::is_concrete(*this))
+            return detail::matches_concrete(other, *this);
+        if(detail::is_concrete(other))
+            return detail::matches_concrete(*this, other);
+        return detail::intersects_dp<Bounds>(*this, other);
     }
 
 private:
