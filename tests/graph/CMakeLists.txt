@@ -84,3 +84,13 @@ target_link_libraries(test_graph_topic_query PRIVATE
     plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_graph_topic_query TEST_PREFIX "graph.")
+
+# The same query surface asked at a node that is itself party to the answer: its own endpoints in
+# its own table, and the retire path they leave by. Shares the query oracle's three-node fixture.
+add_executable(test_graph_self_edges test_graph_self_edges.cpp)
+target_link_libraries(test_graph_self_edges PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_graph_self_edges TEST_PREFIX "graph.")

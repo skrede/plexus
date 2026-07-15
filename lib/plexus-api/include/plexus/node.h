@@ -485,6 +485,7 @@ private:
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
         provision_same_host_ring(fqn, subscriber_effective_bytes(qos), nullptr);
+        m_engine.note_local_topic(fqn, type_name, type_id, graph::topic_role::subscriber);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
             m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any, type_id, type_name);
@@ -515,9 +516,12 @@ private:
             retire_fqn_demand(fqn);
     }
 
+    // Reached only once the LAST subscriber on the fqn is gone, which is what makes dropping the
+    // one (participant, topic, subscriber) edge here correct: N handles are one edge, not N.
     void retire_fqn_demand(std::string_view fqn)
     {
         self_detach(fqn);
+        m_engine.forget_local_topic(fqn, graph::topic_role::subscriber);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired, wire::fqn_topic_hash(fqn), std::nullopt});
         for(const auto &peer : m_known_peers)
             m_engine.unsubscribe(peer, fqn);
@@ -535,7 +539,7 @@ private:
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
         provision_same_host_ring(fqn, effective_bytes, geometry);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
-        note_local_publisher(fqn);
+        note_local_publisher(fqn, type_name, type_id);
     }
 
     void retire_publisher_seam(std::string_view fqn)
@@ -837,24 +841,26 @@ private:
             sync_shm_self_carrier(fqn);
     }
 
-    void note_local_publisher(std::string_view fqn)
+    void note_local_publisher(std::string_view fqn, std::string_view type_name, std::optional<std::uint64_t> type_id)
     {
+        ++m_local_publishers[std::string{fqn}];
+        m_engine.note_local_topic(fqn, type_name, type_id, graph::topic_role::publisher);
         if constexpr(k_has_shm_self_carrier)
-        {
-            ++m_local_publishers[std::string{fqn}];
             sync_shm_self_carrier(fqn);
-        }
     }
 
+    // The graph edge is one per (participant, topic, role), so it outlives every publisher handle
+    // but the last: the count is what tells a retired second handle from a retired topic.
     void forget_local_publisher(std::string_view fqn)
     {
-        if constexpr(k_has_shm_self_carrier)
+        auto it = m_local_publishers.find(std::string{fqn});
+        if(it != m_local_publishers.end() && --it->second == 0)
         {
-            auto it = m_local_publishers.find(std::string{fqn});
-            if(it != m_local_publishers.end() && --it->second == 0)
-                m_local_publishers.erase(it);
-            sync_shm_self_carrier(fqn);
+            m_local_publishers.erase(it);
+            m_engine.forget_local_topic(fqn, graph::topic_role::publisher);
         }
+        if constexpr(k_has_shm_self_carrier)
+            sync_shm_self_carrier(fqn);
     }
 
     // The shm self-ring mints/holds an OS region, so it engages ONLY when a same-node publisher AND
@@ -1074,8 +1080,9 @@ private:
     using self_route_holder = std::conditional_t<k_self_route_erased, io::polymorphic_byte_channel, detail::no_self_route_wrapper>;
     [[no_unique_address]] self_route_holder m_self_route{detail::make_self_route<self_route_holder>(m_self_channel)};
 
-    // Live local-publisher count per fqn: the shm self-ring mints only when a same-node publisher and
-    // subscriber coexist, so the carrier's OS region is never created for a node that only talks remote.
+    // Live local-publisher count per fqn. It settles two questions: the node's own publisher edge
+    // retires on the last handle rather than the first, and the shm self-ring mints only when a
+    // same-node publisher and subscriber coexist (so a node that only talks remote mints no region).
     std::unordered_map<std::string, std::size_t> m_local_publishers;
 
     // The per-fqn node-local shm self-ring carriers (the fallback self-route when no intra-node

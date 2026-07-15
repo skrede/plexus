@@ -24,6 +24,19 @@ using plexus::match::key_pattern;
 constexpr const char *k_rival_type_name  = "sensor/Pose";
 constexpr std::uint64_t k_rival_type_id  = 0x5150u;
 
+// The rival declaration: the same value type under a different type identity, so one topic carries
+// two publishers that disagree about it. It declares through the real publisher handle — a poked
+// forwarder would reach the peers but never the declaring node's own bookkeeping.
+struct pose_codec : imu_codec
+{
+    plexus::type_identity type_info() const
+    {
+        return {k_rival_type_id, k_rival_type_name};
+    }
+};
+
+using pose_publisher = plexus::publisher<pose_codec>;
+
 inline key_pattern pattern(std::string_view text)
 {
     const auto made = key_pattern::make(text);
@@ -56,16 +69,17 @@ inline const topic_record *find_record(std::span<const topic_record> buffer, std
     return it == view.end() ? nullptr : &*it;
 }
 
-// A node's table holds what its PEERS declared, so one topic can only be seen to disagree with
-// itself at a THIRD node: both rival publishers must be remote to whoever enumerates them.
+// Three nodes, because a two-node fixture cannot express a disagreement seen from the outside: the
+// polytype cases need both rival publishers remote to one enumerating node AND local to another.
 struct trio : net
 {
     plexus::node_id id_c{make_id(0x0C)};
     plexus::inproc::inproc_transport<> tc{h.ex, h.bus};
     inproc_node c{h.ex, h.disc, id_c, tc, opts_for(true)};
 
-    // A publishes the topic as one type, C as another, and B demands it — so B's table carries two
-    // publisher edges over one topic entry holding two distinct type names.
+    // A publishes the topic as one type, C as another, C also publishes an untyped topic, and B
+    // demands the contested one. Every endpoint is a real handle driving the node's own seams, so
+    // each node's table carries its own edges alongside the ones its peers declared.
     void declare_all()
     {
         connect();
@@ -73,14 +87,24 @@ struct trio : net
         drive();
         REQUIRE(c.router().is_connected(id_b));
 
-        a.router().messages().declare(k_imu_topic, plexus::topic_qos{}, k_imu_type_id, false, k_imu_type_name);
-        c.router().messages().declare(k_imu_topic, plexus::topic_qos{}, k_rival_type_id, false, k_rival_type_name);
-        c.router().messages().declare(k_plain_topic, plexus::topic_qos{});
+        m_imu   = std::make_unique<imu_publisher>(a, k_imu_topic, plexus::typed_publisher_options{}, imu_codec{});
+        m_rival = std::make_unique<pose_publisher>(c, k_imu_topic, plexus::typed_publisher_options{}, pose_codec{});
+        m_plain = std::make_unique<plexus::publisher<void>>(c, k_plain_topic);
         m_demand = std::make_unique<imu_subscriber>(b, k_imu_topic, [](const std::uint32_t &) {});
         drive();
     }
 
+    // Drops A's publisher handle: the retire path the node's own edge rides out on.
+    void retire_imu_publisher()
+    {
+        m_imu.reset();
+        drive();
+    }
+
 private:
+    std::unique_ptr<imu_publisher> m_imu;
+    std::unique_ptr<pose_publisher> m_rival;
+    std::unique_ptr<plexus::publisher<void>> m_plain;
     std::unique_ptr<imu_subscriber> m_demand;
 };
 

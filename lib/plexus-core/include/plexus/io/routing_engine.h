@@ -232,6 +232,21 @@ public:
         m_messages.publish(fqn, payload);
     }
 
+    // This node's own topics fold into the same table its peers' edges do, under the identity the
+    // handshake asserts to them — so a count, an enumeration or a by-participant view answers for
+    // the whole graph rather than for everyone-but-me, and a party to a polytype disagreement can
+    // see the disagreement it is party to. No wire verb rides this: a local edge is a local table
+    // operation, and peers still learn the topic from the declare/subscribe they always did.
+    void note_local_topic(std::string_view fqn, std::string_view type_name, std::optional<std::uint64_t> type_id, graph::topic_role role)
+    {
+        m_topics.upsert(graph::topic_edge{m_build.fsm_cfg.self_id, fqn, type_name, type_id, role});
+    }
+
+    void forget_local_topic(std::string_view fqn, graph::topic_role role)
+    {
+        m_topics.remove_edge(m_build.fsm_cfg.self_id, fqn, role);
+    }
+
     bool is_connected(const node_id &id) const
     {
         return m_registry.is_connected(id);
