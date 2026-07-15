@@ -30,3 +30,16 @@ target_link_libraries(test_graph_truncate PRIVATE
     Catch2::Catch2WithMain)
 target_include_directories(test_graph_truncate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_graph_truncate TEST_PREFIX "graph.")
+
+# The foreign-thread post-and-wait race gate (the SC#3 TSan proof). It needs a thread-safe executor
+# post — asio's post() is thread-safe, the cooperative inproc step-executor's is not — so the gate
+# runs over the asio node and links plexus::asio (available only under the backend gate).
+if(PLEXUS_ENABLE_ASIO_BACKEND)
+    add_executable(test_graph_foreign_thread test_graph_foreign_thread.cpp)
+    target_link_libraries(test_graph_foreign_thread PRIVATE
+        plexus::plexus
+        plexus::asio
+        plexus::discovery
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_graph_foreign_thread TEST_PREFIX "graph.")
+endif()
