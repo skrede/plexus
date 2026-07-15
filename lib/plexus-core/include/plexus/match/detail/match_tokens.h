@@ -27,6 +27,18 @@ constexpr bool tokens_compatible(segment_view a, segment_view b) noexcept
     return true;
 }
 
+// One a-side token covers one b-side token for set containment: an a-'*' covers any
+// single b segment (literal or '*') but never a b-'**'; an a-literal covers only the
+// byte-equal b-literal. Called only when the a token is not '**'.
+constexpr bool covers_single(segment_view a, segment_view b) noexcept
+{
+    if(b.kind == segment_kind::double_star)
+        return false;
+    if(a.kind == segment_kind::single_star)
+        return true;
+    return b.kind == segment_kind::literal && a.text == b.text;
+}
+
 }
 
 #endif

@@ -18,6 +18,13 @@ constexpr bool rel(std::string_view a, std::string_view b) noexcept
     return key_pattern::make(a)->intersects(*key_pattern::make(b));
 }
 
+// Does a's keyset contain b's (language containment L(b) subset L(a))? The same
+// constexpr no-heap / bounded-evaluation evidence as rel above.
+constexpr bool inc(std::string_view a, std::string_view b) noexcept
+{
+    return key_pattern::make(a)->includes(*key_pattern::make(b));
+}
+
 }
 
 // MATCH (concrete key vs pattern) — the pinned empty-segment truth table.
@@ -47,6 +54,25 @@ static_assert(rel("a/*", "*/b") == rel("*/b", "a/*"));
 static_assert(rel("a/**", "**/c") == rel("**/c", "a/**"));
 static_assert(rel("a/**/c", "a/**/c"));
 static_assert(rel("*", "*") && rel("**", "**") && rel("a/*/c", "a/*/c"));
+
+// INCLUDES (a superset of b) — the pinned containment truth table.
+static_assert(inc("**", "a") && inc("**", "a/b") && inc("**", "a/b/c"));
+static_assert(inc("**", "**") && inc("**", "a/*") && inc("**", "a/**"));
+static_assert(inc("a/**", "a/b") && inc("a/**", "a/*") && inc("a/**", "a/**") && inc("a/**", "a/b/c"));
+static_assert(!inc("a/**", "b/x") && !inc("a/**", "x/a/b"));
+static_assert(inc("a/*", "a/b") && inc("a/*", "a/*"));
+static_assert(!inc("a/*", "a/**") && !inc("a/*", "a/b/c"));
+static_assert(inc("*", "a") && inc("*", "*"));
+static_assert(!inc("*", "**") && !inc("*", "a/b"));
+
+// includes is reflexive and not generally symmetric.
+static_assert(inc("a/**/c", "a/**/c") && inc("a/*/c", "a/*/c") && inc("**", "**"));
+static_assert(inc("a/**", "a/b") && !inc("a/b", "a/**"));
+
+// includes ⇒ intersects on the covered pairs (the cross-relation invariant).
+static_assert(!inc("a/**", "a/b/c") || rel("a/**", "a/b/c"));
+static_assert(!inc("**", "a/*") || rel("**", "a/*"));
+static_assert(!inc("a/*", "a/b") || rel("a/*", "a/b"));
 
 TEST_CASE("key_pattern intersects pins the empty-** match truth table", "[match][key_pattern][intersects]")
 {
@@ -100,4 +126,53 @@ TEST_CASE("key_pattern intersects stays linear on adversarial star runs", "[matc
     REQUIRE(pattern.has_value());
     REQUIRE(key.has_value());
     REQUIRE_FALSE(pattern->intersects(*key));
+}
+
+TEST_CASE("key_pattern includes pins the containment truth table", "[match][key_pattern][includes]")
+{
+    REQUIRE(inc("**", "a"));
+    REQUIRE(inc("**", "a/b/c"));
+    REQUIRE(inc("**", "a/**"));
+    REQUIRE(inc("a/**", "a/b"));
+    REQUIRE(inc("a/**", "a/*"));
+    REQUIRE(inc("a/**", "a/b/c"));
+    REQUIRE_FALSE(inc("a/**", "b/x"));
+    REQUIRE_FALSE(inc("a/**", "x/a/b"));
+    REQUIRE(inc("a/*", "a/b"));
+    REQUIRE(inc("a/*", "a/*"));
+    REQUIRE_FALSE(inc("a/*", "a/**"));
+    REQUIRE_FALSE(inc("a/*", "a/b/c"));
+    REQUIRE(inc("*", "a"));
+    REQUIRE_FALSE(inc("*", "**"));
+    REQUIRE_FALSE(inc("*", "a/b"));
+}
+
+TEST_CASE("key_pattern includes is reflexive and not generally symmetric", "[match][key_pattern][includes]")
+{
+    constexpr std::array<std::string_view, 8> patterns{
+            "a", "*", "**", "a/*", "a/**", "**/c", "a/**/c", "a/*/c"};
+    for(const std::string_view p : patterns)
+        REQUIRE(inc(p, p));
+    REQUIRE(inc("a/**", "a/b"));
+    REQUIRE_FALSE(inc("a/b", "a/**"));
+}
+
+TEST_CASE("key_pattern includes implies intersects on every covered pair", "[match][key_pattern][includes]")
+{
+    constexpr std::array<std::string_view, 8> patterns{
+            "a", "*", "**", "a/*", "a/**", "**/c", "a/**/c", "a/*/c"};
+    for(const std::string_view p : patterns)
+        for(const std::string_view q : patterns)
+            if(inc(p, q))
+                REQUIRE(rel(p, q));
+}
+
+TEST_CASE("key_pattern relations treat **/** as the single canonical ** form", "[match][key_pattern][includes]")
+{
+    REQUIRE_FALSE(key_pattern::make("**/**").has_value());
+    REQUIRE(key_pattern::make("**/**").error() == plexus::match::key_pattern_error::non_canonical);
+    const auto star = key_pattern::make("**");
+    REQUIRE(star.has_value());
+    REQUIRE(star->includes(*star));
+    REQUIRE(star->intersects(*star));
 }

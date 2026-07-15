@@ -61,10 +61,14 @@ TEST_CASE("key_pattern intersects allocates nothing", "[match][key_pattern][allo
     const bool        r1     = wildcard->intersects(*concrete);
     const bool        r2     = wildcard->intersects(*other);
     const bool        r3     = adv_pat->intersects(*adv_key);
+    const bool        r4     = wildcard->includes(*concrete);
+    const bool        r5     = adv_pat->includes(*adv_key);
     const std::size_t after  = plexus::testing::alloc_count();
 
     REQUIRE(r1);
     REQUIRE(r2);
     REQUIRE(r3);
+    REQUIRE(r4);
+    REQUIRE(r5);
     REQUIRE(after - before == 0);
 }

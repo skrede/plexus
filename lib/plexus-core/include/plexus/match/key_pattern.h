@@ -65,6 +65,15 @@ public:
         return detail::intersects_dp<Bounds>(*this, other);
     }
 
+    // Point-in-time set-containment relation: is every concrete key of other also
+    // a key of *this (language containment L(other) subset of L(*this))? Always the
+    // rolling DP — containment has no greedy concrete shortcut. This is the routing
+    // /universe-coverage relation, not a subscription verb.
+    constexpr bool includes(const basic_key_pattern &other) const noexcept
+    {
+        return detail::includes_dp<Bounds>(*this, other);
+    }
+
 private:
     std::size_t                                                m_count;
     std::size_t                                                m_length;

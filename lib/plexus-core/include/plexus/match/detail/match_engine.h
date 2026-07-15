@@ -72,27 +72,28 @@ constexpr bool matches_concrete(const Pattern &pattern, const Key &key) noexcept
     return s.pat_j == pattern.segment_count();
 }
 
-// One product-automaton cell: with '**' on either side the run absorbs a segment
+// One intersection cell: with '**' on either side the run absorbs a segment
 // (right) or matches empty (below); otherwise the two single tokens must be
 // compatible and their tails intersect (diag).
-constexpr bool step_cell(segment_view a, segment_view b, bool right, bool below, bool diag) noexcept
+constexpr bool intersect_cell(segment_view a, segment_view b, bool right, bool below, bool diag) noexcept
 {
     if(a.kind == segment_kind::double_star || b.kind == segment_kind::double_star)
         return right || below;
     return tokens_compatible(a, b) && diag;
 }
 
-template<typename Pattern, typename Row>
-constexpr void seed_tail_row(const Pattern &b, Row &row) noexcept
+// One containment cell: an a-'**' absorbs a run of b (right) or matches empty
+// (below); otherwise the single a token must cover the single b token (never a
+// b-'**') and their tails contain (diag). Only a-side '**' drives the absorb.
+constexpr bool include_cell(segment_view a, segment_view b, bool right, bool below, bool diag) noexcept
 {
-    const std::size_t db = b.segment_count();
-    row[db]              = true;
-    for(std::size_t j = db; j-- > 0;)
-        row[j] = (b.segment(j).kind == segment_kind::double_star) && row[j + 1];
+    if(a.kind == segment_kind::double_star)
+        return right || below;
+    return covers_single(a, b) && diag;
 }
 
-template<typename Pattern, typename Row>
-constexpr void roll_column(const Pattern &a, const Pattern &b, std::size_t i, Row &row) noexcept
+template<typename Cell, typename Pattern, typename Row>
+constexpr void roll_column(Cell cell, const Pattern &a, const Pattern &b, std::size_t i, Row &row) noexcept
 {
     const std::size_t  db    = b.segment_count();
     const segment_view aseg  = a.segment(i);
@@ -102,21 +103,43 @@ constexpr void roll_column(const Pattern &a, const Pattern &b, std::size_t i, Ro
     for(std::size_t j = db; j-- > 0;)
     {
         const bool below = row[j];
-        row[j]           = step_cell(aseg, b.segment(j), row[j + 1], below, diag);
+        row[j]           = cell(aseg, b.segment(j), row[j + 1], below, diag);
         diag             = below;
     }
 }
 
-// Rolling-row DP over segment tokens: product-automaton non-emptiness, computed
-// bottom-up over one std::array<bool, depth+1> row (rolled). O(Da*Db) time,
-// O(depth) working set, no recursion — the pattern-vs-pattern intersects path.
+// b-exhausted boundary shared by both relations: a[i:] denotes the empty key only
+// when every remaining a token is '**', so the last column keeps that suffix flag.
+template<typename Pattern, typename Row>
+constexpr void seed_intersect_row(const Pattern &b, Row &row) noexcept
+{
+    const std::size_t db = b.segment_count();
+    row[db]              = true;
+    for(std::size_t j = db; j-- > 0;)
+        row[j] = (b.segment(j).kind == segment_kind::double_star) && row[j + 1];
+}
+
+// Rolling-row DP over segment tokens (rolled to one std::array<bool, depth+1> row).
+// O(Da*Db) time, O(depth) working set, no recursion. intersects seeds the
+// all-'**' b-suffix (a exhausted may still cover an all-'**' b tail); includes
+// seeds only the empty-key cell (a exhausted covers b only when b is exhausted).
 template<typename Bounds, typename Pattern>
 constexpr bool intersects_dp(const Pattern &a, const Pattern &b) noexcept
 {
     std::array<bool, Bounds::k_pattern_depth + 1> row{};
-    seed_tail_row(b, row);
+    seed_intersect_row(b, row);
     for(std::size_t i = a.segment_count(); i-- > 0;)
-        roll_column(a, b, i, row);
+        roll_column(intersect_cell, a, b, i, row);
+    return row[0];
+}
+
+template<typename Bounds, typename Pattern>
+constexpr bool includes_dp(const Pattern &a, const Pattern &b) noexcept
+{
+    std::array<bool, Bounds::k_pattern_depth + 1> row{};
+    row[b.segment_count()] = true;
+    for(std::size_t i = a.segment_count(); i-- > 0;)
+        roll_column(include_cell, a, b, i, row);
     return row[0];
 }
 
