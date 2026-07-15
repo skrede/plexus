@@ -7,6 +7,7 @@ set(PLEXUS_WIRE_TESTS
     test_subscribe_qos_codec
     test_fetch_latched_codec
     test_heartbeat_codec
+    test_topic_declaration_codec
     test_crc32c
     test_serial_crc_kat)
 
