@@ -65,6 +65,11 @@ struct subscribe_request
 {
     std::string fqn;
     std::string type_name;
+    // Three-state type assertion. type_declared=false (the default) is undeclared and type_name is
+    // ignored; true with an empty type_name is declared-empty; true with a name is declared. It
+    // encodes as one trailing flag byte appended AFTER the optional QoS region, so an undeclared
+    // frame is byte-identical to the pre-flag layout.
+    bool type_declared = false;
     uint64_t topic_hash;
     uint64_t type_hash;
     endpoint_source_type source;
@@ -106,6 +111,7 @@ namespace detail {
 // Subscribe request wire layout:
 //   topic_hash(8) + type_hash(8) + endpoint_source_type(1)
 //   + fqn_len(2) + fqn_bytes + type_name_len(2) + type_name_bytes
+//   [ + qos_region if has_qos ] [ + type_flag(1) if type_declared ]
 // Minimum = 8 + 8 + 1 + 2 + 2 = 21 bytes
 constexpr std::size_t subscribe_request_fixed_prefix = 17; // 8 + 8 + 1
 constexpr std::size_t subscribe_request_min_size     = 21; // + 2 + 2
@@ -157,6 +163,11 @@ constexpr std::uint8_t k_qos_flag_rxo_strict = 0x04;
 // clear = lenient (default, attaches to an untyped producer), set = strict (refuses one with
 // subscribe_status::type_undeclared).
 constexpr std::uint8_t k_qos_flag_typed_strict = 0x08;
+
+// bit0 of the optional one-byte type-declaration flag that trails the frame after the QoS region.
+// set = the subscriber asserted a type (type_name carries it; an empty name is declared-empty). The
+// byte is present iff a type is declared, keeping an undeclared frame byte-identical to the floor.
+constexpr std::uint8_t k_type_declared_flag = 0x01;
 
 }
 
