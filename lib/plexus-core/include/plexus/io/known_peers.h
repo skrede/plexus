@@ -67,6 +67,12 @@ public:
                 ++it;
         }
     }
+    template<typename Fn>
+    void for_each(Fn fn) const
+    {
+        for(const auto &[id, rec] : m_table)
+            fn(id, rec.ep);
+    }
 
 private:
     struct record
@@ -121,6 +127,12 @@ public:
     void expire_older_than(std::uint64_t deadline, Report report)
     {
         m_storage.expire_older_than(deadline, std::move(report));
+    }
+
+    template<typename Fn>
+    void for_each(Fn fn) const
+    {
+        m_storage.for_each(std::move(fn));
     }
 
 private:

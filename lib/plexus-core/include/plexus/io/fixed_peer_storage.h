@@ -83,6 +83,14 @@ public:
             }
     }
 
+    template<typename Fn>
+    void for_each(Fn fn) const
+    {
+        for(const entry &e : m_slots)
+            if(e.occupied)
+                fn(e.id, e.ep);
+    }
+
 private:
     struct entry
     {

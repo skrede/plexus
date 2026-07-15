@@ -255,7 +255,7 @@ public:
         return m_registry.session_for(id);
     }
 
-    const known_peers &known() const noexcept
+    const basic_known_peers<PeerStorage> &known() const noexcept
     {
         return m_known_peers;
     }

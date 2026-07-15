@@ -10,6 +10,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <map>
 #include <cstddef>
 
 using plexus::io::basic_known_peers;
@@ -62,7 +63,58 @@ void exercise_four_verbs(Table &table)
     REQUIRE(table.contains(b)); // forgetting one leaves the other
 }
 
+// Collects every (node_id, endpoint) for_each hands over into an ordered map, so the visited
+// live set can be compared independent of visitation order.
+template<typename Table>
+std::map<node_id, endpoint> collect_via_for_each(const Table &table)
+{
+    std::map<node_id, endpoint> seen;
+    table.for_each([&](const node_id &id, const endpoint &ep) { seen[id] = ep; });
+    return seen;
+}
+
 } // namespace
+
+TEST_CASE("known_peers_storage for_each visits every live pair without erasing", "[io][known_peers]")
+{
+    const node_id a = id_of(std::byte{0x01});
+    const node_id b = id_of(std::byte{0x02});
+
+    known_peers table;
+    table.note_peer(a, ep_of("a:1"));
+    table.note_peer(b, ep_of("b:1"));
+
+    const auto seen = collect_via_for_each(table);
+    REQUIRE(seen.size() == 2);
+    REQUIRE(seen.at(a) == ep_of("a:1"));
+    REQUIRE(seen.at(b) == ep_of("b:1"));
+
+    // Read-only: the live set survives the sweep.
+    REQUIRE(table.contains(a));
+    REQUIRE(table.contains(b));
+}
+
+TEST_CASE("known_peers_storage fixed for_each skips unoccupied slots and matches the std::map set", "[io][known_peers]")
+{
+    const node_id a = id_of(std::byte{0x01});
+    const node_id b = id_of(std::byte{0x02});
+    const node_id c = id_of(std::byte{0x03});
+
+    basic_known_peers<fixed_peer_storage<8>> table;
+    table.note_peer(a, ep_of("a:1"));
+    table.note_peer(b, ep_of("b:1"));
+    table.note_peer(c, ep_of("c:1"));
+    table.forget(b); // reopens a slot the sweep must skip
+
+    const auto seen = collect_via_for_each(table);
+    REQUIRE(seen.size() == 2);
+    REQUIRE(seen.at(a) == ep_of("a:1"));
+    REQUIRE(seen.at(c) == ep_of("c:1"));
+    REQUIRE_FALSE(seen.count(b));
+
+    REQUIRE(table.contains(a));
+    REQUIRE(table.contains(c));
+}
 
 TEST_CASE("known_peers_storage default storage reproduces the std::map 4-verb behavior", "[io][known_peers]")
 {
