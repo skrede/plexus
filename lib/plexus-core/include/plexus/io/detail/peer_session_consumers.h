@@ -27,12 +27,18 @@ namespace plexus::io::detail {
 
 // An unauthenticated peer must not reach the graph: only a complete session's records are folded,
 // so a record cannot be injected before the handshake settles who is speaking.
+//
+// The edge is attributed to the identity the handshake proved, NOT to the slot's key: an accepted
+// session's slot carries a provisional id minted before the peer spoke, and a pair that both dials
+// and accepts holds two sessions. Keying on the proven identity collapses both onto the one
+// participant the awareness table also names, so an edge is never attributed to a peer that no
+// enumeration lists.
 template<typename Session>
 void fold_topic_edge(Session &s, std::string_view topic, std::string_view type_name, std::optional<std::uint64_t> type_id, graph::topic_role role)
 {
     if(!s.is_complete())
         return;
-    s.m_messages.note_topic_edge(graph::topic_edge{s.m_ctx.peer_id, topic, type_name, type_id, role});
+    s.m_messages.note_topic_edge(graph::topic_edge{s.m_fsm.last_seen_peer_id(), topic, type_name, type_id, role});
 }
 
 // The three wire states collapse to the schema's reserved optional: no assertion is nullopt, and a

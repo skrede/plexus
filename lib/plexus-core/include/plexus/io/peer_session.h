@@ -287,6 +287,13 @@ public:
         return m_forwarders_installed;
     }
 
+    // The identity the peer proved in the handshake. It differs from the slot's key on an accepted
+    // session, whose provisional id was minted before the peer spoke.
+    const node_id &peer_identity() const noexcept
+    {
+        return m_fsm.last_seen_peer_id();
+    }
+
     bool same_host() const noexcept
     {
         return m_ctx.same_host;

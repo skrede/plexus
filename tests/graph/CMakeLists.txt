@@ -63,3 +63,13 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_graph_two_universe TEST_PREFIX "graph.")
 endif()
+
+# The cross-participant propagation oracle: a two-node inproc pair driving real sessions, so it
+# links the facade + inproc + discovery like the snapshot oracle.
+add_executable(test_graph_topics test_graph_topics.cpp)
+target_link_libraries(test_graph_topics PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_graph_topics TEST_PREFIX "graph.")

@@ -467,13 +467,25 @@ private:
         }
     }
 
-    // Topic knowledge is scoped to the session that carried it, so a peer's records leave with its
-    // session — mirroring how the registry drops its fan-out entries. Awareness is untouched: a
-    // peer that goes down stays discovered, it just stops asserting topics.
+    // A peer that both dials and accepts holds two sessions under two slot keys but one proven
+    // identity, and the table is keyed by that identity.
+    bool any_session_for(const node_id &proven)
+    {
+        bool found = false;
+        m_registry.for_each_connected([&](const node_id &, session_type &s) { found = found || s.peer_identity() == proven; });
+        return found;
+    }
+
+    // Topic knowledge is scoped to the sessions that carried it, so a peer's records leave with the
+    // last of them — mirroring how the registry drops its fan-out entries. Awareness is untouched:
+    // a peer that goes down stays discovered, it just stops asserting topics.
     void forget_topics_on_teardown(const lifecycle_event &ev)
     {
-        if(ev.edge == lifecycle_edge::disconnected || ev.edge == lifecycle_edge::dead)
-            m_topics.remove_node(ev.id);
+        if(ev.edge != lifecycle_edge::disconnected && ev.edge != lifecycle_edge::dead)
+            return;
+        session_type *torn = m_registry.session_for(ev.id);
+        if(torn != nullptr && !any_session_for(torn->peer_identity()))
+            m_topics.remove_node(torn->peer_identity());
     }
 
     void dispatch_lifecycle(const lifecycle_event &ev)
