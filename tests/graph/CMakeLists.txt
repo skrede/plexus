@@ -73,3 +73,14 @@ target_link_libraries(test_graph_topics PRIVATE
     plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_graph_topics TEST_PREFIX "graph.")
+
+# The public query surface the propagation feeds. It drives a three-node topology (two rival
+# publishers must both be remote to the node enumerating them), so it is its own executable rather
+# than a widening of the two-node propagation oracle.
+add_executable(test_graph_topic_query test_graph_topic_query.cpp)
+target_link_libraries(test_graph_topic_query PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_graph_topic_query TEST_PREFIX "graph.")
