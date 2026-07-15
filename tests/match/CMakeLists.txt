@@ -31,3 +31,10 @@ add_executable(test_key_pattern_alloc test_key_pattern_alloc.cpp)
 target_link_libraries(test_key_pattern_alloc PRIVATE plexus::core Catch2::Catch2WithMain)
 target_include_directories(test_key_pattern_alloc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_key_pattern_alloc TEST_PREFIX "match.")
+
+# The INV-1 byte-identical gate: the same source is compiled by this host leg and the
+# ESP-IDF xtensa cross-compile, proving the header-only matcher carries no platform #ifdef.
+# The constexpr static_asserts are the byte-identical-semantics evidence; header-only core.
+add_executable(inv1_matcher_tu inv1_matcher_tu.cpp)
+target_link_libraries(inv1_matcher_tu PRIVATE plexus::core)
+add_test(NAME match.inv1_matcher_tu COMMAND inv1_matcher_tu)
