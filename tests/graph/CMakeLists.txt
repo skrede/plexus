@@ -14,8 +14,10 @@ target_link_libraries(test_graph_topic_table PRIVATE plexus::core Catch2::Catch2
 target_include_directories(test_graph_topic_table PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_graph_topic_table TEST_PREFIX "graph.")
 
+# The platform-independence gate reaches the query sweeps as well as the records, so it links the
+# facade's header tree — no backend, no discovery: it constructs nothing that needs one.
 add_executable(inv1_graph_tu inv1_graph_tu.cpp)
-target_link_libraries(inv1_graph_tu PRIVATE plexus::core)
+target_link_libraries(inv1_graph_tu PRIVATE plexus::plexus)
 add_test(NAME graph.inv1_graph_tu COMMAND inv1_graph_tu)
 
 # The participant-snapshot fill + node_id keying oracle over the deterministic inproc backend:
