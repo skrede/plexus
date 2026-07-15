@@ -53,7 +53,7 @@ bool direct_only(const plexus::graph::participant_record &rec)
 
 }
 
-// SC#3: a foreign thread reads the snapshot via participants_blocking in a loop while the OWNING
+// A foreign thread reads the snapshot via participants_blocking in a loop while the OWNING
 // executor thread churns peers (note_peer/forget). The helper posts the fill onto the executor, so the
 // awareness table is only ever touched on that one thread — race-free by construction, and under
 // -fsanitize=thread the run reports no data race on the live table.

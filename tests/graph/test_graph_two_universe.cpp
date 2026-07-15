@@ -26,7 +26,7 @@
 #include <algorithm>
 #include <string_view>
 
-// D-07: enumeration is universe-scoped BY CONSTRUCTION. participants() takes no universe argument
+// Enumeration is universe-scoped BY CONSTRUCTION. participants() takes no universe argument
 // and applies no query-time filter; a foreign-universe announcement is dropped at
 // multicast_discovery::on_inbound (ann->universe != m_options.universe) BEFORE note_peer, so it never
 // enters the awareness table the snapshot sweeps. A same-universe control pair proves the boundary is

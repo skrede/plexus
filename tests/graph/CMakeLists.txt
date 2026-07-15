@@ -39,11 +39,11 @@ target_link_libraries(test_graph_truncate PRIVATE
 target_include_directories(test_graph_truncate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_graph_truncate TEST_PREFIX "graph.")
 
-# The foreign-thread post-and-wait race gate (the SC#3 TSan proof). It needs a thread-safe executor
-# post — asio's post() is thread-safe, the cooperative inproc step-executor's is not — so the gate
-# runs over the asio node and links plexus::asio (available only under the backend gate).
+# The foreign-thread post-and-wait race gate needs a thread-safe executor post — asio's post() is
+# thread-safe, the cooperative inproc step-executor's is not — so the gate runs over the asio node
+# and links plexus::asio (available only under the backend gate).
 #
-# The universe-scope-by-construction exclusion proof (D-07) rides the multicast_discovery on_inbound
+# The universe-scope-by-construction exclusion proof rides the multicast_discovery on_inbound
 # universe drop, which lives on the asio multicast path — it links plexus::asio + default_discovery
 # for real loopback multicast, not the inproc static-discovery path (which has no universe compare).
 if(PLEXUS_ENABLE_ASIO_BACKEND)
