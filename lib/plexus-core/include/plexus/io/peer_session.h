@@ -345,6 +345,10 @@ private:
     template<typename S>
     friend void detail::register_session_consumers(S &);
     template<typename S>
+    friend void detail::fold_topic_edge(S &, std::string_view, std::string_view, std::optional<std::uint64_t>, graph::topic_role);
+    template<typename S>
+    friend void detail::on_subscribe_received(S &, std::span<const std::byte>);
+    template<typename S>
     friend void detail::deliver_session_data(S &, const wire::frame_header &, std::span<const std::byte>);
     template<typename S>
     friend void detail::deliver_session_object(S &, const object_carrier &);

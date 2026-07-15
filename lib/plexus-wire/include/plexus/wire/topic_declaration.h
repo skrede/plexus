@@ -21,11 +21,14 @@ enum class type_state : std::uint8_t
 // A producer's topic-with-type, asserted in-band on an authenticated session — the discovery
 // broadcast carries identity and ports only, never topic identity. type_id is the equality token a
 // receiver compares to detect producers disagreeing over a topic's type; type_name is the opaque
-// name plexus carries for enumeration and never parses.
+// name plexus carries for enumeration and never parses. The fqn rides beside the hash it hashes to
+// because a hash is one-way: a receiver enumerating a topic it never subscribed to has no other
+// source for the name (the same reason subscribe_request carries both).
 struct topic_declaration
 {
     std::uint64_t topic_hash;
     std::uint64_t type_id;
+    std::string fqn;
     std::string type_name;
     type_state state;
 
@@ -34,9 +37,10 @@ struct topic_declaration
 
 namespace detail {
 
-// Wire layout: topic_hash(8) + type_id(8) + type_state(1) + type_name_len(2) + type_name_bytes.
-// The name's per-callsite lid is subscribe's k_max_type_name — one bound for one opaque name.
-constexpr std::size_t topic_declaration_min_size = 19;
+// Wire layout: topic_hash(8) + type_id(8) + type_state(1) + fqn_len(2) + fqn_bytes
+//   + type_name_len(2) + type_name_bytes.
+// Both strings reuse subscribe's per-callsite lids — one bound per named thing, never re-minted.
+constexpr std::size_t topic_declaration_min_size = 21;
 
 }
 

@@ -8,18 +8,69 @@
 
 #include "plexus/io/security/attach_facts.h"
 
+#include "plexus/graph/topic_record.h"
+
 #include "plexus/wire/frame.h"
 #include "plexus/wire/handshake.h"
 #include "plexus/wire/heartbeat.h"
 #include "plexus/wire/subscribe.h"
+#include "plexus/wire/topic_declaration.h"
 #include "plexus/wire/fetch_latched.h"
 
 #include <span>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 
 namespace plexus::io::detail {
+
+// An unauthenticated peer must not reach the graph: only a complete session's records are folded,
+// so a record cannot be injected before the handshake settles who is speaking.
+template<typename Session>
+void fold_topic_edge(Session &s, std::string_view topic, std::string_view type_name, std::optional<std::uint64_t> type_id, graph::topic_role role)
+{
+    if(!s.is_complete())
+        return;
+    s.m_messages.note_topic_edge(graph::topic_edge{s.m_ctx.peer_id, topic, type_name, type_id, role});
+}
+
+// The three wire states collapse to the schema's reserved optional: no assertion is nullopt, and a
+// declared type keeps its id whatever the name — an empty name is a type declared without one.
+inline std::optional<std::uint64_t> declared_id(const wire::topic_declaration &td)
+{
+    return td.state == wire::type_state::undeclared ? std::nullopt : std::optional{td.type_id};
+}
+
+// The declared flag, not the id, gates the graph: the type assertion is independent of the numeric
+// token the fan-out matches on.
+inline std::optional<std::uint64_t> declared_id(const wire::subscribe_request &req)
+{
+    return req.type_declared ? std::optional{req.type_hash} : std::nullopt;
+}
+
+template<typename Session>
+void on_subscribe_received(Session &s, std::span<const std::byte> inner)
+{
+    auto req = wire::decode_subscribe_request(inner);
+    if(!req)
+        return;
+    // type_hash == 0 is the undeclared-type sentinel: lift it to nullopt so an undeclared
+    // subscriber is never refused.
+    std::optional<std::uint64_t> subscriber_type_id;
+    if(req->type_hash != 0)
+        subscriber_type_id = req->type_hash;
+    const subscriber_qos sub_qos = req->has_qos ? from_wire_region(req->qos) : subscriber_qos{};
+    s.m_messages.attach_for_fanout(s.m_msg_peer, req->fqn, subscriber_type_id, sub_qos);
+    fold_topic_edge(s, req->fqn, req->type_name, declared_id(*req), graph::topic_role::subscriber);
+}
+
+template<typename Session>
+void on_declare_received(Session &s, std::span<const std::byte> inner)
+{
+    if(auto td = wire::decode_topic_declaration(inner))
+        fold_topic_edge(s, td->fqn, td->type_name, declared_id(*td), graph::topic_role::publisher);
+}
 
 template<typename Session>
 // NOLINTNEXTLINE(readability-function-size)
@@ -49,20 +100,8 @@ void register_session_consumers(Session &s)
                     execute(s, s.m_fsm.on_response(*resp, s.m_negotiator.facts()));
                 }
             });
-    s.m_router.on_subscribe(
-            [&s](std::span<const std::byte> inner)
-            {
-                if(auto req = wire::decode_subscribe_request(inner))
-                {
-                    // type_hash == 0 is the undeclared-type sentinel: lift it to nullopt so an
-                    // undeclared subscriber is never refused.
-                    std::optional<std::uint64_t> subscriber_type_id;
-                    if(req->type_hash != 0)
-                        subscriber_type_id = req->type_hash;
-                    const subscriber_qos sub_qos = req->has_qos ? from_wire_region(req->qos) : subscriber_qos{};
-                    s.m_messages.attach_for_fanout(s.m_msg_peer, req->fqn, subscriber_type_id, sub_qos);
-                }
-            });
+    s.m_router.on_subscribe([&s](std::span<const std::byte> inner) { on_subscribe_received(s, inner); });
+    s.m_router.on_declare([&s](std::span<const std::byte> inner) { on_declare_received(s, inner); });
     s.m_router.on_fetch_latched(
             [&s](std::span<const std::byte> inner)
             {

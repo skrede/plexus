@@ -84,6 +84,16 @@ public:
         }
     }
 
+    void remove_node(const plexus::node_id &node)
+    {
+        for(entry &e : m_slots)
+        {
+            drop_edges(e, node);
+            if(e.edge_count == 0)
+                e = entry{};
+        }
+    }
+
 private:
     std::array<entry, Topics> m_slots;
 
@@ -120,6 +130,15 @@ private:
             return &e;
         }
         return nullptr;
+    }
+
+    static void drop_edges(entry &e, const plexus::node_id &node)
+    {
+        std::size_t kept = 0;
+        for(std::size_t i = 0; i < e.edge_count; ++i)
+            if(e.edges[i].node != node)
+                e.edges[kept++] = e.edges[i];
+        e.edge_count = kept;
     }
 
     static bool note_edge(entry &e, const topic_edge &edge)

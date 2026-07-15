@@ -25,6 +25,8 @@
 #include "plexus/io/session_build_context.h"
 #include "plexus/io/reliability_requirement.h"
 
+#include "plexus/graph/topic_type_table.h"
+
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_sink_install.h"
@@ -260,6 +262,11 @@ public:
         return m_known_peers;
     }
 
+    const graph::topic_type_table &topic_table() const noexcept
+    {
+        return m_topics;
+    }
+
     io::host_fingerprint local_fingerprint() const noexcept
     {
         return m_build.fsm_cfg.local_fingerprint;
@@ -343,6 +350,7 @@ private:
     session_build_context<Policy> m_build;
     registry_type m_registry;
     basic_known_peers<PeerStorage> m_known_peers;
+    graph::topic_type_table m_topics;
     liveliness_monitor<Policy, Clock, typename LivelinessStorage::monitor> m_monitor;
     peer_liveliness<typename LivelinessStorage::arbiter> m_peer_liveliness;
     std::vector<std::reference_wrapper<observer>> m_observers;
@@ -459,9 +467,19 @@ private:
         }
     }
 
+    // Topic knowledge is scoped to the session that carried it, so a peer's records leave with its
+    // session — mirroring how the registry drops its fan-out entries. Awareness is untouched: a
+    // peer that goes down stays discovered, it just stops asserting topics.
+    void forget_topics_on_teardown(const lifecycle_event &ev)
+    {
+        if(ev.edge == lifecycle_edge::disconnected || ev.edge == lifecycle_edge::dead)
+            m_topics.remove_node(ev.id);
+    }
+
     void dispatch_lifecycle(const lifecycle_event &ev)
     {
         feed_liveliness_session(ev);
+        forget_topics_on_teardown(ev);
         switch(ev.edge)
         {
             case lifecycle_edge::connected:

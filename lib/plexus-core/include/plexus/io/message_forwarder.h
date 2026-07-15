@@ -9,6 +9,8 @@
 
 #include "plexus/detail/compat.h"
 
+#include "plexus/graph/topic_record.h"
+
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/message_info.h"
@@ -371,6 +373,19 @@ public:
         m_on_demand_transition_cb = std::move(hook);
     }
 
+    void on_topic_edge(plexus::detail::move_only_function<void(const graph::topic_edge &)> hook)
+    {
+        m_on_topic_edge_cb = std::move(hook);
+    }
+
+    // What a peer told us about a topic. The views borrow the decoded frame, so the sink must copy
+    // anything it keeps — the transport recycles that buffer the moment the fold returns.
+    void note_topic_edge(const graph::topic_edge &edge)
+    {
+        if(m_on_topic_edge_cb)
+            m_on_topic_edge_cb(edge);
+    }
+
     void fetch_latched(const peer &p, std::uint64_t topic_hash, std::uint32_t max_samples)
     {
         auto it = m_retained.find(topic_hash);
@@ -575,6 +590,7 @@ private:
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
+    plexus::detail::move_only_function<void(const graph::topic_edge &)> m_on_topic_edge_cb;
     plexus::detail::move_only_function<bool(std::uint64_t)> m_capture_wants_payload_cb;
     plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change_cb;
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp_cb;

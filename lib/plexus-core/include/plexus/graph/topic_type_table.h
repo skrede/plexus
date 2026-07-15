@@ -61,6 +61,13 @@ public:
                 fn(make_record(topic, e, edge));
     }
 
+    void remove_node(const plexus::node_id &node)
+    {
+        for(auto &[topic, e] : m_table)
+            std::erase_if(e.edges, [&](const edge_slot &s) { return s.node == node; });
+        std::erase_if(m_table, [](const auto &kv) { return kv.second.edges.empty(); });
+    }
+
 private:
     std::map<std::string, entry, std::less<>> m_table;
 
@@ -140,6 +147,13 @@ public:
     void for_each(Fn fn) const
     {
         m_storage.for_each(std::move(fn));
+    }
+
+    // Topic knowledge is session-scoped: a peer's edges leave with its session. A topic left with
+    // no edges goes whole, so a peer that churns cannot hold a slot it no longer occupies.
+    void remove_node(const plexus::node_id &node)
+    {
+        m_storage.remove_node(node);
     }
 
     // Edges refused for want of room. An over-long topic name is refused here too: clipping it
