@@ -20,6 +20,13 @@ add_executable(inv1_graph_tu inv1_graph_tu.cpp)
 target_link_libraries(inv1_graph_tu PRIVATE plexus::plexus)
 add_test(NAME graph.inv1_graph_tu COMMAND inv1_graph_tu)
 
+# The target_profile vocabulary gate: a compile-time proof that a bare policy resolves to the heap
+# twins and bounded<> resolves the graph tables to the fixed twins. It reuses the inproc policy as a
+# real mechanism policy, so it links the facade plus the inproc backend.
+add_executable(target_profile_tu target_profile_tu.cpp)
+target_link_libraries(target_profile_tu PRIVATE plexus::plexus plexus::inproc)
+add_test(NAME graph.target_profile_tu COMMAND target_profile_tu)
+
 # The participant-snapshot fill + node_id keying oracle over the deterministic inproc backend:
 # a basic_node test, so it links the facade + inproc + discovery.
 add_executable(test_graph_snapshot test_graph_snapshot.cpp)
