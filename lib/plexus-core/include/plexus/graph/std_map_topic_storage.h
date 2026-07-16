@@ -17,10 +17,10 @@ namespace plexus::graph
 {
 
 // The default (PC) topic backend: an unbounded heap-backed std::map keyed by an OWNED topic name.
-// The constrained-target build swaps in fixed_topic_storage<N> through the Storage template param.
-// Only the topic and participant counts go unbounded here: the per-topic type list keeps its cap
-// on every backend, because that cap is the polytype conflict semantics and a flooding lid, not a
-// memory tactic.
+// A bounded node profile substitutes fixed_topic_storage<N> through the Storage template param
+// instead. Only the topic and participant counts go unbounded here: the per-topic type list keeps
+// its cap on every backend, because that cap is the polytype conflict semantics and a flooding lid,
+// not a memory tactic.
 class std_map_topic_storage
 {
     struct type_slot

@@ -56,7 +56,7 @@ constexpr UBaseType_t k_plexus_task_prio    = 5;
 // four-topic composition can produce before the report can trust a miss to be a real miss.
 constexpr std::size_t k_edge_scratch = 8;
 
-using device_node = plexus::node<example::uart_policy, example::uart_transport>;
+using device_node = plexus::node<plexus::bounded<example::uart_policy, 2, 4>, example::uart_transport>;
 
 // The periodic report loop: sweep the node's own enumeration surface for the type name the HOST
 // declared on its topic, and publish that name back. An empty name means the device enumerates no

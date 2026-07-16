@@ -18,9 +18,9 @@ namespace plexus::io {
 // recorded (announce_period, TTL) virtual-clock sweep, not guessed.
 constexpr std::uint64_t default_discovery_ttl_ns = 15'000'000'000ull;
 
-// The default (PC) awareness backend: an unbounded heap-backed std::map. The constrained-target
-// build swaps in fixed_peer_storage<N> via the Storage template param. Each record carries a
-// clock-free last_refreshed tick the engine stamps; nothing reads it on the static_discovery PC
+// The default (PC) awareness backend: an unbounded heap-backed std::map. A bounded node profile
+// substitutes fixed_peer_storage<N> through the Storage template param instead. Each record carries
+// a clock-free last_refreshed tick the engine stamps; nothing reads it on the static_discovery PC
 // path (expire_older_than/refresh stay uncalled), so the timestamp is inert there.
 class std_map_peer_storage
 {
