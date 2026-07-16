@@ -3,6 +3,7 @@
 
 #include "plexus/recorder.h"
 #include "plexus/node_options.h"
+#include "plexus/target_profile.h"
 #include "plexus/typed_publisher_options.h"
 
 #include "plexus/io/endpoint.h"
@@ -181,9 +182,9 @@ class procedure;
 // borrowed executor and captures `this`. The borrowed substrate MUST outlive the node, and the
 // executor MUST be drained before the node is destroyed — the structural single-owner
 // discipline. The node pins `this` into those callbacks, so it is non-copyable and non-movable.
-template<typename Policy, typename... Transports>
-    requires plexus::Policy<Policy> && (sizeof...(Transports) >= 1) &&
-        (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, Policy> : (io::mux_member<Transports> && ...))
+template<typename Profile, typename... Transports>
+    requires detail::target_profile<Profile> && (sizeof...(Transports) >= 1) &&
+        (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, typename detail::profile_traits<Profile>::policy> : (io::mux_member<Transports> && ...))
 class basic_node
 {
     // The registration/retire seams are private; the endpoint handles reach them only as friends
@@ -200,11 +201,14 @@ class basic_node
     friend class procedure;
 
 public:
-    using policy_type      = Policy;
-    using executor_type    = typename Policy::executor_type;
-    using engine_policy    = detail::node_engine_policy<Policy, Transports...>;
+    using policy_type      = typename detail::profile_traits<Profile>::policy;
+    using executor_type    = typename policy_type::executor_type;
+    using engine_policy    = detail::node_engine_policy<policy_type, Transports...>;
     using engine_transport = detail::node_engine_transport<Transports...>;
-    using engine_type      = io::routing_engine<engine_policy, engine_transport>;
+    // Storage is threaded off the profile, never off engine_policy/muxify — muxify re-exports only
+    // the mechanism members, so reading storage through it silently reverts to the heap twins.
+    using engine_type      = io::routing_engine<engine_policy, engine_transport, std::chrono::steady_clock, typename detail::profile_traits<Profile>::peer_storage,
+                                                typename detail::profile_traits<Profile>::topic_storage, typename detail::profile_traits<Profile>::liveliness_storage>;
     using engine_channel   = typename engine_type::channel_type;
     using transport_tuple  = std::tuple<Transports...>;
 
@@ -213,12 +217,12 @@ public:
     // object fast path); a composed intra-node+network node binds polymorphic_byte_channel, so the
     // self-channel is wrapped (erased, framed bytes lane only — no zero-copy self-lane there). Any
     // pack with no intra-node member leaves the self-route idle.
-    static constexpr bool k_has_self_loopback = detail::pack_has_intra_node<Policy, Transports...>;
+    static constexpr bool k_has_self_loopback = detail::pack_has_intra_node<policy_type, Transports...>;
 
     // Single-transport: the engine's channel IS the concrete loopback channel, attached directly.
     // Multi-transport: the engine's channel is the erased polymorphic_byte_channel, so the concrete
     // self-channel is reference-adapter wrapped to satisfy the registry's reference_wrapper.
-    static constexpr bool k_self_route_erased = k_has_self_loopback && !std::is_same_v<engine_channel, io::process_loopback_channel<Policy>>;
+    static constexpr bool k_self_route_erased = k_has_self_loopback && !std::is_same_v<engine_channel, io::process_loopback_channel<policy_type>>;
 
     // The fallback self-carrier: when no intra-node transport serves self but the pack has an shm
     // member, a same-node publish self-delivers over a node-local shm self-ring (the framed bytes
@@ -447,9 +451,9 @@ public:
 
     // An RAII recorder handle that registers its tap on the engine and deregisters before
     // teardown. The sink MUST outlive the handle; the drain rides this node's executor turns.
-    recorder<engine_type, Policy> make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
+    recorder<engine_type, policy_type> make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
     {
-        return recorder<engine_type, Policy>{m_engine, m_executor, m_id, sink, std::move(opts), m_wire_crypto_position};
+        return recorder<engine_type, policy_type>{m_engine, m_executor, m_id, sink, std::move(opts), m_wire_crypto_position};
     }
 
     friend struct detail::peer_watch<basic_node>;
@@ -620,7 +624,7 @@ private:
                     { on_reply(status, bytes, provider); }, deadline, session->session_id());
             return;
         }
-        Policy::post(m_executor, [on_reply = std::move(on_reply)]() mutable { on_reply(std::nullopt, {}, std::nullopt); });
+        policy_type::post(m_executor, [on_reply = std::move(on_reply)]() mutable { on_reply(std::nullopt, {}, std::nullopt); });
     }
 
     // The served-FQN set is checked BEFORE the forwarder is touched, so a refused (duplicate-local)
@@ -1072,7 +1076,7 @@ private:
     // The node-owned self-route, attached to its OWN forwarder so a publish reaches a same-node
     // subscriber. Declared BEFORE m_engine so it outlives the registry references that hold it.
     // It is only wired when the pack carries an intra-node transport; on any other node it is idle.
-    io::process_loopback_channel<Policy> m_self_channel;
+    io::process_loopback_channel<policy_type> m_self_channel;
 
     // On a multi-transport node the registry holds reference_wrapper<polymorphic_byte_channel>, so the
     // concrete self-channel is erased through a non-owning reference adapter (the node keeps owning

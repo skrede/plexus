@@ -27,6 +27,18 @@ add_executable(target_profile_tu target_profile_tu.cpp)
 target_link_libraries(target_profile_tu PRIVATE plexus::plexus plexus::inproc)
 add_test(NAME graph.target_profile_tu COMMAND target_profile_tu)
 
+# Through-the-facade reachability: a single-transport bounded<> node's engine resolves peer and topic
+# storage to the fixed twins. It reuses the inproc policy + inproc transport as a real mechanism pair.
+add_executable(facade_bounded_reachable_tu facade_bounded_reachable_tu.cpp)
+target_link_libraries(facade_bounded_reachable_tu PRIVATE plexus::plexus plexus::inproc)
+add_test(NAME graph.facade_bounded_reachable_tu COMMAND facade_bounded_reachable_tu)
+
+# The muxify heap-revert guard: a two-transport bounded<> node resolves to the SAME fixed twins, so
+# storage rides the profile, not muxify. The two members are minimal in-TU mux_member mocks.
+add_executable(muxify_bounded_storage_tu muxify_bounded_storage_tu.cpp)
+target_link_libraries(muxify_bounded_storage_tu PRIVATE plexus::plexus plexus::inproc)
+add_test(NAME graph.muxify_bounded_storage_tu COMMAND muxify_bounded_storage_tu)
+
 # The participant-snapshot fill + node_id keying oracle over the deterministic inproc backend:
 # a basic_node test, so it links the facade + inproc + discovery.
 add_executable(test_graph_snapshot test_graph_snapshot.cpp)
