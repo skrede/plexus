@@ -108,7 +108,7 @@ for ((run = 1; run <= RUNS; ++run)); do
     }
 
     echo "=== run ${run}/${RUNS}: asserting both ends enumerate the other's topic-with-type ==="
-    if ! "${HOST_GATE}"; then
+    if ! "${HOST_GATE}" "${PORT}@115200"; then
         echo "GATE: run ${run}/${RUNS} did NOT propagate topics-with-types both ways"
         echo "GATE: ${passes}/${RUNS} runs passed — FAIL"
         exit 1

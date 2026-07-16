@@ -50,9 +50,9 @@ namespace {
 
 using namespace std::chrono_literals;
 
-// The CP2102 on UART0 at the board's 8N1 @115200 line discipline. The "serial" scheme + the @baud
-// suffix are parsed by the serial_transport endpoint parser.
-constexpr const char *k_device_endpoint = "/dev/ttyUSB0@115200";
+// The "serial" scheme + the @baud suffix are parsed by the serial_transport endpoint parser. Which
+// device the board enumerates as is a property of the bench, not of the gate — argv[1] overrides.
+constexpr const char *k_default_endpoint = "/dev/ttyUSB0@115200";
 
 constexpr std::chrono::seconds k_timeout{12};
 constexpr std::chrono::seconds k_handshake_window{2};
@@ -107,15 +107,17 @@ void report(const verdict &v)
 
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    const std::string endpoint = argc > 1 ? argv[1] : k_default_endpoint;
+
     ::asio::io_context io;
     pasio::serial_transport transport{io};
 
     // Point-at-port discovery: the serial link is the only peer, so the table is empty. The board
     // boots fresh on the reset pulse; the bounded handshake retry absorbs the boot race.
     plexus::discovery::static_discovery disc{{}};
-    reset_board_into_run(device_of(k_device_endpoint));
+    reset_board_into_run(device_of(endpoint));
 
     plexus::node_options opts;
     opts.name              = "topic-gate-host";
@@ -144,7 +146,7 @@ int main()
             io.stop();
         }};
 
-    node.dial({"serial", k_device_endpoint});
+    node.dial({"serial", endpoint});
 
     ::asio::steady_timer deadline{io, k_timeout};
     deadline.async_wait([&](std::error_code) { io.stop(); });
