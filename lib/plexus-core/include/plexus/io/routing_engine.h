@@ -57,7 +57,7 @@ struct default_liveliness_storage
 };
 
 template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock, typename PeerStorage = std_map_peer_storage,
-         typename LivelinessStorage = default_liveliness_storage>
+         typename TopicStorage = graph::std_map_topic_storage, typename LivelinessStorage = default_liveliness_storage>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
 {
@@ -77,11 +77,13 @@ class routing_engine
     };
 
 public:
-    using policy_type   = Policy;
-    using session_type  = peer_session<Policy>;
-    using executor_type = typename Policy::executor_type;
-    using channel_type  = typename Policy::byte_channel_type;
-    using registry_type = peer_session_registry<Policy, Transport, Clock>;
+    using policy_type        = Policy;
+    using peer_storage_type  = PeerStorage;
+    using topic_storage_type = TopicStorage;
+    using session_type       = peer_session<Policy>;
+    using executor_type      = typename Policy::executor_type;
+    using channel_type       = typename Policy::byte_channel_type;
+    using registry_type      = peer_session_registry<Policy, Transport, Clock>;
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
@@ -277,7 +279,7 @@ public:
         return m_known_peers;
     }
 
-    const graph::topic_type_table &topic_table() const noexcept
+    const graph::basic_topic_type_table<TopicStorage> &topic_table() const noexcept
     {
         return m_topics;
     }
@@ -365,7 +367,7 @@ private:
     session_build_context<Policy> m_build;
     registry_type m_registry;
     basic_known_peers<PeerStorage> m_known_peers;
-    graph::topic_type_table m_topics;
+    graph::basic_topic_type_table<TopicStorage> m_topics;
     liveliness_monitor<Policy, Clock, typename LivelinessStorage::monitor> m_monitor;
     peer_liveliness<typename LivelinessStorage::arbiter> m_peer_liveliness;
     std::vector<std::reference_wrapper<observer>> m_observers;
