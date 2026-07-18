@@ -70,8 +70,19 @@ public:
             if(slot->record.dial_endpoint == ep)
             {
                 slot->driver.mark_dial_settled();
+                if(slot->driver.redial_denied())
+                    return;
                 return build_into(*slot, std::move(channel), false);
             }
+    }
+
+    // Awareness for id was withdrawn: cancel an armed backoff and refuse a redial for its slot, so
+    // a forget cannot be undone by a reconnect the peer's own teardown had already armed.
+    void deny_redial(const node_id &id)
+    {
+        auto it = m_slots.find(id);
+        if(it != m_slots.end())
+            it->second->driver.deny_redial();
     }
 
     template<typename PreBuild = std::nullptr_t>

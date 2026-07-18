@@ -181,11 +181,14 @@ public:
             reach(id);
     }
 
-    // Removes a peer's awareness only (a goodbye drops the suggestion, never an active link):
-    // mirrors note_peer's awareness scope and never touches the session registry.
+    // Drops a peer's awareness and denies any redial its teardown armed: a goodbye withdraws the
+    // suggestion reach() gates on, so an in-flight or armed reconnect for the peer is cancelled
+    // rather than left to resurrect it. An established session is untouched — it ends on its own
+    // teardown, not this call.
     void forget(const node_id &id)
     {
         const bool changed = m_known_peers.forget(id);
+        m_registry.deny_redial(id);
         m_peer_liveliness.note_awareness_lost(id);
         bump_graph_generation(changed, id, graph::change_kind::disappeared);
     }
