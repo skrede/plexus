@@ -5,9 +5,9 @@
 
 #include "plexus/detail/compat.h"
 
-#include <deque>
 #include <vector>
 #include <chrono>
+#include <cstddef>
 #include <utility>
 #include <algorithm>
 
@@ -42,10 +42,18 @@ public:
 
     bool step()
     {
-        if(!m_posted.empty())
+        if(m_head < m_posted.size())
         {
-            auto fn = std::move(m_posted.front());
-            m_posted.pop_front();
+            auto fn = std::move(m_posted[m_head]);
+            // Recycle the buffer the moment it drains empty rather than pop_front-ing per step: the
+            // vector keeps its capacity across the clear, so a steady post-drain loop reallocates
+            // nothing (a std::deque recenters its block map periodically, which a zero-alloc gate on
+            // any posted path would otherwise trip).
+            if(++m_head == m_posted.size())
+            {
+                m_posted.clear();
+                m_head = 0;
+            }
             fn();
             return true;
         }
@@ -94,7 +102,8 @@ private:
     }
 
     inproc_bus<Clock> &m_bus;
-    std::deque<detail::move_only_function<void()>> m_posted;
+    std::vector<detail::move_only_function<void()>> m_posted;
+    std::size_t m_head{0};
     std::vector<inproc_timer<Clock> *> m_timers;
 };
 

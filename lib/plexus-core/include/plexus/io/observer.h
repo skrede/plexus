@@ -10,6 +10,8 @@
 #include "plexus/io/observation_events.h"
 #include "plexus/io/peer_liveliness_event.h"
 
+#include "plexus/graph/graph_change.h"
+
 #include "plexus/io/detail/drop_event.h"
 
 #include "plexus/io/recording/wire_record.h"
@@ -80,6 +82,20 @@ public:
     {
     }
 
+    // The coarse graph-change edge: a real add/remove anywhere in the participant/topic graph
+    // coalesces to one posted wakeup carrying the FINAL monotonic generation, so a consumer dedupes
+    // on it and re-snapshots participants()/topics() only when the generation advanced.
+    virtual void on_graph_changed(std::uint64_t /*generation*/)
+    {
+    }
+
+    // The host {who, kind} delta, drained after the coarse wakeup and delivered only while this
+    // observer declares observes_graph(). The bounded profile substitutes a no-op log, so the edge
+    // never fires there.
+    virtual void on_graph_delta(const graph::graph_change &)
+    {
+    }
+
     // Gated STRUCTURALLY, not by observes_data_path: a node that did not compose the
     // recording_channel decorator never produces a captured frame, so the edge never fires.
     virtual void on_wire(const recording::wire_record &)
@@ -97,6 +113,13 @@ public:
     // observer declares interest here, so the goodbye + TTL floor path stays byte-identical when
     // unsubscribed.
     virtual bool observes_liveliness() const
+    {
+        return false;
+    }
+
+    // The graph-payload opt-in: a fixed instance property the engine reads once at registration to
+    // gate the {who, kind} edge-log; the coarse on_graph_changed edge fires regardless.
+    virtual bool observes_graph() const
     {
         return false;
     }
