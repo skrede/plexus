@@ -4,6 +4,7 @@
 #include "plexus/recorder.h"
 #include "plexus/node_options.h"
 #include "plexus/target_profile.h"
+#include "plexus/graph_change_handle.h"
 #include "plexus/typed_publisher_options.h"
 
 #include "plexus/io/endpoint.h"
@@ -208,7 +209,8 @@ public:
     // Storage is threaded off the profile, never off engine_policy/muxify — muxify re-exports only
     // the mechanism members, so reading storage through it silently reverts to the heap twins.
     using engine_type      = io::routing_engine<engine_policy, engine_transport, std::chrono::steady_clock, typename detail::profile_traits<Profile>::peer_storage,
-                                                typename detail::profile_traits<Profile>::topic_storage, typename detail::profile_traits<Profile>::liveliness_storage>;
+                                                typename detail::profile_traits<Profile>::topic_storage, typename detail::profile_traits<Profile>::liveliness_storage,
+                                                typename detail::profile_traits<Profile>::graph_change_log>;
     using engine_channel   = typename engine_type::channel_type;
     using transport_tuple  = std::tuple<Transports...>;
 
@@ -364,6 +366,23 @@ public:
     {
         return detail::sweep_topics(m_engine.topic_table(), out,
                                     [&](const graph::topic_record &rec) { return detail::topic_in(rec.name, filter); });
+    }
+
+    // Registers a graph-change observer over the engine's add_observer seam and returns a move-only
+    // RAII handle whose dtor deregisters (D-03: the teardown ordering is off the consumer, closing the
+    // re-entry footgun). A callback taking a graph::graph_change subscribes to the host {who, kind}
+    // delta — present on the heap profile, structurally absent on bounded<> (its null log twin holds
+    // nothing); a callback taking the coarse std::uint64_t generation dedupes on it and re-snapshots
+    // participants()/topics() only when the generation advanced (D-09). The engine drains posted over
+    // the borrowed executor (the :180-184 lifetime contract), so the handle must be dropped before the
+    // executor stops.
+    template<typename Cb>
+    graph_change_handle on_graph_change(Cb cb)
+    {
+        if constexpr(std::is_invocable_v<Cb &, const graph::graph_change &>)
+            return graph_change_handle{m_engine, {}, std::move(cb)};
+        else
+            return graph_change_handle{m_engine, std::move(cb)};
     }
 
     // Executor-affine. Counted over the same edges topics() enumerates: a maintained counter would

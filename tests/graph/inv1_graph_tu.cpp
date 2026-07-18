@@ -12,10 +12,14 @@
 #include "plexus/graph/topic_type_table.h"
 #include "plexus/graph/fixed_topic_storage.h"
 #include "plexus/graph/participant_record.h"
+#include "plexus/graph/null_graph_change_log.h"
+#include "plexus/graph/vector_graph_change_log.h"
 
 #include "plexus/node_id.h"
+#include "plexus/target_profile.h"
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/observer.h"
 
 #include "plexus/match/key_pattern.h"
 
@@ -28,6 +32,7 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 
 namespace
 {
@@ -75,6 +80,26 @@ static_assert(observation_values_distinct());
 static_assert(direct_only_provenance_has_no_reporter());
 static_assert(type_states_told_apart_by_the_list());
 static_assert(roles_distinct());
+
+// The profile-split edge-log is a compile-time fact selected off profile_traits, never a platform
+// #ifdef (INV-1): the heap primary carries the host vector twin, and bounded<> carries the
+// members-less null twin, so a bounded node pays nothing for the graph-change payload. The Policy is a
+// bare tag here — profile_traits only pattern-matches it, never instantiating a mechanism.
+struct edge_log_policy_tag
+{
+};
+
+static_assert(std::is_same_v<plexus::detail::profile_traits<edge_log_policy_tag>::graph_change_log,
+                             plexus::graph::vector_graph_change_log>);
+static_assert(std::is_same_v<plexus::detail::profile_traits<plexus::bounded<edge_log_policy_tag, 2, 4>>::graph_change_log,
+                             plexus::graph::null_graph_change_log>);
+static_assert(std::is_empty_v<plexus::graph::null_graph_change_log>);
+
+// The coarse edge is byte-identical across both profiles by construction: on_graph_changed lives on
+// the profile-independent io::observer seam, so neither twin can shift its signature. Pinning the
+// pointer-to-member type proves the coarse surface is exactly on_graph_changed(std::uint64_t).
+static_assert(std::is_same_v<decltype(&plexus::io::observer::on_graph_changed),
+                             void (plexus::io::observer::*)(std::uint64_t)>);
 
 plexus::node_id id_with(std::uint8_t tag)
 {
