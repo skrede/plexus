@@ -266,6 +266,26 @@ TEST_CASE("multicast_discovery: a default node's real stamped announcement carri
     REQUIRE(legacy_ann->universe_pattern.empty());
 }
 
+TEST_CASE("multicast_discovery: two same-label concrete nodes admit through the emit loop", "[multicast_discovery][universe]")
+{
+    int ex_a = 0;
+    fake_datagram_socket socket_a;
+    discovery_under_test node_a{ex_a, socket_a, options_for_pattern("alpha")};
+    node_a.advertise(card_for(0x71));
+    REQUIRE(socket_a.sent.size() == 1);
+
+    int ex_c = 0;
+    fake_datagram_socket socket_c;
+    discovery_under_test node_c{ex_c, socket_c, options_for_pattern("alpha")};
+
+    int resolved = 0;
+    node_c.browse([&](const plexus::discovery::service_info &) { ++resolved; });
+    // A flagged same-label peer takes the non-fast-path: intersects("alpha", "alpha") admits.
+    socket_c.inject("10.0.0.71", socket_a.sent.front());
+
+    REQUIRE(resolved == 1);
+}
+
 TEST_CASE("multicast_discovery: two different concrete universes do not mutually admit through the emit loop", "[multicast_discovery][universe]")
 {
     int ex_alpha = 0;
