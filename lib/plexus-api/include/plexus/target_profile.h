@@ -10,7 +10,9 @@
 #include "plexus/io/liveliness_peer_storage.h"
 
 #include "plexus/graph/fixed_topic_storage.h"
+#include "plexus/graph/null_graph_change_log.h"
 #include "plexus/graph/std_map_topic_storage.h"
+#include "plexus/graph/vector_graph_change_log.h"
 
 #include <cstddef>
 
@@ -44,6 +46,7 @@ struct profile_traits
     using peer_storage       = io::std_map_peer_storage;
     using topic_storage      = graph::std_map_topic_storage;
     using liveliness_storage = io::default_liveliness_storage;
+    using graph_change_log   = graph::vector_graph_change_log;
 };
 
 template<typename Policy, std::size_t Peers, std::size_t Topics, typename Liveliness>
@@ -53,6 +56,7 @@ struct profile_traits<bounded<Policy, Peers, Topics, Liveliness>>
     using peer_storage       = io::fixed_peer_storage<Peers>;
     using topic_storage      = graph::fixed_topic_storage<Topics>;
     using liveliness_storage = Liveliness;
+    using graph_change_log   = graph::null_graph_change_log;
 };
 
 template<typename T>
