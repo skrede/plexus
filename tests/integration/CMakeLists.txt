@@ -371,6 +371,35 @@ target_include_directories(test_peer_observer_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_peer_observer_inproc TEST_PREFIX "integration.")
 
+# The destroy-peer-mid-redial non-abort oracle (SC#3): a graph observer registered on a real inproc
+# engine, a peer dropped mid-redial, the engine driven to quiescence with no re-entry into the freed
+# slot_block. Drives the shared support/graph_change_inproc.h harness, so tests/ is on the include
+# path. Authored against the final API — RED until the coalescing engine lands.
+add_executable(test_graph_change_reentrancy_inproc test_graph_change_reentrancy_inproc.cpp)
+target_link_libraries(test_graph_change_reentrancy_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_graph_change_reentrancy_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_graph_change_reentrancy_inproc TEST_PREFIX "integration.")
+
+# The coarse graph-change zero-alloc gate (SC#4): it OWNS the single replaceable operator new
+# (support/alloc_counter.h) for its binary, so it is its own executable and needs tests/ on the include
+# path. A warmed coarse mutation->drain->fire loop allocates zero over the heap and bounded engines.
+add_executable(test_graph_change_alloc test_graph_change_alloc.cpp)
+target_link_libraries(test_graph_change_alloc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_graph_change_alloc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_graph_change_alloc TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
+
 # The data-path tap-point oracle: a recording observer on a publishing routing_engine
 # forces the message-fan-out taps — one publish to N subscribers fires on_message_published
 # once and on_message_delivered once per destination, both posted, and the delivered view
