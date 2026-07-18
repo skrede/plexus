@@ -52,6 +52,7 @@ struct discovery_options
             , cap()
             , egress_interface(io::network_interface::any())
             , jitter_fraction(0.2)
+            , universe_pattern(k_default_universe_label)
             , universe(k_default_universe)
             , scoping(universe_scoping::soft)
             , port(7447)
@@ -68,6 +69,11 @@ struct discovery_options
     // cross-source collisions collapse to the observation baseline, and a larger fraction buys no
     // further decorrelation while shortening the mean interval (more announce traffic).
     double jitter_fraction;
+    // The universe as a wildcard-matchable label — the single source of truth. The uint32 `universe`
+    // below is a derived cache of universe_from_label(universe_pattern) (the concrete fast-path key and
+    // hard-scope group); it is derived at multicast_discovery construction. The reverse is impossible:
+    // FNV is irreversible, so configure the universe here, not via the uint32.
+    std::string universe_pattern;
     std::uint32_t universe;
     universe_scoping scoping;
     std::uint16_t port;
