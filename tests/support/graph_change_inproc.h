@@ -5,6 +5,7 @@
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/fixed_peer_storage.h"
 #include "plexus/io/peer_session_registry.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -15,6 +16,7 @@
 
 #include "plexus/graph/graph_change.h"
 #include "plexus/graph/topic_record.h"
+#include "plexus/graph/fixed_topic_storage.h"
 
 #include "plexus/io/observer.h"
 
