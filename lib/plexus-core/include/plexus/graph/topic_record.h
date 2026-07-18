@@ -71,6 +71,21 @@ enum class upsert_outcome : std::uint8_t
     dropped
 };
 
+// What an upsert both stored and changed. changed is true iff a genuinely new (participant, topic,
+// role) edge OR a new distinct type_id was recorded; a duplicate declare and a reject-and-count
+// drop are both changed==false. The implicit conversion to upsert_outcome lets callers that only
+// consume the stored/truncated/dropped disposition keep compiling unchanged.
+struct upsert_result
+{
+    upsert_outcome outcome;
+    bool changed;
+
+    constexpr operator upsert_outcome() const noexcept
+    {
+        return outcome;
+    }
+};
+
 }
 
 #endif

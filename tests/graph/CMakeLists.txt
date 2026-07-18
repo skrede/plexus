@@ -14,6 +14,12 @@ target_link_libraries(test_graph_topic_table PRIVATE plexus::core Catch2::Catch2
 target_include_directories(test_graph_topic_table PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_graph_topic_table TEST_PREFIX "graph.")
 
+# The change-detection signal on the topic-table mutators (upsert changed flag + did-erase removals),
+# proven symmetric across both storage twins. Header-only core, no backend.
+add_executable(test_graph_change_signal test_graph_change_signal.cpp)
+target_link_libraries(test_graph_change_signal PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_graph_change_signal TEST_PREFIX "graph.")
+
 # The platform-independence gate reaches the query sweeps as well as the records, so it links the
 # facade's header tree — no backend, no discovery: it constructs nothing that needs one.
 add_executable(inv1_graph_tu inv1_graph_tu.cpp)

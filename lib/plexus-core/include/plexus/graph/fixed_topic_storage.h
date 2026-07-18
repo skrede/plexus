@@ -60,17 +60,19 @@ public:
     {
     }
 
-    upsert_outcome upsert(const topic_edge &edge, bool clipped)
+    upsert_result upsert(const topic_edge &edge, bool clipped)
     {
         entry *slot = find(edge.topic);
         if(slot == nullptr)
             slot = claim(edge.topic);
         if(slot == nullptr)
-            return upsert_outcome::dropped;
+            return upsert_result{upsert_outcome::dropped, false};
         slot->truncated = slot->truncated || clipped;
-        if(!note_edge(*slot, edge))
-            return upsert_outcome::dropped;
-        return note_type(*slot, edge);
+        bool new_edge = false;
+        if(!note_edge(*slot, edge, new_edge))
+            return upsert_result{upsert_outcome::dropped, false};
+        const upsert_result t = note_type(*slot, edge);
+        return upsert_result{t.outcome, new_edge || t.changed};
     }
 
     template<typename Fn>
@@ -85,24 +87,27 @@ public:
         }
     }
 
-    void remove_node(const plexus::node_id &node)
+    bool remove_node(const plexus::node_id &node)
     {
+        bool erased = false;
         for(entry &e : m_slots)
         {
-            drop_edges(e, node, std::nullopt);
+            erased = drop_edges(e, node, std::nullopt) || erased;
             if(e.edge_count == 0)
                 e = entry{};
         }
+        return erased;
     }
 
-    void remove_edge(const plexus::node_id &node, std::string_view topic, topic_role role)
+    bool remove_edge(const plexus::node_id &node, std::string_view topic, topic_role role)
     {
         entry *slot = find(topic);
         if(slot == nullptr)
-            return;
-        drop_edges(*slot, node, role);
+            return false;
+        const bool erased = drop_edges(*slot, node, role);
         if(slot->edge_count == 0)
             *slot = entry{};
+        return erased;
     }
 
 private:
@@ -143,17 +148,22 @@ private:
         return nullptr;
     }
 
-    // An absent role means every role — the whole participant leaves.
-    static void drop_edges(entry &e, const plexus::node_id &node, std::optional<topic_role> role)
+    // An absent role means every role — the whole participant leaves. Returns whether any edge was
+    // actually dropped.
+    static bool drop_edges(entry &e, const plexus::node_id &node, std::optional<topic_role> role)
     {
         std::size_t kept = 0;
         for(std::size_t i = 0; i < e.edge_count; ++i)
             if(e.edges[i].node != node || (role && e.edges[i].role != *role))
                 e.edges[kept++] = e.edges[i];
-        e.edge_count = kept;
+        const bool erased = kept != e.edge_count;
+        e.edge_count      = kept;
+        return erased;
     }
 
-    static bool note_edge(entry &e, const topic_edge &edge)
+    // Returns false only when there is no room for a genuinely new edge; is_new reports whether an
+    // edge was actually pushed (vs a re-declare of one already present).
+    static bool note_edge(entry &e, const topic_edge &edge, bool &is_new)
     {
         for(std::size_t i = 0; i < e.edge_count; ++i)
             if(e.edges[i].node == edge.node && e.edges[i].role == edge.role)
@@ -161,27 +171,28 @@ private:
         if(e.edge_count == Edges)
             return false;
         e.edges[e.edge_count++] = edge_slot{edge.node, edge.role};
+        is_new                  = true;
         return true;
     }
 
     // Distinctness is settled on the numeric id, never on a string compare: the id is what the
     // declaration carries to tell two types apart, the names are what enumeration displays.
-    static upsert_outcome note_type(entry &e, const topic_edge &edge)
+    static upsert_result note_type(entry &e, const topic_edge &edge)
     {
         if(!edge.type_id)
-            return upsert_outcome::stored;
+            return upsert_result{upsert_outcome::stored, false};
         for(std::size_t i = 0; i < e.type_count; ++i)
             if(e.types[i].id == *edge.type_id)
-                return upsert_outcome::stored;
+                return upsert_result{upsert_outcome::stored, false};
         if(e.type_count == k_topic_type_list_cap)
         {
             e.truncated = true;
-            return upsert_outcome::truncated;
+            return upsert_result{upsert_outcome::truncated, false};
         }
         type_slot &slot = e.types[e.type_count++];
         slot.id         = *edge.type_id;
         slot.len        = copy_bounded(slot.name, edge.type_name);
-        return upsert_outcome::stored;
+        return upsert_result{upsert_outcome::stored, true};
     }
 
     static topic_record make_record(const entry &e, const edge_slot &edge)

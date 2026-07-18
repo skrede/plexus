@@ -33,7 +33,7 @@ public:
     {
     }
 
-    upsert_outcome upsert(const topic_edge &edge)
+    upsert_result upsert(const topic_edge &edge)
     {
         if(edge.topic.size() > wire::detail::k_max_fqn)
             return drop();
@@ -51,17 +51,17 @@ public:
 
     // Topic knowledge is session-scoped: a peer's edges leave with its session. A topic left with
     // no edges goes whole, so a peer that churns cannot hold a slot it no longer occupies.
-    void remove_node(const plexus::node_id &node)
+    bool remove_node(const plexus::node_id &node)
     {
-        m_storage.remove_node(node);
+        return m_storage.remove_node(node);
     }
 
     // The inverse of a single upsert: one participant leaves one side of one topic, the other side
     // and every other participant untouched. A topic left with no edges goes whole, as under
     // remove_node — the type names go with the entry, never orphaned behind a departed edge.
-    void remove_edge(const plexus::node_id &node, std::string_view topic, topic_role role)
+    bool remove_edge(const plexus::node_id &node, std::string_view topic, topic_role role)
     {
-        m_storage.remove_edge(node, topic, role);
+        return m_storage.remove_edge(node, topic, role);
     }
 
     // Edges refused for want of room. An over-long topic name is refused here too: clipping it
@@ -82,22 +82,22 @@ private:
     std::size_t m_dropped;
     std::size_t m_truncations;
 
-    upsert_outcome drop()
+    upsert_result drop()
     {
         ++m_dropped;
-        return upsert_outcome::dropped;
+        return upsert_result{upsert_outcome::dropped, false};
     }
 
-    upsert_outcome tally(upsert_outcome outcome, bool clipped)
+    upsert_result tally(upsert_result result, bool clipped)
     {
-        if(outcome == upsert_outcome::dropped)
+        if(result.outcome == upsert_outcome::dropped)
             return drop();
-        if(outcome == upsert_outcome::truncated || clipped)
+        if(result.outcome == upsert_outcome::truncated || clipped)
         {
             ++m_truncations;
-            return upsert_outcome::truncated;
+            return upsert_result{upsert_outcome::truncated, result.changed};
         }
-        return outcome;
+        return result;
     }
 };
 

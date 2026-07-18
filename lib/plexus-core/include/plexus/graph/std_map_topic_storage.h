@@ -43,12 +43,13 @@ class std_map_topic_storage
     };
 
 public:
-    upsert_outcome upsert(const topic_edge &edge, bool clipped)
+    upsert_result upsert(const topic_edge &edge, bool clipped)
     {
-        entry &e    = at(edge.topic);
-        e.truncated = e.truncated || clipped;
-        note_edge(e, edge);
-        return note_type(e, edge);
+        entry &e             = at(edge.topic);
+        e.truncated          = e.truncated || clipped;
+        const bool new_edge  = note_edge(e, edge);
+        const upsert_result t = note_type(e, edge);
+        return upsert_result{t.outcome, new_edge || t.changed};
     }
 
     template<typename Fn>
@@ -59,21 +60,24 @@ public:
                 fn(make_record(topic, e, edge));
     }
 
-    void remove_node(const plexus::node_id &node)
+    bool remove_node(const plexus::node_id &node)
     {
+        bool erased = false;
         for(auto &[topic, e] : m_table)
-            std::erase_if(e.edges, [&](const edge_slot &s) { return s.node == node; });
+            erased = std::erase_if(e.edges, [&](const edge_slot &s) { return s.node == node; }) != 0 || erased;
         std::erase_if(m_table, [](const auto &kv) { return kv.second.edges.empty(); });
+        return erased;
     }
 
-    void remove_edge(const plexus::node_id &node, std::string_view topic, topic_role role)
+    bool remove_edge(const plexus::node_id &node, std::string_view topic, topic_role role)
     {
         auto it = m_table.find(topic);
         if(it == m_table.end())
-            return;
-        std::erase_if(it->second.edges, [&](const edge_slot &s) { return s.node == node && s.role == role; });
+            return false;
+        const bool erased = std::erase_if(it->second.edges, [&](const edge_slot &s) { return s.node == node && s.role == role; }) != 0;
         if(it->second.edges.empty())
             m_table.erase(it);
+        return erased;
     }
 
 private:
@@ -87,30 +91,31 @@ private:
         return it->second;
     }
 
-    static void note_edge(entry &e, const topic_edge &edge)
+    static bool note_edge(entry &e, const topic_edge &edge)
     {
         for(const edge_slot &slot : e.edges)
             if(slot.node == edge.node && slot.role == edge.role)
-                return;
+                return false;
         e.edges.push_back(edge_slot{edge.node, edge.role});
+        return true;
     }
 
     // Distinctness is settled on the numeric id, never on a string compare: the id is what the
     // declaration carries to tell two types apart, the names are what enumeration displays.
-    static upsert_outcome note_type(entry &e, const topic_edge &edge)
+    static upsert_result note_type(entry &e, const topic_edge &edge)
     {
         if(!edge.type_id)
-            return upsert_outcome::stored;
+            return upsert_result{upsert_outcome::stored, false};
         for(const type_slot &slot : e.types)
             if(slot.id == *edge.type_id)
-                return upsert_outcome::stored;
+                return upsert_result{upsert_outcome::stored, false};
         if(e.types.size() == k_topic_type_list_cap)
         {
             e.truncated = true;
-            return upsert_outcome::truncated;
+            return upsert_result{upsert_outcome::truncated, false};
         }
         e.types.push_back(type_slot{std::string{edge.type_name}, *edge.type_id});
-        return upsert_outcome::stored;
+        return upsert_result{upsert_outcome::stored, true};
     }
 
     static topic_record make_record(std::string_view topic, const entry &e, const edge_slot &edge)

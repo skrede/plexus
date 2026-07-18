@@ -25,13 +25,24 @@ constexpr std::uint64_t default_discovery_ttl_ns = 15'000'000'000ull;
 class std_map_peer_storage
 {
 public:
-    void put(const node_id &id, const endpoint &ep)
+    bool put(const node_id &id, const endpoint &ep)
     {
-        put(id, ep, 0);
+        return put(id, ep, 0);
     }
-    void put(const node_id &id, const endpoint &ep, std::uint64_t now)
+    // A same-(id, endpoint) re-store refreshes the tick but reports no change: the idempotent
+    // re-announce must not bump the graph observer's generation.
+    bool put(const node_id &id, const endpoint &ep, std::uint64_t now)
     {
-        m_table[id] = record{ep, now};
+        auto it = m_table.find(id);
+        if(it == m_table.end())
+        {
+            m_table.emplace(id, record{ep, now});
+            return true;
+        }
+        const bool changed        = it->second.ep != ep;
+        it->second.ep             = ep;
+        it->second.last_refreshed = now;
+        return changed;
     }
     void refresh(const node_id &id, std::uint64_t now)
     {
@@ -49,9 +60,9 @@ public:
     {
         return m_table.find(id) != m_table.end();
     }
-    void remove(const node_id &id)
+    bool remove(const node_id &id)
     {
-        m_table.erase(id);
+        return m_table.erase(id) != 0;
     }
     template<typename Report>
     void expire_older_than(std::uint64_t deadline, Report report)
@@ -91,14 +102,14 @@ template<typename Storage = std_map_peer_storage>
 class basic_known_peers
 {
 public:
-    void note_peer(const node_id &id, const endpoint &ep)
+    bool note_peer(const node_id &id, const endpoint &ep)
     {
-        m_storage.put(id, ep);
+        return m_storage.put(id, ep);
     }
 
-    void note_peer(const node_id &id, const endpoint &ep, std::uint64_t now)
+    bool note_peer(const node_id &id, const endpoint &ep, std::uint64_t now)
     {
-        m_storage.put(id, ep, now);
+        return m_storage.put(id, ep, now);
     }
 
     // Extends an EXISTING entry's freshness; a no-op for an unknown id (a heartbeat from a
@@ -118,9 +129,9 @@ public:
         return m_storage.has(id);
     }
 
-    void forget(const node_id &id)
+    bool forget(const node_id &id)
     {
-        m_storage.remove(id);
+        return m_storage.remove(id);
     }
 
     template<typename Report>

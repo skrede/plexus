@@ -21,18 +21,21 @@ template<std::size_t N>
 class fixed_peer_storage
 {
 public:
-    void put(const node_id &id, const endpoint &ep)
+    bool put(const node_id &id, const endpoint &ep)
     {
-        put(id, ep, 0);
+        return put(id, ep, 0);
     }
 
-    void put(const node_id &id, const endpoint &ep, std::uint64_t now)
+    // A same-(id, endpoint) re-store refreshes the tick but reports no change: the idempotent
+    // re-announce must not bump the graph observer's generation.
+    bool put(const node_id &id, const endpoint &ep, std::uint64_t now)
     {
         if(entry *slot = find(id))
         {
+            const bool changed   = slot->ep != ep;
             slot->ep             = ep;
             slot->last_refreshed = now;
-            return;
+            return changed;
         }
         for(entry &e : m_slots)
         {
@@ -42,7 +45,7 @@ public:
                 e.id             = id;
                 e.ep             = ep;
                 e.last_refreshed = now;
-                return;
+                return true;
             }
         }
         plexus::detail::fail_closed("fixed_peer_storage: capacity exceeded");
@@ -66,10 +69,14 @@ public:
         return find(id) != nullptr;
     }
 
-    void remove(const node_id &id)
+    bool remove(const node_id &id)
     {
         if(entry *slot = find(id))
+        {
             slot->occupied = false;
+            return true;
+        }
+        return false;
     }
 
     template<typename Report>
