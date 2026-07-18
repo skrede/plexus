@@ -8,6 +8,7 @@
 
 #include "plexus/node_id.h"
 #include "plexus/discovery/contact_card.h"
+#include "plexus/match/key_pattern_bounds.h"
 
 #include <span>
 #include <string>
@@ -33,6 +34,7 @@ struct announcement
     plexus::node_id node_id{};
     std::uint64_t ttl_secs = 0;
     std::vector<std::pair<std::string, std::uint16_t>> listens;
+    std::string universe_pattern;
 
     friend bool operator==(const announcement &, const announcement &) = default;
 };
@@ -40,6 +42,17 @@ struct announcement
 // bit0 of flags: the node is leaving the group (a graceful goodbye), so a browser evicts it
 // without waiting out the liveliness ttl. Other bits are reserved and held 0.
 inline constexpr std::uint8_t k_announcement_goodbye_flag = 0x01;
+
+// bit1 of flags: a universe pattern trails the listens block. The bit is the presence signal —
+// encode writes the field only when it is set, decode reads it only when it is set, so a sender
+// that never sets it emits a byte layout identical to the pre-pattern one and an older receiver
+// that reads the fixed prefix ignores the trailing field. This is the append-only extension point.
+inline constexpr std::uint8_t k_announcement_universe_pattern_flag = 0x02;
+
+// Decode-time ceiling on the u16-length-prefixed pattern, held at the same value construction
+// caps a key pattern to, so decode never retains bytes the matcher would refuse. A prefix over
+// this is refused before any copy off the untrusted datagram.
+inline constexpr std::size_t k_universe_pattern_max = match::default_bounds::k_pattern_length;
 
 // "PLX0" — a fixed plexus discovery tag read as a big-endian u32 ('P'<<24 | 'L'<<16 | 'X'<<8
 // | '0'). A datagram whose first four bytes do not match is foreign traffic on the shared
@@ -58,6 +71,8 @@ inline std::size_t announcement_encoded_size(const announcement &ann)
     std::size_t total = announcement_fixed_max;
     for(const auto &[transport, port] : ann.listens)
         total += 1 + transport.size() + sizeof(std::uint16_t);
+    if(ann.flags & k_announcement_universe_pattern_flag)
+        total += sizeof(std::uint16_t) + ann.universe_pattern.size();
     return total;
 }
 
@@ -95,6 +110,13 @@ inline void encode_announcement_into(std::vector<std::byte> &out, const announce
         w.bytes(std::as_bytes(std::span<const char>{transport.data(), transport.size()}));
         w.u16(port);
     }
+    // Append-only: the pattern is the last field, gated on its presence flag, so a flagless emit
+    // is byte-identical to the pre-pattern layout and a decoder reading only the prefix ignores it.
+    if(ann.flags & k_announcement_universe_pattern_flag)
+    {
+        w.u16(static_cast<std::uint16_t>(ann.universe_pattern.size()));
+        w.bytes(std::as_bytes(std::span<const char>{ann.universe_pattern.data(), ann.universe_pattern.size()}));
+    }
     out.resize(w.offset());
 }
 
@@ -126,6 +148,17 @@ inline std::optional<announcement> decode_announcement(std::span<const std::byte
     r.copy_to(ann.node_id.data(), ann.node_id.size());
     const auto ttl = r.varint();
     detail::decode_listens(r, ann);
+
+    if(ann.flags & k_announcement_universe_pattern_flag)
+    {
+        const auto field = r.length_prefixed<std::uint16_t>();
+        // Cap before retention: a prefix over the ceiling is refused before any copy off the
+        // untrusted datagram. Decode stays value-agnostic — shape validation is the discovery leaf's.
+        if(field.size() > k_universe_pattern_max)
+            return std::nullopt;
+        const auto chars = reinterpret_cast<const char *>(field.data());
+        ann.universe_pattern.assign(chars, field.size());
+    }
 
     if(!r.ok() || !ttl)
         return std::nullopt;
