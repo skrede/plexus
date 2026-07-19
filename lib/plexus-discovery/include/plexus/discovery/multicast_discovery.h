@@ -130,22 +130,9 @@ private:
         const auto ann = wire::decode_announcement(bytes);
         if(!ann)
             return;
-        // Fail-closed ahead of self-echo, goodbye, and admission: a foreign universe is dropped whole,
-        // evicting no peer and paying no admission or alloc. The concrete/concrete common case keeps the
-        // legacy uint32 fast-path (no parse, no alloc); otherwise the universe patterns must intersect —
-        // a rider on the shared matcher, never a second glob. FNV(factory/line/*) != FNV(factory/line/1)
-        // yet they intersect, so a flagged peer must never take the fast-path.
-        if(m_universe_is_concrete && !(ann->flags & wire::k_announcement_universe_pattern_flag))
-        {
-            if(ann->universe != m_options.universe)
-                return;
-        }
-        else
-        {
-            const auto peer = match::key_pattern::make(ann->universe_pattern);
-            if(!m_universe_pattern || !peer || !m_universe_pattern->intersects(*peer))
-                return;
-        }
+        // Fail-closed ahead of self-echo, goodbye, and admission: a foreign universe is dropped whole, evicting no peer and paying no admission or alloc.
+        if(!universe_admits(*ann))
+            return;
         // A node never notes itself: its own echo (same node_id) is recorded for the self-probe then dropped, keeping awareness cross-node.
         if(m_announcement && ann->node_id == m_announcement->node_id)
         {
@@ -153,6 +140,18 @@ private:
             return;
         }
         dispatch(*ann, from.address().to_string());
+    }
+
+    // The concrete/concrete common case keeps the legacy uint32 fast-path (no parse, no alloc);
+    // otherwise the universe patterns must intersect — a rider on the shared matcher, never a second
+    // glob. FNV(factory/line/*) != FNV(factory/line/1) yet they intersect, so a flagged peer must never
+    // take the fast-path. A malformed peer pattern or an unparsable local pattern fails closed.
+    bool universe_admits(const wire::announcement &ann) const
+    {
+        if(m_universe_is_concrete && !(ann.flags & wire::k_announcement_universe_pattern_flag))
+            return ann.universe == m_options.universe;
+        const auto peer = match::key_pattern::make(ann.universe_pattern);
+        return m_universe_pattern && peer && m_universe_pattern->intersects(*peer);
     }
 
     void dispatch(const wire::announcement &ann, const std::string &source)

@@ -91,6 +91,21 @@ inline void decode_listens(reader &r, announcement &ann)
     }
 }
 
+// Read the append-only universe pattern when its presence flag is set, capping the length before any
+// retention: a prefix over the ceiling is refused before any copy off the untrusted datagram. Decode
+// stays value-agnostic — shape validation is the discovery leaf's. Returns false only on an over-cap
+// prefix, which the caller maps to a whole-datagram reject.
+inline bool decode_universe_pattern(reader &r, announcement &ann)
+{
+    if(!(ann.flags & k_announcement_universe_pattern_flag))
+        return true;
+    const auto field = r.length_prefixed<std::uint16_t>();
+    if(field.size() > k_universe_pattern_max)
+        return false;
+    ann.universe_pattern.assign(reinterpret_cast<const char *>(field.data()), field.size());
+    return true;
+}
+
 }
 
 inline void encode_announcement_into(std::vector<std::byte> &out, const announcement &ann)
@@ -148,17 +163,8 @@ inline std::optional<announcement> decode_announcement(std::span<const std::byte
     r.copy_to(ann.node_id.data(), ann.node_id.size());
     const auto ttl = r.varint();
     detail::decode_listens(r, ann);
-
-    if(ann.flags & k_announcement_universe_pattern_flag)
-    {
-        const auto field = r.length_prefixed<std::uint16_t>();
-        // Cap before retention: a prefix over the ceiling is refused before any copy off the
-        // untrusted datagram. Decode stays value-agnostic — shape validation is the discovery leaf's.
-        if(field.size() > k_universe_pattern_max)
-            return std::nullopt;
-        const auto chars = reinterpret_cast<const char *>(field.data());
-        ann.universe_pattern.assign(chars, field.size());
-    }
+    if(!detail::decode_universe_pattern(r, ann))
+        return std::nullopt;
 
     if(!r.ok() || !ttl)
         return std::nullopt;
