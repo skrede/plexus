@@ -154,7 +154,7 @@ TEST_CASE("two_universe: a foreign-universe peer and its topic stay out of enume
     if(!participant_control)
         SKIP("multicast loopback unavailable on this host: the same-universe participant control reached no awareness within the bound");
 
-    // Positive control, topic leg (Pitfall 4): drive real publishes until a2's PUBLISHER edge propagates
+    // Positive control, topic leg: drive real publishes until a2's PUBLISHER edge propagates
     // over the dialed session into a1's by-node view. This proves cross-node topic propagation is live,
     // so the foreign topic's absence below is the universe compare, not an inert propagation path.
     const std::byte payload[1]{std::byte{0x7}};

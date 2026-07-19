@@ -102,9 +102,8 @@ target_link_libraries(test_graph_topics PRIVATE
 catch_discover_tests(test_graph_topics TEST_PREFIX "graph.")
 
 # The graph-change observer engine-level unit oracles: a recording graph observer on a real inproc
-# engine pins the coalescing/idempotency (SC#1), the posted-not-synchronous teardown (SC#2), and the
-# host {who, kind} payload (GRAPH-07). Each drives the shared support/graph_change_inproc.h harness, so
-# tests/ is on the include path. Authored against the final API — RED until the implementing waves land.
+# engine pins the coalescing/idempotency, the posted-not-synchronous teardown, and the host {who, kind}
+# payload. Each drives the shared support/graph_change_inproc.h harness, so tests/ is on the include path.
 add_executable(test_graph_change_coalescing test_graph_change_coalescing.cpp)
 target_link_libraries(test_graph_change_coalescing PRIVATE
     plexus::plexus
