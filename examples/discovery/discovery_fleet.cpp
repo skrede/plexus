@@ -11,7 +11,6 @@
 #include "plexus/io/node_name.h"
 #include "plexus/io/peer_liveliness_event.h"
 
-#include "plexus/discovery/universe.h"
 #include "plexus/discovery/discovery_options.h"
 
 #include "plexus/asio/asio_policy.h"
@@ -63,7 +62,7 @@ int main(int argc, char **argv)
 
     asio::io_context io;
     plexus::discovery::discovery_options disc_opts;
-    disc_opts.universe = plexus::discovery::universe_from_label("fleet-demo");
+    disc_opts.universe_pattern = "fleet-demo";
     plexus::asio::default_discovery discovery{io, disc_opts};
     plexus::asio::asio_transport transport{io};
 

@@ -10,6 +10,11 @@ if(TARGET plexus::asio)
     if(NOT WIN32)
         add_executable(serial_gate_host serial_gate_host.cpp)
         target_link_libraries(serial_gate_host PRIVATE plexus::plexus plexus::asio)
+
+        # The host end of the topic-propagation gate drives the same real serial line, so it shares
+        # the raw POSIX termios/ioctl exclusion.
+        add_executable(topic_propagation_gate_host topic_propagation_gate_host.cpp)
+        target_link_libraries(topic_propagation_gate_host PRIVATE plexus::plexus plexus::asio)
     endif()
 
     add_executable(lwip_gate_host lwip_gate_host.cpp)

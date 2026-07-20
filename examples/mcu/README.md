@@ -74,6 +74,29 @@ link claim) and fails if any iteration misses the message:
 ./examples/mcu/run_serial_gate.sh [RUNS] [PORT]   # defaults: 3 runs, /dev/ttyUSB0
 ```
 
+# MCU example — topic propagation over a real UART
+
+The `esp-idf-topic-graph` firmware runs a node that produces a typed topic, consumes the host's,
+and asks its own enumeration surface what its peer declared. Topic knowledge is never broadcast —
+it reaches each end in-band over the authenticated session — so this is what proves the
+declaration actually crossed the cable, and that the opaque type name arrived with it.
+
+The host end (`topic_propagation_gate_host`) makes the mirror-image ask. It passes only when BOTH
+directions land: the host enumerates the device's topic with the type name the device declared,
+and the device's report says it enumerated the host's topic with its type name.
+
+```sh
+cmake -B build -DPLEXUS_BUILD_EXAMPLES=ON -DPLEXUS_ENABLE_ASIO_BACKEND=ON
+cmake --build build -j4 --target topic_propagation_gate_host
+./examples/mcu/run_topic_propagation_gate.sh [RUNS] [PORT]   # defaults: 3 runs, /dev/ttyUSB0
+```
+
+[`run_topic_propagation_gate.sh`](run_topic_propagation_gate.sh) cross-builds both firmwares, then
+loops flash + assert at least three times and fails if any iteration misses. Each iteration also
+flashes the peerless onboard firmware and requires its `participants()` snapshot to read
+`count=0 truncated=0` — the direct-only baseline, asserted on the same trip. The gate prints
+`GATE_PASS` per iteration and a run tally at the end.
+
 # MCU example — plexus on an ESP32 over TCP/IP
 
 Two firmware variants run the same node over a real IP transport instead of the UART:

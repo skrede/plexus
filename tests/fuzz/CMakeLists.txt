@@ -28,6 +28,7 @@ plexus_add_fuzz_target(fuzz_handshake_frame)
 plexus_add_fuzz_target(fuzz_subscribe_frame)
 plexus_add_fuzz_target(fuzz_fetch_latched_frame)
 plexus_add_fuzz_target(fuzz_heartbeat_frame)
+plexus_add_fuzz_target(fuzz_topic_declaration_frame)
 
 # The announcement decoder's header reaches plexus/node_id.h in plexus::core, so this
 # harness links core on top of the plexus::wire blast radius the others share.
@@ -40,3 +41,8 @@ target_link_libraries(fuzz_announcement_frame PRIVATE plexus::core)
 # as well.
 plexus_add_fuzz_target(fuzz_reassembler)
 target_link_libraries(fuzz_reassembler PRIVATE plexus::core plexus::datagram plexus::inproc)
+
+# The key-pattern matcher lives in plexus::core, so this harness links core on top of
+# the plexus::wire blast radius the others share.
+plexus_add_fuzz_target(fuzz_key_pattern)
+target_link_libraries(fuzz_key_pattern PRIVATE plexus::core)

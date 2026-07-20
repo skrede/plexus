@@ -1,0 +1,210 @@
+#ifndef HPP_GUARD_PLEXUS_GRAPH_FIXED_TOPIC_STORAGE_H
+#define HPP_GUARD_PLEXUS_GRAPH_FIXED_TOPIC_STORAGE_H
+
+#include "plexus/graph/topic_record.h"
+
+#include "plexus/node_id.h"
+
+#include "plexus/wire/subscribe.h"
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <algorithm>
+#include <string_view>
+
+namespace plexus::graph
+{
+
+// The constrained-target topic backend: a dep-free flat array of Topics entries, a linear scan
+// over the topic names. Each entry owns its topic name and its distinct type names inline, at
+// their wire lids — a decoded declare's name lives in a buffer the transport recycles, so a
+// borrowed view would dangle. Per-entry cost: k_max_fqn (1024) for the name, k_topic_type_list_cap
+// x k_max_type_name (2048) for the type names, Edges x 17 for the participants.
+//
+// Both bounds are reject-and-count, not fail-closed: the (Topics+1)-th topic and the (Edges+1)-th
+// participant of a topic are refused and tallied — never written out of bounds, never granted room
+// by evicting a live peer.
+template<std::size_t Topics, std::size_t Edges = 8>
+class fixed_topic_storage
+{
+    struct type_slot
+    {
+        std::array<char, wire::detail::k_max_type_name> name;
+        std::size_t len;
+        std::uint64_t id;
+    };
+
+    struct edge_slot
+    {
+        plexus::node_id node;
+        topic_role role;
+    };
+
+    struct entry
+    {
+        std::array<char, wire::detail::k_max_fqn> topic;
+        std::array<type_slot, k_topic_type_list_cap> types;
+        std::array<edge_slot, Edges> edges;
+        std::size_t topic_len;
+        std::size_t type_count;
+        std::size_t edge_count;
+        bool truncated;
+        bool occupied;
+    };
+
+public:
+    fixed_topic_storage()
+        : m_slots{}
+    {
+    }
+
+    upsert_result upsert(const topic_edge &edge, bool clipped)
+    {
+        entry *slot = find(edge.topic);
+        if(slot == nullptr)
+            slot = claim(edge.topic);
+        if(slot == nullptr)
+            return upsert_result{upsert_outcome::dropped, false};
+        slot->truncated = slot->truncated || clipped;
+        bool new_edge = false;
+        if(!note_edge(*slot, edge, new_edge))
+            return upsert_result{upsert_outcome::dropped, false};
+        const upsert_result t = note_type(*slot, edge);
+        return upsert_result{t.outcome, new_edge || t.changed};
+    }
+
+    template<typename Fn>
+    void for_each(Fn fn) const
+    {
+        for(const entry &e : m_slots)
+        {
+            if(!e.occupied)
+                continue;
+            for(std::size_t i = 0; i < e.edge_count; ++i)
+                fn(make_record(e, e.edges[i]));
+        }
+    }
+
+    bool remove_node(const plexus::node_id &node)
+    {
+        bool erased = false;
+        for(entry &e : m_slots)
+        {
+            erased = drop_edges(e, node, std::nullopt) || erased;
+            if(e.edge_count == 0)
+                e = entry{};
+        }
+        return erased;
+    }
+
+    bool remove_edge(const plexus::node_id &node, std::string_view topic, topic_role role)
+    {
+        entry *slot = find(topic);
+        if(slot == nullptr)
+            return false;
+        const bool erased = drop_edges(*slot, node, role);
+        if(slot->edge_count == 0)
+            *slot = entry{};
+        return erased;
+    }
+
+private:
+    std::array<entry, Topics> m_slots;
+
+    template<std::size_t N>
+    static std::string_view view(const std::array<char, N> &src, std::size_t len)
+    {
+        return std::string_view{src.data(), len};
+    }
+
+    template<std::size_t N>
+    static std::size_t copy_bounded(std::array<char, N> &dst, std::string_view src)
+    {
+        const std::size_t len = std::min(src.size(), N);
+        std::copy_n(src.begin(), len, dst.begin());
+        return len;
+    }
+
+    entry *find(std::string_view topic)
+    {
+        for(entry &e : m_slots)
+            if(e.occupied && view(e.topic, e.topic_len) == topic)
+                return &e;
+        return nullptr;
+    }
+
+    entry *claim(std::string_view topic)
+    {
+        for(entry &e : m_slots)
+        {
+            if(e.occupied)
+                continue;
+            e.occupied  = true;
+            e.topic_len = copy_bounded(e.topic, topic);
+            return &e;
+        }
+        return nullptr;
+    }
+
+    // An absent role means every role — the whole participant leaves. Returns whether any edge was
+    // actually dropped.
+    static bool drop_edges(entry &e, const plexus::node_id &node, std::optional<topic_role> role)
+    {
+        std::size_t kept = 0;
+        for(std::size_t i = 0; i < e.edge_count; ++i)
+            if(e.edges[i].node != node || (role && e.edges[i].role != *role))
+                e.edges[kept++] = e.edges[i];
+        const bool erased = kept != e.edge_count;
+        e.edge_count      = kept;
+        return erased;
+    }
+
+    // Returns false only when there is no room for a genuinely new edge; is_new reports whether an
+    // edge was actually pushed (vs a re-declare of one already present).
+    static bool note_edge(entry &e, const topic_edge &edge, bool &is_new)
+    {
+        for(std::size_t i = 0; i < e.edge_count; ++i)
+            if(e.edges[i].node == edge.node && e.edges[i].role == edge.role)
+                return true;
+        if(e.edge_count == Edges)
+            return false;
+        e.edges[e.edge_count++] = edge_slot{edge.node, edge.role};
+        is_new                  = true;
+        return true;
+    }
+
+    // Distinctness is settled on the numeric id, never on a string compare: the id is what the
+    // declaration carries to tell two types apart, the names are what enumeration displays.
+    static upsert_result note_type(entry &e, const topic_edge &edge)
+    {
+        if(!edge.type_id)
+            return upsert_result{upsert_outcome::stored, false};
+        for(std::size_t i = 0; i < e.type_count; ++i)
+            if(e.types[i].id == *edge.type_id)
+                return upsert_result{upsert_outcome::stored, false};
+        if(e.type_count == k_topic_type_list_cap)
+        {
+            e.truncated = true;
+            return upsert_result{upsert_outcome::truncated, false};
+        }
+        type_slot &slot = e.types[e.type_count++];
+        slot.id         = *edge.type_id;
+        slot.len        = copy_bounded(slot.name, edge.type_name);
+        return upsert_result{upsert_outcome::stored, true};
+    }
+
+    static topic_record make_record(const entry &e, const edge_slot &edge)
+    {
+        type_name_list types{};
+        types.count = e.type_count;
+        for(std::size_t i = 0; i < e.type_count; ++i)
+            types.names[i] = view(e.types[i].name, e.types[i].len);
+        return topic_record{edge.node, view(e.topic, e.topic_len), types, edge.role, e.truncated};
+    }
+};
+
+}
+
+#endif

@@ -64,6 +64,7 @@ public:
     {
         if(m_dialing)
             return;
+        m_denied        = false;
         m_first_attempt = Clock::now();
         dial();
     }
@@ -77,6 +78,21 @@ public:
     void mark_dial_settled() noexcept
     {
         m_dialing = false;
+    }
+
+    // Forget means forget: awareness for this peer was withdrawn, so an armed backoff is cancelled
+    // and any further redial is refused until a fresh start() re-authorizes it. A dial already
+    // issued to the transport is denied at the build seam, which consults redial_denied().
+    void deny_redial()
+    {
+        m_denied  = true;
+        m_dialing = false;
+        m_backoff_timer.cancel();
+    }
+
+    bool redial_denied() const noexcept
+    {
+        return m_denied;
     }
 
     // A transport drop on an already-complete session. A clean/intentional close must NOT route
@@ -99,6 +115,8 @@ public:
 private:
     void schedule_redial()
     {
+        if(m_denied)
+            return;
         ++m_attempt;
         if(surrendered())
             return report_dead();
@@ -146,6 +164,7 @@ private:
     std::uint32_t m_attempt{0};
     bool m_surrendered{false};
     bool m_dialing{false};
+    bool m_denied{false};
     plexus::detail::move_only_function<void()> m_on_redial;
     plexus::detail::move_only_function<void()> m_on_dead;
 };

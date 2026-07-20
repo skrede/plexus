@@ -24,6 +24,7 @@ using plexus::wire::announcement;
 using plexus::wire::encode_announcement;
 using plexus::wire::decode_announcement;
 using plexus::wire::k_announcement_goodbye_flag;
+using plexus::wire::k_announcement_universe_pattern_flag;
 using plexus::wire::k_announcement_magic;
 
 namespace {
@@ -132,4 +133,60 @@ TEST_CASE("announcement codec: a non-zero universe still decodes (wire carries i
     const auto decoded = decode_announcement(bytes);
     REQUIRE(decoded.has_value());
     REQUIRE(decoded->universe == 0xDEADBEEFu);
+}
+
+TEST_CASE("announcement codec: a universe pattern round-trips when the pattern-present flag is set", "[wire][announcement][discovery]")
+{
+    // The value is a grammar-legal slash-notation whole-segment wildcard only for readability; the
+    // codec carries the bytes verbatim and never validates pattern shape (the discovery leaf does).
+    auto ann              = make_sample();
+    ann.universe_pattern  = "factory/line/*";
+    ann.flags            |= k_announcement_universe_pattern_flag;
+
+    const auto decoded = decode_announcement(encode_announcement(ann));
+    REQUIRE(decoded.has_value());
+    REQUIRE((decoded->flags & k_announcement_universe_pattern_flag) != 0);
+    REQUIRE(decoded->universe_pattern == "factory/line/*");
+    REQUIRE(*decoded == ann);
+}
+
+TEST_CASE("announcement codec: the goodbye and pattern flags are independent and both round-trip set", "[wire][announcement][discovery]")
+{
+    auto ann              = make_sample();
+    ann.universe_pattern  = "site/*/gateway";
+    ann.flags            |= k_announcement_goodbye_flag | k_announcement_universe_pattern_flag;
+
+    const auto decoded = decode_announcement(encode_announcement(ann));
+    REQUIRE(decoded.has_value());
+    REQUIRE((decoded->flags & k_announcement_goodbye_flag) != 0);
+    REQUIRE((decoded->flags & k_announcement_universe_pattern_flag) != 0);
+    REQUIRE(decoded->universe_pattern == "site/*/gateway");
+    REQUIRE(*decoded == ann);
+}
+
+TEST_CASE("announcement codec: a flagless announcement decodes unchanged with no trailing bytes", "[wire][announcement][discovery]")
+{
+    auto ann = make_sample();
+    ann.universe_pattern.clear();
+
+    const auto bytes = encode_announcement(ann);
+    // magic(4)+ver(1)+flags(1)+universe(4)+node_id(16)+ttl varint(1)+n_listens(1)
+    // + tcp[len(1)+3+port(2)] + udp[len(1)+3+port(2)] = 40. A cleared flag adds no trailing field.
+    REQUIRE(bytes.size() == 40);
+
+    const auto decoded = decode_announcement(bytes);
+    REQUIRE(decoded.has_value());
+    REQUIRE(*decoded == ann);
+    REQUIRE(decoded->universe_pattern.empty());
+}
+
+TEST_CASE("announcement codec: an oversized universe pattern decodes to nullopt before any copy", "[wire][announcement][discovery]")
+{
+    // A wire-legal but over-ceiling length-prefixed pattern: encode carries it (no encode cap),
+    // decode must refuse it before retaining the bytes off the untrusted datagram.
+    auto ann              = make_sample();
+    ann.universe_pattern  = std::string(300, 'x');
+    ann.flags            |= k_announcement_universe_pattern_flag;
+
+    REQUIRE(!decode_announcement(encode_announcement(ann)).has_value());
 }

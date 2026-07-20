@@ -62,7 +62,7 @@ public:
         local_qos.wants_message_info = std::is_invocable_v<Cb &, std::span<const std::byte>, const io::message_info &>;
         io::endpoint_seam seam       = n.endpoint_seam_for();
         const auto rid =
-                seam.register_subscriber(seam.ctx, fqn, local_qos, plexus::detail::adapt_bytes_callback(std::move(cb)), std::nullopt, nullptr, io::object_dispatch{}, std::nullopt);
+                seam.register_subscriber(seam.ctx, fqn, local_qos, plexus::detail::adapt_bytes_callback(std::move(cb)), std::nullopt, {}, nullptr, io::object_dispatch{}, std::nullopt);
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
@@ -121,7 +121,7 @@ public:
         qos.wants_message_info = std::is_invocable_v<Cb &, const value_type &, const io::message_info &> && opts.qos.wants_message_info;
 
         io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto rid         = plexus::detail::register_typed(seam, fqn, qos, m_state.get(), identity.type_id, &io::detail::type_key<value_type>,
+        const auto rid         = plexus::detail::register_typed(seam, fqn, qos, m_state.get(), identity, &io::detail::type_key<value_type>,
                                                                 opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
         m_retire               = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }

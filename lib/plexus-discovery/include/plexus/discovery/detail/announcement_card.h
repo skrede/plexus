@@ -12,16 +12,26 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <string_view>
 
 namespace plexus::discovery::detail {
 
-inline wire::announcement announcement_from_card(const node_id &id, const std::vector<::plexus::discovery::listening_transport> &listens, std::uint64_t ttl_secs, std::uint8_t flags, std::uint32_t universe = k_default_universe)
+inline wire::announcement announcement_from_card(const node_id &id, const std::vector<::plexus::discovery::listening_transport> &listens, std::uint64_t ttl_secs, std::uint8_t flags, std::uint32_t universe = k_default_universe, std::string_view universe_pattern = k_default_universe_label)
 {
     wire::announcement ann;
     ann.flags    = flags;
     ann.universe = universe;
     ann.node_id  = id;
     ann.ttl_secs = ttl_secs;
+    // The presence flag and pattern bytes are keyed to the LABEL, never the uint32: a node whose
+    // effective label is the default emits flagless with no pattern bytes (byte-identical legacy wire)
+    // even if its uint32 was set non-default, so a stamped announcement never carries a flagged stale
+    // default that two different-universe nodes would then intersect-match and mutually admit.
+    if(universe_pattern != k_default_universe_label)
+    {
+        ann.universe_pattern.assign(universe_pattern);
+        ann.flags |= wire::k_announcement_universe_pattern_flag;
+    }
     ann.listens.reserve(listens.size());
     for(const auto &t : listens)
         ann.listens.emplace_back(t.transport, t.port);

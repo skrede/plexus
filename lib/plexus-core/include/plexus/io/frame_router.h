@@ -68,6 +68,10 @@ public:
     {
         m_heartbeat = std::move(c);
     }
+    void on_declare(consumer c)
+    {
+        m_declare = std::move(c);
+    }
 
     // Decode the header, switch on its type, hand the inner payload to the registered consumer.
     // A short/bad-magic frame or an unknown/unregistered type is warn-and-dropped.
@@ -107,6 +111,8 @@ private:
                 return fire(m_handshake_resp, inner);
             case wire::msg_type::heartbeat:
                 return fire(m_heartbeat, inner);
+            case wire::msg_type::declare:
+                return fire(m_declare, inner);
             default:
                 return drop("plexus: router unknown_frame_type");
         }
@@ -142,6 +148,7 @@ private:
     consumer m_handshake_req;
     consumer m_handshake_resp;
     consumer m_heartbeat;
+    consumer m_declare;
 };
 
 }

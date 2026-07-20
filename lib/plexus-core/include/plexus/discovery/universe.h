@@ -22,10 +22,15 @@ constexpr std::uint32_t universe_from_label(std::string_view label) noexcept
     return h;
 }
 
+// The authoritative default universe label. It is a concrete single-segment literal that intersects
+// only itself — never a match-all wildcard — so a configless node partitions cleanly rather than
+// rendezvousing with every universe.
+inline constexpr std::string_view k_default_universe_label = "plexus.default";
+
 // universe == 0 is the wire-uninitialized sentinel; configless nodes send this constant, not 0.
 // The static_assert pins the hash cross-platform — a toolchain computing a different value fails
 // to compile.
-inline constexpr std::uint32_t k_default_universe = universe_from_label("plexus.default");
+inline constexpr std::uint32_t k_default_universe = universe_from_label(k_default_universe_label);
 static_assert(k_default_universe == 0x58E1B347u);
 
 enum class universe_scoping : std::uint8_t

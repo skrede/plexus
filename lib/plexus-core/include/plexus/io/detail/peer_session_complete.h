@@ -11,6 +11,7 @@
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/subscribe.h"
+#include "plexus/wire/topic_declaration.h"
 
 #include <span>
 #include <cstddef>
@@ -116,7 +117,16 @@ template<typename Session>
 void resubscribe_all(Session &s)
 {
     for(const auto &demand : s.m_messages.remembered_topics(s.m_ctx.node_name))
-        s.subscribe(demand.fqn, demand.qos, demand.type_id);
+        s.subscribe(demand.fqn, demand.qos, demand.type_id, demand.type_name);
+}
+
+// A declaration emitted before the session completes is lost, and a peer that reconnects has
+// forgotten everything it was told: re-assert every local topic here, for the same reason the
+// demand above replays. Declarations survive teardown; only a re-declare rewrites one.
+template<typename Session>
+void redeclare_all(Session &s)
+{
+    s.m_messages.for_each_local_declaration([&s](const wire::topic_declaration &td) { s.declare(td); });
 }
 
 // Install-once: a second complete (the simultaneous-connect tail) no-ops. A bootstrap inbound
@@ -137,6 +147,7 @@ void on_complete(Session &s)
     s.m_forwarders_installed = true;
     fire_connect_edge(s);
     resubscribe_all(s);
+    redeclare_all(s);
     s.maybe_fire_ready();
 }
 

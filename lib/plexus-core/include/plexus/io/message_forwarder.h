@@ -9,6 +9,8 @@
 
 #include "plexus/detail/compat.h"
 
+#include "plexus/graph/topic_record.h"
+
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/message_info.h"
@@ -33,6 +35,7 @@
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/topic_declaration.h"
 
 #include <span>
 #include <string>
@@ -52,6 +55,8 @@ struct remembered_demand
     std::string fqn;
     subscriber_qos qos;
     std::optional<std::uint64_t> type_id; // nullopt = undeclared
+    // Owned, not borrowed: a replay on reconnect outlives whatever named the type at attach.
+    std::string type_name;
 };
 
 constexpr std::size_t k_history_depth_cap = 1024; // DoS clamp: a publisher-declared depth is attacker-controlled (bounds N x max_payload).
@@ -72,14 +77,15 @@ public:
     {
     }
 
-    bool attach(const peer &p, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt)
+    bool attach(const peer &p, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt,
+                std::string_view type_name = {})
     {
         if(!m_endpoint.attach_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
         m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, qos, type_id);
-        record_remote_topic(p.node_name, fqn, qos, type_id);
-        send_subscribe(p.channel, fqn, hash, type_id, qos);
+        record_remote_topic(p.node_name, fqn, qos, type_id, type_name);
+        send_subscribe(p.channel, fqn, hash, type_id, qos, type_name);
         emit_qos_change(qos_edge::accepted, hash, qos, rxo_verdict::compatible, type_id);
         emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::subscriber);
         return true;
@@ -107,9 +113,10 @@ public:
         m_egress.remove(channel);
     }
 
-    void remember_demand(const std::string &node_name, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt)
+    void remember_demand(const std::string &node_name, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt,
+                         std::string_view type_name = {})
     {
-        record_remote_topic(node_name, fqn, qos, type_id);
+        record_remote_topic(node_name, fqn, qos, type_id, type_name);
     }
 
     void forget_remembered_demand(const std::string &node_name, std::string_view fqn)
@@ -120,7 +127,29 @@ public:
     void declare(std::string_view fqn, topic_qos qos, std::optional<std::uint64_t> producer_type_id = std::nullopt, bool emit_source_identity = false,
                  std::string_view producer_type_name = {}, std::uint64_t schema_hint = 0)
     {
-        m_endpoint.registry().declare(wire::fqn_topic_hash(fqn), fqn, qos, producer_type_id, emit_source_identity, producer_type_name, schema_hint);
+        const auto hash = wire::fqn_topic_hash(fqn);
+        m_endpoint.registry().declare(hash, fqn, qos, producer_type_id, emit_source_identity, producer_type_name, schema_hint);
+        announce_declaration(remember_declaration(fqn, hash, producer_type_id, producer_type_name));
+    }
+
+    // Every topic this node declared, in the shape a peer is told about it. The replay a session
+    // runs on connect reads this, not the registry: the registry's producer_type_name borrows the
+    // publisher's option storage, and these copies outlive it.
+    template<typename Fn>
+    void for_each_local_declaration(Fn fn) const
+    {
+        for(const auto &declaration : m_local_declarations)
+            fn(declaration);
+    }
+
+    void send_declare(channel_type &channel, const wire::topic_declaration &td)
+    {
+        m_endpoint.send_declare(channel, td);
+    }
+
+    void on_declaration(plexus::detail::move_only_function<void(const wire::topic_declaration &)> hook)
+    {
+        m_on_declaration_cb = std::move(hook);
     }
 
     void latch(std::string_view fqn)
@@ -371,6 +400,19 @@ public:
         m_on_demand_transition_cb = std::move(hook);
     }
 
+    void on_topic_edge(plexus::detail::move_only_function<void(const graph::topic_edge &)> hook)
+    {
+        m_on_topic_edge_cb = std::move(hook);
+    }
+
+    // What a peer told us about a topic. The views borrow the decoded frame, so the sink must copy
+    // anything it keeps — the transport recycles that buffer the moment the fold returns.
+    void note_topic_edge(const graph::topic_edge &edge)
+    {
+        if(m_on_topic_edge_cb)
+            m_on_topic_edge_cb(edge);
+    }
+
     void fetch_latched(const peer &p, std::uint64_t topic_hash, std::uint32_t max_samples)
     {
         auto it = m_retained.find(topic_hash);
@@ -490,13 +532,14 @@ private:
     }
 
     void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash, std::optional<std::uint64_t> type_id = std::nullopt,
-                        const subscriber_qos &sub_qos = subscriber_qos{})
+                        const subscriber_qos &sub_qos = subscriber_qos{}, std::string_view type_name = {})
     {
-        wire::subscribe_request req{.fqn        = std::string{fqn},
-                                    .type_name  = {},
-                                    .topic_hash = hash,
-                                    .type_hash  = type_id.value_or(0), // 0 = undeclared
-                                    .source     = wire::endpoint_source_type::publisher};
+        wire::subscribe_request req{.fqn           = std::string{fqn},
+                                    .type_name     = std::string{type_name},
+                                    .type_declared = state_of(type_id, type_name) != wire::type_state::undeclared,
+                                    .topic_hash    = hash,
+                                    .type_hash     = type_id.value_or(0), // 0 = undeclared
+                                    .source        = wire::endpoint_source_type::publisher};
 
         if(!(sub_qos == subscriber_qos{}))
         {
@@ -506,13 +549,40 @@ private:
         m_endpoint.send_subscribe(channel, req);
     }
 
-    void record_remote_topic(const std::string &node_name, std::string_view fqn, const subscriber_qos &qos, std::optional<std::uint64_t> type_id = std::nullopt)
+    // A named type is declared; an id with no name is a type declared without one; neither is no
+    // assertion at all. The wire's three states and the subscribe flag both read this one rule.
+    static wire::type_state state_of(std::optional<std::uint64_t> type_id, std::string_view type_name)
+    {
+        if(!type_name.empty())
+            return wire::type_state::declared;
+        return type_id ? wire::type_state::declared_empty : wire::type_state::undeclared;
+    }
+
+    // Idempotent per topic: a re-declare replaces the stored assertion rather than stacking a
+    // second one, so the replay emits one declaration per declared topic.
+    const wire::topic_declaration &remember_declaration(std::string_view fqn, std::uint64_t hash, std::optional<std::uint64_t> type_id, std::string_view type_name)
+    {
+        wire::topic_declaration td{hash, type_id.value_or(0), std::string{fqn}, std::string{type_name}, state_of(type_id, type_name)};
+        for(auto &existing : m_local_declarations)
+            if(existing.topic_hash == hash)
+                return existing = std::move(td);
+        return m_local_declarations.emplace_back(std::move(td));
+    }
+
+    void announce_declaration(const wire::topic_declaration &td)
+    {
+        if(m_on_declaration_cb)
+            m_on_declaration_cb(td);
+    }
+
+    void record_remote_topic(const std::string &node_name, std::string_view fqn, const subscriber_qos &qos, std::optional<std::uint64_t> type_id = std::nullopt,
+                             std::string_view type_name = {})
     {
         auto &topics = m_remote_topics[node_name];
         for(const auto &existing : topics)
             if(existing.fqn == fqn)
-                return; // idempotent: keep the first stored qos + type_id
-        topics.emplace_back(remembered_demand{std::string{fqn}, qos, type_id});
+                return; // idempotent: keep the first stored qos + type
+        topics.emplace_back(remembered_demand{std::string{fqn}, qos, type_id, std::string{type_name}});
     }
 
     void forget_remote_topic(const std::string &node_name, std::string_view fqn)
@@ -571,10 +641,13 @@ private:
     std::size_t m_global_default;
     endpoint_type m_endpoint;
     std::vector<remembered_demand> m_empty;
+    std::vector<wire::topic_declaration> m_local_declarations;
     detail::egress_scheduler<channel_type, Policy> m_egress;
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
+    plexus::detail::move_only_function<void(const graph::topic_edge &)> m_on_topic_edge_cb;
+    plexus::detail::move_only_function<void(const wire::topic_declaration &)> m_on_declaration_cb;
     plexus::detail::move_only_function<bool(std::uint64_t)> m_capture_wants_payload_cb;
     plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change_cb;
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp_cb;

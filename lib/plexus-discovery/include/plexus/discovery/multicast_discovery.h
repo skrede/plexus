@@ -8,6 +8,9 @@
 #include "plexus/discovery/detail/discovery_flood_cap.h"
 #include "plexus/discovery/detail/discovery_card_codec.h"
 
+#include "plexus/match/key_pattern.h"
+#include "plexus/match/detail/match_engine.h"
+
 #include "plexus/stream/datagram_socket.h"
 #include "plexus/wire/announcement.h"
 #include "plexus/discovery/discovery.h"
@@ -47,10 +50,24 @@ public:
             , m_flood_cap(m_options.cap)
             , m_jitter(m_options.jitter_fraction)
             , m_bind_time(Clock::now())
+            , m_universe_is_concrete(true)
             , m_advertising(false)
             , m_self_seen(false)
     {
         m_socket.bind(bind_endpoint());
+        // Single source of truth: derive the concrete uint32 from the authoritative label so the
+        // fast-path key and hard-scope group agree with the pattern. A consumer that left the default
+        // label but set a custom uint32 (the legacy uint32-only shape) keeps it and stays legacy-concrete.
+        if(m_options.universe_pattern != k_default_universe_label)
+            m_options.universe = universe_from_label(m_options.universe_pattern);
+        // Parse the local label once. A misconfigured label fails closed: m_universe_pattern stays empty
+        // so the non-fast-path drops every flagged peer, while m_universe_is_concrete stays true so a
+        // flagless legacy peer still takes the uint32 fast-path.
+        if(auto pattern = match::key_pattern::make(m_options.universe_pattern))
+        {
+            m_universe_pattern     = *pattern;
+            m_universe_is_concrete = match::detail::is_concrete(*pattern);
+        }
         m_socket.on_datagram([this](const typename Socket::endpoint_type &from, std::span<const std::byte> bytes) { on_inbound(from, bytes); });
     }
 
@@ -68,7 +85,7 @@ public:
 
     void advertise(const ::plexus::discovery::service_info &service) override
     {
-        m_announcement             = detail::announcement_from_service_info(service, ttl_secs(), m_options.universe);
+        m_announcement             = detail::announcement_from_service_info(service, ttl_secs(), m_options.universe, m_options.universe_pattern);
         const bool was_advertising = m_advertising;
         m_advertising              = true;
         emit_announcement();
@@ -114,7 +131,7 @@ private:
         if(!ann)
             return;
         // Fail-closed ahead of self-echo, goodbye, and admission: a foreign universe is dropped whole, evicting no peer and paying no admission or alloc.
-        if(ann->universe != m_options.universe)
+        if(!universe_admits(*ann))
             return;
         // A node never notes itself: its own echo (same node_id) is recorded for the self-probe then dropped, keeping awareness cross-node.
         if(m_announcement && ann->node_id == m_announcement->node_id)
@@ -123,6 +140,18 @@ private:
             return;
         }
         dispatch(*ann, from.address().to_string());
+    }
+
+    // The concrete/concrete common case keeps the legacy uint32 fast-path (no parse, no alloc);
+    // otherwise the universe patterns must intersect — a rider on the shared matcher, never a second
+    // glob. FNV(factory/line/*) != FNV(factory/line/1) yet they intersect, so a flagged peer must never
+    // take the fast-path. A malformed peer pattern or an unparsable local pattern fails closed.
+    bool universe_admits(const wire::announcement &ann) const
+    {
+        if(m_universe_is_concrete && !(ann.flags & wire::k_announcement_universe_pattern_flag))
+            return ann.universe == m_options.universe;
+        const auto peer = match::key_pattern::make(ann.universe_pattern);
+        return m_universe_pattern && peer && m_universe_pattern->intersects(*peer);
     }
 
     void dispatch(const wire::announcement &ann, const std::string &source)
@@ -145,7 +174,10 @@ private:
     {
         if(!m_announcement)
             return;
-        m_announcement->flags = flags;
+        // The universe-pattern presence flag is a persistent property of this node's announcement (set
+        // at build from the label); goodbye is the only transient per-emit bit. Preserve the former so a
+        // re-announce or goodbye never drops the pattern and silently reverts to legacy-flagless wire.
+        m_announcement->flags = flags | (m_announcement->flags & wire::k_announcement_universe_pattern_flag);
         wire::encode_announcement_into(m_scratch, *m_announcement);
         m_socket.send_multicast(m_scratch);
     }
@@ -187,6 +219,8 @@ private:
     detail::discovery_flood_cap<Clock> m_flood_cap;
     detail::announce_jitter<std::chrono::milliseconds> m_jitter;
     typename Clock::time_point m_bind_time;
+    std::optional<match::key_pattern> m_universe_pattern;
+    bool m_universe_is_concrete;
     std::optional<wire::announcement> m_announcement;
     std::vector<std::byte> m_scratch;
     resolved_callback m_on_resolved_cb;

@@ -125,6 +125,13 @@ public:
         return m_peer_fingerprint;
     }
 
+    // The identity the peer proved in the handshake, which an accepted session learns only there:
+    // its slot is keyed by a provisional id minted before anyone spoke.
+    const node_id &last_seen_peer_id() const noexcept
+    {
+        return m_peer_id;
+    }
+
     host_fingerprint local_fingerprint() const noexcept
     {
         return m_cfg.local_fingerprint;

@@ -3,6 +3,8 @@
 
 #include "plexus/recorder.h"
 #include "plexus/node_options.h"
+#include "plexus/target_profile.h"
+#include "plexus/graph_change_handle.h"
 #include "plexus/typed_publisher_options.h"
 
 #include "plexus/io/endpoint.h"
@@ -27,6 +29,11 @@
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/contact_card.h"
 
+#include "plexus/graph/topic_record.h"
+#include "plexus/graph/participant_record.h"
+
+#include "plexus/match/key_pattern.h"
+
 #include "plexus/muxify.h"
 #include "plexus/node_id.h"
 #include "plexus/topic_qos.h"
@@ -35,6 +42,7 @@
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/fail_closed.h"
+#include "plexus/detail/topic_sweep.h"
 #include "plexus/detail/address_parse.h"
 #include "plexus/detail/node_self_route.h"
 #include "plexus/detail/node_self_carrier.h"
@@ -175,9 +183,9 @@ class procedure;
 // borrowed executor and captures `this`. The borrowed substrate MUST outlive the node, and the
 // executor MUST be drained before the node is destroyed — the structural single-owner
 // discipline. The node pins `this` into those callbacks, so it is non-copyable and non-movable.
-template<typename Policy, typename... Transports>
-    requires plexus::Policy<Policy> && (sizeof...(Transports) >= 1) &&
-        (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, Policy> : (io::mux_member<Transports> && ...))
+template<typename Profile, typename... Transports>
+    requires detail::target_profile<Profile> && (sizeof...(Transports) >= 1) &&
+        (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, typename detail::profile_traits<Profile>::policy> : (io::mux_member<Transports> && ...))
 class basic_node
 {
     // The registration/retire seams are private; the endpoint handles reach them only as friends
@@ -194,10 +202,15 @@ class basic_node
     friend class procedure;
 
 public:
-    using executor_type    = typename Policy::executor_type;
-    using engine_policy    = detail::node_engine_policy<Policy, Transports...>;
+    using policy_type      = typename detail::profile_traits<Profile>::policy;
+    using executor_type    = typename policy_type::executor_type;
+    using engine_policy    = detail::node_engine_policy<policy_type, Transports...>;
     using engine_transport = detail::node_engine_transport<Transports...>;
-    using engine_type      = io::routing_engine<engine_policy, engine_transport>;
+    // Storage is threaded off the profile, never off engine_policy/muxify — muxify re-exports only
+    // the mechanism members, so reading storage through it silently reverts to the heap twins.
+    using engine_type      = io::routing_engine<engine_policy, engine_transport, std::chrono::steady_clock, typename detail::profile_traits<Profile>::peer_storage,
+                                                typename detail::profile_traits<Profile>::topic_storage, typename detail::profile_traits<Profile>::liveliness_storage,
+                                                typename detail::profile_traits<Profile>::graph_change_log>;
     using engine_channel   = typename engine_type::channel_type;
     using transport_tuple  = std::tuple<Transports...>;
 
@@ -206,12 +219,12 @@ public:
     // object fast path); a composed intra-node+network node binds polymorphic_byte_channel, so the
     // self-channel is wrapped (erased, framed bytes lane only — no zero-copy self-lane there). Any
     // pack with no intra-node member leaves the self-route idle.
-    static constexpr bool k_has_self_loopback = detail::pack_has_intra_node<Policy, Transports...>;
+    static constexpr bool k_has_self_loopback = detail::pack_has_intra_node<policy_type, Transports...>;
 
     // Single-transport: the engine's channel IS the concrete loopback channel, attached directly.
     // Multi-transport: the engine's channel is the erased polymorphic_byte_channel, so the concrete
     // self-channel is reference-adapter wrapped to satisfy the registry's reference_wrapper.
-    static constexpr bool k_self_route_erased = k_has_self_loopback && !std::is_same_v<engine_channel, io::process_loopback_channel<Policy>>;
+    static constexpr bool k_self_route_erased = k_has_self_loopback && !std::is_same_v<engine_channel, io::process_loopback_channel<policy_type>>;
 
     // The fallback self-carrier: when no intra-node transport serves self but the pack has an shm
     // member, a same-node publish self-delivers over a node-local shm self-ring (the framed bytes
@@ -325,6 +338,88 @@ public:
         return m_executor;
     }
 
+    // Executor-affine: call only on the owning executor. Sweeps the awareness table with no lock
+    // and no allocation, filling out to capacity and reporting overflow as a count plus a flag —
+    // never abort, never evict (reject-and-count at the span boundary).
+    graph::snapshot_result participants(std::span<graph::participant_record> out) const
+    {
+        std::size_t filled = 0;
+        bool        truncated = false;
+        m_engine.known().for_each([&](const plexus::node_id &id, const io::endpoint &ep) {
+            if(filled == out.size())
+            {
+                truncated = true;
+                return;
+            }
+            out[filled++] = graph::participant_record{id, graph::route{ep, std::nullopt},
+                                                      graph::provenance{graph::observation::directly_observed, std::nullopt}};
+        });
+        return graph::snapshot_result{filled, truncated};
+    }
+
+    // Executor-affine: call only on the owning executor. One record per (participant, topic, role)
+    // edge, so a topic with both a publisher and a subscriber yields both — these edges are the
+    // substrate the counts and by-node views reduce over, which is why neither keeps an index of
+    // its own. A filter admits only the topics its keyset intersects.
+    graph::snapshot_result topics(std::span<graph::topic_record> out,
+                                  const std::optional<match::key_pattern> &filter = std::nullopt) const
+    {
+        return detail::sweep_topics(m_engine.topic_table(), out,
+                                    [&](const graph::topic_record &rec) { return detail::topic_in(rec.name, filter); });
+    }
+
+    // Registers a graph-change observer over the engine's add_observer seam and returns a move-only
+    // RAII handle whose dtor deregisters (D-03: the teardown ordering is off the consumer, closing the
+    // re-entry footgun). A callback taking a graph::graph_change subscribes to the host {who, kind}
+    // delta — present on the heap profile, structurally absent on bounded<> (its null log twin holds
+    // nothing); a callback taking the coarse std::uint64_t generation dedupes on it and re-snapshots
+    // participants()/topics() only when the generation advanced (D-09). The engine drains posted over
+    // the borrowed executor (the :180-184 lifetime contract), so the handle must be dropped before the
+    // executor stops.
+    template<typename Cb>
+    graph_change_handle on_graph_change(Cb cb)
+    {
+        if constexpr(std::is_invocable_v<Cb &, const graph::graph_change &>)
+            return graph_change_handle{m_engine, {}, std::move(cb)};
+        else
+            return graph_change_handle{m_engine, std::move(cb)};
+    }
+
+    // Executor-affine. Counted over the same edges topics() enumerates: a maintained counter would
+    // be a second truth to keep coherent with the table.
+    std::size_t count_publishers(std::string_view topic) const
+    {
+        return detail::count_topic_role(m_engine.topic_table(), topic, graph::topic_role::publisher);
+    }
+
+    std::size_t count_subscribers(std::string_view topic) const
+    {
+        return detail::count_topic_role(m_engine.topic_table(), topic, graph::topic_role::subscriber);
+    }
+
+    // Executor-affine. The same edges keyed by participant rather than by topic.
+    graph::snapshot_result topics_published_by(const plexus::node_id &node, std::span<graph::topic_record> out) const
+    {
+        return topics_of(node, graph::topic_role::publisher, out);
+    }
+
+    graph::snapshot_result topics_subscribed_by(const plexus::node_id &node, std::span<graph::topic_record> out) const
+    {
+        return topics_of(node, graph::topic_role::subscriber, out);
+    }
+
+    // Topics whose type list is not the whole truth: a name clipped to its bound, or a distinct
+    // type past the per-topic cap. Edges refused outright for want of room.
+    std::size_t topic_truncations() const noexcept
+    {
+        return m_engine.topic_table().truncations();
+    }
+
+    std::size_t topics_dropped() const noexcept
+    {
+        return m_engine.topic_table().dropped();
+    }
+
     // Object-lane deliveries dropped at the demux on a type-witness mismatch.
     std::size_t object_dispatch_mismatch() const noexcept
     {
@@ -375,9 +470,9 @@ public:
 
     // An RAII recorder handle that registers its tap on the engine and deregisters before
     // teardown. The sink MUST outlive the handle; the drain rides this node's executor turns.
-    recorder<engine_type, Policy> make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
+    recorder<engine_type, policy_type> make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
     {
-        return recorder<engine_type, Policy>{m_engine, m_executor, m_id, sink, std::move(opts), m_wire_crypto_position};
+        return recorder<engine_type, policy_type>{m_engine, m_executor, m_id, sink, std::move(opts), m_wire_crypto_position};
     }
 
     friend struct detail::peer_watch<basic_node>;
@@ -389,13 +484,20 @@ private:
 
     using registration_id = std::uint64_t;
 
+    graph::snapshot_result topics_of(const plexus::node_id &node, graph::topic_role role, std::span<graph::topic_record> out) const
+    {
+        return detail::sweep_topics(m_engine.topic_table(), out,
+                                    [&](const graph::topic_record &rec) { return rec.node == node && rec.role == role; });
+    }
+
     registration_id register_subscriber_seam(std::string_view fqn, const io::subscriber_qos &qos,
                                              plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb,
-                                             std::optional<std::uint64_t> type_id = std::nullopt, object_entry obj = {}, std::optional<io::topic_capture_rule> capture = std::nullopt)
+                                             std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {}, object_entry obj = {},
+                                             std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
         const registration_id rid    = m_next_registration++;
         const bool first_for_fqn     = !any_subscriber_for(fqn);
-        std::pair<registration_id, subscription> entry{rid, subscription{std::string{fqn}, qos, type_id, std::move(cb), std::move(obj)}};
+        std::pair<registration_id, subscription> entry{rid, subscription{std::string{fqn}, qos, type_id, std::string{type_name}, std::move(cb), std::move(obj)}};
         if(m_dispatch_depth > 0)
             m_deferred_subscription_adds.push_back(std::move(entry));
         else
@@ -406,9 +508,10 @@ private:
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
         provision_same_host_ring(fqn, subscriber_effective_bytes(qos), nullptr);
+        m_engine.note_local_topic(fqn, type_name, type_id, graph::topic_role::subscriber);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
-            m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any, type_id);
+            m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any, type_id, type_name);
         return rid;
     }
 
@@ -436,9 +539,12 @@ private:
             retire_fqn_demand(fqn);
     }
 
+    // Reached only once the LAST subscriber on the fqn is gone, which is what makes dropping the
+    // one (participant, topic, subscriber) edge here correct: N handles are one edge, not N.
     void retire_fqn_demand(std::string_view fqn)
     {
         self_detach(fqn);
+        m_engine.forget_local_topic(fqn, graph::topic_role::subscriber);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired, wire::fqn_topic_hash(fqn), std::nullopt});
         for(const auto &peer : m_known_peers)
             m_engine.unsubscribe(peer, fqn);
@@ -456,7 +562,7 @@ private:
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
         provision_same_host_ring(fqn, effective_bytes, geometry);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
-        note_local_publisher(fqn);
+        note_local_publisher(fqn, type_name, type_id);
     }
 
     void retire_publisher_seam(std::string_view fqn)
@@ -537,7 +643,7 @@ private:
                     { on_reply(status, bytes, provider); }, deadline, session->session_id());
             return;
         }
-        Policy::post(m_executor, [on_reply = std::move(on_reply)]() mutable { on_reply(std::nullopt, {}, std::nullopt); });
+        policy_type::post(m_executor, [on_reply = std::move(on_reply)]() mutable { on_reply(std::nullopt, {}, std::nullopt); });
     }
 
     // The served-FQN set is checked BEFORE the forwarder is touched, so a refused (duplicate-local)
@@ -567,7 +673,7 @@ private:
     void fan_demands_to(const plexus::node_id &id)
     {
         for(const auto &[rid, sub] : m_subscriptions)
-            m_engine.subscribe(id, sub.fqn, sub.qos, io::locality::any, io::reliability_requirement::any, sub.type_id);
+            m_engine.subscribe(id, sub.fqn, sub.qos, io::locality::any, io::reliability_requirement::any, sub.type_id, sub.type_name);
     }
 
     // While a dispatch fan is live (m_dispatch_depth > 0) the (un)subscribe seams cannot touch
@@ -758,24 +864,26 @@ private:
             sync_shm_self_carrier(fqn);
     }
 
-    void note_local_publisher(std::string_view fqn)
+    void note_local_publisher(std::string_view fqn, std::string_view type_name, std::optional<std::uint64_t> type_id)
     {
+        ++m_local_publishers[std::string{fqn}];
+        m_engine.note_local_topic(fqn, type_name, type_id, graph::topic_role::publisher);
         if constexpr(k_has_shm_self_carrier)
-        {
-            ++m_local_publishers[std::string{fqn}];
             sync_shm_self_carrier(fqn);
-        }
     }
 
+    // The graph edge is one per (participant, topic, role), so it outlives every publisher handle
+    // but the last: the count is what tells a retired second handle from a retired topic.
     void forget_local_publisher(std::string_view fqn)
     {
-        if constexpr(k_has_shm_self_carrier)
+        auto it = m_local_publishers.find(std::string{fqn});
+        if(it != m_local_publishers.end() && --it->second == 0)
         {
-            auto it = m_local_publishers.find(std::string{fqn});
-            if(it != m_local_publishers.end() && --it->second == 0)
-                m_local_publishers.erase(it);
-            sync_shm_self_carrier(fqn);
+            m_local_publishers.erase(it);
+            m_engine.forget_local_topic(fqn, graph::topic_role::publisher);
         }
+        if constexpr(k_has_shm_self_carrier)
+            sync_shm_self_carrier(fqn);
     }
 
     // The shm self-ring mints/holds an OS region, so it engages ONLY when a same-node publisher AND
@@ -875,9 +983,9 @@ private:
         s.publish        = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes) { static_cast<basic_node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
         s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier, io::encode_thunk encode)
         { static_cast<basic_node *>(ctx)->m_engine.messages().publish_object(fqn, carrier, [&] { return io::invoke(encode); }); };
-        s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos, io::bytes_cb cb, std::optional<std::uint64_t> type_id, const void *native_key,
-                                   io::object_dispatch dispatch, std::optional<io::topic_capture_rule> capture) -> registration_id
-        { return static_cast<basic_node *>(ctx)->register_subscriber_seam(fqn, qos, std::move(cb), type_id, object_entry{native_key, std::move(dispatch)}, capture); };
+        s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos, io::bytes_cb cb, std::optional<std::uint64_t> type_id, std::string_view type_name,
+                                   const void *native_key, io::object_dispatch dispatch, std::optional<io::topic_capture_rule> capture) -> registration_id
+        { return static_cast<basic_node *>(ctx)->register_subscriber_seam(fqn, qos, std::move(cb), type_id, type_name, object_entry{native_key, std::move(dispatch)}, capture); };
         s.retire_subscriber = [](void *ctx, registration_id rid) { static_cast<basic_node *>(ctx)->retire_subscriber_seam(rid); };
         s.retire_publisher  = [](void *ctx, std::string_view fqn) { static_cast<basic_node *>(ctx)->retire_publisher_seam(fqn); };
         s.serve_procedure   = [](void *ctx, std::string_view fqn, io::handler_fn handler) { static_cast<basic_node *>(ctx)->serve_procedure_seam(fqn, std::move(handler)); };
@@ -987,7 +1095,7 @@ private:
     // The node-owned self-route, attached to its OWN forwarder so a publish reaches a same-node
     // subscriber. Declared BEFORE m_engine so it outlives the registry references that hold it.
     // It is only wired when the pack carries an intra-node transport; on any other node it is idle.
-    io::process_loopback_channel<Policy> m_self_channel;
+    io::process_loopback_channel<policy_type> m_self_channel;
 
     // On a multi-transport node the registry holds reference_wrapper<polymorphic_byte_channel>, so the
     // concrete self-channel is erased through a non-owning reference adapter (the node keeps owning
@@ -995,8 +1103,9 @@ private:
     using self_route_holder = std::conditional_t<k_self_route_erased, io::polymorphic_byte_channel, detail::no_self_route_wrapper>;
     [[no_unique_address]] self_route_holder m_self_route{detail::make_self_route<self_route_holder>(m_self_channel)};
 
-    // Live local-publisher count per fqn: the shm self-ring mints only when a same-node publisher and
-    // subscriber coexist, so the carrier's OS region is never created for a node that only talks remote.
+    // Live local-publisher count per fqn. It settles two questions: the node's own publisher edge
+    // retires on the last handle rather than the first, and the shm self-ring mints only when a
+    // same-node publisher and subscriber coexist (so a node that only talks remote mints no region).
     std::unordered_map<std::string, std::size_t> m_local_publishers;
 
     // The per-fqn node-local shm self-ring carriers (the fallback self-route when no intra-node

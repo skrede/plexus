@@ -7,6 +7,7 @@ set(PLEXUS_WIRE_TESTS
     test_subscribe_qos_codec
     test_fetch_latched_codec
     test_heartbeat_codec
+    test_topic_declaration_codec
     test_crc32c
     test_serial_crc_kat)
 
@@ -43,6 +44,7 @@ add_executable(test_wire_codec
     test_wire_codec.cpp
     test_wire_codec_data.cpp
     test_wire_codec_subscribe.cpp
+    test_wire_codec_subscribe_type.cpp
     test_wire_codec_rpc.cpp
     test_wire_codec_handshake.cpp)
 target_link_libraries(test_wire_codec PRIVATE plexus::wire Catch2::Catch2WithMain)

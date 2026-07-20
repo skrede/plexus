@@ -25,6 +25,10 @@
 #include "plexus/io/session_build_context.h"
 #include "plexus/io/reliability_requirement.h"
 
+#include "plexus/graph/graph_change.h"
+#include "plexus/graph/topic_type_table.h"
+#include "plexus/graph/vector_graph_change_log.h"
+
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_sink_install.h"
@@ -55,7 +59,8 @@ struct default_liveliness_storage
 };
 
 template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock, typename PeerStorage = std_map_peer_storage,
-         typename LivelinessStorage = default_liveliness_storage>
+         typename TopicStorage = graph::std_map_topic_storage, typename LivelinessStorage = default_liveliness_storage,
+         typename GraphChangeLog = graph::vector_graph_change_log>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
 {
@@ -75,11 +80,13 @@ class routing_engine
     };
 
 public:
-    using policy_type   = Policy;
-    using session_type  = peer_session<Policy>;
-    using executor_type = typename Policy::executor_type;
-    using channel_type  = typename Policy::byte_channel_type;
-    using registry_type = peer_session_registry<Policy, Transport, Clock>;
+    using policy_type        = Policy;
+    using peer_storage_type  = PeerStorage;
+    using topic_storage_type = TopicStorage;
+    using session_type       = peer_session<Policy>;
+    using executor_type      = typename Policy::executor_type;
+    using channel_type       = typename Policy::byte_channel_type;
+    using registry_type      = peer_session_registry<Policy, Transport, Clock>;
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
@@ -107,6 +114,8 @@ public:
             m_capture.add_observer();
         if(o.observes_liveliness())
             m_peer_liveliness.add_subscriber();
+        if(o.observes_graph())
+            ++m_graph_subscribers;
     }
 
     void remove_observer(observer &o)
@@ -116,6 +125,8 @@ public:
             m_capture.remove_observer();
         if(erased != 0 && o.observes_liveliness())
             m_peer_liveliness.remove_subscriber();
+        if(erased != 0 && o.observes_graph())
+            --m_graph_subscribers;
     }
 
     auto drop_sink()
@@ -163,18 +174,23 @@ public:
 
     void note_peer(const node_id &id, const endpoint &ep, std::uint64_t now)
     {
-        m_known_peers.note_peer(id, ep, now);
+        const bool changed = m_known_peers.note_peer(id, ep, now);
         m_peer_liveliness.note_awareness(id, now);
+        bump_graph_generation(changed, id, graph::change_kind::appeared);
         if(m_dial_eagerly)
             reach(id);
     }
 
-    // Removes a peer's awareness only (a goodbye drops the suggestion, never an active link):
-    // mirrors note_peer's awareness scope and never touches the session registry.
+    // Drops a peer's awareness and denies any redial its teardown armed: a goodbye withdraws the
+    // suggestion reach() gates on, so an in-flight or armed reconnect for the peer is cancelled
+    // rather than left to resurrect it. An established session is untouched — it ends on its own
+    // teardown, not this call.
     void forget(const node_id &id)
     {
-        m_known_peers.forget(id);
+        const bool changed = m_known_peers.forget(id);
+        m_registry.deny_redial(id);
         m_peer_liveliness.note_awareness_lost(id);
+        bump_graph_generation(changed, id, graph::change_kind::disappeared);
     }
 
     void reach(const node_id &id)
@@ -195,7 +211,7 @@ public:
     }
 
     void subscribe(const node_id &id, std::string_view fqn, const subscriber_qos &qos, locality reach_mask = locality::any,
-                   reliability_requirement require = reliability_requirement::any, std::optional<std::uint64_t> type_id = std::nullopt)
+                   reliability_requirement require = reliability_requirement::any, std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {})
     {
         if(!demand_in_scope(id, reach_mask))
             return;
@@ -203,10 +219,10 @@ public:
             return;
         reach(id);
 
-        m_messages.remember_demand(node_name_of(id), fqn, qos, type_id);
+        m_messages.remember_demand(node_name_of(id), fqn, qos, type_id, type_name);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
-            session->subscribe(fqn, qos, type_id);
+            session->subscribe(fqn, qos, type_id, type_name);
     }
 
     void call(const node_id &id, std::string_view fqn, std::span<const std::byte> param, typename procedure_forwarder<Policy>::on_response_fn on_response)
@@ -228,6 +244,23 @@ public:
     void publish(std::string_view fqn, std::span<const std::byte> payload)
     {
         m_messages.publish(fqn, payload);
+    }
+
+    // This node's own topics fold into the same table its peers' edges do, under the identity the
+    // handshake asserts to them — so a count, an enumeration or a by-participant view answers for
+    // the whole graph rather than for everyone-but-me, and a party to a polytype disagreement can
+    // see the disagreement it is party to. No wire verb rides this: a local edge is a local table
+    // operation, and peers still learn the topic from the declare/subscribe they always did.
+    void note_local_topic(std::string_view fqn, std::string_view type_name, std::optional<std::uint64_t> type_id, graph::topic_role role)
+    {
+        const bool changed = m_topics.upsert(graph::topic_edge{m_build.fsm_cfg.self_id, fqn, type_name, type_id, role}).changed;
+        bump_graph_generation(changed, m_build.fsm_cfg.self_id, graph::change_kind::appeared);
+    }
+
+    void forget_local_topic(std::string_view fqn, graph::topic_role role)
+    {
+        const bool changed = m_topics.remove_edge(m_build.fsm_cfg.self_id, fqn, role);
+        bump_graph_generation(changed, m_build.fsm_cfg.self_id, graph::change_kind::disappeared);
     }
 
     bool is_connected(const node_id &id) const
@@ -255,9 +288,19 @@ public:
         return m_registry.session_for(id);
     }
 
-    const known_peers &known() const noexcept
+    const basic_known_peers<PeerStorage> &known() const noexcept
     {
         return m_known_peers;
+    }
+
+    const graph::basic_topic_type_table<TopicStorage> &topic_table() const noexcept
+    {
+        return m_topics;
+    }
+
+    std::uint64_t graph_generation() const noexcept
+    {
+        return m_graph_generation;
     }
 
     io::host_fingerprint local_fingerprint() const noexcept
@@ -343,6 +386,11 @@ private:
     session_build_context<Policy> m_build;
     registry_type m_registry;
     basic_known_peers<PeerStorage> m_known_peers;
+    graph::basic_topic_type_table<TopicStorage> m_topics;
+    std::uint64_t m_graph_generation{0};
+    bool m_graph_wakeup_pending{false};
+    std::size_t m_graph_subscribers{0};
+    GraphChangeLog m_graph_log;
     liveliness_monitor<Policy, Clock, typename LivelinessStorage::monitor> m_monitor;
     peer_liveliness<typename LivelinessStorage::arbiter> m_peer_liveliness;
     std::vector<std::reference_wrapper<observer>> m_observers;
@@ -459,9 +507,35 @@ private:
         }
     }
 
+    // A peer that both dials and accepts holds two sessions under two slot keys but one proven
+    // identity, and the table is keyed by that identity.
+    bool any_session_for(const node_id &proven)
+    {
+        bool found = false;
+        m_registry.for_each_connected([&](const node_id &, session_type &s) { found = found || s.peer_identity() == proven; });
+        return found;
+    }
+
+    // Topic knowledge is scoped to the sessions that carried it, so a peer's records leave with the
+    // last of them — mirroring how the registry drops its fan-out entries. Awareness is untouched:
+    // a peer that goes down stays discovered, it just stops asserting topics.
+    void forget_topics_on_teardown(const lifecycle_event &ev)
+    {
+        if(ev.edge != lifecycle_edge::disconnected && ev.edge != lifecycle_edge::dead)
+            return;
+        session_type *torn = m_registry.session_for(ev.id);
+        if(torn != nullptr && !any_session_for(torn->peer_identity()))
+        {
+            const node_id who  = torn->peer_identity();
+            const bool changed = m_topics.remove_node(who);
+            bump_graph_generation(changed, who, graph::change_kind::disappeared);
+        }
+    }
+
     void dispatch_lifecycle(const lifecycle_event &ev)
     {
         feed_liveliness_session(ev);
+        forget_topics_on_teardown(ev);
         switch(ev.edge)
         {
             case lifecycle_edge::connected:
@@ -496,6 +570,49 @@ private:
         return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count());
     }
 
+    // Level-triggered coalescing: a real change bumps a monotonic generation and, only while a graph
+    // subscriber is registered, appends the {who, kind} delta; a flood collapses to ONE posted wakeup
+    // because a second bump with one already in flight only advances the counter. The fan-out is the
+    // deferred post — never synchronous from this mutator body or a teardown frame (the DoS-amplifier
+    // and freed-slot_block guards). An idempotent mutation reports changed==false and is silent.
+    void bump_graph_generation(bool changed, const node_id &who, graph::change_kind kind)
+    {
+        if(!changed)
+            return;
+        ++m_graph_generation;
+        if(m_graph_subscribers != 0)
+            m_graph_log.append(who, kind);
+        if(m_graph_wakeup_pending)
+            return;
+        m_graph_wakeup_pending = true;
+        Policy::post(m_executor, [this] { fire_graph_wakeup(); });
+    }
+
+    // The posted wakeup: fires the coarse edge once at the FINAL generation, then drains the host
+    // delta log to the opt-in observers. Iterates the live observer list directly rather than
+    // detail::fan_out — the snapshot copy fan_out takes would allocate on every wakeup, and the
+    // coarse path must stay allocation-free (the [this] closure fits move_only_function's SBO). It
+    // re-reads known_peers/topic_table only, never slot_block, so a peer torn down before the drain
+    // cannot be re-entered.
+    void fire_graph_wakeup()
+    {
+        m_graph_wakeup_pending = false;
+        const std::uint64_t gen = m_graph_generation;
+        for(std::size_t i = 0; i < m_observers.size(); ++i)
+            m_observers[i].get().on_graph_changed(gen);
+        const auto deltas = m_graph_log.drain();
+        if(deltas.empty())
+            return;
+        for(std::size_t i = 0; i < m_observers.size(); ++i)
+        {
+            observer &o = m_observers[i].get();
+            if(o.observes_graph())
+                for(const graph::graph_change &delta : deltas)
+                    o.on_graph_delta(delta);
+        }
+        m_graph_log.clear();
+    }
+
     // Awareness-only removal on the existing tick: forgets a peer that stopped re-announcing and was
     // not refreshed by a heartbeat. NEVER touches m_registry — an active session outlives its
     // awareness entry.
@@ -504,7 +621,12 @@ private:
         const std::uint64_t now      = now_for_aging();
         const std::uint64_t ttl      = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(m_liveliness.awareness_ttl).count());
         const std::uint64_t deadline = now > ttl ? now - ttl : 0;
-        m_known_peers.expire_older_than(deadline, [this](const node_id &id) { m_peer_liveliness.note_awareness_lost(id); });
+        m_known_peers.expire_older_than(deadline,
+                                        [this](const node_id &id)
+                                        {
+                                            m_peer_liveliness.note_awareness_lost(id);
+                                            bump_graph_generation(true, id, graph::change_kind::disappeared);
+                                        });
     }
 };
 

@@ -38,6 +38,7 @@
 #include "plexus/wire/heartbeat.h"
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/close_cause.h"
+#include "plexus/wire/topic_declaration.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/fetch_latched.h"
 
@@ -250,15 +251,20 @@ public:
         tear_down();
     }
 
-    void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt)
+    void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {})
     {
-        if(m_messages.attach(m_msg_peer, fqn, qos, type_id))
+        if(m_messages.attach(m_msg_peer, fqn, qos, type_id, type_name))
             ++m_outstanding_subscribes;
     }
 
     void unsubscribe(std::string_view fqn)
     {
         m_messages.detach(m_msg_peer, fqn);
+    }
+
+    void declare(const wire::topic_declaration &td)
+    {
+        m_messages.send_declare(m_channel, td);
     }
 
     void emit_heartbeat()
@@ -279,6 +285,13 @@ public:
     bool is_complete() const noexcept
     {
         return m_forwarders_installed;
+    }
+
+    // The identity the peer proved in the handshake. It differs from the slot's key on an accepted
+    // session, whose provisional id was minted before the peer spoke.
+    const node_id &peer_identity() const noexcept
+    {
+        return m_fsm.last_seen_peer_id();
     }
 
     bool same_host() const noexcept
@@ -345,6 +358,10 @@ private:
     template<typename S>
     friend void detail::register_session_consumers(S &);
     template<typename S>
+    friend void detail::fold_topic_edge(S &, std::string_view, std::string_view, std::optional<std::uint64_t>, graph::topic_role);
+    template<typename S>
+    friend void detail::on_subscribe_received(S &, std::span<const std::byte>);
+    template<typename S>
     friend void detail::deliver_session_data(S &, const wire::frame_header &, std::span<const std::byte>);
     template<typename S>
     friend void detail::deliver_session_object(S &, const object_carrier &);
@@ -358,6 +375,8 @@ private:
     friend void detail::on_complete(S &);
     template<typename S>
     friend void detail::resubscribe_all(S &);
+    template<typename S>
+    friend void detail::redeclare_all(S &);
     template<typename S>
     friend void detail::record_same_host(S &) noexcept;
     template<typename S>

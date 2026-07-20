@@ -11,7 +11,11 @@
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
 
+#include "plexus/graph/graph_change.h"
+#include "plexus/graph/topic_record.h"
+
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/topic_declaration.h"
 
 #include "plexus/node_id.h"
 #include "plexus/policy.h"
@@ -48,6 +52,14 @@ void install_routing_sinks(Engine &e)
     e.m_messages.on_companion_route([&e](std::string_view node_name, std::string_view fqn, std::size_t bytes) -> channel_type *
                                     { return e.m_coordinator.companion_for(node_name, fqn, bytes); });
     e.m_messages.set_capture_wants_payload([&e](std::uint64_t hash) { return e.m_capture.wants_payload(hash, wire::now_timestamp_ns()); });
+    // The table copies the borrowed names in and reject-and-counts on overflow, so a peer flooding
+    // topics costs a counter, never an eviction and never an abort.
+    e.m_messages.on_topic_edge([&e](const graph::topic_edge &edge)
+                               { e.bump_graph_generation(e.m_topics.upsert(edge).changed, edge.node, graph::change_kind::appeared); });
+    // A local declaration reaches every peer already listening; an incomplete session would lose
+    // the frame, so the ones still handshaking are caught by the replay their completion runs.
+    e.m_messages.on_declaration([&e](const wire::topic_declaration &td)
+                                { e.m_registry.for_each_connected([&td](const node_id &, session_type &s) { s.declare(td); }); });
     e.m_procedures.on_rpc_call(make_rpc_sink(e, &observer::on_rpc_call));
     e.m_procedures.on_rpc_serve(make_rpc_sink(e, &observer::on_rpc_serve));
     e.m_procedures.on_rpc_reply(make_rpc_sink(e, &observer::on_rpc_reply));
