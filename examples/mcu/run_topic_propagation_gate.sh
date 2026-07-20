@@ -38,8 +38,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 GRAPH_PROJECT="${REPO_ROOT}/examples/mcu/esp-idf-topic-graph"
 ONBOARD_PROJECT="${REPO_ROOT}/examples/mcu/esp-idf-onboard"
-HOST_GATE="${REPO_ROOT}/build/examples/mcu/topic_propagation_gate_host"
-LOG_DIR="${REPO_ROOT}/build/examples/mcu/topic_propagation_gate_logs"
+BUILD_DIR="${PLEXUS_BUILD_DIR:-${REPO_ROOT}/build}"
+HOST_GATE="${BUILD_DIR}/examples/mcu/topic_propagation_gate_host"
+LOG_DIR="${BUILD_DIR}/examples/mcu/topic_propagation_gate_logs"
 
 if [[ ! -x "${HOST_GATE}" ]]; then
     echo "host gate binary not found at ${HOST_GATE}"
@@ -84,8 +85,18 @@ flash_firmware() {   # $1=project-dir  $2=build-dir  $3=label
     return 1
 }
 
-# shellcheck disable=SC1091
-. /opt/esp-idf/export.sh
+# Source the ESP-IDF environment only if idf.py is not already on PATH. The install location is
+# host-specific (CI puts it at /opt/esp-idf; a developer install commonly lives under $IDF_PATH or
+# $HOME/esp), so try the known locations rather than hardcoding one.
+if ! command -v idf.py >/dev/null 2>&1; then
+    for candidate in "${IDF_PATH:+${IDF_PATH}/export.sh}" "${HOME}/esp/export.sh" "${HOME}/esp/esp-idf/export.sh" /opt/esp-idf/export.sh; do
+        if [[ -n "${candidate}" && -f "${candidate}" ]]; then
+            # shellcheck disable=SC1090
+            . "${candidate}"
+            break
+        fi
+    done
+fi
 
 mkdir -p "${LOG_DIR}"
 : >"${LOG_DIR}/flash.log"
