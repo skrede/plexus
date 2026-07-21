@@ -29,10 +29,12 @@ inline std::size_t forwarded_frame_encoded_size(const forwarded_frame &ff) noexc
 
 }
 
-inline std::vector<std::byte> encode_forwarded_frame(const forwarded_frame &ff)
+// Encode into a caller-pre-sized region (a pool slot on the relay splice) and return the byte count,
+// so the splice frames the envelope with no intermediate buffer. region must hold at least
+// forwarded_frame_encoded_size(ff) bytes.
+inline std::size_t encode_forwarded_frame_into(std::span<std::byte> region, const forwarded_frame &ff) noexcept
 {
-    std::vector<std::byte> buf(detail::forwarded_frame_encoded_size(ff));
-    writer w{buf};
+    writer w{region};
     w.bytes(std::span<const std::byte>{ff.origin.data(), ff.origin.size()});
     w.bytes(std::span<const std::byte>{ff.destination.data(), ff.destination.size()});
     w.u8(ff.hop);
@@ -41,6 +43,13 @@ inline std::vector<std::byte> encode_forwarded_frame(const forwarded_frame &ff)
     const std::size_t n = detail::effective_inner_size(ff);
     w.u32(static_cast<std::uint32_t>(n));
     w.bytes(std::span<const std::byte>{ff.inner.data(), n});
+    return w.offset();
+}
+
+inline std::vector<std::byte> encode_forwarded_frame(const forwarded_frame &ff)
+{
+    std::vector<std::byte> buf(detail::forwarded_frame_encoded_size(ff));
+    encode_forwarded_frame_into(buf, ff);
     return buf;
 }
 

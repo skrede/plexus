@@ -20,6 +20,24 @@ target_link_libraries(test_message_forwarder PRIVATE
 
 catch_discover_tests(test_message_forwarder TEST_PREFIX "forwarder.")
 
+# The splice-buffer zero-steady-state-alloc gate: a warm loop of pooled buffer-builds (checkout +
+# encode the forwarded envelope into the slot + release) allocates exactly ZERO per iteration, proven
+# through support/alloc_counter.h — the make_shared buffer-build shape it replaces allocates every
+# iteration (the contrast is pinned). The refcounted zero-copy checkout adds zero per-iteration alloc
+# too, and pool exhaustion counts a drop without allocating. Needs the core + wire layers; selected by
+# the `forwarder.` ctest prefix.
+add_executable(test_forward_splice_alloc test_forward_splice_alloc.cpp)
+
+target_include_directories(test_forward_splice_alloc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+target_link_libraries(test_forward_splice_alloc PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_forward_splice_alloc TEST_PREFIX "forwarder.")
+
 # The frame_router demux oracle: each msg_type routes to its registered consumer
 # with the correct inner (header-off) span; short / bad-magic / unregistered
 # frames are warn-and-dropped through an injected counting logger. The router is
