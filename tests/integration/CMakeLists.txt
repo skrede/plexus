@@ -1643,3 +1643,13 @@ target_include_directories(test_discovery_noalloc PRIVATE
 # RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
 catch_discover_tests(test_discovery_noalloc TEST_PREFIX "integration."
     PROPERTIES RUN_SERIAL TRUE)
+
+# The mixed-version oracle: an encoded peer_report frame routed through a bare frame_router carrying
+# only the pre-peer_report (v0.3.0) consumer set produces no peer and is warn-dropped whole, and a
+# genuinely-unknown type pins the default arm. Header-only frame_router + wire codecs over core.
+add_executable(test_peer_report_oracle test_peer_report_oracle.cpp)
+target_link_libraries(test_peer_report_oracle PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_peer_report_oracle TEST_PREFIX "integration.")
