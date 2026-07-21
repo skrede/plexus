@@ -95,6 +95,7 @@ public:
     using peer_storage_type        = PeerStorage;
     using topic_storage_type       = TopicStorage;
     using peer_report_emitter_type = PeerReportEmitter;
+    using forward_splice_type      = ForwardSplice;
     using session_type       = peer_session<Policy>;
     using executor_type      = typename Policy::executor_type;
     using channel_type       = typename Policy::byte_channel_type;
@@ -938,6 +939,16 @@ private:
                                                 m_coordinator.on_edge(node_name, fqn, dir, role);
                                                 relay_propagate_demand(fqn, dir, role);
                                             });
+            // The re-origination gate: forward_scope_admits (the engine matcher, reachable only here) AND
+            // self-route-aware non-local demand, then reuse refan -> fan_forwarded_buffer (hop 0 -> out_hop
+            // 1, per-relay seq, arrival-excluded) and the receive-edge (origin, arrival-relay) dedup.
+            m_messages.on_originate([this](std::uint64_t hash, const node_id &origin, std::span<const std::byte> inner, const channel_type *arrival)
+                                    {
+                                        const std::string_view fqn = m_messages.fqn_for(hash);
+                                        if(fqn.empty() || !m_splice.forward_scope_admits(fqn) || !m_messages.has_remote_demand(hash, static_cast<const void *>(arrival)))
+                                            return;
+                                        m_splice.refan(m_messages, hash, origin, 0, inner, arrival, nullptr);
+                                    });
         }
     }
 

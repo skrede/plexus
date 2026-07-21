@@ -206,11 +206,19 @@ public:
     using executor_type    = typename policy_type::executor_type;
     using engine_policy    = detail::node_engine_policy<policy_type, Transports...>;
     using engine_transport = detail::node_engine_transport<Transports...>;
+    // The engine owns forward-splice selection: a relay profile (a real peer_report_emitter) threads the
+    // real forward_splice keyed on the ENGINE policy — a mux relay's engine channel is
+    // polymorphic_byte_channel, so keying on the profile policy would mis-type against it — while a
+    // non-relay profile (the null emitter) threads the byte-identical null twin that reaches no
+    // forwarding-send code. The emitter pivot is the single relay-vs-leaf discriminator the profile carries.
+    using engine_forward_splice = std::conditional_t<std::is_same_v<typename detail::profile_traits<Profile>::peer_report_emitter, io::null_peer_report_emitter>,
+                                                     io::null_forward_splice, io::forward_splice<engine_policy>>;
     // Storage is threaded off the profile, never off engine_policy/muxify — muxify re-exports only
     // the mechanism members, so reading storage through it silently reverts to the heap twins.
     using engine_type      = io::routing_engine<engine_policy, engine_transport, std::chrono::steady_clock, typename detail::profile_traits<Profile>::peer_storage,
                                                 typename detail::profile_traits<Profile>::topic_storage, typename detail::profile_traits<Profile>::liveliness_storage,
-                                                typename detail::profile_traits<Profile>::graph_change_log, typename detail::profile_traits<Profile>::peer_report_emitter>;
+                                                typename detail::profile_traits<Profile>::graph_change_log, typename detail::profile_traits<Profile>::peer_report_emitter,
+                                                engine_forward_splice>;
     using engine_channel   = typename engine_type::channel_type;
     using transport_tuple  = std::tuple<Transports...>;
 

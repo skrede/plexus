@@ -109,6 +109,9 @@ public:
     {
         const auto hash = wire::fqn_topic_hash(fqn);
         m_endpoint.registry().add_subscriber(hash, fqn, channel, self_name, qos, type_id);
+        // Record the self-route by its channel POINTER (a proven registration, not the spoofable
+        // self_name tag) so the origination gate never wraps a 0x0F onto a same-node self-channel.
+        ++m_self_route_channels[static_cast<const void *>(&channel)];
         replay_if_latched(peer{channel, std::string{self_name}}, hash);
     }
 
@@ -116,6 +119,9 @@ public:
     {
         m_endpoint.registry().remove_subscriber(wire::fqn_topic_hash(fqn), channel);
         m_egress.remove(channel);
+        auto it = m_self_route_channels.find(static_cast<const void *>(&channel));
+        if(it != m_self_route_channels.end() && --it->second == 0)
+            m_self_route_channels.erase(it);
     }
 
     void remember_demand(const std::string &node_name, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt,
@@ -209,6 +215,39 @@ public:
     {
         if(m_on_forward_refan_cb)
             m_on_forward_refan_cb(hash, origin, hop, inner, arrival, owner);
+    }
+
+    // True iff a subscriber for the topic exists whose channel is NEITHER the arrival session NOR a local
+    // self-route: the non-local-demand gate the pub/sub origination fires on. A self-route is excluded by
+    // the channel pointer recorded at attach_local time, so a purely-locally-demanded topic never
+    // originates a 0x0F envelope onto its own self-channel (which decodes framed bytes as unidirectional).
+    bool has_remote_demand(std::uint64_t hash, const void *arrival) const
+    {
+        const auto *topic = m_endpoint.registry().entry_for(hash);
+        if(topic == nullptr)
+            return false;
+        for(const auto &sub : topic->subscribers)
+        {
+            const void *ch = static_cast<const void *>(&sub.channel.get());
+            if(ch != arrival && !m_self_route_channels.contains(ch))
+                return true;
+        }
+        return false;
+    }
+
+    // Relay-installed only: the seam a plain-unidirectional receive fires so the relay re-originates a
+    // directly-attached publisher's publish as a forwarded envelope (the pub/sub analogue of the
+    // call -> forward_call fallback). The engine installs the scope + non-local-demand gate; a non-relay
+    // node installs nothing, so wants_refan() short-circuits the receive path before this is reached.
+    void on_originate(plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::span<const std::byte>, const channel_type *)> hook)
+    {
+        m_on_originate_cb = std::move(hook);
+    }
+
+    void originate_forwarded(std::uint64_t hash, const node_id &origin, std::span<const std::byte> header_on_inner, const channel_type *arrival)
+    {
+        if(m_on_originate_cb)
+            m_on_originate_cb(hash, origin, header_on_inner, arrival);
     }
 
     // The by-destination relay seam a transiting request/response inner frame re-resolves through: the
@@ -756,8 +795,12 @@ private:
     detail::egress_scheduler<channel_type, Policy> m_egress;
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
+    // Self-route channel pointers recorded at attach_local, refcounted per fqn: the origination gate
+    // excludes them from non-local demand so a same-node self-route never receives a forwarded envelope.
+    std::unordered_map<const void *, std::size_t> m_self_route_channels;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
     plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)> m_on_forward_refan_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::span<const std::byte>, const channel_type *)> m_on_originate_cb;
     plexus::detail::move_only_function<bool(const node_id &, const node_id &, std::uint8_t, std::span<const std::byte>)> m_on_forward_rpc_cb;
     plexus::detail::move_only_function<void(const graph::topic_edge &)> m_on_topic_edge_cb;
     plexus::detail::move_only_function<void(const node_id &, const wire::peer_report &)> m_on_peer_report_cb;

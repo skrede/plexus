@@ -34,13 +34,6 @@ using relayed_capped = plexus::detail::profile_traits<plexus::relay<plexus::boun
 static_assert(std::is_same_v<relayed::peer_report_emitter, plexus::io::peer_report_emitter>);
 static_assert(std::is_same_v<relayed_capped::peer_report_emitter, plexus::io::peer_report_emitter>);
 
-// The forwarding-send splice threads the same twin: a non-relay profile carries the members-less null
-// splice (zero forwarding-send code), and relay<> is the single spelling that selects the real one.
-static_assert(std::is_same_v<plain::forward_splice, plexus::io::null_forward_splice>);
-static_assert(std::is_same_v<capped::forward_splice, plexus::io::null_forward_splice>);
-static_assert(std::is_same_v<relayed::forward_splice, plexus::io::forward_splice<policy>>);
-static_assert(std::is_same_v<relayed_capped::forward_splice, plexus::io::forward_splice<policy>>);
-
 // relay<> overrides ONLY the emitter: every other alias is the wrapped profile's, so relay<bounded<>>
 // keeps the fixed twins and relay<policy> keeps the heap twins.
 static_assert(std::is_same_v<relayed::policy, plain::policy>);
@@ -59,6 +52,13 @@ using relay_node = plexus::node<plexus::relay<policy>, transport>;
 using plain_node = plexus::node<policy, transport>;
 static_assert(std::is_same_v<relay_node::engine_type::peer_report_emitter_type, plexus::io::peer_report_emitter>);
 static_assert(std::is_same_v<plain_node::engine_type::peer_report_emitter_type, plexus::io::null_peer_report_emitter>);
+
+// The forwarding-send splice is no longer a profile trait: the engine selects it off the emitter pivot,
+// keyed on the ENGINE policy. A relay node's engine carries the wants_refan()-capable real splice; a
+// non-relay node's engine carries the members-less null twin (zero forwarding-send code). For a
+// single-transport node the engine policy is the profile policy, so the real splice is forward_splice<policy>.
+static_assert(std::is_same_v<relay_node::engine_type::forward_splice_type, plexus::io::forward_splice<policy>>);
+static_assert(std::is_same_v<plain_node::engine_type::forward_splice_type, plexus::io::null_forward_splice>);
 
 }
 

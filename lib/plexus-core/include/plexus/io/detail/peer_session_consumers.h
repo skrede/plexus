@@ -6,6 +6,7 @@
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_forward.h"
 #include "plexus/io/detail/peer_session_complete.h"
+#include "plexus/io/detail/peer_session_originate.h"
 #include "plexus/io/detail/peer_report_consumers.h"
 
 #include "plexus/io/security/attach_facts.h"
@@ -136,7 +137,14 @@ void register_session_consumers(Session &s)
                     s.m_messages.fetch_latched(s.m_msg_peer, req->topic_hash, req->max_samples);
             });
     s.m_router.on_subscribe_response([&s](std::span<const std::byte> inner) { on_subscribe_response_received(s, inner); });
-    s.m_router.on_unidirectional([&s](const wire::frame_header &hdr, std::span<const std::byte> inner) { deliver_session_data(s, hdr, inner); });
+    // The plain unidirectional receive: deliver locally, then (relay-only) re-originate as a forwarded
+    // envelope so a directly-attached publisher's publish transits onward to remote subscribers.
+    s.m_router.on_unidirectional(
+            [&s](const wire::frame_header &hdr, std::span<const std::byte> inner)
+            {
+                deliver_session_data(s, hdr, inner);
+                originate_if_pubsub(s, hdr, inner);
+            });
     s.m_router.on_rpc_request([&s](std::span<const std::byte> inner) { s.m_procedures.deliver_request(s.m_rpc_peer, inner, s.m_session_id); });
     s.m_router.on_rpc_response([&s](std::span<const std::byte> inner) { s.m_procedures.deliver_response(s.m_rpc_peer, inner); });
     // A heartbeat stamps this pinned peer's last-seen only — presence, never a topic deadline.
