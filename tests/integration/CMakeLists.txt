@@ -1237,6 +1237,26 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_serial_resync TEST_PREFIX "integration.")
     endif()
 
+    # The control-plane acceptance gate over the openpty serial link: a consumer node enumerates a
+    # serial-attached origin THROUGH a relay end-to-end, host-side, before hardware. The origin's
+    # declaration folds over the real serial wire into the relay's topic table; the relay lifts the
+    # handshake-proven identity + topics and emits a peer_report (real emitter + wire codec) the
+    # consumer ingests and surfaces AS relayed, then retires on a kill-origin withdrawal with no
+    # identity churn. Loops the scenario in-body; the ctest invocation is re-run >=3 process runs.
+    # Links util for openpty(3) and inproc for the consumer node — POSIX-only, excluded on Windows.
+    if(NOT WIN32)
+    add_executable(test_relay_serial_e2e test_relay_serial_e2e.cpp)
+    target_link_libraries(test_relay_serial_e2e PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    catch_discover_tests(test_relay_serial_e2e TEST_PREFIX "integration.")
+    endif()
+
     # The saturating-publisher memory-bound gate: a producer outrunning a never-reading
     # peer drives each stream channel's bounded write queue to its cap and no further — the
     # byte budget is the structural memory bound. Looped per tcp/unix transport; re-run >=3
