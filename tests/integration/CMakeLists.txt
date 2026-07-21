@@ -1684,3 +1684,14 @@ target_link_libraries(test_peer_report_oracle PRIVATE
     plexus::wire
     Catch2::Catch2WithMain)
 catch_discover_tests(test_peer_report_oracle TEST_PREFIX "integration.")
+
+# The mixed-version oracle for the forwarded verb: an encoded forwarded frame routed through a bare
+# frame_router carrying only the pre-forwarded (v0.3.0) consumer set delivers nothing and is
+# warn-dropped whole, while installing a forwarded consumer proves the dispatch arm fires. Header-only
+# frame_router + wire codecs over core.
+add_executable(test_forwarded_frame_oracle test_forwarded_frame_oracle.cpp)
+target_link_libraries(test_forwarded_frame_oracle PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_forwarded_frame_oracle TEST_PREFIX "integration.")

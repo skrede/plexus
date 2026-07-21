@@ -37,7 +37,8 @@ enum class msg_type : uint8_t
     subscribe_response = 0x0B,
     heartbeat          = 0x0C,
     declare            = 0x0D,
-    peer_report        = 0x0E
+    peer_report        = 0x0E,
+    forwarded          = 0x0F
 };
 
 enum class endpoint_source_type : uint8_t

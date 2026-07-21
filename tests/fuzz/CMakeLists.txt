@@ -40,6 +40,11 @@ target_link_libraries(fuzz_announcement_frame PRIVATE plexus::core)
 plexus_add_fuzz_target(fuzz_peer_report_frame)
 target_link_libraries(fuzz_peer_report_frame PRIVATE plexus::core)
 
+# The forwarded_frame decoder's header reaches plexus/node_id.h in plexus::core, so this harness
+# links core on top of the plexus::wire blast radius.
+plexus_add_fuzz_target(fuzz_forwarded_frame)
+target_link_libraries(fuzz_forwarded_frame PRIVATE plexus::core)
+
 # The datagram reassembler harness drives the header-only reassembler in the
 # plexus::datagram family instantiated against the plexus::inproc executor/timer,
 # beyond the plexus::wire blast radius the other harnesses share -- so it links those

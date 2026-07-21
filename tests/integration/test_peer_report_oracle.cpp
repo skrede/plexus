@@ -7,7 +7,7 @@
 // v0.3.0-shaped behavior: a router with no peer_report consumer registered. A 0x0E frame therefore
 // fires no consumer and is warn-dropped whole (at the shipped default arm before the dispatch arm
 // exists; as an unregistered-consumer drop after), producing no peer and leaving the session
-// healthy. A genuinely-unknown type (0x0F) permanently pins the default warn-drop arm. The magic
+// healthy. A genuinely-unknown type (0x7F) permanently pins the default warn-drop arm. The magic
 // gate is proven directly: decode_announcement over the same bytes is nullopt.
 
 #include "plexus/io/frame_router.h"
@@ -138,9 +138,10 @@ TEST_CASE("peer_report oracle: a genuinely-unknown type warn-drops at the defaul
     fired_set fired;
     register_v0_3_0_consumers(router, fired);
 
-    // 0x0F has no case this phase, so it reaches the shipped default: — a permanent pin on the
-    // unknown-verb warn-drop, durable independent of 0x0E's now-handled status.
-    const auto unknown = static_cast<wire::msg_type>(0x0F);
+    // 0x7F has no assigned verb, so it reaches the shipped default: — a permanent pin on the
+    // unknown-verb warn-drop, held far from the assignment frontier and durable independent of the
+    // now-handled status of any lower value.
+    const auto unknown = static_cast<wire::msg_type>(0x7F);
     const auto drops_before = sink.drops;
     router.route(frame_of(unknown, std::vector<std::byte>{}));
 

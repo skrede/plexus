@@ -94,6 +94,15 @@ target_link_libraries(test_peer_report_codec PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_peer_report_codec TEST_PREFIX "wire.")
 
+# The forwarded-frame codec oracle. Its header reaches plexus/node_id.h in plexus::core, so it
+# links core alongside the header-only plexus::wire.
+add_executable(test_forwarded_frame_codec test_forwarded_frame_codec.cpp)
+target_link_libraries(test_forwarded_frame_codec PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_forwarded_frame_codec TEST_PREFIX "wire.")
+
 # The stream_inbound detection oracle drives a virtual-clock inproc timer, so this
 # TU additionally links plexus::inproc (the other wire targets do not) — mirroring
 # how the integration inproc targets pull in the manual-clock executor/timer. The
