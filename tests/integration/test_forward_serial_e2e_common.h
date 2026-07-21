@@ -105,15 +105,15 @@ struct cold_cluster
     node_id consumer_id{id_of(0x03)};
 
     std::optional<origin_node> origin;
-    relay_node relay;
+    std::optional<relay_node> relay;
     consumer_node consumer;
 
     std::uint16_t tcp_port{0};
 
     cold_cluster()
-            : relay{io, rdisc, relay_id, relay_serial, relay_tcp, named("relay")}
-            , consumer{io, cdisc, consumer_id, consumer_tcp, named("consumer")}
+            : consumer{io, cdisc, consumer_id, consumer_tcp, named("consumer")}
     {
+        relay.emplace(io, rdisc, relay_id, relay_serial, relay_tcp, named("relay"));
         origin.emplace(io, odisc, origin_id, origin_serial, named("origin"));
     }
 
@@ -144,20 +144,20 @@ struct cold_cluster
     void bring_up_serial()
     {
         ::close(pty.take_slave());
-        relay.dial({"serial", slave_device + "@115200"});
+        relay->dial({"serial", slave_device + "@115200"});
         serial_fixture::settle(io, std::chrono::milliseconds(50));
         origin->router().registry().accept_session(adopt_channel(io, pty.take_master()));
-        pump([&] { return connected(relay, origin_id) && connected(*origin, relay_id); });
+        pump([&] { return connected(*relay, origin_id) && connected(*origin, relay_id); });
     }
 
     // Session B: the relay listens on an ephemeral TCP port; the consumer dials the resolved port. The
     // relay lifts the origin as an origin and replays its peer_report onto the fresh session.
     void bring_up_tcp()
     {
-        relay.listen({"tcp", "127.0.0.1:0"});
+        relay->listen({"tcp", "127.0.0.1:0"});
         tcp_port = relay_tcp.port();
         consumer.dial({"tcp", "127.0.0.1:" + std::to_string(tcp_port)});
-        pump([&] { return connected(consumer, relay_id) && connected(relay, consumer_id); });
+        pump([&] { return connected(consumer, relay_id) && connected(*relay, consumer_id); });
     }
 
     // Drain the origin's pending executor work before dropping it, so no posted callback outlives the
@@ -166,6 +166,16 @@ struct cold_cluster
     {
         serial_fixture::settle(io, std::chrono::milliseconds(20));
         origin.reset();
+    }
+
+    // Destroy the WHOLE relay node — both its sessions — draining pending work first. Unlike a
+    // serial-leg-down (which leaves the relay alive to withdraw the reported origin, retiring it to
+    // no_provider), tearing the relay session down leaves the origin's via-relay candidate stale in
+    // the consumer's route table, so a forwarded re-issue finds no live via-session and drops.
+    void kill_relay()
+    {
+        serial_fixture::settle(io, std::chrono::milliseconds(20));
+        relay.reset();
     }
 
     // The borrowed-executor contract: drain before the nodes are destroyed so no in-flight callback

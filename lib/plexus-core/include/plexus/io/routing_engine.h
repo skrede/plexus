@@ -261,14 +261,15 @@ public:
             session->subscribe(fqn, qos, type_id, type_name);
     }
 
-    void call(const node_id &id, std::string_view fqn, std::span<const std::byte> param, typename procedure_forwarder<Policy>::on_response_fn on_response)
+    void call(const node_id &id, std::string_view fqn, std::span<const std::byte> param, typename procedure_forwarder<Policy>::on_response_fn on_response,
+              std::optional<std::chrono::nanoseconds> deadline = std::nullopt)
     {
         reach(id);
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
-            m_procedures.call(session->rpc_peer(), fqn, param, std::move(on_response), std::nullopt, session->session_id());
+            m_procedures.call(session->rpc_peer(), fqn, param, std::move(on_response), deadline, session->session_id());
         else
-            m_procedures.forward_call(id, fqn, param, std::move(on_response));
+            m_procedures.forward_call(id, fqn, param, std::move(on_response), deadline);
     }
 
     void unsubscribe(const node_id &id, std::string_view fqn)
@@ -889,16 +890,22 @@ private:
             m_messages.send_peer_report(s.msg_peer().channel, wire::encode_peer_report(pr));
     }
 
-    // The identity re-resolution primitive (D95.2): route_select over the destination's candidates, then
+    // The identity re-resolution primitive: route_select over the destination's candidates, then
     // re-wrap the header-on rpc frame in a forwarded envelope (origin preserved, destination re-stamped,
-    // hop+1) onto the chosen via-session. Stateless — no per-correlation table. Empty candidates or a via
-    // with no live session drop-with-count and return false; the caller's deadline then fires the timeout.
+    // hop+1) onto the chosen via-session. Stateless — no per-correlation table. With no awareness
+    // candidate a live direct session to the destination still carries the frame (a peer reached by a
+    // raw dial/accept holds a session but no candidate row); only a destination with neither a candidate
+    // nor a live session drop-with-count and returns false, and the caller's deadline fires the timeout.
     bool forward_rpc(const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> inner_frame)
     {
         const auto cands      = m_known_peers.candidates(destination);
         const std::size_t idx = route_select(cands);
         if(idx == route_select_npos)
+        {
+            if(session_type *direct = session_by_identity(destination))
+                return send_forwarded_rpc(*direct, origin, destination, hop, inner_frame), true;
             return (void)++m_forward_rpc_dropped, false;
+        }
         const route_candidate &c = cands[idx];
         session_type *s          = session_by_identity(c.is_direct() ? destination : *c.reach.via);
         if(s == nullptr)

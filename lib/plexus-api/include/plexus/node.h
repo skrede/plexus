@@ -45,6 +45,7 @@
 #include "plexus/detail/topic_sweep.h"
 #include "plexus/detail/address_parse.h"
 #include "plexus/detail/node_self_route.h"
+#include "plexus/detail/call_origination.h"
 #include "plexus/detail/node_self_carrier.h"
 #include "plexus/detail/node_upgrade_wiring.h"
 #include "plexus/detail/function_traits.h"
@@ -633,21 +634,24 @@ private:
         m.geometry_from(static_cast<const void *>(nullptr));
     };
 
-    // Routes to the first connection-order peer with a complete session. With NO connected
-    // provider the completion is POSTED with an absent status (the out-of-band no_provider
-    // verdict, never a fabricated rpc_status) — it never hangs, buffers, or queues.
+    // Routes to the first connection-order peer with a complete session and issues the plain direct
+    // call. The consumer has no served-fqn signal to pre-decide direct-vs-forward, so resolution is
+    // EX-POST: only when that direct answer is rpc_status::no_handler does the wrapper resolve a
+    // reported via-relay origin and re-issue the request ONCE as a forwarded call. With NO connected
+    // provider the completion is POSTED with an absent status (the out-of-band no_provider verdict,
+    // never a fabricated rpc_status) — it never hangs, buffers, or queues. A pure-direct node (no
+    // non-direct candidate) installs the byte-identical thin adapter and pays none of the fallback work.
     template<typename OnReply>
     void call_seam(std::string_view fqn, std::span<const std::byte> param, OnReply on_reply, std::optional<std::chrono::nanoseconds> deadline)
     {
+        const bool with_fallback = detail::first_via_relay_origin(m_engine, m_id).has_value();
         for(const auto &peer : m_known_peers)
         {
             auto *session = m_engine.registry().session_for(peer);
             if(session == nullptr || !session->is_complete())
                 continue;
             const std::optional<publisher_gid> provider{publisher_gid{peer, 0}};
-            m_engine.procedures().call(
-                    session->rpc_peer(), fqn, param, [on_reply = std::move(on_reply), provider](wire::rpc_status status, std::span<const std::byte> bytes) mutable
-                    { on_reply(status, bytes, provider); }, deadline, session->session_id());
+            detail::issue_direct_call(m_engine, m_id, *session, fqn, param, std::move(on_reply), provider, deadline, with_fallback);
             return;
         }
         policy_type::post(m_executor, [on_reply = std::move(on_reply)]() mutable { on_reply(std::nullopt, {}, std::nullopt); });

@@ -1269,6 +1269,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain
         util)
     catch_discover_tests(test_forward_serial_e2e TEST_PREFIX "integration.")
+
+    # The consumer-side origination robustness arms over the same cold relay fixture: a dead relay
+    # session fails a caller cleanly as a bounded timeout with a forward-drop count, and a single call
+    # executes the origin's served handler exactly once (no direct+forwarded double-fire).
+    add_executable(test_forward_reqres_robustness test_forward_reqres_robustness.cpp)
+    target_link_libraries(test_forward_reqres_robustness PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    catch_discover_tests(test_forward_reqres_robustness TEST_PREFIX "integration.")
     endif()
 
     # The splice-time envelope gate: an oversized forwarded frame drops-with-count over a narrow

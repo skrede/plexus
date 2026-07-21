@@ -64,17 +64,17 @@ void run_pubsub_once(std::vector<std::uint64_t> &epochs)
 {
     cold_cluster cluster;
     cluster.bring_up_serial();
-    REQUIRE(connected(cluster.relay, cluster.origin_id));
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
 
     std::optional<plexus::publisher<>> pub;
     pub.emplace(*cluster.origin, k_topic, plexus::topic_qos{}, /*emit_source_identity=*/true);
-    cluster.pump([&] { return cluster.relay.count_publishers(std::string{k_topic}) >= 1; });
-    REQUIRE(cluster.relay.count_publishers(std::string{k_topic}) >= 1);
+    cluster.pump([&] { return cluster.relay->count_publishers(std::string{k_topic}) >= 1; });
+    REQUIRE(cluster.relay->count_publishers(std::string{k_topic}) >= 1);
 
     cluster.bring_up_tcp();
     REQUIRE(connected(cluster.consumer, cluster.relay_id));
 
-    const std::uint64_t epoch = session_epoch(cluster.relay, cluster.consumer_id);
+    const std::uint64_t epoch = session_epoch(*cluster.relay, cluster.consumer_id);
     REQUIRE(epoch != 0);
     epochs.push_back(epoch);
 
@@ -122,7 +122,7 @@ void run_reqres_once()
 {
     cold_cluster cluster;
     cluster.bring_up_serial();
-    REQUIRE(connected(cluster.relay, cluster.origin_id));
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
 
     std::string served;
     plexus::procedure<> echo{*cluster.origin, k_procedure,
@@ -131,7 +131,7 @@ void run_reqres_once()
                                  served = to_string(param);
                                  reply(plexus::wire::rpc_status::success, param);
                              }};
-    cluster.pump([&] { return cluster.relay.count_publishers(std::string{k_procedure}) >= 0; });
+    cluster.pump([&] { return cluster.relay->count_publishers(std::string{k_procedure}) >= 0; });
 
     cluster.bring_up_tcp();
     REQUIRE(connected(cluster.consumer, cluster.relay_id));
@@ -168,15 +168,8 @@ TEST_CASE("pub/sub and control transit a serial+TCP relay end-to-end with the or
     REQUIRE(epochs.size() == static_cast<std::size_t>(k_runs));
 }
 
-// KNOWN-FAILING pending acceptance. The data-plane request/response leg does NOT yet transit at the
-// node facade: the public caller resolves only a DIRECTLY-connected provider and issues a plain
-// rpc_request to it, so a consumer with only a relay session calls the relay, which serves no such
-// procedure and replies no_handler — it never promotes the plain request into a forwarded call. Relayed
-// req/res exists at the routing_engine boundary (call -> forward_call over a via-relay candidate) but is
-// not wired through the node's caller. Marked [!shouldfail] so the suite stays green while the required
-// success assertions remain visible; the mark trips the day the node-caller relayed path lands.
 TEST_CASE("request/response transits a serial+TCP relay end-to-end returning success, over cold runs",
-          "[integration][serial][relay][e2e][reqres][!shouldfail]")
+          "[integration][serial][relay][e2e][reqres]")
 {
     for(int run = 0; run < k_runs; ++run)
         run_reqres_once();
