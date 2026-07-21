@@ -102,6 +102,23 @@ target_link_libraries(test_procedure_forwarder_detach_reentry PRIVATE
 
 catch_discover_tests(test_procedure_forwarder_detach_reentry TEST_PREFIX "forwarder.")
 
+# The deferred-reply routing oracle: two interleaved forwarded requests whose handlers defer, then answer
+# in order, each re-address the forwarded reply to their OWN requester origin/correlation — the per-dispatch
+# reply-context binding, not a shared single slot. Links the core, wire, and inproc layers; selected by the
+# `forwarder.` ctest prefix.
+add_executable(test_procedure_forwarder_deferred_reply test_procedure_forwarder_deferred_reply.cpp)
+
+target_include_directories(test_procedure_forwarder_deferred_reply PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+target_link_libraries(test_procedure_forwarder_deferred_reply PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_procedure_forwarder_deferred_reply TEST_PREFIX "forwarder.")
+
 # The latch behavioral oracle: the registry-seam qos assertion, replay of a value
 # published with ZERO subscribers, the non-latched no-replay negative, empty
 # retention, depth=1 last-value-only, replay-targets-only-the-new-peer, retention

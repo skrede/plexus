@@ -70,11 +70,8 @@ public:
             : m_logger(logger)
             , m_executor(executor)
             , m_max_outstanding(max_outstanding)
-            , m_active_channel{nullptr}
-            , m_active_session_id{0}
             , m_next_correlation_id{1}
             , m_default_deadline(default_deadline)
-            , m_active_req_hdr{}
     {
     }
 
@@ -223,22 +220,16 @@ public:
         if(!decoded)
             return drop("plexus: forwarder rpc_request decode_failed");
 
-        const auto req_hdr       = decoded->header;
-        m_active_channel         = &p.channel;
-        m_active_req_hdr         = req_hdr;
-        m_active_session_id      = session_id;
-        m_active_reply_forwarded = reply_origin != nullptr;
-        if(reply_origin)
-            m_active_reply_origin = *reply_origin;
+        const reply_context ctx{&p.channel, decoded->header, session_id, reply_origin != nullptr, reply_origin ? *reply_origin : node_id{}};
 
-        auto hash_it = m_hash_to_fqn.find(req_hdr.topic_hash);
+        auto hash_it = m_hash_to_fqn.find(ctx.req_hdr.topic_hash);
         if(hash_it == m_hash_to_fqn.end())
         {
-            auto status = m_endpoint.registry().fqn_for(req_hdr.topic_hash).empty() ? wire::rpc_status::no_handler : wire::rpc_status::topic_not_found;
-            return emit_reply(status, {});
+            auto status = m_endpoint.registry().fqn_for(ctx.req_hdr.topic_hash).empty() ? wire::rpc_status::no_handler : wire::rpc_status::topic_not_found;
+            return emit_reply(ctx, status, {});
         }
-        ensure_reply_ready();
-        detail::emit_rpc_serve(*this, hash_it->second, req_hdr.correlation_id);
+        bind_reply(ctx);
+        detail::emit_rpc_serve(*this, hash_it->second, ctx.req_hdr.correlation_id);
         m_providers.find(hash_it->second)->second(decoded->param_data, m_reply);
     }
 
@@ -286,21 +277,28 @@ private:
         std::unique_ptr<timer_type> timer;
     };
 
+    // The reply's destination bound per request, captured by value into the reply closure so a handler
+    // that defers its reply routes to its OWN requester — not whichever request last ran. forwarded picks
+    // the origin-addressed forwarded reply over the direct reply on the arrival channel.
+    struct reply_context
+    {
+        channel_type *channel;
+        wire::bidirectional_header req_hdr;
+        std::uint64_t session_id;
+        bool forwarded;
+        node_id origin;
+    };
+
     reply_fn m_reply;
     log::logger &m_logger;
     endpoint_type m_endpoint;
     executor_type m_executor;
     std::size_t m_max_outstanding;
-    channel_type *m_active_channel;
-    std::uint64_t m_active_session_id;
     std::uint64_t m_next_correlation_id;
     std::vector<std::byte> m_req_scratch;
     std::vector<std::byte> m_resp_scratch;
     std::vector<std::byte> m_frame_scratch;
     std::chrono::nanoseconds m_default_deadline;
-    wire::bidirectional_header m_active_req_hdr;
-    bool m_active_reply_forwarded{false};
-    node_id m_active_reply_origin{};
     forward_rpc_fn m_forward_rpc;
     std::unordered_map<std::string, handler_fn> m_providers;
     std::unordered_map<std::uint64_t, std::string> m_hash_to_fqn;
@@ -367,37 +365,36 @@ private:
         wire::encode_frame_into(m_frame_scratch, fhdr, inner);
     }
 
-    // Build the reused reply once: it closes over the staged m_active_* context, so a steady-state
-    // dispatch reuses it with no per-dispatch type-erased allocation.
-    void ensure_reply_ready()
+    // Bind the reply for THIS dispatch: the closure captures ctx by value (it fits the function's inline
+    // buffer, so a steady-state synchronous reply still allocates nothing), and a handler that moves the
+    // reply out to answer later carries its own requester with it — no shared single-slot state to clobber.
+    void bind_reply(const reply_context &ctx)
     {
-        if(m_reply)
-            return;
-        m_reply = [this](wire::rpc_status status, std::span<const std::byte> return_data) { emit_reply(status, return_data); };
+        m_reply = [this, ctx](wire::rpc_status status, std::span<const std::byte> return_data) { emit_reply(ctx, status, return_data); };
     }
 
     // A reply to a forwarded request routes back by the requester origin (re-resolved via route_select at
     // each hop); a reply to a direct request rides straight back on the arrival channel.
-    void emit_reply(wire::rpc_status status, std::span<const std::byte> return_data)
+    void emit_reply(const reply_context &ctx, wire::rpc_status status, std::span<const std::byte> return_data)
     {
-        if(m_active_reply_forwarded && m_forward_rpc)
-            return emit_forwarded_reply(status, return_data);
-        detail::reply_status(*this, *m_active_channel, m_active_req_hdr, status, return_data, m_active_session_id);
+        if(ctx.forwarded && m_forward_rpc)
+            return emit_forwarded_reply(ctx, status, return_data);
+        detail::reply_status(*this, *ctx.channel, ctx.req_hdr, status, return_data, ctx.session_id);
     }
 
     // Echo the correlation_id and address the reply to the requester origin — the relay holds no
     // correlation, so the reply must carry its own destination for each hop to re-resolve it.
-    void emit_forwarded_reply(wire::rpc_status status, std::span<const std::byte> return_data)
+    void emit_forwarded_reply(const reply_context &ctx, wire::rpc_status status, std::span<const std::byte> return_data)
     {
         wire::bidirectional_header resp_hdr{.source         = wire::endpoint_source_type::procedure,
                                             .sequence       = m_endpoint.next_sequence(),
-                                            .topic_hash     = m_active_req_hdr.topic_hash,
+                                            .topic_hash     = ctx.req_hdr.topic_hash,
                                             .type_hash_1    = 0,
                                             .type_hash_2    = 0,
-                                            .correlation_id = m_active_req_hdr.correlation_id};
+                                            .correlation_id = ctx.req_hdr.correlation_id};
         wire::encode_rpc_response_into(m_resp_scratch, resp_hdr, status, return_data);
         stage_rpc_frame(wire::msg_type::rpc_response, m_resp_scratch);
-        m_forward_rpc(m_active_reply_origin, m_frame_scratch);
+        m_forward_rpc(ctx.origin, m_frame_scratch);
     }
 
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)

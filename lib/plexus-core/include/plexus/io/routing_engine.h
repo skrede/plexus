@@ -907,7 +907,9 @@ private:
             return (void)++m_forward_rpc_dropped, false;
         }
         const route_candidate &c = cands[idx];
-        session_type *s          = session_by_identity(c.is_direct() ? destination : *c.reach.via);
+        if(!c.is_direct() && !c.reach.via)
+            return (void)++m_forward_rpc_dropped, false;
+        session_type *s = session_by_identity(c.is_direct() ? destination : *c.reach.via);
         if(s == nullptr)
             return (void)++m_forward_rpc_dropped, false;
         send_forwarded_rpc(*s, origin, destination, hop, inner_frame);
@@ -916,6 +918,8 @@ private:
 
     void send_forwarded_rpc(session_type &s, const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> inner_frame)
     {
+        // Saturating so a max hop_budget config cannot wrap hop 255 -> 0 and reset the loop guard; the
+        // gate rejects hop past the budget first, so the ceiling arm is normally unreached (defense only).
         const std::uint8_t out_hop = static_cast<std::uint8_t>(hop < 0xFF ? hop + 1 : hop);
         const std::size_t inner_n  = inner_frame.size() < wire::detail::k_forwarded_inner_max ? inner_frame.size() : wire::detail::k_forwarded_inner_max;
         m_forward_rpc_scratch.resize(wire::header_size + wire::detail::forwarded_frame_preamble_size + sizeof(std::uint32_t) + inner_n);
