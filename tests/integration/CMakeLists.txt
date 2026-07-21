@@ -1257,6 +1257,23 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_relay_serial_e2e TEST_PREFIX "integration.")
     endif()
 
+    # The splice-time envelope gate: an oversized forwarded frame drops-with-count over a narrow
+    # serial leg (openpty) rather than tearing the session down, and a multi-fragment UDP message
+    # reassembles-then-refragments byte-for-byte across an asymmetric-budget relay. POSIX-only.
+    if(NOT WIN32)
+    add_executable(test_forward_envelope_gate test_forward_envelope_gate.cpp)
+    target_link_libraries(test_forward_envelope_gate PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    target_include_directories(test_forward_envelope_gate PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_forward_envelope_gate TEST_PREFIX "integration.")
+    endif()
+
     # The saturating-publisher memory-bound gate: a producer outrunning a never-reading
     # peer drives each stream channel's bounded write queue to its cap and no further — the
     # byte budget is the structural memory bound. Looped per tcp/unix transport; re-run >=3
@@ -1729,3 +1746,13 @@ target_link_libraries(test_forward_splice_no_hol PRIVATE
 target_include_directories(test_forward_splice_no_hol PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_forward_splice_no_hol TEST_PREFIX "integration.")
+
+add_executable(test_forward_demand_propagation test_forward_demand_propagation.cpp)
+target_link_libraries(test_forward_demand_propagation PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_forward_demand_propagation PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_forward_demand_propagation TEST_PREFIX "integration.")

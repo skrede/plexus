@@ -27,6 +27,7 @@
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/history_ring.h"
 #include "plexus/io/detail/forward_gate.h"
+#include "plexus/io/detail/forward_splice.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/detail/forwarder_fanout.h"
 
@@ -178,6 +179,13 @@ public:
             const wire_bytes<> &framed = build_once();
             if(framed.empty()) // pool exhaustion: counted at the splice pool, never enqueue an empty owner
                 continue;
+            // Splice-time envelope gate: a frame past the outbound leg's ceiling drops-with-count here
+            // rather than being sent and tearing the narrow session down (unprobed channel = unlimited).
+            if(framed.size() > detail::channel_frame_ceiling(sub.channel.get()))
+            {
+                shed(hash, band, detail::drop_cause::splice_oversize, sub.tier);
+                continue;
+            }
             const detail::drop_cause cause = m_egress.enqueue(sub.channel.get(), band, qos.congestion, framed);
             if(cause != detail::drop_cause::none)
                 shed(hash, band, cause, sub.tier);

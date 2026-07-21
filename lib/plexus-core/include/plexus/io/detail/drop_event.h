@@ -27,6 +27,7 @@ enum class drop_cause : std::uint8_t
     unroutable,
     closed_unsent,
     splice_exhausted,
+    splice_oversize,
 };
 
 struct drop_event

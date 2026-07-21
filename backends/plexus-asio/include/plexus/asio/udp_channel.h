@@ -264,6 +264,14 @@ public:
         return m_backpressure.capacity();
     }
 
+    // The per-MESSAGE size ceiling (the send-side oversize-reject bound and the receive
+    // reassembler's per-message cap). The splice gates an outbound forwarded envelope against this,
+    // so a frame too large for this leg drops-with-count instead of being rejected at publish.
+    std::size_t max_frame_bytes() const noexcept
+    {
+        return m_max_message_bytes;
+    }
+
 private:
     template<typename Ch>
     friend void detail::reject_oversize(Ch &);

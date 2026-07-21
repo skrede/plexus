@@ -68,6 +68,7 @@ public:
             : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
             , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
+            , m_max_frame_bytes(cfg.max_payload_size)
     {
         wire_decorator();
     }
@@ -77,6 +78,7 @@ public:
             : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
             , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
+            , m_max_frame_bytes(cfg.max_payload_size)
     {
         wire_decorator();
         // The adopt ctor's read loop, deferred until the decorator is constructed.
@@ -121,6 +123,14 @@ public:
         return m_decorator;
     }
 
+    // The per-MESSAGE size ceiling for this leg (the inbound reassembler's max payload). The splice
+    // gates an outbound forwarded envelope against this so a frame too large for the serial leg
+    // drops-with-count rather than being sent and rejected at the peer's reassembler (a teardown).
+    std::size_t max_frame_bytes() const noexcept
+    {
+        return m_max_frame_bytes;
+    }
+
 private:
     void wire_decorator()
     {
@@ -148,6 +158,7 @@ private:
 
     stream::crc_serial_inbound m_decorator;
     std::vector<std::byte> m_read_buf;
+    std::size_t m_max_frame_bytes;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_frame_dropped_cb;
 };

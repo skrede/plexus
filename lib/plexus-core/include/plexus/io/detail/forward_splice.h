@@ -14,8 +14,11 @@
 #include "plexus/wire/forwarded_frame.h"
 
 #include <span>
+#include <limits>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
 
 namespace plexus::io {
 
@@ -43,6 +46,19 @@ struct null_forward_splice
 };
 
 namespace detail {
+
+// The outbound leg's per-message envelope ceiling: a channel that publishes max_frame_bytes() (a
+// real per-message size limit — a serial or datagram leg) gates the splice against it; a channel
+// without the probe is UNLIMITED, so the gate is inert and a single-leg / wide-leg node stays
+// byte-identical. The probe mirrors the can_poll()/scheduler_key() capability pattern.
+template<typename Channel>
+inline std::size_t channel_frame_ceiling(const Channel &ch) noexcept
+{
+    if constexpr(requires(const Channel &c) { c.max_frame_bytes(); })
+        return ch.max_frame_bytes();
+    else
+        return (std::numeric_limits<std::size_t>::max)();
+}
 
 // The outbound forwarded frame put on the wire once and addref-shared to every destination: a fresh
 // outer header (never the arrival frame's bytes, Pitfall 8) then the re-framed envelope. session_id 0
@@ -85,7 +101,22 @@ public:
     explicit forward_splice(const forward_ctx &ctx)
             : m_pool(ctx.splice_pool_slots, ctx.splice_slot_bytes)
             , m_mode(ctx.ownership)
+            , m_scope_all(ctx.scope_all)
+            , m_scope(ctx.scope)
     {
+    }
+
+    // The forward-scope gate: which topics this relay is permitted to carry. An absent scope admits
+    // every topic; a configured scope admits only topics its keyset intersects (the shipped matcher,
+    // never a second glob); a misconfigured scope that failed to compile fails closed to none.
+    bool forward_scope_admits(std::string_view fqn) const noexcept
+    {
+        if(m_scope_all)
+            return true;
+        if(!m_scope)
+            return false;
+        const auto key = match::key_pattern::make(fqn);
+        return key.has_value() && m_scope->intersects(*key);
     }
 
     // Re-fan an admitted forwarded pub/sub inner frame to the topic's actual subscribers, excluding the
@@ -129,6 +160,8 @@ private:
 
     splice_pool m_pool;
     splice_ownership m_mode;
+    bool m_scope_all;
+    std::optional<match::key_pattern> m_scope;
     std::uint16_t m_seq{0};
 };
 

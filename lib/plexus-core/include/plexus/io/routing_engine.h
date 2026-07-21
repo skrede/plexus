@@ -880,8 +880,45 @@ private:
     void install_splice_refan()
     {
         if constexpr(!std::is_same_v<ForwardSplice, null_forward_splice>)
+        {
             m_messages.on_forward_refan([this](std::uint64_t hash, const node_id &origin, std::uint8_t hop, std::span<const std::byte> inner, const channel_type *arrival,
                                                const wire::shared_bytes *owner) { m_splice.refan(m_messages, hash, origin, hop, inner, arrival, owner); });
+            m_messages.on_demand_transition([this](std::string_view node_name, std::string_view fqn, demand_transition dir, demand_role role)
+                                            {
+                                                m_coordinator.on_edge(node_name, fqn, dir, role);
+                                                relay_propagate_demand(fqn, dir, role);
+                                            });
+        }
+    }
+
+    // A downstream consumer subscribed a topic on the relay (an incoming subscribe folds as demand
+    // up on the serving side): confine the constrained leg to demanded, in-scope topics by
+    // subscribing upstream on the session of every directly-attached origin publishing the fqn. An
+    // out-of-scope topic never propagates, so it never transits the narrow leg. The relay's own
+    // upstream subscribe folds as demand up on the SUBSCRIBER side and is ignored here.
+    void relay_propagate_demand(std::string_view fqn, demand_transition dir, demand_role role)
+    {
+        if constexpr(!std::is_same_v<ForwardSplice, null_forward_splice>)
+        {
+            if(dir != demand_transition::up || role != demand_role::publisher || !m_splice.forward_scope_admits(fqn))
+                return;
+            m_registry.for_each_connected([&](const node_id &, session_type &s)
+                                          {
+                                              if(s.is_complete() && publishes_topic(s.peer_identity(), fqn))
+                                                  s.subscribe(fqn);
+                                          });
+        }
+    }
+
+    bool publishes_topic(const node_id &node, std::string_view fqn) const
+    {
+        bool found = false;
+        m_topics.for_each([&](const graph::topic_record &r)
+                          {
+                              if(!found && r.node == node && r.role == graph::topic_role::publisher && r.name == fqn)
+                                  found = true;
+                          });
+        return found;
     }
 
     // Awareness-only removal on the existing tick: forgets a peer that stopped re-announcing and was
