@@ -99,7 +99,7 @@ public:
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
-                   io::liveliness_options live = {}, io::route_options routes = {}, io::report_options report = {})
+                   io::liveliness_options live = {}, io::route_options routes = {}, io::report_options report = {}, io::forward_options forward = {})
             : m_dial_eagerly(dial_eagerly)
             , m_liveliness(live)
             , m_route_options(routes)
@@ -115,6 +115,7 @@ public:
             , m_peer_liveliness(m_liveliness)
             , m_coordinator(m_registry)
     {
+        m_messages.set_forward_options(forward);
         detail::install_routing_sinks(*this);
     }
 

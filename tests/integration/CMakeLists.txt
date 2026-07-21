@@ -1695,3 +1695,17 @@ target_link_libraries(test_forwarded_frame_oracle PRIVATE
     plexus::wire
     Catch2::Catch2WithMain)
 catch_discover_tests(test_forwarded_frame_oracle TEST_PREFIX "integration.")
+
+# The delivery-edge dedup + origin-override oracle: a forwarded unidirectional injected twice into a
+# completed session delivers exactly once with the trailer origin (not the relay peer) as the message
+# source, and a duplicated forwarded rpc_request runs its served handler exactly once. Drives a real
+# inproc session_link handshake plus inject_receive. Links the core, wire, and inproc layers.
+add_executable(test_forwarded_dedup_delivery test_forwarded_dedup_delivery.cpp)
+target_link_libraries(test_forwarded_dedup_delivery PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_forwarded_dedup_delivery PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_forwarded_dedup_delivery TEST_PREFIX "integration.")

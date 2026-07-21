@@ -38,6 +38,19 @@ target_link_libraries(test_forward_splice_alloc PRIVATE
 
 catch_discover_tests(test_forward_splice_alloc TEST_PREFIX "forwarder.")
 
+# The pure forward-admission chain oracle: the self/loop, hop-budget, and per-(origin, arrival-relay)
+# dedup gate returns a distinct outcome for admit/loop/hop/duplicate/too_old, mutates no window on a
+# reject, and keeps two relays' independent seq streams for one origin from colliding. A pure detail
+# header (no I/O, no backend) — needs only the core + wire layers; selected by the `forwarder.` prefix.
+add_executable(test_forward_gate test_forward_gate.cpp)
+
+target_link_libraries(test_forward_gate PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_forward_gate TEST_PREFIX "forwarder.")
+
 # The frame_router demux oracle: each msg_type routes to its registered consumer
 # with the correct inner (header-off) span; short / bad-magic / unregistered
 # frames are warn-and-dropped through an injected counting logger. The router is

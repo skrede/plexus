@@ -4,6 +4,7 @@
 #include "plexus/io/subscribe_qos_wire.h"
 
 #include "plexus/io/detail/peer_session_deliver.h"
+#include "plexus/io/detail/peer_session_forward.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_report_consumers.h"
 
@@ -117,6 +118,16 @@ void register_session_consumers(Session &s)
             {
                 if(s.is_complete())
                     ingest_peer_report_frame(s.m_messages, s.m_fsm.last_seen_peer_id(), inner);
+            });
+    // The always-compiled forwarded receive half: a complete session's 0x0F frame runs the pure
+    // admission gate (self/loop, hop, (origin, arrival-relay) dedup) and, on admit, delivers the inner
+    // frame with the delivery-edge origin override. The SENDING relay is attributed as the proven
+    // identity for gate bookkeeping, distinct from the trailer origin delivered as the message source.
+    s.m_router.on_forwarded(
+            [&s](std::span<const std::byte> inner)
+            {
+                if(s.is_complete())
+                    deliver_forwarded_frame(s, s.m_fsm.last_seen_peer_id(), inner);
             });
     s.m_router.on_fetch_latched(
             [&s](std::span<const std::byte> inner)

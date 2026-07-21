@@ -17,6 +17,7 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
+#include "plexus/io/forward_options.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/observation_events.h"
 #include "plexus/io/subscribe_qos_wire.h"
@@ -25,6 +26,7 @@
 
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/history_ring.h"
+#include "plexus/io/detail/forward_gate.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/detail/forwarder_fanout.h"
 
@@ -36,6 +38,7 @@
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
 #include "plexus/wire/peer_report.h"
+#include "plexus/wire/forwarded_frame.h"
 #include "plexus/wire/topic_declaration.h"
 
 #include <span>
@@ -432,6 +435,19 @@ public:
             m_on_peer_report_cb(reporter, pr);
     }
 
+    // The node-wide forwarded-frame admission verdict, run against the shared per-(origin, arrival-relay)
+    // dedup state so a duplicate never double-delivers regardless of which session carried it. Pure — the
+    // gate mutates the dedup window only on an admit; the caller delivers only on admit.
+    detail::forward_admission admit_forwarded(const wire::forwarded_frame &ff, const node_id &local_id, const node_id &arrival_relay)
+    {
+        return detail::forward_gate(ff, local_id, arrival_relay, m_forward_ctx.hop_budget, m_forward_ctx.dedup_depth, m_forward_dedup);
+    }
+
+    void set_forward_options(const forward_options &opts)
+    {
+        m_forward_ctx = make_forward_ctx(opts);
+    }
+
     void fetch_latched(const peer &p, std::uint64_t topic_hash, std::uint32_t max_samples)
     {
         auto it = m_retained.find(topic_hash);
@@ -658,6 +674,8 @@ private:
 
     log::logger &m_logger;
     std::size_t m_global_default;
+    forward_ctx m_forward_ctx;
+    detail::forward_dedup_table m_forward_dedup;
     endpoint_type m_endpoint;
     std::vector<remembered_demand> m_empty;
     std::vector<wire::topic_declaration> m_local_declarations;
