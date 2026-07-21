@@ -1255,6 +1255,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain
         util)
     catch_discover_tests(test_relay_serial_e2e TEST_PREFIX "integration.")
+
+    # The two-live-transport acceptance: a relay owning a serial AND a TCP session carries control and
+    # data across the second live session end-to-end (pub/sub + request/response), driven through the
+    # public node facade over a real openpty serial link and a real TCP loopback. POSIX-only (openpty).
+    add_executable(test_forward_serial_e2e test_forward_serial_e2e.cpp)
+    target_link_libraries(test_forward_serial_e2e PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    catch_discover_tests(test_forward_serial_e2e TEST_PREFIX "integration.")
     endif()
 
     # The splice-time envelope gate: an oversized forwarded frame drops-with-count over a narrow

@@ -1,30 +1,20 @@
-// The control-plane acceptance gate, host-side over a real openpty serial link: a consumer node
-// enumerates a serial-attached origin THROUGH a relay, end-to-end, before hardware. The origin's
-// declaration folds over the REAL serial wire into the relay's topic table; the relay lifts the
-// handshake-proven identity + topics and emits a peer_report (real emitter + wire codec, both ways)
-// the consumer ingests and surfaces AS relayed beside an unblended direct peer. Killing the origin's
-// serial session withdraws it — the consumer retires it with no identity churn. Looped in-body; the
-// ctest invocation is re-run >=3 process runs (the serial-claim discipline).
+// The relay's report-emission gate, host-side over a real openpty serial link. A serial-attached origin
+// declares a topic-with-type that folds over the REAL serial wire into the relay's topic table; the relay
+// lifts the handshake-proven identity + folded topics through its production report emitter (real emitter +
+// wire codec) into a peer_report, and a kill-origin drop emits the matching withdrawal. This TU covers the
+// relay's real-wire lift and report/withdrawal EMISSION; the downstream ingestion + enumeration of that
+// report ACROSS a second live transport is covered end-to-end by the two-live-transport acceptance, so no
+// report is hand-delivered here. Looped in-body; the ctest invocation is re-run >=3 process runs (the
+// serial-claim discipline).
 
 #include "test_serial_common.h"
-
-#include "plexus/node.h"
-#include "plexus/node_options.h"
 
 #include "plexus/io/report_options.h"
 #include "plexus/io/peer_report_emitter.h"
 
-#include "plexus/inproc/inproc_bus.h"
-#include "plexus/inproc/inproc_policy.h"
-#include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_transport.h"
-
 #include "plexus/discovery/universe.h"
-#include "plexus/discovery/static_discovery.h"
 
-#include "plexus/graph/topic_record.h"
 #include "plexus/graph/topic_type_table.h"
-#include "plexus/graph/participant_record.h"
 
 #include "plexus/wire/peer_report.h"
 
@@ -33,13 +23,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <array>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <algorithm>
-#include <string_view>
 
 using namespace serial_fixture;
 
@@ -52,99 +40,17 @@ using plexus::io::report_options;
 using plexus::io::peer_report_emitter;
 
 namespace {
-node_id make_node_id(std::uint8_t seed)
+const wire::topic_declaration *topic_named(const std::vector<wire::topic_declaration> &topics, std::string_view fqn)
 {
-    node_id id{};
-    id[0] = std::byte{seed};
-    return id;
+    const auto it = std::find_if(topics.begin(), topics.end(), [&](const auto &t) { return t.fqn == fqn; });
+    return it == topics.end() ? nullptr : &*it;
 }
-plexus::io::endpoint make_ep(std::string_view addr)
-{
-    return {"inproc", std::string{addr}};
 }
 
-// A stock inproc node: it ingests relayed peer_reports off the wire and enumerates them.
-struct consumer
-{
-    plexus::inproc::inproc_bus<>        bus;
-    plexus::inproc::inproc_executor<>   ex{bus};
-    plexus::inproc::inproc_transport<>  transport{ex, bus};
-    plexus::discovery::static_discovery disc{{}};
-    plexus::node<plexus::inproc::inproc_policy, plexus::inproc::inproc_transport<>> node;
-
-    explicit consumer(const node_id &id)
-            : node{ex, disc, id, transport, plexus::node_options{}}
-    {
-    }
-
-    void ingest(const node_id &reporter, std::span<const std::byte> bytes)
-    {
-        const auto pr = wire::decode_peer_report(bytes);
-        REQUIRE(pr.has_value());
-        node.router().ingest_peer_report(reporter, *pr);
-        ex.drain();
-    }
-};
-
-const graph::participant_record *participant_of(std::span<const graph::participant_record> f, const node_id &id)
-{
-    const auto it = std::find_if(f.begin(), f.end(), [&](const auto &r) { return r.id == id; });
-    return it == f.end() ? nullptr : &*it;
-}
-const graph::topic_record *topic_of(std::span<const graph::topic_record> f, const node_id &node)
-{
-    const auto it = std::find_if(f.begin(), f.end(), [&](const auto &r) { return r.node == node; });
-    return it == f.end() ? nullptr : &*it;
-}
-void expect_relayed(const consumer &c, const node_id &origin, const node_id &relay, const node_id &direct)
-{
-    std::array<graph::participant_record, 8> pbuf{};
-    const auto pres = c.node.participants(pbuf);
-    const std::span<const graph::participant_record> parts{pbuf.data(), pres.count};
-    const auto *reported = participant_of(parts, origin);
-    REQUIRE(reported != nullptr);
-    REQUIRE(reported->origin.how == graph::observation::reported);
-    REQUIRE(reported->origin.reporter == relay);
-    REQUIRE(reported->reach.via == relay);
-    const auto *peer = participant_of(parts, direct);
-    REQUIRE(peer != nullptr);
-    REQUIRE(peer->origin.how == graph::observation::directly_observed);
-    REQUIRE_FALSE(peer->reach.via.has_value());
-    std::array<graph::topic_record, 8> tbuf{};
-    const auto tres   = c.node.topics(tbuf);
-    const auto *topic = topic_of({tbuf.data(), tres.count}, origin);
-    REQUIRE(topic != nullptr);
-    REQUIRE(topic->name == "sensor/temp");
-    REQUIRE(topic->role == graph::topic_role::publisher);
-    REQUIRE(topic->types.count == 1);
-    REQUIRE(topic->types.names[0] == "Temp");
-}
-
-void expect_retired(const consumer &c, const node_id &origin, const node_id &direct, const plexus::io::endpoint &ep_direct)
-{
-    std::array<graph::participant_record, 8> pbuf{};
-    const auto pres = c.node.participants(pbuf);
-    const std::span<const graph::participant_record> parts{pbuf.data(), pres.count};
-    REQUIRE(participant_of(parts, origin) == nullptr);
-    const auto *peer = participant_of(parts, direct); // the surviving direct identity is untouched
-    REQUIRE(peer != nullptr);
-    REQUIRE(peer->origin.how == graph::observation::directly_observed);
-    REQUIRE(peer->reach.transport == ep_direct);
-    std::array<graph::topic_record, 8> tbuf{};
-    const auto tres = c.node.topics(tbuf);
-    REQUIRE(topic_of({tbuf.data(), tres.count}, origin) == nullptr);
-}
-
-}
-
-TEST_CASE("a consumer enumerates a serial-attached origin through a relay end-to-end, then retires it on kill-origin, looped",
+TEST_CASE("a relay lifts a serial-attached origin's real-wire declaration into a peer_report and withdraws it on kill-origin, looped",
           "[integration][serial][relay][e2e]")
 {
     constexpr int k_runs = 5;
-    const auto relay_id  = make_node_id(0x0A);
-    const auto direct_id = make_node_id(0x0B);
-    const auto ep_relay  = make_ep("relay:5000");
-    const auto ep_direct = make_ep("direct:6000");
 
     for(int run = 0; run < k_runs; ++run)
     {
@@ -176,25 +82,30 @@ TEST_CASE("a consumer enumerates a serial-attached origin through a relay end-to
         REQUIRE(origin.is_complete());
         REQUIRE(relay.is_complete());
         REQUIRE(folded);
+
+        // The relay lifts the proven identity + real-wire-folded topics into a peer_report through the
+        // production emitter + wire codec — no report is hand-stitched onto a downstream node.
         const node_id origin_id = relay.peer_identity();
         peer_report_emitter                   emitter;
         std::optional<std::vector<std::byte>> asserted;
         emitter.note_origin(make_report_ctx(report_options{}), origin_id, plexus::discovery::k_default_universe, table,
                             [&](const wire::peer_report &pr) { asserted = wire::encode_peer_report(pr); });
         REQUIRE(asserted.has_value());
-        consumer cons{make_node_id(0x0C)};
-        cons.node.router().note_peer(relay_id, ep_relay);
-        cons.node.router().note_peer(direct_id, ep_direct);
-        cons.ingest(relay_id, *asserted);
-        expect_relayed(cons, origin_id, relay_id, direct_id);
+        const auto reported = wire::decode_peer_report(*asserted);
+        REQUIRE(reported.has_value());
+        REQUIRE(reported->origin == origin_id);
+        const auto *topic = topic_named(reported->topics, "sensor/temp");
+        REQUIRE(topic != nullptr);
+        REQUIRE(topic->type_name == "Temp");
 
-        // Killing the origin drops the live serial path: the relay withdraws, the consumer retires.
+        // Killing the origin drops the live serial path: the relay withdraws the origin downstream.
         std::optional<std::vector<std::byte>> withdrawn;
         relay.on_transport_drop([&] { emitter.withdraw(origin_id, [&](const wire::peer_report &pr) { withdrawn = wire::encode_peer_report(pr); }); });
         origin_ctx.channel->close();
         pump_until(io, [&] { return withdrawn.has_value(); });
         REQUIRE(withdrawn.has_value());
-        cons.ingest(relay_id, *withdrawn);
-        expect_retired(cons, origin_id, direct_id, ep_direct);
+        const auto retired = wire::decode_peer_report(*withdrawn);
+        REQUIRE(retired.has_value());
+        REQUIRE(retired->origin == origin_id);
     }
 }
