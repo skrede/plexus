@@ -12,6 +12,13 @@ add_executable(test_route_select test_route_select.cpp)
 target_link_libraries(test_route_select PRIVATE plexus::core Catch2::Catch2WithMain)
 catch_discover_tests(test_route_select TEST_PREFIX "graph.")
 
+# The fixed twin's direct-first candidate admission: a direct row survives a transitive flood under
+# both protection schemes, transitive overflow is rejected-and-counted, and lookup surfaces the direct
+# endpoint only. Header-only core, no backend, no discovery.
+add_executable(test_fixed_peer_storage_candidates test_fixed_peer_storage_candidates.cpp)
+target_link_libraries(test_fixed_peer_storage_candidates PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_fixed_peer_storage_candidates TEST_PREFIX "graph.")
+
 # The owning-table semantics over the fixed-capacity backend. It owns the single replaceable
 # operator new (support/alloc_counter.h) for the zero-alloc sweep proof, so it must be its own
 # executable and needs tests/ on the include path.

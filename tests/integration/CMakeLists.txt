@@ -1612,6 +1612,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 endif()
 
+# The evolved awareness-path alloc gate: re-noting a known direct peer and looking it up adds zero
+# allocation on the existing direct-only path (heap and fixed twins), the fixed twin allocating nothing
+# at all. It owns the single replaceable operator new (support/alloc_counter.h), so it is its own
+# executable and needs tests/ on the include path.
+add_executable(test_route_note_noalloc test_route_note_noalloc.cpp)
+target_link_libraries(test_route_note_noalloc PRIVATE
+    plexus::core
+    Catch2::Catch2WithMain)
+target_include_directories(test_route_note_noalloc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_route_note_noalloc TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
+
 # The discovery re-announce/expiry alloc gate: a warmed multicast_discovery over a sink Policy and
 # a non-allocating sink datagram socket re-announces and re-resolves the same card and asserts the
 # re-announce path churns zero and the inbound resolve build is a bounded per-call constant. The

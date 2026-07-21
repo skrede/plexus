@@ -4,8 +4,14 @@
 #include "plexus/node_id.h"
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/route_options.h"
+#include "plexus/io/route_candidate.h"
+#include "plexus/io/detail/route_admission.h"
 
 #include <map>
+#include <span>
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <optional>
@@ -19,9 +25,10 @@ namespace plexus::io {
 constexpr std::uint64_t default_discovery_ttl_ns = 15'000'000'000ull;
 
 // The default (PC) awareness backend: an unbounded heap-backed std::map. A bounded node profile
-// substitutes fixed_peer_storage<N> through the Storage template param instead. Each record carries
-// a clock-free last_refreshed tick the engine stamps; nothing reads it on the static_discovery PC
-// path (expire_older_than/refresh stay uncalled), so the timestamp is inert there.
+// substitutes fixed_peer_storage<N> through the Storage template param instead. Each record holds a
+// bounded, inline candidate list with direct-first partitioning mirroring the fixed twin; only a
+// first admission of a new identity allocates (the map node). The clock-free last_refreshed tick the
+// engine stamps is inert on the static_discovery PC path (expire_older_than/refresh stay uncalled).
 class std_map_peer_storage
 {
 public:
@@ -30,19 +37,20 @@ public:
         return put(id, ep, 0);
     }
     // A same-(id, endpoint) re-store refreshes the tick but reports no change: the idempotent
-    // re-announce must not bump the graph observer's generation.
+    // re-announce must not bump the graph observer's generation. A fresh direct endpoint overwrites
+    // the single direct row in place.
     bool put(const node_id &id, const endpoint &ep, std::uint64_t now)
     {
-        auto it = m_table.find(id);
-        if(it == m_table.end())
-        {
-            m_table.emplace(id, record{ep, now});
-            return true;
-        }
-        const bool changed        = it->second.ep != ep;
-        it->second.ep             = ep;
-        it->second.last_refreshed = now;
-        return changed;
+        return admit(id, direct_candidate(ep), now, route_options{});
+    }
+    bool admit(const node_id &id, const route_candidate &cand, std::uint64_t now, const route_options &opts)
+    {
+        record &rec        = m_table[id];
+        rec.last_refreshed = now;
+        const auto r       = detail::admit_candidate(rec.candidates.data(), rec.count, candidate_cap, cand, now, opts);
+        if(r.dropped)
+            ++m_dropped;
+        return r.changed;
     }
     void refresh(const node_id &id, std::uint64_t now)
     {
@@ -54,15 +62,26 @@ public:
         auto it = m_table.find(id);
         if(it == m_table.end())
             return std::nullopt;
-        return it->second.ep;
+        return detail::direct_endpoint(it->second.candidates.data(), it->second.count);
     }
     bool has(const node_id &id) const
     {
         return m_table.find(id) != m_table.end();
     }
+    std::span<const route_candidate> candidates(const node_id &id) const
+    {
+        auto it = m_table.find(id);
+        if(it == m_table.end())
+            return {};
+        return {it->second.candidates.data(), it->second.count};
+    }
     bool remove(const node_id &id)
     {
         return m_table.erase(id) != 0;
+    }
+    std::size_t dropped() const noexcept
+    {
+        return m_dropped;
     }
     template<typename Report>
     void expire_older_than(std::uint64_t deadline, Report report)
@@ -82,17 +101,22 @@ public:
     void for_each(Fn fn) const
     {
         for(const auto &[id, rec] : m_table)
-            fn(id, rec.ep);
+            if(auto ep = detail::direct_endpoint(rec.candidates.data(), rec.count))
+                fn(id, *ep);
     }
 
 private:
+    static constexpr std::size_t candidate_cap = 4;
+
     struct record
     {
-        endpoint ep;
-        std::uint64_t last_refreshed;
+        std::array<route_candidate, candidate_cap> candidates{};
+        std::size_t count{0};
+        std::uint64_t last_refreshed{0};
     };
 
     std::map<node_id, record> m_table;
+    std::size_t m_dropped{0};
 };
 
 // The in-memory awareness table, keyed by node_id (not a discovery name): AWARENESS, not

@@ -18,6 +18,7 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/peer_liveliness.h"
 #include "plexus/io/liveliness_monitor.h"
+#include "plexus/io/route_options.h"
 #include "plexus/io/liveliness_options.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/upgrade_coordinator.h"
@@ -90,9 +91,10 @@ public:
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
-                   io::liveliness_options live = {})
+                   io::liveliness_options live = {}, io::route_options routes = {})
             : m_dial_eagerly(dial_eagerly)
             , m_liveliness(live)
+            , m_route_options(routes)
             , m_transport(transport)
             , m_executor(executor)
             , m_security_fanout{*this}
@@ -298,6 +300,11 @@ public:
         return m_topics;
     }
 
+    io::route_options route_opts() const noexcept
+    {
+        return m_route_options;
+    }
+
     std::uint64_t graph_generation() const noexcept
     {
         return m_graph_generation;
@@ -377,6 +384,7 @@ public:
 private:
     bool m_dial_eagerly;
     io::liveliness_options m_liveliness;
+    io::route_options m_route_options;
     Transport &m_transport;
     executor_type m_executor;
     capture_policy m_capture;
