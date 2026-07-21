@@ -144,6 +144,17 @@ public:
                     fn(e.id, *ep);
     }
 
+    // Every candidate row of every occupied identity, direct and via-only alike, each with its own
+    // reach and provenance — the extended-world enumeration a reported peer surfaces through. A
+    // direct-only identity yields exactly its one direct row, so the direct-only output is byte-identical.
+    template<typename Fn>
+    void for_each_candidate(Fn fn) const
+    {
+        for(const entry &e : m_slots)
+            for(std::size_t i = 0; e.occupied && i < e.count; ++i)
+                fn(e.id, e.candidates[i].reach, e.candidates[i].origin);
+    }
+
 private:
     struct entry
     {

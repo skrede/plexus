@@ -121,6 +121,18 @@ public:
                 fn(id, *ep);
     }
 
+    // Every candidate row of every identity, direct and via-only alike, each with its own reach and
+    // provenance — the extended-world enumeration a reported peer surfaces through (for_each yields the
+    // direct row only). A direct-only identity yields exactly its one direct row, so the direct-only
+    // enumeration stays byte-identical.
+    template<typename Fn>
+    void for_each_candidate(Fn fn) const
+    {
+        for(const auto &[id, rec] : m_table)
+            for(std::size_t i = 0; i < rec.count; ++i)
+                fn(id, rec.candidates[i].reach, rec.candidates[i].origin);
+    }
+
 private:
     static constexpr std::size_t candidate_cap = 4;
 
@@ -199,6 +211,12 @@ public:
     void for_each(Fn fn) const
     {
         m_storage.for_each(std::move(fn));
+    }
+
+    template<typename Fn>
+    void for_each_candidate(Fn fn) const
+    {
+        m_storage.for_each_candidate(std::move(fn));
     }
 
 private:

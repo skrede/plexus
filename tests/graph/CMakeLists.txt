@@ -75,6 +75,17 @@ target_link_libraries(test_graph_snapshot PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_graph_snapshot TEST_PREFIX "graph.")
 
+# The extended-world enumeration facade: a reported peer surfaces in participants()/topics() shown as
+# relayed (reported-by and via-whom visible) beside an unblended direct peer in the same snapshot. A
+# basic_node test over the inproc backend, so it links the facade + inproc + discovery.
+add_executable(test_graph_extended_enumeration test_graph_extended_enumeration.cpp)
+target_link_libraries(test_graph_extended_enumeration PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_graph_extended_enumeration TEST_PREFIX "graph.")
+
 # The reject-and-count + zero-alloc proof owns the single replaceable operator new
 # (support/alloc_counter.h), so it must be its own executable and needs tests/ on the include path.
 add_executable(test_graph_truncate test_graph_truncate.cpp)

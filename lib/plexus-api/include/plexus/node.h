@@ -343,16 +343,15 @@ public:
     // never abort, never evict (reject-and-count at the span boundary).
     graph::snapshot_result participants(std::span<graph::participant_record> out) const
     {
-        std::size_t filled = 0;
+        std::size_t filled    = 0;
         bool        truncated = false;
-        m_engine.known().for_each([&](const plexus::node_id &id, const io::endpoint &ep) {
+        m_engine.known().for_each_candidate([&](const plexus::node_id &id, const graph::route &reach, const graph::provenance &origin) {
             if(filled == out.size())
             {
                 truncated = true;
                 return;
             }
-            out[filled++] = graph::participant_record{id, graph::route{ep, std::nullopt},
-                                                      graph::provenance{graph::observation::directly_observed, std::nullopt}};
+            out[filled++] = graph::participant_record{id, reach, origin};
         });
         return graph::snapshot_result{filled, truncated};
     }
