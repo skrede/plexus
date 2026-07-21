@@ -62,13 +62,12 @@ inline std::size_t channel_frame_ceiling(const Channel &ch) noexcept
 
 // The outbound forwarded frame put on the wire once and addref-shared to every destination: a fresh
 // outer header (never the arrival frame's bytes, Pitfall 8) then the re-framed envelope. session_id 0
-// on the data leg so the destination's staleness gate admits it regardless of its latched epoch; the
-// destination field stays unset because a pub/sub frame transits by interest, not by a single
-// destination identity (the receive edge dedups and delivers by origin, never destination).
-inline std::size_t encode_forwarded_wire_into(std::span<std::byte> region, const node_id &origin, std::uint8_t hop, std::uint16_t seq, std::uint8_t flags,
-                                              std::span<const std::byte> inner)
+// on the data leg so the destination's staleness gate admits it regardless of its latched epoch. A
+// pub/sub frame passes an unset destination (it transits by interest, the receive edge dedups and
+// delivers by origin); a request/response frame passes the target identity so each hop re-resolves it.
+inline std::size_t encode_forwarded_wire_into(std::span<std::byte> region, const node_id &origin, const node_id &destination, std::uint8_t hop, std::uint16_t seq,
+                                              std::uint8_t flags, std::span<const std::byte> inner)
 {
-    const node_id destination{};
     const std::size_t inner_n = inner.size() < wire::detail::k_forwarded_inner_max ? inner.size() : wire::detail::k_forwarded_inner_max;
     const std::size_t payload  = wire::detail::forwarded_frame_preamble_size + sizeof(std::uint32_t) + inner_n;
     const wire::frame_header fhdr{.type = wire::msg_type::forwarded, .flags = 0, .session_id = 0, .timestamp_ns = wire::now_timestamp_ns(), .payload_len = payload};
@@ -155,7 +154,7 @@ private:
         if(m_mode == splice_ownership::refcounted_zero_copy && owner != nullptr && !owner->empty())
             return splice_pool::checkout_zero_copy(*owner);
         return m_pool.checkout_owned_copy([&](std::span<std::byte> slot)
-                                          { return detail::encode_forwarded_wire_into(slot, origin, hop, seq, wire::k_forwarded_relay_consent_flag, inner); });
+                                          { return detail::encode_forwarded_wire_into(slot, origin, node_id{}, hop, seq, wire::k_forwarded_relay_consent_flag, inner); });
     }
 
     splice_pool m_pool;

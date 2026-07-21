@@ -63,7 +63,11 @@ private:
 inline forward_admission forward_gate(const wire::forwarded_frame &ff, const node_id &local_id, const node_id &arrival_relay, std::uint8_t hop_budget, std::size_t dedup_depth,
                                       forward_dedup_table &dedup)
 {
-    if(ff.origin == local_id || arrival_relay == local_id || ff.origin == arrival_relay)
+    // origin == arrival_relay is a loop ONLY for an unaddressed (pub/sub) frame — a relay re-wrapping its
+    // own direct traffic. An addressed (request/response) frame legitimately has origin == sender at its
+    // first hop: the caller wraps its OWN request onto the relay, and the responder its OWN reply.
+    const bool addressed = ff.destination != node_id{};
+    if(ff.origin == local_id || arrival_relay == local_id || (!addressed && ff.origin == arrival_relay))
         return forward_admission::drop_loop;
     if(ff.hop > hop_budget)
         return forward_admission::drop_hop;

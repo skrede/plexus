@@ -72,6 +72,14 @@ void install_routing_sinks(Engine &e)
     e.m_procedures.on_rpc_call(make_rpc_sink(e, &observer::on_rpc_call));
     e.m_procedures.on_rpc_serve(make_rpc_sink(e, &observer::on_rpc_serve));
     e.m_procedures.on_rpc_reply(make_rpc_sink(e, &observer::on_rpc_reply));
+    // The by-destination rpc re-resolution seam, installed on EVERY engine (a request/response leg is
+    // not relay-profile-gated): the caller's forwarded request and the responder's forwarded reply emit
+    // as this node's identity through the procedure forwarder, while a transiting relay hop preserves the
+    // frame's origin through the message forwarder — both re-resolving the destination via route_select.
+    e.m_procedures.on_forward_rpc([&e](const node_id &destination, std::span<const std::byte> frame)
+                                  { return e.forward_rpc(e.m_build.fsm_cfg.self_id, destination, 0, frame); });
+    e.m_messages.on_forward_rpc([&e](const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> frame)
+                                { return e.forward_rpc(origin, destination, hop, frame); });
     e.m_messages.set_on_data_stamp([&e](const node_id &ep, std::uint64_t topic_hash) { e.m_monitor.stamp_data(ep, topic_hash); });
     // A received heartbeat asserts session presence AND refreshes the peer's discovery TTL, so an
     // actively-heartbeating peer never ages out of awareness even if its multicast announces lapse;

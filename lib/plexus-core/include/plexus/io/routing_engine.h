@@ -18,6 +18,7 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/peer_liveliness.h"
 #include "plexus/io/liveliness_monitor.h"
+#include "plexus/io/route_select.h"
 #include "plexus/io/route_options.h"
 #include "plexus/io/report_options.h"
 #include "plexus/io/liveliness_options.h"
@@ -265,6 +266,8 @@ public:
         auto *session = m_registry.session_for(id);
         if(session != nullptr && session->is_complete())
             m_procedures.call(session->rpc_peer(), fqn, param, std::move(on_response), std::nullopt, session->session_id());
+        else
+            m_procedures.forward_call(id, fqn, param, std::move(on_response));
     }
 
     void unsubscribe(const node_id &id, std::string_view fqn)
@@ -359,6 +362,14 @@ public:
         return m_emitter.reports(origin);
     }
 
+    // Forwarded request/response frames dropped for want of a route (route_select over empty candidates,
+    // or a chosen via with no live session) — the honest count behind a reply-fail that no route is
+    // manufactured to paper over.
+    std::size_t forward_rpc_dropped_count() const noexcept
+    {
+        return m_forward_rpc_dropped;
+    }
+
     io::host_fingerprint local_fingerprint() const noexcept
     {
         return m_build.fsm_cfg.local_fingerprint;
@@ -448,6 +459,9 @@ private:
     std::set<node_id> m_reported;
     std::map<node_id, std::size_t> m_reporter_load;
     std::size_t m_report_dropped{0};
+    std::size_t m_forward_rpc_dropped{0};
+    std::uint16_t m_forward_rpc_seq{0};
+    std::vector<std::byte> m_forward_rpc_scratch;
     std::uint64_t m_graph_generation{0};
     bool m_graph_wakeup_pending{false};
     std::size_t m_graph_subscribers{0};
@@ -872,6 +886,42 @@ private:
     {
         if(s.peer_identity() != pr.origin)
             m_messages.send_peer_report(s.msg_peer().channel, wire::encode_peer_report(pr));
+    }
+
+    // The identity re-resolution primitive (D95.2): route_select over the destination's candidates, then
+    // re-wrap the header-on rpc frame in a forwarded envelope (origin preserved, destination re-stamped,
+    // hop+1) onto the chosen via-session. Stateless — no per-correlation table. Empty candidates or a via
+    // with no live session drop-with-count and return false; the caller's deadline then fires the timeout.
+    bool forward_rpc(const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> inner_frame)
+    {
+        const auto cands      = m_known_peers.candidates(destination);
+        const std::size_t idx = route_select(cands);
+        if(idx == route_select_npos)
+            return (void)++m_forward_rpc_dropped, false;
+        const route_candidate &c = cands[idx];
+        session_type *s          = session_by_identity(c.is_direct() ? destination : *c.reach.via);
+        if(s == nullptr)
+            return (void)++m_forward_rpc_dropped, false;
+        send_forwarded_rpc(*s, origin, destination, hop, inner_frame);
+        return true;
+    }
+
+    void send_forwarded_rpc(session_type &s, const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> inner_frame)
+    {
+        const std::uint8_t out_hop = static_cast<std::uint8_t>(hop < 0xFF ? hop + 1 : hop);
+        const std::size_t inner_n  = inner_frame.size() < wire::detail::k_forwarded_inner_max ? inner_frame.size() : wire::detail::k_forwarded_inner_max;
+        m_forward_rpc_scratch.resize(wire::header_size + wire::detail::forwarded_frame_preamble_size + sizeof(std::uint32_t) + inner_n);
+        const std::size_t n = detail::encode_forwarded_wire_into(m_forward_rpc_scratch, origin, destination, out_hop, m_forward_rpc_seq++, 0, inner_frame);
+        s.rpc_peer().channel.send(std::span<const std::byte>{m_forward_rpc_scratch.data(), n});
+    }
+
+    // A live session for a PROVEN identity — an accepted session's slot key is provisional, so the table
+    // is scanned by handshake-proven identity, mirroring relay_broadcast's loop guard.
+    session_type *session_by_identity(const node_id &proven)
+    {
+        session_type *found = nullptr;
+        m_registry.for_each_connected([&](const node_id &, session_type &s) { if(s.peer_identity() == proven) found = &s; });
+        return found;
     }
 
     // Bind the forwarded-receive re-fan seam to the relay twin. A non-relay engine threads the null twin,

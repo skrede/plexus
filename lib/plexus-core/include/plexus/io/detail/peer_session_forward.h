@@ -1,10 +1,14 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_FORWARD_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_FORWARD_H
 
+#include "plexus/io/node_name.h"
+
 #include "plexus/io/detail/forward_gate.h"
 #include "plexus/io/detail/peer_session_deliver.h"
 
 #include "plexus/node_id.h"
+
+#include <string>
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/data_frame.h"
@@ -41,26 +45,34 @@ void refan_if_pubsub(Session &s, const wire::forwarded_frame &ff)
     s.m_messages.refan_forwarded(uni->header.topic_hash, ff.origin, ff.hop, std::span<const std::byte>{ff.inner}, &s.m_channel, owner);
 }
 
-// Dispatch an admitted forwarded frame's header-on inner frame by its own type, applying the delivery-
-// edge origin override on the data leg: a forwarded unidirectional delivers with source = the trailer
-// origin (never the relay session pin), while rpc transit re-enters the procedure forwarder unchanged.
-// Exactly one call per admitted frame (dedup upstream), so a forwarded frame delivers locally at most
-// once. A non-data inner type is dropped — only the data-plane verbs transit.
+// Dispatch an admitted forwarded frame's header-on inner frame by its own type. A request/response
+// addressed ELSEWHERE (destination set and not self) re-resolves onward by its destination identity
+// through route_select at this hop — the relay holds no correlation, so nothing is delivered locally.
+// A frame addressed HERE (destination self or unset) delivers: a unidirectional lands with source =
+// the trailer origin (never the relay session pin); a request stages the requester origin as its
+// reply route; a response keys the pending table by the responder ORIGIN, not the arrival via, so a
+// reply that re-resolved through a different relay still matches. Exactly one call per admitted frame.
 template<typename Session>
-void dispatch_forwarded_inner(Session &s, const node_id &origin, std::span<const std::byte> inner_frame)
+void dispatch_forwarded_inner(Session &s, const wire::forwarded_frame &ff)
 {
-    auto hdr = wire::decode_header(inner_frame);
+    auto hdr = wire::decode_header(ff.inner);
     if(!hdr)
         return;
-    const auto body = inner_frame.subspan(wire::header_size);
+    const auto body      = std::span<const std::byte>{ff.inner}.subspan(wire::header_size);
+    const bool elsewhere = ff.destination != node_id{} && ff.destination != s.m_fsm_cfg.self_id;
+    if(elsewhere && (hdr->type == wire::msg_type::rpc_request || hdr->type == wire::msg_type::rpc_response) && s.m_messages.forward_rpc_installed())
+        return (void)s.m_messages.forward_rpc(ff.origin, ff.destination, ff.hop, std::span<const std::byte>{ff.inner});
     switch(hdr->type)
     {
         case wire::msg_type::unidirectional:
-            return deliver_data_with_source(s, *hdr, body, origin);
+            return deliver_data_with_source(s, *hdr, body, ff.origin);
         case wire::msg_type::rpc_request:
-            return s.m_procedures.deliver_request(s.m_rpc_peer, body, s.m_session_id);
+            return s.m_procedures.deliver_request(s.m_rpc_peer, body, s.m_session_id, &ff.origin);
         case wire::msg_type::rpc_response:
-            return s.m_procedures.deliver_response(s.m_rpc_peer, body);
+        {
+            const std::string key = node_name_of(ff.origin);
+            return s.m_procedures.deliver_response(s.m_rpc_peer, body, &key);
+        }
         default:
             return;
     }
@@ -78,7 +90,7 @@ void deliver_forwarded_frame(Session &s, const node_id &arrival_relay, std::span
         return;
     if(s.m_messages.admit_forwarded(*ff, s.m_fsm_cfg.self_id, arrival_relay) != forward_admission::admit)
         return;
-    dispatch_forwarded_inner(s, ff->origin, ff->inner);
+    dispatch_forwarded_inner(s, *ff);
     refan_if_pubsub(s, *ff);
 }
 

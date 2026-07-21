@@ -211,6 +211,25 @@ public:
             m_on_forward_refan_cb(hash, origin, hop, inner, arrival, owner);
     }
 
+    // The by-destination relay seam a transiting request/response inner frame re-resolves through: the
+    // engine route_selects over the destination's candidates and re-wraps onto the chosen via-session,
+    // holding no per-correlation state. Installed on every engine (a request/response leg is not
+    // relay-profile-gated); a forwarder with no engine attached leaves it null and never re-forwards.
+    void on_forward_rpc(plexus::detail::move_only_function<bool(const node_id &, const node_id &, std::uint8_t, std::span<const std::byte>)> hook)
+    {
+        m_on_forward_rpc_cb = std::move(hook);
+    }
+
+    bool forward_rpc_installed() const noexcept
+    {
+        return static_cast<bool>(m_on_forward_rpc_cb);
+    }
+
+    bool forward_rpc(const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> inner_frame)
+    {
+        return m_on_forward_rpc_cb && m_on_forward_rpc_cb(origin, destination, hop, inner_frame);
+    }
+
     void on_declaration(plexus::detail::move_only_function<void(const wire::topic_declaration &)> hook)
     {
         m_on_declaration_cb = std::move(hook);
@@ -739,6 +758,7 @@ private:
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
     plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)> m_on_forward_refan_cb;
+    plexus::detail::move_only_function<bool(const node_id &, const node_id &, std::uint8_t, std::span<const std::byte>)> m_on_forward_rpc_cb;
     plexus::detail::move_only_function<void(const graph::topic_edge &)> m_on_topic_edge_cb;
     plexus::detail::move_only_function<void(const node_id &, const wire::peer_report &)> m_on_peer_report_cb;
     plexus::detail::move_only_function<void(const wire::topic_declaration &)> m_on_declaration_cb;

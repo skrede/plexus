@@ -41,7 +41,7 @@ wire::forwarded_frame frame_from(const node_id &origin, std::uint8_t hop, std::u
 {
     wire::forwarded_frame ff;
     ff.origin      = origin;
-    ff.destination = k_local;
+    ff.destination = {}; // unaddressed (pub/sub): exercises the origin==arrival_relay loop guard
     ff.hop         = hop;
     ff.seq         = seq;
     ff.flags       = 0;

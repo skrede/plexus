@@ -1747,6 +1747,26 @@ target_include_directories(test_forward_splice_no_hol PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_forward_splice_no_hol TEST_PREFIX "integration.")
 
+add_executable(test_forward_reqres test_forward_reqres.cpp)
+target_link_libraries(test_forward_reqres PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_forward_reqres PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_forward_reqres TEST_PREFIX "integration.")
+
+add_executable(test_forward_reply_reresolve test_forward_reply_reresolve.cpp)
+target_link_libraries(test_forward_reply_reresolve PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_forward_reply_reresolve PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_forward_reply_reresolve TEST_PREFIX "integration.")
+
 add_executable(test_forward_demand_propagation test_forward_demand_propagation.cpp)
 target_link_libraries(test_forward_demand_propagation PRIVATE
     plexus::core
