@@ -10,6 +10,8 @@
 #include "plexus/io/peer_report_emitter.h"
 #include "plexus/io/liveliness_peer_storage.h"
 
+#include "plexus/io/detail/forward_splice.h"
+
 #include "plexus/graph/fixed_topic_storage.h"
 #include "plexus/graph/null_graph_change_log.h"
 #include "plexus/graph/std_map_topic_storage.h"
@@ -57,6 +59,7 @@ struct profile_traits
     using liveliness_storage  = io::default_liveliness_storage;
     using graph_change_log    = graph::vector_graph_change_log;
     using peer_report_emitter = io::null_peer_report_emitter;
+    using forward_splice      = io::null_forward_splice;
 };
 
 template<typename Policy, std::size_t Peers, std::size_t Topics, typename Liveliness>
@@ -68,6 +71,7 @@ struct profile_traits<bounded<Policy, Peers, Topics, Liveliness>>
     using liveliness_storage  = Liveliness;
     using graph_change_log    = graph::null_graph_change_log;
     using peer_report_emitter = io::null_peer_report_emitter;
+    using forward_splice      = io::null_forward_splice;
 };
 
 // The relay decorator preserves every storage/log alias of the profile it wraps and overrides only
@@ -77,6 +81,7 @@ template<typename P>
 struct profile_traits<relay<P>> : profile_traits<P>
 {
     using peer_report_emitter = io::peer_report_emitter;
+    using forward_splice      = io::forward_splice<typename profile_traits<P>::policy>;
 };
 
 template<typename T>

@@ -156,6 +156,53 @@ public:
         m_endpoint.send_peer_report(channel, bytes);
     }
 
+    // The interest-scoped forwarding-send: fan a relay's pre-built outbound forwarded envelope to the
+    // topic's actual subscribers, excluding the arrival session (the loop guard), through the SAME
+    // per-destination egress scheduler the publish path uses — one slow leg drops-with-count in its own
+    // band while an unrelated destination drains unaffected (no head-of-line blocking). The envelope is
+    // built once on the first eligible destination and addref-shared into every band (frame-once-fan-to-N);
+    // an exhausted pool yields an empty buffer that is counted at the pool and never enqueued.
+    template<typename BuildOnce>
+    void fan_forwarded_buffer(std::uint64_t hash, const void *arrival, BuildOnce &&build_once)
+    {
+        const auto *topic = m_endpoint.registry().entry_for(hash);
+        if(topic == nullptr || topic->subscribers.empty())
+            return;
+
+        const topic_qos qos    = topic->qos;
+        const std::size_t band = detail::band_of(qos.priority);
+        for(const auto &sub : topic->subscribers)
+        {
+            if(static_cast<const void *>(&sub.channel.get()) == arrival || !any_set(qos.reach, sub.tier))
+                continue;
+            const wire_bytes<> &framed = build_once();
+            if(framed.empty()) // pool exhaustion: counted at the splice pool, never enqueue an empty owner
+                continue;
+            const detail::drop_cause cause = m_egress.enqueue(sub.channel.get(), band, qos.congestion, framed);
+            if(cause != detail::drop_cause::none)
+                shed(hash, band, cause, sub.tier);
+        }
+    }
+
+    // Relay-installed only: the seam a completed forwarded receive fires so the relay twin re-fans the
+    // frame. A non-relay node never installs it, so the forwarded receive path stays a pure local
+    // delivery with no splice code reached.
+    void on_forward_refan(plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)> hook)
+    {
+        m_on_forward_refan_cb = std::move(hook);
+    }
+
+    bool wants_refan() const noexcept
+    {
+        return static_cast<bool>(m_on_forward_refan_cb);
+    }
+
+    void refan_forwarded(std::uint64_t hash, const node_id &origin, std::uint8_t hop, std::span<const std::byte> inner, const channel_type *arrival, const wire::shared_bytes *owner)
+    {
+        if(m_on_forward_refan_cb)
+            m_on_forward_refan_cb(hash, origin, hop, inner, arrival, owner);
+    }
+
     void on_declaration(plexus::detail::move_only_function<void(const wire::topic_declaration &)> hook)
     {
         m_on_declaration_cb = std::move(hook);
@@ -683,6 +730,7 @@ private:
     std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)> m_on_forward_refan_cb;
     plexus::detail::move_only_function<void(const graph::topic_edge &)> m_on_topic_edge_cb;
     plexus::detail::move_only_function<void(const node_id &, const wire::peer_report &)> m_on_peer_report_cb;
     plexus::detail::move_only_function<void(const wire::topic_declaration &)> m_on_declaration_cb;

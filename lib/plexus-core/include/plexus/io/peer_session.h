@@ -370,6 +370,8 @@ private:
     template<typename S>
     friend void detail::dispatch_forwarded_inner(S &, const node_id &, std::span<const std::byte>);
     template<typename S>
+    friend void detail::refan_if_pubsub(S &, const wire::forwarded_frame &);
+    template<typename S>
     friend void detail::deliver_session_object(S &, const object_carrier &);
     template<typename S>
     friend message_info detail::assemble_message_info(S &, const wire::frame_header &);

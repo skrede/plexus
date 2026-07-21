@@ -32,6 +32,7 @@
 #include "plexus/graph/topic_type_table.h"
 #include "plexus/graph/vector_graph_change_log.h"
 
+#include "plexus/io/detail/forward_splice.h"
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_sink_install.h"
@@ -55,6 +56,7 @@
 #include <optional>
 #include <algorithm>
 #include <string_view>
+#include <type_traits>
 
 namespace plexus::io {
 
@@ -68,7 +70,7 @@ struct default_liveliness_storage
 
 template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock, typename PeerStorage = std_map_peer_storage,
          typename TopicStorage = graph::std_map_topic_storage, typename LivelinessStorage = default_liveliness_storage,
-         typename GraphChangeLog = graph::vector_graph_change_log, typename PeerReportEmitter = null_peer_report_emitter>
+         typename GraphChangeLog = graph::vector_graph_change_log, typename PeerReportEmitter = null_peer_report_emitter, typename ForwardSplice = null_forward_splice>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
 {
@@ -114,9 +116,11 @@ public:
             , m_monitor(m_executor)
             , m_peer_liveliness(m_liveliness)
             , m_coordinator(m_registry)
+            , m_splice(io::make_forward_ctx(forward))
     {
         m_messages.set_forward_options(forward);
         detail::install_routing_sinks(*this);
+        install_splice_refan();
     }
 
     void add_observer(observer &o)
@@ -454,6 +458,7 @@ private:
     std::vector<std::reference_wrapper<observer>> m_observers;
     upgrade_coordinator<registry_type, channel_type> m_coordinator;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness_cb;
+    ForwardSplice m_splice;
 
     template<typename E>
     friend void detail::install_routing_sinks(E &);
@@ -867,6 +872,16 @@ private:
     {
         if(s.peer_identity() != pr.origin)
             m_messages.send_peer_report(s.msg_peer().channel, wire::encode_peer_report(pr));
+    }
+
+    // Bind the forwarded-receive re-fan seam to the relay twin. A non-relay engine threads the null twin,
+    // so the hook is never installed and the forwarded receive stays a pure local delivery — no splice
+    // pool, no envelope encode, no forwarding-send code reached.
+    void install_splice_refan()
+    {
+        if constexpr(!std::is_same_v<ForwardSplice, null_forward_splice>)
+            m_messages.on_forward_refan([this](std::uint64_t hash, const node_id &origin, std::uint8_t hop, std::span<const std::byte> inner, const channel_type *arrival,
+                                               const wire::shared_bytes *owner) { m_splice.refan(m_messages, hash, origin, hop, inner, arrival, owner); });
     }
 
     // Awareness-only removal on the existing tick: forgets a peer that stopped re-announcing and was
