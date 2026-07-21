@@ -6,6 +6,12 @@ add_executable(test_graph_records test_graph_records.cpp)
 target_link_libraries(test_graph_records PRIVATE plexus::core Catch2::Catch2WithMain)
 catch_discover_tests(test_graph_records TEST_PREFIX "graph.")
 
+# The pure stateless route-selection ranking over a candidate span: direct before relayed, fewer hops
+# before more, first-in-span tie-break. Header-only core, no backend, no discovery.
+add_executable(test_route_select test_route_select.cpp)
+target_link_libraries(test_route_select PRIVATE plexus::core Catch2::Catch2WithMain)
+catch_discover_tests(test_route_select TEST_PREFIX "graph.")
+
 # The owning-table semantics over the fixed-capacity backend. It owns the single replaceable
 # operator new (support/alloc_counter.h) for the zero-alloc sweep proof, so it must be its own
 # executable and needs tests/ on the include path.

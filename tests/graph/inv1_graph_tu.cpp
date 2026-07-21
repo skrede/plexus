@@ -20,6 +20,8 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/observer.h"
+#include "plexus/io/route_select.h"
+#include "plexus/io/route_candidate.h"
 
 #include "plexus/match/key_pattern.h"
 
