@@ -210,7 +210,7 @@ public:
     // the mechanism members, so reading storage through it silently reverts to the heap twins.
     using engine_type      = io::routing_engine<engine_policy, engine_transport, std::chrono::steady_clock, typename detail::profile_traits<Profile>::peer_storage,
                                                 typename detail::profile_traits<Profile>::topic_storage, typename detail::profile_traits<Profile>::liveliness_storage,
-                                                typename detail::profile_traits<Profile>::graph_change_log>;
+                                                typename detail::profile_traits<Profile>::graph_change_log, typename detail::profile_traits<Profile>::peer_report_emitter>;
     using engine_channel   = typename engine_type::channel_type;
     using transport_tuple  = std::tuple<Transports...>;
 

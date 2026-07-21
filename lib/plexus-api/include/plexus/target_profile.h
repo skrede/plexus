@@ -7,6 +7,7 @@
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/liveness_storage.h"
 #include "plexus/io/fixed_peer_storage.h"
+#include "plexus/io/peer_report_emitter.h"
 #include "plexus/io/liveliness_peer_storage.h"
 
 #include "plexus/graph/fixed_topic_storage.h"
@@ -26,6 +27,14 @@ struct bounded
 {
 };
 
+// The transitive-relay decorator: like bounded<> it is never instantiated, only pattern-matched by
+// profile_traits, so composing it onto a profile is the single spelling that turns the peer_report
+// emitter on. A node never spelled relay<> keeps the structurally-absent null emitter.
+template<typename Profile>
+struct relay
+{
+};
+
 template<std::size_t Leases, std::size_t Deadlines, std::size_t Arbiters>
 struct fixed_liveliness
 {
@@ -42,21 +51,32 @@ namespace plexus::detail {
 template<typename P>
 struct profile_traits
 {
-    using policy             = P;
-    using peer_storage       = io::std_map_peer_storage;
-    using topic_storage      = graph::std_map_topic_storage;
-    using liveliness_storage = io::default_liveliness_storage;
-    using graph_change_log   = graph::vector_graph_change_log;
+    using policy              = P;
+    using peer_storage        = io::std_map_peer_storage;
+    using topic_storage       = graph::std_map_topic_storage;
+    using liveliness_storage  = io::default_liveliness_storage;
+    using graph_change_log    = graph::vector_graph_change_log;
+    using peer_report_emitter = io::null_peer_report_emitter;
 };
 
 template<typename Policy, std::size_t Peers, std::size_t Topics, typename Liveliness>
 struct profile_traits<bounded<Policy, Peers, Topics, Liveliness>>
 {
-    using policy             = Policy;
-    using peer_storage       = io::fixed_peer_storage<Peers>;
-    using topic_storage      = graph::fixed_topic_storage<Topics>;
-    using liveliness_storage = Liveliness;
-    using graph_change_log   = graph::null_graph_change_log;
+    using policy              = Policy;
+    using peer_storage        = io::fixed_peer_storage<Peers>;
+    using topic_storage       = graph::fixed_topic_storage<Topics>;
+    using liveliness_storage  = Liveliness;
+    using graph_change_log    = graph::null_graph_change_log;
+    using peer_report_emitter = io::null_peer_report_emitter;
+};
+
+// The relay decorator preserves every storage/log alias of the profile it wraps and overrides only
+// the emitter to the real twin, so relay<bounded<...>> stays MCU-shaped yet emits, and a relayed
+// profile satisfies target_profile through the wrapped policy.
+template<typename P>
+struct profile_traits<relay<P>> : profile_traits<P>
+{
+    using peer_report_emitter = io::peer_report_emitter;
 };
 
 template<typename T>

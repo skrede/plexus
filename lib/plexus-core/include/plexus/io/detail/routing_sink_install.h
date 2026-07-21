@@ -55,8 +55,12 @@ void install_routing_sinks(Engine &e)
     e.m_messages.set_capture_wants_payload([&e](std::uint64_t hash) { return e.m_capture.wants_payload(hash, wire::now_timestamp_ns()); });
     // The table copies the borrowed names in and reject-and-counts on overflow, so a peer flooding
     // topics costs a counter, never an eviction and never an abort.
-    e.m_messages.on_topic_edge([&e](const graph::topic_edge &edge)
-                               { e.bump_graph_generation(e.m_topics.upsert(edge).changed, edge.node, graph::change_kind::appeared); });
+    e.m_messages.on_topic_edge(
+            [&e](const graph::topic_edge &edge)
+            {
+                e.bump_graph_generation(e.m_topics.upsert(edge).changed, edge.node, graph::change_kind::appeared);
+                e.relay_maybe_refresh(edge.node);
+            });
     // The receive half of transitive propagation: a decoded peer_report about a third-party origin
     // enters the engine gate chain (origin-universe fail-closed, self-guard, hop budget, per-origin
     // dedup) before any awareness mutation.

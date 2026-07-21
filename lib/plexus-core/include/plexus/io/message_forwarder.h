@@ -148,6 +148,11 @@ public:
         m_endpoint.send_declare(channel, td);
     }
 
+    void send_peer_report(channel_type &channel, std::span<const std::byte> bytes)
+    {
+        m_endpoint.send_peer_report(channel, bytes);
+    }
+
     void on_declaration(plexus::detail::move_only_function<void(const wire::topic_declaration &)> hook)
     {
         m_on_declaration_cb = std::move(hook);

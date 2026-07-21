@@ -58,6 +58,13 @@ add_executable(muxify_bounded_storage_tu muxify_bounded_storage_tu.cpp)
 target_link_libraries(muxify_bounded_storage_tu PRIVATE plexus::plexus plexus::inproc)
 add_test(NAME graph.muxify_bounded_storage_tu COMMAND muxify_bounded_storage_tu)
 
+# The relay-decorator vocabulary gate: a compile-time proof that a non-relay profile resolves the
+# peer_report emitter to the structurally-absent null twin and composing relay<> selects the real one
+# while preserving every storage alias. Reuses the inproc policy + transport as a real mechanism pair.
+add_executable(relay_profile_tu relay_profile_tu.cpp)
+target_link_libraries(relay_profile_tu PRIVATE plexus::plexus plexus::inproc)
+add_test(NAME graph.relay_profile_tu COMMAND relay_profile_tu)
+
 # The participant-snapshot fill + node_id keying oracle over the deterministic inproc backend:
 # a basic_node test, so it links the facade + inproc + discovery.
 add_executable(test_graph_snapshot test_graph_snapshot.cpp)
@@ -185,3 +192,25 @@ target_link_libraries(test_peer_report_withdrawal PRIVATE
     Catch2::Catch2WithMain)
 target_include_directories(test_peer_report_withdrawal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_peer_report_withdrawal TEST_PREFIX "graph.")
+
+# The relay emitter's lift + host-side universe stamp + refuse-to-bridge, exercised directly over a
+# topic table so the identity, topics-with-types, and universe of the produced report are asserted and
+# a foreign-universe origin is refused with no report.
+add_executable(test_peer_report_emitter test_peer_report_emitter.cpp)
+target_link_libraries(test_peer_report_emitter PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_peer_report_emitter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_peer_report_emitter TEST_PREFIX "graph.")
+
+# The relay emit + withdrawal wiring end to end: a relay engine asserts an attached origin to a
+# downstream session, and a lost live path (origin goodbye, session death, or TTL age-out) emits a
+# withdrawal-flagged report to connected sessions and drops the origin from the replay set.
+add_executable(test_peer_report_emitter_withdrawal test_peer_report_emitter_withdrawal.cpp)
+target_link_libraries(test_peer_report_emitter_withdrawal PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_peer_report_emitter_withdrawal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_peer_report_emitter_withdrawal TEST_PREFIX "graph.")

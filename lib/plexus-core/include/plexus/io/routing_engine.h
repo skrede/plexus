@@ -24,6 +24,7 @@
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/upgrade_coordinator.h"
 #include "plexus/io/peer_session_registry.h"
+#include "plexus/io/peer_report_emitter.h"
 #include "plexus/io/session_build_context.h"
 #include "plexus/io/reliability_requirement.h"
 
@@ -66,7 +67,7 @@ struct default_liveliness_storage
 
 template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock, typename PeerStorage = std_map_peer_storage,
          typename TopicStorage = graph::std_map_topic_storage, typename LivelinessStorage = default_liveliness_storage,
-         typename GraphChangeLog = graph::vector_graph_change_log>
+         typename GraphChangeLog = graph::vector_graph_change_log, typename PeerReportEmitter = null_peer_report_emitter>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
 {
@@ -86,9 +87,10 @@ class routing_engine
     };
 
 public:
-    using policy_type        = Policy;
-    using peer_storage_type  = PeerStorage;
-    using topic_storage_type = TopicStorage;
+    using policy_type              = Policy;
+    using peer_storage_type        = PeerStorage;
+    using topic_storage_type       = TopicStorage;
+    using peer_report_emitter_type = PeerReportEmitter;
     using session_type       = peer_session<Policy>;
     using executor_type      = typename Policy::executor_type;
     using channel_type       = typename Policy::byte_channel_type;
@@ -198,6 +200,7 @@ public:
         const bool changed = m_known_peers.forget(id);
         m_registry.deny_redial(id);
         m_peer_liveliness.note_awareness_lost(id);
+        relay_withdraw(id);
         bump_graph_generation(changed, id, graph::change_kind::disappeared);
     }
 
@@ -329,6 +332,16 @@ public:
         return m_graph_generation;
     }
 
+    std::size_t reported_origin_count() const noexcept
+    {
+        return m_emitter.reported_count();
+    }
+
+    bool reports_origin(const node_id &origin) const noexcept
+    {
+        return m_emitter.reports(origin);
+    }
+
     io::host_fingerprint local_fingerprint() const noexcept
     {
         return m_build.fsm_cfg.local_fingerprint;
@@ -420,6 +433,7 @@ private:
     bool m_graph_wakeup_pending{false};
     std::size_t m_graph_subscribers{0};
     GraphChangeLog m_graph_log;
+    PeerReportEmitter m_emitter;
     liveliness_monitor<Policy, Clock, typename LivelinessStorage::monitor> m_monitor;
     peer_liveliness<typename LivelinessStorage::arbiter> m_peer_liveliness;
     std::vector<std::reference_wrapper<observer>> m_observers;
@@ -556,6 +570,7 @@ private:
         if(torn != nullptr && !any_session_for(torn->peer_identity()))
         {
             const node_id who  = torn->peer_identity();
+            relay_withdraw(who);
             const bool changed = m_topics.remove_node(who);
             bump_graph_generation(changed, who, graph::change_kind::disappeared);
         }
@@ -565,6 +580,8 @@ private:
     {
         feed_liveliness_session(ev);
         forget_topics_on_teardown(ev);
+        if(ev.edge == lifecycle_edge::connected || ev.edge == lifecycle_edge::reconnected)
+            relay_on_ready(ev.id);
         switch(ev.edge)
         {
             case lifecycle_edge::connected:
@@ -698,6 +715,59 @@ private:
         bump_graph_generation(true, origin, graph::change_kind::disappeared);
     }
 
+    // The emit seam a newly-completed session runs: hand it every origin already reported (skipping a
+    // report about its own peer) the way redeclare_all replays declarations, then lift the just-
+    // attached peer as an origin and assert it to the rest. A non-relay node threads the null twin, so
+    // both calls are no-ops and no peer_report leaves the wire.
+    void relay_on_ready(const node_id &id)
+    {
+        session_type *fresh = m_registry.session_for(id);
+        if(fresh == nullptr)
+            return;
+        const node_id peer = fresh->peer_identity();
+        m_emitter.replay(peer, [this, fresh](const wire::peer_report &pr) { relay_send(*fresh, pr); });
+        relay_note_origin(peer);
+    }
+
+    // Re-lift an already-attached origin whose topic table changed, so a late or updated declaration
+    // re-announces downstream. Only a directly-attached origin (never self, never a via-only reported
+    // candidate) is a relay source.
+    void relay_maybe_refresh(const node_id &node)
+    {
+        if(node == m_build.fsm_cfg.self_id || !any_session_for(node))
+            return;
+        relay_note_origin(node);
+    }
+
+    void relay_note_origin(const node_id &origin)
+    {
+        m_emitter.note_origin(m_report, origin, m_report.universe, m_topics, [this](const wire::peer_report &pr) { relay_broadcast(pr); });
+    }
+
+    void relay_withdraw(const node_id &origin)
+    {
+        m_emitter.withdraw(origin, [this](const wire::peer_report &pr) { relay_broadcast(pr); });
+    }
+
+    // Send one report to every connected session but the origin's own — an origin is never announced
+    // back to itself. The encode is per-broadcast, off the emitted report only.
+    void relay_broadcast(const wire::peer_report &pr)
+    {
+        auto bytes = wire::encode_peer_report(pr);
+        m_registry.for_each_connected(
+                [&](const node_id &, session_type &s)
+                {
+                    if(s.peer_identity() != pr.origin)
+                        m_messages.send_peer_report(s.msg_peer().channel, bytes);
+                });
+    }
+
+    void relay_send(session_type &s, const wire::peer_report &pr)
+    {
+        if(s.peer_identity() != pr.origin)
+            m_messages.send_peer_report(s.msg_peer().channel, wire::encode_peer_report(pr));
+    }
+
     // Awareness-only removal on the existing tick: forgets a peer that stopped re-announcing and was
     // not refreshed by a heartbeat. A reported origin ages out the same way — its topics retire with
     // it (a live reporter is the only refresh). NEVER touches m_registry — an active session outlives
@@ -711,6 +781,7 @@ private:
                                         [this](const node_id &id)
                                         {
                                             m_peer_liveliness.note_awareness_lost(id);
+                                            relay_withdraw(id);
                                             if(m_reported.erase(id) != 0)
                                                 m_topics.remove_node(id);
                                             bump_graph_generation(true, id, graph::change_kind::disappeared);
