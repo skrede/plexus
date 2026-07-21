@@ -164,3 +164,24 @@ target_link_libraries(test_graph_self_edges PRIVATE
     plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_graph_self_edges TEST_PREFIX "graph.")
+
+# The peer_report receive gate chain at the engine seam: origin-universe fail-closed, self-guard, hop
+# budget, and per-origin dedup admit a via-only reported candidate without dialing or perturbing the
+# direct-peer table. Drives the shared support/graph_change_inproc.h harness, so tests/ is on the path.
+add_executable(test_peer_report_admission test_peer_report_admission.cpp)
+target_link_libraries(test_peer_report_admission PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_peer_report_admission PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_peer_report_admission TEST_PREFIX "graph.")
+
+# Withdrawal and TTL retirement of a reported entry: a goodbye flag or an aged-out row retires the
+# candidate AND the origin's topic edges without churning the identity; only a live reporter refreshes.
+add_executable(test_peer_report_withdrawal test_peer_report_withdrawal.cpp)
+target_link_libraries(test_peer_report_withdrawal PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_peer_report_withdrawal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_peer_report_withdrawal TEST_PREFIX "graph.")

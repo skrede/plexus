@@ -35,6 +35,7 @@
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/peer_report.h"
 #include "plexus/wire/topic_declaration.h"
 
 #include <span>
@@ -413,6 +414,19 @@ public:
             m_on_topic_edge_cb(edge);
     }
 
+    void on_peer_report(plexus::detail::move_only_function<void(const node_id &, const wire::peer_report &)> hook)
+    {
+        m_on_peer_report_cb = std::move(hook);
+    }
+
+    // A relay's re-announcement of a THIRD-party origin, forwarded to the engine gate chain. The
+    // report borrows the decoded frame, so the sink copies only what the owning route table keeps.
+    void note_peer_report(const node_id &reporter, const wire::peer_report &pr)
+    {
+        if(m_on_peer_report_cb)
+            m_on_peer_report_cb(reporter, pr);
+    }
+
     void fetch_latched(const peer &p, std::uint64_t topic_hash, std::uint32_t max_samples)
     {
         auto it = m_retained.find(topic_hash);
@@ -647,6 +661,7 @@ private:
     std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
     plexus::detail::move_only_function<void(const graph::topic_edge &)> m_on_topic_edge_cb;
+    plexus::detail::move_only_function<void(const node_id &, const wire::peer_report &)> m_on_peer_report_cb;
     plexus::detail::move_only_function<void(const wire::topic_declaration &)> m_on_declaration_cb;
     plexus::detail::move_only_function<bool(std::uint64_t)> m_capture_wants_payload_cb;
     plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change_cb;

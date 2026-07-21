@@ -5,6 +5,7 @@
 
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_complete.h"
+#include "plexus/io/detail/peer_report_consumers.h"
 
 #include "plexus/io/security/attach_facts.h"
 
@@ -108,6 +109,15 @@ void register_session_consumers(Session &s)
             });
     s.m_router.on_subscribe([&s](std::span<const std::byte> inner) { on_subscribe_received(s, inner); });
     s.m_router.on_declare([&s](std::span<const std::byte> inner) { on_declare_received(s, inner); });
+    // The always-compiled peer_report receive half: a complete session's 0x0E frame decodes and folds
+    // through the shared message seam into the engine gate chain, attributed to the handshake-proven
+    // sender as the reporter (distinct from the report's origin).
+    s.m_router.on_peer_report(
+            [&s](std::span<const std::byte> inner)
+            {
+                if(s.is_complete())
+                    ingest_peer_report_frame(s.m_messages, s.m_fsm.last_seen_peer_id(), inner);
+            });
     s.m_router.on_fetch_latched(
             [&s](std::span<const std::byte> inner)
             {

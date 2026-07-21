@@ -4,9 +4,14 @@
 #include "plexus/io/route_options.h"
 #include "plexus/io/route_candidate.h"
 
+#include "plexus/wire/udp_dedup_window.h"
+
+#include "plexus/node_id.h"
+
 #include "plexus/detail/fail_closed.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <algorithm>
 
 namespace plexus::io::detail
@@ -16,6 +21,14 @@ struct admit_result
 {
     bool changed;
     bool dropped;
+};
+
+enum class report_admit : std::uint8_t
+{
+    noted_new,
+    refreshed,
+    duplicate,
+    dropped
 };
 
 // One direct row per identity: a re-store of the direct endpoint matches it regardless of transport,
@@ -95,6 +108,55 @@ inline admit_result admit_candidate(route_candidate *slots, std::size_t &count, 
     if(cand.is_direct())
         return admit_direct(slots, count, cap, cand, now);
     return admit_transitive(slots, count, cap, cand, now, opts);
+}
+
+// A reported (via-only) candidate keyed per (origin, via) row: an existing row admits the seq against
+// its embedded dedup window, so a duplicate or too_old seq is a no-op that neither refreshes the row
+// nor bumps the graph, and only a fresh seq refreshes it; a first sighting seeds the window and takes
+// a non-reserved row (rejected-and-counted when the transitive region is full). Removal is
+// remove_transitive_row, never this path.
+inline report_admit admit_reported(route_candidate *slots, std::size_t &count, std::size_t cap, const route_candidate &cand, std::uint16_t seq, std::uint64_t now,
+                                   const route_options &opts)
+{
+    for(std::size_t i = 0; i < count; ++i)
+        if(same_candidate(slots[i], cand))
+        {
+            if(slots[i].seq_window.admit(seq) != wire::udp_dedup_window::outcome::fresh)
+                return report_admit::duplicate;
+            slots[i].last_refreshed = now;
+            return report_admit::refreshed;
+        }
+    if(!transitive_has_room(slots, count, cap, opts))
+        return report_admit::dropped;
+    route_candidate seeded = cand;
+    seeded.seq_window.admit(seq);
+    place(slots[count++], seeded, now);
+    return report_admit::noted_new;
+}
+
+// Admits a reported candidate into a record and stamps its freshness tick on a noted/refreshed row,
+// so both storage twins share the whole per-record note path (only the drop tally stays per-storage).
+inline report_admit note_reported_row(route_candidate *slots, std::size_t &count, std::size_t cap, std::uint64_t &last_refreshed, const route_candidate &cand,
+                                      std::uint16_t seq, std::uint64_t now, const route_options &opts)
+{
+    const auto r = admit_reported(slots, count, cap, cand, seq, now, opts);
+    if(r == report_admit::noted_new || r == report_admit::refreshed)
+        last_refreshed = now;
+    return r;
+}
+
+// Retires the transitive row reaching origin via `via`, compacting the array; the direct row (if any)
+// is never touched. Returns true when a row was removed.
+inline bool remove_transitive_row(route_candidate *slots, std::size_t &count, const node_id &via)
+{
+    for(std::size_t i = 0; i < count; ++i)
+        if(!slots[i].is_direct() && slots[i].reach.via == via)
+        {
+            slots[i]       = slots[count - 1];
+            slots[--count] = route_candidate{};
+            return true;
+        }
+    return false;
 }
 
 // The direct endpoint an identity's rows surface to a dial/scoping path: the direct row only, never a

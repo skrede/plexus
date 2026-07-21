@@ -52,6 +52,22 @@ public:
             ++m_dropped;
         return r.changed;
     }
+    detail::report_admit note_reported(const node_id &id, const route_candidate &cand, std::uint16_t seq, std::uint64_t now, const route_options &opts)
+    {
+        record &rec  = m_table[id];
+        const auto r = detail::note_reported_row(rec.candidates.data(), rec.count, candidate_cap, rec.last_refreshed, cand, seq, now, opts);
+        m_dropped += static_cast<std::size_t>(r == detail::report_admit::dropped);
+        return r;
+    }
+    bool remove_transitive(const node_id &id, const node_id &via)
+    {
+        auto it = m_table.find(id);
+        if(it == m_table.end() || !detail::remove_transitive_row(it->second.candidates.data(), it->second.count, via))
+            return false;
+        if(it->second.count == 0)
+            m_table.erase(it);
+        return true;
+    }
     void refresh(const node_id &id, std::uint64_t now)
     {
         if(auto it = m_table.find(id); it != m_table.end())
@@ -134,6 +150,21 @@ public:
     bool note_peer(const node_id &id, const endpoint &ep, std::uint64_t now)
     {
         return m_storage.put(id, ep, now);
+    }
+
+    // A reported (via-only) transitive candidate about a THIRD-party origin, deduplicated on the
+    // per-origin seq embedded in its row; the direct-peer awareness is never perturbed.
+    detail::report_admit note_reported(const node_id &id, const route_candidate &cand, std::uint16_t seq, std::uint64_t now, const route_options &opts)
+    {
+        return m_storage.note_reported(id, cand, seq, now, opts);
+    }
+    bool remove_transitive(const node_id &id, const node_id &via)
+    {
+        return m_storage.remove_transitive(id, via);
+    }
+    std::span<const route_candidate> candidates(const node_id &id) const
+    {
+        return m_storage.candidates(id);
     }
 
     // Extends an EXISTING entry's freshness; a no-op for an unknown id (a heartbeat from a

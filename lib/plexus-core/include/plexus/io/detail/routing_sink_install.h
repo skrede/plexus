@@ -15,6 +15,7 @@
 #include "plexus/graph/topic_record.h"
 
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/peer_report.h"
 #include "plexus/wire/topic_declaration.h"
 
 #include "plexus/node_id.h"
@@ -56,6 +57,10 @@ void install_routing_sinks(Engine &e)
     // topics costs a counter, never an eviction and never an abort.
     e.m_messages.on_topic_edge([&e](const graph::topic_edge &edge)
                                { e.bump_graph_generation(e.m_topics.upsert(edge).changed, edge.node, graph::change_kind::appeared); });
+    // The receive half of transitive propagation: a decoded peer_report about a third-party origin
+    // enters the engine gate chain (origin-universe fail-closed, self-guard, hop budget, per-origin
+    // dedup) before any awareness mutation.
+    e.m_messages.on_peer_report([&e](const node_id &reporter, const wire::peer_report &pr) { e.ingest_peer_report(reporter, pr); });
     // A local declaration reaches every peer already listening; an incomplete session would lose
     // the frame, so the ones still handshaking are caught by the replay their completion runs.
     e.m_messages.on_declaration([&e](const wire::topic_declaration &td)

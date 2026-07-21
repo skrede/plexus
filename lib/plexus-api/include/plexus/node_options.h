@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_NODE_OPTIONS_H
 
 #include "plexus/io/fragmentation.h"
+#include "plexus/io/report_options.h"
 #include "plexus/io/host_fingerprint.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/liveliness_options.h"
@@ -70,6 +71,12 @@ struct node_options
     // (the carried aging deadline vs the swept heartbeat values) is documented at the
     // liveliness_options definition.
     io::liveliness_options liveliness{};
+
+    // The node's own control-plane universe stamp and the loop-safety bounds an inbound peer_report is
+    // admitted under. Defaults to the concrete default universe with depth-1 admission; a node on a
+    // custom universe stamps the same universe it advertises on (no session field carries the
+    // receiver's own universe).
+    io::report_options report{};
 
     // fidelity off selects nothing, so a node that declares no recording QoS ships zero capture.
     recording_qos capture{};

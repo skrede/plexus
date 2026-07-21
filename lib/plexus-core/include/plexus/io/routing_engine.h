@@ -19,6 +19,7 @@
 #include "plexus/io/peer_liveliness.h"
 #include "plexus/io/liveliness_monitor.h"
 #include "plexus/io/route_options.h"
+#include "plexus/io/report_options.h"
 #include "plexus/io/liveliness_options.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/upgrade_coordinator.h"
@@ -33,12 +34,16 @@
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_sink_install.h"
+#include "plexus/io/detail/peer_report_consumers.h"
+
+#include "plexus/graph/topic_record.h"
 
 #include "plexus/log/logger.h"
 
 #include "plexus/wire/topic_hash.h"
 #include "plexus/wire/frame_codec.h"
 
+#include <set>
 #include <span>
 #include <chrono>
 #include <memory>
@@ -91,10 +96,11 @@ public:
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
-                   io::liveliness_options live = {}, io::route_options routes = {})
+                   io::liveliness_options live = {}, io::route_options routes = {}, io::report_options report = {})
             : m_dial_eagerly(dial_eagerly)
             , m_liveliness(live)
             , m_route_options(routes)
+            , m_report(io::make_report_ctx(report))
             , m_transport(transport)
             , m_executor(executor)
             , m_security_fanout{*this}
@@ -193,6 +199,19 @@ public:
         m_registry.deny_redial(id);
         m_peer_liveliness.note_awareness_lost(id);
         bump_graph_generation(changed, id, graph::change_kind::disappeared);
+    }
+
+    // The receive gate chain for an inbound peer_report about a THIRD-party origin: fail-closed
+    // against the ORIGIN universe, then self-guard, both BEFORE any awareness mutation. The hop
+    // budget and per-origin dedup run in the note path. A reported candidate is via-only — it never
+    // dials and never feeds the direct-peer liveliness arbiter.
+    void ingest_peer_report(const node_id &reporter, const wire::peer_report &pr)
+    {
+        if(!detail::report_universe_admits(m_report, pr))
+            return;
+        if(pr.origin == m_build.fsm_cfg.self_id)
+            return;
+        note_reported_candidate(reporter, pr);
     }
 
     void reach(const node_id &id)
@@ -385,6 +404,7 @@ private:
     bool m_dial_eagerly;
     io::liveliness_options m_liveliness;
     io::route_options m_route_options;
+    io::report_universe_ctx m_report;
     Transport &m_transport;
     executor_type m_executor;
     capture_policy m_capture;
@@ -395,6 +415,7 @@ private:
     registry_type m_registry;
     basic_known_peers<PeerStorage> m_known_peers;
     graph::basic_topic_type_table<TopicStorage> m_topics;
+    std::set<node_id> m_reported;
     std::uint64_t m_graph_generation{0};
     bool m_graph_wakeup_pending{false};
     std::size_t m_graph_subscribers{0};
@@ -621,9 +642,66 @@ private:
         m_graph_log.clear();
     }
 
+    // The reported-candidate note path (hop budget + per-origin dedup, then write). A withdrawal-
+    // flagged report retires instead — a removal is never rate-limited. Only a first sighting bumps
+    // the graph appeared; a fresh re-report refreshes silently, a duplicate/over-budget report is a
+    // no-op. No dial and no direct-liveliness note: a reported identity is via-only.
+    void note_reported_candidate(const node_id &reporter, const wire::peer_report &pr)
+    {
+        if(pr.flags & wire::k_peer_report_withdrawal_flag)
+            return retire_reported(pr.origin, reporter);
+        if(pr.hop > m_report.hop_budget)
+            return;
+        const auto oc = m_known_peers.note_reported(pr.origin, reported_candidate(reporter, pr), pr.seq, now_for_aging(), m_route_options);
+        if(oc != detail::report_admit::noted_new && oc != detail::report_admit::refreshed)
+            return;
+        fold_report_topics(pr);
+        if(oc == detail::report_admit::noted_new)
+        {
+            m_reported.insert(pr.origin);
+            bump_graph_generation(true, pr.origin, graph::change_kind::appeared);
+        }
+    }
+
+    route_candidate reported_candidate(const node_id &reporter, const wire::peer_report &pr) const
+    {
+        route_candidate cand{};
+        cand.reach      = graph::route{endpoint{}, reporter};
+        cand.origin     = graph::provenance{graph::observation::reported, reporter};
+        cand.hop        = pr.hop;
+        cand.seq_window = wire::udp_dedup_window{m_report.dedup_depth};
+        return cand;
+    }
+
+    // A reported origin has no session, so its topic edges must be folded here and retired on
+    // withdrawal/aging or they outlive the reachability that carried them. The origin's wire
+    // declarations fold under its own id as publisher edges.
+    void fold_report_topics(const wire::peer_report &pr)
+    {
+        for(const wire::topic_declaration &td : pr.topics)
+        {
+            const std::optional<std::uint64_t> tid = td.state == wire::type_state::undeclared ? std::nullopt : std::optional{td.type_id};
+            const bool changed = m_topics.upsert(graph::topic_edge{pr.origin, td.fqn, td.type_name, tid, graph::topic_role::publisher}).changed;
+            bump_graph_generation(changed, pr.origin, graph::change_kind::appeared);
+        }
+    }
+
+    // Retires a reported origin's transitive row and, once no reachability remains, its topic edges —
+    // WITHOUT churning the identity (only reachability rows retire). A row still held by a direct
+    // session keeps both the id and its topics.
+    void retire_reported(const node_id &origin, const node_id &via)
+    {
+        if(!m_known_peers.remove_transitive(origin, via) || m_known_peers.contains(origin))
+            return;
+        m_reported.erase(origin);
+        m_topics.remove_node(origin);
+        bump_graph_generation(true, origin, graph::change_kind::disappeared);
+    }
+
     // Awareness-only removal on the existing tick: forgets a peer that stopped re-announcing and was
-    // not refreshed by a heartbeat. NEVER touches m_registry — an active session outlives its
-    // awareness entry.
+    // not refreshed by a heartbeat. A reported origin ages out the same way — its topics retire with
+    // it (a live reporter is the only refresh). NEVER touches m_registry — an active session outlives
+    // its awareness entry.
     void sweep_aged_awareness()
     {
         const std::uint64_t now      = now_for_aging();
@@ -633,6 +711,8 @@ private:
                                         [this](const node_id &id)
                                         {
                                             m_peer_liveliness.note_awareness_lost(id);
+                                            if(m_reported.erase(id) != 0)
+                                                m_topics.remove_node(id);
                                             bump_graph_generation(true, id, graph::change_kind::disappeared);
                                         });
     }

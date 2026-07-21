@@ -59,6 +59,30 @@ public:
         return r.changed;
     }
 
+    // Reported (via-only) admission: a new origin claims a free slot without fail_closed (a transitive
+    // report never aborts the table), and the seq dedups against the row's embedded window.
+    detail::report_admit note_reported(const node_id &id, const route_candidate &cand, std::uint16_t seq, std::uint64_t now, const route_options &opts)
+    {
+        entry *slot = find(id);
+        if(slot == nullptr)
+            slot = claim(id, false);
+        if(slot == nullptr)
+            return (++m_dropped, detail::report_admit::dropped);
+        const auto r = detail::note_reported_row(slot->candidates.data(), slot->count, Candidates, slot->last_refreshed, cand, seq, now, opts);
+        m_dropped += static_cast<std::size_t>(r == detail::report_admit::dropped);
+        return r;
+    }
+
+    bool remove_transitive(const node_id &id, const node_id &via)
+    {
+        entry *slot = find(id);
+        if(slot == nullptr || !detail::remove_transitive_row(slot->candidates.data(), slot->count, via))
+            return false;
+        if(slot->count == 0)
+            slot->occupied = false;
+        return true;
+    }
+
     void refresh(const node_id &id, std::uint64_t now)
     {
         if(entry *slot = find(id))
