@@ -257,7 +257,7 @@ public:
             , m_leaf(engine_leaf(transports...))
             , m_self_channel(executor, m_service_name)
             , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout, opts.reconnect, opts.redial_seed, resolve_logger(opts), opts.dial_eagerly,
-                       opts.max_message_bytes, opts.liveliness, io::route_options{}, opts.report)
+                       opts.max_message_bytes, opts.liveliness, opts.routes, opts.report)
     {
         // The routes are installed and the card advertised synchronously in the ctor turn, before
         // any session is built (the set-before-listen contract).
@@ -644,7 +644,7 @@ private:
     template<typename OnReply>
     void call_seam(std::string_view fqn, std::span<const std::byte> param, OnReply on_reply, std::optional<std::chrono::nanoseconds> deadline)
     {
-        const bool with_fallback = detail::first_via_relay_origin(m_engine, m_id).has_value();
+        const bool with_fallback = m_engine.route_opts().usage != io::route_usage::never && detail::first_via_relay_origin(m_engine, m_id).has_value();
         for(const auto &peer : m_known_peers)
         {
             auto *session = m_engine.registry().session_for(peer);

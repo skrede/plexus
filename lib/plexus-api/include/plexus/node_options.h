@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_NODE_OPTIONS_H
 
 #include "plexus/io/fragmentation.h"
+#include "plexus/io/route_options.h"
 #include "plexus/io/report_options.h"
 #include "plexus/io/host_fingerprint.h"
 #include "plexus/io/reconnect_config.h"
@@ -77,6 +78,10 @@ struct node_options
     // custom universe stamps the same universe it advertises on (no session field carries the
     // receiver's own universe).
     io::report_options report{};
+
+    // The node's route-usage posture. The default prefers a direct path and uses a relayed one only
+    // when no direct path is held, so a direct-only node behaves exactly as it did before relaying.
+    io::route_options routes{};
 
     // fidelity off selects nothing, so a node that declares no recording QoS ships zero capture.
     recording_qos capture{};

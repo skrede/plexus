@@ -567,6 +567,20 @@ public:
         m_forward_ctx = make_forward_ctx(opts);
     }
 
+    // Whether this node consumes a relayed publish addressed to it. A node that never uses relayed
+    // routes still admits a forwarded frame through the shared dedup gate (so a relay re-fanning it
+    // stays sequenced) but never delivers it to its own subscribers — the receive-side half of the
+    // never posture, the send/reply half living at the forward_rpc and call-fallback selection sites.
+    void set_consume_relayed(bool consume) noexcept
+    {
+        m_consume_relayed = consume;
+    }
+
+    bool consumes_relayed() const noexcept
+    {
+        return m_consume_relayed;
+    }
+
     void fetch_latched(const peer &p, std::uint64_t topic_hash, std::uint32_t max_samples)
     {
         auto it = m_retained.find(topic_hash);
@@ -794,6 +808,7 @@ private:
     log::logger &m_logger;
     std::size_t m_global_default;
     forward_ctx m_forward_ctx;
+    bool m_consume_relayed{true};
     detail::forward_dedup_table m_forward_dedup;
     endpoint_type m_endpoint;
     std::vector<remembered_demand> m_empty;

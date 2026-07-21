@@ -121,6 +121,7 @@ public:
             , m_splice(io::make_forward_ctx(forward))
     {
         m_messages.set_forward_options(forward);
+        m_messages.set_consume_relayed(routes.usage != route_usage::never);
         detail::install_routing_sinks(*this);
         install_splice_refan();
     }
@@ -899,21 +900,47 @@ private:
     bool forward_rpc(const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> inner_frame)
     {
         const auto cands      = m_known_peers.candidates(destination);
-        const std::size_t idx = route_select(cands);
+        const std::size_t idx = route_select(cands, m_route_options.usage);
         if(idx == route_select_npos)
         {
             if(session_type *direct = session_by_identity(destination))
                 return send_forwarded_rpc(*direct, origin, destination, hop, inner_frame), true;
             return (void)++m_forward_rpc_dropped, false;
         }
+        if(session_type *s = forward_session_for(cands, idx, destination))
+            return send_forwarded_rpc(*s, origin, destination, hop, inner_frame), true;
+        return (void)++m_forward_rpc_dropped, false;
+    }
+
+    // Resolve the session that carries the forwarded frame for the ranked pick. prefer_direct (and
+    // never, which route_select has already kept to a direct winner) binds the single pick's via and
+    // drops when it has no live session — a working direct path is used, but a stale pick never falls
+    // through. allow_relayed instead takes the best-ranked candidate that HAS a live session, so a
+    // held direct candidate with no session yields to a live relayed one. The scan is bounded to the
+    // candidate span, so the fall-through cannot loop.
+    session_type *forward_session_for(std::span<const route_candidate> cands, std::size_t idx, const node_id &destination)
+    {
+        if(m_route_options.usage == route_usage::allow_relayed)
+            return best_live_forward_session(cands, destination);
         const route_candidate &c = cands[idx];
         if(!c.is_direct() && !c.reach.via)
-            return (void)++m_forward_rpc_dropped, false;
-        session_type *s = session_by_identity(c.is_direct() ? destination : *c.reach.via);
-        if(s == nullptr)
-            return (void)++m_forward_rpc_dropped, false;
-        send_forwarded_rpc(*s, origin, destination, hop, inner_frame);
-        return true;
+            return nullptr;
+        return session_by_identity(c.is_direct() ? destination : *c.reach.via);
+    }
+
+    session_type *best_live_forward_session(std::span<const route_candidate> cands, const node_id &destination)
+    {
+        session_type *best_session   = nullptr;
+        const route_candidate *chosen = nullptr;
+        for(const route_candidate &c : cands)
+        {
+            if(!c.is_direct() && !c.reach.via)
+                continue;
+            session_type *s = session_by_identity(c.is_direct() ? destination : *c.reach.via);
+            if(s != nullptr && (chosen == nullptr || route_outranks(c, *chosen)))
+                chosen = &c, best_session = s;
+        }
+        return best_session;
     }
 
     void send_forwarded_rpc(session_type &s, const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> inner_frame)

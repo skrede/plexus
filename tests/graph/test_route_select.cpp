@@ -27,6 +27,7 @@ using plexus::io::endpoint;
 using plexus::io::route_candidate;
 using plexus::io::route_select;
 using plexus::io::route_select_npos;
+using plexus::io::route_usage;
 
 node_id id_with(std::uint8_t tag)
 {
@@ -126,4 +127,40 @@ TEST_CASE("route_select returns npos for an empty span without dereferencing", "
 {
     const std::span<const route_candidate> empty{};
     REQUIRE(route_select(empty) == route_select_npos);
+}
+
+TEST_CASE("route_select under never rejects a relayed-only span, yielding npos", "[graph][route_select][usage]")
+{
+    const std::array<route_candidate, 2> span{relayed(1, 10), relayed(2, 20)};
+    REQUIRE(route_select(span, route_usage::never) == route_select_npos);
+    REQUIRE(route_select(span, route_usage::prefer_direct) == 0);
+    REQUIRE(route_select(span, route_usage::allow_relayed) == 0);
+}
+
+TEST_CASE("route_select keeps a direct winner across every usage mode", "[graph][route_select][usage]")
+{
+    const std::array<route_candidate, 3> span{relayed(1, 10), direct(100), relayed(2, 20)};
+    for(const route_usage usage : {route_usage::never, route_usage::prefer_direct, route_usage::allow_relayed})
+    {
+        const auto pick = route_select(span, usage);
+        REQUIRE(pick != route_select_npos);
+        REQUIRE(span[pick].is_direct());
+        REQUIRE(span[pick].last_refreshed == 100);
+    }
+}
+
+TEST_CASE("route_select prefer_direct and allow_relayed keep a relayed pick that never rejects", "[graph][route_select][usage]")
+{
+    const std::array<route_candidate, 1> span{relayed(3, 33)};
+    REQUIRE(route_select(span, route_usage::prefer_direct) == 0);
+    REQUIRE(route_select(span, route_usage::allow_relayed) == 0);
+    REQUIRE(route_select(span, route_usage::never) == route_select_npos);
+}
+
+TEST_CASE("route_select usage overload leaves an empty span at npos for every mode", "[graph][route_select][usage]")
+{
+    const std::span<const route_candidate> empty{};
+    REQUIRE(route_select(empty, route_usage::never) == route_select_npos);
+    REQUIRE(route_select(empty, route_usage::prefer_direct) == route_select_npos);
+    REQUIRE(route_select(empty, route_usage::allow_relayed) == route_select_npos);
 }

@@ -110,11 +110,18 @@ struct cold_cluster
 
     std::uint16_t tcp_port{0};
 
-    cold_cluster()
-            : consumer{io, cdisc, consumer_id, consumer_tcp, named("consumer")}
+    explicit cold_cluster(plexus::io::route_usage consumer_usage = plexus::io::route_usage::prefer_direct)
+            : consumer{io, cdisc, consumer_id, consumer_tcp, consumer_options(consumer_usage)}
     {
         relay.emplace(io, rdisc, relay_id, relay_serial, relay_tcp, named("relay"));
         origin.emplace(io, odisc, origin_id, origin_serial, named("origin"));
+    }
+
+    static plexus::node_options consumer_options(plexus::io::route_usage usage)
+    {
+        plexus::node_options opts = named("consumer");
+        opts.routes.usage         = usage;
+        return opts;
     }
 
     static plexus::node_options named(std::string_view n)

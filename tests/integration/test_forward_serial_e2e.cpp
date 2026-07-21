@@ -22,6 +22,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <vector>
 #include <cstddef>
@@ -157,6 +158,118 @@ void run_reqres_once()
     REQUIRE_FALSE(connected(cluster.consumer, cluster.origin_id));
 }
 
+// A never consumer admits the relayed origin (it is enumerable) but never consumes its relayed publish:
+// the demand still propagates up through the relay (so the origin publishes and the relay forwards the
+// frame), yet the consumer drops it at the forwarded-receive rather than delivering it to a subscriber.
+void run_never_denies_relayed_pubsub()
+{
+    cold_cluster cluster{plexus::io::route_usage::never};
+    cluster.bring_up_serial();
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
+
+    std::optional<plexus::publisher<>> pub;
+    pub.emplace(*cluster.origin, k_topic, plexus::topic_qos{}, /*emit_source_identity=*/true);
+    cluster.pump([&] { return cluster.relay->count_publishers(std::string{k_topic}) >= 1; });
+
+    cluster.bring_up_tcp();
+    REQUIRE(connected(cluster.consumer, cluster.relay_id));
+
+    // Admit-but-never-select: the relayed origin is enumerable at the consumer even under never.
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+    const auto *reported = find_participant(cluster.consumer, cluster.origin_id);
+    REQUIRE(reported != nullptr);
+    REQUIRE(reported->origin.how == graph::observation::reported);
+    REQUIRE(reported->reach.via == cluster.relay_id);
+
+    delivery got;
+    plexus::subscriber<> sub{cluster.consumer, k_topic,
+                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+                             {
+                                 got.body = to_string(b);
+                                 if(info.source_identity)
+                                     got.source = info.source_identity->node_id();
+                             }};
+    // The relay does receive the demand and forward the publish (the origin gains a subscriber), so the
+    // frame reaches the consumer's forwarded-receive — where the never gate drops it before delivery.
+    cluster.pump([&] { return cluster.origin->count_subscribers(std::string{k_topic}) >= 1; });
+    pub->publish(as_bytes(std::string{"24.5C"}));
+    serial_fixture::settle(cluster.io, std::chrono::milliseconds(150));
+
+    REQUIRE(got.body.empty());
+    REQUIRE(find_participant(cluster.consumer, cluster.origin_id) != nullptr);
+
+    pub.reset();
+    cluster.kill_origin();
+}
+
+// A never consumer's via-relay call fallback never arms, so a procedure reachable only through the relay
+// finds no provider: the origin's handler never runs and the caller fails.
+void run_never_call_finds_no_relayed_provider()
+{
+    cold_cluster cluster{plexus::io::route_usage::never};
+    cluster.bring_up_serial();
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
+
+    std::string served;
+    plexus::procedure<> echo{*cluster.origin, k_procedure,
+                             [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
+                             {
+                                 served = to_string(param);
+                                 reply(plexus::wire::rpc_status::success, param);
+                             }};
+    cluster.pump([&] { return cluster.relay->count_publishers(std::string{k_procedure}) >= 0; });
+
+    cluster.bring_up_tcp();
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+
+    std::optional<bool> ok;
+    plexus::call_options opts;
+    opts.deadline = std::chrono::milliseconds(500);
+    plexus::caller<> call{cluster.consumer, k_procedure};
+    call.call(as_bytes(std::string{"ping"}), opts, [&](plexus::expected<plexus::reply, std::error_code> result) { ok = result.has_value(); });
+    cluster.pump([&] { return ok.has_value(); });
+
+    REQUIRE(ok.has_value());
+    REQUIRE_FALSE(*ok);
+    REQUIRE(served.empty());
+    REQUIRE_FALSE(connected(cluster.consumer, cluster.origin_id));
+}
+
+// An allow_relayed consumer reaches the same relayed origin the never consumer refuses: the publish is
+// delivered with the origin as the source, exactly as the default prefer_direct consumer sees it.
+void run_allow_relayed_reaches_relayed_origin()
+{
+    cold_cluster cluster{plexus::io::route_usage::allow_relayed};
+    cluster.bring_up_serial();
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
+
+    std::optional<plexus::publisher<>> pub;
+    pub.emplace(*cluster.origin, k_topic, plexus::topic_qos{}, /*emit_source_identity=*/true);
+    cluster.pump([&] { return cluster.relay->count_publishers(std::string{k_topic}) >= 1; });
+
+    cluster.bring_up_tcp();
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+
+    delivery got;
+    plexus::subscriber<> sub{cluster.consumer, k_topic,
+                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+                             {
+                                 got.body = to_string(b);
+                                 if(info.source_identity)
+                                     got.source = info.source_identity->node_id();
+                             }};
+    cluster.pump([&] { return cluster.origin->count_subscribers(std::string{k_topic}) >= 1; });
+    pub->publish(as_bytes(std::string{"24.5C"}));
+    cluster.pump([&] { return !got.body.empty(); });
+
+    REQUIRE(got.body == "24.5C");
+    REQUIRE(got.source.has_value());
+    REQUIRE(*got.source == cluster.origin_id);
+
+    pub.reset();
+    cluster.kill_origin();
+}
+
 }
 
 TEST_CASE("pub/sub and control transit a serial+TCP relay end-to-end with the origin as source, over cold runs",
@@ -173,4 +286,25 @@ TEST_CASE("request/response transits a serial+TCP relay end-to-end returning suc
 {
     for(int run = 0; run < k_runs; ++run)
         run_reqres_once();
+}
+
+TEST_CASE("a never consumer enumerates a relayed origin but never consumes its relayed publish, over cold runs",
+          "[integration][serial][relay][e2e][route_usage]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_never_denies_relayed_pubsub();
+}
+
+TEST_CASE("a never consumer's via-relay call finds no relayed provider, over cold runs",
+          "[integration][serial][relay][e2e][route_usage]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_never_call_finds_no_relayed_provider();
+}
+
+TEST_CASE("an allow_relayed consumer reaches the relayed origin a never consumer refuses, over cold runs",
+          "[integration][serial][relay][e2e][route_usage]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_allow_relayed_reaches_relayed_origin();
 }

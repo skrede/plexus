@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_ROUTE_SELECT_H
 #define HPP_GUARD_PLEXUS_IO_ROUTE_SELECT_H
 
+#include "plexus/io/route_options.h"
 #include "plexus/io/route_candidate.h"
 
 #include <span>
@@ -33,6 +34,20 @@ inline std::size_t route_select(std::span<const route_candidate> candidates) noe
     for(std::size_t i = 0; i < candidates.size(); ++i)
         if(best == route_select_npos || route_outranks(candidates[i], candidates[best]))
             best = i;
+    return best;
+}
+
+// The route_usage-aware pick. never rejects a relayed winner (a relayed candidate is not a usable
+// route, so a span holding only relayed candidates yields npos), while prefer_direct and allow_relayed
+// return route_select's rank unchanged — both differ from prefer_direct only in whether the caller
+// falls through to a live relayed session, which is a session-liveness decision the pure pick cannot
+// see. Because route_select already ranks a direct candidate ahead of any relayed one, a span holding
+// any direct candidate is unaffected by the mode. Pure: no state, no allocation, no I/O.
+inline std::size_t route_select(std::span<const route_candidate> candidates, route_usage usage) noexcept
+{
+    const std::size_t best = route_select(candidates);
+    if(usage == route_usage::never && best != route_select_npos && !candidates[best].is_direct())
+        return route_select_npos;
     return best;
 }
 
