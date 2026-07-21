@@ -78,6 +78,33 @@ TEST_CASE("dedup window: a large forward jump clears the bitmap and stays fresh"
     REQUIRE(w.admit(0) == outcome::too_old);
 }
 
+TEST_CASE("dedup window: a first sighting anchors on a high seq instead of aging it out", "[udp][dedup]")
+{
+    // A per-origin counter already past the serial half-space: the FIRST seq seen must anchor the
+    // window (fresh), not measure against the default high-water of 0 and classify too_old forever.
+    window w;
+    REQUIRE(w.admit(40000) == outcome::fresh);
+    REQUIRE(w.admit(40000) == outcome::duplicate);
+    REQUIRE(w.admit(40001) == outcome::fresh); // a following higher seq refreshes (was too_old pre-fix)
+    // A seq more than depth behind the freshly-anchored high-water is correctly older.
+    REQUIRE(w.admit(39960) == outcome::too_old);
+}
+
+TEST_CASE("dedup window: explicit anchor latches the window and reset re-arms first-sighting", "[udp][dedup]")
+{
+    window w;
+    w.anchor(200);
+    REQUIRE(w.admit(200) == outcome::duplicate); // the anchored seq is already seen
+    REQUIRE(w.admit(201) == outcome::fresh);
+
+    // A reporter restart drops its counter back to a low seq behind the mark; without a reset it is
+    // deduped (too_old). reset() re-arms the first-sighting anchor so the post-restart replay re-admits.
+    REQUIRE(w.admit(2) == outcome::too_old); // delta 199 > depth, behind 201
+    w.reset();
+    REQUIRE(w.admit(2) == outcome::fresh);   // re-anchored on the restarted counter
+    REQUIRE(w.admit(2) == outcome::duplicate);
+}
+
 TEST_CASE("dedup window: reset re-freshes seq=0 (the handshake/session-id transition)", "[udp][dedup]")
 {
     window w;

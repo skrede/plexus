@@ -16,6 +16,14 @@ namespace plexus::wire {
 
 namespace detail {
 
+// The topics count actually put on the wire: clamped to the decoder's ceiling so the u16 count field
+// can never wrap (a >65535-edge origin would otherwise encode a frame that decodes valid with almost
+// every topic silently lost). encode and encoded_size share it so the buffer and the count agree.
+inline std::size_t effective_topic_count(const peer_report &pr) noexcept
+{
+    return pr.topics.size() < k_peer_report_max_topics ? pr.topics.size() : k_peer_report_max_topics;
+}
+
 inline std::size_t peer_report_encoded_size(const peer_report &pr)
 {
     std::size_t total = peer_report_min_size;
@@ -24,8 +32,9 @@ inline std::size_t peer_report_encoded_size(const peer_report &pr)
     if(pr.flags & k_peer_report_topics_flag)
     {
         total += sizeof(std::uint16_t);
-        for(const auto &td : pr.topics)
-            total += topic_declaration_min_size + td.fqn.size() + td.type_name.size();
+        const std::size_t n = effective_topic_count(pr);
+        for(std::size_t i = 0; i < n; ++i)
+            total += topic_declaration_min_size + pr.topics[i].fqn.size() + pr.topics[i].type_name.size();
     }
     return total;
 }
@@ -70,14 +79,17 @@ inline bool decode_peer_report_topic_entry(reader &r, topic_declaration &td)
     return true;
 }
 
-// Read the append-only topics-with-types list when its presence flag is set. The count is capped
-// before any per-entry read off the untrusted frame so a claimed-huge count reserves nothing.
+// Read the append-only topics-with-types list when its presence flag is set. The count is refused
+// against both the ceiling AND the bytes actually remaining before any reserve, so a ~30-byte frame
+// claiming thousands of entries cannot force a ~400 KB transient allocation it can never fill.
 inline bool decode_peer_report_topics(reader &r, peer_report &pr)
 {
     if(!(pr.flags & k_peer_report_topics_flag))
         return true;
     const auto n = r.u16();
     if(!r.ok() || n > k_peer_report_max_topics)
+        return false;
+    if(static_cast<std::size_t>(n) * topic_declaration_min_size > r.remaining())
         return false;
     pr.topics.reserve(n);
     for(std::uint16_t i = 0; i < n; ++i)
@@ -105,9 +117,10 @@ inline std::vector<std::byte> encode_peer_report(const peer_report &pr)
         write_string(w, pr.origin_universe_pattern);
     if(pr.flags & k_peer_report_topics_flag)
     {
-        w.u16(static_cast<std::uint16_t>(pr.topics.size()));
-        for(const auto &td : pr.topics)
-            detail::write_peer_report_topic(w, td);
+        const std::size_t n = detail::effective_topic_count(pr);
+        w.u16(static_cast<std::uint16_t>(n));
+        for(std::size_t i = 0; i < n; ++i)
+            detail::write_peer_report_topic(w, pr.topics[i]);
     }
     return buf;
 }
