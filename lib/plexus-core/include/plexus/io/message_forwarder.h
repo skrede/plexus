@@ -164,11 +164,12 @@ public:
     }
 
     // The interest-scoped forwarding-send: fan a relay's pre-built outbound forwarded envelope to the
-    // topic's actual subscribers, excluding the arrival session (the loop guard), through the SAME
-    // per-destination egress scheduler the publish path uses — one slow leg drops-with-count in its own
-    // band while an unrelated destination drains unaffected (no head-of-line blocking). The envelope is
-    // built once on the first eligible destination and addref-shared into every band (frame-once-fan-to-N);
-    // an exhausted pool yields an empty buffer that is counted at the pool and never enqueued.
+    // topic's actual subscribers, excluding the arrival session AND any same-node self-route (both loop
+    // guards — a self-route would decode framed bytes as unidirectional), through the SAME per-destination
+    // egress scheduler the publish path uses — one slow leg drops-with-count in its own band while an
+    // unrelated destination drains unaffected (no head-of-line blocking). The envelope is built once on
+    // the first eligible destination and addref-shared into every band (frame-once-fan-to-N); a build that
+    // could not fit a slot (oversize) or found no free slot (exhaustion) drops-with-count per destination.
     template<typename BuildOnce>
     void fan_forwarded_buffer(std::uint64_t hash, const void *arrival, BuildOnce &&build_once)
     {
@@ -180,19 +181,24 @@ public:
         const std::size_t band = detail::band_of(qos.priority);
         for(const auto &sub : topic->subscribers)
         {
-            if(static_cast<const void *>(&sub.channel.get()) == arrival || !any_set(qos.reach, sub.tier))
+            const void *ch = static_cast<const void *>(&sub.channel.get());
+            if(ch == arrival || m_self_route_channels.contains(ch) || !any_set(qos.reach, sub.tier))
                 continue;
-            const wire_bytes<> &framed = build_once();
-            if(framed.empty()) // pool exhaustion: counted at the splice pool, never enqueue an empty owner
+            const auto &built = build_once();
+            if(built.bytes.empty()) // oversize / pool exhaustion: count the affected destination, enqueue nothing
+            {
+                if(built.cause != detail::drop_cause::none)
+                    shed(hash, band, built.cause, sub.tier);
                 continue;
+            }
             // Splice-time envelope gate: a frame past the outbound leg's ceiling drops-with-count here
             // rather than being sent and tearing the narrow session down (unprobed channel = unlimited).
-            if(framed.size() > detail::channel_frame_ceiling(sub.channel.get()))
+            if(built.bytes.size() > detail::channel_frame_ceiling(sub.channel.get()))
             {
                 shed(hash, band, detail::drop_cause::splice_oversize, sub.tier);
                 continue;
             }
-            const detail::drop_cause cause = m_egress.enqueue(sub.channel.get(), band, qos.congestion, framed);
+            const detail::drop_cause cause = m_egress.enqueue(sub.channel.get(), band, qos.congestion, built.bytes);
             if(cause != detail::drop_cause::none)
                 shed(hash, band, cause, sub.tier);
         }

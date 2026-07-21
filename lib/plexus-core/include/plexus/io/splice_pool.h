@@ -24,6 +24,7 @@ class splice_pool
 {
 public:
     splice_pool(std::size_t slot_count, std::size_t slot_bytes)
+            : m_slot_bytes(slot_bytes)
     {
         m_slots.reserve(slot_count);
         for(std::size_t i = 0; i < slot_count; ++i)
@@ -62,6 +63,12 @@ public:
     {
         return m_slots.size();
     }
+    // The per-slot byte capacity: the splice gates the encoded envelope against this BEFORE encoding, so
+    // an envelope that cannot fit a slot drops-with-count rather than overrunning the slot's allocation.
+    std::size_t slot_bytes() const noexcept
+    {
+        return m_slot_bytes;
+    }
     std::uint64_t exhaustion_drops() const noexcept
     {
         return m_exhaustion_drops;
@@ -85,6 +92,7 @@ private:
     }
 
     std::vector<std::shared_ptr<std::vector<std::byte>>> m_slots;
+    std::size_t m_slot_bytes;
     std::uint64_t m_exhaustion_drops{0};
 };
 

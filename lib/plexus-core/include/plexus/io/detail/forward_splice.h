@@ -65,10 +65,22 @@ inline std::size_t channel_frame_ceiling(const Channel &ch) noexcept
 // on the data leg so the destination's staleness gate admits it regardless of its latched epoch. A
 // pub/sub frame passes an unset destination (it transits by interest, the receive edge dedups and
 // delivers by origin); a request/response frame passes the target identity so each hop re-resolves it.
+// The encoded envelope size for an inner region of inner_n bytes (the outer header, the preamble, the
+// u32 inner-length prefix, then the inner bytes). The splice gates a slot against this before encoding.
+inline std::size_t forwarded_wire_size(std::size_t inner_n) noexcept
+{
+    return wire::header_size + wire::detail::forwarded_frame_preamble_size + sizeof(std::uint32_t) + inner_n;
+}
+
+// Returns 0 without writing when the region cannot hold the whole envelope: the writer is an unchecked
+// memcpy, so this fail-closed guard is the hard floor that keeps a too-large frame from overrunning a
+// pre-sized slot (the splice gates on slot capacity first; this refuses even a mis-sized direct call).
 inline std::size_t encode_forwarded_wire_into(std::span<std::byte> region, const node_id &origin, const node_id &destination, std::uint8_t hop, std::uint16_t seq,
                                               std::uint8_t flags, std::span<const std::byte> inner)
 {
     const std::size_t inner_n = inner.size() < wire::detail::k_forwarded_inner_max ? inner.size() : wire::detail::k_forwarded_inner_max;
+    if(region.size() < forwarded_wire_size(inner_n))
+        return 0;
     const std::size_t payload  = wire::detail::forwarded_frame_preamble_size + sizeof(std::uint32_t) + inner_n;
     const wire::frame_header fhdr{.type = wire::msg_type::forwarded, .flags = 0, .session_id = 0, .timestamp_ns = wire::now_timestamp_ns(), .payload_len = payload};
 
@@ -85,6 +97,15 @@ inline std::size_t encode_forwarded_wire_into(std::span<std::byte> region, const
 }
 
 }
+
+// One splice build outcome: the outbound envelope and a drop cause. cause is none on a live buffer; it
+// carries splice_oversize (the envelope cannot fit a slot) or splice_exhausted (no free slot) with an
+// empty buffer, so the fan sheds that cause per affected destination instead of silently skipping.
+struct splice_buffer
+{
+    wire_bytes<> bytes;
+    detail::drop_cause cause{detail::drop_cause::none};
+};
 
 // The relay-profile twin: the pub/sub forwarding-send half. It holds the grow-once splice pool and, per
 // admitted forwarded frame, builds ONE outbound forwarded envelope (the D95.1 pooled owned copy by
@@ -130,8 +151,8 @@ public:
         const std::uint8_t out_hop = static_cast<std::uint8_t>(hop < 0xFF ? hop + 1 : hop);
         const std::uint16_t seq    = m_seq++;
         bool built = false;
-        wire_bytes<> buf;
-        auto build_once = [&]() -> const wire_bytes<> &
+        splice_buffer buf;
+        auto build_once = [&]() -> const splice_buffer &
         {
             if(!built)
             {
@@ -149,12 +170,21 @@ public:
     }
 
 private:
-    wire_bytes<> build(const node_id &origin, std::uint8_t hop, std::uint16_t seq, std::span<const std::byte> inner, const wire::shared_bytes *owner)
+    // Gate the encoded envelope against the slot capacity BEFORE encoding: an envelope too large for a
+    // slot drops-with-count (splice_oversize) rather than overrunning it; an exhausted pool drops-with-count
+    // (splice_exhausted). The zero-copy path retains the inbound owner with no slot and cannot overrun.
+    splice_buffer build(const node_id &origin, std::uint8_t hop, std::uint16_t seq, std::span<const std::byte> inner, const wire::shared_bytes *owner)
     {
         if(m_mode == splice_ownership::refcounted_zero_copy && owner != nullptr && !owner->empty())
-            return splice_pool::checkout_zero_copy(*owner);
-        return m_pool.checkout_owned_copy([&](std::span<std::byte> slot)
-                                          { return detail::encode_forwarded_wire_into(slot, origin, node_id{}, hop, seq, wire::k_forwarded_relay_consent_flag, inner); });
+            return {splice_pool::checkout_zero_copy(*owner), detail::drop_cause::none};
+        const std::size_t inner_n = inner.size() < wire::detail::k_forwarded_inner_max ? inner.size() : wire::detail::k_forwarded_inner_max;
+        if(detail::forwarded_wire_size(inner_n) > m_pool.slot_bytes())
+            return {wire_bytes<>{}, detail::drop_cause::splice_oversize};
+        wire_bytes<> bytes = m_pool.checkout_owned_copy([&](std::span<std::byte> slot)
+                                                        { return detail::encode_forwarded_wire_into(slot, origin, node_id{}, hop, seq, wire::k_forwarded_relay_consent_flag, inner); });
+        if(bytes.empty())
+            return {wire_bytes<>{}, detail::drop_cause::splice_exhausted};
+        return {std::move(bytes), detail::drop_cause::none};
     }
 
     splice_pool m_pool;
