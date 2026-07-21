@@ -83,6 +83,34 @@ public:
         return true;
     }
 
+    std::size_t reset_reported_windows(const node_id &via)
+    {
+        std::size_t n = 0;
+        for(entry &e : m_slots)
+            if(e.occupied)
+                n += detail::reset_windows_via(e.candidates.data(), e.count, via);
+        return n;
+    }
+
+    bool withdraw_seq_fresh(const node_id &id, const node_id &via, std::uint16_t seq)
+    {
+        entry *slot = find(id);
+        return slot != nullptr && detail::admit_via_seq(slot->candidates.data(), slot->count, via, seq);
+    }
+
+    template<typename Fn>
+    void for_each_origin_via(const node_id &via, Fn fn) const
+    {
+        for(const entry &e : m_slots)
+            if(e.occupied)
+                for(std::size_t i = 0; i < e.count; ++i)
+                    if(!e.candidates[i].is_direct() && e.candidates[i].reach.via == via)
+                    {
+                        fn(e.id);
+                        break;
+                    }
+    }
+
     void refresh(const node_id &id, std::uint64_t now)
     {
         if(entry *slot = find(id))

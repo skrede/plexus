@@ -68,6 +68,29 @@ public:
             m_table.erase(it);
         return true;
     }
+    std::size_t reset_reported_windows(const node_id &via)
+    {
+        std::size_t n = 0;
+        for(auto &[id, rec] : m_table)
+            n += detail::reset_windows_via(rec.candidates.data(), rec.count, via);
+        return n;
+    }
+    bool withdraw_seq_fresh(const node_id &id, const node_id &via, std::uint16_t seq)
+    {
+        auto it = m_table.find(id);
+        return it != m_table.end() && detail::admit_via_seq(it->second.candidates.data(), it->second.count, via, seq);
+    }
+    template<typename Fn>
+    void for_each_origin_via(const node_id &via, Fn fn) const
+    {
+        for(const auto &[id, rec] : m_table)
+            for(std::size_t i = 0; i < rec.count; ++i)
+                if(!rec.candidates[i].is_direct() && rec.candidates[i].reach.via == via)
+                {
+                    fn(id);
+                    break;
+                }
+    }
     void refresh(const node_id &id, std::uint64_t now)
     {
         if(auto it = m_table.find(id); it != m_table.end())
@@ -173,6 +196,26 @@ public:
     bool remove_transitive(const node_id &id, const node_id &via)
     {
         return m_storage.remove_transitive(id, via);
+    }
+
+    // Re-arm the dedup windows of every row reaching an origin via `via` (its reporter session
+    // (re)completed): the reporter's next report re-anchors on its current seq counter.
+    std::size_t reset_reported_windows(const node_id &via)
+    {
+        return m_storage.reset_reported_windows(via);
+    }
+
+    // Seq-validate a withdrawal against the (id, via) row's window without removing it: fresh only
+    // when the seq advances, so a stale/replayed withdrawal is rejected before it can retire a row.
+    bool withdraw_seq_fresh(const node_id &id, const node_id &via, std::uint16_t seq)
+    {
+        return m_storage.withdraw_seq_fresh(id, via, seq);
+    }
+
+    template<typename Fn>
+    void for_each_origin_via(const node_id &via, Fn fn) const
+    {
+        m_storage.for_each_origin_via(via, std::move(fn));
     }
     std::span<const route_candidate> candidates(const node_id &id) const
     {

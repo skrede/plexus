@@ -44,6 +44,7 @@
 #include "plexus/wire/topic_hash.h"
 #include "plexus/wire/frame_codec.h"
 
+#include <map>
 #include <set>
 #include <span>
 #include <chrono>
@@ -197,22 +198,26 @@ public:
     // teardown, not this call.
     void forget(const node_id &id)
     {
+        release_all_reporter_load(id);
         const bool changed = m_known_peers.forget(id);
         m_registry.deny_redial(id);
         m_peer_liveliness.note_awareness_lost(id);
         relay_withdraw(id);
+        if(m_reported.erase(id) != 0)
+            m_topics.remove_node(id);
         bump_graph_generation(changed, id, graph::change_kind::disappeared);
     }
 
     // The receive gate chain for an inbound peer_report about a THIRD-party origin: fail-closed
-    // against the ORIGIN universe, then self-guard, both BEFORE any awareness mutation. The hop
-    // budget and per-origin dedup run in the note path. A reported candidate is via-only — it never
-    // dials and never feeds the direct-peer liveliness arbiter.
+    // against the ORIGIN universe, then a self-guard, then a reporter-is-origin guard (a peer
+    // self-reporting must not install a transitive twin beside its own direct row), all BEFORE any
+    // awareness mutation. The hop budget and per-origin dedup run in the note path. A reported
+    // candidate is via-only — it never dials and never feeds the direct-peer liveliness arbiter.
     void ingest_peer_report(const node_id &reporter, const wire::peer_report &pr)
     {
         if(!detail::report_universe_admits(m_report, pr))
             return;
-        if(pr.origin == m_build.fsm_cfg.self_id)
+        if(pr.origin == m_build.fsm_cfg.self_id || pr.origin == reporter)
             return;
         note_reported_candidate(reporter, pr);
     }
@@ -337,6 +342,13 @@ public:
         return m_emitter.reported_count();
     }
 
+    // Reports dropped at the receiver's flood bound (a per-reporter origin ceiling or a per-origin
+    // topic ceiling) — the honest drop accounting a bounded ingress keeps against a hostile relay.
+    std::size_t reported_dropped_count() const noexcept
+    {
+        return m_report_dropped;
+    }
+
     bool reports_origin(const node_id &origin) const noexcept
     {
         return m_emitter.reports(origin);
@@ -429,6 +441,8 @@ private:
     basic_known_peers<PeerStorage> m_known_peers;
     graph::basic_topic_type_table<TopicStorage> m_topics;
     std::set<node_id> m_reported;
+    std::map<node_id, std::size_t> m_reporter_load;
+    std::size_t m_report_dropped{0};
     std::uint64_t m_graph_generation{0};
     bool m_graph_wakeup_pending{false};
     std::size_t m_graph_subscribers{0};
@@ -571,6 +585,7 @@ private:
         {
             const node_id who  = torn->peer_identity();
             relay_withdraw(who);
+            retire_reports_via(who);
             const bool changed = m_topics.remove_node(who);
             bump_graph_generation(changed, who, graph::change_kind::disappeared);
         }
@@ -581,7 +596,10 @@ private:
         feed_liveliness_session(ev);
         forget_topics_on_teardown(ev);
         if(ev.edge == lifecycle_edge::connected || ev.edge == lifecycle_edge::reconnected)
+        {
+            reset_windows_for_reporter(ev.id);
             relay_on_ready(ev.id);
+        }
         switch(ev.edge)
         {
             case lifecycle_edge::connected:
@@ -666,23 +684,75 @@ private:
     void note_reported_candidate(const node_id &reporter, const wire::peer_report &pr)
     {
         if(pr.flags & wire::k_peer_report_withdrawal_flag)
-            return retire_reported(pr.origin, reporter);
+            return retire_reported_if_fresh(pr.origin, reporter, pr.seq);
         if(pr.hop > m_report.hop_budget)
             return;
+        if(pr.topics.size() > m_report.max_report_topics || reporter_at_capacity(reporter, pr.origin))
+            return (void)++m_report_dropped;
         const auto oc = m_known_peers.note_reported(pr.origin, reported_candidate(reporter, pr), pr.seq, now_for_aging(), m_route_options);
         if(oc != detail::report_admit::noted_new && oc != detail::report_admit::refreshed)
             return;
         fold_report_topics(pr);
         if(oc == detail::report_admit::noted_new)
         {
+            ++m_reporter_load[reporter];
             m_reported.insert(pr.origin);
             bump_graph_generation(true, pr.origin, graph::change_kind::appeared);
         }
     }
 
+    // A reporter may install at most max_reported_origins DISTINCT origins: a report that would add a
+    // NEW (origin, via=reporter) row past the ceiling is rejected and counted, never evicting a held
+    // row and never touching a direct peer. A refresh of an origin the reporter already reaches passes.
+    bool reporter_at_capacity(const node_id &reporter, const node_id &origin) const
+    {
+        auto it = m_reporter_load.find(reporter);
+        if(it == m_reporter_load.end() || it->second < m_report.max_reported_origins)
+            return false;
+        return !has_row_via(origin, reporter);
+    }
+
+    bool has_row_via(const node_id &origin, const node_id &via) const
+    {
+        for(const route_candidate &c : m_known_peers.candidates(origin))
+            if(!c.is_direct() && c.reach.via == via)
+                return true;
+        return false;
+    }
+
+    void dec_reporter_load(const node_id &reporter)
+    {
+        auto it = m_reporter_load.find(reporter);
+        if(it != m_reporter_load.end() && --it->second == 0)
+            m_reporter_load.erase(it);
+    }
+
+    // Release the per-reporter load of every transitive row a record holds, before the whole record
+    // is removed (a TTL sweep or a forget) rather than retired one via at a time.
+    void release_all_reporter_load(const node_id &origin)
+    {
+        for(const route_candidate &c : m_known_peers.candidates(origin))
+            if(!c.is_direct() && c.reach.via)
+                dec_reporter_load(*c.reach.via);
+    }
+
+    // The relay R is gone: retire every origin still reported as reachable via R (R can no longer
+    // withdraw them itself), driving the same retire path a withdrawal does. Gather-then-retire so the
+    // per-origin removal never mutates the table mid-iteration.
+    void retire_reports_via(const node_id &via)
+    {
+        std::vector<node_id> origins;
+        m_known_peers.for_each_origin_via(via, [&](const node_id &o) { origins.push_back(o); });
+        for(const node_id &o : origins)
+            retire_reported(o, via);
+    }
+
     route_candidate reported_candidate(const node_id &reporter, const wire::peer_report &pr) const
     {
         route_candidate cand{};
+        // A via-only row carries a default-constructed (empty-scheme) endpoint as reach.transport: it
+        // is reachability hearsay, never a dial target. The engine resolves dials through the DIRECT
+        // endpoint only (route_admission::direct_endpoint), so this row is structurally non-dialable.
         cand.reach      = graph::route{endpoint{}, reporter};
         cand.origin     = graph::provenance{graph::observation::reported, reporter};
         cand.hop        = pr.hop;
@@ -708,11 +778,41 @@ private:
     // session keeps both the id and its topics.
     void retire_reported(const node_id &origin, const node_id &via)
     {
-        if(!m_known_peers.remove_transitive(origin, via) || m_known_peers.contains(origin))
+        if(!m_known_peers.remove_transitive(origin, via))
+            return;
+        dec_reporter_load(via);
+        if(m_known_peers.contains(origin))
             return;
         m_reported.erase(origin);
         m_topics.remove_node(origin);
         bump_graph_generation(true, origin, graph::change_kind::disappeared);
+    }
+
+    // A withdrawal retires the origin's row via `via` only when its seq is fresh against that row's
+    // dedup window: a reordered or replayed stale withdrawal (a hostile relay alternating
+    // assert/withdraw, or a UDP-backed reorder) is dropped, so it cannot retire a re-asserted live row.
+    void retire_reported_if_fresh(const node_id &origin, const node_id &via, std::uint16_t seq)
+    {
+        if(!m_known_peers.withdraw_seq_fresh(origin, via, seq))
+            return;
+        retire_reported(origin, via);
+    }
+
+    // A reporter's session (re)completed: re-arm the dedup windows of the rows it feeds so its next
+    // report re-anchors on its current (possibly restarted-from-0) seq counter instead of deduping
+    // against a stale high-water mark from the prior incarnation.
+    void reset_windows_for_reporter(const node_id &id)
+    {
+        if(session_type *s = m_registry.session_for(id))
+            m_known_peers.reset_reported_windows(s->peer_identity());
+    }
+
+    // Re-assert every held report on the relay's heartbeat cadence so a downstream row for a
+    // still-live-but-idle origin refreshes before it ages out at awareness_ttl. Relay-only: the null
+    // emitter twin makes this a no-op, so a non-relay node still emits nothing.
+    void relay_reassert()
+    {
+        m_emitter.reassert([this](const wire::peer_report &pr) { relay_broadcast(pr); });
     }
 
     // The emit seam a newly-completed session runs: hand it every origin already reported (skipping a
@@ -780,6 +880,7 @@ private:
         m_known_peers.expire_older_than(deadline,
                                         [this](const node_id &id)
                                         {
+                                            release_all_reporter_load(id);
                                             m_peer_liveliness.note_awareness_lost(id);
                                             relay_withdraw(id);
                                             if(m_reported.erase(id) != 0)

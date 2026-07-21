@@ -18,13 +18,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <algorithm>
 
 namespace plexus::io {
 
-// The non-relay twin: a members-less struct whose note/withdraw/replay are no-ops, so a node not
-// spelled relay<> pays zero for the transitive-relay emitter by construction and instantiates no
-// peer_report send path at all. It mirrors peer_report_emitter's surface exactly, so one template
-// parameter threads both twins with no platform branch. (The null_graph_change_log precedent.)
+// The non-relay twin: a members-less struct whose note/withdraw/replay/reassert are no-ops, so a node
+// not spelled relay<> pays zero for the transitive-relay emitter and instantiates no peer_report send
+// path at all. It mirrors peer_report_emitter's surface exactly, so one template parameter threads
+// both twins with no platform branch. (The null_graph_change_log precedent.)
 struct null_peer_report_emitter
 {
     template<typename Table, typename Sink>
@@ -42,6 +43,11 @@ struct null_peer_report_emitter
     {
     }
 
+    template<typename Sink>
+    void reassert(Sink &&) noexcept
+    {
+    }
+
     std::size_t reported_count() const noexcept
     {
         return 0;
@@ -54,15 +60,14 @@ struct null_peer_report_emitter
 };
 
 // The relay twin: lifts an attached origin's identity + topics-with-types from held session state,
-// stamps the origin universe from host-side config (the handshake carries none), refuses to bridge
-// an origin whose stamped universe the relay's own does not admit, and holds one current report per
-// reported origin so a newly-completed session replays them and a lost live path withdraws them.
+// stamps the origin universe from host-side config (the handshake carries none), refuses to bridge an
+// origin whose stamped universe the relay's own does not admit, and holds one current report per
+// reported origin so a completed session replays them and a lost live path withdraws them.
 class peer_report_emitter
 {
 public:
-    // Lift + stamp + refuse-to-bridge. On admission the origin's current report is (re)recorded under
-    // a freshly minted per-origin seq and handed to the sink for broadcast; a refused origin never
-    // emits and never enters the replay set.
+    // Lift + stamp + refuse-to-bridge. On admission the origin's current report is (re)recorded under a
+    // freshly minted per-origin seq and broadcast; a refused origin never emits nor enters the replay set.
     template<typename Table, typename Sink>
     void note_origin(const report_universe_ctx &local, const node_id &origin, std::uint32_t origin_universe, const Table &table, Sink &&send)
     {
@@ -74,8 +79,7 @@ public:
     }
 
     // The withdrawal twin: an origin still reported is dropped from the replay set and a
-    // withdrawal-flagged report is handed to the sink; an origin never reported is a no-op, so a dead
-    // origin is never re-refreshed downstream.
+    // withdrawal-flagged report is sent; an origin never reported is a no-op.
     template<typename Sink>
     void withdraw(const node_id &origin, Sink &&send)
     {
@@ -97,6 +101,18 @@ public:
                 send(report);
     }
 
+    // Re-assert every held report with a fresh per-origin seq so a still-live-but-idle origin's
+    // downstream row refreshes before awareness_ttl; driven on the relay's heartbeat cadence.
+    template<typename Sink>
+    void reassert(Sink &&send)
+    {
+        for(auto &[origin, report] : m_reported)
+        {
+            report.seq = next_seq(origin);
+            send(report);
+        }
+    }
+
     std::size_t reported_count() const noexcept
     {
         return m_reported.size();
@@ -109,6 +125,7 @@ public:
 
 private:
     std::map<node_id, wire::peer_report> m_reported;
+    // Retained across a withdraw so a re-note/re-assert keeps minting monotonically-rising seqs.
     std::map<node_id, std::uint16_t> m_seq;
 
     template<typename Table>
@@ -118,10 +135,18 @@ private:
         pr.origin          = origin;
         pr.origin_universe = origin_universe;
         pr.hop             = 1;
+        // A pattern-universe relay carries its canonical local pattern (and the presence flag) so the
+        // refuse-to-bridge intersect below — and the receiver's — match on the pattern instead of
+        // refusing every origin against an empty peer pattern; a concrete-default node stays flagless.
+        if(local.pattern)
+        {
+            pr.flags |= wire::k_peer_report_universe_pattern_flag;
+            pr.origin_universe_pattern = local.universe_pattern;
+        }
         if(!detail::report_universe_admits(local, pr))
             return std::nullopt;
-        pr.flags  = wire::k_peer_report_consent_flag | wire::k_peer_report_topics_flag;
-        pr.topics = lift_topics(table, origin);
+        pr.flags |= wire::k_peer_report_consent_flag | wire::k_peer_report_topics_flag;
+        pr.topics = lift_topics(table, origin, local.max_report_topics);
         pr.seq    = next_seq(origin);
         return pr;
     }
@@ -137,14 +162,16 @@ private:
         return retire;
     }
 
+    // Clamp the lifted set to `cap` (never above the decoder's ceiling) so the encoder's u16 count cannot wrap.
     template<typename Table>
-    static std::vector<wire::topic_declaration> lift_topics(const Table &table, const node_id &origin)
+    static std::vector<wire::topic_declaration> lift_topics(const Table &table, const node_id &origin, std::size_t cap)
     {
+        const std::size_t ceiling = std::min(cap, wire::detail::k_peer_report_max_topics);
         std::vector<wire::topic_declaration> topics;
         table.for_each(
                 [&](const graph::topic_record &rec)
                 {
-                    if(rec.node != origin || rec.role != graph::topic_role::publisher)
+                    if(rec.node != origin || rec.role != graph::topic_role::publisher || topics.size() >= ceiling)
                         return;
                     topics.push_back(one_topic(rec));
                 });

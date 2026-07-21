@@ -148,6 +148,26 @@ TEST_CASE("peer_report withdrawal: stopping the reports ages the row out on the 
     REQUIRE(deltas_for(n.obs, n.origin, plexus::graph::change_kind::disappeared) == 1);
 }
 
+TEST_CASE("peer_report withdrawal: a replayed stale withdrawal cannot retire a live row", "[graph][peer_report][withdrawal]")
+{
+    manual_clock::reset();
+    aging_node n;
+    n.ingest(make_report(n.origin, 1, 5));
+    REQUIRE(n.candidate_count(n.origin) == 1);
+
+    // A withdrawal whose seq the row's dedup window already admitted (a datagram-reorder replay, or a
+    // hostile relay alternating assert/withdraw) is stale: it must NOT destroy the window and retire.
+    n.ingest(make_report(n.origin, 1, 5, wire::k_peer_report_withdrawal_flag));
+    REQUIRE(n.candidate_count(n.origin) == 1);
+    REQUIRE(n.origin_topic_edges() == 1);
+    REQUIRE(deltas_for(n.obs, n.origin, plexus::graph::change_kind::disappeared) == 0);
+
+    // A withdrawal with a fresh seq is honored.
+    n.ingest(make_report(n.origin, 1, 6, wire::k_peer_report_withdrawal_flag));
+    REQUIRE(n.candidate_count(n.origin) == 0);
+    REQUIRE(deltas_for(n.obs, n.origin, plexus::graph::change_kind::disappeared) == 1);
+}
+
 TEST_CASE("peer_report withdrawal: a retired origin re-appears under the same node_id", "[graph][peer_report][withdrawal]")
 {
     manual_clock::reset();

@@ -225,3 +225,25 @@ target_link_libraries(test_peer_report_emitter_withdrawal PRIVATE
     Catch2::Catch2WithMain)
 target_include_directories(test_peer_report_emitter_withdrawal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_peer_report_emitter_withdrawal TEST_PREFIX "graph.")
+
+# The receiver's flood bound against a hostile authenticated relay: a per-reporter origin ceiling and
+# a per-origin topic ceiling reject-and-count without evicting a held row or a direct peer, plus the
+# reporter-is-origin self-report guard. Drives the shared support/graph_change_inproc.h harness.
+add_executable(test_peer_report_flood_bound test_peer_report_flood_bound.cpp)
+target_link_libraries(test_peer_report_flood_bound PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_peer_report_flood_bound PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_peer_report_flood_bound TEST_PREFIX "graph.")
+
+# The refresh/lifetime story of a relayed origin end to end: the relay's periodic re-assert keeps a
+# live-but-idle origin alive past the downstream's awareness_ttl, and a downstream retires origins
+# reachable only via a relay whose session dies. A relay engine + two plain nodes on one virtual clock.
+add_executable(test_peer_report_relay_refresh test_peer_report_relay_refresh.cpp)
+target_link_libraries(test_peer_report_relay_refresh PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_peer_report_relay_refresh PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_peer_report_relay_refresh TEST_PREFIX "graph.")

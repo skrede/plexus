@@ -129,9 +129,24 @@ inline report_admit admit_reported(route_candidate *slots, std::size_t &count, s
     if(!transitive_has_room(slots, count, cap, opts))
         return report_admit::dropped;
     route_candidate seeded = cand;
-    seeded.seq_window.admit(seq);
+    seeded.seq_window.anchor(seq);
     place(slots[count++], seeded, now);
     return report_admit::noted_new;
+}
+
+// Re-arm the dedup window of every transitive row reaching an origin via `via` back to its
+// first-sighting state, so the reporter's next report re-anchors on its (possibly restarted) seq
+// counter rather than measuring it against a stale high-water. Returns the number of rows re-armed.
+inline std::size_t reset_windows_via(route_candidate *slots, std::size_t count, const node_id &via)
+{
+    std::size_t reset = 0;
+    for(std::size_t i = 0; i < count; ++i)
+        if(!slots[i].is_direct() && slots[i].reach.via == via)
+        {
+            slots[i].seq_window.reset();
+            ++reset;
+        }
+    return reset;
 }
 
 // Admits a reported candidate into a record and stamps its freshness tick on a noted/refreshed row,
@@ -143,6 +158,17 @@ inline report_admit note_reported_row(route_candidate *slots, std::size_t &count
     if(r == report_admit::noted_new || r == report_admit::refreshed)
         last_refreshed = now;
     return r;
+}
+
+// Admit a seq against the dedup window of the transitive row reaching origin via `via` WITHOUT
+// removing it: true only when fresh (a missing row is not fresh). Seq-validates a withdrawal so a
+// replayed or reordered stale withdrawal cannot retire a live row.
+inline bool admit_via_seq(route_candidate *slots, std::size_t count, const node_id &via, std::uint16_t seq)
+{
+    for(std::size_t i = 0; i < count; ++i)
+        if(!slots[i].is_direct() && slots[i].reach.via == via)
+            return slots[i].seq_window.admit(seq) == wire::udp_dedup_window::outcome::fresh;
+    return false;
 }
 
 // Retires the transitive row reaching origin via `via`, compacting the array; the direct row (if any)

@@ -33,6 +33,7 @@ using plexus::io::endpoint;
 using plexus::io::fixed_peer_storage;
 using plexus::io::route_candidate;
 using plexus::io::route_options;
+using plexus::io::detail::report_admit;
 
 node_id id_with(std::uint8_t tag)
 {
@@ -148,6 +149,26 @@ TEST_CASE("fixed twin lookup surfaces the direct endpoint only, never a via cand
 
     store.admit(peer, direct_with(1), 11, opts);
     REQUIRE(store.get(peer) == ep_with(1));
+}
+
+TEST_CASE("fixed twin reported window anchors a high first seq and reset re-arms after a reporter restart", "[graph][route][fixed_peer_storage]")
+{
+    fixed_peer_storage<4, 4> store;
+    const route_options opts{};
+    const node_id peer = id_with(1);
+    const node_id via  = id_with(20);
+
+    // First sighting at a seq already past the serial half-space anchors the row's window (noted_new),
+    // so a following higher seq REFRESHES instead of being classified too_old against a default 0.
+    REQUIRE(store.note_reported(peer, relayed_via(20), 40000, 10, opts) == report_admit::noted_new);
+    REQUIRE(store.note_reported(peer, relayed_via(20), 40001, 11, opts) == report_admit::refreshed);
+    // A stale seq more than depth behind the anchored high-water is a no-op (neither refreshes nor churns).
+    REQUIRE(store.note_reported(peer, relayed_via(20), 39000, 12, opts) == report_admit::duplicate);
+
+    // The reporter restarts and its per-origin counter drops back to a low seq; reset re-arms the
+    // first-sighting anchor so the post-restart replay re-admits instead of deduping behind the mark.
+    REQUIRE(store.reset_reported_windows(via) == 1);
+    REQUIRE(store.note_reported(peer, relayed_via(20), 1, 13, opts) == report_admit::refreshed);
 }
 
 TEST_CASE("fixed twin fails closed on a direct peer past identity capacity but never on a transitive flood", "[graph][route][fixed_peer_storage]")

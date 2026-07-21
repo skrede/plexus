@@ -6,6 +6,8 @@
 #include "plexus/io/report_options.h"
 #include "plexus/io/peer_report_emitter.h"
 
+#include "plexus/io/detail/peer_report_consumers.h"
+
 #include "plexus/graph/topic_record.h"
 #include "plexus/graph/topic_type_table.h"
 
@@ -19,6 +21,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <string>
 #include <optional>
 
 namespace wire = plexus::wire;
@@ -117,4 +120,27 @@ TEST_CASE("peer_report emitter: refuses to bridge a foreign-universe origin", "[
     REQUIRE_FALSE(got.has_value());
     REQUIRE(f.emitter.reported_count() == 0);
     REQUIRE_FALSE(f.emitter.reports(f.origin));
+}
+
+TEST_CASE("peer_report emitter: a pattern-universe relay carries the pattern so the relay leg works", "[graph][peer_report][emitter]")
+{
+    fixture f;
+    report_options opts;
+    opts.universe_pattern = "plant/*";
+    std::optional<wire::peer_report> got;
+    // With a non-concrete local pattern the relay must still admit its own-universe origin (not
+    // silently refuse every origin against an empty peer pattern) AND stamp the pattern on the wire.
+    f.emitter.note_origin(make_report_ctx(opts), f.origin, plexus::discovery::k_default_universe, f.table,
+                          [&](const wire::peer_report &pr) { got = pr; });
+
+    REQUIRE(got.has_value());
+    REQUIRE((got->flags & wire::k_peer_report_universe_pattern_flag) != 0);
+    REQUIRE(got->origin_universe_pattern == "plant/*");
+
+    // A receiver in the same pattern universe admits it through the relay; a disjoint-universe
+    // receiver refuses it on the origin-universe intersect.
+    REQUIRE(plexus::io::detail::report_universe_admits(make_report_ctx(opts), *got));
+    report_options other;
+    other.universe_pattern = "office/*";
+    REQUIRE_FALSE(plexus::io::detail::report_universe_admits(make_report_ctx(other), *got));
 }

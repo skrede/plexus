@@ -24,8 +24,9 @@ constexpr bool route_outranks(const route_candidate &a, const route_candidate &b
 
 // Pick the preferred route over a candidate span, returning its index (route_select_npos when the
 // span is empty). Ranking: direct before relayed, then fewer hops before more, with first-in-span
-// order as the deterministic tie-break — so the winner is independent of input order for a fixed set.
-// Pure: no state, no allocation, no I/O.
+// order as the deterministic tie-break — so the choice is reproducible for a fixed span order (equal
+// -rank candidates resolve to the earliest, which does depend on how the span is laid out). Pure: no
+// state, no allocation, no I/O.
 inline std::size_t route_select(std::span<const route_candidate> candidates) noexcept
 {
     std::size_t best = route_select_npos;

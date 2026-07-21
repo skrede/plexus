@@ -86,8 +86,10 @@ void install_routing_sinks(Engine &e)
     e.m_peer_liveliness.on_verdict([&e](const peer_liveliness_event &ev) { detail::post_liveliness(e, ev); });
     // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer when
     // the configured interval has elapsed (the default equals the tick cadence, so emission is
-    // per-tick and wire-identical), sweep the awareness table for peers past their discovery TTL, then
-    // settle the fused verdicts so a TTL expiry lands in the same tick's evaluation.
+    // per-tick and wire-identical) and, on the same cadence, re-assert every held relay report so a
+    // still-live-but-idle reported origin refreshes downstream before it ages out at awareness_ttl
+    // (a relay-only no-op on a non-relay node); then sweep the awareness table for peers past their
+    // discovery TTL and settle the fused verdicts so a TTL expiry lands in the same tick's evaluation.
     e.m_monitor.on_tick_action(
             [&e, last_emit_ns = std::uint64_t{0}]() mutable
             {
@@ -97,6 +99,7 @@ void install_routing_sinks(Engine &e)
                 if(now - last_emit_ns >= interval)
                 {
                     e.m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); });
+                    e.relay_reassert();
                     last_emit_ns = now;
                 }
                 e.sweep_aged_awareness();
