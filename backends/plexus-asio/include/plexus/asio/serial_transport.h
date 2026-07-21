@@ -95,8 +95,12 @@ public:
     {
     }
 
+    using channel_type = serial_channel;
     static constexpr std::array<std::string_view, 1> mux_schemes{"serial"};
-    static constexpr io::transport_kind mux_tier = io::transport_kind::local;
+    // A cabled UART crosses the host boundary, so the scheme is remote — the classification
+    // transport_selector::select and io::tier_of both assign "serial" (fail-closed on the
+    // unrecognized scheme), which is what the multiplexer matches a serial candidate against.
+    static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
 
 private:
     // The line discipline is applied HERE (on the open port, before adoption) rather than through

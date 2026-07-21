@@ -1444,6 +1444,17 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_mux_node_composition TEST_PREFIX "integration.")
 
+    # Proves serial_transport is now mux-composable: node<relay<asio_policy>, serial_transport,
+    # asio_transport> constructs from borrowed leaves and a serial:// dial resolves a candidate
+    # (the misclassified-scheme no-op is closed). Construct-only; links the node facade + the asio
+    # backend for both leaves.
+    add_executable(test_serial_mux_member test_serial_mux_member.cpp)
+    target_link_libraries(test_serial_mux_member PRIVATE
+        plexus::plexus
+        plexus::asio
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_serial_mux_member TEST_PREFIX "integration.")
+
     # The hot-path allocation audit gains a type-erased polymorphic_byte_channel variant when the asio
     # backend is on: the same steady-state 0-alloc invariant must hold across the single
     # virtual hop the erasure adds. The mux headers are header-only inside plexus::asio, so
