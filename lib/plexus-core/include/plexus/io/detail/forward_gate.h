@@ -47,6 +47,14 @@ public:
         return it->second.admit(seq);
     }
 
+    // Drop the window for (origin, arrival_relay) so the next forwarded frame re-anchors on the relay's
+    // current (possibly restarted-from-0) sequence rather than measuring it against a stale high-water —
+    // the data-plane mirror of the control-plane re-arm when a relay returns under the same identity.
+    bool reset(const node_id &origin, const node_id &arrival_relay)
+    {
+        return m_windows.erase(forward_dedup_key{origin, arrival_relay}) != 0;
+    }
+
     std::size_t tracked() const noexcept
     {
         return m_windows.size();

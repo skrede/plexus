@@ -699,6 +699,82 @@ void run_revive_relay_smoke()
     cluster.kill_origin();
 }
 
+// The reachability discrimination oracle, RECOVERY (revive-relay) arm — the third act. Over the real
+// relayed path, killing the whole relay degrades the origin to UNREACHABLE-NOT-DEAD; reviving a fresh
+// relay under the SAME identity re-establishes both legs and the origin RECOVERS. The proof is the
+// strongest available: a fresh publish flows end-to-end through the revived relay — the DATA plane, not
+// merely control, because the reachable transition resets the consumer's forward dedup window so the
+// revived splice's restarted-from-0 sequence is not misclassified too_old. Across kill->revive the
+// consumer sees NO disappeared+appeared pair for the origin and the SAME node_id resolves throughout, and
+// EXACTLY ONE reachable-kind delta fires on recovery — all read at the consumer's public observer surface.
+void run_revive_relay_recovers()
+{
+    probe_observer obs; // declared before the cluster so it outlives every posted fan-out into it
+    cold_cluster cluster;
+    cluster.consumer.router().add_observer(obs);
+
+    std::optional<plexus::publisher<>> pub;
+    pub.emplace(*cluster.origin, k_topic, plexus::topic_qos{}, /*emit_source_identity=*/true);
+
+    delivery got;
+    cluster.bring_up_serial();
+    cluster.pump([&] { return cluster.relay->count_publishers(std::string{k_topic}) >= 1; });
+    cluster.bring_up_tcp();
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+
+    plexus::subscriber<> sub{cluster.consumer, k_topic,
+                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+                             {
+                                 got.body = to_string(b);
+                                 if(info.source_identity)
+                                     got.source = info.source_identity->node_id();
+                             }};
+    cluster.pump([&] { return cluster.origin->count_subscribers(std::string{k_topic}) >= 1; });
+
+    // Baseline delivery over the first incarnation anchors the consumer's forward dedup window high — the
+    // exact condition that wedges a naive revive whose splice restarts its sequence at 0.
+    pub->publish(as_bytes(std::string{"first"}));
+    cluster.pump([&] { return !got.body.empty(); });
+    REQUIRE(got.body == "first");
+    REQUIRE(find_participant(cluster.consumer, cluster.origin_id)->id == cluster.origin_id);
+
+    cluster.kill_relay();
+    cluster.pump([&] {
+        const auto *p = find_participant(cluster.consumer, cluster.origin_id);
+        return p != nullptr && p->origin.reach_status == graph::reachability::unreachable;
+    });
+
+    cluster.revive_relay();
+    cluster.pump([&] { return kind_count(obs, cluster.origin_id, graph::change_kind::reachable) >= 1; });
+
+    const auto *back = find_participant(cluster.consumer, cluster.origin_id);
+    REQUIRE(back != nullptr);
+    REQUIRE(back->id == cluster.origin_id);       // same identity across the kill->revive cycle
+    REQUIRE(back->reach.via == cluster.relay_id);  // reachable again via the revived relay
+    REQUIRE(back->origin.reach_status == graph::reachability::reachable);
+
+    // Demand re-propagates onto the origin over the revived legs before the recovery publish.
+    cluster.pump([&] { return cluster.origin->count_subscribers(std::string{k_topic}) >= 1; });
+
+    // DATA-plane proof: a fresh publish flows end-to-end through the revived relay with the origin as the
+    // delivered source. Without the forward dedup reset this frame drops as too_old against the stale window.
+    got = {};
+    pub->publish(as_bytes(std::string{"recovered"}));
+    cluster.pump([&] { return !got.body.empty(); });
+    REQUIRE(got.body == "recovered");
+    REQUIRE(got.source.has_value());
+    REQUIRE(*got.source == cluster.origin_id);
+
+    // No identity churn across the whole cycle: exactly one reachable delta and NO disappeared for the
+    // origin (a re-appear would churn the identity at the notification level). The graph generation
+    // advancing is expected and required; the KIND is what must not churn.
+    REQUIRE(kind_count(obs, cluster.origin_id, graph::change_kind::reachable) == 1);
+    REQUIRE(kind_count(obs, cluster.origin_id, graph::change_kind::disappeared) == 0);
+
+    pub.reset();
+    cluster.kill_origin();
+}
+
 }
 
 TEST_CASE("a composed relay discloses it offers a relayed path and its reported-origin count moves with a real lift",
@@ -728,6 +804,13 @@ TEST_CASE("a revived relay under the same identity re-establishes both legs and 
 {
     for(int run = 0; run < 2; ++run)
         run_revive_relay_smoke();
+}
+
+TEST_CASE("a revived relay recovers the origin's reachability without identity churn and data flows again end-to-end, over cold runs",
+          "[integration][serial][relay][e2e][revive][recover]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_revive_relay_recovers();
 }
 
 TEST_CASE("pub/sub and control transit a serial+TCP relay end-to-end with the origin as source, over cold runs",

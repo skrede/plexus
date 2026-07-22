@@ -764,6 +764,24 @@ private:
                 m_messages.suppress_relayed_from(pr.origin);
             bump_graph_generation(true, pr.origin, graph::change_kind::appeared);
         }
+        else
+            recover_reachable_via(pr.origin, reporter);
+    }
+
+    // A seq-fresh re-report for an origin currently marked UNREACHABLE-NOT-DEAD (its relay returned)
+    // flips the row back to reachable under the SAME identity — a reachable delta, never appeared (a
+    // re-appear would churn the identity at the notification level). The flip is gated on note_reported's
+    // seq-freshness above, so a stale report from the dead incarnation is rejected before it reaches here
+    // and cannot resurrect the row; mark_reachable_via reports a change only on a real transition, so a
+    // steady-state refresh of an already-reachable row is silent. The data-plane dedup window is dropped
+    // in step because the revived relay's splice restarts its sequence at 0 — otherwise the first
+    // re-forwarded frame drops as too_old against the stale window and delivery stays wedged.
+    void recover_reachable_via(const node_id &origin, const node_id &via)
+    {
+        if(!m_known_peers.mark_reachable_via(origin, via))
+            return;
+        m_messages.reset_forward_dedup(origin, via);
+        bump_graph_generation(true, origin, graph::change_kind::reachable);
     }
 
     // A reporter may install at most max_reported_origins DISTINCT origins: a report that would add a
