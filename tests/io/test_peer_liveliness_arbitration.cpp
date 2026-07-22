@@ -10,6 +10,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <algorithm>
 #include <stdexcept>
 
 TEST_CASE("peer_liveliness a transport drop dominates a fresh heartbeat the same turn", "[io][peer_liveliness]")
@@ -112,6 +113,25 @@ TEST_CASE("peer_liveliness updates the latch but emits nothing without a subscri
     arb.add_subscriber();
     arb.evaluate(k_base_ns + 1); // unchanged from the latched alive -> still no emission
     REQUIRE(log.empty());
+}
+
+// A via-only reported identity is never fed to the direct-peer arbiter (routing_engine's
+// note_reported_candidate takes no arbiter path), so it can never draw a verdict. Pinned here at the
+// arbiter surface: a peer given no signal is absent from the verdict log even as a directly-fed peer
+// churns through alive/lost — the reachability derivation reads the arbiter, it never feeds it.
+TEST_CASE("peer_liveliness a reported-only identity never fed a signal never receives a verdict", "[io][peer_liveliness]")
+{
+    harness h(combine::any_signal_alive);
+    const node_id direct   = id_of(1);
+    const node_id reported = id_of(2);
+
+    h.arb.note_session_up(direct);
+    h.arb.evaluate(k_base_ns);
+    h.arb.note_session_down(direct, k_base_ns + k_interval_ns);
+    h.arb.evaluate(k_base_ns + k_window_ns + 1);
+
+    REQUIRE(std::any_of(h.log.begin(), h.log.end(), [&](const peer_liveliness_event &e) { return e.id == direct; }));
+    REQUIRE(std::none_of(h.log.begin(), h.log.end(), [&](const peer_liveliness_event &e) { return e.id == reported; }));
 }
 
 TEST_CASE("peer_liveliness fixed twin fails closed on the (N+1)-th distinct peer", "[io][peer_liveliness]")

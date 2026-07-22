@@ -27,6 +27,7 @@ namespace
 using plexus::node_id;
 using plexus::graph::observation;
 using plexus::graph::provenance;
+using plexus::graph::reachability;
 using plexus::graph::route;
 using plexus::io::direct_protection;
 using plexus::io::endpoint;
@@ -169,6 +170,39 @@ TEST_CASE("fixed twin reported window anchors a high first seq and reset re-arms
     // first-sighting anchor so the post-restart replay re-admits instead of deduping behind the mark.
     REQUIRE(store.reset_reported_windows(via) == 1);
     REQUIRE(store.note_reported(peer, relayed_via(20), 1, 13, opts) == report_admit::refreshed);
+}
+
+reachability status_via(const fixed_peer_storage<4, 4> &store, const node_id &id, const node_id &via)
+{
+    for(const route_candidate &c : store.candidates(id))
+        if(!c.is_direct() && c.reach.via == via)
+            return c.origin.reach_status;
+    return reachability::reachable;
+}
+
+TEST_CASE("fixed twin marks a via row unreachable in place, keeping the row and its direct twin reachable", "[graph][route][fixed_peer_storage]")
+{
+    fixed_peer_storage<4, 4> store;
+    const route_options opts{};
+    const node_id peer = id_with(1);
+    const node_id via  = id_with(20);
+
+    REQUIRE(store.admit(peer, direct_with(1), 10, opts)); // a direct row alongside the relayed one
+    REQUIRE(store.note_reported(peer, relayed_via(20), 1, 10, opts) == report_admit::noted_new);
+    REQUIRE(status_via(store, peer, via) == reachability::reachable);
+
+    // Relay death degrades only the via row; the identity, the row, and the direct twin survive.
+    REQUIRE(store.mark_unreachable_via(peer, via));
+    REQUIRE(store.candidates(peer).size() == 2);
+    REQUIRE(direct_rows(store.candidates(peer)) == 1);
+    REQUIRE(store.get(peer) == ep_with(1)); // the direct endpoint is still surfaced, always reachable
+    REQUIRE(status_via(store, peer, via) == reachability::unreachable);
+    REQUIRE_FALSE(store.mark_unreachable_via(peer, via)); // idempotent
+
+    // The recovery counterpart restores it; an unknown (origin, via) marks nothing.
+    REQUIRE(store.mark_reachable_via(peer, via));
+    REQUIRE(status_via(store, peer, via) == reachability::reachable);
+    REQUIRE_FALSE(store.mark_unreachable_via(id_with(2), via));
 }
 
 TEST_CASE("fixed twin fails closed on a direct peer past identity capacity but never on a transitive flood", "[graph][route][fixed_peer_storage]")

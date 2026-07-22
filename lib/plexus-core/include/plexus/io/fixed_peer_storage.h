@@ -83,6 +83,18 @@ public:
         return true;
     }
 
+    bool mark_unreachable_via(const node_id &id, const node_id &via)
+    {
+        entry *slot = find(id);
+        return slot != nullptr && detail::mark_reachability_via(slot->candidates.data(), slot->count, via, graph::reachability::unreachable) != 0;
+    }
+
+    bool mark_reachable_via(const node_id &id, const node_id &via)
+    {
+        entry *slot = find(id);
+        return slot != nullptr && detail::mark_reachability_via(slot->candidates.data(), slot->count, via, graph::reachability::reachable) != 0;
+    }
+
     std::size_t reset_reported_windows(const node_id &via)
     {
         std::size_t n = 0;

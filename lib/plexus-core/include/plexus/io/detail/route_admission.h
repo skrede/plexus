@@ -185,6 +185,22 @@ inline bool remove_transitive_row(route_candidate *slots, std::size_t &count, co
     return false;
 }
 
+// Flip the reachability of every transitive row reaching origin via `via` to `status` in place, WITHOUT
+// removing it — the identity and its via edge survive so a returning relay recovers the row rather than
+// re-minting it. Only a row that actually transitions is counted, so an idempotent re-mark reports no
+// change. The direct row (always reachable) is never touched. Returns the number of rows re-marked.
+inline std::size_t mark_reachability_via(route_candidate *slots, std::size_t count, const node_id &via, graph::reachability status)
+{
+    std::size_t changed = 0;
+    for(std::size_t i = 0; i < count; ++i)
+        if(!slots[i].is_direct() && slots[i].reach.via == via && slots[i].origin.reach_status != status)
+        {
+            slots[i].origin.reach_status = status;
+            ++changed;
+        }
+    return changed;
+}
+
 // The direct endpoint an identity's rows surface to a dial/scoping path: the direct row only, never a
 // via-only candidate.
 inline std::optional<endpoint> direct_endpoint(const route_candidate *slots, std::size_t count)

@@ -627,7 +627,7 @@ private:
         {
             const node_id who  = torn->peer_identity();
             relay_withdraw(who);
-            retire_reports_via(who);
+            mark_reports_via_unreachable(who);
             m_messages.resume_relayed_from(who);
             const bool changed = m_topics.remove_node(who);
             bump_graph_generation(changed, who, graph::change_kind::disappeared);
@@ -801,15 +801,19 @@ private:
                 dec_reporter_load(*c.reach.via);
     }
 
-    // The relay R is gone: retire every origin still reported as reachable via R (R can no longer
-    // withdraw them itself), driving the same retire path a withdrawal does. Gather-then-retire so the
-    // per-origin removal never mutates the table mid-iteration.
-    void retire_reports_via(const node_id &via)
+    // The relay R is gone: its session died, so R can no longer withdraw the origins it reported. Rather
+    // than retire them — which would render a dead PATH byte-identical to a dead PEER (disappeared) — each
+    // origin reachable via R degrades to UNREACHABLE-NOT-DEAD in place: the identity, its via edge, and its
+    // topics are retained so the path recovers when R returns. Only this relay-death caller diverges;
+    // withdrawal (retire_reported_if_fresh) and aging (sweep_aged_awareness) keep retiring to disappeared
+    // through the untouched retire_reported funnel. Gather-then-mark so the update never mutates mid-scan.
+    void mark_reports_via_unreachable(const node_id &via)
     {
         std::vector<node_id> origins;
         m_known_peers.for_each_origin_via(via, [&](const node_id &o) { origins.push_back(o); });
         for(const node_id &o : origins)
-            retire_reported(o, via);
+            if(m_known_peers.mark_unreachable_via(o, via))
+                bump_graph_generation(true, o, graph::change_kind::unreachable);
     }
 
     route_candidate reported_candidate(const node_id &reporter, const wire::peer_report &pr) const

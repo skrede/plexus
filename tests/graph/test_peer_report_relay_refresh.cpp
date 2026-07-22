@@ -84,6 +84,17 @@ struct relay_net
     {
         return d.known().candidates(id_o).size();
     }
+
+    // The reachability the downstream's only (via-relay) row for O currently carries.
+    plexus::graph::reachability origin_reach_status() const
+    {
+        for(const auto &c : d.known().candidates(id_o))
+            if(!c.is_direct() && c.reach.via == id_r)
+                return c.origin.reach_status;
+        return plexus::graph::reachability::reachable;
+    }
+
+    node_id id_r{make_id(0xA1)};
 };
 
 }
@@ -105,17 +116,20 @@ TEST_CASE("relay refresh: a live-but-idle reported origin survives past awarenes
     REQUIRE(net.downstream_sees_origin() == 1);
 }
 
-TEST_CASE("relay refresh: a downstream retires origins reachable via a relay whose session dies", "[graph][peer_report][relay]")
+TEST_CASE("relay refresh: a downstream degrades origins via a relay whose session dies to unreachable, not disappeared", "[graph][peer_report][relay]")
 {
     manual_clock::reset();
     relay_net net;
     net.establish();
     REQUIRE(net.downstream_sees_origin() == 1);
+    REQUIRE(net.origin_reach_status() == plexus::graph::reachability::reachable);
 
-    // D's only path to O is via R. Tearing down D's session to R must retire O at D immediately — R is
-    // gone and cannot withdraw it — rather than leaving a phantom "reachable via dead relay" row.
+    // D's only path to O is via R. Tearing down D's session to R degrades O to UNREACHABLE-NOT-DEAD: the
+    // dead relay can no longer withdraw O, but O's identity and its via edge are RETAINED (distinguishable
+    // from a peer that genuinely left) so the path recovers if R returns — never conflated with disappeared.
     net.d.session_for(inbound_slot(1))->tear_down();
     net.drive();
 
-    REQUIRE(net.downstream_sees_origin() == 0);
+    REQUIRE(net.downstream_sees_origin() == 1); // the row is kept, not retired
+    REQUIRE(net.origin_reach_status() == plexus::graph::reachability::unreachable);
 }

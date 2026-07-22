@@ -26,12 +26,23 @@ enum class observation : std::uint8_t
     reported
 };
 
+// Whether a candidate's path is currently usable. A reported origin whose relay's session dies
+// degrades to unreachable WITHOUT losing its identity or its via edge, so it stays distinguishable
+// from a peer that genuinely left (which retires the row outright). A directly-observed peer is
+// always reachable; the field defaults so a direct-only record is unperturbed.
+enum class reachability : std::uint8_t
+{
+    reachable,
+    unreachable
+};
+
 struct provenance
 {
     observation how;
     // The peer that reported this entry; std::nullopt is the reserved direct-only
     // state, never a zero-node_id sentinel.
     std::optional<plexus::node_id> reporter;
+    reachability reach_status{reachability::reachable};
 };
 
 struct participant_record

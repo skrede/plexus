@@ -68,6 +68,16 @@ public:
             m_table.erase(it);
         return true;
     }
+    bool mark_unreachable_via(const node_id &id, const node_id &via)
+    {
+        auto it = m_table.find(id);
+        return it != m_table.end() && detail::mark_reachability_via(it->second.candidates.data(), it->second.count, via, graph::reachability::unreachable) != 0;
+    }
+    bool mark_reachable_via(const node_id &id, const node_id &via)
+    {
+        auto it = m_table.find(id);
+        return it != m_table.end() && detail::mark_reachability_via(it->second.candidates.data(), it->second.count, via, graph::reachability::reachable) != 0;
+    }
     std::size_t reset_reported_windows(const node_id &via)
     {
         std::size_t n = 0;
@@ -196,6 +206,20 @@ public:
     bool remove_transitive(const node_id &id, const node_id &via)
     {
         return m_storage.remove_transitive(id, via);
+    }
+
+    // Degrade the origin's row reaching it via `via` to unreachable in place (the relay carrying it
+    // died): the identity and its via edge are retained, distinguishing UNREACHABLE-NOT-DEAD from a
+    // retired row. True only when a row actually transitions.
+    bool mark_unreachable_via(const node_id &id, const node_id &via)
+    {
+        return m_storage.mark_unreachable_via(id, via);
+    }
+
+    // The recovery counterpart: restore the origin's row via `via` to reachable when the path returns.
+    bool mark_reachable_via(const node_id &id, const node_id &via)
+    {
+        return m_storage.mark_reachable_via(id, via);
     }
 
     // Re-arm the dedup windows of every row reaching an origin via `via` (its reporter session

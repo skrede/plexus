@@ -225,8 +225,9 @@ struct cold_cluster
 
     // Destroy the WHOLE relay node — both its sessions — draining pending work first. Unlike a
     // serial-leg-down (which leaves the relay alive to withdraw the reported origin, retiring it to
-    // no_provider), tearing the relay session down leaves the origin's via-relay candidate stale in
-    // the consumer's route table, so a forwarded re-issue finds no live via-session and drops.
+    // disappeared), tearing the relay session down degrades the origin's via-relay candidate to
+    // UNREACHABLE-NOT-DEAD in the consumer's route table (the identity is retained, distinguishable from
+    // a peer that left), so a forwarded re-issue finds no live via-session and drops.
     void kill_relay()
     {
         serial_fixture::settle(io, std::chrono::milliseconds(20));

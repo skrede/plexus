@@ -11,7 +11,12 @@ namespace plexus::graph
 enum class change_kind : std::uint8_t
 {
     appeared,
-    disappeared
+    disappeared,
+    // A reported origin's only path went dead (its relay's session died) yet the identity is retained,
+    // marked unreachable — a state distinct from disappeared (which means the participant is gone). The
+    // reachable kind is its recovery counterpart, fired when the path returns.
+    unreachable,
+    reachable
 };
 
 // The minimal graph delta: which participant crossed the graph and in which direction, owned by

@@ -541,17 +541,14 @@ void run_leaf_self_check_discloses_routes_via_relay()
     cluster.kill_origin();
 }
 
-// The wave-0 probe. It PINS today's consumer-side behavior when the whole relay node dies over the
-// real relayed path (the derivation-design input, open question Q2): with the origin reachable ONLY
-// via the relay, kill the relay and, within a bounded pump, record at the consumer's public surface
-// (a) whether the origin's via-relay row is retired or left stale, (b) which change_kind — if any —
-// crosses for the origin, (c) whether the direct-peer liveliness arbiter renders any verdict for the
-// via-only origin (it must not — a reported identity never feeds the arbiter), and (d) that a
-// via-relay call through the dead relay fails cleanly, bounded, with the forward-rpc drop counted.
-// The recorded answer — not a desired future behavior — decides where the liveliness derivation hooks
-// and how unreachable state is stored. It documents which of prompt-retire-to-disappeared vs
-// stale-window is TRUE today.
-void run_kill_relay_probe()
+// The reachability discrimination oracle, kill-RELAY arm. Over the real relayed path with the origin
+// reachable ONLY via the relay, destroying the whole relay node degrades the origin to
+// UNREACHABLE-NOT-DEAD at the consumer's public surface: the identity and its via edge are RETAINED
+// (find_participant still resolves it, reported-via-relay), its provenance reads unreachable, the graph
+// delta is the new unreachable kind (NEVER disappeared for the origin), and the direct-peer arbiter
+// stays silent for the via-only origin. A via-relay call then fails cleanly, bounded, through the dead
+// relay with the forward-rpc drop counted — the reply-fail the derivation renders as a reachability state.
+void run_kill_relay_unreachable()
 {
     probe_observer obs; // declared before the cluster so it outlives every posted fan-out into it
     cold_cluster cluster;
@@ -575,33 +572,25 @@ void run_kill_relay_probe()
     REQUIRE(before != nullptr);
     REQUIRE(before->origin.how == graph::observation::reported);
     REQUIRE(before->reach.via == cluster.relay_id);
-    REQUIRE(kind_count(obs, cluster.origin_id, graph::change_kind::appeared) >= 1);
+    REQUIRE(before->origin.reach_status == graph::reachability::reachable);
     REQUIRE_FALSE(arbiter_saw(obs, cluster.origin_id)); // a via-only origin never feeds the arbiter
 
     const std::size_t drops_before = cluster.consumer.router().forward_rpc_dropped_count();
 
     cluster.kill_relay();
     cluster.pump([&] { return !connected(cluster.consumer, cluster.relay_id); });
-    serial_fixture::settle(cluster.io, std::chrono::milliseconds(200));
+    cluster.pump([&] { return kind_count(obs, cluster.origin_id, graph::change_kind::unreachable) >= 1; });
 
-    const bool relay_session_gone   = !connected(cluster.consumer, cluster.relay_id);
-    const auto *after               = find_participant(cluster.consumer, cluster.origin_id);
-    const bool origin_retired       = after == nullptr;
-    const int  origin_disappeared   = kind_count(obs, cluster.origin_id, graph::change_kind::disappeared);
-    const bool arbiter_saw_origin   = arbiter_saw(obs, cluster.origin_id);
-    const bool arbiter_saw_relay    = arbiter_saw(obs, cluster.relay_id);
-    INFO("relay_session_gone=" << relay_session_gone << " origin_retired=" << origin_retired
-         << " origin_disappeared_deltas=" << origin_disappeared << " arbiter_saw_origin=" << arbiter_saw_origin
-         << " arbiter_saw_relay=" << arbiter_saw_relay);
-
-    // Ground truth, pinned to the observed behavior: the consumer notices the relay's teardown edge and
-    // PROMPTLY RETIRES the origin's via-relay row, emitting change_kind::disappeared — byte-identical to
-    // a genuinely-dead peer. The via-only origin never receives an arbiter verdict; only the relay (a
-    // direct peer) can.
-    REQUIRE(relay_session_gone);
-    REQUIRE(origin_retired);
-    REQUIRE(origin_disappeared == 1);
-    REQUIRE_FALSE(arbiter_saw_origin);
+    // The origin is NOT retired: its row survives, degraded and distinguishable — a dead PATH, not a dead
+    // PEER. The unreachable delta crossed; the disappeared delta (the dead-peer notification) never did.
+    const auto *after = find_participant(cluster.consumer, cluster.origin_id);
+    REQUIRE(after != nullptr);
+    REQUIRE(after->reach.via == cluster.relay_id);
+    REQUIRE(after->origin.how == graph::observation::reported);
+    REQUIRE(after->origin.reach_status == graph::reachability::unreachable);
+    REQUIRE(kind_count(obs, cluster.origin_id, graph::change_kind::unreachable) >= 1);
+    REQUIRE(kind_count(obs, cluster.origin_id, graph::change_kind::disappeared) == 0);
+    REQUIRE_FALSE(arbiter_saw(obs, cluster.origin_id)); // still never arbitrated: only the relay can be
 
     std::optional<bool> ok;
     plexus::call_options copts;
@@ -616,9 +605,39 @@ void run_kill_relay_probe()
     REQUIRE(cluster.consumer.router().forward_rpc_dropped_count() >= drops_before);
 }
 
+// The reachability discrimination oracle, kill-ORIGIN arm. When the origin genuinely leaves, the relay
+// observes its serial drop and WITHDRAWS it, so the consumer retires it to disappeared: find_participant
+// no longer resolves it and the delta is disappeared (NEVER the unreachable kind), with the arbiter still
+// silent for the via-only origin. The contrast with the kill-relay arm is the whole derivation — the
+// consumer never conflates a relay's death with the origin's own departure.
+void run_kill_origin_disappeared()
+{
+    probe_observer obs;
+    cold_cluster cluster;
+    cluster.consumer.router().add_observer(obs);
+
+    cluster.bring_up_serial();
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
+    cluster.bring_up_tcp();
+    REQUIRE(connected(cluster.consumer, cluster.relay_id));
+
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+    REQUIRE(find_participant(cluster.consumer, cluster.origin_id) != nullptr);
+    REQUIRE_FALSE(arbiter_saw(obs, cluster.origin_id));
+
+    cluster.kill_origin();
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) == nullptr; });
+
+    REQUIRE(find_participant(cluster.consumer, cluster.origin_id) == nullptr);         // retired: the peer is gone
+    REQUIRE(kind_count(obs, cluster.origin_id, graph::change_kind::disappeared) >= 1); // the dead-peer kind
+    REQUIRE(kind_count(obs, cluster.origin_id, graph::change_kind::unreachable) == 0); // never the dead-path kind
+    REQUIRE_FALSE(arbiter_saw(obs, cluster.origin_id));                                // a via-only origin never arbitrated
+}
+
 // The recovery capability the liveliness half's revival arm needs: after the relay dies (the origin's
-// via-relay row retires to disappeared), a fresh relay under the SAME identity re-establishes BOTH legs
-// and the relayed path's control + demand plane comes back — the origin resolves under the same node_id
+// via-relay row degrades to unreachable, its identity retained), a fresh relay under the SAME identity
+// re-establishes BOTH legs and the relayed path's control + demand plane comes back — the origin resolves
+// under the same node_id
 // (no identity churn), reachable via the relay, and the consumer's remembered demand re-propagates all
 // the way up onto the origin. The DATA-plane delivery of a fresh publish does NOT yet recover, and this
 // smoke test deliberately stops short of asserting it: because recovery keeps the relay identity, the
@@ -653,8 +672,15 @@ void run_revive_relay_smoke()
     REQUIRE(got.source == cluster.origin_id);
 
     cluster.kill_relay();
-    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) == nullptr; });
-    REQUIRE(find_participant(cluster.consumer, cluster.origin_id) == nullptr);
+    cluster.pump([&] {
+        const auto *p = find_participant(cluster.consumer, cluster.origin_id);
+        return p != nullptr && p->origin.reach_status == graph::reachability::unreachable;
+    });
+    // The origin degrades to UNREACHABLE-NOT-DEAD, not retired: the row survives the relay's death so the
+    // path recovers under the same identity (restoring it to reachable is the recovery half's job).
+    const auto *down = find_participant(cluster.consumer, cluster.origin_id);
+    REQUIRE(down != nullptr);
+    REQUIRE(down->origin.reach_status == graph::reachability::unreachable);
 
     cluster.revive_relay();
     cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
@@ -687,11 +713,14 @@ TEST_CASE("a non-relay leaf discloses routes transiting a relay after a real pee
     run_leaf_self_check_discloses_routes_via_relay();
 }
 
-TEST_CASE("probe: killing the whole relay retires the origin's via-relay row and the arbiter stays silent for it",
-          "[integration][serial][relay][e2e][kill_relay][probe]")
+TEST_CASE("kill-relay degrades the origin to unreachable while kill-origin retires it to disappeared, discriminated at the consumer, over cold runs",
+          "[integration][serial][relay][e2e][kill_relay][kill_origin][discrimination]")
 {
     for(int run = 0; run < 2; ++run)
-        run_kill_relay_probe();
+    {
+        run_kill_relay_unreachable();
+        run_kill_origin_disappeared();
+    }
 }
 
 TEST_CASE("a revived relay under the same identity re-establishes both legs and the relayed path recovers, over cold runs",
