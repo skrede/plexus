@@ -65,9 +65,10 @@ void dispatch_forwarded_inner(Session &s, const wire::forwarded_frame &ff)
     switch(hdr->type)
     {
         case wire::msg_type::unidirectional:
-            // A relayed publish addressed here is consumed only when the node uses relayed routes; the
-            // never posture drops it after admission so a re-fanning relay still sees a sequenced frame.
-            if(!s.m_messages.consumes_relayed())
+            // A relayed publish addressed here is consumed only when the node uses relayed routes AND no
+            // live direct session to this origin supersedes the relayed one; either posture drops it after
+            // admission so a re-fanning relay still sees a sequenced frame and re-arm stays gap-free.
+            if(!s.m_messages.consumes_relayed_from(ff.origin))
                 return;
             return deliver_data_with_source(s, *hdr, body, ff.origin);
         case wire::msg_type::rpc_request:

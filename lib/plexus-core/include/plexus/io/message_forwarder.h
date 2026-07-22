@@ -42,6 +42,7 @@
 #include "plexus/wire/forwarded_frame.h"
 #include "plexus/wire/topic_declaration.h"
 
+#include <set>
 #include <span>
 #include <string>
 #include <vector>
@@ -571,6 +572,8 @@ public:
     // routes still admits a forwarded frame through the shared dedup gate (so a relay re-fanning it
     // stays sequenced) but never delivers it to its own subscribers — the receive-side half of the
     // never posture, the send/reply half living at the forward_rpc and call-fallback selection sites.
+    // The per-origin overload additionally retires relayed delivery for a single origin because a live
+    // direct session to that origin supersedes the relayed one.
     void set_consume_relayed(bool consume) noexcept
     {
         m_consume_relayed = consume;
@@ -579,6 +582,25 @@ public:
     bool consumes_relayed() const noexcept
     {
         return m_consume_relayed;
+    }
+
+    // Cold path (direct-session lifecycle only): retire / restore relayed delivery for one origin whose
+    // direct session supersedes / has lost the relayed path. A suppressed origin's frame is still admitted
+    // through the shared dedup window and only dropped at local delivery, so the window stays sequenced and
+    // resume delivers the next frame with no gap.
+    void suppress_relayed_from(const node_id &origin)
+    {
+        m_relayed_suppressed.insert(origin);
+    }
+
+    void resume_relayed_from(const node_id &origin)
+    {
+        m_relayed_suppressed.erase(origin);
+    }
+
+    bool consumes_relayed_from(const node_id &origin) const noexcept
+    {
+        return m_consume_relayed && m_relayed_suppressed.find(origin) == m_relayed_suppressed.end();
     }
 
     void fetch_latched(const peer &p, std::uint64_t topic_hash, std::uint32_t max_samples)
@@ -809,6 +831,7 @@ private:
     std::size_t m_global_default;
     forward_ctx m_forward_ctx;
     bool m_consume_relayed{true};
+    std::set<node_id> m_relayed_suppressed;
     detail::forward_dedup_table m_forward_dedup;
     endpoint_type m_endpoint;
     std::vector<remembered_demand> m_empty;

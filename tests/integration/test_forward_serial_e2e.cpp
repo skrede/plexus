@@ -27,6 +27,7 @@
 #include <vector>
 #include <cstddef>
 #include <optional>
+#include <algorithm>
 #include <string_view>
 
 using namespace forward_serial_e2e_fixture;
@@ -270,6 +271,133 @@ void run_allow_relayed_reaches_relayed_origin()
     cluster.kill_origin();
 }
 
+// A per-sequence delivery ledger read at the consumer facade: every delivered publication_sequence is
+// recorded so exactly-once (no duplicate seq) and contiguity (no gap) are assertions over the ledger.
+// A duplicate delivery of a superseded relayed frame shows up as a repeated seq; a lost frame as a gap.
+struct seq_ledger
+{
+    std::vector<std::uint64_t> seqs;
+    std::optional<node_id> last_source;
+};
+
+bool exactly_once(const seq_ledger &l)
+{
+    std::vector<std::uint64_t> s = l.seqs;
+    std::sort(s.begin(), s.end());
+    return std::adjacent_find(s.begin(), s.end()) == s.end();
+}
+
+bool contiguous(const seq_ledger &l)
+{
+    if(l.seqs.empty())
+        return true;
+    std::vector<std::uint64_t> s = l.seqs;
+    std::sort(s.begin(), s.end());
+    return s.back() - s.front() + 1 == s.size();
+}
+
+void publish_and_drain(dualhome_cluster &c, plexus::publisher<> &pub, seq_ledger &log, const std::string &body)
+{
+    const std::size_t before = log.seqs.size();
+    pub.publish(as_bytes(body));
+    c.pump([&] { return log.seqs.size() > before; });
+    serial_fixture::settle(c.io, std::chrono::milliseconds(40)); // let any duplicate (bug) or forwarded twin land
+}
+
+// The criterion-2 discharge: a live publish stream survives a relayed<->direct switchover to the same
+// origin identity with exactly-once delivery. Relay-first, then the direct session supersedes the relayed
+// delivery (no duplicate), then the direct drop re-arms the relayed path (no gap) — proving the relay was
+// forwarding-but-suppressed all along, since resume delivers with nothing re-anchored.
+void run_switchover_relay_first()
+{
+    dualhome_cluster c;
+    std::optional<plexus::publisher<>> pub;
+    pub.emplace(*c.origin, k_topic, plexus::topic_qos{}, /*emit_source_identity=*/true);
+
+    c.bring_up_relay_to_origin();
+    c.bring_up_consumer_to_relay();
+    c.pump([&] { return find_participant(c.consumer, c.origin_id) != nullptr; });
+
+    seq_ledger log;
+    plexus::subscriber<> sub{c.consumer, k_topic,
+                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+                             {
+                                 (void)b;
+                                 log.seqs.push_back(info.publication_sequence);
+                                 if(info.source_identity)
+                                     log.last_source = info.source_identity->node_id();
+                             }};
+    c.pump([&] { return c.origin->count_subscribers(std::string{k_topic}) >= 1; });
+
+    publish_and_drain(c, *pub, log, "r0"); // relay-only delivery
+    publish_and_drain(c, *pub, log, "r1");
+    REQUIRE(log.seqs.size() == 2);
+
+    c.bring_up_consumer_to_origin_direct();
+    // The direct path must be WORKING (its subscription reached the origin, so both paths fan) before the
+    // stream is driven: criterion 2 is that a relayed route never displaces a working direct path.
+    c.pump([&] { return c.origin->count_subscribers(std::string{k_topic}) >= 2; });
+    publish_and_drain(c, *pub, log, "d0"); // direct delivers, the forwarded twin is suppressed
+    publish_and_drain(c, *pub, log, "d1");
+    REQUIRE(log.seqs.size() == 4); // no duplicate from the still-forwarding relay
+
+    c.drop_direct(); // the direct path is lost; the relayed path re-arms
+    publish_and_drain(c, *pub, log, "x0");
+    publish_and_drain(c, *pub, log, "x1");
+    REQUIRE(log.seqs.size() == 6); // resume delivered, nothing lost, nothing doubled
+
+    REQUIRE(exactly_once(log));
+    REQUIRE(contiguous(log));
+    REQUIRE(log.last_source.has_value());
+    REQUIRE(*log.last_source == c.origin_id);
+
+    pub.reset();
+}
+
+// The direct-first ordering arm: the direct session is live BEFORE the relay reports the origin, so the
+// session-ready arm cannot fire on it (the origin was not yet reported). Suppression must instead arm at
+// report ingest when a live direct session already exists — otherwise the relayed publishes double-deliver.
+void run_switchover_direct_first()
+{
+    dualhome_cluster c;
+    std::optional<plexus::publisher<>> pub;
+    pub.emplace(*c.origin, k_topic, plexus::topic_qos{}, /*emit_source_identity=*/true);
+
+    c.bring_up_consumer_to_origin_direct(); // direct live FIRST, origin not yet reported
+
+    seq_ledger log;
+    plexus::subscriber<> sub{c.consumer, k_topic,
+                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+                             {
+                                 (void)b;
+                                 log.seqs.push_back(info.publication_sequence);
+                                 if(info.source_identity)
+                                     log.last_source = info.source_identity->node_id();
+                             }};
+    c.pump([&] { return c.origin->count_subscribers(std::string{k_topic}) >= 1; });
+
+    publish_and_drain(c, *pub, log, "d0"); // direct-only delivery
+    REQUIRE(log.seqs.size() == 1);
+
+    c.bring_up_relay_to_origin();  // the relay now reports the origin AND forwards its publishes
+    c.bring_up_consumer_to_relay();
+    c.pump([&] { return find_participant(c.consumer, c.origin_id) != nullptr; });
+    c.pump([&] { return c.origin->count_subscribers(std::string{k_topic}) >= 2; });
+
+    publish_and_drain(c, *pub, log, "d1"); // ingest arm must suppress the forwarded twin
+    publish_and_drain(c, *pub, log, "d2");
+    REQUIRE(log.seqs.size() == 3);
+
+    REQUIRE(exactly_once(log));
+    REQUIRE(contiguous(log));
+    // Source provenance by id is pinned on the relayed path in the switchover test; the last delivery here
+    // rides the direct (endpoint-dialed) session, which labels the source with its provisional endpoint id,
+    // so only source-identity presence is asserted.
+    REQUIRE(log.last_source.has_value());
+
+    pub.reset();
+}
+
 }
 
 TEST_CASE("pub/sub and control transit a serial+TCP relay end-to-end with the origin as source, over cold runs",
@@ -307,4 +435,18 @@ TEST_CASE("an allow_relayed consumer reaches the relayed origin a never consumer
 {
     for(int run = 0; run < 2; ++run)
         run_allow_relayed_reaches_relayed_origin();
+}
+
+TEST_CASE("a dual-homed consumer's relayed delivery is superseded by a live direct session and re-arms on its loss, exactly-once per seq",
+          "[integration][relay][e2e][switchover]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_switchover_relay_first();
+}
+
+TEST_CASE("a direct session live before the origin is reported suppresses the later relayed twin at ingest, no double-delivery",
+          "[integration][relay][e2e][switchover]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_switchover_direct_first();
 }

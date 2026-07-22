@@ -609,9 +609,28 @@ private:
             const node_id who  = torn->peer_identity();
             relay_withdraw(who);
             retire_reports_via(who);
+            m_messages.resume_relayed_from(who);
             const bool changed = m_topics.remove_node(who);
             bump_graph_generation(changed, who, graph::change_kind::disappeared);
         }
+    }
+
+    static bool is_session_live_edge(lifecycle_edge edge) noexcept
+    {
+        return edge == lifecycle_edge::ready || edge == lifecycle_edge::connected || edge == lifecycle_edge::reconnected;
+    }
+
+    // A direct session to a currently-reported (relayed) origin just went live: retire its relayed
+    // delivery so the dual-homed consumer stops double-delivering. The lifecycle event carries the slot's
+    // provisional endpoint id, so the proven identity is read off the session the way relay_on_ready does.
+    void arm_relayed_suppression(const node_id &slot_id)
+    {
+        session_type *s = m_registry.session_for(slot_id);
+        if(s == nullptr)
+            return;
+        const node_id proven = s->peer_identity();
+        if(m_reported.count(proven) != 0)
+            m_messages.suppress_relayed_from(proven);
     }
 
     void dispatch_lifecycle(const lifecycle_event &ev)
@@ -623,6 +642,8 @@ private:
             reset_windows_for_reporter(ev.id);
             relay_on_ready(ev.id);
         }
+        if(is_session_live_edge(ev.edge))
+            arm_relayed_suppression(ev.id);
         switch(ev.edge)
         {
             case lifecycle_edge::connected:
@@ -720,6 +741,8 @@ private:
         {
             ++m_reporter_load[reporter];
             m_reported.insert(pr.origin);
+            if(any_session_for(pr.origin))
+                m_messages.suppress_relayed_from(pr.origin);
             bump_graph_generation(true, pr.origin, graph::change_kind::appeared);
         }
     }
