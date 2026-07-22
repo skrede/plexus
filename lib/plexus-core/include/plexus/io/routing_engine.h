@@ -211,6 +211,7 @@ public:
         m_registry.deny_redial(id);
         m_peer_liveliness.note_awareness_lost(id);
         relay_withdraw(id);
+        m_emitter.clear_decline(id);
         if(m_reported.erase(id) != 0)
             m_topics.remove_node(id);
         bump_graph_generation(changed, id, graph::change_kind::disappeared);
@@ -627,6 +628,7 @@ private:
         {
             const node_id who  = torn->peer_identity();
             relay_withdraw(who);
+            m_emitter.clear_decline(who);
             mark_reports_via_unreachable(who);
             m_messages.resume_relayed_from(who);
             const bool changed = m_topics.remove_node(who);

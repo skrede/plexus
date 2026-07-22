@@ -56,6 +56,8 @@ struct null_peer_report_emitter
         return false;
     }
 
+    void clear_decline(const node_id &) noexcept {}
+
     bool declines(const node_id &) const noexcept
     {
         return false;
@@ -138,6 +140,15 @@ public:
         if(declining)
             return m_declined.insert(origin).second;
         return m_declined.erase(origin) != 0;
+    }
+
+    // Drop an origin's decline state outright when its session tears down or it is forgotten — a
+    // lifecycle prune that bounds the set, not a cooperative un-decline, so it reports no transition
+    // and never re-lifts the origin. A returning same-identity peer re-levels the bit on its first
+    // heartbeat.
+    void clear_decline(const node_id &origin)
+    {
+        m_declined.erase(origin);
     }
 
     bool declines(const node_id &origin) const noexcept

@@ -75,6 +75,8 @@ static_assert(std::is_same_v<decltype(std::declval<const plexus::io::peer_report
 static_assert(std::is_same_v<decltype(std::declval<const plexus::io::null_peer_report_emitter &>().declines(std::declval<const plexus::node_id &>())), bool>);
 static_assert(std::is_same_v<decltype(std::declval<plexus::io::peer_report_emitter &>().mark_decline(std::declval<const plexus::node_id &>(), true)), bool>);
 static_assert(std::is_same_v<decltype(std::declval<plexus::io::null_peer_report_emitter &>().mark_decline(std::declval<const plexus::node_id &>(), true)), bool>);
+static_assert(std::is_same_v<decltype(std::declval<plexus::io::peer_report_emitter &>().clear_decline(std::declval<const plexus::node_id &>())), void>);
+static_assert(std::is_same_v<decltype(std::declval<plexus::io::null_peer_report_emitter &>().clear_decline(std::declval<const plexus::node_id &>())), void>);
 
 // The delivery-path suppression set (the dual-homed consumer's relayed-delivery retirement) lives on
 // the message_forwarder, which is keyed on the ENGINE policy — unchanged by relay<>. So the two

@@ -157,8 +157,11 @@ void register_session_consumers(Session &s)
                 if(s.m_on_stamp_seen_cb)
                     s.m_on_stamp_seen_cb(s.m_ctx.peer_id);
                 // The relay honor points key on the handshake-proven identity (m_reported, the broadcast
-                // self-skip), not the provisional context id a dialed/accepted slot carries.
-                if(s.m_on_decline_seen_cb)
+                // self-skip), not the provisional context id a dialed/accepted slot carries — so the
+                // decline bit is consumed only once the handshake has settled who is speaking, matching
+                // the peer_report and forwarded receive halves. A pre-handshake heartbeat stamps
+                // presence but must not reach the relay's decline honor state.
+                if(s.is_complete() && s.m_on_decline_seen_cb)
                     s.m_on_decline_seen_cb(s.peer_identity(), (hb->reserved & wire::k_heartbeat_relay_decline_flag) != 0);
             });
 }

@@ -1755,6 +1755,16 @@ target_include_directories(test_forwarded_dedup_delivery PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_forwarded_dedup_delivery TEST_PREFIX "integration.")
 
+add_executable(test_heartbeat_decline_gate test_heartbeat_decline_gate.cpp)
+target_link_libraries(test_heartbeat_decline_gate PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_heartbeat_decline_gate PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_heartbeat_decline_gate TEST_PREFIX "integration.")
+
 add_executable(test_forward_splice_pubsub test_forward_splice_pubsub.cpp)
 target_link_libraries(test_forward_splice_pubsub PRIVATE
     plexus::core

@@ -161,7 +161,8 @@ void run_reqres_once()
                                  served = to_string(param);
                                  reply(plexus::wire::rpc_status::success, param);
                              }};
-    cluster.pump([&] { return cluster.relay->count_publishers(std::string{k_procedure}) >= 0; });
+    cluster.pump([&] { return cluster.relay->router().reports_origin(cluster.origin_id); });
+    REQUIRE(cluster.relay->router().reports_origin(cluster.origin_id));
 
     cluster.bring_up_tcp();
     REQUIRE(connected(cluster.consumer, cluster.relay_id));
@@ -246,7 +247,8 @@ void run_never_call_finds_no_relayed_provider()
                                  served = to_string(param);
                                  reply(plexus::wire::rpc_status::success, param);
                              }};
-    cluster.pump([&] { return cluster.relay->count_publishers(std::string{k_procedure}) >= 0; });
+    cluster.pump([&] { return cluster.relay->router().reports_origin(cluster.origin_id); });
+    REQUIRE(cluster.relay->router().reports_origin(cluster.origin_id));
 
     cluster.bring_up_tcp();
     cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
@@ -345,6 +347,26 @@ void run_origin_decline_flip_withdraws_downstream()
     REQUIRE(find_participant(cluster.consumer, cluster.origin_id) == nullptr);
 
     cluster.kill_origin();
+}
+
+// A declining peer that disconnects leaves no decline entry behind: the relay records the origin's
+// cooperative decline on its heartbeat, and the origin's teardown prunes that entry so the honor set does
+// not grow without bound across churning identities.
+void run_origin_decline_pruned_on_disconnect()
+{
+    cold_cluster cluster{plexus::io::route_usage::prefer_direct, plexus::io::route_usage::never};
+    cluster.bring_up_serial();
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
+
+    cluster.pump([&] { return cluster.relay->router().peer_declines(cluster.origin_id); });
+    REQUIRE(cluster.relay->router().peer_declines(cluster.origin_id));
+
+    cluster.kill_origin();
+    cluster.pump([&] { return !connected(*cluster.relay, cluster.origin_id); });
+    REQUIRE_FALSE(connected(*cluster.relay, cluster.origin_id));
+
+    // The teardown pruned the decline entry — the set is bounded, not leaked.
+    REQUIRE_FALSE(cluster.relay->router().peer_declines(cluster.origin_id));
 }
 
 // A declining consumer is offered no relayed path: the relay lifts the origin (the positive control that
@@ -602,7 +624,10 @@ void run_kill_relay_unreachable()
     REQUIRE(ok.has_value());
     REQUIRE_FALSE(*ok);          // no live via-session — the request cannot complete
     REQUIRE(served.empty());     // the origin's handler never ran through the dead relay
-    REQUIRE(cluster.consumer.router().forward_rpc_dropped_count() >= drops_before);
+    // The consumer originates; it never re-forwards, so its forward-rpc drop counter cannot move. The
+    // failure is the no-provider verdict: with the origin degraded to unreachable, the via-relay fallback
+    // does not even reissue toward the dead path, so no forwarded request is emitted to drop.
+    REQUIRE(cluster.consumer.router().forward_rpc_dropped_count() == drops_before);
 }
 
 // The reachability discrimination oracle, kill-ORIGIN arm. When the origin genuinely leaves, the relay
@@ -869,6 +894,13 @@ TEST_CASE("a declining consumer is offered no relayed origin the relay otherwise
 {
     for(int run = 0; run < 2; ++run)
         run_consumer_decline_receives_no_offer();
+}
+
+TEST_CASE("a declining origin's decline entry is pruned on disconnect, bounding the relay's honor set, over cold runs",
+          "[integration][serial][relay][e2e][decline]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_origin_decline_pruned_on_disconnect();
 }
 
 TEST_CASE("a dual-homed consumer's relayed delivery is superseded by a live direct session and re-arms on its loss, exactly-once per seq",
