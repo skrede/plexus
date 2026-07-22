@@ -4,6 +4,8 @@
 #include "plexus/node_id.h"
 #include "plexus/publisher_gid.h"
 
+#include "plexus/graph/participant_record.h"
+
 #include "plexus/wire/rpc_status.h"
 
 #include <span>
@@ -18,15 +20,17 @@
 namespace plexus::detail {
 
 // The first reported via-relay origin — a non-direct route candidate whose reachability is a relay
-// hop — excluding self. There is no served-procedure signal to match on (it is not propagated), so
-// selection is over reachability only; the directory-free model cannot rank among several, so
-// enumeration order decides.
+// hop — excluding self, and excluding a row whose via has degraded to unreachable (its relay died),
+// so the fallback never latches onto a dead path while a live one sits later in the enumeration.
+// There is no served-procedure signal to match on (it is not propagated), so selection is over
+// reachability only; the directory-free model cannot rank among several, so enumeration order decides.
 template<typename Engine>
 std::optional<node_id> first_via_relay_origin(const Engine &engine, const node_id &self)
 {
     std::optional<node_id> chosen;
-    engine.known().for_each_candidate([&](const node_id &id, const auto &reach, const auto &)
-                                      { if(!chosen && reach.via.has_value() && id != self) chosen = id; });
+    engine.known().for_each_candidate(
+            [&](const node_id &id, const auto &reach, const auto &origin)
+            { if(!chosen && reach.via.has_value() && origin.reach_status == graph::reachability::reachable && id != self) chosen = id; });
     return chosen;
 }
 

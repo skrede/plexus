@@ -56,6 +56,18 @@ route_candidate direct(std::uint64_t tag)
         tag};
 }
 
+using plexus::graph::reachability;
+
+route_candidate relayed_via(std::uint8_t via_tag, std::uint8_t hop, std::uint64_t tag, reachability reach_status)
+{
+    return route_candidate{
+        route{endpoint{"udp", "203.0.113.9:9000"}, id_with(via_tag)},
+        provenance{observation::reported, id_with(via_tag), reach_status},
+        hop,
+        plexus::wire::udp_dedup_window{},
+        tag};
+}
+
 }
 
 TEST_CASE("route_select degenerates a one-direct span to that direct candidate", "[graph][route_select]")
@@ -89,6 +101,27 @@ TEST_CASE("route_select prefers the direct candidate placed after a relayed one"
     const auto pick = route_select(span);
     REQUIRE(span[pick].is_direct());
     REQUIRE(span[pick].last_refreshed == 100);
+}
+
+TEST_CASE("route_select ranks a live relayed row over a same-hop unreachable one for the same origin", "[graph][route_select]")
+{
+    const std::array<route_candidate, 2> dead_first{relayed_via(0xA1, 1, 91, reachability::unreachable), relayed_via(0xA2, 1, 92, reachability::reachable)};
+    const auto pick_a = route_select(dead_first);
+    REQUIRE(pick_a == 1);
+    REQUIRE(dead_first[pick_a].last_refreshed == 92);
+
+    const std::array<route_candidate, 2> live_first{relayed_via(0xA2, 1, 92, reachability::reachable), relayed_via(0xA1, 1, 91, reachability::unreachable)};
+    const auto pick_b = route_select(live_first);
+    REQUIRE(pick_b == 0);
+    REQUIRE(live_first[pick_b].last_refreshed == 92);
+}
+
+TEST_CASE("route_select still picks an origin's only relayed row once it degrades to unreachable", "[graph][route_select]")
+{
+    const std::array<route_candidate, 1> span{relayed_via(0xA1, 1, 91, reachability::unreachable)};
+    const auto pick = route_select(span);
+    REQUIRE(pick == 0);
+    REQUIRE_FALSE(span[pick].is_direct());
 }
 
 TEST_CASE("route_select picks the fewest-hop relayed candidate, first-in-span breaking ties", "[graph][route_select]")
