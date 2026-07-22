@@ -53,6 +53,7 @@ void refan_if_pubsub(Session &s, const wire::forwarded_frame &ff)
 // reply route; a response keys the pending table by the responder ORIGIN, not the arrival via, so a
 // reply that re-resolved through a different relay still matches. Exactly one call per admitted frame.
 template<typename Session>
+// NOLINTNEXTLINE(readability-function-size)
 void dispatch_forwarded_inner(Session &s, const wire::forwarded_frame &ff)
 {
     auto hdr = wire::decode_header(ff.inner);
