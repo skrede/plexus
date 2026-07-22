@@ -13,6 +13,7 @@
 
 #include "plexus/io/fixed_peer_storage.h"
 
+#include <utility>
 #include <type_traits>
 
 namespace {
@@ -59,6 +60,28 @@ static_assert(std::is_same_v<plain_node::engine_type::peer_report_emitter_type, 
 // single-transport node the engine policy is the profile policy, so the real splice is forward_splice<policy>.
 static_assert(std::is_same_v<relay_node::engine_type::forward_splice_type, plexus::io::forward_splice<policy>>);
 static_assert(std::is_same_v<plain_node::engine_type::forward_splice_type, plexus::io::null_forward_splice>);
+
+// The offering-side per-origin bookkeeping (the report set, the seq map, and the cooperative-decline
+// set) is STATE the real emitter carries; the null twin is a members-less struct, so a non-relay node
+// pays zero for it. is_empty pins that structural present/absent — the on-target 0-symbol gate a later
+// phase measures rests on the null twin holding no offering state at all.
+static_assert(!std::is_empty_v<plexus::io::peer_report_emitter>);
+static_assert(std::is_empty_v<plexus::io::null_peer_report_emitter>);
+
+// Both twins mirror the cooperative-decline honor surface so one template parameter threads either
+// without a platform branch: the query is const->bool, the mark is (id, bool)->bool. On the null twin
+// both are inert no-ops (no decline set to record into); on the real twin they gate the report set.
+static_assert(std::is_same_v<decltype(std::declval<const plexus::io::peer_report_emitter &>().declines(std::declval<const plexus::node_id &>())), bool>);
+static_assert(std::is_same_v<decltype(std::declval<const plexus::io::null_peer_report_emitter &>().declines(std::declval<const plexus::node_id &>())), bool>);
+static_assert(std::is_same_v<decltype(std::declval<plexus::io::peer_report_emitter &>().mark_decline(std::declval<const plexus::node_id &>(), true)), bool>);
+static_assert(std::is_same_v<decltype(std::declval<plexus::io::null_peer_report_emitter &>().mark_decline(std::declval<const plexus::node_id &>(), true)), bool>);
+
+// The delivery-path suppression set (the dual-homed consumer's relayed-delivery retirement) lives on
+// the message_forwarder, which is keyed on the ENGINE policy — unchanged by relay<>. So the two
+// profiles carry the byte-identical forwarder type: the suppression machinery is no relay-only
+// structural member, it is inert-by-emptiness on a leaf that never reports an origin.
+static_assert(std::is_same_v<relay_node::engine_policy, plain_node::engine_policy>);
+static_assert(std::is_same_v<plexus::io::message_forwarder<relay_node::engine_policy>, plexus::io::message_forwarder<plain_node::engine_policy>>);
 
 }
 

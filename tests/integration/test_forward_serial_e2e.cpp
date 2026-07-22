@@ -468,6 +468,63 @@ void run_switchover_direct_first()
     pub.reset();
 }
 
+// A composed relay<> node discloses it OFFERS a relayed path, and its reported-origin count moves with
+// a real serial lift: 0 before the origin is attached, >=1 once the relay has lifted it. The disclosure
+// reaches the logger at least once (never silent), and offering is a compile-time property of the
+// profile — a relay<> node offers regardless of whether any origin is yet reported.
+void run_relay_self_check_discloses_offering()
+{
+    cold_cluster cluster;
+
+    const plexus::relay_posture before = cluster.relay->self_check();
+    REQUIRE(before.offering_relay);
+    REQUIRE(before.reported_origins == 0);
+
+    cluster.bring_up_serial();
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
+    cluster.pump([&] { return cluster.relay->router().reports_origin(cluster.origin_id); });
+
+    const plexus::relay_posture after = cluster.relay->self_check();
+    REQUIRE(after.offering_relay);
+    REQUIRE(after.reported_origins >= 1);
+    REQUIRE(after.reported_origins > before.reported_origins);
+    REQUIRE(cluster.relay_log.self_checks >= 1);
+
+    cluster.kill_origin();
+}
+
+// A non-relay leaf discloses N>0 routes transiting a relay only AFTER a real peer_report crosses the
+// wire — the origin enters its table reachable via the relay. It discloses offering_relay == false (the
+// null emitter twin, no offering code instantiated) and its disclosure reaches the logger at least once.
+void run_leaf_self_check_discloses_routes_via_relay()
+{
+    cold_cluster cluster;
+    cluster.bring_up_serial();
+    cluster.bring_up_tcp();
+
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+
+    const plexus::relay_posture posture = cluster.consumer.self_check();
+    REQUIRE_FALSE(posture.offering_relay);
+    REQUIRE(posture.reported_origins == 0);
+    REQUIRE(posture.routes_via_relays >= 1);
+    REQUIRE(cluster.consumer_log.self_checks >= 1);
+
+    cluster.kill_origin();
+}
+
+}
+
+TEST_CASE("a composed relay discloses it offers a relayed path and its reported-origin count moves with a real lift",
+          "[integration][serial][relay][e2e][self_check]")
+{
+    run_relay_self_check_discloses_offering();
+}
+
+TEST_CASE("a non-relay leaf discloses routes transiting a relay after a real peer_report ingest",
+          "[integration][serial][relay][e2e][self_check]")
+{
+    run_leaf_self_check_discloses_routes_via_relay();
 }
 
 TEST_CASE("pub/sub and control transit a serial+TCP relay end-to-end with the origin as source, over cold runs",

@@ -60,6 +60,21 @@ inline node_id id_of(std::uint8_t seed)
     return id;
 }
 
+// Records how many warn lines the node emitted and, of those, how many were self_check() posture
+// disclosures (tagged "(self_check)" by node.h) — so a test proves relay-posture disclosure is never
+// silent without coupling to the exact wording.
+struct capturing_logger final : plexus::log::logger
+{
+    void warn(std::string_view message) override
+    {
+        ++count;
+        if(message.find("self_check") != std::string_view::npos)
+            ++self_checks;
+    }
+    std::size_t count{0};
+    std::size_t self_checks{0};
+};
+
 // A complete session whose HANDSHAKE-PROVEN identity is `proven` exists (slots key by endpoint hash,
 // not the proven id, so connectivity is asserted by peer_identity, never a keyed lookup).
 template<typename Node>
@@ -109,6 +124,9 @@ struct cold_cluster
     node_id consumer_id{id_of(0x03)};
     node_id origin2_id{id_of(0x04)};
 
+    capturing_logger relay_log;
+    capturing_logger consumer_log;
+
     std::optional<origin_node> origin;
     std::optional<relay_node> relay;
     consumer_node consumer;
@@ -118,10 +136,16 @@ struct cold_cluster
 
     explicit cold_cluster(plexus::io::route_usage consumer_usage = plexus::io::route_usage::prefer_direct,
                           plexus::io::route_usage origin_usage = plexus::io::route_usage::prefer_direct)
-            : consumer{io, cdisc, consumer_id, consumer_tcp, usage_options("consumer", consumer_usage)}
+            : consumer{io, cdisc, consumer_id, consumer_tcp, logged(usage_options("consumer", consumer_usage), consumer_log)}
     {
-        relay.emplace(io, rdisc, relay_id, relay_serial, relay_tcp, named("relay"));
+        relay.emplace(io, rdisc, relay_id, relay_serial, relay_tcp, logged(named("relay"), relay_log));
         origin.emplace(io, odisc, origin_id, origin_serial, usage_options("origin", origin_usage));
+    }
+
+    static plexus::node_options logged(plexus::node_options opts, capturing_logger &log)
+    {
+        opts.logger = &log;
+        return opts;
     }
 
     static plexus::node_options usage_options(std::string_view n, plexus::io::route_usage usage)

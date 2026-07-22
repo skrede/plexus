@@ -179,6 +179,18 @@ class caller;
 template<typename Sig = void, template<typename> class CReq = no_codec, template<typename> class CRes = CReq>
 class procedure;
 
+// A node's cooperative relay posture, as disclosed by self_check(). offering_relay is a compile-time
+// property of the profile — a node not spelled relay<> resolves the structurally-absent emitter twin
+// and never offers, so the count of origins it relays is meaningful only when offering. declining is
+// a cooperative request to peers not to relay for this node, never a security boundary.
+struct relay_posture
+{
+    bool        offering_relay;
+    std::size_t reported_origins;
+    std::size_t routes_via_relays;
+    bool        declining;
+};
+
 // LIFETIME: the node BORROWS its executor, discovery, and transport leaves and OWNS only the
 // engine and (for >1 transport) the multiplexing glue. Every engine callback is POSTED on the
 // borrowed executor and captures `this`. The borrowed substrate MUST outlive the node, and the
@@ -363,6 +375,19 @@ public:
             out[filled++] = graph::participant_record{id, reach, origin};
         });
         return graph::snapshot_result{filled, truncated};
+    }
+
+    // Executor-affine: call only on the owning executor. Non-blocking; sweeps engine state with no
+    // lock and no allocation (the participants() shape) and discloses the posture through the logger
+    // at least once so relay involvement is never silent (the default_discovery::self_check()
+    // warn-once precedent). offering_relay is decided at COMPILE time off the emitter twin: a node not
+    // spelled relay<> instantiates none of the offering-query branch, so no emitter-query symbol
+    // reaches the leaf image.
+    relay_posture self_check() const
+    {
+        const relay_posture posture = compute_relay_posture();
+        disclose_relay_posture_once(posture);
+        return posture;
     }
 
     // Executor-affine: call only on the owning executor. One record per (participant, topic, role)
@@ -1068,6 +1093,52 @@ private:
         std::erase(m_known_peers, *peer_id);
     }
 
+    relay_posture compute_relay_posture() const
+    {
+        relay_posture posture{};
+        if constexpr(!std::is_same_v<typename engine_type::peer_report_emitter_type, io::null_peer_report_emitter>)
+        {
+            posture.offering_relay   = true;
+            posture.reported_origins = m_engine.reported_origin_count();
+        }
+        posture.routes_via_relays = count_routes_via_relays();
+        posture.declining         = m_engine.route_opts().usage == io::route_usage::never;
+        return posture;
+    }
+
+    std::size_t count_routes_via_relays() const
+    {
+        std::size_t via = 0;
+        m_engine.known().for_each_candidate([&](const plexus::node_id &id, const graph::route &reach, const graph::provenance &) {
+            if(reach.via.has_value() && id != m_id)
+                ++via;
+        });
+        return via;
+    }
+
+    void disclose_relay_posture_once(const relay_posture &posture) const
+    {
+        if(m_relay_posture_warned)
+            return;
+        if(!posture.offering_relay && posture.routes_via_relays < k_relay_routes_disclosure_threshold && !posture.declining)
+            return;
+        m_logger.warn(relay_posture_line(posture));
+        m_relay_posture_warned = true;
+    }
+
+    static std::string_view relay_posture_line(const relay_posture &posture) noexcept
+    {
+        if(posture.offering_relay)
+            return "plexus: node offers a cooperative relay path for its reported origins (self_check)";
+        if(posture.declining)
+            return "plexus: node cooperatively declines relayed use — a request to peers, not a security boundary (self_check)";
+        return "plexus: node reaches one or more destinations via a relay (self_check)";
+    }
+
+    // The route count at which a leaf's via-relay reach is first disclosed. INTERIM: a value of 1
+    // discloses any relayed reach; the on-target symbol/size sweep is a later phase and may retune it.
+    static constexpr std::size_t k_relay_routes_disclosure_threshold = 1;
+
     plexus::node_id m_id;
     executor_type m_executor;
     discovery::discovery &m_disc;
@@ -1075,6 +1146,7 @@ private:
     // either reference in the init list when no logger is supplied.
     log::null_logger m_default_logger;
     log::logger &m_logger;
+    mutable bool m_relay_posture_warned{false};
     std::string m_service_name;
     std::string m_host;
     std::vector<discovery::listening_transport> m_listens;
