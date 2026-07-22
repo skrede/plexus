@@ -135,7 +135,7 @@ struct stall_policy
 static_assert(plexus::Policy<stall_policy>);
 
 using forwarder = io::message_forwarder<stall_policy>;
-using splice    = io::forward_splice<stall_policy>;
+using fwd_splice = io::forward_splice<stall_policy>;
 
 // A pool sized ABOVE the band depth so the saturated band (not the pool) is the drop site under test.
 io::forward_ctx pooled_ctx(std::size_t slots)
@@ -181,7 +181,7 @@ TEST_CASE("forward_splice_no_hol: a saturated destination drops-with-count while
     fast_st.reported = 0;                           // free: every fanned frame drains immediately
 
     const auto inner = capture_inner("relayed.topic", "m");
-    splice sp{pooled_ctx(depth + 16)};
+    fwd_splice sp{pooled_ctx(depth + 16)};
     const node_id origin = id_of(0xA0);
     for(std::size_t i = 0; i < frames; ++i)
         sp.refan(fwd, wire::fqn_topic_hash("relayed.topic"), origin, /*hop=*/1, inner, /*arrival=*/nullptr, nullptr);
@@ -222,7 +222,7 @@ TEST_CASE("forward_splice_no_hol: a slow leg never stalls the fast leg's drain; 
     for(std::size_t i = 0; i < depth; ++i)
         inners.push_back(capture_inner("relayed.topic", "f" + std::to_string(i)));
 
-    splice sp{pooled_ctx(depth + 4)};
+    fwd_splice sp{pooled_ctx(depth + 4)};
     const node_id origin = id_of(0xA0);
     for(std::size_t i = 0; i < depth; ++i)
         sp.refan(fwd, wire::fqn_topic_hash("relayed.topic"), origin, 1, inners[i], nullptr, nullptr);

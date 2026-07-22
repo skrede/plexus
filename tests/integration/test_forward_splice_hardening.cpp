@@ -37,7 +37,7 @@ namespace wire = plexus::wire;
 namespace {
 
 using forwarder = io::message_forwarder<inproc::inproc_policy>;
-using splice    = io::forward_splice<inproc::inproc_policy>;
+using fwd_splice = io::forward_splice<inproc::inproc_policy>;
 
 node_id id_of(std::uint8_t base)
 {
@@ -127,7 +127,7 @@ TEST_CASE("forward_splice hardening: an envelope larger than a pooled slot drops
     fx.ex.drain();
     dest.got.clear(); // discard the attach handshake frames
 
-    splice sp{ctx_with(/*slots=*/8, /*slot_bytes=*/2048)};
+    fwd_splice sp{ctx_with(/*slots=*/8, /*slot_bytes=*/2048)};
     const auto hash = wire::fqn_topic_hash("relayed.topic");
 
     // An envelope whose encoded size (outer header + preamble + inner) exceeds the 2048-byte slot: an
@@ -163,7 +163,7 @@ TEST_CASE("forward_splice hardening: a co-registered self-route never receives t
     remote.got.clear();
     self.got.clear();
 
-    splice sp{ctx_with(8, 2048)};
+    fwd_splice sp{ctx_with(8, 2048)};
     const auto inner = capture_inner("relayed.topic", 16);
     sp.refan(fx.fwd, wire::fqn_topic_hash("relayed.topic"), id_of(0xB0), /*hop=*/1, inner, /*arrival=*/nullptr, nullptr);
     fx.ex.drain();
@@ -188,7 +188,7 @@ TEST_CASE("forward_splice hardening: pool exhaustion is counted per affected des
 
     // Zero free slots models the exhaustion condition deterministically: the single build finds no slot,
     // and every one of the three destinations must be accounted — not collapsed into a single drop.
-    splice sp{ctx_with(/*slots=*/0, /*slot_bytes=*/2048)};
+    fwd_splice sp{ctx_with(/*slots=*/0, /*slot_bytes=*/2048)};
     const auto inner = capture_inner("relayed.topic", 16);
     sp.refan(fx.fwd, wire::fqn_topic_hash("relayed.topic"), id_of(0xB0), /*hop=*/1, inner, /*arrival=*/nullptr, nullptr);
     fx.ex.drain();

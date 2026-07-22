@@ -37,7 +37,7 @@ namespace wire = plexus::wire;
 namespace {
 
 using forwarder = io::message_forwarder<inproc::inproc_policy>;
-using splice    = io::forward_splice<inproc::inproc_policy>;
+using fwd_splice = io::forward_splice<inproc::inproc_policy>;
 
 std::span<const std::byte> as_bytes(const std::string &s)
 {
@@ -123,7 +123,7 @@ TEST_CASE("forward_splice_pubsub: an admitted frame re-fans to the subscriber wi
     const auto inner     = capture_inner("relayed.topic", "relayed-body");
     REQUIRE_FALSE(inner.empty());
 
-    splice sp{ctx_of(io::splice_ownership::pooled_owned_copy)};
+    fwd_splice sp{ctx_of(io::splice_ownership::pooled_owned_copy)};
     sp.refan(fx.fwd, wire::fqn_topic_hash("relayed.topic"), origin, /*hop=*/1, inner, &fx.arrival, nullptr);
     fx.ex.drain();
 
@@ -150,7 +150,7 @@ TEST_CASE("forward_splice_pubsub: an undemanded topic is not fanned (registry sc
     fx.dest_got.clear();
 
     const auto inner = capture_inner("relayed.topic", "body");
-    splice sp{ctx_of(io::splice_ownership::pooled_owned_copy)};
+    fwd_splice sp{ctx_of(io::splice_ownership::pooled_owned_copy)};
 
     // A different topic nobody on this relay subscribes: the interest lookup finds no destination.
     sp.refan(fx.fwd, wire::fqn_topic_hash("other.topic"), id_of(0x10), 1, inner, nullptr, nullptr);
@@ -180,7 +180,7 @@ TEST_CASE("forward_splice_pubsub: the refcounted zero-copy knob retains an inbou
             wire::frame_header{.type = wire::msg_type::forwarded, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, wire::encode_forwarded_frame(carried));
     wire::shared_bytes owner{owned_bytes};
 
-    splice sp{ctx_of(io::splice_ownership::refcounted_zero_copy)};
+    fwd_splice sp{ctx_of(io::splice_ownership::refcounted_zero_copy)};
     sp.refan(fx.fwd, wire::fqn_topic_hash("relayed.topic"), carried.origin, carried.hop, carried.inner, nullptr, &owner);
     fx.ex.drain();
 

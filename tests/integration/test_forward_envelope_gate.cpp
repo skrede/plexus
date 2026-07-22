@@ -42,7 +42,7 @@ using namespace serial_fixture;
 
 namespace {
 
-using splice = pio::forward_splice<pasio::serial_policy>;
+using fwd_splice = pio::forward_splice<pasio::serial_policy>;
 
 plexus::node_id id_of(std::uint8_t base)
 {
@@ -139,7 +139,7 @@ TEST_CASE("envelope gate: an oversized forwarded frame drops-with-count at the s
 
         pio::forward_options opts;
         opts.splice_slot_bytes = 16u * 1024; // room for the oversized envelope in a pool slot
-        splice sp{pio::make_forward_ctx(opts)};
+        fwd_splice sp{pio::make_forward_ctx(opts)};
         const auto hash = wire::fqn_topic_hash("gated");
         const auto origin = id_of(0xB0);
 
