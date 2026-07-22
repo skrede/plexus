@@ -14,6 +14,7 @@
 #include "plexus/node_id.h"
 
 #include <map>
+#include <set>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
@@ -48,6 +49,18 @@ struct null_peer_report_emitter
     {
     }
 
+    // Always reports no transition and never declines: a non-relay node emits nothing, so the
+    // decline honor points the caller gates on this twin are inert with no relay-only state.
+    bool mark_decline(const node_id &, bool) noexcept
+    {
+        return false;
+    }
+
+    bool declines(const node_id &) const noexcept
+    {
+        return false;
+    }
+
     std::size_t reported_count() const noexcept
     {
         return 0;
@@ -71,6 +84,8 @@ public:
     template<typename Table, typename Sink>
     void note_origin(const report_universe_ctx &local, const node_id &origin, std::uint32_t origin_universe, const Table &table, Sink &&send)
     {
+        if(declines(origin))
+            return;
         auto report = build_assert(local, origin, origin_universe, table);
         if(!report)
             return;
@@ -97,7 +112,7 @@ public:
     void replay(const node_id &skip, Sink &&send) const
     {
         for(const auto &[origin, report] : m_reported)
-            if(origin != skip)
+            if(origin != skip && !declines(origin))
                 send(report);
     }
 
@@ -108,9 +123,26 @@ public:
     {
         for(auto &[origin, report] : m_reported)
         {
+            if(declines(origin))
+                continue;
             report.seq = next_seq(origin);
             send(report);
         }
+    }
+
+    // Record the origin's current cooperative decline posture, returning true only on a transition so
+    // the caller drives a withdrawal or a re-lift once per edge; the heartbeat carrier is level, so a
+    // repeated same-state assert is a no-op and an un-decline restores lift/offer for free.
+    bool mark_decline(const node_id &origin, bool declining)
+    {
+        if(declining)
+            return m_declined.insert(origin).second;
+        return m_declined.erase(origin) != 0;
+    }
+
+    bool declines(const node_id &origin) const noexcept
+    {
+        return m_declined.find(origin) != m_declined.end();
     }
 
     std::size_t reported_count() const noexcept
@@ -127,6 +159,8 @@ private:
     std::map<node_id, wire::peer_report> m_reported;
     // Retained across a withdraw so a re-note/re-assert keeps minting monotonically-rising seqs.
     std::map<node_id, std::uint16_t> m_seq;
+    // Origins that asserted the cooperative decline bit: none is (re)announced or offered a relayed path.
+    std::set<node_id> m_declined;
 
     template<typename Table>
     std::optional<wire::peer_report> build_assert(const report_universe_ctx &local, const node_id &origin, std::uint32_t origin_universe, const Table &table)

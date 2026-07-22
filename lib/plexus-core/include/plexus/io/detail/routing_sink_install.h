@@ -90,6 +90,9 @@ void install_routing_sinks(Engine &e)
         e.m_known_peers.refresh(ep, e.now_for_aging());
         e.m_peer_liveliness.note_heartbeat(ep, e.now_for_aging());
     };
+    // A peer's heartbeat also carries its cooperative decline posture; the engine honors the transition
+    // (withdraw an emitted report / re-lift on un-decline), a no-op on a non-relay node's null twin.
+    e.m_build.on_decline_seen = [&e](const node_id &ep, bool declines) { e.note_decline(ep, declines); };
     e.m_monitor.on_liveness([&e](const liveness_event &ev) { policy_type::post(e.m_executor, [&e, ev] { e.fan_liveness(ev); }); });
     e.m_peer_liveliness.on_verdict([&e](const peer_liveliness_event &ev) { detail::post_liveliness(e, ev); });
     // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer when

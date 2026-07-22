@@ -537,6 +537,8 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
                         {},
                         {},
                         {},
+                        /*declines_relay=*/false,
+                        /*on_decline_seen=*/{},
                         obs,
                         fake_seam(),
                         {}};

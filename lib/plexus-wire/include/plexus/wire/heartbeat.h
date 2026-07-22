@@ -22,6 +22,12 @@ struct heartbeat
     friend bool operator==(const heartbeat &, const heartbeat &) = default;
 };
 
+// bit0 of the reserved byte: the sender declines being relayed, so a willing relay must not
+// re-announce it as an origin nor offer it relayed paths. This is COOPERATIVE, never a security
+// boundary — decode_heartbeat below reads-and-ignores every reserved bit, so a peer that predates
+// the flag stays healthy and the refusal only binds a relay that chooses to honor it.
+inline constexpr std::uint8_t k_heartbeat_relay_decline_flag = 0x01;
+
 namespace detail {
 
 // Fixed-width payload layout (no length prefix, no allocation by length):

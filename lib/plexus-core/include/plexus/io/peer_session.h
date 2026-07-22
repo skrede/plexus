@@ -154,6 +154,16 @@ public:
         m_on_stamp_seen_cb = std::move(cb);
     }
 
+    void on_decline_seen(plexus::detail::move_only_function<void(const node_id &, bool)> cb)
+    {
+        m_on_decline_seen_cb = std::move(cb);
+    }
+
+    void set_declines_relay(bool declines) noexcept
+    {
+        m_declines_relay = declines;
+    }
+
     void on_security(plexus::detail::move_only_function<void(const security_event &)> cb)
     {
         m_on_security_cb = std::move(cb);
@@ -269,7 +279,10 @@ public:
 
     void emit_heartbeat()
     {
-        wire::encode_heartbeat_into(m_payload_scratch, wire::heartbeat{});
+        wire::heartbeat hb;
+        if(m_declines_relay)
+            hb.reserved |= wire::k_heartbeat_relay_decline_flag;
+        wire::encode_heartbeat_into(m_payload_scratch, hb);
         detail::send_control(*this, wire::msg_type::heartbeat);
     }
 
@@ -344,8 +357,10 @@ private:
     std::chrono::nanoseconds m_handshake_timeout;
     typename message_forwarder<Policy>::peer m_msg_peer;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
+    bool m_declines_relay = false;
     plexus::detail::move_only_function<void()> m_on_drop_cb;
     plexus::detail::move_only_function<void(const node_id &)> m_on_stamp_seen_cb;
+    plexus::detail::move_only_function<void(const node_id &, bool)> m_on_decline_seen_cb;
     plexus::detail::move_only_function<void(const security_event &)> m_on_security_cb;
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle_cb;
     plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> m_on_subscribe_degraded_cb;

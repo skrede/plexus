@@ -271,6 +271,76 @@ void run_allow_relayed_reaches_relayed_origin()
     cluster.kill_origin();
 }
 
+// A declining origin is never announced downstream. Its decline rides its heartbeats (level, not the
+// handshake), so the relay lifts it on serial-ready and retracts it on the first decline heartbeat; a
+// non-declining second origin still appears at the consumer — the positive control that the absence is
+// the decline, not a broken fixture.
+void run_origin_decline_suppresses_announcement()
+{
+    cold_cluster cluster{plexus::io::route_usage::prefer_direct, plexus::io::route_usage::never};
+    cluster.bring_up_serial();
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
+
+    cluster.pump([&] { return cluster.relay->router().peer_declines(cluster.origin_id); });
+    REQUIRE_FALSE(cluster.relay->router().reports_origin(cluster.origin_id)); // withdrawn as an origin
+
+    cluster.bring_up_tcp();
+    cluster.bring_up_origin2();
+
+    // Positive control: the non-declining second origin is announced to the consumer over the relay.
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin2_id) != nullptr; });
+    const auto *control = find_participant(cluster.consumer, cluster.origin2_id);
+    REQUIRE(control != nullptr);
+    REQUIRE(control->origin.how == graph::observation::reported);
+    REQUIRE(control->reach.via == cluster.relay_id);
+
+    // The declining origin is never offered to the consumer.
+    REQUIRE(find_participant(cluster.consumer, cluster.origin_id) == nullptr);
+
+    cluster.kill_origin();
+}
+
+// Flipping an origin's decline mid-session withdraws it downstream: the consumer sees it reported over
+// the relay, the origin flips its route-usage to never, and the relay retracts it on the next heartbeat.
+void run_origin_decline_flip_withdraws_downstream()
+{
+    cold_cluster cluster;
+    cluster.bring_up_serial();
+    cluster.bring_up_tcp();
+
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+    REQUIRE(find_participant(cluster.consumer, cluster.origin_id) != nullptr);
+
+    cluster.origin->router().set_route_usage(plexus::io::route_usage::never);
+
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) == nullptr; });
+    REQUIRE(find_participant(cluster.consumer, cluster.origin_id) == nullptr);
+
+    cluster.kill_origin();
+}
+
+// A declining consumer is offered no relayed path: the relay lifts the origin (the positive control that
+// it HAS the origin reported) but skips the declining consumer's session, so the origin never enters the
+// decliner's participants(). The consumer declines before the origin is reported, so no session-ready
+// replay races ahead of the decline.
+void run_consumer_decline_receives_no_offer()
+{
+    cold_cluster cluster{plexus::io::route_usage::never};
+    cluster.bring_up_tcp();
+    REQUIRE(connected(cluster.consumer, cluster.relay_id));
+
+    cluster.pump([&] { return cluster.relay->router().peer_declines(cluster.consumer_id); });
+
+    cluster.bring_up_serial();
+    cluster.pump([&] { return cluster.relay->router().reports_origin(cluster.origin_id); });
+    REQUIRE(cluster.relay->router().reports_origin(cluster.origin_id)); // positive control: the relay HAS it
+
+    serial_fixture::settle(cluster.io, std::chrono::milliseconds(150)); // let any (skipped) broadcast land
+    REQUIRE(find_participant(cluster.consumer, cluster.origin_id) == nullptr);
+
+    cluster.kill_origin();
+}
+
 // A per-sequence delivery ledger read at the consumer facade: every delivered publication_sequence is
 // recorded so exactly-once (no duplicate seq) and contiguity (no gap) are assertions over the ledger.
 // A duplicate delivery of a superseded relayed frame shows up as a repeated seq; a lost frame as a gap.
@@ -435,6 +505,27 @@ TEST_CASE("an allow_relayed consumer reaches the relayed origin a never consumer
 {
     for(int run = 0; run < 2; ++run)
         run_allow_relayed_reaches_relayed_origin();
+}
+
+TEST_CASE("a declining origin is never announced over the relay while a non-declining second origin is, over cold runs",
+          "[integration][serial][relay][e2e][decline]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_origin_decline_suppresses_announcement();
+}
+
+TEST_CASE("an origin flipping its decline mid-session is withdrawn from the consumer downstream, over cold runs",
+          "[integration][serial][relay][e2e][decline]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_origin_decline_flip_withdraws_downstream();
+}
+
+TEST_CASE("a declining consumer is offered no relayed origin the relay otherwise reports, over cold runs",
+          "[integration][serial][relay][e2e][decline]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_consumer_decline_receives_no_offer();
 }
 
 TEST_CASE("a dual-homed consumer's relayed delivery is superseded by a live direct session and re-arms on its loss, exactly-once per seq",

@@ -41,6 +41,10 @@ struct session_build_context
     plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> on_object;
     plexus::detail::move_only_function<void(const lifecycle_event &)> on_lifecycle;
     plexus::detail::move_only_function<void(const node_id &)> on_stamp_seen;
+    // The node's own cooperative posture, stamped onto every heartbeat, and the inbound edge that
+    // surfaces a peer's posture off its heartbeats. One knob (route_usage == never) drives the send bit.
+    bool declines_relay = false;
+    plexus::detail::move_only_function<void(const node_id &, bool)> on_decline_seen;
     observer &session_observer;
     security_seam install_security;
     // Fail-closed: a security-engaged accept with no factory wired is refused, never fail-open.

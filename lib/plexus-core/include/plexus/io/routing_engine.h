@@ -113,7 +113,7 @@ public:
             , m_security_fanout{*this}
             , m_messages(logger, global_default)
             , m_procedures(executor, handshake_timeout, logger)
-            , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures, redial, redial_seed, logger, {}, {}, {}, {}, m_security_fanout, {}, {}}
+            , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures, redial, redial_seed, logger, {}, {}, {}, {}, routes.usage == route_usage::never, {}, m_security_fanout, {}, {}}
             , m_registry(transport, m_build)
             , m_monitor(m_executor)
             , m_peer_liveliness(m_liveliness)
@@ -343,6 +343,18 @@ public:
         return m_route_options;
     }
 
+    // Re-point the node's route-usage knob at runtime: the single switch drives the local relayed-use
+    // gate AND the cooperative decline posture stamped on every live session's next heartbeat, so an
+    // un-decline restores lift and offer for free on the level carrier.
+    void set_route_usage(route_usage usage)
+    {
+        m_route_options.usage  = usage;
+        const bool declines    = usage == route_usage::never;
+        m_build.declines_relay = declines;
+        m_messages.set_consume_relayed(!declines);
+        m_registry.for_each_connected([declines](const node_id &, session_type &s) { s.set_declines_relay(declines); });
+    }
+
     std::uint64_t graph_generation() const noexcept
     {
         return m_graph_generation;
@@ -363,6 +375,13 @@ public:
     bool reports_origin(const node_id &origin) const noexcept
     {
         return m_emitter.reports(origin);
+    }
+
+    // Whether a peer has asserted its cooperative decline posture — the relay skips offering it any
+    // relayed path. Always false on a non-relay node's null twin.
+    bool peer_declines(const node_id &peer) const noexcept
+    {
+        return m_emitter.declines(peer);
     }
 
     // Forwarded request/response frames dropped for want of a route (route_select over empty candidates,
@@ -895,6 +914,19 @@ private:
         m_emitter.withdraw(origin, [this](const wire::peer_report &pr) { relay_broadcast(pr); });
     }
 
+    // A peer's heartbeat carries its cooperative decline posture. Only a transition acts (the carrier is
+    // level): a fresh decline withdraws an already-emitted report and, held in the emitter, keeps a later
+    // note_origin from re-announcing it; an un-decline re-lifts the origin so its offer returns for free.
+    void note_decline(const node_id &peer, bool declines)
+    {
+        if(!m_emitter.mark_decline(peer, declines))
+            return;
+        if(declines)
+            relay_withdraw(peer);
+        else
+            relay_maybe_refresh(peer);
+    }
+
     // Send one report to every connected session but the origin's own — an origin is never announced
     // back to itself. The encode is per-broadcast, off the emitted report only.
     void relay_broadcast(const wire::peer_report &pr)
@@ -903,14 +935,14 @@ private:
         m_registry.for_each_connected(
                 [&](const node_id &, session_type &s)
                 {
-                    if(s.peer_identity() != pr.origin)
+                    if(s.peer_identity() != pr.origin && !m_emitter.declines(s.peer_identity()))
                         m_messages.send_peer_report(s.msg_peer().channel, bytes);
                 });
     }
 
     void relay_send(session_type &s, const wire::peer_report &pr)
     {
-        if(s.peer_identity() != pr.origin)
+        if(s.peer_identity() != pr.origin && !m_emitter.declines(s.peer_identity()))
             m_messages.send_peer_report(s.msg_peer().channel, wire::encode_peer_report(pr));
     }
 

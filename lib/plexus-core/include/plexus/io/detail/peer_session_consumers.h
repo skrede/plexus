@@ -151,8 +151,15 @@ void register_session_consumers(Session &s)
     s.m_router.on_heartbeat(
             [&s](std::span<const std::byte> inner)
             {
-                if(wire::decode_heartbeat(inner) && s.m_on_stamp_seen_cb)
+                const auto hb = wire::decode_heartbeat(inner);
+                if(!hb)
+                    return;
+                if(s.m_on_stamp_seen_cb)
                     s.m_on_stamp_seen_cb(s.m_ctx.peer_id);
+                // The relay honor points key on the handshake-proven identity (m_reported, the broadcast
+                // self-skip), not the provisional context id a dialed/accepted slot carries.
+                if(s.m_on_decline_seen_cb)
+                    s.m_on_decline_seen_cb(s.peer_identity(), (hb->reserved & wire::k_heartbeat_relay_decline_flag) != 0);
             });
 }
 

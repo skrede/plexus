@@ -96,32 +96,37 @@ struct cold_cluster
     plexus::discovery::static_discovery odisc{{}};
     plexus::discovery::static_discovery rdisc{{}};
     plexus::discovery::static_discovery cdisc{{}};
+    plexus::discovery::static_discovery o2disc{{}};
 
     pasio::serial_transport origin_serial{io};
     pasio::serial_transport relay_serial{io};
     pasio::asio_transport relay_tcp{io};
     pasio::asio_transport consumer_tcp{io};
+    pasio::asio_transport origin2_tcp{io};
 
     node_id origin_id{id_of(0x01)};
     node_id relay_id{id_of(0x02)};
     node_id consumer_id{id_of(0x03)};
+    node_id origin2_id{id_of(0x04)};
 
     std::optional<origin_node> origin;
     std::optional<relay_node> relay;
     consumer_node consumer;
+    std::optional<consumer_node> origin2;
 
     std::uint16_t tcp_port{0};
 
-    explicit cold_cluster(plexus::io::route_usage consumer_usage = plexus::io::route_usage::prefer_direct)
-            : consumer{io, cdisc, consumer_id, consumer_tcp, consumer_options(consumer_usage)}
+    explicit cold_cluster(plexus::io::route_usage consumer_usage = plexus::io::route_usage::prefer_direct,
+                          plexus::io::route_usage origin_usage = plexus::io::route_usage::prefer_direct)
+            : consumer{io, cdisc, consumer_id, consumer_tcp, usage_options("consumer", consumer_usage)}
     {
         relay.emplace(io, rdisc, relay_id, relay_serial, relay_tcp, named("relay"));
-        origin.emplace(io, odisc, origin_id, origin_serial, named("origin"));
+        origin.emplace(io, odisc, origin_id, origin_serial, usage_options("origin", origin_usage));
     }
 
-    static plexus::node_options consumer_options(plexus::io::route_usage usage)
+    static plexus::node_options usage_options(std::string_view n, plexus::io::route_usage usage)
     {
-        plexus::node_options opts = named("consumer");
+        plexus::node_options opts = named(n);
         opts.routes.usage         = usage;
         return opts;
     }
@@ -169,6 +174,16 @@ struct cold_cluster
         pump([&] { return connected(consumer, relay_id) && connected(*relay, consumer_id); });
     }
 
+    // A second, non-declining origin dials the relay's TCP listener so the relay lifts it as a reported
+    // origin — the positive control that a declining origin's absence downstream is the decline, not a
+    // broken fixture. Requires bring_up_tcp first (the relay's port is resolved there).
+    void bring_up_origin2()
+    {
+        origin2.emplace(io, o2disc, origin2_id, origin2_tcp, named("origin2"));
+        origin2->dial({"tcp", "127.0.0.1:" + std::to_string(tcp_port)});
+        pump([&] { return connected(*origin2, relay_id) && connected(*relay, origin2_id); });
+    }
+
     // Drain the origin's pending executor work before dropping it, so no posted callback outlives the
     // node it captured; the relay then observes the serial drop and withdraws the relayed peer.
     void kill_origin()
@@ -192,6 +207,7 @@ struct cold_cluster
     ~cold_cluster()
     {
         origin.reset();
+        origin2.reset();
         serial_fixture::settle(io, std::chrono::milliseconds(30));
     }
 };

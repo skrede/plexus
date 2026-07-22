@@ -13,6 +13,7 @@
 #include "plexus/io/frame_router.h"
 
 #include "plexus/wire/frame.h"
+#include "plexus/wire/heartbeat.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/peer_report.h"
 #include "plexus/wire/announcement.h"
@@ -129,6 +130,33 @@ TEST_CASE("peer_report oracle: the peer_report bytes fail the announcement magic
 {
     const auto payload = make_peer_report_payload();
     REQUIRE(!wire::decode_announcement(payload).has_value());
+}
+
+TEST_CASE("peer_report oracle: a decline-flagged heartbeat decodes-and-ignores against the v0.3.0 router", "[integration][peer_report][oracle]")
+{
+    counting_logger sink;
+    plexus::io::frame_router router{sink};
+    fired_set fired;
+    register_v0_3_0_consumers(router, fired);
+
+    // Control: the harness genuinely dispatches before we assert the decline arm is benign.
+    router.route(frame_of(wire::msg_type::declare, std::vector<std::byte>{}));
+    REQUIRE(fired.types == std::set<wire::msg_type>{wire::msg_type::declare});
+    fired.types.clear();
+
+    wire::heartbeat hb;
+    hb.reserved |= wire::k_heartbeat_relay_decline_flag;
+    const auto payload      = wire::encode_heartbeat(hb);
+    const auto drops_before = sink.drops;
+    router.route(frame_of(wire::msg_type::heartbeat, payload));
+
+    REQUIRE(fired.types == std::set<wire::msg_type>{wire::msg_type::heartbeat}); // heartbeat consumer ran
+    REQUIRE(sink.drops == drops_before);                                        // no warn/drop: session healthy
+
+    // The shipped decoder reads the reserved byte and ignores its unknown bit — the struct round-trips.
+    const auto decoded = wire::decode_heartbeat(payload);
+    REQUIRE(decoded.has_value());
+    REQUIRE((decoded->reserved & wire::k_heartbeat_relay_decline_flag) != 0);
 }
 
 TEST_CASE("peer_report oracle: a genuinely-unknown type warn-drops at the default arm", "[integration][peer_report][oracle]")
