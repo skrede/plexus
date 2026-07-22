@@ -119,6 +119,13 @@ struct cold_cluster
     pasio::asio_transport consumer_tcp{io};
     pasio::asio_transport origin2_tcp{io};
 
+    // A revived relay is a fresh node under the SAME relay_id on fresh transports and a fresh serial
+    // line (the first incarnation's slave fd closed on its death, EOF-tearing the origin's inbound
+    // session). Declared BEFORE relay so they outlive the node that borrows them at teardown.
+    std::optional<pty_pair> revive_pty;
+    std::optional<pasio::serial_transport> revive_relay_serial;
+    std::optional<pasio::asio_transport> revive_relay_tcp;
+
     node_id origin_id{id_of(0x01)};
     node_id relay_id{id_of(0x02)};
     node_id consumer_id{id_of(0x03)};
@@ -226,12 +233,39 @@ struct cold_cluster
         relay.reset();
     }
 
+    // Reconstruct the relay under the SAME identity on fresh transports and re-establish BOTH legs, so
+    // the consumer can observe the relayed path recover without identity churn. A fresh pty is needed:
+    // the dead incarnation's slave fd closed, EOF-tearing the origin's inbound serial session, so the
+    // origin adopts a fresh master while the revived relay dials the fresh slave (same order dependence
+    // as bring_up_serial). The revived relay listens on a fresh ephemeral port that the consumer dials.
+    void revive_relay()
+    {
+        serial_fixture::settle(io, std::chrono::milliseconds(20));
+        revive_pty.emplace();
+        const std::string revive_slave{::ptsname(revive_pty->master)};
+        revive_relay_serial.emplace(io);
+        revive_relay_tcp.emplace(io);
+        relay.emplace(io, rdisc, relay_id, *revive_relay_serial, *revive_relay_tcp, logged(named("relay"), relay_log));
+
+        ::close(revive_pty->take_slave());
+        relay->dial({"serial", revive_slave + "@115200"});
+        serial_fixture::settle(io, std::chrono::milliseconds(50));
+        origin->router().registry().accept_session(adopt_channel(io, revive_pty->take_master()));
+        pump([&] { return connected(*relay, origin_id) && connected(*origin, relay_id); });
+
+        relay->listen({"tcp", "127.0.0.1:0"});
+        tcp_port = revive_relay_tcp->port();
+        consumer.dial({"tcp", "127.0.0.1:" + std::to_string(tcp_port)});
+        pump([&] { return connected(consumer, relay_id) && connected(*relay, consumer_id); });
+    }
+
     // The borrowed-executor contract: drain before the nodes are destroyed so no in-flight callback
     // references a torn-down engine.
     ~cold_cluster()
     {
         origin.reset();
         origin2.reset();
+        relay.reset();
         serial_fixture::settle(io, std::chrono::milliseconds(30));
     }
 };

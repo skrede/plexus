@@ -16,6 +16,8 @@
 
 #include "plexus/io/endpoint_seam.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/observer.h"
+#include "plexus/io/peer_liveliness_event.h"
 
 #include "plexus/wire/rpc_status.h"
 
@@ -61,6 +63,32 @@ struct delivery
     std::string body;
     std::optional<node_id> source;
 };
+
+// Records the consumer's graph deltas and the direct-peer liveliness verdicts so the kill-relay probe
+// can read, at the public observer surface, WHICH change_kind crosses for an identity and whether the
+// arbiter ever renders a verdict for a given peer — never by hand-poking a table or a verdict.
+struct probe_observer final : plexus::io::observer
+{
+    std::vector<graph::graph_change> deltas;
+    std::vector<plexus::io::peer_liveliness_event> verdicts;
+
+    void on_graph_delta(const graph::graph_change &c) override { deltas.push_back(c); }
+    void on_peer_liveliness(const plexus::io::peer_liveliness_event &e) override { verdicts.push_back(e); }
+    bool observes_graph() const override { return true; }
+    bool observes_liveliness() const override { return true; }
+};
+
+int kind_count(const probe_observer &o, const node_id &who, graph::change_kind kind)
+{
+    return static_cast<int>(std::count_if(o.deltas.begin(), o.deltas.end(),
+                                          [&](const graph::graph_change &c) { return c.who == who && c.kind == kind; }));
+}
+
+bool arbiter_saw(const probe_observer &o, const node_id &who)
+{
+    return std::any_of(o.verdicts.begin(), o.verdicts.end(),
+                       [&](const plexus::io::peer_liveliness_event &e) { return e.id == who; });
+}
 
 void run_pubsub_once(std::vector<std::uint64_t> &epochs)
 {
@@ -513,6 +541,138 @@ void run_leaf_self_check_discloses_routes_via_relay()
     cluster.kill_origin();
 }
 
+// The wave-0 probe. It PINS today's consumer-side behavior when the whole relay node dies over the
+// real relayed path (the derivation-design input, open question Q2): with the origin reachable ONLY
+// via the relay, kill the relay and, within a bounded pump, record at the consumer's public surface
+// (a) whether the origin's via-relay row is retired or left stale, (b) which change_kind — if any —
+// crosses for the origin, (c) whether the direct-peer liveliness arbiter renders any verdict for the
+// via-only origin (it must not — a reported identity never feeds the arbiter), and (d) that a
+// via-relay call through the dead relay fails cleanly, bounded, with the forward-rpc drop counted.
+// The recorded answer — not a desired future behavior — decides where the liveliness derivation hooks
+// and how unreachable state is stored. It documents which of prompt-retire-to-disappeared vs
+// stale-window is TRUE today.
+void run_kill_relay_probe()
+{
+    probe_observer obs; // declared before the cluster so it outlives every posted fan-out into it
+    cold_cluster cluster;
+    cluster.consumer.router().add_observer(obs);
+
+    std::string served;
+    plexus::procedure<> echo{*cluster.origin, k_procedure,
+                             [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
+                             {
+                                 served = to_string(param);
+                                 reply(plexus::wire::rpc_status::success, param);
+                             }};
+
+    cluster.bring_up_serial();
+    REQUIRE(connected(*cluster.relay, cluster.origin_id));
+    cluster.bring_up_tcp();
+    REQUIRE(connected(cluster.consumer, cluster.relay_id));
+
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+    const auto *before = find_participant(cluster.consumer, cluster.origin_id);
+    REQUIRE(before != nullptr);
+    REQUIRE(before->origin.how == graph::observation::reported);
+    REQUIRE(before->reach.via == cluster.relay_id);
+    REQUIRE(kind_count(obs, cluster.origin_id, graph::change_kind::appeared) >= 1);
+    REQUIRE_FALSE(arbiter_saw(obs, cluster.origin_id)); // a via-only origin never feeds the arbiter
+
+    const std::size_t drops_before = cluster.consumer.router().forward_rpc_dropped_count();
+
+    cluster.kill_relay();
+    cluster.pump([&] { return !connected(cluster.consumer, cluster.relay_id); });
+    serial_fixture::settle(cluster.io, std::chrono::milliseconds(200));
+
+    const bool relay_session_gone   = !connected(cluster.consumer, cluster.relay_id);
+    const auto *after               = find_participant(cluster.consumer, cluster.origin_id);
+    const bool origin_retired       = after == nullptr;
+    const int  origin_disappeared   = kind_count(obs, cluster.origin_id, graph::change_kind::disappeared);
+    const bool arbiter_saw_origin   = arbiter_saw(obs, cluster.origin_id);
+    const bool arbiter_saw_relay    = arbiter_saw(obs, cluster.relay_id);
+    INFO("relay_session_gone=" << relay_session_gone << " origin_retired=" << origin_retired
+         << " origin_disappeared_deltas=" << origin_disappeared << " arbiter_saw_origin=" << arbiter_saw_origin
+         << " arbiter_saw_relay=" << arbiter_saw_relay);
+
+    // Ground truth, pinned to the observed behavior: the consumer notices the relay's teardown edge and
+    // PROMPTLY RETIRES the origin's via-relay row, emitting change_kind::disappeared — byte-identical to
+    // a genuinely-dead peer. The via-only origin never receives an arbiter verdict; only the relay (a
+    // direct peer) can.
+    REQUIRE(relay_session_gone);
+    REQUIRE(origin_retired);
+    REQUIRE(origin_disappeared == 1);
+    REQUIRE_FALSE(arbiter_saw_origin);
+
+    std::optional<bool> ok;
+    plexus::call_options copts;
+    copts.deadline = std::chrono::milliseconds(300);
+    plexus::caller<> call{cluster.consumer, k_procedure};
+    call.call(as_bytes(std::string{"ping"}), copts, [&](plexus::expected<plexus::reply, std::error_code> r) { ok = r.has_value(); });
+    cluster.pump([&] { return ok.has_value(); });
+
+    REQUIRE(ok.has_value());
+    REQUIRE_FALSE(*ok);          // no live via-session — the request cannot complete
+    REQUIRE(served.empty());     // the origin's handler never ran through the dead relay
+    REQUIRE(cluster.consumer.router().forward_rpc_dropped_count() >= drops_before);
+}
+
+// The recovery capability the liveliness half's revival arm needs: after the relay dies (the origin's
+// via-relay row retires to disappeared), a fresh relay under the SAME identity re-establishes BOTH legs
+// and the relayed path's control + demand plane comes back — the origin resolves under the same node_id
+// (no identity churn), reachable via the relay, and the consumer's remembered demand re-propagates all
+// the way up onto the origin. The DATA-plane delivery of a fresh publish does NOT yet recover, and this
+// smoke test deliberately stops short of asserting it: because recovery keeps the relay identity, the
+// consumer's per-(origin, relay-identity) forward dedup window survives the relay's death, while the
+// revived relay's splice restarts its forwarding sequence at 0 — so the first re-forwarded publish is
+// dropped as a duplicate against the stale window. Resetting that window on relay return is the recovery
+// derivation's job (owned by a later plan), not this fixture's.
+void run_revive_relay_smoke()
+{
+    cold_cluster cluster;
+
+    std::optional<plexus::publisher<>> pub;
+    pub.emplace(*cluster.origin, k_topic, plexus::topic_qos{}, /*emit_source_identity=*/true);
+
+    delivery got;
+    cluster.bring_up_serial();
+    cluster.pump([&] { return cluster.relay->count_publishers(std::string{k_topic}) >= 1; });
+    cluster.bring_up_tcp();
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+
+    plexus::subscriber<> sub{cluster.consumer, k_topic,
+                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+                             {
+                                 got.body = to_string(b);
+                                 if(info.source_identity)
+                                     got.source = info.source_identity->node_id();
+                             }};
+    cluster.pump([&] { return cluster.origin->count_subscribers(std::string{k_topic}) >= 1; });
+    pub->publish(as_bytes(std::string{"24.5C"}));
+    cluster.pump([&] { return !got.body.empty(); });
+    REQUIRE(got.body == "24.5C");
+    REQUIRE(got.source == cluster.origin_id);
+
+    cluster.kill_relay();
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) == nullptr; });
+    REQUIRE(find_participant(cluster.consumer, cluster.origin_id) == nullptr);
+
+    cluster.revive_relay();
+    cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
+    const auto *back = find_participant(cluster.consumer, cluster.origin_id);
+    REQUIRE(back != nullptr);
+    REQUIRE(back->id == cluster.origin_id);       // same identity across the kill->revive cycle
+    REQUIRE(back->reach.via == cluster.relay_id); // reachable again via the revived relay
+
+    // The consumer's remembered demand re-propagates all the way up onto the origin over the revived
+    // legs — the relayed path's control + demand plane is live again.
+    cluster.pump([&] { return cluster.origin->count_subscribers(std::string{k_topic}) >= 1; });
+    REQUIRE(cluster.origin->count_subscribers(std::string{k_topic}) >= 1);
+    REQUIRE(cluster.relay->count_publishers(std::string{k_topic}) >= 1);
+
+    pub.reset();
+    cluster.kill_origin();
+}
+
 }
 
 TEST_CASE("a composed relay discloses it offers a relayed path and its reported-origin count moves with a real lift",
@@ -525,6 +685,20 @@ TEST_CASE("a non-relay leaf discloses routes transiting a relay after a real pee
           "[integration][serial][relay][e2e][self_check]")
 {
     run_leaf_self_check_discloses_routes_via_relay();
+}
+
+TEST_CASE("probe: killing the whole relay retires the origin's via-relay row and the arbiter stays silent for it",
+          "[integration][serial][relay][e2e][kill_relay][probe]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_kill_relay_probe();
+}
+
+TEST_CASE("a revived relay under the same identity re-establishes both legs and the relayed path recovers, over cold runs",
+          "[integration][serial][relay][e2e][revive]")
+{
+    for(int run = 0; run < 2; ++run)
+        run_revive_relay_smoke();
 }
 
 TEST_CASE("pub/sub and control transit a serial+TCP relay end-to-end with the origin as source, over cold runs",
