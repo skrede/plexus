@@ -64,7 +64,7 @@ execute_process(
             -p ${FUNC_GATE_BUILD_DIR}
             -quiet
             -checks=-*,readability-function-size,readability-function-cognitive-complexity
-            -header-filter=.*/(lib|backends)/plexus.*
+            "-header-filter=.*/(lib|backends)/plexus.*"
     OUTPUT_VARIABLE _tidy_out
     ERROR_VARIABLE _tidy_err
     RESULT_VARIABLE _tidy_rc)

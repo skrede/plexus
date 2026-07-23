@@ -1,10 +1,10 @@
 # Fuzz + sanitizer gate
 
 This directory holds the libFuzzer harnesses that exercise the untrusted-input
-decode surface, the checked-in regression corpus they replay, and the protocol
+decode surface, the local regression corpus they replay, and the protocol
 for running the repeatable hardening gate (fuzz replay + a bounded campaign, plus
 the sanitizer trees the gate depends on). The gate is deterministic-replay-first:
-a committed corpus is replayed on every run, and a short bounded campaign hunts
+a local corpus is replayed when present, and a short bounded campaign hunts
 for fresh crashes within a fixed time budget.
 
 ## Harnesses
@@ -23,12 +23,17 @@ partial-message state crosses inputs.
 
 ## Corpus
 
-`corpus/<harness>/` is the checked-in regression seed corpus (committed test
-data, not a build artifact). It is the minimized coverage-covering set produced
-by `-merge=1`: the three wire-frame decoders collapse to a single coverage edge
-so one seed suffices; the two reassembler harnesses carry the coverage-distinct
-fragment-header / fragment-index / fragment-count combinations the range checks
-must survive. Keep the corpus minimal — re-minimize after any growth (see below).
+`corpus/<harness>/` is a local, git-ignored regression corpus — a build/run
+artifact, never committed (binary corpora do not live in this repo). Treat it as
+the minimal coverage-covering set produced by `-merge=1`: the three wire-frame
+decoders collapse to a single coverage edge so one seed suffices; the two
+reassembler harnesses carry the coverage-distinct fragment-header /
+fragment-index / fragment-count combinations the range checks must survive. Keep
+it minimal — re-minimize after any growth (see below). Because the corpus is not
+checked in, replay is a no-op on a fresh checkout until a campaign has populated
+it; the bounded campaign below reaches full decoder coverage from an empty corpus
+in seconds, so a clean run needs no seed. Durable, shared corpus storage is a
+separate, still-open question (see the decision seed in `.planning/seeds/`).
 
 ## Building the fuzz tree
 

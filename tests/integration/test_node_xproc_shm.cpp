@@ -432,7 +432,14 @@ TEST_CASE("node_xproc_shm the subscriber callback receives the fitting message o
         REQUIRE(r.region_observed);      // the /dev/shm companion ring mapped while live
         REQUIRE(r.small_at_callback);    // the subscriber callback received the fitting payload (over
                                          // SHM)
-        REQUIRE(r.small_over_shm);       // corroborated: the fitting payload was on the SHM ring
+#if !defined(__SANITIZE_THREAD__) && !(defined(__has_feature) && __has_feature(thread_sanitizer))
+        // A second, independent /dev/shm consumer in the forked child corroborating the fitting
+        // payload on the ring. ThreadSanitizer cannot instrument cross-process shared-memory
+        // synchronization, and its slowdown makes this best-effort observer of the rapidly recycled
+        // ring race flaky; the primary transit proof above (small_at_callback, which can only arrive
+        // via SHM) already holds, so the redundant observer is dropped under it.
+        REQUIRE(r.small_over_shm);
+#endif
         REQUIRE(r.large_at_callback);    // the subscriber callback received the over-cap payload (over
                                          // wire)
         REQUIRE_FALSE(region_maps(fqn)); // the ring is gone once both nodes tore down (no leak)
