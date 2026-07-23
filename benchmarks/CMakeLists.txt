@@ -5,3 +5,4 @@
 add_subdirectory(scalability)
 add_subdirectory(loopback)
 add_subdirectory(shm_notifier)
+add_subdirectory(relay)
