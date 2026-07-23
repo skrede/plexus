@@ -43,6 +43,17 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 
+// Nested directives, not one `defined(__has_feature) && __has_feature(...)` expression: a
+// compiler without __has_feature (gcc < 14) replaces the identifier with 0 in a single #if and
+// then fails to parse `0(thread_sanitizer)`, so the token is only reached under an outer guard.
+#if defined(__SANITIZE_THREAD__)
+#define PLEXUS_TEST_UNDER_TSAN 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define PLEXUS_TEST_UNDER_TSAN 1
+#endif
+#endif
+
 // The whole-stack proof through the PUBLIC facade that published data flows END-TO-END over
 // the same-host shared-memory ring — both LANES of the wire_fallback companion model: two
 // same_host_transports nodes, forked onto one host and rendezvousing over static_discovery,
@@ -432,7 +443,7 @@ TEST_CASE("node_xproc_shm the subscriber callback receives the fitting message o
         REQUIRE(r.region_observed);      // the /dev/shm companion ring mapped while live
         REQUIRE(r.small_at_callback);    // the subscriber callback received the fitting payload (over
                                          // SHM)
-#if !defined(__SANITIZE_THREAD__) && !(defined(__has_feature) && __has_feature(thread_sanitizer))
+#if !defined(PLEXUS_TEST_UNDER_TSAN)
         // A second, independent /dev/shm consumer in the forked child corroborating the fitting
         // payload on the ring. ThreadSanitizer cannot instrument cross-process shared-memory
         // synchronization, and its slowdown makes this best-effort observer of the rapidly recycled
