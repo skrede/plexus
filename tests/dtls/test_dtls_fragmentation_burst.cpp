@@ -48,5 +48,6 @@ TEST_CASE("dtls.fragment: a 1 MB / 4 MB best-effort burst reassembles byte-equal
         const auto r = dtls_large_run(srv, cli, size, std::chrono::milliseconds{8000});
         REQUIRE(r.records > 1);        // the message fragmented into many records
         REQUIRE(r.got.size() == size); // and every fragment arrived and reassembled
+        REQUIRE(r.got == ramp(size));  // byte-equal reassembly
     }
 }
