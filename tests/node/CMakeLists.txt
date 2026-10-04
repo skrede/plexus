@@ -345,8 +345,8 @@ endif()
 # multicast_discovery over a datagram_socket, discover each other with NO static table and NO
 # mdnspp. The deterministic wired-pair case runs in the default set; the live udp_multicast_socket
 # case is hidden behind [.multicast] (real multicast loopback is environment-sensitive). Built only
-# when the asio backend is on (the real socket + transport live there); links plexus::native (the
-# discovery) and plexus::stream (the datagram_socket concept).
+# when the asio backend is on (the real socket + transport live there); links plexus::discovery
+# (the multicast discovery) and plexus::stream (the datagram_socket concept).
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(test_node_native_discovery test_node_native_discovery.cpp)
     target_include_directories(test_node_native_discovery PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -356,7 +356,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::wire
         plexus::stream
         plexus::asio
-        plexus::native
+        plexus::discovery
         Catch2::Catch2WithMain)
     catch_discover_tests(test_node_native_discovery TEST_PREFIX "node.")
 endif()
