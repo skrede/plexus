@@ -11,6 +11,8 @@
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_lifecycle.h"
+#include "plexus/io/detail/routing_relay_emit.h"
+#include "plexus/io/detail/routing_forward_rpc.h"
 
 #include "plexus/graph/graph_change.h"
 #include "plexus/graph/topic_record.h"
@@ -60,7 +62,7 @@ void install_routing_sinks(Engine &e)
             [&e](const graph::topic_edge &edge)
             {
                 e.bump_graph_generation(e.m_topics.upsert(edge).changed, edge.node, graph::change_kind::appeared);
-                e.relay_maybe_refresh(edge.node);
+                detail::relay_maybe_refresh(e, edge.node);
             });
     // The receive half of transitive propagation: a decoded peer_report about a third-party origin
     // enters the engine gate chain (origin-universe fail-closed, self-guard, hop budget, per-origin
@@ -78,9 +80,9 @@ void install_routing_sinks(Engine &e)
     // as this node's identity through the procedure forwarder, while a transiting relay hop preserves the
     // frame's origin through the message forwarder — both re-resolving the destination via route_select.
     e.m_procedures.on_forward_rpc([&e](const node_id &destination, std::span<const std::byte> frame)
-                                  { return e.forward_rpc(e.m_build.fsm_cfg.self_id, destination, 0, frame); });
+                                  { return detail::forward_rpc(e, e.m_build.fsm_cfg.self_id, destination, 0, frame); });
     e.m_messages.on_forward_rpc([&e](const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> frame)
-                                { return e.forward_rpc(origin, destination, hop, frame); });
+                                { return detail::forward_rpc(e, origin, destination, hop, frame); });
     e.m_messages.set_on_data_stamp([&e](const node_id &ep, std::uint64_t topic_hash) { e.m_monitor.stamp_data(ep, topic_hash); });
     // A received heartbeat asserts session presence AND refreshes the peer's discovery TTL, so an
     // actively-heartbeating peer never ages out of awareness even if its multicast announces lapse;
@@ -93,7 +95,7 @@ void install_routing_sinks(Engine &e)
     };
     // A peer's heartbeat also carries its cooperative decline posture; the engine honors the transition
     // (withdraw an emitted report / re-lift on un-decline), a no-op on a non-relay node's null twin.
-    e.m_build.on_decline_seen = [&e](const node_id &ep, bool declines) { e.note_decline(ep, declines); };
+    e.m_build.on_decline_seen = [&e](const node_id &ep, bool declines) { detail::note_decline(e, ep, declines); };
     e.m_monitor.on_liveness([&e](const liveness_event &ev) { policy_type::post(e.m_executor, [&e, ev] { detail::fan_liveness(e, ev); }); });
     e.m_peer_liveliness.on_verdict([&e](const peer_liveliness_event &ev) { detail::post_liveliness(e, ev); });
     // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer when
@@ -111,7 +113,7 @@ void install_routing_sinks(Engine &e)
                 if(now - last_emit_ns >= interval)
                 {
                     e.m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); });
-                    e.relay_reassert();
+                    detail::relay_reassert(e);
                     last_emit_ns = now;
                 }
                 e.sweep_aged_awareness();

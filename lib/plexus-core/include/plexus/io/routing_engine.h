@@ -38,6 +38,9 @@
 #include "plexus/io/detail/routing_reports.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_lifecycle.h"
+#include "plexus/io/detail/routing_relay_emit.h"
+#include "plexus/io/detail/routing_forward_rpc.h"
+#include "plexus/io/detail/routing_relay_demand.h"
 #include "plexus/io/detail/routing_sink_install.h"
 #include "plexus/io/detail/peer_report_consumers.h"
 
@@ -59,7 +62,6 @@
 #include <optional>
 #include <algorithm>
 #include <string_view>
-#include <type_traits>
 
 namespace plexus::io {
 
@@ -125,7 +127,7 @@ public:
         m_messages.set_forward_options(forward);
         m_messages.set_consume_relayed(routes.usage != route_usage::never);
         detail::install_routing_sinks(*this);
-        install_splice_refan();
+        detail::install_splice_refan(*this);
     }
 
     void add_observer(observer &o)
@@ -212,7 +214,7 @@ public:
         const bool changed = m_known_peers.forget(id);
         m_registry.deny_redial(id);
         m_peer_liveliness.note_awareness_lost(id);
-        relay_withdraw(id);
+        detail::relay_withdraw(*this, id);
         m_emitter.clear_decline(id);
         if(m_reported.erase(id) != 0)
             m_topics.remove_node(id);
@@ -598,6 +600,51 @@ private:
     template<typename E>
     friend void detail::fan_liveness(E &, const liveness_event &);
 
+    template<typename E>
+    friend typename E::session_type *detail::session_by_identity(E &, const node_id &);
+
+    template<typename E>
+    friend typename E::session_type *detail::forward_session_for(E &, std::span<const route_candidate>, std::size_t, const node_id &);
+
+    template<typename E>
+    friend void detail::send_forwarded_rpc(E &, typename E::session_type &, const node_id &, const node_id &, std::uint8_t, std::span<const std::byte>);
+
+    template<typename E>
+    friend bool detail::forward_rpc(E &, const node_id &, const node_id &, std::uint8_t, std::span<const std::byte>);
+
+    template<typename E>
+    friend void detail::relay_send(E &, typename E::session_type &, const wire::peer_report &);
+
+    template<typename E>
+    friend void detail::relay_broadcast(E &, const wire::peer_report &);
+
+    template<typename E>
+    friend void detail::relay_note_origin(E &, const node_id &);
+
+    template<typename E>
+    friend void detail::relay_withdraw(E &, const node_id &);
+
+    template<typename E>
+    friend void detail::relay_reassert(E &);
+
+    template<typename E>
+    friend void detail::relay_on_ready(E &, const node_id &);
+
+    template<typename E>
+    friend void detail::relay_maybe_refresh(E &, const node_id &);
+
+    template<typename E>
+    friend void detail::note_decline(E &, const node_id &, bool);
+
+    template<typename E>
+    friend bool detail::publishes_topic(const E &, const node_id &, std::string_view);
+
+    template<typename E>
+    friend void detail::relay_propagate_demand(E &, std::string_view, demand_transition, demand_role);
+
+    template<typename E>
+    friend void detail::install_splice_refan(E &);
+
     bool demand_in_scope(const node_id &id, locality reach_mask) const
     {
         if(reach_mask == locality::any)
@@ -691,209 +738,6 @@ private:
         m_graph_log.clear();
     }
 
-    // Re-assert every held report on the relay's heartbeat cadence so a downstream row for a
-    // still-live-but-idle origin refreshes before it ages out at awareness_ttl. Relay-only: the null
-    // emitter twin makes this a no-op, so a non-relay node still emits nothing.
-    void relay_reassert()
-    {
-        m_emitter.reassert([this](const wire::peer_report &pr) { relay_broadcast(pr); });
-    }
-
-    // The emit seam a newly-completed session runs: hand it every origin already reported (skipping a
-    // report about its own peer) the way redeclare_all replays declarations, then lift the just-
-    // attached peer as an origin and assert it to the rest. A non-relay node threads the null twin, so
-    // both calls are no-ops and no peer_report leaves the wire.
-    void relay_on_ready(const node_id &id)
-    {
-        session_type *fresh = m_registry.session_for(id);
-        if(fresh == nullptr)
-            return;
-        const node_id peer = fresh->peer_identity();
-        m_emitter.replay(peer, [this, fresh](const wire::peer_report &pr) { relay_send(*fresh, pr); });
-        relay_note_origin(peer);
-    }
-
-    // Re-lift an already-attached origin whose topic table changed, so a late or updated declaration
-    // re-announces downstream. Only a directly-attached origin (never self, never a via-only reported
-    // candidate) is a relay source.
-    void relay_maybe_refresh(const node_id &node)
-    {
-        if(node == m_build.fsm_cfg.self_id || !detail::any_session_for(*this, node))
-            return;
-        relay_note_origin(node);
-    }
-
-    void relay_note_origin(const node_id &origin)
-    {
-        m_emitter.note_origin(m_report, origin, m_report.universe, m_topics, [this](const wire::peer_report &pr) { relay_broadcast(pr); });
-    }
-
-    void relay_withdraw(const node_id &origin)
-    {
-        m_emitter.withdraw(origin, [this](const wire::peer_report &pr) { relay_broadcast(pr); });
-    }
-
-    // A peer's heartbeat carries its cooperative decline posture. Only a transition acts (the carrier is
-    // level): a fresh decline withdraws an already-emitted report and, held in the emitter, keeps a later
-    // note_origin from re-announcing it; an un-decline re-lifts the origin so its offer returns for free.
-    void note_decline(const node_id &peer, bool declines)
-    {
-        if(!m_emitter.mark_decline(peer, declines))
-            return;
-        if(declines)
-            relay_withdraw(peer);
-        else
-            relay_maybe_refresh(peer);
-    }
-
-    // Send one report to every connected session but the origin's own — an origin is never announced
-    // back to itself. The encode is per-broadcast, off the emitted report only.
-    void relay_broadcast(const wire::peer_report &pr)
-    {
-        auto bytes = wire::encode_peer_report(pr);
-        m_registry.for_each_connected(
-                [&](const node_id &, session_type &s)
-                {
-                    if(s.peer_identity() != pr.origin && !m_emitter.declines(s.peer_identity()))
-                        m_messages.send_peer_report(s.msg_peer().channel, bytes);
-                });
-    }
-
-    void relay_send(session_type &s, const wire::peer_report &pr)
-    {
-        if(s.peer_identity() != pr.origin && !m_emitter.declines(s.peer_identity()))
-            m_messages.send_peer_report(s.msg_peer().channel, wire::encode_peer_report(pr));
-    }
-
-    // The identity re-resolution primitive: route_select over the destination's candidates, then
-    // re-wrap the header-on rpc frame in a forwarded envelope (origin preserved, destination re-stamped,
-    // hop+1) onto the chosen via-session. Stateless — no per-correlation table. With no awareness
-    // candidate a live direct session to the destination still carries the frame (a peer reached by a
-    // raw dial/accept holds a session but no candidate row); only a destination with neither a candidate
-    // nor a live session drop-with-count and returns false, and the caller's deadline fires the timeout.
-    bool forward_rpc(const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> inner_frame)
-    {
-        const auto cands      = m_known_peers.candidates(destination);
-        const std::size_t idx = route_select(cands, m_route_options.usage);
-        if(idx == route_select_npos)
-        {
-            if(session_type *direct = session_by_identity(destination))
-                return send_forwarded_rpc(*direct, origin, destination, hop, inner_frame), true;
-            return (void)++m_forward_rpc_dropped, false;
-        }
-        if(session_type *s = forward_session_for(cands, idx, destination))
-            return send_forwarded_rpc(*s, origin, destination, hop, inner_frame), true;
-        return (void)++m_forward_rpc_dropped, false;
-    }
-
-    // Resolve the session that carries the forwarded frame for the ranked pick. prefer_direct (and
-    // never, which route_select has already kept to a direct winner) binds the single pick's via and
-    // drops when it has no live session — a working direct path is used, but a stale pick never falls
-    // through. allow_relayed instead takes the best-ranked candidate that HAS a live session, so a
-    // held direct candidate with no session yields to a live relayed one. The scan is bounded to the
-    // candidate span, so the fall-through cannot loop.
-    session_type *forward_session_for(std::span<const route_candidate> cands, std::size_t idx, const node_id &destination)
-    {
-        if(m_route_options.usage == route_usage::allow_relayed)
-            return best_live_forward_session(cands, destination);
-        const route_candidate &c = cands[idx];
-        if(!c.is_direct() && !c.reach.via)
-            return nullptr;
-        return session_by_identity(c.is_direct() ? destination : *c.reach.via);
-    }
-
-    session_type *best_live_forward_session(std::span<const route_candidate> cands, const node_id &destination)
-    {
-        session_type *best_session   = nullptr;
-        const route_candidate *chosen = nullptr;
-        for(const route_candidate &c : cands)
-        {
-            if(!c.is_direct() && !c.reach.via)
-                continue;
-            session_type *s = session_by_identity(c.is_direct() ? destination : *c.reach.via);
-            if(s != nullptr && (chosen == nullptr || route_outranks(c, *chosen)))
-                chosen = &c, best_session = s;
-        }
-        return best_session;
-    }
-
-    void send_forwarded_rpc(session_type &s, const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> inner_frame)
-    {
-        // Saturating so a max hop_budget config cannot wrap hop 255 -> 0 and reset the loop guard; the
-        // gate rejects hop past the budget first, so the ceiling arm is normally unreached (defense only).
-        const std::uint8_t out_hop = static_cast<std::uint8_t>(hop < 0xFF ? hop + 1 : hop);
-        const std::size_t inner_n  = inner_frame.size() < wire::detail::k_forwarded_inner_max ? inner_frame.size() : wire::detail::k_forwarded_inner_max;
-        m_forward_rpc_scratch.resize(wire::header_size + wire::detail::forwarded_frame_preamble_size + sizeof(std::uint32_t) + inner_n);
-        const std::size_t n = detail::encode_forwarded_wire_into(m_forward_rpc_scratch, origin, destination, out_hop, m_forward_rpc_seq++, 0, inner_frame);
-        s.rpc_peer().channel.send(std::span<const std::byte>{m_forward_rpc_scratch.data(), n});
-    }
-
-    // A live session for a PROVEN identity — an accepted session's slot key is provisional, so the table
-    // is scanned by handshake-proven identity, mirroring relay_broadcast's loop guard.
-    session_type *session_by_identity(const node_id &proven)
-    {
-        session_type *found = nullptr;
-        m_registry.for_each_connected([&](const node_id &, session_type &s) { if(s.peer_identity() == proven) found = &s; });
-        return found;
-    }
-
-    // Bind the forwarded-receive re-fan seam to the relay twin. A non-relay engine threads the null twin,
-    // so the hook is never installed and the forwarded receive stays a pure local delivery — no splice
-    // pool, no envelope encode, no forwarding-send code reached.
-    void install_splice_refan()
-    {
-        if constexpr(!std::is_same_v<ForwardSplice, null_forward_splice>)
-        {
-            m_messages.on_forward_refan([this](std::uint64_t hash, const node_id &origin, std::uint8_t hop, std::span<const std::byte> inner, const channel_type *arrival,
-                                               const wire::shared_bytes *owner) { m_splice.refan(m_messages, hash, origin, hop, inner, arrival, owner); });
-            m_messages.on_demand_transition([this](std::string_view node_name, std::string_view fqn, demand_transition dir, demand_role role)
-                                            {
-                                                m_coordinator.on_edge(node_name, fqn, dir, role);
-                                                relay_propagate_demand(fqn, dir, role);
-                                            });
-            // The re-origination gate: forward_scope_admits (the engine matcher, reachable only here) AND
-            // self-route-aware non-local demand, then reuse refan -> fan_forwarded_buffer (hop 0 -> out_hop
-            // 1, per-relay seq, arrival-excluded) and the receive-edge (origin, arrival-relay) dedup.
-            m_messages.on_originate([this](std::uint64_t hash, const node_id &origin, std::span<const std::byte> inner, const channel_type *arrival)
-                                    {
-                                        const std::string_view fqn = m_messages.fqn_for(hash);
-                                        if(fqn.empty() || !m_splice.forward_scope_admits(fqn) || !m_messages.has_remote_demand(hash, static_cast<const void *>(arrival)))
-                                            return;
-                                        m_splice.refan(m_messages, hash, origin, 0, inner, arrival, nullptr);
-                                    });
-        }
-    }
-
-    // A downstream consumer subscribed a topic on the relay (an incoming subscribe folds as demand
-    // up on the serving side): confine the constrained leg to demanded, in-scope topics by
-    // subscribing upstream on the session of every directly-attached origin publishing the fqn. An
-    // out-of-scope topic never propagates, so it never transits the narrow leg. The relay's own
-    // upstream subscribe folds as demand up on the SUBSCRIBER side and is ignored here.
-    void relay_propagate_demand(std::string_view fqn, demand_transition dir, demand_role role)
-    {
-        if constexpr(!std::is_same_v<ForwardSplice, null_forward_splice>)
-        {
-            if(dir != demand_transition::up || role != demand_role::publisher || !m_splice.forward_scope_admits(fqn))
-                return;
-            m_registry.for_each_connected([&](const node_id &, session_type &s)
-                                          {
-                                              if(s.is_complete() && publishes_topic(s.peer_identity(), fqn))
-                                                  s.subscribe(fqn);
-                                          });
-        }
-    }
-
-    bool publishes_topic(const node_id &node, std::string_view fqn) const
-    {
-        bool found = false;
-        m_topics.for_each([&](const graph::topic_record &r)
-                          {
-                              if(!found && r.node == node && r.role == graph::topic_role::publisher && r.name == fqn)
-                                  found = true;
-                          });
-        return found;
-    }
-
     // Awareness-only removal on the existing tick: forgets a peer that stopped re-announcing and was
     // not refreshed by a heartbeat. A reported origin ages out the same way — its topics retire with
     // it (a live reporter is the only refresh). NEVER touches m_registry — an active session outlives
@@ -908,7 +752,7 @@ private:
                                         {
                                             detail::release_all_reporter_load(*this, id);
                                             m_peer_liveliness.note_awareness_lost(id);
-                                            relay_withdraw(id);
+                                            detail::relay_withdraw(*this, id);
                                             if(m_reported.erase(id) != 0)
                                                 m_topics.remove_node(id);
                                             bump_graph_generation(true, id, graph::change_kind::disappeared);

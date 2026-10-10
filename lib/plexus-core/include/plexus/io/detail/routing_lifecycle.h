@@ -6,6 +6,7 @@
 
 #include "plexus/io/detail/routing_reports.h"
 #include "plexus/io/detail/routing_dispatch.h"
+#include "plexus/io/detail/routing_relay_emit.h"
 
 #include "plexus/graph/graph_change.h"
 
@@ -70,7 +71,7 @@ void forget_topics_on_teardown(Engine &e, const lifecycle_event &ev)
     if(torn != nullptr && !any_session_for(e, torn->peer_identity()))
     {
         const node_id who  = torn->peer_identity();
-        e.relay_withdraw(who);
+        detail::relay_withdraw(e, who);
         e.m_emitter.clear_decline(who);
         mark_reports_via_unreachable(e, who);
         e.m_messages.resume_relayed_from(who);
@@ -106,7 +107,7 @@ void dispatch_lifecycle(Engine &e, const lifecycle_event &ev)
     if(ev.edge == lifecycle_edge::connected || ev.edge == lifecycle_edge::reconnected)
     {
         reset_windows_for_reporter(e, ev.id);
-        e.relay_on_ready(ev.id);
+        detail::relay_on_ready(e, ev.id);
     }
     if(is_session_live_edge(ev.edge))
         arm_relayed_suppression(e, ev.id);
