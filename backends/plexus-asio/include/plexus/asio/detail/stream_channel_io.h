@@ -56,13 +56,15 @@ void stream_fail(Ch &c, const std::error_code &ec)
     if(ec == ::asio::error::operation_aborted || !c.m_open)
         return;
     c.m_open = false;
-    c.m_egress.close(); // stop the drain so the failed write does not chain
+    // Stop the drain so the failed write does not chain.
+    c.m_egress.close();
     c.m_inbound.shutdown();
-    stream_shutdown_socket(c); // a stalled/failed write must not survive into a redial
+    // A stalled or failed write must not survive into a redial.
+    stream_shutdown_socket(c);
     auto mapped = detail::map_error(ec);
     if(c.m_on_error_cb)
         c.m_on_error_cb(mapped);
-    stream_post_on_closed(c); // posted, exactly once — the same discipline as close()
+    stream_post_on_closed(c);
 }
 
 // A wire protocol violation: fire the protocol-close seam, then close() (on_closed only) — NEVER

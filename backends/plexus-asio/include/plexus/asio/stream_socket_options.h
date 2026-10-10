@@ -12,12 +12,22 @@ namespace plexus::asio {
 // keepalive intervals apply ONLY when keepalive is true AND the interval is non-zero.
 struct stream_socket_options
 {
-    std::size_t so_sndbuf                 = 0;
-    std::size_t so_rcvbuf                 = 0;
-    bool keepalive                        = false;
-    std::uint32_t keepalive_idle_secs     = 0;
-    std::uint32_t keepalive_interval_secs = 0;
-    std::uint32_t keepalive_count         = 0;
+    constexpr stream_socket_options()
+            : so_sndbuf(0)
+            , so_rcvbuf(0)
+            , keepalive(false)
+            , keepalive_idle_secs(0)
+            , keepalive_interval_secs(0)
+            , keepalive_count(0)
+    {
+    }
+
+    std::size_t so_sndbuf;
+    std::size_t so_rcvbuf;
+    bool keepalive;
+    std::uint32_t keepalive_idle_secs;
+    std::uint32_t keepalive_interval_secs;
+    std::uint32_t keepalive_count;
 };
 
 // 64 KiB clears one max TLS record (~16 KiB) with margin; a constrained target dials it down via

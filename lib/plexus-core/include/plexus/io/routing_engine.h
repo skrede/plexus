@@ -107,7 +107,7 @@ public:
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
-                   io::liveliness_options live = {}, io::route_options routes = {}, io::report_options report = {}, io::forward_options forward = {})
+                   io::liveliness_options live = {}, io::route_options routes = {}, const io::report_options &report = {}, const io::forward_options &forward = {})
             : m_dial_eagerly(dial_eagerly)
             , m_liveliness(live)
             , m_route_options(routes)
@@ -714,11 +714,11 @@ private:
     }
 
     // The posted wakeup: fires the coarse edge once at the FINAL generation, then drains the host
-    // delta log to the opt-in observers. Iterates the live observer list directly rather than
-    // detail::fan_out — the snapshot copy fan_out takes would allocate on every wakeup, and the
-    // coarse path must stay allocation-free (the [this] closure fits move_only_function's SBO). It
-    // re-reads known_peers/topic_table only, never slot_block, so a peer torn down before the drain
-    // cannot be re-entered.
+    // delta log to the opt-in observers. It walks the live observer list by index, not through
+    // detail::fan_out: fan_out's snapshot copy would allocate on every wakeup and the coarse path must
+    // stay allocation-free (the [this] closure fits move_only_function's SBO), while indexing survives
+    // a callback that (un)registers an observer. It re-reads known_peers/topic_table only, never
+    // slot_block, so a peer torn down before the drain cannot be re-entered.
     void fire_graph_wakeup()
     {
         m_graph_wakeup_pending = false;

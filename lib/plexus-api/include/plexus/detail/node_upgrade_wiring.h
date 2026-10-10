@@ -4,6 +4,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/transport_selector.h"
+#include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 
 #include <span>

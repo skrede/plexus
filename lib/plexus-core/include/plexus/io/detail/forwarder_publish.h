@@ -1,15 +1,16 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_PUBLISH_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_PUBLISH_H
 
-#include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/history_ring.h"
-#include "plexus/io/detail/priority_band_queue.h"
-
 #include "plexus/io/locality.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/history_limits.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/observation_events.h"
+
+#include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/history_ring.h"
+#include "plexus/io/detail/priority_band_queue.h"
 
 #include "plexus/topic_qos.h"
 #include "plexus/wire_bytes.h"
@@ -29,13 +30,7 @@
 #include <algorithm>
 #include <string_view>
 
-namespace plexus::io {
-
-// DoS clamp: a publisher-declared depth is attacker-controlled (bounds N x max_payload).
-constexpr std::size_t k_history_depth_cap = 1024;
-constexpr std::size_t k_fetch_cap         = 1024;
-
-namespace detail {
+namespace plexus::io::detail {
 
 inline wire_bytes<> frame_owned(const wire::frame_header &fhdr, const wire::unidirectional_header &uhdr, std::span<const std::byte> payload, std::optional<std::uint64_t> counter)
 {
@@ -158,8 +153,6 @@ void forwarder_publish(Forwarder &f, std::string_view fqn, std::span<const std::
     if(subs != nullptr)
         fan_published(f, *subs, hash, fqn, qos, framed, bare, pub_info);
     retain_if_latched(f, hash, qos, framed);
-}
-
 }
 
 }

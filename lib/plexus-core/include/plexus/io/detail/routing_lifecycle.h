@@ -7,6 +7,7 @@
 #include "plexus/io/detail/routing_reports.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_relay_emit.h"
+#include "plexus/io/detail/routing_session_scan.h"
 
 #include "plexus/graph/graph_change.h"
 
@@ -47,16 +48,6 @@ void feed_liveliness_session(Engine &e, const lifecycle_event &ev)
         case lifecycle_edge::rejected:
             return e.m_peer_liveliness.note_session_down(ev.id, e.now_for_aging());
     }
-}
-
-// A peer that both dials and accepts holds two sessions under two slot keys but one proven
-// identity, and the table is keyed by that identity.
-template<typename Engine>
-bool any_session_for(Engine &e, const node_id &proven)
-{
-    bool found = false;
-    e.m_registry.for_each_connected([&](const node_id &, typename Engine::session_type &s) { found = found || s.peer_identity() == proven; });
-    return found;
 }
 
 // Topic knowledge is scoped to the sessions that carried it, so a peer's records leave with the

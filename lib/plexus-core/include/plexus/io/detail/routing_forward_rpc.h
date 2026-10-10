@@ -6,6 +6,7 @@
 #include "plexus/io/route_candidate.h"
 
 #include "plexus/io/detail/forward_splice.h"
+#include "plexus/io/detail/routing_session_scan.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/forwarded_frame.h"
@@ -17,16 +18,6 @@
 #include <cstdint>
 
 namespace plexus::io::detail {
-
-// A live session for a PROVEN identity — an accepted session's slot key is provisional, so the table
-// is scanned by handshake-proven identity, mirroring relay_broadcast's loop guard.
-template<typename Engine>
-typename Engine::session_type *session_by_identity(Engine &e, const node_id &proven)
-{
-    typename Engine::session_type *found = nullptr;
-    e.m_registry.for_each_connected([&](const node_id &, typename Engine::session_type &s) { if(s.peer_identity() == proven) found = &s; });
-    return found;
-}
 
 template<typename Engine>
 typename Engine::session_type *best_live_forward_session(Engine &e, std::span<const route_candidate> cands, const node_id &destination)

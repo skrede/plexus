@@ -39,7 +39,7 @@ struct session_slot
 inline node_id inbound_slot_id(std::uint64_t n)
 {
     node_id id{};
-    for(int i = 0; i < 8; ++i)
+    for(std::size_t i = 0; i < 8; ++i)
         id[15 - i] = std::byte{static_cast<std::uint8_t>(n >> (8 * i))};
     return id;
 }

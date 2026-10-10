@@ -4,6 +4,7 @@
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/demand_transition.h"
+#include "plexus/io/remembered_demand.h"
 #include "plexus/io/observation_events.h"
 
 #include "plexus/wire/frame.h"
@@ -16,27 +17,17 @@
 #include <optional>
 #include <string_view>
 
-namespace plexus::io {
-
-struct remembered_demand
-{
-    std::string fqn;
-    subscriber_qos qos;
-    std::optional<std::uint64_t> type_id; // nullopt = undeclared
-    // Owned, not borrowed: a replay on reconnect outlives whatever named the type at attach.
-    std::string type_name;
-};
-
-namespace detail {
+namespace plexus::io::detail {
 
 template<typename Forwarder>
 void record_remote_topic(Forwarder &f, const std::string &node_name, std::string_view fqn, const subscriber_qos &qos, std::optional<std::uint64_t> type_id = std::nullopt,
                          std::string_view type_name = {})
 {
     auto &topics = f.m_remote_topics[node_name];
+    // Idempotent: the first stored qos and type win over a repeated attach.
     for(const auto &existing : topics)
         if(existing.fqn == fqn)
-            return; // idempotent: keep the first stored qos + type
+            return;
     topics.emplace_back(remembered_demand{std::string{fqn}, qos, type_id, std::string{type_name}});
 }
 
@@ -91,8 +82,6 @@ void forwarder_detach_local(Forwarder &f, std::string_view fqn, Channel &channel
     auto it = f.m_self_route_channels.find(static_cast<const void *>(&channel));
     if(it != f.m_self_route_channels.end() && --it->second == 0)
         f.m_self_route_channels.erase(it);
-}
-
 }
 
 }

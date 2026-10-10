@@ -1,15 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_RELAY_EMIT_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_RELAY_EMIT_H
 
+#include "plexus/io/detail/routing_session_scan.h"
+
 #include "plexus/wire/peer_report.h"
 
 #include "plexus/node_id.h"
 
 namespace plexus::io::detail {
-
-// Forward-declared: the session lifecycle fan defines it and itself calls into this header.
-template<typename Engine>
-bool any_session_for(Engine &e, const node_id &proven);
 
 template<typename Engine>
 void relay_send(Engine &e, typename Engine::session_type &s, const wire::peer_report &pr)

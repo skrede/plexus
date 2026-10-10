@@ -5,6 +5,7 @@
 #include "plexus/io/route_candidate.h"
 
 #include "plexus/io/detail/route_admission.h"
+#include "plexus/io/detail/routing_session_scan.h"
 
 #include "plexus/graph/graph_change.h"
 #include "plexus/graph/topic_record.h"
@@ -19,12 +20,9 @@
 #include <vector>
 #include <cstdint>
 #include <optional>
+#include <algorithm>
 
 namespace plexus::io::detail {
-
-// Forward-declared: the session lifecycle fan defines it and itself calls into this header.
-template<typename Engine>
-bool any_session_for(Engine &e, const node_id &proven);
 
 // A seq-fresh re-report for an origin currently marked UNREACHABLE-NOT-DEAD (its relay returned) flips
 // the row back to reachable under the SAME identity — a reachable delta, never appeared (a re-appear
@@ -46,10 +44,7 @@ void recover_reachable_via(Engine &e, const node_id &origin, const node_id &via)
 template<typename Engine>
 bool has_row_via(const Engine &e, const node_id &origin, const node_id &via)
 {
-    for(const route_candidate &c : e.m_known_peers.candidates(origin))
-        if(!c.is_direct() && c.reach.via == via)
-            return true;
-    return false;
+    return std::ranges::any_of(e.m_known_peers.candidates(origin), [&](const route_candidate &c) { return !c.is_direct() && c.reach.via == via; });
 }
 
 // A reporter may install at most max_reported_origins DISTINCT origins: a report that would add a
