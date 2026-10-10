@@ -1,10 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_HANDSHAKE_FSM_H
 #define HPP_GUARD_PLEXUS_IO_HANDSHAKE_FSM_H
 
+#include "plexus/io/host_fingerprint.h"
 #include "plexus/io/handshake_protocol.h"
+
+#include "plexus/io/detail/handshake_resolve.h"
+
 #include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/attach_policy.h"
-#include "plexus/io/host_fingerprint.h"
 
 #include "plexus/wire/handshake.h"
 
@@ -52,25 +55,25 @@ public:
     fsm_step_result on_request(const wire::handshake_request &req, bool inbound_is_bootstrap, const security::attach_facts &facts = {}) noexcept
     {
         m_last_seen_their_protocol_version = req.protocol_version;
-        if(auto gate = validate(req.protocol_version, req.id, req.fingerprint, facts))
+        if(auto gate = detail::validate(*this, req.protocol_version, req.id, req.fingerprint, facts))
             return *gate;
-        if(!is_version_compatible(req.version_major, req.version_minor))
-            return reject_version_result();
-        return resolve_inbound(inbound_is_bootstrap);
+        if(!detail::is_version_compatible(*this, req.version_major, req.version_minor))
+            return detail::reject_version_result(*this);
+        return detail::resolve_inbound(*this, inbound_is_bootstrap);
     }
 
     fsm_step_result on_response(const wire::handshake_response &resp, const security::attach_facts &facts = {}) noexcept
     {
         m_last_seen_their_protocol_version = resp.protocol_version;
-        if(auto gate = validate(resp.protocol_version, resp.id, resp.fingerprint, facts))
+        if(auto gate = detail::validate(*this, resp.protocol_version, resp.id, resp.fingerprint, facts))
             return *gate;
         if(resp.status == wire::handshake_status::identity_conflict)
-            return identity_conflict_result();
+            return detail::identity_conflict_result(*this);
         if(resp.status != wire::handshake_status::accepted)
-            return reject_version_result();
-        if(!is_version_compatible(resp.version_major, resp.version_minor))
-            return reject_version_result();
-        return resolve_outbound();
+            return detail::reject_version_result(*this);
+        if(!detail::is_version_compatible(*this, resp.version_major, resp.version_minor))
+            return detail::reject_version_result(*this);
+        return detail::resolve_outbound(*this);
     }
 
     fsm_step_result on_timeout() noexcept
@@ -143,95 +146,6 @@ public:
     }
 
 private:
-    std::optional<fsm_step_result> validate(std::uint8_t peer_protocol_version, const node_id &peer_id, std::uint64_t peer_fingerprint,
-                                            const security::attach_facts &facts = {}) noexcept
-    {
-        m_peer_id          = peer_id;
-        m_peer_fingerprint = host_fingerprint{peer_fingerprint};
-        if(peer_protocol_version != wire::k_protocol_version)
-            return reject_version_result();
-        if(peer_id == m_cfg.self_id)
-            return identity_conflict_result();
-        if(m_cfg.attach_policy != nullptr && !m_cfg.attach_policy->decide(facts))
-            return reject_unauthorized_result();
-        return std::nullopt;
-    }
-
-    // A fresh inbound bootstrap completes inbound-only (no counter-dial to arbitrate). A mid-dial
-    // inbound with an outbound in flight is the second arrival of a simultaneous connect: arbitrate.
-    fsm_step_result resolve_inbound(bool inbound_is_bootstrap) noexcept
-    {
-        m_inbound_pending = true;
-        if(racing_outbound())
-            return m_complete_emitted ? accept_inbound_no_complete() : complete_inbound(arbitrate_dedup());
-        if(inbound_is_bootstrap)
-            return complete_inbound(dedup_decision::none);
-        m_state = peer_fsm_state::handshake_resolved;
-        return {.action = fsm_action::send_response, .outcome = handshake_outcome::accept_inbound};
-    }
-
-    fsm_step_result resolve_outbound() noexcept
-    {
-        if(m_state != peer_fsm_state::handshaking && m_state != peer_fsm_state::handshake_resolved)
-            return {};
-        if(m_complete_emitted)
-            return {};
-        auto dedup         = m_inbound_pending ? arbitrate_dedup() : dedup_decision::none;
-        m_state            = peer_fsm_state::handshake_resolved;
-        m_complete_emitted = true;
-        return {.action = fsm_action::complete, .outcome = handshake_outcome::accept_outbound, .dedup = dedup};
-    }
-
-    bool racing_outbound() const noexcept
-    {
-        return m_state == peer_fsm_state::handshaking || m_state == peer_fsm_state::handshake_resolved;
-    }
-
-    fsm_step_result complete_inbound(dedup_decision dedup) noexcept
-    {
-        m_state            = peer_fsm_state::handshake_resolved;
-        m_complete_emitted = true;
-        return {.action = fsm_action::complete, .outcome = handshake_outcome::accept_inbound, .dedup = dedup};
-    }
-
-    static fsm_step_result accept_inbound_no_complete() noexcept
-    {
-        return {.action = fsm_action::send_response, .outcome = handshake_outcome::accept_inbound};
-    }
-
-    // Greater node_id keeps its outbound; the loser keeps the inbound it accepted. The equal case is
-    // rejected at validation, so the comparison is strict and both sides agree on the survivor.
-    dedup_decision arbitrate_dedup() const noexcept
-    {
-        return m_cfg.self_id > m_peer_id ? dedup_decision::keep_outbound : dedup_decision::keep_inbound;
-    }
-
-    bool is_version_compatible(std::uint8_t peer_major, std::uint8_t peer_minor) const noexcept
-    {
-        return (peer_major > m_cfg.compatible_version_major) || (peer_major == m_cfg.compatible_version_major && peer_minor >= m_cfg.compatible_version_minor);
-    }
-
-    fsm_step_result abort_result(handshake_outcome reason) noexcept
-    {
-        m_state = peer_fsm_state::not_connected;
-        return {.action = fsm_action::abort, .outcome = reason};
-    }
-
-    fsm_step_result reject_version_result() noexcept
-    {
-        return abort_result(handshake_outcome::reject_version);
-    }
-
-    fsm_step_result identity_conflict_result() noexcept
-    {
-        return abort_result(handshake_outcome::reject_identity);
-    }
-
-    fsm_step_result reject_unauthorized_result() noexcept
-    {
-        return abort_result(handshake_outcome::reject_unauthorized);
-    }
-
     node_id m_peer_id;
     bool m_inbound_pending;
     peer_fsm_state m_state;
@@ -240,6 +154,23 @@ private:
     host_fingerprint m_peer_fingerprint;
     std::uint8_t m_last_seen_their_protocol_version;
     std::uint32_t m_handshake_retry_remaining;
+
+    template<typename F>
+    friend fsm_step_result detail::abort_result(F &, handshake_outcome) noexcept;
+    template<typename F>
+    friend std::optional<fsm_step_result> detail::validate(F &, std::uint8_t, const node_id &, std::uint64_t, const security::attach_facts &) noexcept;
+    template<typename F>
+    friend bool detail::racing_outbound(const F &) noexcept;
+    template<typename F>
+    friend fsm_step_result detail::complete_inbound(F &, dedup_decision) noexcept;
+    template<typename F>
+    friend dedup_decision detail::arbitrate_dedup(const F &) noexcept;
+    template<typename F>
+    friend fsm_step_result detail::resolve_inbound(F &, bool) noexcept;
+    template<typename F>
+    friend fsm_step_result detail::resolve_outbound(F &) noexcept;
+    template<typename F>
+    friend bool detail::is_version_compatible(const F &, std::uint8_t, std::uint8_t) noexcept;
 };
 
 }

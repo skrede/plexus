@@ -3,12 +3,18 @@
 
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/security_seam.h"
+#include "plexus/io/object_carrier.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/handshake_protocol.h"
 
+#include "plexus/node_id.h"
+
 #include <span>
+#include <memory>
 #include <cstddef>
+#include <utility>
 #include <string_view>
 
 namespace plexus::io::detail {
@@ -139,6 +145,24 @@ void wire_dead(Registry &reg, Slot &slot, const node_id &id)
                 it->second->dead = true;
                 fire_dead(reg, *it->second, id);
             });
+}
+
+template<typename Registry, typename Slot>
+void build_session_into(Registry &reg, Slot &slot, std::unique_ptr<typename Registry::channel_type> channel, bool inbound)
+{
+    slot.record.channel = std::move(channel);
+    slot.session.reset();
+    slot.session.emplace(slot.record, reg.m_build.executor, reg.m_build.fsm_cfg, reg.m_build.handshake_timeout, reg.m_build.messages, reg.m_build.procedures, inbound,
+                         reg.m_build.logger);
+    if(inbound)
+        detail::wire_inbound_drop(reg, slot, slot.record.peer_id);
+    else
+        detail::wire_drop(reg, slot, slot.record.peer_id);
+    detail::wire_observer(reg, slot);
+    detail::wire_message_route(reg, slot);
+    detail::wire_object_route(reg, slot);
+    detail::wire_security(reg, slot);
+    slot.session->start();
 }
 
 }

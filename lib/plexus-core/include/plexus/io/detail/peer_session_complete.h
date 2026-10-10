@@ -11,6 +11,7 @@
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/subscribe.h"
+#include "plexus/wire/close_cause.h"
 #include "plexus/wire/topic_declaration.h"
 
 #include <span>

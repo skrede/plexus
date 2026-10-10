@@ -16,6 +16,7 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/session_build_context.h"
 
+#include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_build.h"
 
 #include "plexus/log/logger.h"
@@ -72,7 +73,7 @@ public:
                 slot->driver.mark_dial_settled();
                 if(slot->driver.redial_denied())
                     return;
-                return build_into(*slot, std::move(channel), false);
+                return detail::build_session_into(*this, *slot, std::move(channel), false);
             }
     }
 
@@ -88,7 +89,7 @@ public:
     template<typename PreBuild = std::nullptr_t>
     node_id accept_session(std::unique_ptr<channel_type> channel, PreBuild &&pre_build = nullptr)
     {
-        const node_id inbound_id = next_inbound_id();
+        const node_id inbound_id = detail::inbound_slot_id(m_next_inbound++);
         auto slot                = std::make_unique<slot_block>(m_transport, m_build, inbound_id, endpoint{}, node_name_of(inbound_id));
         auto [it, inserted]      = m_slots.emplace(inbound_id, std::move(slot));
         if(!inserted)
@@ -98,7 +99,7 @@ public:
         }
         if constexpr(!std::is_null_pointer_v<std::decay_t<PreBuild>>)
             pre_build(*channel, inbound_id);
-        build_into(*it->second, std::move(channel), true);
+        detail::build_session_into(*this, *it->second, std::move(channel), true);
         return inbound_id;
     }
 
@@ -178,24 +179,7 @@ public:
     }
 
 private:
-    // The member order encodes the destruction discipline: session is destroyed first, so the
-    // record (whose channel/epoch it borrows) and the driver outlive every incarnation.
-    struct slot_block
-    {
-        slot_block(Transport &transport, session_build_context<Policy> &build, const node_id &id, const endpoint &ep, const std::string &node_name)
-                : driver(transport, build.executor, build.redial, ep, build.redial_seed)
-                , dead(false)
-        {
-            record.peer_id       = id;
-            record.node_name     = node_name;
-            record.dial_endpoint = ep;
-        }
-
-        peer_context<Policy> record;
-        driver_type driver;
-        std::optional<session_type> session;
-        bool dead;
-    };
+    using slot_block = detail::session_slot<Policy, Transport, Clock>;
 
     Transport &m_transport;
     std::uint64_t m_next_inbound;
@@ -220,31 +204,8 @@ private:
     friend void detail::wire_dead(R &, S &, const node_id &);
     template<typename R, typename S>
     friend void detail::fire_dead(R &, S &, const node_id &);
-
-    void build_into(slot_block &slot, std::unique_ptr<channel_type> channel, bool inbound)
-    {
-        slot.record.channel = std::move(channel);
-        slot.session.reset();
-        slot.session.emplace(slot.record, m_build.executor, m_build.fsm_cfg, m_build.handshake_timeout, m_build.messages, m_build.procedures, inbound, m_build.logger);
-        if(inbound)
-            detail::wire_inbound_drop(*this, slot, slot.record.peer_id);
-        else
-            detail::wire_drop(*this, slot, slot.record.peer_id);
-        detail::wire_observer(*this, slot);
-        detail::wire_message_route(*this, slot);
-        detail::wire_object_route(*this, slot);
-        detail::wire_security(*this, slot);
-        slot.session->start();
-    }
-
-    node_id next_inbound_id()
-    {
-        const std::uint64_t n = m_next_inbound++;
-        node_id id{};
-        for(int i = 0; i < 8; ++i)
-            id[15 - i] = std::byte{static_cast<std::uint8_t>(n >> (8 * i))};
-        return id;
-    }
+    template<typename R, typename S>
+    friend void detail::build_session_into(R &, S &, std::unique_ptr<typename R::channel_type>, bool);
 
     bool endpoint_claimed(const node_id &id, const endpoint &ep) const
     {

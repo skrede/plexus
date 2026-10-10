@@ -27,6 +27,7 @@
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_consumers.h"
 #include "plexus/io/detail/peer_session_handshake.h"
+#include "plexus/io/detail/peer_session_lifecycle.h"
 
 #include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/attach_policy.h"
@@ -39,7 +40,6 @@
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/close_cause.h"
 #include "plexus/wire/topic_declaration.h"
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/fetch_latched.h"
 
 #include <span>
@@ -49,7 +49,6 @@
 #include <utility>
 #include <optional>
 #include <string_view>
-#include <system_error>
 
 namespace plexus::io {
 
@@ -109,7 +108,7 @@ public:
         if constexpr(requires(channel_type &c) { c.on_object([](const object_carrier &) {}); })
             m_channel.on_object([this](const object_carrier &c) { detail::deliver_session_object(*this, c); });
         detail::register_session_consumers(*this);
-        arm_handshake_timer();
+        detail::arm_handshake_timer(*this);
         if(!m_is_inbound_bootstrap)
         {
             detail::execute(*this, m_fsm.on_dial_started());
@@ -204,21 +203,9 @@ public:
         m_on_subscribe_degraded_cb = std::move(cb);
     }
 
-    // The staleness gate runs before the router: a frame whose non-zero session_id differs from
-    // the latched epoch is a previous-session straggler and is dropped; the first non-zero
-    // observation latches the peer's epoch.
     void on_receive(std::span<const std::byte> frame)
     {
-        if(m_torn_down)
-            return;
-        auto hdr = wire::decode_header(frame);
-        if(!hdr)
-            return close_for_protocol_error(wire::close_cause::invalid_magic);
-        if(hdr->session_id != 0 && m_peer_session_id != 0 && hdr->session_id != m_peer_session_id)
-            return;
-        if(hdr->session_id != 0 && m_peer_session_id == 0)
-            m_peer_session_id = hdr->session_id;
-        m_router.route(frame);
+        detail::receive_frame(*this, frame);
     }
 
     void inject_receive(std::span<const std::byte> frame)
@@ -228,37 +215,17 @@ public:
 
     void tear_down()
     {
-        const bool was_complete = m_forwarders_installed;
-        m_torn_down             = true;
-        m_handshake_timer.cancel();
-        m_messages.detach_all(m_msg_peer);
-        m_procedures.detach_all(m_rpc_peer);
-        m_peer_session_id          = 0;
-        m_forwarders_installed     = false;
-        m_outstanding_subscribes   = 0;
-        m_ready_latched_this_cycle = false;
-        m_fsm.on_torn_down();
-        m_channel.close();
-        if(was_complete)
-            detail::fire_lifecycle(*this, lifecycle_edge::disconnected);
+        detail::tear_down_session(*this);
     }
 
     void on_channel_protocol_close(wire::close_cause cause)
     {
-        if(m_torn_down)
-            return;
-        if(m_negotiator.engaged() && m_forwarders_installed)
-            detail::fire_security(*this, security_kind::stream_tamper_teardown, security_cause::tag_verify_failed);
-        close_for_protocol_error(cause);
+        detail::protocol_close(*this, cause);
     }
 
-    void close_for_protocol_error(wire::close_cause)
+    void close_for_protocol_error(wire::close_cause cause)
     {
-        if(m_torn_down)
-            return;
-        m_closed_for_protocol_error = true;
-        m_logger.warn("plexus: peer_session protocol_close");
-        tear_down();
+        detail::close_for_protocol_error(*this, cause);
     }
 
     void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {})
@@ -428,23 +395,16 @@ private:
     friend void detail::send_handshake_request(S &);
     template<typename S>
     friend void detail::send_handshake_response(S &, handshake_outcome);
-
-    void arm_handshake_timer()
-    {
-        m_handshake_timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(m_handshake_timeout));
-        m_handshake_timer.async_wait(
-                [this](std::error_code ec)
-                {
-                    if(ec)
-                        return;
-                    const auto step = m_fsm.on_timeout();
-                    detail::execute(*this, step);
-                    // A bounded handshake re-send keeps the window open: re-arm here so a subsequent
-                    // loss is also bounded. arm_handshake_timer stays the single source of the window.
-                    if(step.action == fsm_action::send_request)
-                        arm_handshake_timer();
-                });
-    }
+    template<typename S>
+    friend void detail::tear_down_session(S &);
+    template<typename S>
+    friend void detail::close_for_protocol_error(S &, wire::close_cause);
+    template<typename S>
+    friend void detail::protocol_close(S &, wire::close_cause);
+    template<typename S>
+    friend void detail::receive_frame(S &, std::span<const std::byte>);
+    template<typename S>
+    friend void detail::arm_handshake_timer(S &);
 };
 
 }
