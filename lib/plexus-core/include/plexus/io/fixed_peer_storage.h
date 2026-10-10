@@ -3,12 +3,11 @@
 
 #include "plexus/node_id.h"
 
-#include "plexus/detail/fail_closed.h"
-
 #include "plexus/io/endpoint.h"
 #include "plexus/io/route_options.h"
 #include "plexus/io/route_candidate.h"
 #include "plexus/io/detail/route_admission.h"
+#include "plexus/io/detail/fixed_peer_admission.h"
 
 #include <span>
 #include <array>
@@ -39,38 +38,14 @@ public:
         return admit(id, direct_candidate(ep), now, route_options{});
     }
 
-    // Direct-first candidate admission: a direct row is never reject-and-counted, a transitive row is
-    // admitted only into the non-reserved region and otherwise rejected-and-tallied — never displacing
-    // a direct row under either protection scheme.
     bool admit(const node_id &id, const route_candidate &cand, std::uint64_t now, const route_options &opts)
     {
-        entry *slot = find(id);
-        if(slot == nullptr)
-            slot = claim(id, cand.is_direct());
-        if(slot == nullptr)
-        {
-            ++m_dropped;
-            return false;
-        }
-        slot->last_refreshed = now;
-        const auto r = detail::admit_candidate(slot->candidates.data(), slot->count, Candidates, cand, now, opts);
-        if(r.dropped)
-            ++m_dropped;
-        return r.changed;
+        return detail::admit_identity_candidate(*this, id, cand, now, opts);
     }
 
-    // Reported (via-only) admission: a new origin claims a free slot without fail_closed (a transitive
-    // report never aborts the table), and the seq dedups against the row's embedded window.
     detail::report_admit note_reported(const node_id &id, const route_candidate &cand, std::uint16_t seq, std::uint64_t now, const route_options &opts)
     {
-        entry *slot = find(id);
-        if(slot == nullptr)
-            slot = claim(id, false);
-        if(slot == nullptr)
-            return (++m_dropped, detail::report_admit::dropped);
-        const auto r = detail::note_reported_row(slot->candidates.data(), slot->count, Candidates, slot->last_refreshed, cand, seq, now, opts);
-        m_dropped += static_cast<std::size_t>(r == detail::report_admit::dropped);
-        return r;
+        return detail::note_identity_report(*this, id, cand, seq, now, opts);
     }
 
     bool remove_transitive(const node_id &id, const node_id &via)
@@ -205,24 +180,6 @@ private:
         bool occupied{false};
     };
 
-    // A new identity takes a free slot. When the identity array is full a DIRECT peer fails closed
-    // (the target is sized below its direct peer count); a TRANSITIVE report is rejected by the caller
-    // and counted, never allowed to exhaust the table or abort.
-    entry *claim(const node_id &id, bool is_direct)
-    {
-        for(entry &e : m_slots)
-            if(!e.occupied)
-            {
-                e.occupied = true;
-                e.id       = id;
-                e.count    = 0;
-                return &e;
-            }
-        if(is_direct)
-            plexus::detail::fail_closed("fixed_peer_storage: capacity exceeded");
-        return nullptr;
-    }
-
     entry *find(const node_id &id)
     {
         for(entry &e : m_slots)
@@ -240,6 +197,11 @@ private:
 
     std::array<entry, N> m_slots{};
     std::size_t m_dropped{0};
+
+    template<typename S>
+    friend bool detail::admit_identity_candidate(S &, const node_id &, const route_candidate &, std::uint64_t, const route_options &);
+    template<typename S>
+    friend detail::report_admit detail::note_identity_report(S &, const node_id &, const route_candidate &, std::uint16_t, std::uint64_t, const route_options &);
 };
 
 }
