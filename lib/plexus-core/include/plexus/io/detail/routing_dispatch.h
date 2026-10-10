@@ -52,6 +52,26 @@ void post_rejected(Engine &e, const lifecycle_event &ev)
     policy_type::post(e.m_executor, [&e, ev] { fan_out(e, [&](observer &o) { o.on_peer_rejected(ev.id, ev.node_name, ev.reason); }); });
 }
 
+template<typename Engine>
+void post_lifecycle_edge(Engine &e, const lifecycle_event &ev)
+{
+    switch(ev.edge)
+    {
+        case lifecycle_edge::connected:
+            return detail::post_edge(e, ev, &observer::on_peer_connected);
+        case lifecycle_edge::disconnected:
+            return detail::post_edge(e, ev, &observer::on_peer_disconnected);
+        case lifecycle_edge::reconnected:
+            return detail::post_edge(e, ev, &observer::on_peer_reconnected);
+        case lifecycle_edge::dead:
+            return detail::post_edge(e, ev, &observer::on_peer_dead);
+        case lifecycle_edge::ready:
+            return detail::post_edge(e, ev, &observer::on_peer_ready);
+        case lifecycle_edge::rejected:
+            return detail::post_rejected(e, ev);
+    }
+}
+
 // The indirection that keeps a per-packet drop site off the synchronous observer path.
 template<typename Engine>
 void post_drop(Engine &e, const drop_event &ev)

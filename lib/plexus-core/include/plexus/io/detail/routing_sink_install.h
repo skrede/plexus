@@ -10,6 +10,7 @@
 
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
+#include "plexus/io/detail/routing_lifecycle.h"
 
 #include "plexus/graph/graph_change.h"
 #include "plexus/graph/topic_record.h"
@@ -41,7 +42,7 @@ void install_routing_sinks(Engine &e)
     e.m_transport.on_dialed([&e](std::unique_ptr<channel_type> ch, const endpoint &ep) { e.on_dialed(std::move(ch), ep); });
     e.m_transport.on_accepted([&e](std::unique_ptr<channel_type> ch) { e.on_accepted(std::move(ch)); });
     e.m_transport.on_dial_failed([&e](const endpoint &ep, io_error) { e.m_registry.notify_dial_failed(ep); });
-    e.m_build.on_lifecycle = [&e](const lifecycle_event &ev) { e.dispatch_lifecycle(ev); };
+    e.m_build.on_lifecycle = [&e](const lifecycle_event &ev) { detail::dispatch_lifecycle(e, ev); };
     e.m_messages.on_drop(make_drop_sink(e));
     // The data-path observation sinks post a snapshot on the borrowed executor, never inline from
     // the per-publish loop (the DoS-amplifier guard).
@@ -93,7 +94,7 @@ void install_routing_sinks(Engine &e)
     // A peer's heartbeat also carries its cooperative decline posture; the engine honors the transition
     // (withdraw an emitted report / re-lift on un-decline), a no-op on a non-relay node's null twin.
     e.m_build.on_decline_seen = [&e](const node_id &ep, bool declines) { e.note_decline(ep, declines); };
-    e.m_monitor.on_liveness([&e](const liveness_event &ev) { policy_type::post(e.m_executor, [&e, ev] { e.fan_liveness(ev); }); });
+    e.m_monitor.on_liveness([&e](const liveness_event &ev) { policy_type::post(e.m_executor, [&e, ev] { detail::fan_liveness(e, ev); }); });
     e.m_peer_liveliness.on_verdict([&e](const peer_liveliness_event &ev) { detail::post_liveliness(e, ev); });
     // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer when
     // the configured interval has elapsed (the default equals the tick cadence, so emission is
