@@ -16,7 +16,7 @@ namespace plexus {
 // A move-only RAII registration over the engine's observer seam: it owns a small observer sink
 // carrying the consumer's coarse on_graph_changed(uint64) callback (and, on a host profile, the
 // {who, kind} delta callback), added via add_observer at construction and removed in the dtor. The
-// handle takes the teardown ordering off the consumer (D-03): the sink leaves the live observer list
+// handle takes the teardown ordering off the consumer: the sink leaves the live observer list
 // before its owner is gone, so a coalesced wakeup never fires into freed state. No drain block is
 // needed — the engine owns the coalescer, so this side has nothing to flush and the dtor only
 // deregisters.

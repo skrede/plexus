@@ -46,6 +46,7 @@
 #include "plexus/detail/address_parse.h"
 #include "plexus/detail/node_identity.h"
 #include "plexus/detail/node_internals.h"
+#include "plexus/detail/node_rpc_seams.h"
 #include "plexus/detail/function_traits.h"
 #include "plexus/detail/node_self_route.h"
 #include "plexus/detail/call_origination.h"
@@ -53,6 +54,7 @@
 #include "plexus/detail/node_subscriptions.h"
 #include "plexus/detail/node_discovery_glue.h"
 #include "plexus/detail/node_upgrade_wiring.h"
+#include "plexus/detail/node_self_carrier_sync.h"
 
 #include <span>
 #include <tuple>
@@ -374,12 +376,12 @@ public:
     }
 
     // Registers a graph-change observer over the engine's add_observer seam and returns a move-only
-    // RAII handle whose dtor deregisters (D-03: the teardown ordering is off the consumer, closing the
-    // re-entry footgun). A callback taking a graph::graph_change subscribes to the host {who, kind}
+    // RAII handle whose dtor deregisters: the teardown ordering is off the consumer, closing the
+    // re-entry footgun. A callback taking a graph::graph_change subscribes to the host {who, kind}
     // delta — present on the heap profile, structurally absent on bounded<> (its null log twin holds
     // nothing); a callback taking the coarse std::uint64_t generation dedupes on it and re-snapshots
-    // participants()/topics() only when the generation advanced (D-09). The engine drains posted over
-    // the borrowed executor (the :180-184 lifetime contract), so the handle must be dropped before the
+    // participants()/topics() only when the generation advanced. The engine drains posted over the
+    // borrowed executor (the class's LIFETIME contract), so the handle must be dropped before the
     // executor stops.
     template<typename Cb>
     graph_change_handle on_graph_change(Cb cb)
@@ -542,12 +544,12 @@ private:
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
         provision_same_host_ring(fqn, effective_bytes, geometry);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
-        note_local_publisher(fqn, type_name, type_id);
+        detail::note_local_publisher(*this, fqn, type_name, type_id);
     }
 
     void retire_publisher_seam(std::string_view fqn)
     {
-        forget_local_publisher(fqn);
+        detail::forget_local_publisher(*this, fqn);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_dropped, wire::fqn_topic_hash(fqn), std::nullopt});
     }
 
@@ -605,45 +607,6 @@ private:
         m.set_topic_geometry(std::string{}, std::size_t{}, m.default_geometry());
         m.geometry_from(static_cast<const void *>(nullptr));
     };
-
-    // Routes to the first connection-order peer with a complete session and issues the plain direct
-    // call. The consumer has no served-fqn signal to pre-decide direct-vs-forward, so resolution is
-    // EX-POST: only when that direct answer is rpc_status::no_handler does the wrapper resolve a
-    // reported via-relay origin and re-issue the request ONCE as a forwarded call. With NO connected
-    // provider the completion is POSTED with an absent status (the out-of-band no_provider verdict,
-    // never a fabricated rpc_status) — it never hangs, buffers, or queues. A pure-direct node (no
-    // non-direct candidate) installs the byte-identical thin adapter and pays none of the fallback work.
-    template<typename OnReply>
-    void call_seam(std::string_view fqn, std::span<const std::byte> param, OnReply on_reply, std::optional<std::chrono::nanoseconds> deadline)
-    {
-        const bool with_fallback = m_engine.route_opts().usage != io::route_usage::never && detail::first_via_relay_origin(m_engine, m_id).has_value();
-        for(const auto &peer : m_known_peers)
-        {
-            auto *session = m_engine.registry().session_for(peer);
-            if(session == nullptr || !session->is_complete())
-                continue;
-            const std::optional<publisher_gid> provider{publisher_gid{peer, 0}};
-            detail::issue_direct_call(m_engine, m_id, *session, fqn, param, std::move(on_reply), provider, deadline, with_fallback);
-            return;
-        }
-        policy_type::post(m_executor, [on_reply = std::move(on_reply)]() mutable { on_reply(std::nullopt, {}, std::nullopt); });
-    }
-
-    // The served-FQN set is checked BEFORE the forwarder is touched, so a refused (duplicate-local)
-    // registration throws with ZERO side effects, closing the forwarder's silent-overwrite hijack.
-    void serve_procedure_seam(std::string_view fqn, io::handler_fn handler)
-    {
-        if(std::find(m_served_fqns.begin(), m_served_fqns.end(), fqn) != m_served_fqns.end())
-            plexus::detail::fail_closed("plexus: a procedure is already served locally on this fqn");
-        m_served_fqns.emplace_back(fqn);
-        m_engine.procedures().serve(fqn, std::move(handler));
-    }
-
-    void retire_procedure_seam(std::string_view fqn)
-    {
-        m_engine.procedures().retire(fqn);
-        std::erase(m_served_fqns, std::string{fqn});
-    }
 
     void dispatch_message(std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info)
     {
@@ -755,7 +718,7 @@ private:
         if constexpr(k_has_self_loopback)
             m_engine.messages().attach_local(fqn, self_route(), m_service_name, qos, type_id);
         else if constexpr(k_has_shm_self_carrier)
-            sync_shm_self_carrier(fqn);
+            detail::sync_shm_self_carrier(*this, fqn);
     }
 
     void self_detach(std::string_view fqn)
@@ -763,97 +726,7 @@ private:
         if constexpr(k_has_self_loopback)
             m_engine.messages().detach_local(fqn, self_route());
         else if constexpr(k_has_shm_self_carrier)
-            sync_shm_self_carrier(fqn);
-    }
-
-    void note_local_publisher(std::string_view fqn, std::string_view type_name, std::optional<std::uint64_t> type_id)
-    {
-        ++m_local_publishers[std::string{fqn}];
-        m_engine.note_local_topic(fqn, type_name, type_id, graph::topic_role::publisher);
-        if constexpr(k_has_shm_self_carrier)
-            sync_shm_self_carrier(fqn);
-    }
-
-    // The graph edge is one per (participant, topic, role), so it outlives every publisher handle
-    // but the last: the count is what tells a retired second handle from a retired topic.
-    void forget_local_publisher(std::string_view fqn)
-    {
-        auto it = m_local_publishers.find(std::string{fqn});
-        if(it != m_local_publishers.end() && --it->second == 0)
-        {
-            m_local_publishers.erase(it);
-            m_engine.forget_local_topic(fqn, graph::topic_role::publisher);
-        }
-        if constexpr(k_has_shm_self_carrier)
-            sync_shm_self_carrier(fqn);
-    }
-
-    // The shm self-ring mints/holds an OS region, so it engages ONLY when a same-node publisher AND
-    // subscriber coexist for the fqn (true self-traffic) — a node talking to a distinct-host peer
-    // creates no region. Idempotent: re-driven from all four pub/sub seams to converge on the state.
-    void sync_shm_self_carrier(std::string_view fqn)
-    {
-        const std::string key{fqn};
-        const bool want = m_local_publishers.contains(key) && m_subscriptions.any_for(fqn);
-        const bool have = m_self_carriers.contains(key);
-        if(want && !have)
-            install_shm_self_carrier(key);
-        else if(!want && have)
-            teardown_shm_self_carrier(key);
-    }
-
-    // Mint the node-local shm self-ring for the fqn, record its write half as the self-route (a
-    // publish fans into the ring), and bind the read half to re-enter the node's own dispatch.
-    void install_shm_self_carrier(const std::string &fqn)
-    {
-        const io::subscriber_qos qos          = m_subscriptions.qos_for(fqn);
-        const std::optional<std::uint64_t> tid = m_subscriptions.type_id_for(fqn);
-        for_each_shm_member(
-                [&](auto &m)
-                {
-                    auto carrier = detail::install_self_carrier<engine_channel>(m, fqn, [this](std::span<const std::byte> framed) { self_carrier_bytes(framed); });
-                    if(!carrier.write)
-                        return;
-                    m_engine.messages().attach_local(fqn, *carrier.write, m_service_name, qos, tid);
-                    m_self_carriers.insert_or_assign(fqn, std::move(carrier));
-                });
-    }
-
-    void teardown_shm_self_carrier(const std::string &fqn)
-    {
-        auto it = m_self_carriers.find(fqn);
-        if(it == m_self_carriers.end())
-            return;
-        m_engine.messages().detach_local(fqn, *it->second.write);
-        m_self_carriers.erase(it);
-    }
-
-    // The shm self-ring's read half: strip the frame header off the ring's framed bytes and route the
-    // inner through the forwarder's decode into the node's own dispatch — bypassing the session-keyed
-    // inject_upgrade_receive (a node has no session to itself). The frame's write-half channel is the
-    // (ignored) peer the deliver overload requires.
-    void self_carrier_bytes(std::span<const std::byte> framed)
-    {
-        if constexpr(k_has_shm_self_carrier)
-        {
-            const auto hdr = wire::decode_header(framed);
-            if(!hdr)
-                return;
-            const std::span<const std::byte> inner = framed.subspan(wire::header_size);
-            const bool has_source_identity         = (hdr->flags & wire::k_flag_source_identity) != 0;
-            io::message_info info{};
-            info.from_intra_process = true;
-            typename io::message_forwarder<engine_policy>::peer self{any_self_carrier_channel(), m_service_name};
-            m_engine.messages().deliver(self, inner, info, m_id, has_source_identity,
-                                        [this](std::string_view fqn, std::span<const std::byte> data, const io::message_info &mi) { dispatch_message(fqn, data, mi); });
-        }
-    }
-
-    // Any live carrier's write half supplies the channel reference the deliver peer needs (the peer is
-    // never dereferenced); the receive sink only fires while a carrier is live, so the map is non-empty.
-    engine_channel &any_self_carrier_channel() noexcept
-    {
-        return *m_self_carriers.begin()->second.write;
+            detail::sync_shm_self_carrier(*this, fqn);
     }
 
     // Each verb is a captureless static lambda (a plain fn-ptr, zero alloc) recovering the node and
@@ -874,10 +747,10 @@ private:
         { return static_cast<basic_node *>(ctx)->register_subscriber_seam(fqn, qos, std::move(cb), type_id, type_name, object_entry{native_key, std::move(dispatch)}, capture); };
         s.retire_subscriber = [](void *ctx, registration_id rid) { static_cast<basic_node *>(ctx)->retire_subscriber_seam(rid); };
         s.retire_publisher  = [](void *ctx, std::string_view fqn) { static_cast<basic_node *>(ctx)->retire_publisher_seam(fqn); };
-        s.serve_procedure   = [](void *ctx, std::string_view fqn, io::handler_fn handler) { static_cast<basic_node *>(ctx)->serve_procedure_seam(fqn, std::move(handler)); };
-        s.retire_procedure  = [](void *ctx, std::string_view fqn) { static_cast<basic_node *>(ctx)->retire_procedure_seam(fqn); };
+        s.serve_procedure   = [](void *ctx, std::string_view fqn, io::handler_fn handler) { detail::serve_procedure_seam(*static_cast<basic_node *>(ctx), fqn, std::move(handler)); };
+        s.retire_procedure  = [](void *ctx, std::string_view fqn) { detail::retire_procedure_seam(*static_cast<basic_node *>(ctx), fqn); };
         s.call              = [](void *ctx, std::string_view fqn, std::span<const std::byte> param, io::on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
-        { static_cast<basic_node *>(ctx)->call_seam(fqn, param, std::move(on_reply), deadline); };
+        { detail::call_seam(*static_cast<basic_node *>(ctx), fqn, param, std::move(on_reply), deadline); };
         return s;
     }
 
@@ -950,7 +823,7 @@ private:
     }
 
     // The route count at which a leaf's via-relay reach is first disclosed. INTERIM: a value of 1
-    // discloses any relayed reach; the on-target symbol/size sweep is a later phase and may retune it.
+    // discloses any relayed reach; an on-target symbol/size sweep may retune it.
     static constexpr std::size_t k_relay_routes_disclosure_threshold = 1;
 
     plexus::node_id m_id;
@@ -1015,6 +888,26 @@ private:
     friend void detail::note_from_card(N &, const discovery::service_info &);
     template<typename N>
     friend void detail::forget_from_card(N &, const discovery::service_info &);
+    template<typename N, typename R>
+    friend void detail::call_seam(N &, std::string_view, std::span<const std::byte>, R, std::optional<std::chrono::nanoseconds>);
+    template<typename N>
+    friend void detail::serve_procedure_seam(N &, std::string_view, io::handler_fn);
+    template<typename N>
+    friend void detail::retire_procedure_seam(N &, std::string_view);
+    template<typename N>
+    friend void detail::note_local_publisher(N &, std::string_view, std::string_view, std::optional<std::uint64_t>);
+    template<typename N>
+    friend void detail::forget_local_publisher(N &, std::string_view);
+    template<typename N>
+    friend void detail::sync_shm_self_carrier(N &, std::string_view);
+    template<typename N>
+    friend void detail::install_shm_self_carrier(N &, const std::string &);
+    template<typename N>
+    friend void detail::teardown_shm_self_carrier(N &, const std::string &);
+    template<typename N>
+    friend void detail::self_carrier_bytes(N &, std::span<const std::byte>);
+    template<typename N>
+    friend typename N::engine_channel &detail::any_self_carrier_channel(N &) noexcept;
 };
 
 // Transitional: every existing plexus::node<...> spelling migrates onto basic_node through this
