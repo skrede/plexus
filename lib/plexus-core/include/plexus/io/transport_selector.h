@@ -11,20 +11,15 @@
 
 namespace plexus::io {
 
-// The delivery-guarantee axis the selector composes with the locality tier. The
-// enumerators are now live (a lossy datagram backend exists): a scheme classifies
-// into ONE of these classes.
-//   * unspecified  — the scheme makes no reliability claim of its own (same-host
-//     "unix"/"inproc", where locality wins and the axis is moot; or an unrecognized
-//     scheme that carries no claim).
-//   * best_effort  — lossy, fire-and-forget datagrams (the "udp" scheme).
-//   * reliable     — a lossless ordered stream (the "tcp"/"tls" schemes).
-//   * reliable_datagram — the datagram-with-retransmit opt-in (the "udpr" scheme):
-//     a reliable guarantee over a datagram substrate. Until its data ARQ engine
-//     exists, the multiplexing transport routes it to the reliable STREAM member
-//     (never to bare best_effort UDP — that would silently downgrade the guarantee).
-// select() still TAKES a hint param (unchanged signature); the mux derives the hint
-// from ep.scheme via reliability_of_scheme so the axis reaches dial(ep).
+// The delivery-guarantee axis the selector composes with the locality tier; every scheme
+// classifies into exactly one class:
+//   * unspecified       — no reliability claim of its own: a same-host scheme ("unix"/"inproc"),
+//     where locality wins and the axis is moot, or an unrecognized scheme.
+//   * best_effort       — lossy datagrams ("udp", and "dtls" encrypted).
+//   * reliable          — a lossless ordered stream ("tcp"/"tls").
+//   * reliable_datagram — a reliable guarantee over a datagram substrate ("udpr"): the member that
+//     serves the scheme runs its retransmitting (ARQ) channel mode.
+// The mux derives the hint from ep.scheme through reliability_of_scheme, so the axis reaches dial(ep).
 enum class reliability_hint : std::uint8_t
 {
     unspecified = 0,

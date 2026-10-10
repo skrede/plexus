@@ -60,11 +60,6 @@ inline std::size_t channel_frame_ceiling(const Channel &ch) noexcept
         return (std::numeric_limits<std::size_t>::max)();
 }
 
-// The outbound forwarded frame put on the wire once and addref-shared to every destination: a fresh
-// outer header (never the arrival frame's bytes, Pitfall 8) then the re-framed envelope. session_id 0
-// on the data leg so the destination's staleness gate admits it regardless of its latched epoch. A
-// pub/sub frame passes an unset destination (it transits by interest, the receive edge dedups and
-// delivers by origin); a request/response frame passes the target identity so each hop re-resolves it.
 // The encoded envelope size for an inner region of inner_n bytes (the outer header, the preamble, the
 // u32 inner-length prefix, then the inner bytes). The splice gates a slot against this before encoding.
 inline std::size_t forwarded_wire_size(std::size_t inner_n) noexcept
@@ -72,6 +67,11 @@ inline std::size_t forwarded_wire_size(std::size_t inner_n) noexcept
     return wire::header_size + wire::detail::forwarded_frame_preamble_size + sizeof(std::uint32_t) + inner_n;
 }
 
+// The outbound forwarded frame put on the wire once and addref-shared to every destination: a fresh
+// outer header (never the arrival frame's bytes) then the re-framed envelope. session_id 0 on the data
+// leg so the destination's staleness gate admits it regardless of its latched epoch. A pub/sub frame
+// passes an unset destination (it transits by interest, the receive edge dedups and delivers by
+// origin); a request/response frame passes the target identity so each hop re-resolves it.
 // Returns 0 without writing when the region cannot hold the whole envelope: the writer is an unchecked
 // memcpy, so this fail-closed guard is the hard floor that keeps a too-large frame from overrunning a
 // pre-sized slot (the splice gates on slot capacity first; this refuses even a mis-sized direct call).

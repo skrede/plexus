@@ -659,17 +659,13 @@ void run_kill_origin_disappeared()
     REQUIRE_FALSE(arbiter_saw(obs, cluster.origin_id));                                // a via-only origin never arbitrated
 }
 
-// The recovery capability the liveliness half's revival arm needs: after the relay dies (the origin's
-// via-relay row degrades to unreachable, its identity retained), a fresh relay under the SAME identity
-// re-establishes BOTH legs and the relayed path's control + demand plane comes back — the origin resolves
-// under the same node_id
-// (no identity churn), reachable via the relay, and the consumer's remembered demand re-propagates all
-// the way up onto the origin. The DATA-plane delivery of a fresh publish does NOT yet recover, and this
-// smoke test deliberately stops short of asserting it: because recovery keeps the relay identity, the
-// consumer's per-(origin, relay-identity) forward dedup window survives the relay's death, while the
-// revived relay's splice restarts its forwarding sequence at 0 — so the first re-forwarded publish is
-// dropped as a duplicate against the stale window. Resetting that window on relay return is the recovery
-// derivation's job (owned by a later plan), not this fixture's.
+// After the relay dies (the origin's via-relay row degrades to unreachable, its identity retained), a
+// fresh relay under the SAME identity re-establishes BOTH legs and the relayed path's control + demand
+// plane comes back: the origin resolves under the same node_id (no identity churn), reachable via the
+// relay, and the consumer's remembered demand re-propagates all the way up onto the origin. This smoke
+// stops at the control + demand plane; data-plane delivery through the revived relay, which needs the
+// consumer's forward dedup window reset on the reachable transition, is asserted by
+// run_revive_relay_recovers.
 void run_revive_relay_smoke()
 {
     cold_cluster cluster;

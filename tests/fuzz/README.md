@@ -32,8 +32,8 @@ fragment-index / fragment-count combinations the range checks must survive. Keep
 it minimal — re-minimize after any growth (see below). Because the corpus is not
 checked in, replay is a no-op on a fresh checkout until a campaign has populated
 it; the bounded campaign below reaches full decoder coverage from an empty corpus
-in seconds, so a clean run needs no seed. Durable, shared corpus storage is a
-separate, still-open question (see the decision seed in `.planning/seeds/`).
+in seconds, so a clean run needs no seed. There is no durable, shared corpus
+store; each checkout grows its own.
 
 ## Building the fuzz tree
 

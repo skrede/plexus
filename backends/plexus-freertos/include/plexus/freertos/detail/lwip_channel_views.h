@@ -7,7 +7,7 @@
 namespace plexus::freertos::detail {
 
 // A bounded, no-heap set of non-owning channel VIEWS for the transport's poll-all. The engine owns
-// the channels; a view is a raw pointer only because a cleared slot is a real modelled state (the
+// the channels; a view is a raw pointer only because a cleared slot is a real modeled state (the
 // nullable-lookup carve-out), never an owning pointer — it is cleared on channel close so poll-all
 // never touches a dangling channel. Capacity N is the compile-time accept cap; full() rejects a
 // connection over the bound (the set never grows). For N=1 the loops collapse to the single-slot

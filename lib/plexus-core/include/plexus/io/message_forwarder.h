@@ -232,7 +232,7 @@ public:
     }
 
     // Relay-installed only: the seam a plain-unidirectional receive fires so the relay re-originates a
-    // directly-attached publisher's publish as a forwarded envelope (the pub/sub analogue of the
+    // directly-attached publisher's publish as a forwarded envelope (the pub/sub analog of the
     // call -> forward_call fallback). The engine installs the scope + non-local-demand gate; a non-relay
     // node installs nothing, so wants_refan() short-circuits the receive path before this is reached.
     void on_originate(plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::span<const std::byte>, const channel_type *)> hook)

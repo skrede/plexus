@@ -57,7 +57,7 @@ struct fired_set
 };
 
 // The pre-forwarded consumer set, hand-registered: the surface of a node with NO forwarded consumer,
-// modelled directly.
+// modeled directly.
 void register_pre_forwarded_consumers(plexus::io::frame_router &router, fired_set &fired)
 {
     router.on_subscribe(fired.record(wire::msg_type::subscribe));

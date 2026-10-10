@@ -28,7 +28,7 @@ namespace example {
 
 // One topic per producer, so each end has something the other must enumerate by name AND by
 // declared type. The report topic is untyped: it carries the device's own enumeration verdict back
-// to the host gate as text, not a modelled value.
+// to the host gate as text, not a modeled value.
 inline constexpr std::string_view k_device_topic = "telemetry";
 inline constexpr std::string_view k_host_topic   = "command";
 inline constexpr std::string_view k_report_topic = "graph";

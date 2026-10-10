@@ -201,7 +201,7 @@ initialization-order constraint in **Construction**.
   ownership and a `shared_ptr` for genuinely shared ownership; for everything else, pass and store
   **references**. The system composes this way: an owner holds the long-lived utilities and hands
   them out by reference (a context object the parts reach through), so a non-owner never needs a
-  pointer. A raw pointer survives only where absence is a real, modelled state (a nullable lookup
+  pointer. A raw pointer survives only where absence is a real, modeled state (a nullable lookup
   result) — and even there prefer a reference or `std::optional` where it fits.
 - A non-owning relationship that *must outlive* its holder is a **reference, not a raw pointer** — a
   reference says "not optional, not owned" without the nullability a pointer implies. Store it as

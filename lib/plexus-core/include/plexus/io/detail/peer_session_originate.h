@@ -14,7 +14,7 @@
 namespace plexus::io::detail {
 
 // Re-originate a directly-attached publisher's PLAIN unidirectional publish as a forwarded envelope so it
-// transits relay -> remote subscriber (the pub/sub analogue of the call -> forward_call fallback). It
+// transits relay -> remote subscriber (the pub/sub analog of the call -> forward_call fallback). It
 // fires ONLY on the plain-receive path, never the forwarded (0x0F) path, so an already-forwarded frame is
 // never re-originated and a just-re-fanned frame cannot re-enter as a plain publish. The origin is the
 // HANDSHAKE-PROVEN peer identity (peer_identity() == last_seen_peer_id()), NEVER the provisional slot key

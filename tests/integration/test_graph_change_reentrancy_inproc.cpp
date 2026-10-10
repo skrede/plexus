@@ -2,7 +2,7 @@
 // a real inproc engine, a peer is brought up and then a REAL transport drop arms A's redial; while the
 // redial is in flight the peer is dropped (forget + session teardown). The posted graph wakeup must
 // drain over a surviving snapshot and never re-enter the freed slot_block — the rmw_fastrtps #496
-// analogue. The suite drives to quiescence via drain() and asserts no abort, a stable engine, and a
+// analog. The suite drives to quiescence via drain() and asserts no abort, a stable engine, and a
 // post-drain awareness snapshot reflecting the removal. This TU is also run under the asan/ubsan
 // no-recover config.
 
