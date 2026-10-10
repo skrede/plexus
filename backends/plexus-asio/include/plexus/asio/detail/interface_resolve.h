@@ -32,7 +32,7 @@ struct interface_record
 };
 
 // The resolved egress. set_outbound is false for any() (the OS chooses; IP_MULTICAST_IF is left
-// unset). effective_name is a diagnosability hint (D-09): for any() it is the first enumerated
+// unset). effective_name is a diagnosability hint: for any() it is the first enumerated
 // non-loopback interface (or a route match), which on a multi-NIC host need NOT equal the kernel's
 // true per-destination egress — it is reported, never asserted as the true egress.
 struct interface_resolution

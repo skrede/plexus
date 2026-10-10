@@ -20,9 +20,9 @@
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 #include "plexus/datagram/detail/udp_backpressure_queue.h"
 #include "plexus/asio/detail/udp_channel_io.h"
+#include "plexus/asio/detail/udp_channel_post.h"
 #include "plexus/detail/compat.h"
 
-#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
 
@@ -136,13 +136,7 @@ public:
         if(!m_open)
             return;
         m_open = false;
-        // Posted, never synchronous: a this-capturing on_closed could otherwise run inline.
-        ::asio::post(m_io,
-                     [this]
-                     {
-                         if(m_on_closed_cb)
-                             m_on_closed_cb();
-                     });
+        detail::udp_post_on_closed(*this);
     }
 
     // The scheme reflects the channel's mode: a best_effort channel reports "udp", a
@@ -283,6 +277,8 @@ private:
     friend void detail::post_on_data(Ch &, std::span<const std::byte>);
     template<typename Ch>
     friend void detail::post_on_data_owned(Ch &, wire::shared_bytes);
+    template<typename Ch>
+    friend void detail::udp_post_on_closed(Ch &);
     template<typename Ch>
     friend void detail::ensure_reassembler(Ch &);
     template<typename Ch>

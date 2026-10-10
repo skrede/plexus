@@ -2,8 +2,10 @@
 #define HPP_GUARD_PLEXUS_ASIO_STREAM_CHANNEL_H
 
 #include "plexus/asio/asio_timer.h"
+#include "plexus/asio/stream_socket_options.h"
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/stream_channel_io.h"
+#include "plexus/asio/detail/stream_channel_lifecycle.h"
 
 #include "plexus/stream/stream_inbound.h"
 
@@ -18,7 +20,6 @@
 #include "plexus/stream/detail/send_queue.h"
 #include "plexus/detail/compat.h"
 
-#include <asio/post.hpp>
 #include <asio/write.hpp>
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
@@ -33,33 +34,6 @@
 
 namespace plexus::asio {
 
-// The kernel socket knobs a stream backend applies once at the open transition. Every field is a
-// sentinel: 0 (or false) leaves the kernel default untouched, a non-zero value is a best-effort
-// override (a rejection is swallowed — a buffer size is a throughput hint). The granular
-// keepalive intervals apply ONLY when keepalive is true AND the interval is non-zero.
-struct stream_socket_options
-{
-    std::size_t so_sndbuf                 = 0;
-    std::size_t so_rcvbuf                 = 0;
-    bool keepalive                        = false;
-    std::uint32_t keepalive_idle_secs     = 0;
-    std::uint32_t keepalive_interval_secs = 0;
-    std::uint32_t keepalive_count         = 0;
-};
-
-// 64 KiB clears one max TLS record (~16 KiB) with margin; a constrained target dials it down via
-// the channel's read-buffer ctor argument.
-inline constexpr std::size_t k_stream_read_buffer_bytes = 64u * 1024u;
-
-// The fail-closed floor: a degenerate (sub-floor) request floors here rather than producing a
-// zero-size buffer (a zero-length async_read makes no progress).
-inline constexpr std::size_t k_min_stream_read_buffer_bytes = 4u * 1024u;
-
-constexpr std::size_t stream_read_buffer_size(std::size_t requested) noexcept
-{
-    return requested < k_min_stream_read_buffer_bytes ? k_min_stream_read_buffer_bytes : requested;
-}
-
 // A byte_channel over an asio stream type (a bare socket, or an ssl::stream). Each complete
 // inbound frame is POSTED to on_data (per the byte_channel contract); a framing violation or a
 // no-progress stall raises on_protocol_close — DISTINCT from on_error so the session discriminates
@@ -69,6 +43,8 @@ constexpr std::size_t stream_read_buffer_size(std::size_t requested) noexcept
 template<typename Stream, typename Traits, typename Bootstrap>
 class stream_channel
 {
+    using traits_type = Traits;
+
 public:
     // Dial/executor-alone: unconnected, not reading yet — the transport arms the open path
     // (start_read for plaintext, the handshake for TLS).
@@ -113,7 +89,7 @@ public:
         bind_bootstrap();
         detail::stream_wire_inbound(*this);
         m_bootstrap.arm_on_accept(*this);
-        apply_socket_options();
+        detail::stream_apply_socket_options(*this);
     }
 
     ~stream_channel()
@@ -123,7 +99,7 @@ public:
         // no-ops instead of touching this freed channel.
         m_life->alive = false;
         m_inbound.shutdown();
-        shutdown_socket();
+        detail::stream_shutdown_socket(*this);
         m_bootstrap.reset();
     }
 
@@ -157,8 +133,8 @@ public:
         // rather than flushing them, so the residual lands on the same edge a shed frame does.
         m_dropped += m_egress.close_and_drain();
         // An aborted in-flight write must not chain onto the closed socket.
-        shutdown_socket();
-        post_on_closed();
+        detail::stream_shutdown_socket(*this);
+        detail::stream_post_on_closed(*this);
     }
 
     io::endpoint remote_endpoint() const
@@ -198,7 +174,7 @@ public:
     void start_read()
     {
         m_open = true;
-        apply_socket_options();
+        detail::stream_apply_socket_options(*this);
         if(m_reading)
             return;
         m_reading = true;
@@ -275,7 +251,7 @@ protected:
     }
 
     // The single read-arm latch for this channel's lifetime. serial_channel reuses it (its own
-    // start_read arms serial_do_read), so shutdown_socket()'s reset clears the guard for both.
+    // start_read arms serial_do_read), so stream_shutdown_socket's reset clears the guard for both.
     bool m_reading{false};
 
 private:
@@ -293,52 +269,17 @@ private:
     friend void detail::stream_do_read(Ch &);
     template<typename Ch>
     friend stream::detail::send_queue::send_sink detail::stream_make_send_sink(Ch &);
+    template<typename Ch>
+    friend void detail::stream_apply_socket_options(Ch &);
+    template<typename Ch>
+    friend void detail::stream_post_on_closed(Ch &);
+    template<typename Ch>
+    friend void detail::stream_shutdown_socket(Ch &);
 
     void bind_bootstrap()
     {
         if constexpr(requires(Bootstrap &b) { b.bind_drain([](std::span<const std::byte>) {}); })
             m_bootstrap.bind_drain([this](std::span<const std::byte> b) { enqueue_egress(b); });
-    }
-
-    // Guarded on an open socket so a not-yet-open TLS accept defers to its own start_read;
-    // best-effort (the ec is swallowed — a clamped/rejected size keeps the socket usable).
-    void apply_socket_options()
-    {
-        if(!socket().is_open())
-            return;
-        std::error_code ec;
-        Traits::apply_socket_options(socket(), m_socket_options, ec);
-    }
-
-    // on_closed on ONE discipline: posted, exactly once. The closed_fired latch collapses the
-    // close()/stream_fail double-edge to a single delivery; the closure captures the shared
-    // liveness block and checks alive, so a post still queued at destruction no-ops rather than
-    // dangling on this.
-    void post_on_closed()
-    {
-        if(m_life->closed_fired)
-            return;
-        m_life->closed_fired = true;
-        ::asio::post(m_io,
-                     [this, life = m_life]
-                     {
-                         if(!life->alive)
-                             return;
-                         if(m_on_closed_cb)
-                             m_on_closed_cb();
-                     });
-    }
-
-    void shutdown_socket()
-    {
-        auto &sock = socket();
-        if(!sock.is_open())
-            return;
-        std::error_code ec;
-        Traits::shutdown(sock, ec);
-        (void)sock.close(ec);
-        m_open    = false;
-        m_reading = false;
     }
 
     ::asio::io_context &m_io;

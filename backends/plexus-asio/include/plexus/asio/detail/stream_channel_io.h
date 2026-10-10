@@ -2,8 +2,10 @@
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_STREAM_CHANNEL_IO_H
 
 #include "plexus/asio/detail/asio_error_map.h"
+#include "plexus/asio/detail/stream_channel_lifecycle.h"
 
 #include "plexus/wire/frame.h"
+#include "plexus/wire/close_cause.h"
 
 #include "plexus/wire_bytes.h"
 
@@ -56,11 +58,11 @@ void stream_fail(Ch &c, const std::error_code &ec)
     c.m_open = false;
     c.m_egress.close(); // stop the drain so the failed write does not chain
     c.m_inbound.shutdown();
-    c.shutdown_socket(); // a stalled/failed write must not survive into a redial
+    stream_shutdown_socket(c); // a stalled/failed write must not survive into a redial
     auto mapped = detail::map_error(ec);
     if(c.m_on_error_cb)
         c.m_on_error_cb(mapped);
-    c.post_on_closed(); // posted, exactly once — the same discipline as close()
+    stream_post_on_closed(c); // posted, exactly once — the same discipline as close()
 }
 
 // A wire protocol violation: fire the protocol-close seam, then close() (on_closed only) — NEVER

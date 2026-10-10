@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_DETAIL_UDP_CHANNEL_IO_H
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_UDP_CHANNEL_IO_H
 
+#include "plexus/asio/detail/udp_channel_post.h"
+
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
 #include "plexus/wire/udp_dedup_window.h"
@@ -11,11 +13,10 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/drop_event.h"
 
-#include <asio/post.hpp>
+#include "plexus/datagram/detail/udp_handshake_frame.h"
 
 #include <span>
 #include <memory>
-#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -49,32 +50,6 @@ void send_best_effort_large(Ch &c, std::span<const std::byte> frame)
         c.m_server.send_to(c.m_frag_scratch, c.m_dest);
     };
     io::split(frame, c.m_max_payload, msg_id, sink);
-}
-
-// on_data is always posted (the byte_channel contract); the owning vector keeps the bytes alive
-// across the post (the demux reuses its recv buffer immediately).
-template<typename Ch>
-void post_on_data(Ch &c, std::span<const std::byte> frame)
-{
-    auto owned = std::make_shared<std::vector<std::byte>>(frame.begin(), frame.end());
-    ::asio::post(c.m_io,
-                 [&c, owned]
-                 {
-                     if(c.m_on_data_cb)
-                         c.m_on_data_cb(std::span<const std::byte>{*owned});
-                 });
-}
-
-// Carry the already-owning bytes straight into the posted closure (no second copy).
-template<typename Ch>
-void post_on_data_owned(Ch &c, wire::shared_bytes owned)
-{
-    ::asio::post(c.m_io,
-                 [&c, owned = std::move(owned)]
-                 {
-                     if(c.m_on_data_cb)
-                         c.m_on_data_cb(static_cast<std::span<const std::byte>>(owned));
-                 });
 }
 
 template<typename Ch>
