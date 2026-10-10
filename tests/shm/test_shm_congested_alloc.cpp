@@ -7,7 +7,7 @@ using namespace shm_congested_fixture;
 TEST_CASE("shm.backpressure the reliable blocking spin allocates nothing", "[shm][backpressure]")
 {
     constexpr std::uint64_t k_cells = 16;
-    constexpr int k_total           = 2000;
+    constexpr std::uint64_t k_total = 2000;
     ring_fixture<k_cells, 64> f;
 
     shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable, plexus::io::congestion::block);
@@ -15,39 +15,61 @@ TEST_CASE("shm.backpressure the reliable blocking spin allocates nothing", "[shm
     // The deliver callback counts drained messages into an atomic (NO heap in its
     // body). It is constructed BEFORE the snapshot, so the one-time
     // move_only_function construction never falls inside the measured window.
-    std::atomic<int> drained{0};
+    std::atomic<std::uint64_t> drained{0};
     shm_channel<null_notifier>::deliver_fn deliver = [&](plexus::wire_bytes<shm_slot_owner>) { drained.fetch_add(1, std::memory_order_release); };
 
-    // Bring the consumer thread fully up (its stack + any one-time allocation lands)
-    // and barrier on a flag BEFORE snapshotting the allocation counter, so only the
-    // steady-state send/drain loops fall inside the measured window.
-    std::atomic<bool> go{false};
+    std::atomic<std::uint64_t> expected{k_total};
+    // Draining only a full lap (or the final remainder) makes the producer's next claim meet a
+    // full ring, so every run exercises the reliable spin instead of leaving it to scheduling.
+    const auto lap_outstanding = [&]
+    {
+        const std::uint64_t tail = f.ring.tail_position();
+        return tail - drained.load(std::memory_order_acquire) >= k_cells || tail >= expected.load(std::memory_order_acquire);
+    };
+
+    std::atomic<bool> started{false};
+    std::atomic<bool> finished{false};
     std::thread reader(
             [&]
             {
-                while(!go.load(std::memory_order_acquire))
-                    std::this_thread::yield();
-                while(drained.load(std::memory_order_acquire) < k_total)
+                started.store(true, std::memory_order_release);
+                while(drained.load(std::memory_order_acquire) < expected.load(std::memory_order_acquire))
                 {
-                    channel.drain(deliver);
-                    if(drained.load(std::memory_order_acquire) < k_total)
+                    if(lap_outstanding())
+                        channel.drain(deliver);
+                    else
                         std::this_thread::yield();
                 }
+                finished.store(true, std::memory_order_release);
             });
 
-    const std::size_t before = plexus::testing::alloc_count();
-    go.store(true, std::memory_order_release);
+    // Thread start-up allocates under a sanitizer runtime (pthread_getattr_np reads the stack
+    // bounds), so the window spans only the running reader: opened after it starts, closed before the join.
+    while(!started.load(std::memory_order_acquire))
+        std::this_thread::yield();
 
-    for(int i = 0; i < k_total; ++i)
+    const std::size_t before = plexus::testing::alloc_count();
+
+    loan_status status = loan_status::ok;
+    std::uint64_t sent = 0;
+    while(sent < k_total && status == loan_status::ok)
     {
-        const std::uint32_t v = static_cast<std::uint32_t>(i);
+        const std::uint32_t v = static_cast<std::uint32_t>(sent);
         std::byte bytes[sizeof(v)];
         std::memcpy(bytes, &v, sizeof(v));
-        REQUIRE(channel.send(std::span<const std::byte>(bytes, sizeof(bytes))) == loan_status::ok);
+        status = channel.send(std::span<const std::byte>(bytes, sizeof(bytes)));
+        if(status == loan_status::ok)
+            ++sent;
     }
-    reader.join();
+    // A rejected send never arrives; lowering the target lets the reader finish rather than hang.
+    expected.store(sent, std::memory_order_release);
+    while(!finished.load(std::memory_order_acquire))
+        std::this_thread::yield();
     const std::size_t after = plexus::testing::alloc_count();
+    reader.join();
 
+    REQUIRE(status == loan_status::ok);
+    REQUIRE(drained.load(std::memory_order_acquire) == k_total);
     // The steady-state send loop (incl. the reliable spin/yield back-pressure path)
     // and the drain loop allocated NOTHING: no kernel object, no heap -- the
     // determinism the safety/drone use requires.
