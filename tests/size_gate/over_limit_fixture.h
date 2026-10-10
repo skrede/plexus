@@ -2,8 +2,8 @@
 #define HPP_GUARD_TESTS_SIZE_GATE_OVER_LIMIT_FIXTURE_H
 
 // Negative fixture for the size gate: a deliberately over-limit header that
-// carries NO over-limit marker and has NO EXCEPTIONS.md row, so a fatal scan
-// rooted at this dir must reject it. Never compiled into any shipped TU.
+// has NO EXCEPTIONS.md row, so a fatal scan rooted at this dir must reject it.
+// Never compiled into any shipped TU.
 
 namespace plexus::size_gate_fixture {
 

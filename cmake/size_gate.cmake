@@ -1,10 +1,12 @@
-# The size assertion: no source unit may exceed the conventions.md file ceiling
+# The size assertion: no source unit may exceed the CONVENTIONS.md file ceiling
 # (200 lines, comments and blank lines included) unless it is a registered
 # exception. The scan set is the whole tree -- lib/, backends/, tests/, examples/
 # -- minus the gate's own negative-fixture dir. An over-limit file is legal only when it
-# carries a matching row in EXCEPTIONS.md; a row for a unit that is no longer
-# over-limit, or that names no scanned file, is itself a violation (stale exceptions
-# are not silently tolerated). This file is self-dispatching: included from the
+# carries a matching row in EXCEPTIONS.md, and only up to that row's Ceiling: a
+# registered file may shrink freely but never grow past its ceiling. A row for a unit
+# that is no longer over-limit, that names no scanned file, or that lacks an integer
+# ceiling above the limit is itself a violation (stale exceptions are not silently
+# tolerated). This file is self-dispatching: included from the
 # build it registers an ALL custom target that re-invokes it via -P
 # (cross-platform, no bash) with SIZE_GATE_FATAL=ON, so a violation fails the
 # build; run with -DSIZE_GATE_SCAN it performs the scan. A direct -P invocation
@@ -57,19 +59,33 @@ list(FILTER _scan_files EXCLUDE REGEX "^${_fixture_re}")
 # matching the .gitignore'd patterns (the JetBrains cmake-build-* layout included).
 list(FILTER _scan_files EXCLUDE REGEX "/(cmake-)?build([-_][^/]*)?/")
 
-# Parse EXCEPTIONS.md once into the set of registered file paths (the first
-# pipe-delimited cell of each data row that names an existing source file).
+# Parse EXCEPTIONS.md once into the registered file paths and their ceilings, two
+# index-aligned lists (CMake has no map). A file row is | path | kind | ceiling | ... |
+# whose first cell names a source file; function rows start with a backtick and never match.
 set(_registered "")
+set(_ceilings "")
+set(_violations "")
 set(_exceptions_md "${SIZE_GATE_ROOT}/EXCEPTIONS.md")
 if(EXISTS "${_exceptions_md}")
     file(STRINGS "${_exceptions_md}" _md_lines)
     foreach(_md IN LISTS _md_lines)
-        if(_md MATCHES "^\\|[ \t]*([^|]+[^| \t])[ \t]*\\|")
-            set(_cell "${CMAKE_MATCH_1}")
-            string(STRIP "${_cell}" _cell)
-            if(_cell MATCHES "\\.(h|hpp|cpp|cc)$")
-                list(APPEND _registered "${_cell}")
-            endif()
+        if(NOT _md MATCHES "^\\|([^|]+)\\|([^|]+)\\|([^|]+)\\|")
+            continue()
+        endif()
+        string(STRIP "${CMAKE_MATCH_1}" _cell)
+        string(STRIP "${CMAKE_MATCH_3}" _ceiling)
+        if(NOT _cell MATCHES "\\.(h|hpp|cpp|cc)$")
+            continue()
+        endif()
+        list(APPEND _registered "${_cell}")
+        # An invalid cell stores a non-numeric sentinel so a blank or ';'-bearing cell
+        # cannot shift the index alignment with _registered.
+        if(_ceiling MATCHES "^[0-9]+$" AND _ceiling GREATER SIZE_GATE_LIMIT)
+            list(APPEND _ceilings "${_ceiling}")
+        else()
+            list(APPEND _ceilings "-")
+            list(APPEND _violations
+                "${_cell}: EXCEPTIONS.md row has no valid ceiling above ${SIZE_GATE_LIMIT}")
         endif()
     endforeach()
 endif()
@@ -89,7 +105,6 @@ function(_size_line_count file out_var)
     set(${out_var} ${_n} PARENT_SCOPE)
 endfunction()
 
-set(_violations "")
 set(_seen_registered "")
 
 foreach(_file IN LISTS _scan_files)
@@ -107,6 +122,12 @@ foreach(_file IN LISTS _scan_files)
         if(NOT _has_row)
             list(APPEND _violations
                 "${_rel}: ${_count} lines over the ${SIZE_GATE_LIMIT} ceiling with no EXCEPTIONS.md row")
+        else()
+            list(GET _ceilings ${_row_idx} _ceiling)
+            if(_ceiling MATCHES "^[0-9]+$" AND _count GREATER _ceiling)
+                list(APPEND _violations
+                    "${_rel}: ${_count} lines over its registered ceiling ${_ceiling}")
+            endif()
         endif()
     else()
         if(_has_row)
