@@ -23,6 +23,27 @@ if(TARGET plexus::asio::shm AND NOT WIN32 AND NOT APPLE)
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_liburing_link TEST_PREFIX "shm.")
+
+    include(FetchContent)
+    FetchContent_GetProperties(asio)
+    set(_liburing_probe_asio "")
+    if(asio_POPULATED)
+        set(_liburing_probe_asio -DASIO_SOURCE_DIR=${asio_SOURCE_DIR})
+    endif()
+
+    # Configures the real tree against a liburing without the futex-wait helper and asserts the
+    # shm notifier resolves to the threaded floor.
+    add_test(NAME shm.liburing_probe_falls_back_without_futex_wait
+        COMMAND ${CMAKE_COMMAND}
+            -DPLEXUS_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+            -DPROBE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/liburing_probe
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/liburing_probe
+            "-DPROBE_GENERATOR=${CMAKE_GENERATOR}"
+            -DPROBE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+            "-DPROBE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}"
+            ${_liburing_probe_asio}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/liburing_probe/run_probe.cmake)
+    set_tests_properties(shm.liburing_probe_falls_back_without_futex_wait PROPERTIES TIMEOUT 600)
 endif()
 
 # The scaffold oracle: forks a child, round-trips a value through an anonymous
@@ -70,7 +91,7 @@ target_link_libraries(test_shm_ring_backpressure PRIVATE
 catch_discover_tests(test_shm_ring_backpressure TEST_PREFIX "shm.")
 
 # The overwrite-vs-pin Dekker race, driven across a producer + consumer thread
-# (the looped-logic proof; tsan is the phase-boundary gate). The two driver
+# (a looped-logic proof here; the tsan tree runs it to catch the race). The two driver
 # threads are a test-local concern (the ring itself spawns none) -- the SHM test
 # tree is the sole consumer of pthreads, so the dependency is resolved here in the
 # fragment, never in the shared root.
