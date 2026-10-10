@@ -1,4 +1,4 @@
-// Host slice for the constrained-target lwIP P2 RX-task receive policy: off-target the spawned RX
+// Host-side test of the constrained-target lwIP P2 RX-task receive policy: off-target the spawned RX
 // task does not run (the host xTaskCreate is a no-op stub), so this models the RX task's cross-context
 // edge by driving the channel's acquire-slot -> recv_into_slot -> post_from_task step directly as the
 // "RX context", then ex.drain() as the executor task. It proves delivery is POSTED (on_data does NOT

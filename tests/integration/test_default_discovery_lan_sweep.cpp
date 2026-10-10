@@ -16,8 +16,7 @@ using namespace default_discovery_lan_fixture;
 // The empirical announce-numeric sweep (hidden [.sweep]: an on-demand measurement rig, not a gate).
 // It measures, on THIS host, the worst-case time-to-mutual-awareness (a late joiner waiting out the
 // re-announce cadence) and a cross-source collision proxy (near-simultaneous inbound announces at a
-// passive observer) across a grid of (announce_period, jitter_fraction). Run explicitly to capture
-// the numbers recorded in the phase sweep note:
+// passive observer) across a grid of (announce_period, jitter_fraction). Run explicitly to measure:
 //   ctest --test-dir build -R default_discovery_sweep --output-on-failure
 // (Catch runs a [.]-hidden case only when its ctest test is invoked by name.) The medians are REAL
 // measurements printed via WARN; no number here is assumed.

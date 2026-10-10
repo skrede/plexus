@@ -18,8 +18,8 @@
 // a consumer thread: the consumer pins each slot it observes via pin_if_current
 // (the Dekker reader half) and asserts byte-equality of every value it manages to
 // pin -- a torn read (a best_effort overwrite stomping a live pin) would corrupt
-// the payload. N>=10000 publishes per run; the tsan run is the phase-boundary
-// gate (Wave 6) -- this is the looped-logic proof.
+// the payload. N>=10000 publishes per run; this is the looped-logic proof, and the
+// tsan tree runs it to catch the race.
 
 using namespace plexus::shm;
 

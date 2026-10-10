@@ -5,8 +5,7 @@
 // engines (node A, node B) over one inproc bus, each owning its forwarders, its
 // peer-session registry, its known-peers table and the dial-trigger hook. A trivial
 // discovery stub feeds (node_id, endpoint) straight into note_peer (the awareness
-// seam this phase ships at its locked node_id->endpoint shape — no discovery-seam
-// extension). The oracle proves, looped where behavioral:
+// seam, at its node_id->endpoint shape). The oracle proves, looped where behavioral:
 //   - awareness-no-connect: note_peer records the entry and dials NOTHING;
 //   - LAZY (default): no session until a demand call, then dial+handshake complete;
 //   - EAGER (opt-in knob): note_peer ALONE dials+handshakes, no demand call;

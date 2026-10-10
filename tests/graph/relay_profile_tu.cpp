@@ -1,8 +1,7 @@
 // The relay-decorator vocabulary gate: a profile never spelled relay<> resolves the peer_report
 // emitter to the structurally-absent null twin, composing relay<> onto it (and only that) selects the
 // real emitter while preserving every storage/log alias, and both spellings still satisfy
-// target_profile. All proofs are compile-time; main() only signals. The on-target 0-symbol gate the
-// null twin backs is a later phase's measurement — this is the host-side presence/absence proof.
+// target_profile. All proofs are compile-time host-side presence/absence proofs; main() only signals.
 
 #include "plexus/target_profile.h"
 
@@ -63,8 +62,8 @@ static_assert(std::is_same_v<plain_node::engine_type::forward_splice_type, plexu
 
 // The offering-side per-origin bookkeeping (the report set, the seq map, and the cooperative-decline
 // set) is STATE the real emitter carries; the null twin is a members-less struct, so a non-relay node
-// pays zero for it. is_empty pins that structural present/absent — the on-target 0-symbol gate a later
-// phase measures rests on the null twin holding no offering state at all.
+// pays zero for it. is_empty pins that structural present/absent: the null twin holds no offering state
+// at all.
 static_assert(!std::is_empty_v<plexus::io::peer_report_emitter>);
 static_assert(std::is_empty_v<plexus::io::null_peer_report_emitter>);
 

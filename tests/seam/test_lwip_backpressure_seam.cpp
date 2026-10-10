@@ -1,4 +1,4 @@
-// Host slice for the constrained-target lwIP egress backpressure / error-class split: over a REAL
+// Host-side test of the constrained-target lwIP egress backpressure / error-class split: over a REAL
 // localhost-TCP loopback pair (a genuine POSIX stream_socket, no hardware and no mock) it proves the
 // two failure classes stay DISTINCT. A full egress queue (cap exceeded) drives the congestion QoS —
 // block backpressures the producer (would_block), drop_newest sheds + counts — and NEVER fires
@@ -40,7 +40,7 @@ std::vector<std::byte> filler(std::size_t n)
 }
 
 // A channel with a chosen egress cap + congestion policy; the read/message/reassembly knobs keep the
-// channel defaults (this slice exercises only the egress half).
+// channel defaults (this test exercises only the egress half).
 lwip_channel make_egress_channel(host_tcp_socket socket, plexus::freertos::freertos_executor &ex, std::size_t egress_cap, plexus::io::congestion c)
 {
     using lim = plexus::freertos::lwip_channel_limits;

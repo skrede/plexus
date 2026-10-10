@@ -1,4 +1,4 @@
-// The single-node self-delivery slice: a node built with NO caller transport delivers its own
+// The single-node self-loopback test: a node built with NO caller transport delivers its own
 // publications to its own subscribers in-process. Three witnessed properties — the bytes lane
 // (posted, correct payload, not-before-drain), the typed lane (zero-copy: same object by address,
 // the codec's encode never invoked), and no wire subscribe emitted for the self-route.

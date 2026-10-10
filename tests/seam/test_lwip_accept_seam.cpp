@@ -1,4 +1,4 @@
-// Host slice for the constrained-target lwIP listen/accept transport: drives the server half over a
+// Host-side test of the constrained-target lwIP listen/accept transport: drives the server half over a
 // REAL localhost-TCP loopback (a genuine POSIX listener test-side, no hardware and no mock). The TU
 // proves accept -> on_accepted -> a poll-able channel, the compile-time accept cap bound (default 1
 // refuses the second client; cap 2 accepts both), and view invalidation on channel close (the

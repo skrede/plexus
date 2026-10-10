@@ -61,8 +61,8 @@ std::string read_card_value(const std::vector<std::pair<std::string, std::string
 // datagram seam carries the advertise -> announcement -> decode -> resolve cycle
 // deterministically (no real multicast), while a framed payload round-trips over a real
 // asio loopback channel — the SAME poll loop drives both subsystems' completions. This is
-// the in-tree home of the shared-executor proof for the first-party discovery path (the
-// mDNS-specific variant relocated to the opt-in interop example).
+// the shared-executor proof for the first-party discovery path; the opt-in interop example
+// carries the mDNS-specific variant.
 TEST_CASE("native discovery and plexus asio transport progress on one io_context", "[integration][asio]")
 {
     ::asio::io_context io; // the SINGLE shared executor

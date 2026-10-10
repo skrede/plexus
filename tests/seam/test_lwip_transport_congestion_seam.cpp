@@ -1,4 +1,4 @@
-// Host slice for the constrained-target lwIP transport's congestion plumbing: over a REAL localhost-TCP
+// Host-side test of the constrained-target lwIP transport's congestion plumbing: over a REAL localhost-TCP
 // connection (a genuine POSIX stream_socket, no hardware and no mock) it proves the transport-level
 // congestion policy reaches the channels it mints and that dropped() folds the shed total across its
 // live views. drop_newest sheds + counts an over-cap send (transport.dropped() > 0); block backpressures

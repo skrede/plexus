@@ -210,12 +210,9 @@ TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-iden
     REQUIRE(small.cell_count == 256u);
     REQUIRE(small.slot_capacity == 4096u);
 
-    // The same-host ring defaults relocated from node_options onto the shm transport ship the
-    // BYTE-IDENTICAL values the node now sources from the member: the {0, reliable_preserving}
-    // geometry (max_consumers 0 resolves to the capacity floor above) and the consumer-sovereign
-    // auto-upgrade policy. This is the relocation's behavioral-identity proof (no field migration,
-    // no value drift) — the unprovisioned default resolves through default_geometry() to the SAME
-    // 256/4096 ring asserted above.
+    // The shm transport's same-host ring defaults are the {0, reliable_preserving} geometry (max_consumers 0
+    // resolves to the capacity floor above) and the consumer-sovereign auto-upgrade policy; the unprovisioned
+    // default resolves through default_geometry() to the SAME 256/4096 ring asserted above.
     region_store store;
     stub_broker broker{store};
     test_member member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};

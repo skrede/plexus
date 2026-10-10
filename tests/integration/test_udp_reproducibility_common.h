@@ -1,17 +1,16 @@
 #ifndef HPP_GUARD_TESTS_INTEGRATION_UDP_REPRODUCIBILITY_COMMON_H
 #define HPP_GUARD_TESTS_INTEGRATION_UDP_REPRODUCIBILITY_COMMON_H
 
-// The phase-close reproducibility gate: BOTH UDP delivery classes proven over 100
+// The cross-class UDP reproducibility test: BOTH UDP delivery classes proven over 100
 // in-body iterations each, with the ctest invocation re-run across >=3 process runs (a
-// transport/timing claim is NEVER made from a single run — feedback_no_success_from_
-// single_run). The two classes:
+// transport/timing claim is NEVER made from a single run). The two classes:
 //   * best_effort: a fire-and-forget "udp" flow delivers the published frame on a clean
 //     loopback path (no loss injected — best_effort makes no delivery guarantee, so the
 //     reproducible claim is "the clean path delivers every iteration").
 //   * reliable-ARQ over loss: a "udpr" reliable-datagram flow over a deterministically
 //     lossy relay delivers EVERY frame IN ORDER every iteration (the guarantee holds
 //     under loss, reproducibly).
-// This is the live cross-class proof that closes the phase; the numeric-default sweep
+// This is the live cross-class proof; the numeric-default sweep
 // (test_udp_arq_sweep) substantiates the constants the reliable class rests on.
 
 #include "plexus/asio/udp_channel.h"

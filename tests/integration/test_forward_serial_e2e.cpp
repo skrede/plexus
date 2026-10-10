@@ -1,4 +1,4 @@
-// The phase acceptance: a relay owning TWO live transport sessions carries BOTH control and data across
+// The two-session relay-forwarding test: a relay owning TWO live transport sessions carries BOTH control and data across
 // the second live session end-to-end. A serial-attached origin, a relay, and a TCP-attached consumer
 // stand up over a real openpty serial link (session A) and a real TCP loopback (session B) with NO
 // direct origin<->consumer path. The consumer enumerates the origin from a peer_report that crossed

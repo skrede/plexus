@@ -95,7 +95,7 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
           "[udp_large_payload][envelope16][msgid]")
 {
     // The EXPLICIT msg_id-wrap assertion. A single large message is split into many
-    // fragments; the fragment COUNT is a uint32 field (lifted this phase), while msg_id
+    // fragments; the fragment COUNT is a uint32 field, while msg_id
     // stays uint16 and advances per-MESSAGE, never per-fragment. At a 128-byte fragment
     // budget a 16 MiB message is ~131072 fragments — far past the uint16 max (65535) — so a
     // single message's fragment count CANNOT be expressed in a uint16 msg_id: the old

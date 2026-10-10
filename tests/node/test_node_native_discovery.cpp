@@ -27,7 +27,7 @@ plexus::node_id make_id(std::uint8_t seed)
 
 } // namespace
 
-// The deterministic equivalent of the live slice: two real nodes, each with a multicast_discovery
+// The deterministic two-node equivalent of the live multicast test: two real nodes, each with a multicast_discovery
 // over a paired wiring socket. It exercises the full advertise -> announcement -> decode ->
 // note_from_card -> note_peer path with no real multicast, so it runs in the default set. Both
 // nodes end aware of each other (records only — note_peer is awareness, no dial issued by
@@ -114,7 +114,7 @@ TEST_CASE("node_native_discovery: a goodbye flushes the leaver from a peer's awa
     REQUIRE(b.router().session_for(id_a) == nullptr);
 }
 
-// The live slice over the real udp_multicast_socket. Hidden behind [.multicast]: same-host
+// The live multicast test over the real udp_multicast_socket. Hidden behind [.multicast]: same-host
 // multicast loopback is environment-sensitive (a sandbox may drop IGMP-joined delivery), so the
 // deterministic wired equivalent above carries the default-set proof. This is NEVER weakened to a
 // 127.0.0.1 unicast send. A test-local group avoids colliding with a co-resident plexus default.

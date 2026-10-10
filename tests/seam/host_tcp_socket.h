@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_TCP_SOCKET_H
 #define HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_TCP_SOCKET_H
 
-// A GENUINE POSIX-TCP stream_socket the host slice connects over loopback — NOT a mock and NOT a
+// A GENUINE POSIX-TCP stream_socket the host-side seam tests connect over loopback — NOT a mock and NOT a
 // synthetic byte buffer. It exercises the channel's framing against real partial reads and real
 // EWOULDBLOCK on a non-blocking 127.0.0.1 socket, so the loopback round-trip proves the dial path,
 // the stream_inbound reassembly, and the P1 poll-drive end-to-end with no hardware. Test-local —

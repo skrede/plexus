@@ -1,7 +1,7 @@
 // The UDP envelope codec oracle: the [ver_flags][uint16 seq][frame] outer wrapper
 // round-trips an opaque inner frame byte-identically, sizes the seq for the full
 // uint16 range (big-endian on the wire), exposes the kind discriminator, reserves
-// the FRAGMENTED bit (decoded, never set this phase), and fail-closes a datagram
+// the FRAGMENTED bit (decoded, never set on encode), and fail-closes a datagram
 // shorter than the fixed overhead. A pure header-only unit — no backend.
 
 #include "plexus/wire/udp_envelope.h"
@@ -109,7 +109,7 @@ TEST_CASE("udp envelope: the kind discriminator distinguishes best_effort from r
     REQUIRE(static_cast<unsigned>(be_wire[0]) == 0x00u);
 }
 
-TEST_CASE("udp envelope: the FRAGMENTED bit is never set on encode this phase", "[udp][envelope]")
+TEST_CASE("udp envelope: the FRAGMENTED bit is never set on encode", "[udp][envelope]")
 {
     const auto frame    = bytes({0x33});
     const auto be_wire  = wrap_udp(udp_envelope_kind::best_effort, 9, frame);

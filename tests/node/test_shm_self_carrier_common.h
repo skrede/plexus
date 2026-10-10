@@ -28,7 +28,7 @@ namespace pasio = plexus::asio;
 
 // A node with NO intra_node transport but WITH an shm member (shm + unix + tcp). The intra-node
 // self-route is therefore ABSENT; a same-node publish→subscribe must fall through to the shm
-// self-ring (the fallback carrier this slice proves).
+// self-ring (the fallback carrier this test proves).
 using shm_self_node = plexus::node<pasio::asio_policy, pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport>;
 
 inline plexus::node_id make_id(std::byte first) noexcept

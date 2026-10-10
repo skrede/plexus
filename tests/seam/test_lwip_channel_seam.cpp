@@ -1,4 +1,4 @@
-// Host slice for the constrained-target lwIP byte_channel + dial transport: the two static_asserts
+// Host-side test of the constrained-target lwIP byte_channel + dial transport: the two static_asserts
 // fire at compile time (the load-bearing proof that lwip_channel satisfies byte_channel and
 // lwip_transport satisfies transport_backend), and the runtime TEST_CASEs round-trip a framed
 // message over a REAL localhost-TCP loopback pair (a genuine POSIX stream_socket, not a mock) — so

@@ -214,7 +214,7 @@ TEST_CASE("fixed twin fails closed on a direct peer past identity capacity but n
     store.admit(id_with(2), direct_with(2), 10, opts);
 
     // A transitive report about a new identity when the table is full is rejected-and-counted, never
-    // an abort — the DoS guard for T-94-02.
+    // an abort — the guard against a transitive-report flood exhausting the table.
     REQUIRE_FALSE(store.admit(id_with(3), relayed_via(3), 20, opts));
     REQUIRE(store.dropped() == 1);
     REQUIRE_FALSE(store.has(id_with(3)));

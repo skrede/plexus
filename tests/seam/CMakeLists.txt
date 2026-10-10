@@ -62,7 +62,7 @@ target_link_libraries(test_lwip_channel_compile PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_channel_compile TEST_PREFIX "seam.")
 
-# Host slice for the constrained-target lwIP byte_channel + dial transport: fires
+# Host-side test of the constrained-target lwIP byte_channel + dial transport: fires
 # static_assert(byte_channel<lwip_channel<host_tcp_socket>>) and
 # static_assert(transport_backend<lwip_transport, lwip_policy>) at compile time, then round-trips a
 # framed message over a REAL localhost-TCP loopback pair (a genuine POSIX stream_socket declared
@@ -81,7 +81,7 @@ target_link_libraries(test_lwip_channel_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_channel_seam TEST_PREFIX "seam.")
 
-# Host slice for the constrained-target lwIP P2 RX-task receive policy: drives the channel's
+# Host-side test of the constrained-target lwIP P2 RX-task receive policy: drives the channel's
 # acquire-slot -> recv_into_slot -> post_from_task step inline as the RX context (the spawned task
 # is a no-op stub off-target), then ex.drain() as the executor, proving delivery is POSTED and
 # exactly-once with reassembly over a REAL localhost-TCP loopback pair, and a peer close surfaced as
@@ -96,7 +96,7 @@ target_link_libraries(test_lwip_rx_task_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_rx_task_seam TEST_PREFIX "seam.")
 
-# Host slice for the constrained-target lwIP listen/accept transport: fires
+# Host-side test of the constrained-target lwIP listen/accept transport: fires
 # static_assert(transport_backend<lwip_transport<host_tcp_socket, host_tcp_listener>>) at compile
 # time, then over a REAL localhost-TCP loopback (a genuine POSIX listener test-side, no hardware and
 # no mock) proves accept -> on_accepted -> a poll-able channel, the compile-time accept cap bound
@@ -112,7 +112,7 @@ target_link_libraries(test_lwip_accept_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_accept_seam TEST_PREFIX "seam.")
 
-# Host slice for the constrained-target lwIP egress backpressure / error-class split: over a REAL
+# Host-side test of the constrained-target lwIP egress backpressure / error-class split: over a REAL
 # localhost-TCP loopback pair (a genuine POSIX stream_socket, no hardware and no mock) it proves a full
 # egress queue drives the congestion QoS (block backpressures via would_block, drop_newest sheds +
 # counts) and NEVER fires on_error / re-dials, a transient short send re-arms with the unsent tail left
@@ -128,7 +128,7 @@ target_link_libraries(test_lwip_backpressure_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_backpressure_seam TEST_PREFIX "seam.")
 
-# Host slice for the constrained-target lwIP transport's congestion plumbing: over a REAL localhost-TCP
+# Host-side test of the constrained-target lwIP transport's congestion plumbing: over a REAL localhost-TCP
 # connection it proves the transport-level congestion policy reaches the channels it mints (drop_newest
 # sheds + counts, block backpressures via would_block) and that transport.dropped() folds the shed total
 # across its live views. The current source dir is on the include path so the host socket header
@@ -160,7 +160,7 @@ catch_discover_tests(test_freertos_executor_post TEST_PREFIX "seam.")
 # The permissive/strict reliability enforcement gate on the routing_engine subscribe
 # demand path — a deterministic inproc seam test (no backend socket). Links the inproc
 # Policy substrate for the engine harness. Registered under the `udp.` prefix so
-# `ctest -R udp` selects it with the rest of the phase's reliability legs.
+# `ctest -R udp` selects it with the other udp reliability tests.
 add_executable(test_reliability_enforcement
     test_reliability_enforcement.cpp
     test_reliability_enforcement_classifier.cpp)
