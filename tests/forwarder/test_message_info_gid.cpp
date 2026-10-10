@@ -7,8 +7,8 @@ TEST_CASE("message_info: declare(emit_source_identity) mints a stable, distinct 
           "[forwarder][message_info][gid]")
 {
     // Producer side: the endpoint counter is minted ONCE at the first source-identity
-    // declare, is STABLE across a re-declare (so an endpoint's gid does not drift —
-    // IDENT-02), and is DISTINCT per declared topic. Captured off the wire via a
+    // declare, is STABLE across a re-declare (so an endpoint's gid does not drift),
+    // and is DISTINCT per declared topic. Captured off the wire via a
     // subscribed channel so it exercises the real publish framing.
     inproc_bus<> bus;
     inproc_executor<> ex(bus);

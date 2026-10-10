@@ -1,10 +1,10 @@
-// The fast-path named gates: cell 6 (the zero-serialization identity witness, here as the
-// named gate with the carrier-field assertions) and cell 7 (the LOOPED fast/fallback flip).
-// The flip is proven the no-success-from-a-single-run way: a fresh net per iteration, the
-// path of EVERY message witnessed (the codec's encode-count delta plus object-address
-// identity vs value-only equality), every iteration asserted, and a proven-counter equal to
-// the iteration count at the end. The single-dialer topology (subscriber eager, publisher
-// lazy) matches the matrix fixture. The codec is hand-rolled — plexus never names a codec.
+// The fast-path gates: the zero-serialization identity witness (with the carrier-field
+// assertions) and the LOOPED fast/fallback flip. The flip is proven reproducibly, never from
+// a single run: a fresh net per iteration, the path of EVERY message witnessed (the codec's
+// encode-count delta plus object-address identity vs value-only equality), every iteration
+// asserted, and a proven-counter equal to the iteration count at the end. The single-dialer
+// topology (subscriber eager, publisher lazy) matches the matrix fixture. The codec is
+// hand-rolled — plexus never names a codec.
 
 #include "plexus/node.h"
 #include "plexus/publisher.h"
@@ -136,7 +136,7 @@ struct net
 
 }
 
-TEST_CASE("typed fast path cell 6: the identity witness - same address, zero encodes, intra-process", "[node][typed][fastpath]")
+TEST_CASE("typed fast path: the identity witness - same address, zero encodes, intra-process", "[node][typed][fastpath]")
 {
     net n;
     n.connect();
@@ -173,14 +173,14 @@ TEST_CASE("typed fast path cell 6: the identity witness - same address, zero enc
     REQUIRE_FALSE(infos.front().source_identity.has_value());
 }
 
-// Cell 7, the looped flip. Each iteration stands up a FRESH net and witnesses the path of
+// The looped flip. Each iteration stands up a FRESH net and witnesses the path of
 // every message: a fast-path message arrives by the SAME object address with zero encode
 // delta; a fallback message arrives value-equal with a NON-zero encode delta (and never by a
 // live borrowed address). The iteration alternates between an eligible (typed, process-tier)
 // subscriber — which fast-paths a borrow — and an ineligible (bytes) subscriber — which
 // forces the byte path even for a borrowed loan; it also fires a pool-exhaustion burst that
 // makes some publishes within one iteration fall back mid-stream.
-TEST_CASE("typed fast path cell 7: the fast/fallback flip is looped, every message's path witnessed", "[node][typed][fastpath]")
+TEST_CASE("typed fast path: the fast/fallback flip is looped, every message's path witnessed", "[node][typed][fastpath]")
 {
     constexpr int k_iterations         = 8;
     constexpr std::size_t k_pool_depth = 4;

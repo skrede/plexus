@@ -287,7 +287,7 @@ TEST_CASE("dtls.teardown: a consumer that destroys the channel in on_closed surv
 
 TEST_CASE("dtls.demux: a re-insert on an existing sender OVERWRITES the stale channel pointer", "[dtls][teardown]")
 {
-    // BL-01 secondary: insert must OVERWRITE (insert_or_assign), not no-op (emplace),
+    // Insert must OVERWRITE (insert_or_assign), not no-op (emplace),
     // on an already-present key. A re-dial to a dest that still has a (stale) entry
     // otherwise silently keeps the OLD pointer and the new channel never routes.
     pdetail::basic_inbound_demux<ptls::dtls_channel> demux;

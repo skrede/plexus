@@ -237,7 +237,7 @@ TEST_CASE("known_peers_storage fixed twin marks a reported row unreachable in pl
     exercise_unreachable_marking(table);
 }
 
-// INV-1: a direct-only identity's for_each_candidate enumeration is byte-identical whether or not a
+// A direct-only identity's for_each_candidate enumeration is byte-identical whether or not a
 // SEPARATE identity's transitive row is marked unreachable — the flag never leaks into a direct row.
 namespace {
 
@@ -263,7 +263,7 @@ std::vector<enum_row> direct_only_rows(const Table &table, const node_id &want)
 
 } // namespace
 
-TEST_CASE("known_peers_storage direct-only enumeration is byte-identical across a transitive unreachable mark", "[io][known_peers][inv1]")
+TEST_CASE("known_peers_storage direct-only enumeration is byte-identical across a transitive unreachable mark", "[io][known_peers]")
 {
     const node_id direct = id_of(std::byte{0x0D});
     const node_id origin = id_of(std::byte{0x11});

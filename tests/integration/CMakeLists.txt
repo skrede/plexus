@@ -371,10 +371,10 @@ target_include_directories(test_peer_observer_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_peer_observer_inproc TEST_PREFIX "integration.")
 
-# The destroy-peer-mid-redial non-abort oracle (SC#3): a graph observer registered on a real inproc
-# engine, a peer dropped mid-redial, the engine driven to quiescence with no re-entry into the freed
+# The destroy-peer-mid-redial non-abort oracle: a graph observer registered on a real inproc engine,
+# a peer dropped mid-redial, the engine driven to quiescence with no re-entry into the freed
 # slot_block. Drives the shared support/graph_change_inproc.h harness, so tests/ is on the include
-# path. Authored against the final API — RED until the coalescing engine lands.
+# path.
 add_executable(test_graph_change_reentrancy_inproc test_graph_change_reentrancy_inproc.cpp)
 target_link_libraries(test_graph_change_reentrancy_inproc PRIVATE
     plexus::core
@@ -385,7 +385,7 @@ target_include_directories(test_graph_change_reentrancy_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_graph_change_reentrancy_inproc TEST_PREFIX "integration.")
 
-# The coarse graph-change zero-alloc gate (SC#4): it OWNS the single replaceable operator new
+# The coarse graph-change zero-alloc gate: it OWNS the single replaceable operator new
 # (support/alloc_counter.h) for its binary, so it is its own executable and needs tests/ on the include
 # path. A warmed coarse mutation->drain->fire loop allocates zero over the heap and bounded engines.
 add_executable(test_graph_change_alloc test_graph_change_alloc.cpp)
@@ -1065,7 +1065,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_serial_atomic_admission TEST_PREFIX "integration.")
 
-    # The phase-close cross-class UDP reproducibility gate: a best_effort clean-path flow
+    # The cross-class UDP reproducibility gate: a best_effort clean-path flow
     # AND a reliable-datagram-over-loss flow, each looped 100x in-body; the ctest
     # invocation is re-run across >=3 process runs (a timing/transport claim is never made
     # from a single run). Header-only inside plexus::asio; the `udp.` ctest prefix selects
@@ -1586,7 +1586,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback LABELS "live-multicast")
 
     # The two-PROCESS out-of-box discovery proof: two configless nodes in separate forked processes
-    # discover each other over same-host multicast loopback (DISC-02), reproduced over several runs.
+    # discover each other over same-host multicast loopback, reproduced over several runs.
     # Fork is POSIX, so the target is Windows-excluded. RUN_SERIAL + the loopback lock as above.
     if(NOT WIN32)
         add_executable(test_default_discovery_xproc test_default_discovery_xproc.cpp)
@@ -1721,7 +1721,7 @@ catch_discover_tests(test_discovery_noalloc TEST_PREFIX "integration."
     PROPERTIES RUN_SERIAL TRUE)
 
 # The mixed-version oracle: an encoded peer_report frame routed through a bare frame_router carrying
-# only the pre-peer_report (v0.3.0) consumer set produces no peer and is warn-dropped whole, and a
+# only the pre-peer_report consumer set produces no peer and is warn-dropped whole, and a
 # genuinely-unknown type pins the default arm. Header-only frame_router + wire codecs over core.
 add_executable(test_peer_report_oracle test_peer_report_oracle.cpp)
 target_link_libraries(test_peer_report_oracle PRIVATE
@@ -1731,7 +1731,7 @@ target_link_libraries(test_peer_report_oracle PRIVATE
 catch_discover_tests(test_peer_report_oracle TEST_PREFIX "integration.")
 
 # The mixed-version oracle for the forwarded verb: an encoded forwarded frame routed through a bare
-# frame_router carrying only the pre-forwarded (v0.3.0) consumer set delivers nothing and is
+# frame_router carrying only the pre-forwarded consumer set delivers nothing and is
 # warn-dropped whole, while installing a forwarded consumer proves the dispatch arm fires. Header-only
 # frame_router + wire codecs over core.
 add_executable(test_forwarded_frame_oracle test_forwarded_frame_oracle.cpp)

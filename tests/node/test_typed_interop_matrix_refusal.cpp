@@ -2,7 +2,7 @@
 
 using namespace typed_interop_fixture;
 
-TEST_CASE("typed interop cell 5: a declared type mismatch is refused, no delivery, session stays up", "[node][typed][interop]")
+TEST_CASE("typed interop: a declared type mismatch is refused, no delivery, session stays up", "[node][typed][interop]")
 {
     net n;
     n.connect();
@@ -27,7 +27,7 @@ TEST_CASE("typed interop cell 5: a declared type mismatch is refused, no deliver
     REQUIRE(n.a.router().is_connected(n.id_b)); // the session is not torn down
 }
 
-TEST_CASE("typed interop cell 8: a typed inproc publisher to a bytes subscriber takes the byte path", "[node][typed][interop]")
+TEST_CASE("typed interop: a typed inproc publisher to a bytes subscriber takes the byte path", "[node][typed][interop]")
 {
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
@@ -62,7 +62,7 @@ TEST_CASE("typed interop cell 8: a typed inproc publisher to a bytes subscriber 
     REQUIRE(encodes->load() == 1); // the byte path was taken: exactly one encode
 }
 
-TEST_CASE("typed interop cell 9: a strict typed subscriber refuses an undeclared producer", "[node][typed][interop]")
+TEST_CASE("typed interop: a strict typed subscriber refuses an undeclared producer", "[node][typed][interop]")
 {
     net n;
     n.connect();
@@ -81,7 +81,7 @@ TEST_CASE("typed interop cell 9: a strict typed subscriber refuses an undeclared
     REQUIRE(n.a.router().is_connected(n.id_b)); // refusal is per-topic, never a teardown
 }
 
-TEST_CASE("typed interop cell 10: a tag-equal carrier of a different C++ type is a counted drop, "
+TEST_CASE("typed interop: a tag-equal carrier of a different C++ type is a counted drop, "
           "never a cast",
           "[node][typed][interop]")
 {

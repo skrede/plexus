@@ -33,10 +33,9 @@
 
 // The shared inproc harness the graph-change observer suites drive against. It mirrors the
 // recording-observer-on-a-real-engine + manual virtual clock + drain-then-assert oracle in
-// tests/integration/test_peer_observer_inproc.cpp, narrowed to the graph mutation seams. These TUs are
-// authored against the FINAL intended API — plexus::io::observer::on_graph_changed/on_graph_delta/
-// observes_graph, plexus::graph::graph_change, and routing_engine::graph_generation — and are RED
-// until the implementing waves land the symbols.
+// tests/integration/test_peer_observer_inproc.cpp, narrowed to the graph mutation seams and the
+// observer surface over them: plexus::io::observer::on_graph_changed/on_graph_delta/observes_graph,
+// plexus::graph::graph_change, and routing_engine::graph_generation.
 
 namespace plexus::testing::graph_change_fixture {
 
@@ -81,8 +80,8 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = plexus::inproc::inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-// The bounded-profile engine: the fixed-capacity peer + topic twins the MCU path selects. It joins
-// the coarse graph path SC#4 proves allocation-free; the host edge-log is structurally absent here.
+// The bounded-profile engine: the fixed-capacity peer + topic twins the MCU path selects. The
+// zero-alloc gate proves its coarse graph path allocation-free; the host edge-log is structurally absent.
 using bounded_engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock,
                                                   plexus::io::fixed_peer_storage<8>, plexus::graph::fixed_topic_storage<8>>;
 
@@ -122,8 +121,8 @@ inline plexus::io::reconnect_config forever_cfg()
 }
 
 // Counts each graph EDGE the engine posts. The coarse counter and the last generation prove the
-// single-wakeup coalescing (SC#1) + the D-09 generation argument; the deltas vector captures the
-// GRAPH-07 host payload; graph_opt_in drives the observes_graph opt-in gate.
+// single-wakeup coalescing and the generation each fire reports; the deltas vector captures the
+// host {who, kind} payload; graph_opt_in drives the observes_graph opt-in gate.
 struct recording_graph_observer final : public plexus::io::observer
 {
     int changed_fires{0};
@@ -176,7 +175,7 @@ using one_node         = basic_one_node<engine>;
 using bounded_one_node = basic_one_node<bounded_engine>;
 
 // A two-node rendezvous on one bus, mirroring the peer-observer oracle: A dials B so the redial +
-// mid-flight teardown legs (SC#3) have a real session to tear down.
+// mid-flight teardown legs have a real session to tear down.
 struct two_node
 {
     plexus::inproc::inproc_bus<manual_clock> bus;

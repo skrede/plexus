@@ -1,13 +1,14 @@
 // The mixed-version oracle for the forwarded verb: proof that an encoded forwarded frame is
-// structurally unparseable-as-payload by the REAL shipped v0.3.0 parser, not a simulation of it.
+// structurally unparseable-as-payload by the REAL parser of a router with the pre-forwarded consumer
+// set, not a simulation of it.
 //
-// The harness is a BARE frame_router carrying ONLY the pre-forwarded (v0.3.0) consumer set,
-// hand-registered — deliberately NOT the full session consumer set — so a router with no forwarded
-// consumer installed models the v0.3.0 surface. A 0x0F frame therefore fires no consumer and is
-// warn-dropped whole (at the shipped default arm before the dispatch arm exists; as an
-// unregistered-consumer drop after), delivering nothing and leaving the session healthy. This is the
-// fail-closed carrier property: a flag-bit or appended trailer would instead ride inside the
-// delivered unidirectional payload (decode_unidirectional returns data = reader.rest()).
+// The harness is a BARE frame_router carrying ONLY the pre-forwarded consumer set, hand-registered —
+// deliberately NOT the full session consumer set — so it models a router with no forwarded consumer
+// installed. A 0x0F frame therefore fires no consumer and is warn-dropped whole (at the default arm,
+// or as an unregistered-consumer drop once the dispatch arm exists), delivering nothing and leaving
+// the session healthy. This is the fail-closed carrier property: a flag-bit or appended trailer would
+// instead ride inside the delivered unidirectional payload, since a unidirectional decoder returns
+// data = reader.rest().
 
 #include "plexus/io/frame_router.h"
 
@@ -55,9 +56,9 @@ struct fired_set
     }
 };
 
-// The pre-forwarded (v0.3.0) consumer set, hand-registered: the shipped surface a v0.3.0 node exposes
-// has NO forwarded consumer, so this models it directly.
-void register_v0_3_0_consumers(plexus::io::frame_router &router, fired_set &fired)
+// The pre-forwarded consumer set, hand-registered: the surface of a node with NO forwarded consumer,
+// modelled directly.
+void register_pre_forwarded_consumers(plexus::io::frame_router &router, fired_set &fired)
 {
     router.on_subscribe(fired.record(wire::msg_type::subscribe));
     router.on_fetch_latched(fired.record(wire::msg_type::fetch_latched));
@@ -83,7 +84,8 @@ node_id fill(std::uint8_t base)
 std::vector<std::byte> make_forwarded_payload()
 {
     // A header-on inner frame: a real encoded unidirectional frame nested inside the envelope, the
-    // exact shape a v0.3.0 node would silently deliver were this a rider rather than a new verb.
+    // exact shape a router without the forwarded consumer would silently deliver were this a rider
+    // rather than a new verb.
     wire::frame_header inner_hdr{.type = wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 4};
     const std::vector<std::byte> inner_payload{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}};
     const auto inner = wire::encode_frame(inner_hdr, inner_payload);
@@ -106,12 +108,12 @@ std::vector<std::byte> frame_of(wire::msg_type type, std::span<const std::byte> 
 
 }
 
-TEST_CASE("forwarded oracle: a 0x0F frame fires no consumer and delivers nothing against the v0.3.0 router", "[integration][forwarded][oracle]")
+TEST_CASE("forwarded oracle: a 0x0F frame fires no consumer and delivers nothing against a router without the forwarded consumer", "[integration][forwarded][oracle]")
 {
     counting_logger sink;
     plexus::io::frame_router router{sink};
     fired_set fired;
-    register_v0_3_0_consumers(router, fired);
+    register_pre_forwarded_consumers(router, fired);
 
     // Control: the harness genuinely dispatches — a declare frame fires exactly its consumer. Without
     // this, "no consumer fired" for the forwarded verb could pass on a dead harness.
@@ -136,7 +138,7 @@ TEST_CASE("forwarded oracle: the router dispatches its arm when a forwarded cons
     counting_logger sink;
     plexus::io::frame_router router{sink};
     fired_set fired;
-    register_v0_3_0_consumers(router, fired);
+    register_pre_forwarded_consumers(router, fired);
     router.on_forwarded(fired.record(wire::msg_type::forwarded));
 
     const auto payload = make_forwarded_payload();

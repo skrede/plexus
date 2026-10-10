@@ -1,14 +1,15 @@
 // The mixed-version oracle: proof that an encoded peer_report frame is structurally
-// unparseable-as-direct by the REAL shipped v0.3.0 parser, not a simulation of it.
+// unparseable-as-direct by the REAL parser of a router with the pre-peer_report consumer set, not a
+// simulation of it.
 //
-// The harness is a BARE frame_router carrying ONLY the pre-peer_report (v0.3.0) consumer set,
-// hand-registered — deliberately NOT register_session_consumers, so that when a later plan installs
-// an always-compiled peer_report consumer through that function this oracle keeps proving the
-// v0.3.0-shaped behavior: a router with no peer_report consumer registered. A 0x0E frame therefore
-// fires no consumer and is warn-dropped whole (at the shipped default arm before the dispatch arm
-// exists; as an unregistered-consumer drop after), producing no peer and leaving the session
-// healthy. A genuinely-unknown type (0x7F) permanently pins the default warn-drop arm. The magic
-// gate is proven directly: decode_announcement over the same bytes is nullopt.
+// The harness is a BARE frame_router carrying ONLY the pre-peer_report consumer set, hand-registered
+// — deliberately NOT register_session_consumers, so the always-compiled peer_report consumer that
+// function installs never reaches it and this oracle keeps proving the behavior of a router with no
+// peer_report consumer registered. A 0x0E frame therefore fires no consumer and is warn-dropped whole
+// (at the default arm, or as an unregistered-consumer drop once the dispatch arm exists), producing
+// no peer and leaving the session healthy. A genuinely-unknown type (0x7F) permanently pins the
+// default warn-drop arm. The magic gate is proven directly: decode_announcement over the same bytes
+// is nullopt.
 
 #include "plexus/io/frame_router.h"
 
@@ -59,10 +60,10 @@ struct fired_set
     }
 };
 
-// The pre-peer_report (v0.3.0) consumer set, hand-registered. This is the shipped surface a v0.3.0
-// node exposes — NO peer_report consumer — and is intentionally installed WITHOUT
-// register_session_consumers so a later consumer install through that function cannot reach here.
-void register_v0_3_0_consumers(plexus::io::frame_router &router, fired_set &fired)
+// The pre-peer_report consumer set, hand-registered: the surface of a node with NO peer_report
+// consumer, intentionally installed WITHOUT register_session_consumers so a consumer installed
+// through that function cannot reach here.
+void register_pre_peer_report_consumers(plexus::io::frame_router &router, fired_set &fired)
 {
     router.on_subscribe(fired.record(wire::msg_type::subscribe));
     router.on_fetch_latched(fired.record(wire::msg_type::fetch_latched));
@@ -105,15 +106,15 @@ std::vector<std::byte> frame_of(wire::msg_type type, std::span<const std::byte> 
 
 }
 
-TEST_CASE("peer_report oracle: a 0x0E frame fires no consumer and produces no peer against the v0.3.0 router", "[integration][peer_report][oracle]")
+TEST_CASE("peer_report oracle: a 0x0E frame fires no consumer and produces no peer against a router without the peer_report consumer", "[integration][peer_report][oracle]")
 {
     counting_logger sink;
     plexus::io::frame_router router{sink};
     fired_set fired;
-    register_v0_3_0_consumers(router, fired);
+    register_pre_peer_report_consumers(router, fired);
 
     // Control: the harness genuinely dispatches — a declare frame fires exactly its consumer. Without
-    // this, "no consumer fired" for 0x0E could pass on a dead harness (Pitfall 1).
+    // this, "no consumer fired" for 0x0E could pass on a dead harness.
     router.route(frame_of(wire::msg_type::declare, std::vector<std::byte>{}));
     REQUIRE(fired.types == std::set<wire::msg_type>{wire::msg_type::declare});
     fired.types.clear();
@@ -132,12 +133,12 @@ TEST_CASE("peer_report oracle: the peer_report bytes fail the announcement magic
     REQUIRE(!wire::decode_announcement(payload).has_value());
 }
 
-TEST_CASE("peer_report oracle: a decline-flagged heartbeat decodes-and-ignores against the v0.3.0 router", "[integration][peer_report][oracle]")
+TEST_CASE("peer_report oracle: a decline-flagged heartbeat decodes-and-ignores against a router without the peer_report consumer", "[integration][peer_report][oracle]")
 {
     counting_logger sink;
     plexus::io::frame_router router{sink};
     fired_set fired;
-    register_v0_3_0_consumers(router, fired);
+    register_pre_peer_report_consumers(router, fired);
 
     // Control: the harness genuinely dispatches before we assert the decline arm is benign.
     router.route(frame_of(wire::msg_type::declare, std::vector<std::byte>{}));
@@ -153,7 +154,8 @@ TEST_CASE("peer_report oracle: a decline-flagged heartbeat decodes-and-ignores a
     REQUIRE(fired.types == std::set<wire::msg_type>{wire::msg_type::heartbeat}); // heartbeat consumer ran
     REQUIRE(sink.drops == drops_before);                                        // no warn/drop: session healthy
 
-    // The shipped decoder reads the reserved byte and ignores its unknown bit — the struct round-trips.
+    // A decoder that accepts unknown flag bits reads the reserved byte and ignores the decline bit —
+    // the struct round-trips.
     const auto decoded = wire::decode_heartbeat(payload);
     REQUIRE(decoded.has_value());
     REQUIRE((decoded->reserved & wire::k_heartbeat_relay_decline_flag) != 0);
@@ -164,9 +166,9 @@ TEST_CASE("peer_report oracle: a genuinely-unknown type warn-drops at the defaul
     counting_logger sink;
     plexus::io::frame_router router{sink};
     fired_set fired;
-    register_v0_3_0_consumers(router, fired);
+    register_pre_peer_report_consumers(router, fired);
 
-    // 0x7F has no assigned verb, so it reaches the shipped default: — a permanent pin on the
+    // 0x7F has no assigned verb, so it reaches the default: arm — a permanent pin on the
     // unknown-verb warn-drop, held far from the assignment frontier and durable independent of the
     // now-handled status of any lower value.
     const auto unknown = static_cast<wire::msg_type>(0x7F);

@@ -35,9 +35,9 @@ catch_discover_tests(test_graph_change_signal TEST_PREFIX "graph.")
 
 # The platform-independence gate reaches the query sweeps as well as the records, so it links the
 # facade's header tree — no backend, no discovery: it constructs nothing that needs one.
-add_executable(inv1_graph_tu inv1_graph_tu.cpp)
-target_link_libraries(inv1_graph_tu PRIVATE plexus::plexus)
-add_test(NAME graph.inv1_graph_tu COMMAND inv1_graph_tu)
+add_executable(platform_neutral_graph_tu platform_neutral_graph_tu.cpp)
+target_link_libraries(platform_neutral_graph_tu PRIVATE plexus::plexus)
+add_test(NAME graph.platform_neutral_graph_tu COMMAND platform_neutral_graph_tu)
 
 # The target_profile vocabulary gate: a compile-time proof that a bare policy resolves to the heap
 # twins and bounded<> resolves the graph tables to the fixed twins. It reuses the inproc policy as a

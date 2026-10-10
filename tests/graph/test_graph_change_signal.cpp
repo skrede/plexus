@@ -1,9 +1,9 @@
 // The change-detection contract on the topic-table mutators: upsert reports changed==true only on
 // a genuinely new (participant, topic, role) edge OR a new distinct type_id, and changed==false on
 // a duplicate declare or a reject-and-count drop; remove_edge / remove_node report whether they
-// actually erased. Both storage twins carry the IDENTICAL result surface — INV-1 symmetric. The
-// upsert_result still converts to upsert_outcome so the reject-and-count oracle keeps compiling.
-// Header-only core, Catch2 main only.
+// actually erased. Both storage twins carry the IDENTICAL result surface (the host/device
+// byte-identical contract). The upsert_result still converts to upsert_outcome so the
+// reject-and-count oracle keeps compiling. Header-only core, Catch2 main only.
 
 #include "plexus/graph/topic_type_table.h"
 #include "plexus/graph/fixed_topic_storage.h"

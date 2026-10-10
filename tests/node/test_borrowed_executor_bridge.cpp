@@ -1,8 +1,7 @@
-// The borrowed-executor named gate, shaped like the vagus integration bridge: a host
-// struct OWNS the whole substrate — the executor, the discovery service, and the
-// transports — and embeds two plexus::node instances that BORROW all three. Nothing
-// inside a node owns an io_context or a thread; the host alone pumps the loop. Three
-// assertion families prove it:
+// The borrowed-executor bridge: a host that owns and pumps the executor. The host struct
+// OWNS the whole substrate — the executor, the discovery service, and the transports — and
+// embeds two plexus::node instances that BORROW all three. Nothing inside a node owns an
+// io_context or a thread; the host alone pumps the loop. Three assertion families prove it:
 //   1. No thread spawned: on Linux, the /proc/self/task count is unchanged across node
 //      construction and a full pub/sub + call round-trip (the structural property is
 //      platform-independent; the proof is Linux).
@@ -113,7 +112,7 @@ bool pump_until(inproc_executor<> &ex, Pred done, int step_budget = 100000)
     return done();
 }
 
-// The vagus-shaped bridge: the HOST owns the io_context-equivalent (executor + bus), the
+// The bridge host: the HOST owns and pumps the io_context-equivalent (executor + bus), the
 // discovery service, and the transports. The two embedded nodes borrow all three. Member
 // ORDER is load-bearing: the substrate is declared BEFORE the node refs so it outlives
 // them (reverse destruction order) — the living documentation of the borrowed-executor

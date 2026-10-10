@@ -1,10 +1,10 @@
-// The destroy-peer-mid-re-dial non-abort integration oracle (SC#3). A graph observer is registered on
+// The destroy-peer-mid-re-dial non-abort integration oracle. A graph observer is registered on
 // a real inproc engine, a peer is brought up and then a REAL transport drop arms A's redial; while the
 // redial is in flight the peer is dropped (forget + session teardown). The posted graph wakeup must
 // drain over a surviving snapshot and never re-enter the freed slot_block — the rmw_fastrtps #496
 // analogue. The suite drives to quiescence via drain() and asserts no abort, a stable engine, and a
-// post-drain awareness snapshot reflecting the removal. This TU is the one built under the asan/ubsan
-// no-recover config at the phase gate. RED until the coalescing engine lands in Wave 2.
+// post-drain awareness snapshot reflecting the removal. This TU is also run under the asan/ubsan
+// no-recover config.
 
 #include "support/graph_change_inproc.h"
 
@@ -57,7 +57,7 @@ TEST_CASE("graph change reentrancy: dropping a peer mid-redial with a graph obse
 
         // Drop the peer WHILE the redial is in flight: forget its awareness and tear down A's dialing
         // session. The posted graph wakeup must drain over a snapshot that outlives the teardown,
-        // never re-entering the freed slot_block (SC#3).
+        // never re-entering the freed slot_block.
         net.a.forget(net.id_b);
         if(auto *s = net.a.session_for(net.id_b))
             s->tear_down();

@@ -61,7 +61,7 @@ TEST_CASE("forward_splice_alloc: the pooled buffer-build allocates nothing in st
     };
     REQUIRE(per_iteration_alloc_delta(naive_build) > 0);
 
-    // Pooled owned copy (D95.1 default): checkout claims a free slot, the envelope encodes into it, and
+    // Pooled owned copy (the default): checkout claims a free slot, the envelope encodes into it, and
     // the returned wire_bytes<> returns the slot to the pool on release — zero per-iteration alloc.
     const auto pool_build = [&]
     {

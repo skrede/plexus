@@ -1,6 +1,7 @@
 // Through-the-facade reachability: a single-transport bounded<> node resolves its engine's peer and
-// topic tables to the fixed twins the profile names. The direct-instantiation proof in inv1_graph_tu
-// augments this — it shows the twin compiles on any platform; this shows the facade reaches it.
+// topic tables to the fixed twins the profile names. The direct-instantiation proof in
+// platform_neutral_graph_tu augments this — it shows the twin compiles on any platform; this shows
+// the facade reaches it.
 
 #include "plexus/node.h"
 

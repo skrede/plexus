@@ -84,7 +84,7 @@ static_assert(type_states_told_apart_by_the_list());
 static_assert(roles_distinct());
 
 // The profile-split edge-log is a compile-time fact selected off profile_traits, never a platform
-// #ifdef (INV-1): the heap primary carries the host vector twin, and bounded<> carries the
+// #ifdef: the heap primary carries the host vector twin, and bounded<> carries the
 // members-less null twin, so a bounded node pays nothing for the graph-change payload. The Policy is a
 // bare tag here — profile_traits only pattern-matches it, never instantiating a mechanism.
 struct edge_log_policy_tag

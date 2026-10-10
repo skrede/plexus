@@ -2,7 +2,7 @@
 
 using namespace typed_interop_fixture;
 
-TEST_CASE("typed interop cell 1: a typed publisher reaches a bytes subscriber with the codec's "
+TEST_CASE("typed interop: a typed publisher reaches a bytes subscriber with the codec's "
           "encoding",
           "[node][typed][interop]")
 {
@@ -36,7 +36,7 @@ TEST_CASE("typed interop cell 1: a typed publisher reaches a bytes subscriber wi
     REQUIRE(codec.encodes->load() == 1);
 }
 
-TEST_CASE("typed interop cell 2: a bytes producer's valid encoding decodes to an equal T", "[node][typed][interop]")
+TEST_CASE("typed interop: a bytes producer's valid encoding decodes to an equal T", "[node][typed][interop]")
 {
     net n;
     n.connect();
@@ -53,7 +53,7 @@ TEST_CASE("typed interop cell 2: a bytes producer's valid encoding decodes to an
     REQUIRE(got.front().value == 0x0BADF00Du);
 }
 
-TEST_CASE("typed interop cell 3: garbage from a bytes producer drops+counts by default, escapes on "
+TEST_CASE("typed interop: garbage from a bytes producer drops+counts by default, escapes on "
           "opt-in",
           "[node][typed][interop]")
 {
@@ -104,14 +104,14 @@ TEST_CASE("typed interop cell 3: garbage from a bytes producer drops+counts by d
     }
 }
 
-TEST_CASE("typed interop cell 4: a typed pair over a NON-process tier round-trips through "
+TEST_CASE("typed interop: a typed pair over a NON-process tier round-trips through "
           "encode+decode",
           "[node][typed][interop]")
 {
     // Both endpoints are typed with the SAME identity, but the subscriber declares the
     // topic locality-confined to remote so the in-process object lane is never eligible —
     // forcing the encode->wire->decode round-trip even on one bus. The value equality after
-    // a real serialize/deserialize is the cell-4 observable.
+    // a real serialize/deserialize is the observable.
     net n;
     n.connect();
 

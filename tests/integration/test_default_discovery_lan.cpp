@@ -18,7 +18,7 @@ using namespace default_discovery_lan_fixture;
 // over several runs with medians recorded.
 //
 // HONESTY FRAME: this proves the discovery MECHANISM only. It is NOT the two-host same-LAN-segment
-// claim (SC1 / DISC-01), which needs a real NIC between two separate hosts. That genuine two-host
+// claim, which needs a real NIC between two separate hosts. That genuine two-host
 // reproduction (two machines, one LAN segment, >=3 runs, medians) is a SEPARATE hardware-gated
 // MANUAL step and stays UNPROVEN in this single-host run. The loopback proxy does NOT satisfy it.
 
@@ -80,5 +80,5 @@ TEST_CASE("default_discovery_lan two configless nodes reach mutual awareness ove
 
     REQUIRE(awareness_ms.size() >= 3);
     WARN("[loopback-proxy] same-host medians over " << awareness_ms.size() << " runs: mutual-awareness " << median_ms(awareness_ms) << " ms, self-check-healthy "
-         << median_ms(healthy_ms) << " ms. This proves the discovery MECHANISM only; the two-host same-LAN DISC-01/SC1 reproduction is an UNPROVEN hardware-gated manual step.");
+         << median_ms(healthy_ms) << " ms. This proves the discovery MECHANISM only; the two-host same-LAN reproduction is an UNPROVEN hardware-gated manual step.");
 }

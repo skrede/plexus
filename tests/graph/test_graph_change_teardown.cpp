@@ -1,9 +1,9 @@
-// The posted-not-synchronous teardown oracle for the coarse graph-change observer (SC#2). A recording
+// The posted-not-synchronous teardown oracle for the coarse graph-change observer. A recording
 // graph observer on a real inproc engine proves the coarse edge is POSTED, never emitted synchronously
 // from the mutation site: no on_graph_changed is observed WITHOUT an intervening drain(), an observer
 // removed BEFORE the drain receives no in-flight wakeup (the remove-before-teardown discipline that
 // keeps a posted value from firing into freed state), and after remove_observer a later mutation +
-// drain fires nothing into it. Runs under asan/ubsan at the phase gate. RED until the engine lands.
+// drain fires nothing into it. Also runs under asan/ubsan.
 
 #include "support/graph_change_inproc.h"
 

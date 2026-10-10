@@ -183,9 +183,9 @@ target_link_libraries(test_late_join PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_late_join TEST_PREFIX "node.")
 
-# The borrowed-executor bridge smoke: a vagus-shaped host owns the io substrate and two
-# embedded nodes borrow it; no thread is spawned and nothing progresses unless the host
-# pumps. The milestone's named correctness gate for the node facade.
+# The borrowed-executor bridge: a host owns and pumps the executor and the bus, and two
+# embedded nodes borrow them; no thread is spawned and nothing progresses unless the host
+# pumps. Proves the node facade runs entirely on a borrowed, host-driven substrate.
 add_executable(test_borrowed_executor_bridge test_borrowed_executor_bridge.cpp)
 target_link_libraries(test_borrowed_executor_bridge PRIVATE
     plexus::plexus
@@ -234,9 +234,9 @@ target_link_libraries(test_typed_interop_matrix PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_interop_matrix TEST_PREFIX "node.")
 
-# The fast-path gates: the identity witness (cell 6) and the LOOPED fast/fallback flip
-# (cell 7) — fresh nodes per iteration, every message's path witnessed, every iteration
-# asserted, alternating eligible/ineligible sets plus pool-exhaustion bursts.
+# The fast-path gates: the identity witness and the LOOPED fast/fallback flip — fresh
+# nodes per iteration, every message's path witnessed, every iteration asserted,
+# alternating eligible/ineligible sets plus pool-exhaustion bursts.
 add_executable(test_typed_fastpath test_typed_fastpath.cpp)
 target_link_libraries(test_typed_fastpath PRIVATE
     plexus::plexus
@@ -245,7 +245,7 @@ target_link_libraries(test_typed_fastpath PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_fastpath TEST_PREFIX "node.")
 
-# The single-node self-loopback slice: a node built with no caller transport delivers its own
+# The single-node self-loopback: a node built with no caller transport delivers its own
 # publications to its own subscribers — the bytes lane (posted), the typed zero-copy lane (same
 # address, zero encodes), and the no-wire-subscribe witness for the self-route.
 add_executable(test_self_loopback test_self_loopback.cpp)
@@ -341,7 +341,7 @@ if(PLEXUS_ENABLE_SHM_BACKEND AND NOT WIN32)
     catch_discover_tests(test_shm_self_carrier TEST_PREFIX "node.")
 endif()
 
-# The two-node native multicast-discovery host slice: two real basic_node instances, each with a
+# The two-node native multicast-discovery host proof: two real basic_node instances, each with a
 # multicast_discovery over a datagram_socket, discover each other with NO static table and NO
 # mdnspp. The deterministic wired-pair case runs in the default set; the live udp_multicast_socket
 # case is hidden behind [.multicast] (real multicast loopback is environment-sensitive). Built only

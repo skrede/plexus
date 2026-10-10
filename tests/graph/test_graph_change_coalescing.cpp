@@ -1,9 +1,9 @@
-// The coalescing / idempotency oracle for the coarse graph-change observer (SC#1, GRAPH-05). A
-// recording graph observer on a real inproc engine drives the graph mutation seams; every assertion
-// is made after drain(). The suite pins the level-triggered single-wakeup coalescing (a burst of real
-// changes collapses to ONE fire at the final generation, the 1->2->1 case losing no transition), the
+// The coalescing / idempotency oracle for the coarse graph-change observer. A recording graph
+// observer on a real inproc engine drives the graph mutation seams; every assertion is made after
+// drain(). The suite pins the level-triggered single-wakeup coalescing (a burst of real changes
+// collapses to ONE fire at the final generation, the 1->2->1 case losing no transition), the
 // idempotent no-fire (a re-announce / duplicate declare neither fires nor bumps the generation), and
-// the D-04 edge classes each firing the coarse signal once. RED until the coalescing engine lands.
+// each coalescing edge class firing the coarse signal once.
 
 #include "support/graph_change_inproc.h"
 
@@ -68,7 +68,7 @@ TEST_CASE("graph change coalescing: an idempotent re-announce and duplicate decl
     const auto settled = net.eng.graph_generation();
 
     // Re-announce the SAME (id, endpoint) and re-declare the SAME (topic, role, type): nothing
-    // changes, so no coarse edge fires and the generation does not move (the D-04 no-fire case).
+    // changes, so no coarse edge fires and the generation does not move (the idempotent no-fire case).
     net.eng.note_peer(make_id(0xB2), ep_for("node-b"));
     net.eng.note_local_topic("topic/a", "pkg/T", 1u, topic_role::publisher);
     net.drain();
@@ -76,7 +76,7 @@ TEST_CASE("graph change coalescing: an idempotent re-announce and duplicate decl
     REQUIRE(net.eng.graph_generation() == settled);
 }
 
-TEST_CASE("graph change coalescing: each D-04 edge class fires the coarse signal once and bumps the "
+TEST_CASE("graph change coalescing: each coalescing edge class fires the coarse signal once and bumps the "
           "generation",
           "[graph][change][coalescing]")
 {

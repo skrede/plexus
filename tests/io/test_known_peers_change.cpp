@@ -2,7 +2,7 @@
 // underlying put / remove) report whether they actually altered the surface, so the graph
 // observer can bump its generation only on a real change and stay silent on an idle re-announce.
 // Both storage twins (the std::map default and the fixed-capacity variant) carry the IDENTICAL
-// bool return — INV-1 symmetric. Header-only core, Catch2 main only.
+// bool return (the host/device byte-identical contract). Header-only core, Catch2 main only.
 
 #include "plexus/io/known_peers.h"
 #include "plexus/io/fixed_peer_storage.h"

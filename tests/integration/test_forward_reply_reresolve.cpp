@@ -1,4 +1,4 @@
-// Reply routing is identity re-resolution, not path memory (D95.2). Two proofs:
+// Reply routing is identity re-resolution, not path memory. Two proofs:
 //
 //   (a) with an alternate relay present, retiring the relay the request rode still lets the reply
 //       re-resolve through route_select at the responder and return via the alternate — the reply is

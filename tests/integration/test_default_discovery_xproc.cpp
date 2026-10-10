@@ -27,9 +27,8 @@
 #include <sys/wait.h>
 
 // Two nodes in SEPARATE PROCESSES on one host discover each other out of the box, with NO discovery
-// configuration — the node-facade-shm-not-xproc gap closed as a first-class scenario. Same-host
-// cross-process multicast loopback (already enabled) is exactly what makes this work (DISC-02). The
-// mutual-awareness outcome is reproduced over several runs, each forking fresh processes.
+// configuration. Same-host cross-process multicast loopback (already enabled) is exactly what makes
+// this work. The mutual-awareness outcome is reproduced over several runs, each forking fresh processes.
 
 namespace pasio = plexus::asio;
 using asio_node = plexus::basic_node<pasio::asio_policy, pasio::asio_transport>;
@@ -158,5 +157,5 @@ TEST_CASE("default_discovery_xproc two configless nodes in separate processes di
     }
 
     REQUIRE(mutual >= 3);
-    WARN("[xproc] same-host cross-process out-of-box discovery reproduced over " << mutual << " runs (DISC-02).");
+    WARN("[xproc] same-host cross-process out-of-box discovery reproduced over " << mutual << " runs.");
 }

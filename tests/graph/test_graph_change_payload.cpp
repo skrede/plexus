@@ -1,9 +1,9 @@
-// The host {who, appeared|disappeared} payload oracle for the graph-change observer (GRAPH-07). On the
+// The host {who, appeared|disappeared} payload oracle for the graph-change observer. On the
 // heap profile the additive edge-log is compiled in, but maintained only while a registered observer
 // declares interest through observes_graph(): an opt-in observer drains the exact {who, kind} deltas
 // for a sequence of appears/disappears, while a non-opt-in observer leaves the log empty (inert when
 // unused). These host test binaries exercise only the heap engine — the edge-log is structurally
-// absent on bounded<>. RED until the payload edge-log lands.
+// absent on bounded<>.
 
 #include "support/graph_change_inproc.h"
 

@@ -1,5 +1,5 @@
 // The single source compiled by both the host build and the ESP-IDF xtensa cross-compile:
-// the byte-identical INV-1 proof that the header-only matcher is pure logic with no platform
+// the host/device byte-identical proof that the header-only matcher is pure logic with no platform
 // #ifdef. make(), intersects(), and includes() are exercised in a constexpr context, so the
 // static_asserts firing identically on both targets is the byte-identical-semantics evidence;
 // a trivial runtime entry links the host leg.
