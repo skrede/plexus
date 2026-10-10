@@ -14,8 +14,8 @@
 #include <cstddef>
 #include <cstdint>
 
-// The offline frame-scan + CRC-verify helpers for record_stream_reader, relocated out of the
-// reader header (free functions over the validated wire::reader / the raw stream span).
+// The offline frame-scan + CRC-verify helpers for record_stream_reader (free functions over the
+// validated wire::reader / the raw stream span).
 namespace plexus::io::recording::detail {
 
 inline std::vector<std::byte> read_bytes(wire::reader &r)

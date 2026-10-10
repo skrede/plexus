@@ -5,7 +5,6 @@
 #include "plexus/node_id.h"
 #include "plexus/topic_qos.h"
 #include "plexus/wire_bytes.h"
-#include "plexus/publisher_gid.h"
 
 #include "plexus/detail/compat.h"
 
@@ -25,11 +24,14 @@
 #include "plexus/io/subscription_endpoint.h"
 
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/history_ring.h"
 #include "plexus/io/detail/forward_gate.h"
+#include "plexus/io/detail/history_ring.h"
 #include "plexus/io/detail/forward_splice.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/detail/forwarder_fanout.h"
+#include "plexus/io/detail/forwarder_demand.h"
+#include "plexus/io/detail/forwarder_deliver.h"
+#include "plexus/io/detail/forwarder_publish.h"
 
 #include "plexus/log/logger.h"
 
@@ -56,18 +58,6 @@
 
 namespace plexus::io {
 
-struct remembered_demand
-{
-    std::string fqn;
-    subscriber_qos qos;
-    std::optional<std::uint64_t> type_id; // nullopt = undeclared
-    // Owned, not borrowed: a replay on reconnect outlives whatever named the type at attach.
-    std::string type_name;
-};
-
-constexpr std::size_t k_history_depth_cap = 1024; // DoS clamp: a publisher-declared depth is attacker-controlled (bounds N x max_payload).
-constexpr std::size_t k_fetch_cap         = 1024;
-
 template<typename Policy>
     requires plexus::Policy<Policy>
 class message_forwarder
@@ -90,7 +80,7 @@ public:
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
         m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, qos, type_id);
-        record_remote_topic(p.node_name, fqn, qos, type_id, type_name);
+        detail::record_remote_topic(*this, p.node_name, fqn, qos, type_id, type_name);
         send_subscribe(p.channel, fqn, hash, type_id, qos, type_name);
         emit_qos_change(qos_edge::accepted, hash, qos, rxo_verdict::compatible, type_id);
         emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::subscriber);
@@ -113,27 +103,23 @@ public:
         // Record the self-route by its channel POINTER (a proven registration, not the spoofable
         // self_name tag) so the origination gate never wraps a 0x0F onto a same-node self-channel.
         ++m_self_route_channels[static_cast<const void *>(&channel)];
-        replay_if_latched(peer{channel, std::string{self_name}}, hash);
+        detail::replay_if_latched(*this, peer{channel, std::string{self_name}}, hash);
     }
 
     void detach_local(std::string_view fqn, channel_type &channel)
     {
-        m_endpoint.registry().remove_subscriber(wire::fqn_topic_hash(fqn), channel);
-        m_egress.remove(channel);
-        auto it = m_self_route_channels.find(static_cast<const void *>(&channel));
-        if(it != m_self_route_channels.end() && --it->second == 0)
-            m_self_route_channels.erase(it);
+        detail::forwarder_detach_local(*this, fqn, channel);
     }
 
     void remember_demand(const std::string &node_name, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt,
                          std::string_view type_name = {})
     {
-        record_remote_topic(node_name, fqn, qos, type_id, type_name);
+        detail::record_remote_topic(*this, node_name, fqn, qos, type_id, type_name);
     }
 
     void forget_remembered_demand(const std::string &node_name, std::string_view fqn)
     {
-        forget_remote_topic(node_name, fqn);
+        detail::forget_remote_topic(*this, node_name, fqn);
     }
 
     void declare(std::string_view fqn, topic_qos qos, std::optional<std::uint64_t> producer_type_id = std::nullopt, bool emit_source_identity = false,
@@ -289,69 +275,7 @@ public:
 
     void publish(std::string_view fqn, std::span<const std::byte> payload, std::uint64_t session_id = 0)
     {
-        auto hash           = wire::fqn_topic_hash(fqn);
-        const auto *topic   = m_endpoint.registry().entry_for(hash);
-        const auto *subs    = topic != nullptr && !topic->subscribers.empty() ? &topic->subscribers : nullptr;
-        const topic_qos qos = topic != nullptr ? topic->qos : topic_qos{};
-        if(subs == nullptr && !qos.latch)
-            return;
-
-        const std::optional<std::uint64_t> counter = topic->emit_source_identity ? topic->endpoint_counter : std::nullopt;
-        message_info pub_info{};
-        const wire_bytes<> framed = frame_publish(hash, payload, counter, session_id, pub_info);
-        const message_view bare   = bare_of(framed, counter);
-        emit_published(hash, fqn, bare);
-
-        if(subs != nullptr)
-            fan_published(*subs, hash, fqn, qos, framed, bare, pub_info);
-        retain_if_latched(hash, qos, framed);
-    }
-
-    wire_bytes<> frame_publish(std::uint64_t hash, std::span<const std::byte> payload, std::optional<std::uint64_t> counter, std::uint64_t session_id, message_info &pub_info)
-    {
-        wire::unidirectional_header uhdr{.source = wire::endpoint_source_type::publisher, .sequence = m_endpoint.next_sequence(), .topic_hash = hash};
-        wire::frame_header fhdr{.type         = wire::msg_type::unidirectional,
-                                .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
-                                .session_id   = session_id,
-                                .timestamp_ns = wire::now_timestamp_ns(),
-                                .payload_len  = 0};
-        pub_info.publication_sequence = uhdr.sequence;
-        pub_info.source_timestamp     = fhdr.timestamp_ns;
-        return frame_owned(fhdr, uhdr, payload, counter);
-    }
-
-    wire_bytes<> frame_object(const object_carrier &carrier, std::uint64_t hash, std::optional<std::uint64_t> counter, std::uint64_t session_id, std::span<const std::byte> bytes)
-    {
-        wire::unidirectional_header uhdr{.source = wire::endpoint_source_type::publisher, .sequence = carrier.sequence, .topic_hash = hash};
-        wire::frame_header fhdr{.type         = wire::msg_type::unidirectional,
-                                .flags        = counter ? wire::k_flag_source_identity : std::uint8_t{0},
-                                .session_id   = session_id,
-                                .timestamp_ns = carrier.source_timestamp,
-                                .payload_len  = 0};
-        return frame_owned(fhdr, uhdr, bytes, counter);
-    }
-
-    void fan_published(const std::vector<typename subscriber_registry<channel_type>::subscriber> &subs, std::uint64_t hash, std::string_view fqn, const topic_qos &qos,
-                       const wire_bytes<> &framed, const message_view &bare, const message_info &pub_info)
-    {
-        const std::size_t band = detail::band_of(qos.priority);
-        for(const auto &sub : subs)
-        {
-            if(!any_set(qos.reach, sub.tier))
-                continue;
-
-            channel_type *route =
-                    &sub.channel
-                             .get(); // Gate on the FRAMED size, not the bare payload: the ring slot carries framed bytes, so a bare-size gate would route a frame-overflowing message to SHM only and drop it.
-            if(m_companion_route_cb)
-                if(channel_type *companion = m_companion_route_cb(sub.node_name, fqn, framed.size()))
-                    route = companion;
-
-            const detail::drop_cause cause = m_egress.enqueue(*route, band, qos.congestion, framed);
-            if(cause != detail::drop_cause::none)
-                shed(hash, band, cause, sub.tier);
-            emit_delivered(hash, fqn, pub_info, bare);
-        }
+        detail::forwarder_publish(*this, fqn, payload, session_id);
     }
 
     template<typename EncodeOnce>
@@ -405,7 +329,7 @@ public:
             if(encoded)
                 return;
             encoded = true;
-            framed  = frame_object(carrier, hash, counter, session_id, std::forward<EncodeFn>(encode)());
+            framed  = detail::frame_object(carrier, hash, counter, session_id, std::forward<EncodeFn>(encode)());
         };
 
         const bool capture_payload = m_capture_wants_payload_cb && m_capture_wants_payload_cb(hash);
@@ -422,7 +346,7 @@ public:
         if(latched)
         {
             encode_once();
-            retain_if_latched(hash, qos, framed);
+            detail::retain_if_latched(*this, hash, qos, framed);
         }
 
         release(carrier);
@@ -430,65 +354,29 @@ public:
 
     bool detach(const peer &p, std::string_view fqn)
     {
-        if(!m_endpoint.detach_gate(p.node_name, fqn))
-            return false;
-
-        auto hash = wire::fqn_topic_hash(fqn);
-        m_endpoint.registry().remove_subscriber(hash, p.channel);
-        m_egress.remove(p.channel);
-        forget_remote_topic(p.node_name, fqn);
-
-        auto req = wire::encode_unsubscribe_request({.topic_hash = hash});
-        send_control(p.channel, wire::msg_type::unsubscribe, req);
-        emit_qos_change(qos_edge::unsubscribed, hash, subscriber_qos{}, rxo_verdict::compatible, std::nullopt);
-        emit_demand_transition(p.node_name, fqn, demand_transition::down, demand_role::subscriber);
-        return true;
+        return detail::forwarder_detach(*this, p, fqn);
     }
 
     void detach_all(const peer &p)
     {
-        m_endpoint.remove_peer(p);
-        m_egress.remove(p.channel);
+        detail::forwarder_detach_all(*this, p);
     }
 
     const std::vector<remembered_demand> &remembered_topics(const std::string &node_name) const
     {
-        auto it = m_remote_topics.find(node_name);
-        return it == m_remote_topics.end() ? m_empty : it->second;
+        return detail::remembered_topics(*this, node_name);
     }
 
     template<typename OnMessage>
     void deliver(const peer &, std::span<const std::byte> inner, const node_id &source_node_id, bool has_source_identity, OnMessage &&on_message)
     {
-        auto decoded = wire::decode_unidirectional(inner, has_source_identity);
-        if(!decoded)
-            return drop("plexus: forwarder unidirectional_decode_failed");
-
-        auto fqn = m_endpoint.registry().fqn_for(decoded->header.topic_hash);
-        if(fqn.empty())
-            return drop("plexus: forwarder topic_unknown_for_data");
-
-        stamp_received(source_node_id, decoded->header.topic_hash);
-        on_message(fqn, decoded->data);
+        detail::forwarder_deliver(*this, inner, source_node_id, has_source_identity, std::forward<OnMessage>(on_message));
     }
 
     template<typename OnMessage>
     void deliver(const peer &, std::span<const std::byte> inner, message_info info, const node_id &source_node_id, bool has_source_identity, OnMessage &&on_message)
     {
-        auto decoded = wire::decode_unidirectional(inner, has_source_identity);
-        if(!decoded)
-            return drop("plexus: forwarder unidirectional_decode_failed");
-
-        auto fqn = m_endpoint.registry().fqn_for(decoded->header.topic_hash);
-        if(fqn.empty())
-            return drop("plexus: forwarder topic_unknown_for_data");
-
-        info.publication_sequence = decoded->header.sequence;
-        if(decoded->endpoint_counter)
-            info.source_identity = publisher_gid{source_node_id, *decoded->endpoint_counter};
-
-        stamp_received(source_node_id, decoded->header.topic_hash);
-        on_message(fqn, decoded->data, info);
+        detail::forwarder_deliver(*this, inner, info, source_node_id, has_source_identity, std::forward<OnMessage>(on_message));
     }
 
     void set_on_data_stamp(plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> hook)
@@ -621,7 +509,7 @@ public:
             return;
 
         const auto limit = std::min<std::size_t>({static_cast<std::size_t>(max_samples), it->second.count(), k_fetch_cap});
-        replay_window(p, it->second, limit);
+        detail::replay_window(p, it->second, limit);
     }
 
     std::string_view fqn_for(std::uint64_t topic_hash) const
@@ -647,18 +535,40 @@ public:
 private:
     template<typename F, typename P>
     friend bool detail::attach_for_fanout(F &, const P &, std::string_view, std::optional<std::uint64_t>, const subscriber_qos &);
+    template<typename F>
+    friend void detail::forwarder_drop(F &, std::string_view);
+    template<typename F>
+    friend void detail::stamp_received(F &, const node_id &, std::uint64_t);
+    template<typename F, typename O>
+    friend void detail::forwarder_deliver(F &, std::span<const std::byte>, const node_id &, bool, O &&);
+    template<typename F, typename O>
+    friend void detail::forwarder_deliver(F &, std::span<const std::byte>, message_info, const node_id &, bool, O &&);
+    template<typename F>
+    friend wire_bytes<> detail::frame_publish(F &, std::uint64_t, std::span<const std::byte>, std::optional<std::uint64_t>, std::uint64_t, message_info &);
+    template<typename F>
+    friend void detail::retain_if_latched(F &, std::uint64_t, const topic_qos &, const wire_bytes<> &);
+    template<typename F, typename P>
+    friend void detail::replay_if_latched(F &, const P &, std::uint64_t);
+    template<typename F, typename S>
+    friend void detail::fan_published(F &, const S &, std::uint64_t, std::string_view, const topic_qos &, const wire_bytes<> &, const message_view &, const message_info &);
+    template<typename F>
+    friend void detail::forwarder_publish(F &, std::string_view, std::span<const std::byte>, std::uint64_t);
+    template<typename F>
+    friend void detail::record_remote_topic(F &, const std::string &, std::string_view, const subscriber_qos &, std::optional<std::uint64_t>, std::string_view);
+    template<typename F>
+    friend void detail::forget_remote_topic(F &, const std::string &, std::string_view);
+    template<typename F>
+    friend const std::vector<remembered_demand> &detail::remembered_topics(const F &, const std::string &);
+    template<typename F, typename P>
+    friend bool detail::forwarder_detach(F &, const P &, std::string_view);
+    template<typename F, typename P>
+    friend void detail::forwarder_detach_all(F &, const P &);
+    template<typename F, typename C>
+    friend void detail::forwarder_detach_local(F &, std::string_view, C &);
 
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
         m_endpoint.send_control(channel, type, inner);
-    }
-
-    wire_bytes<> frame_owned(const wire::frame_header &fhdr, const wire::unidirectional_header &uhdr, std::span<const std::byte> payload, std::optional<std::uint64_t> counter)
-    {
-        auto buf = std::make_shared<std::vector<std::byte>>();
-        wire::encode_unidirectional_frame_into(*buf, fhdr, uhdr, payload, counter);
-        std::span<const std::byte> view{*buf};
-        return wire_bytes<>{view, std::shared_ptr<const void>{std::move(buf)}};
     }
 
     static message_view bare_of(const wire_bytes<> &framed, std::optional<std::uint64_t> counter)
@@ -666,49 +576,6 @@ private:
         const std::size_t prefix              = wire::header_size + wire::unidirectional_header_size + (counter ? wire::varint_size(*counter) : 0);
         const std::span<const std::byte> view = static_cast<std::span<const std::byte>>(framed);
         return message_view{view.subspan(prefix), framed.owner()};
-    }
-
-    void retain_if_latched(std::uint64_t hash, const topic_qos &qos, const wire_bytes<> &framed)
-    {
-        if(!qos.latch)
-            return;
-
-        auto &ring = m_retained[hash];
-        ring.resize_to(std::clamp<std::size_t>(qos.depth, 1, k_history_depth_cap));
-        ring.push(static_cast<std::span<const std::byte>>(framed));
-    }
-
-    void replay_if_latched(const peer &p, std::uint64_t hash)
-    {
-        if(!m_endpoint.registry().qos_for(hash).latch)
-            return;
-
-        auto it = m_retained.find(hash);
-        if(it == m_retained.end() || it->second.empty())
-            return;
-
-        const subscriber_qos sub = m_endpoint.registry().qos_for_subscriber(hash, p.channel);
-        switch(sub.durability_mode)
-        {
-            case durability::none:
-                return;
-            case durability::latest:
-                p.channel.send(it->second.newest());
-                return;
-            case durability::all:
-                {
-                    auto count = it->second.count();
-                    auto limit = sub.replay_depth ? std::min<std::size_t>(count, sub.replay_depth) : count;
-                    replay_window(p, it->second, limit);
-                }
-        }
-    }
-
-    void replay_window(const peer &p, const detail::history_ring &ring, std::size_t limit)
-    {
-        const std::size_t count = ring.count();
-        for(std::size_t i = count - limit; i < count; ++i)
-            p.channel.send(ring.oldest_to_newest(i));
     }
 
     static bool eligible_for_object(const typename subscriber_registry<channel_type>::subscriber &sub, const object_carrier &carrier)
@@ -776,32 +643,6 @@ private:
             m_on_declaration_cb(td);
     }
 
-    void record_remote_topic(const std::string &node_name, std::string_view fqn, const subscriber_qos &qos, std::optional<std::uint64_t> type_id = std::nullopt,
-                             std::string_view type_name = {})
-    {
-        auto &topics = m_remote_topics[node_name];
-        for(const auto &existing : topics)
-            if(existing.fqn == fqn)
-                return; // idempotent: keep the first stored qos + type
-        topics.emplace_back(remembered_demand{std::string{fqn}, qos, type_id, std::string{type_name}});
-    }
-
-    void forget_remote_topic(const std::string &node_name, std::string_view fqn)
-    {
-        auto it = m_remote_topics.find(node_name);
-        if(it == m_remote_topics.end())
-            return;
-        std::erase_if(it->second, [&](const remembered_demand &d) { return d.fqn == fqn; });
-        if(it->second.empty())
-            m_remote_topics.erase(it);
-    }
-
-    void stamp_received(const node_id &source_node_id, std::uint64_t topic_hash)
-    {
-        if(m_on_data_stamp_cb)
-            m_on_data_stamp_cb(source_node_id, topic_hash);
-    }
-
     void shed(std::uint64_t hash, std::size_t band, detail::drop_cause cause, locality tier)
     {
         m_endpoint.registry().record_drop(hash, band, cause);
@@ -831,11 +672,6 @@ private:
     {
         if(m_on_qos_change_cb)
             m_on_qos_change_cb(qos_change_event{.edge = edge, .topic_hash = hash, .peer = node_id{}, .requested = requested, .verdict = verdict, .type_id = type_id});
-    }
-
-    void drop(std::string_view message)
-    {
-        m_logger.warn(message);
     }
 
     log::logger &m_logger;

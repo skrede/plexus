@@ -108,7 +108,7 @@ struct splice_buffer
 };
 
 // The relay-profile twin: the pub/sub forwarding-send half. It holds the grow-once splice pool and, per
-// admitted forwarded frame, builds ONE outbound forwarded envelope (the D95.1 pooled owned copy by
+// admitted forwarded frame, builds ONE outbound forwarded envelope (the pooled owned copy by
 // default; the owner-retaining zero-copy when the knob is refcounted_zero_copy and an inbound owner is
 // available) and hands it to the forwarder's interest-scoped fan, which addref-shares it into every
 // subscribing destination's band through the existing egress scheduler — no second queue.

@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_FANOUT_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_FANOUT_H
 
+#include "plexus/io/detail/forwarder_publish.h"
+
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_qos.h"
@@ -56,7 +58,7 @@ bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn, std::o
             ? wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::subscribed_degraded, .has_degraded = true, .degraded_flags = rxo.degraded_fields})
             : wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::subscribed});
     f.send_control(p.channel, wire::msg_type::subscribe_response, resp);
-    f.replay_if_latched(p, hash);
+    replay_if_latched(f, p, hash);
     f.emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::publisher);
     return true;
 }

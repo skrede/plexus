@@ -16,8 +16,8 @@ namespace plexus::wire {
 // A relay's re-announcement of an attached peer on an authenticated session: the origin identity
 // (distinct from the transport-sender), the universe it lives in, a hop count, a per-origin seq, and
 // the origin's topics-with-types. It rides a NEW session verb (msg_type::peer_report), not the
-// announcement, because the shipped v0.3.0 announcement decoder accepts unknown flag bits and
-// ignores trailing bytes — a rider would decode as a direct peer. Decoded straight off an untrusted
+// announcement, because an announcement decoder that accepts unknown flag bits and ignores
+// trailing bytes would decode a rider as a direct peer. Decoded straight off an untrusted
 // session frame, so decode_peer_report is hardened (latching reader, cap-before-copy, closed-set
 // enum checks, nullopt on any malformation, never a partial struct).
 struct peer_report

@@ -31,7 +31,7 @@ public:
             m_slots.push_back(std::make_shared<std::vector<std::byte>>(slot_bytes));
     }
 
-    // Pooled owned copy (D95.1 default): claim a free slot, let enc(std::span<std::byte>) write the
+    // Pooled owned copy (the default ownership): claim a free slot, let enc(std::span<std::byte>) write the
     // forwarded envelope into it and return the byte count, then hand back a wire_bytes<> whose owner
     // returns the slot to the pool on final release. On exhaustion the resident set is untouched, the
     // drop is counted, and an empty wire_bytes degrades the caller to drop-with-count.

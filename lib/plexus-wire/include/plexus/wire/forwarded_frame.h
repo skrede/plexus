@@ -13,8 +13,8 @@ namespace plexus::wire {
 
 // A relayed session verb: it carries an inner frame from an origin toward a destination across one
 // relay hop. It rides a NEW session verb (msg_type::forwarded), not a flag bit or an appended
-// trailer, because the shipped v0.3.0 unidirectional decoder returns data = reader.rest() and ignores
-// nothing — a rider would be delivered inside the subscriber payload (silent corruption). The inner
+// trailer, because a unidirectional decoder that returns data = reader.rest() ignores nothing — a
+// rider would be delivered inside the subscriber payload (silent corruption). The inner
 // region is header-on, so the receive edge re-enters frame_router dispatch for the inner type and one
 // verb covers unidirectional AND rpc_request AND rpc_response transit. Decoded straight off an
 // untrusted session frame, so decode_forwarded_frame is hardened (latching reader, cap-before-copy,
