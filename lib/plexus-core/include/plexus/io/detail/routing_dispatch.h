@@ -21,11 +21,11 @@
 
 namespace plexus::io::detail {
 
-// The posted observer fan-out discipline, factored out of the engine body. Every edge is POSTED on
-// the BORROWED executor over a SNAPSHOT of the observer list: a callback that (un)registers an
-// observer mutates the live list without invalidating the in-flight iteration — a same-turn remove
-// is honored, a same-turn add takes effect on the next posted edge. RELOCATION: the engine owns
-// m_observers/m_executor; these read them through it (they are friends).
+// The posted observer fan-out discipline. Every edge is POSTED on the BORROWED executor over a
+// SNAPSHOT of the observer list: a callback that (un)registers an observer mutates the live list
+// without invalidating the in-flight iteration — a same-turn remove is honored, a same-turn add
+// takes effect on the next posted edge. The engine owns m_observers/m_executor; these read them
+// through it (they are friends).
 
 // Skip any observer unregistered mid-turn so a callback may safely (un)register without corrupting
 // the fan-out.

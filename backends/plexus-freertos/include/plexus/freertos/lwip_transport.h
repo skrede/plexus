@@ -33,7 +33,7 @@ namespace plexus::freertos {
 // is poll-all over a BOUNDED, no-heap set of non-owning channel views; a connection over the cap is
 // refused. For N=1 the view set collapses to the single-slot case the dial-only path compiles to.
 // The Socket and Acceptor are the injection seams: lwip_socket/lwip_acceptor on hardware, the host's
-// POSIX socket/listener in the loopback slice. The default null_acceptor never listens (dial-only).
+// POSIX socket/listener under test. The default null_acceptor never listens (dial-only).
 template<plexus::stream::stream_socket Socket, typename Acceptor = detail::null_acceptor<Socket>, std::size_t MaxClients = 1>
 class lwip_transport
 {

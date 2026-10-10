@@ -1,12 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_DETAIL_UART_IO_H
 #define HPP_GUARD_PLEXUS_FREERTOS_DETAIL_UART_IO_H
 
-// The asio->UART transport leg, factored out of uart_channel so the channel header
-// stays the byte_channel shell and stays under the file-size ceiling. These are the
-// only functions that name the ESP-IDF UART driver; on-target they bind the real
-// `driver/uart.h` symbols, on the host suite they bind the test-local UART shim that
-// declares the same surface (see the seam test). Mirrors how serial_channel keeps its
-// read loop in detail/serial_channel_io.h.
+// The asio->UART transport leg: the only functions that name the ESP-IDF UART driver.
+// On-target they bind the real `driver/uart.h` symbols; on the host suite they bind the
+// test-local UART shim that declares the same surface.
 
 #if defined(ESP_PLATFORM)
     #include "driver/uart.h"

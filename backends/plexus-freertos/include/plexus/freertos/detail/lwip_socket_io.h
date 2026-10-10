@@ -160,7 +160,7 @@ private:
         lwip_fcntl(m_fd, F_SETFL, flags | O_NONBLOCK);
     }
 
-    // A negative return splits into two classes kept textually distinct (research §5). SOFT/transient
+    // A negative return splits into two classes kept textually distinct. SOFT/transient
     // — EWOULDBLOCK/EAGAIN (send buffer full) or ENOMEM (lwIP ERR_MEM: a tcp_write/pbuf OOM) — is local
     // congestion: report 0, the channel re-arms, it NEVER tears down. HARD — ECONNRESET/EPIPE — is a
     // connection drop: set closed so the channel fires on_error and the engine re-dials.

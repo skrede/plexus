@@ -132,7 +132,6 @@ public:
 
     // Fires on_dialed on the ARQ RESOLVING (the paired hs_response arriving), NOT immediately. ep
     // rides through the ARQ closures so the engine correlates the completion by endpoint.
-    // NOLINTNEXTLINE(readability-function-size)
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;

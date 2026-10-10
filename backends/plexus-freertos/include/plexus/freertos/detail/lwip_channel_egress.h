@@ -18,7 +18,7 @@ namespace plexus::freertos::detail {
 // stream_socket. The borrowed socket and the on_error hook outlive this helper (the owning channel
 // holds both). lwIP has no scatter writev, so the gathered views are sent one by one.
 //
-// Two distinct failure classes ride this path (research §5), kept textually separate so a reader
+// Two distinct failure classes ride this path, kept textually separate so a reader
 // sees soft != hard:
 //   * SOFT/transient — a full send_queue (egress cap exceeded) or a short/zero send the socket
 //     folded from EWOULDBLOCK/EAGAIN/ERR_MEM. This is LOCAL congestion: the congestion QoS absorbs

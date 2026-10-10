@@ -32,8 +32,8 @@ struct fragmentation_limits
 };
 
 // THE NODE-OPTIONS MESSAGE-SIZE DEFAULTS — the operator-facing knobs the transport
-// ctors bind by default. The live per-message ceiling is no longer the implicit
-// fragmentation_limits::max_message_size (that constant survives only as the
+// ctors bind by default. The live per-message ceiling is not the implicit
+// fragmentation_limits::max_message_size (that constant serves only as the
 // fragment-count assert math + a safe fallback); it is this settable node default,
 // resolved per-topic through effective_max and threaded from the transport ctor.
 //

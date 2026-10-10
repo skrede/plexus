@@ -15,8 +15,8 @@ namespace plexus::freertos {
 
 // The constrained-target Policy for the real TCP byte_channel: freertos_policy with the
 // transport-free stub swapped for lwip_channel over a connected stream_socket (the same swap
-// v0.2.5 did stub->uart). The Socket parameter is the injection seam the transport dials over — the
-// on-target lwIP socket on hardware, the host's POSIX socket in the loopback slice — so a single
+// the uart policy makes). The Socket parameter is the injection seam the transport dials over — the
+// on-target lwIP socket on hardware, the host's POSIX socket under test — so a single
 // Policy shape serves both without the lib naming the test-side socket.
 //
 // Fully-qualify plexus::detail here: an io/host-shim detail namespace is in scope inside

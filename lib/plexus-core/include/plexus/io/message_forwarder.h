@@ -279,7 +279,6 @@ public:
     }
 
     template<typename EncodeOnce>
-    // NOLINTNEXTLINE(readability-function-size)
     void fan_object(const std::vector<typename subscriber_registry<channel_type>::subscriber> &subs, std::uint64_t hash, std::string_view fqn, const topic_qos &qos,
                     const object_carrier &carrier, const wire_bytes<> &framed, const message_view &bare, const message_info &obj_info, EncodeOnce &encode_once)
     {

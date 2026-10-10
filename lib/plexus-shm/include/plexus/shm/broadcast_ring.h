@@ -37,7 +37,7 @@ public:
     // reads its first slot.
     static constexpr std::uint64_t k_cursor_idle = UINT64_MAX;
 
-    // No-progress bound on the reliable pin-clear spin (shm-spin-budget-sweep-2026-06-14):
+    // No-progress bound on the reliable pin-clear spin:
     // CONSECUTIVE relax turns during which the slowest cursor did NOT move, RESET on every
     // advance, so a live-but-slow consumer blocks the producer losslessly while a wedged/dead pin
     // holder trips the budget. The unpinned happy path takes it zero times.
@@ -131,7 +131,6 @@ public:
 
     // The reliable claim with no consumer gating: size>slot_capacity -> rejected; a free cell
     // won -> ok; ring full -> congested.
-    // NOLINTNEXTLINE(readability-function-size)
     loan_status claim(std::size_t size, claim_result &out) noexcept
     {
         if(size > m_slot_capacity)

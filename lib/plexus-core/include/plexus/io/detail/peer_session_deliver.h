@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_DELIVER_H
 
 #include "plexus/io/message_info.h"
+#include "plexus/io/object_carrier.h"
 
 #include "plexus/node_id.h"
 
@@ -30,7 +31,6 @@ message_info assemble_message_info(Session &s, const wire::frame_header &hdr)
 // honor has_source_identity to land the data span correctly, and attributes the passed source
 // (never a node_id read from the frame body). None set = silent drop.
 template<typename Session>
-// NOLINTNEXTLINE(readability-function-size)
 void deliver_data_with_source(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner, const node_id &source)
 {
     const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;

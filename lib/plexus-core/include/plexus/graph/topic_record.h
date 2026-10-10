@@ -15,8 +15,7 @@ namespace plexus::graph
 // The per-topic distinct-type bound. An owning backend stores each name at its wire lid
 // (wire::detail::k_max_type_name, 512 bytes), so four names cost 2048 bytes of name storage per
 // topic. The common case is one type per topic; a publisher disagreement past four distinct types
-// is refused and flagged, never grown unbounded. Interim: an on-target footprint measurement is
-// what moves this value.
+// is refused and flagged, never grown unbounded.
 constexpr std::size_t k_topic_type_list_cap = 4;
 
 // Which side of a topic a participant sits on. The edge direction is the record's own field, so a

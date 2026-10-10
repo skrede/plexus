@@ -10,7 +10,7 @@ Together they cover the compilers that no local run touches.
 
 ## CI is additive signal, not the gate
 
-The green CI matrix is **additive** cross-compiler coverage; it is **not the milestone
+The green CI matrix is **additive** cross-compiler coverage; it is **not the acceptance
 gate**, and it is not the definition of done. The definition of done stays
 local per-host green on Windows and macOS plus the standing Linux green: an agent on each host
 builds and runs the full suite, and those local runs are the arbiter of correctness. The

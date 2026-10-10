@@ -19,14 +19,13 @@
 
 namespace plexus::io::detail {
 
-// The engine's posted observation sinks, factored out of the engine body. Each is a
-// value-capturing callable that fans out on the BORROWED executor over a snapshot, never
-// synchronously from the site (the per-packet-inline-fire DoS guard). The data-path sinks
-// SHORT-CIRCUIT through the capture gate before posting: payload sinks consult should_emit(hash)
-// (selection AND observer-presence behind one branch), event-record sinks read observers_present()
-// directly — an unobserved/unselected node pays one branch and allocates nothing. RELOCATION: the
-// engine still owns m_capture/m_executor/m_observers; these carry the engine by reference and call
-// its private post helpers (they are friends).
+// The engine's posted observation sinks. Each is a value-capturing callable that fans out on the
+// BORROWED executor over a snapshot, never synchronously from the site (the per-packet-inline-fire
+// DoS guard). The data-path sinks SHORT-CIRCUIT through the capture gate before posting: payload
+// sinks consult should_emit(hash) (selection AND observer-presence behind one branch), event-record
+// sinks read observers_present() directly — an unobserved/unselected node pays one branch and
+// allocates nothing. The engine owns m_capture/m_executor/m_observers; these carry the engine by
+// reference and call its private post helpers (they are friends).
 
 template<typename Engine>
 auto make_drop_sink(Engine &e)

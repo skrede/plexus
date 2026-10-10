@@ -731,7 +731,6 @@ private:
 
     // Each verb is a captureless static lambda (a plain fn-ptr, zero alloc) recovering the node and
     // forwarding to the private *_seam, so the concrete Policy stays inside those bodies.
-    // NOLINTNEXTLINE(readability-function-size)
     io::endpoint_seam endpoint_seam_for() noexcept
     {
         io::endpoint_seam s{};
@@ -822,8 +821,8 @@ private:
         return "plexus: node reaches one or more destinations via a relay (self_check)";
     }
 
-    // The route count at which a leaf's via-relay reach is first disclosed. INTERIM: a value of 1
-    // discloses any relayed reach; an on-target symbol/size sweep may retune it.
+    // The route count at which a leaf's via-relay reach is first disclosed: a value of 1
+    // discloses any relayed reach.
     static constexpr std::size_t k_relay_routes_disclosure_threshold = 1;
 
     plexus::node_id m_id;

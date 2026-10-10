@@ -164,7 +164,7 @@ void plexus_task(void *)
     auto host = std::make_unique<plexus::loopback_host<example::onboard_policy>>(ex, disc, plexus::node_id_from_name("esp32-onboard"), opts);
     auto &node = host->node();
 
-    // The same public enumeration surface on-target (INV-1): the peerless onboard node yields an
+    // The same public enumeration surface on-target: the peerless onboard node yields an
     // empty snapshot, but the identical header-only participants() path runs byte-identically on xtensa.
     std::array<plexus::graph::participant_record, 4> peers{};
     const auto snapshot = node.participants(std::span<plexus::graph::participant_record>{peers});

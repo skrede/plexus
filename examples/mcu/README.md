@@ -8,8 +8,8 @@ the cooperative executor and delivered to the subscriber on the next drain, all 
 to a consumer inside one device. The payload is a plain in-process counter (no HAL, no pin), and
 the device console (UART0, left enabled) logs each self-delivered value with `ESP_LOGI`.
 
-It cross-builds for `esp32` (Xtensa). A green cross-compile is the deliverable here; the
-on-hardware run is deferred (a green cross-compile is not a runtime proof on its own).
+It cross-builds for `esp32` (Xtensa). A green cross-compile is the deliverable here; no
+on-hardware run is claimed (a green cross-compile is not a runtime proof on its own).
 
 ```sh
 . /opt/esp-idf/export.sh
@@ -107,7 +107,7 @@ Two firmware variants run the same node over a real IP transport instead of the 
   listens, accepts the device's inbound dial, and asserts one real message arrives.
 - [`esp-idf-eth/`](esp-idf-eth/) — **Ethernet**. The same node over a wired PHY. It cross-builds
   for `esp32`, but no on-hardware run is claimed until a PHY board is available — treat it as a
-  compile-only target for now.
+  compile-only target.
 
 Unlike the serial example the device is the **dialer** here: it brings up the netif, then dials
 the host. The host gate is therefore a TCP **server** (`node.listen`), not a dialer.

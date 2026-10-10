@@ -24,7 +24,7 @@ enum class splice_ownership : std::uint8_t
 };
 
 // The forwarding relay's loop-safety and egress bounds plus the splice-pool sizing. Every numeric is a
-// defaulted struct field swept on target later, never pinned in the mechanism; scope_pattern, when set,
+// defaulted, consumer-tunable struct field, never pinned in the mechanism; scope_pattern, when set,
 // scopes which topics the relay forwards. ownership is the forwarded-copy knob (default pooled_owned_copy).
 struct forward_options
 {

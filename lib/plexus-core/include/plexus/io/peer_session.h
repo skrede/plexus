@@ -87,7 +87,6 @@ public:
     {
     }
 
-    // NOLINTNEXTLINE(readability-function-size)
     void start()
     {
         m_torn_down                 = false;

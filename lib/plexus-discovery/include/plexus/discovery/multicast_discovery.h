@@ -3,8 +3,9 @@
 
 #include "plexus/discovery/discovery_health.h"
 #include "plexus/discovery/discovery_options.h"
+#include "plexus/discovery/detail/discovery_emit.h"
 #include "plexus/discovery/detail/announce_jitter.h"
-#include "plexus/discovery/detail/announcement_card.h"
+#include "plexus/discovery/detail/discovery_inbound.h"
 #include "plexus/discovery/detail/discovery_flood_cap.h"
 #include "plexus/discovery/detail/discovery_card_codec.h"
 
@@ -24,7 +25,6 @@
 #include <cstdint>
 #include <utility>
 #include <optional>
-#include <system_error>
 
 namespace plexus::discovery {
 
@@ -68,7 +68,7 @@ public:
             m_universe_pattern     = *pattern;
             m_universe_is_concrete = match::detail::is_concrete(*pattern);
         }
-        m_socket.on_datagram([this](const typename Socket::endpoint_type &from, std::span<const std::byte> bytes) { on_inbound(from, bytes); });
+        m_socket.on_datagram([this](const typename Socket::endpoint_type &from, std::span<const std::byte> bytes) { detail::on_inbound<Clock>(*this, from, bytes); });
     }
 
     // The self-probe verdict: healthy once the node has seen its own multicast echo, no_self_echo
@@ -88,11 +88,11 @@ public:
         m_announcement             = detail::announcement_from_service_info(service, ttl_secs(), m_options.universe, m_options.universe_pattern);
         const bool was_advertising = m_advertising;
         m_advertising              = true;
-        emit_announcement();
+        detail::emit_announcement(*this);
         if(!was_advertising)
         {
             m_jitter.seed(detail::jitter_seed_from(m_announcement->node_id));
-            arm_timer();
+            detail::arm_timer(*this);
         }
     }
 
@@ -110,7 +110,7 @@ public:
     {
         m_timer.cancel();
         if(m_advertising)
-            emit_goodbye();
+            detail::emit_goodbye(*this);
         m_socket.close();
         m_on_resolved_cb  = nullptr;
         m_on_withdrawn_cb = nullptr;
@@ -123,88 +123,6 @@ private:
         typename Socket::endpoint_type ep{};
         ep.port(m_options.port);
         return ep;
-    }
-
-    void on_inbound(const typename Socket::endpoint_type &from, std::span<const std::byte> bytes)
-    {
-        const auto ann = wire::decode_announcement(bytes);
-        if(!ann)
-            return;
-        // Fail-closed ahead of self-echo, goodbye, and admission: a foreign universe is dropped whole, evicting no peer and paying no admission or alloc.
-        if(!universe_admits(*ann))
-            return;
-        // A node never notes itself: its own echo (same node_id) is recorded for the self-probe then dropped, keeping awareness cross-node.
-        if(m_announcement && ann->node_id == m_announcement->node_id)
-        {
-            m_self_seen = true;
-            return;
-        }
-        dispatch(*ann, from.address().to_string());
-    }
-
-    // The concrete/concrete common case keeps the legacy uint32 fast-path (no parse, no alloc);
-    // otherwise the universe patterns must intersect — a rider on the shared matcher, never a second
-    // glob. FNV(factory/line/*) != FNV(factory/line/1) yet they intersect, so a flagged peer must never
-    // take the fast-path. A malformed peer pattern or an unparsable local pattern fails closed.
-    bool universe_admits(const wire::announcement &ann) const
-    {
-        if(m_universe_is_concrete && !(ann.flags & wire::k_announcement_universe_pattern_flag))
-            return ann.universe == m_options.universe;
-        const auto peer = match::key_pattern::make(ann.universe_pattern);
-        return m_universe_pattern && peer && m_universe_pattern->intersects(*peer);
-    }
-
-    void dispatch(const wire::announcement &ann, const std::string &source)
-    {
-        auto info = detail::service_info_from_announcement(ann, source);
-        if((ann.flags & wire::k_announcement_goodbye_flag) != 0)
-        {
-            // A goodbye is a removal: never rate-limit or cap it, a leaver must always be able to leave.
-            if(m_on_withdrawn_cb)
-                m_on_withdrawn_cb(info);
-            return;
-        }
-        if(m_on_resolved_cb && m_flood_cap.admit(source, Clock::now()))
-            m_on_resolved_cb(info);
-    }
-
-    // Re-encode the cached announcement into the reused scratch (no per-emit alloc once warm) and
-    // send. Re-announces of the same (id, ep) are idempotent at note_peer (a map put), so no dedup.
-    void emit_with_flags(std::uint8_t flags)
-    {
-        if(!m_announcement)
-            return;
-        // The universe-pattern presence flag is a persistent property of this node's announcement (set
-        // at build from the label); goodbye is the only transient per-emit bit. Preserve the former so a
-        // re-announce or goodbye never drops the pattern and silently reverts to legacy-flagless wire.
-        m_announcement->flags = flags | (m_announcement->flags & wire::k_announcement_universe_pattern_flag);
-        wire::encode_announcement_into(m_scratch, *m_announcement);
-        m_socket.send_multicast(m_scratch);
-    }
-
-    void emit_announcement()
-    {
-        emit_with_flags(0);
-    }
-
-    // A best-effort single leave datagram: a browser evicts this node's awareness on receipt
-    // instead of waiting out the ttl.
-    void emit_goodbye()
-    {
-        emit_with_flags(wire::k_announcement_goodbye_flag);
-    }
-
-    void arm_timer()
-    {
-        m_timer.expires_after(m_jitter.next(m_options.announce_period));
-        m_timer.async_wait(
-                [this](std::error_code ec)
-                {
-                    if(ec || !m_advertising)
-                        return;
-                    emit_announcement();
-                    arm_timer();
-                });
     }
 
     std::uint64_t ttl_secs() const
@@ -227,6 +145,17 @@ private:
     ::plexus::discovery::discovery::withdrawn_callback m_on_withdrawn_cb;
     bool m_advertising;
     bool m_self_seen;
+
+    template<typename C, typename D, typename Endpoint>
+    friend void detail::on_inbound(D &, const Endpoint &, std::span<const std::byte>);
+    template<typename D>
+    friend bool detail::universe_admits(const D &, const wire::announcement &);
+    template<typename C, typename D>
+    friend void detail::dispatch_announcement(D &, const wire::announcement &, const std::string &);
+    template<typename D>
+    friend void detail::emit_with_flags(D &, std::uint8_t);
+    template<typename D>
+    friend void detail::arm_timer(D &);
 };
 
 }

@@ -22,7 +22,7 @@ class slot_subscriber
 {
 public:
     // The conservative spin-then-park budget, confirmed by a {0,64,256,1k,4k,16k} x rate x
-    // payload sweep (shm-spin-budget-sweep-2026-06-13): 256 reclaims ~-50% P50 at 100kHz on
+    // payload sweep: 256 reclaims ~-50% P50 at 100kHz on
     // the back-to-back path over pure-park at a sub-1us spin window, never busy-spins idle.
     static constexpr std::uint32_t default_spin_budget = 256;
 

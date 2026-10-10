@@ -47,7 +47,6 @@ public:
     using value_type = typename Codec::value_type;
 
     template<typename Policy, typename... NodeTs>
-    // NOLINTNEXTLINE(readability-function-size)
     value_logger(node<Policy, NodeTs...> &n, std::string_view fqn, const value_logger_options &opts, Codec codec = {}, Projection projection = {})
             : m_state(std::make_unique<state>(std::move(codec), std::move(projection), opts.format, opts.out))
     {

@@ -53,7 +53,7 @@ constexpr const char *k_topic = "telemetry";
 constexpr std::chrono::seconds k_timeout{8};
 
 // The bounded handshake re-send budget: each attempt is spaced one handshake_timeout window, so the
-// product covers the worst board boot the same way the old knock budget did — without a busy loop.
+// product covers the worst board boot without a busy loop.
 constexpr std::chrono::seconds k_handshake_window{2};
 constexpr std::uint32_t k_handshake_retry{8};
 
