@@ -4,6 +4,7 @@
 #include "plexus/node_id.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/node_discovery_glue.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/observer.h"
@@ -55,8 +56,8 @@ struct peer_watch : io::observer
 
     void on_peer_ready(const plexus::node_id &id, std::string_view, io::peer_kind) override
     {
-        owner.note_known_peer(id);
-        owner.fan_demands_to(id);
+        note_known_peer(owner, id);
+        fan_demands_to(owner, id);
     }
 };
 

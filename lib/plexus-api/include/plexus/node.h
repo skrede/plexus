@@ -44,12 +44,15 @@
 #include "plexus/detail/fail_closed.h"
 #include "plexus/detail/topic_sweep.h"
 #include "plexus/detail/address_parse.h"
+#include "plexus/detail/node_identity.h"
+#include "plexus/detail/node_internals.h"
+#include "plexus/detail/function_traits.h"
 #include "plexus/detail/node_self_route.h"
 #include "plexus/detail/call_origination.h"
 #include "plexus/detail/node_self_carrier.h"
+#include "plexus/detail/node_subscriptions.h"
+#include "plexus/detail/node_discovery_glue.h"
 #include "plexus/detail/node_upgrade_wiring.h"
-#include "plexus/detail/function_traits.h"
-#include "plexus/detail/node_internals.h"
 
 #include <span>
 #include <tuple>
@@ -125,37 +128,6 @@ using node_engine_transport = typename mux_selection<sizeof...(Transports) == 1,
 template<typename... Transports>
 using node_mux_glue = typename mux_selection<sizeof...(Transports) == 1, Transports...>::glue;
 
-// FNV-1a 64 over the name, run twice with distinct offset baselines, folding the two 8-byte
-// digests into the 16-byte node_id. Deterministic and platform-stable: the same name yields the
-// same identity.
-inline node_id hash_node_id(std::string_view name) noexcept
-{
-    constexpr std::uint64_t k_prime    = 1099511628211ull;
-    constexpr std::uint64_t k_basis_lo = 1469598103934665603ull;
-    constexpr std::uint64_t k_basis_hi = 0x9e3779b97f4a7c15ull;
-    std::uint64_t lo                   = k_basis_lo;
-    std::uint64_t hi                   = k_basis_hi;
-    for(char c : name)
-    {
-        const auto byte = static_cast<std::uint64_t>(static_cast<unsigned char>(c));
-        lo              = (lo ^ byte) * k_prime;
-        hi              = (hi ^ byte) * k_prime;
-    }
-    node_id id{};
-    for(int i = 0; i < 8; ++i)
-    {
-        id[i]     = static_cast<std::byte>((lo >> (8 * i)) & 0xff);
-        id[8 + i] = static_cast<std::byte>((hi >> (8 * i)) & 0xff);
-    }
-    return id;
-}
-
-}
-
-// Equal to the id() of a node constructed with the same name string.
-inline node_id node_id_from_name(std::string_view name) noexcept
-{
-    return detail::hash_node_id(name);
 }
 
 struct value_logger_options;
@@ -276,9 +248,9 @@ public:
         m_engine.on_message_route([this](std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info) { dispatch_message(fqn, bytes, info); });
         m_engine.on_object_route([this](std::string_view fqn, const io::object_carrier &carrier) { dispatch_object(fqn, carrier); });
         m_engine.add_observer(m_peer_watch);
-        advertise_card();
-        m_disc.browse([this](const discovery::service_info &peer) { note_from_card(peer); });
-        m_disc.on_withdrawn([this](const discovery::service_info &peer) { forget_from_card(peer); });
+        detail::advertise_card(*this);
+        m_disc.browse([this](const discovery::service_info &peer) { detail::note_from_card(*this, peer); });
+        m_disc.on_withdrawn([this](const discovery::service_info &peer) { detail::forget_from_card(*this, peer); });
         install_upgrade_coordinator();
         install_self_loopback();
         m_engine.capture().set_default(opts.capture.to_rule());
@@ -326,7 +298,7 @@ public:
             if(m_host.empty())
                 m_host = plexus::detail::host_of(ep.address);
             m_listens.push_back({ep.scheme, *port});
-            advertise_card();
+            detail::advertise_card(*this);
         }
     }
 
@@ -508,8 +480,6 @@ public:
         return recorder<engine_type, policy_type>{m_engine, m_executor, m_id, sink, std::move(opts), m_wire_crypto_position};
     }
 
-    friend struct detail::peer_watch<basic_node>;
-
 private:
     using object_entry = detail::object_entry;
     using subscription = detail::subscription;
@@ -528,13 +498,8 @@ private:
                                              std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {}, object_entry obj = {},
                                              std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
-        const registration_id rid    = m_next_registration++;
-        const bool first_for_fqn     = !any_subscriber_for(fqn);
-        std::pair<registration_id, subscription> entry{rid, subscription{std::string{fqn}, qos, type_id, std::string{type_name}, std::move(cb), std::move(obj)}};
-        if(m_dispatch_depth > 0)
-            m_deferred_subscription_adds.push_back(std::move(entry));
-        else
-            m_subscriptions.push_back(std::move(entry));
+        const bool first_for_fqn  = !m_subscriptions.any_for(fqn);
+        const registration_id rid = m_subscriptions.add(subscription{std::string{fqn}, qos, type_id, std::string{type_name}, std::move(cb), std::move(obj)});
         if(first_for_fqn)
             self_attach(fqn, qos, type_id);
         if(capture)
@@ -550,26 +515,8 @@ private:
 
     void retire_subscriber_seam(registration_id rid)
     {
-        if(m_dispatch_depth > 0)
-        {
-            // A retire from inside a dispatch fan: record a logical removal and defer the physical
-            // erase, so the in-flight callback loop never relocates m_subscriptions under itself.
-            const std::optional<std::string> fqn = subscription_fqn(rid);
-            if(!fqn || subscription_pending_removed(rid))
-                return;
-            m_deferred_subscription_removes.push_back(rid);
-            if(!any_subscriber_for(*fqn))
-                retire_fqn_demand(*fqn);
-            return;
-        }
-
-        auto it = std::find_if(m_subscriptions.begin(), m_subscriptions.end(), [&](const auto &e) { return e.first == rid; });
-        if(it == m_subscriptions.end())
-            return;
-        const std::string fqn = it->second.fqn;
-        m_subscriptions.erase(it);
-        if(!any_subscriber_for(fqn))
-            retire_fqn_demand(fqn);
+        if(const std::optional<std::string> fqn = m_subscriptions.remove(rid))
+            retire_fqn_demand(*fqn);
     }
 
     // Reached only once the LAST subscriber on the fqn is gone, which is what makes dropping the
@@ -698,86 +645,11 @@ private:
         std::erase(m_served_fqns, std::string{fqn});
     }
 
-    // Insertion order is awareness order, which also feeds caller target resolution.
-    void note_known_peer(const plexus::node_id &id)
-    {
-        if(std::find(m_known_peers.begin(), m_known_peers.end(), id) == m_known_peers.end())
-            m_known_peers.push_back(id);
-    }
-
-    // Idempotent per (peer, fqn).
-    void fan_demands_to(const plexus::node_id &id)
-    {
-        for(const auto &[rid, sub] : m_subscriptions)
-            m_engine.subscribe(id, sub.fqn, sub.qos, io::locality::any, io::reliability_requirement::any, sub.type_id, sub.type_name);
-    }
-
-    // While a dispatch fan is live (m_dispatch_depth > 0) the (un)subscribe seams cannot touch
-    // m_subscriptions directly: a push_back could reallocate it while the callback loop iterates it,
-    // and an erase would relocate the very callable being invoked. Edits are staged and applied by the
-    // outermost fan on exit; a logically-removed entry is skipped for the remainder of the fan.
-    struct dispatch_guard
-    {
-        basic_node &owner;
-        explicit dispatch_guard(basic_node &node) noexcept
-                : owner(node)
-        {
-            ++owner.m_dispatch_depth;
-        }
-        dispatch_guard(const dispatch_guard &)            = delete;
-        dispatch_guard &operator=(const dispatch_guard &) = delete;
-        ~dispatch_guard()
-        {
-            if(--owner.m_dispatch_depth != 0)
-                return;
-#if defined(__cpp_exceptions)
-            try
-            {
-                owner.apply_deferred_subscription_edits();
-            }
-            catch(...)
-            {
-            }
-#else
-            owner.apply_deferred_subscription_edits();
-#endif
-        }
-    };
-
-    bool subscription_pending_removed(registration_id rid) const
-    {
-        return std::find(m_deferred_subscription_removes.begin(), m_deferred_subscription_removes.end(), rid) != m_deferred_subscription_removes.end();
-    }
-
-    std::optional<std::string> subscription_fqn(registration_id rid) const
-    {
-        for(const auto &e : m_subscriptions)
-            if(e.first == rid)
-                return e.second.fqn;
-        for(const auto &e : m_deferred_subscription_adds)
-            if(e.first == rid)
-                return e.second.fqn;
-        return std::nullopt;
-    }
-
-    void apply_deferred_subscription_edits()
-    {
-        if(!m_deferred_subscription_removes.empty())
-        {
-            std::erase_if(m_subscriptions, [&](const auto &e) { return subscription_pending_removed(e.first); });
-            std::erase_if(m_deferred_subscription_adds, [&](const auto &e) { return subscription_pending_removed(e.first); });
-            m_deferred_subscription_removes.clear();
-        }
-        for(auto &e : m_deferred_subscription_adds)
-            m_subscriptions.push_back(std::move(e));
-        m_deferred_subscription_adds.clear();
-    }
-
     void dispatch_message(std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info)
     {
-        dispatch_guard guard{*this};
-        for(auto &[rid, sub] : m_subscriptions)
-            if(sub.fqn == fqn && !subscription_pending_removed(rid))
+        detail::subscription_table::dispatch_guard guard{m_subscriptions};
+        for(auto &[rid, sub] : m_subscriptions.entries())
+            if(sub.fqn == fqn && !m_subscriptions.pending_removed(rid))
                 sub.cb(bytes, info);
     }
 
@@ -785,16 +657,16 @@ private:
     // releases the slot right after); a MISMATCH is counted and warn-and-dropped, never a cast.
     void dispatch_object(std::string_view fqn, const io::object_carrier &carrier)
     {
-        dispatch_guard guard{*this};
+        detail::subscription_table::dispatch_guard guard{m_subscriptions};
 
         // The receive clock is read at most once, and only if a matching subscriber wants
         // message_info.
         std::uint64_t reception = 0;
         bool reception_read     = false;
 
-        for(auto &[rid, sub] : m_subscriptions)
+        for(auto &[rid, sub] : m_subscriptions.entries())
         {
-            if(sub.fqn != fqn || sub.obj.native_key == nullptr || subscription_pending_removed(rid))
+            if(sub.fqn != fqn || sub.obj.native_key == nullptr || m_subscriptions.pending_removed(rid))
                 continue;
             if(sub.obj.native_key != carrier.native_key)
             {
@@ -824,12 +696,6 @@ private:
             info.reception_timestamp = reception;
         }
         return info;
-    }
-
-    bool any_subscriber_for(std::string_view fqn) const
-    {
-        const auto live = [&](const auto &e) { return e.second.fqn == fqn && !subscription_pending_removed(e.first); };
-        return std::any_of(m_subscriptions.begin(), m_subscriptions.end(), live) || std::any_of(m_deferred_subscription_adds.begin(), m_deferred_subscription_adds.end(), live);
     }
 
     // The registry-facing self-route: the concrete loopback channel on a single-transport node, or
@@ -928,7 +794,7 @@ private:
     void sync_shm_self_carrier(std::string_view fqn)
     {
         const std::string key{fqn};
-        const bool want = m_local_publishers.contains(key) && any_subscriber_for(fqn);
+        const bool want = m_local_publishers.contains(key) && m_subscriptions.any_for(fqn);
         const bool have = m_self_carriers.contains(key);
         if(want && !have)
             install_shm_self_carrier(key);
@@ -940,8 +806,8 @@ private:
     // publish fans into the ring), and bind the read half to re-enter the node's own dispatch.
     void install_shm_self_carrier(const std::string &fqn)
     {
-        const io::subscriber_qos qos          = subscriber_qos_for(fqn);
-        const std::optional<std::uint64_t> tid = subscriber_type_id_for(fqn);
+        const io::subscriber_qos qos          = m_subscriptions.qos_for(fqn);
+        const std::optional<std::uint64_t> tid = m_subscriptions.type_id_for(fqn);
         for_each_shm_member(
                 [&](auto &m)
                 {
@@ -960,22 +826,6 @@ private:
             return;
         m_engine.messages().detach_local(fqn, *it->second.write);
         m_self_carriers.erase(it);
-    }
-
-    io::subscriber_qos subscriber_qos_for(std::string_view fqn) const
-    {
-        for(const auto &[rid, sub] : m_subscriptions)
-            if(sub.fqn == fqn)
-                return sub.qos;
-        return {};
-    }
-
-    std::optional<std::uint64_t> subscriber_type_id_for(std::string_view fqn) const
-    {
-        for(const auto &[rid, sub] : m_subscriptions)
-            if(sub.fqn == fqn)
-                return sub.type_id;
-        return std::nullopt;
     }
 
     // The shm self-ring's read half: strip the frame header off the ring's framed bytes and route the
@@ -1057,42 +907,6 @@ private:
             return m_glue;
     }
 
-    // The host is empty until the first listen. A real mDNS backend fills it from the resolved
-    // record; over static_discovery the node supplies it.
-    void advertise_card()
-    {
-        m_disc.advertise({m_service_name, io::endpoint{"", m_host}, discovery::assemble_contact_card(m_id, m_listens)});
-    }
-
-    // The card is untrusted multicast input: a malformed/missing node_id, a self card, a host-less
-    // address, or no usable port key each abort without a note_peer. The first valid port key wins.
-    void note_from_card(const discovery::service_info &peer)
-    {
-        const auto peer_id = plexus::detail::card_node_id(peer.metadata);
-        if(!peer_id || *peer_id == m_id)
-            return;
-        const std::string host = plexus::detail::host_of(peer.endpoint.address);
-        if(host.empty())
-            return;
-        if(const auto ep = plexus::detail::first_port_endpoint(peer.metadata, host))
-        {
-            m_engine.note_peer(*peer_id, *ep);
-            note_known_peer(*peer_id);
-            fan_demands_to(*peer_id);
-        }
-    }
-
-    // A goodbye removes awareness only (engine forget + local mirror erase), mirroring
-    // note_from_card's id/self guards; an unknown or self id is a harmless no-op.
-    void forget_from_card(const discovery::service_info &peer)
-    {
-        const auto peer_id = plexus::detail::card_node_id(peer.metadata);
-        if(!peer_id || *peer_id == m_id)
-            return;
-        m_engine.forget(*peer_id);
-        std::erase(m_known_peers, *peer_id);
-    }
-
     relay_posture compute_relay_posture() const
     {
         relay_posture posture{};
@@ -1163,16 +977,9 @@ private:
     // engine is destroyed FIRST, leaving no dangling observer/route reference during teardown.
     peer_watch m_peer_watch{*this};
     std::vector<plexus::node_id> m_known_peers;
-    std::vector<std::pair<registration_id, subscription>> m_subscriptions;
-
-    // Dispatch-fan re-entrancy guard: a (un)subscribe from inside a callback stages its edit here
-    // rather than mutating m_subscriptions under the live callback loop (see dispatch_guard).
-    int m_dispatch_depth{0};
-    std::vector<std::pair<registration_id, subscription>> m_deferred_subscription_adds;
-    std::vector<registration_id> m_deferred_subscription_removes;
+    detail::subscription_table m_subscriptions;
 
     std::vector<std::string> m_served_fqns;
-    registration_id m_next_registration{1};
     std::size_t m_object_dispatch_mismatch{};
 
     // The node-owned self-route, attached to its OWN forwarder so a publish reaches a same-node
@@ -1197,6 +1004,17 @@ private:
     std::unordered_map<std::string, detail::self_carrier_handle<engine_channel>> m_self_carriers;
 
     engine_type m_engine;
+
+    template<typename N>
+    friend void detail::note_known_peer(N &, const plexus::node_id &);
+    template<typename N>
+    friend void detail::fan_demands_to(N &, const plexus::node_id &);
+    template<typename N>
+    friend void detail::advertise_card(N &);
+    template<typename N>
+    friend void detail::note_from_card(N &, const discovery::service_info &);
+    template<typename N>
+    friend void detail::forget_from_card(N &, const discovery::service_info &);
 };
 
 // Transitional: every existing plexus::node<...> spelling migrates onto basic_node through this
