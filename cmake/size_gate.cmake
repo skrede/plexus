@@ -60,8 +60,10 @@ list(FILTER _scan_files EXCLUDE REGEX "^${_fixture_re}")
 list(FILTER _scan_files EXCLUDE REGEX "/(cmake-)?build([-_][^/]*)?/")
 
 # Parse EXCEPTIONS.md once into the registered file paths and their ceilings, two
-# index-aligned lists (CMake has no map). A file row is | path | kind | ceiling | ... |
+# index-aligned lists (CMake has no map). A file row is | path | file | ceiling | ... |
 # whose first cell names a source file; function rows start with a backtick and never match.
+# A path-shaped row under any other kind, or a second row for an already registered path, is
+# rejected rather than registered, so no row can silently shadow or stand in for another.
 set(_registered "")
 set(_ceilings "")
 set(_violations "")
@@ -73,8 +75,18 @@ if(EXISTS "${_exceptions_md}")
             continue()
         endif()
         string(STRIP "${CMAKE_MATCH_1}" _cell)
+        string(STRIP "${CMAKE_MATCH_2}" _kind)
         string(STRIP "${CMAKE_MATCH_3}" _ceiling)
         if(NOT _cell MATCHES "\\.(h|hpp|cpp|cc)$")
+            continue()
+        endif()
+        if(NOT _kind STREQUAL "file")
+            list(APPEND _violations "${_cell}: EXCEPTIONS.md row kind '${_kind}' is not file")
+            continue()
+        endif()
+        list(FIND _registered "${_cell}" _dup_idx)
+        if(NOT _dup_idx EQUAL -1)
+            list(APPEND _violations "${_cell}: duplicate EXCEPTIONS.md row")
             continue()
         endif()
         list(APPEND _registered "${_cell}")

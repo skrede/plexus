@@ -7,10 +7,11 @@ scattering shared state across files or forcing an artificial-purity layer.
 
 A row here is the sole sanction for an over-limit unit — there is no in-code marker; the
 justification is bookkeeping and bookkeeping never lives in the code. The size gate fails
-the build on any unlisted overage, and on any stale row: one whose unit has dropped back
-under the limit, or that names no scanned file at all. A row's Ceiling is the most lines it
-sanctions: growing past it fails the build, so growth must raise the ceiling in the same change,
-and shrinking needs no edit. There are no silent exceptions.
+the build on any unlisted overage, on a second row for one path, on a path row whose Kind is
+not `file`, and on any stale row: one whose unit has dropped back under the limit, or that
+names no scanned file at all. A row's Ceiling is the most lines it sanctions: growing past it
+fails the build, so growth must raise the ceiling in the same change, and shrinking needs no
+edit. There are no silent exceptions.
 
 | Path | Kind | Ceiling | Justification |
 | ---- | ---- | ------- | ------------- |
@@ -78,7 +79,7 @@ and shrinking needs no edit. There are no silent exceptions.
 | tests/asio/test_udp_reliable_arq.cpp | file | 446 | One cohesive selective-repeat ARQ-over-loss matrix; every cell drives the one shared programmable lossy-relay channel-pair fixture (the drop/reorder/duplicate scripting + the window/RTO config), so splitting the cells scatters that shared relay + ARQ fixture state. |
 | tests/asio/test_udp_arq_sweep.cpp | file | 217 | One cohesive empirical ARQ numeric sweep; the single {loss x window x RTO} grid scenario shares one seeded probabilistic-loss relay harness and its captured result table, so splitting it scatters that shared sweep fixture and the contiguous evidence record. |
 | tests/node/test_typed_fastpath.cpp | file | 318 | One cohesive fast-path identity+flip matrix; both cells share the one codec + two-node net harness (the encode-count delta and object-address identity witness), so splitting them across TUs scatters that shared fixture into near-empty per-cell shells. |
-| tests/node/test_borrowed_executor_bridge.cpp | file | 256 | One cohesive borrowed-executor lifecycle gate; the three assertion families all drive the one shared host struct that owns the executor/discovery/transports and embeds the borrowing nodes, so splitting them scatters that shared single-substrate fixture. |
+| tests/node/test_borrowed_executor_bridge.cpp | file | 255 | One cohesive borrowed-executor lifecycle gate; the three assertion families all drive the one shared host struct that owns the executor/discovery/transports and embeds the borrowing nodes, so splitting them scatters that shared single-substrate fixture. |
 | tests/forwarder/test_egress_priority.cpp | file | 856 | One cohesive egress-priority scheduling matrix; every cell drives the one shared backpressured-destination forwarder harness (the stalled-channel band scheduler + drop-event taps), and that shared fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs without scattering that one harness into over-budget shells. |
 | tests/shm/test_medium_coordinator.cpp | file | 520 | One cohesive medium-coordinator decision matrix; every cell drives the one shared stub_registry + fake_channel + gate/receive recorder harness (the engine-owned coordinator over its injected gates), so splitting the cells scatters that shared recorder-bound fixture into near-empty per-cell shells. |
 | tests/shm/test_shm_wire_fallback.cpp | file | 472 | One cohesive wire_fallback per-message routing proof; the cross-process cells share the one live shm broker + forwarder fan-out harness and its per-channel tap, and that shared fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs without scattering that one harness into over-budget shells. |
@@ -88,7 +89,7 @@ and shrinking needs no edit. There are no silent exceptions.
 | tests/shm/test_shm_wire_fallback_node.cpp | file | 326 | One cohesive wire_fallback production-seam matrix; the per-mode prefer-hook cells share the one node-declare-path shm broker + mux harness, and that shared fixture preamble alone exceeds the file ceiling, so the cells cannot split across TUs without scattering that one harness into over-budget shells. |
 | tests/shm/posix_test_shm_dual_delivery.cpp | file | 208 | One cohesive dual-delivery cross-process proof; the single end-to-end SHM-ring + wire-loopback round-trip is one pipeline over a shared converged region and reactor bridge, so it cannot split without scattering that shared cross-process pipeline state. |
 | tests/shm/test_shm_notifier_bridge.cpp | file | 301 | One cohesive wakeup->reactor bridge matrix; the cells share the one forked producer + io_uring-futex reactor-bridge harness over a converged region, and that shared fixture preamble plus its produce helpers cannot split across TUs without scattering that shared cross-process bridge state into near-empty per-cell shells. |
-| tests/shm/test_shm_geometry_defaults.cpp | file | 282 | One cohesive safe-defaults + fail-closed geometry matrix; the cells share the one heap-backed stub-broker registry harness, so splitting them scatters that shared broker fixture into near-empty per-cell shells. |
+| tests/shm/test_shm_geometry_defaults.cpp | file | 279 | One cohesive safe-defaults + fail-closed geometry matrix; the cells share the one heap-backed stub-broker registry harness, so splitting them scatters that shared broker fixture into near-empty per-cell shells. |
 | tests/shm/test_shm_ring_memory_query.cpp | file | 241 | One cohesive ring-memory-cost query matrix; the cells share the one recording stub-broker registry harness that captures the requested slab sizes, so splitting them scatters that shared recording-broker fixture into near-empty per-cell shells. |
 | tests/shm/test_shm_bilateral.cpp | file | 224 | One cohesive bilateral demand-driven convergence proof (xproc); the cells share the one two-process independent-acquire harness over a converged named ring, and that shared fixture preamble cannot split across TUs without scattering that shared cross-process state. |
 | tests/handshake/test_handshake_fsm.cpp | file | 833 | One cohesive FSM transition matrix over a single shared fixture; the total (state x event) enumeration is one indivisible TEST_CASE and the zero-alloc step binds the single-TU alloc_counter, so splitting scatters the matrix and the one allocation contract. |
@@ -101,7 +102,7 @@ and shrinking needs no edit. There are no silent exceptions.
 | tests/tls/test_tls_mux.cpp | file | 261 | One cohesive TLS-over-mux E2E matrix; every cell drives the one shared ephemeral-cert + mux-face loopback-pair harness (whose identity + quintet-member preamble alone exceeds the file ceiling), so splitting the cells scatters that one harness. |
 | lib/plexus-core/include/plexus/graph/fixed_topic_storage.h | file | 210 | One cohesive constrained-target topic backend; the upsert/remove/scan verbs and the inline-owned entry (the topic name + distinct type names at their wire lids) are one flat dep-free array over the shared entries/count state, and it is the byte-identical host/device twin of std_map_topic_storage.h — splitting one twin breaks that symmetry — so splitting scatters the shared array-scan state. |
 | tests/discovery/test_multicast_discovery_universe.cpp | file | 320 | One cohesive universe-match matrix; every cell (foreign-drop, same-universe resolve, wildcard positive/negative, concrete fast-path parity, default-never-match-all, malformed-fail-closed, and the real emit->inbound loop) drives the one shared fake-datagram-socket fixture + the universe option/announcement helpers, so splitting the cells scatters that shared fixture. |
-| tests/support/graph_change_inproc.h | file | 217 | One cohesive graph-change inproc harness; the recording graph observer plus the two-node routing_engine/known_peers/inproc substrate scaffold are one shared fixture every graph-change oracle (coalescing, teardown, payload, reentrancy, alloc) drives, so splitting it scatters that shared engine/observer state. |
+| tests/support/graph_change_inproc.h | file | 216 | One cohesive graph-change inproc harness; the recording graph observer plus the two-node routing_engine/known_peers/inproc substrate scaffold are one shared fixture every graph-change oracle (coalescing, teardown, payload, reentrancy, alloc) drives, so splitting it scatters that shared engine/observer state. |
 
 ## Function exceptions
 
